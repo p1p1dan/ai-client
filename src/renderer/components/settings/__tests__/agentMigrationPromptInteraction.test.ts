@@ -22,7 +22,10 @@ vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'e
 // which `aRoundMigrationGate.test.ts` pins against the real (unmocked) flag.
 // Mocked `false` here so flipping the real switch back on later cannot turn
 // this whole file red.
-vi.mock('@/lib/aRoundTesting', () => ({ LOCAL_SETUP_ENTRY_DISABLED: false }));
+vi.mock('@/lib/aRoundTesting', () => ({
+  LOCAL_SETUP_ENTRY_DISABLED: false,
+  PI_MIGRATION_DISABLED: false,
+}));
 
 import { resetModalQueueForTests } from '@/stores/modalQueue';
 import { STORAGE_KEYS } from '../../../App/storage';
@@ -81,6 +84,11 @@ beforeEach(() => {
   api.apply.mockResolvedValue({ plan: FULL_PLAN, outcomes: [] });
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     agentMigration: api,
+    legacyImport: {
+      listProjects: () => Promise.resolve([]),
+      listSessions: () => Promise.resolve([]),
+      importBatch: () => Promise.resolve({ results: [] }),
+    },
     env: { platform: 'linux' },
   };
   container = document.createElement('div');

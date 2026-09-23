@@ -21,7 +21,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  */
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
-vi.mock('@/lib/aRoundTesting', () => ({ LOCAL_SETUP_ENTRY_DISABLED: false }));
+vi.mock('@/lib/aRoundTesting', () => ({
+  LOCAL_SETUP_ENTRY_DISABLED: false,
+  PI_MIGRATION_DISABLED: false,
+}));
 
 import { AgentMigrationSettings } from '../AgentMigrationSettings';
 

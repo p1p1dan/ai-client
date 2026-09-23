@@ -702,6 +702,9 @@ export const zhTranslations: Record<string, string> = {
 
   // H/21 C5：从 Claude Code / Codex 导入历史对话。
   'Import conversations from Claude Code / Codex': '从 Claude Code / Codex 导入历史对话',
+  'Go to import': '前往导入',
+  'Found Claude Code or Codex conversation history on this machine. Import it to keep working with those conversations here.':
+    '在这台机器上检测到 Claude Code 或 Codex 的对话历史。导入后可以在这里继续查看和接着聊。',
   'Copies conversation history off this machine into this app, where you can read it and keep talking. The original files are only read, never changed.':
     '把这台机器上的历史对话复制进本应用，进来之后可以看、也可以接着聊。原来的文件只读不改。',
   'No Claude Code or Codex conversations were found on this machine.':

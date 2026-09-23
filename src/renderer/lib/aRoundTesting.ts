@@ -41,4 +41,18 @@
  * `WelcomeView` treatment this switch started as (see git history:
  * `99ab7d57`).
  */
-export const LOCAL_SETUP_ENTRY_DISABLED = true;
+export const LOCAL_SETUP_ENTRY_DISABLED = false;
+
+/**
+ * The Pi-directory migration rows (skills, prompt templates, AGENTS.md, AI
+ * services, Pi conversation history) inside `AgentMigrationPrompt` and
+ * `AgentMigrationSettings`.
+ *
+ * `LOCAL_SETUP_ENTRY_DISABLED` was flipped to `false` so the startup dialog
+ * can open again — but only to carry the Claude Code / Codex history guide.
+ * The Pi copy itself is not ready to ship yet, so its rows stay suppressed:
+ * the dialog never inspects `~/.pi/agent`, never offers the Pi copy, and the
+ * settings pane greys those rows out. Flip this to `false` to bring the Pi
+ * migration back.
+ */
+export const PI_MIGRATION_DISABLED = true;

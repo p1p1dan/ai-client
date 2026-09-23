@@ -77,7 +77,10 @@ describe('AgentMigrationPrompt wiring (H/21 P1)', () => {
   });
 
   it('[MPW-07] renders nothing at all when there is no offer', () => {
-    expect(PROMPT).toContain('if (!plan) return null;');
+    // The guard now also accounts for the Claude Code / Codex history guide:
+    // the dialog renders when there is a Pi plan OR legacy conversations to
+    // guide to, and nothing otherwise.
+    expect(PROMPT).toContain('if (!plan && !showLegacyGuide) return null;');
   });
 
   it('[MPW-08] shows each item count, which is what makes unticking a huge one possible', () => {
@@ -124,37 +127,42 @@ describe('AgentMigrationSettings shares the prompt rules (H/21 P1)', () => {
   });
 });
 
-describe('A-round testing gate (@/lib/aRoundTesting)', () => {
-  it('[MPW-14] the dialog is suppressed before it ever inspects, not just greyed out', () => {
+describe('Pi-migration suppression (@/lib/aRoundTesting)', () => {
+  it('[MPW-14] the dialog still bails on the A-round gate, and suppresses the Pi copy separately', () => {
     expect(PROMPT).toContain("from '@/lib/aRoundTesting'");
-    // Both the auto-open effect and the settings-page yield check bail before
-    // any `inspect()` call — neither walks the filesystem while this is on.
+    // The A-round gate still short-circuits the auto-open effect before any
+    // inspect call — the dialog does not walk the filesystem while it is on.
     const effect = PROMPT.slice(PROMPT.indexOf('useEffect(() => {'));
     expect(effect.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeGreaterThan(-1);
     expect(effect.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeLessThan(
       effect.indexOf('agentMigration.inspect')
     );
+    // The Pi copy is suppressed by its own flag, separate from the gate: the
+    // inspect call is skipped while `PI_MIGRATION_DISABLED` is on, so the
+    // Claude Code / Codex guide is the only thing the dialog offers.
+    expect(PROMPT).toContain('PI_MIGRATION_DISABLED');
     const gate = PROMPT.slice(PROMPT.indexOf('export async function migrationOfferWillOpen'));
-    expect(gate.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeGreaterThan(-1);
-    expect(gate.indexOf('LOCAL_SETUP_ENTRY_DISABLED')).toBeLessThan(
-      gate.indexOf('agentMigration.inspect')
-    );
+    expect(gate.indexOf('PI_MIGRATION_DISABLED')).toBeGreaterThan(-1);
   });
 
   it('[MPW-15] the settings-pane twin is greyed out, not removed', () => {
     expect(PANE).toContain("from '@/lib/aRoundTesting'");
     // The section still renders (no early `return null` keyed on the flag) —
     // only the interactive controls carry it.
-    expect(PANE).not.toMatch(/if \(LOCAL_SETUP_ENTRY_DISABLED\)\s*return null/);
-    expect(PANE.match(/LOCAL_SETUP_ENTRY_DISABLED/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(PANE).not.toMatch(/if \(PI_MIGRATION_DISABLED\)\s*return null/);
+    expect(PANE.match(/PI_MIGRATION_DISABLED/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('[MPW-16] WelcomeView, the dialog and the pane all read the one shared constant', () => {
+  it('[MPW-16] WelcomeView reads the gate; the migration surfaces read the suppression flag', () => {
     const WELCOME = read('../../onboarding/WelcomeView.tsx', 'WelcomeView.tsx');
-    for (const file of [WELCOME, PROMPT, PANE]) {
-      expect(file).toContain('LOCAL_SETUP_ENTRY_DISABLED');
-    }
+    // WelcomeView still defers to the A-round gate.
+    expect(WELCOME).toContain('LOCAL_SETUP_ENTRY_DISABLED');
     expect(WELCOME).toContain("from '@/lib/aRoundTesting'");
+    // The Pi-migration surfaces now key their disabled state on the dedicated
+    // suppression flag rather than the A-round gate.
+    for (const file of [PROMPT, PANE]) {
+      expect(file).toContain('PI_MIGRATION_DISABLED');
+    }
   });
 });
 

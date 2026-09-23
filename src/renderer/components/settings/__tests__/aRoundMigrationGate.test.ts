@@ -1,28 +1,29 @@
 // @vitest-environment happy-dom
 import type { MigrationItem, MigrationItemKind, MigrationPlan } from '@shared/agentMigration';
+import type { LegacyImportProject } from '@shared/types';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
- * A-round testing closes every surface that would pull a user's own Pi setup
- * into this app. `welcomeLocalEntry.test.ts` already pins the `WelcomeView`
- * button; this file pins the other two named in `@/lib/aRoundTesting`:
- * `AgentMigrationPrompt` (the startup dialog — suppressed outright, never
- * even inspects) and `AgentMigrationSettings` (the Settings-pane twin —
- * greyed out, stays visible).
+ * Two switches in `@/lib/aRoundTesting` now govern the migration surfaces:
  *
- * `LOCAL_SETUP_ENTRY_DISABLED` is imported for real, NOT mocked — every
- * assertion is phrased against its live value (`… ? 0 : 1`, `toBe(
- * LOCAL_SETUP_ENTRY_DISABLED)`) so flipping that one line back after A-round
- * leaves this suite green and still guarding the wiring, the same trick
- * `welcomeLocalEntry.test.ts` uses.
+ *  - `LOCAL_SETUP_ENTRY_DISABLED` — the A-round gate. `false` post-release, so
+ *    the startup dialog is free to open and the settings pane is reachable.
+ *  - `PI_MIGRATION_DISABLED` — suppresses the Pi-directory copy specifically.
+ *    While `true`, the dialog never inspects `~/.pi/agent`, the Pi rows never
+ *    appear, and the settings pane greys its controls out. The Claude Code /
+ *    Codex history guide is the only actionable thing in the dialog then.
+ *
+ * Both are imported for real, NOT mocked — every assertion is phrased against
+ * their live values, so flipping either line back leaves this suite green and
+ * still guarding the wiring.
  */
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
 
 import { resetModalQueueForTests } from '@/stores/modalQueue';
-import { LOCAL_SETUP_ENTRY_DISABLED } from '../../../lib/aRoundTesting';
+import { LOCAL_SETUP_ENTRY_DISABLED, PI_MIGRATION_DISABLED } from '../../../lib/aRoundTesting';
 import { AgentMigrationPrompt, migrationOfferWillOpen } from '../AgentMigrationPrompt';
 import { AgentMigrationSettings } from '../AgentMigrationSettings';
 
@@ -47,9 +48,19 @@ const PLAN: MigrationPlan = {
   nothingToDo: false,
 };
 
-const api = {
+const LEGACY_PROJECTS: LegacyImportProject[] = [
+  { id: 'home-u', path: '/home/u', sessionCount: 11, lastActivityAt: 0 },
+];
+
+const agentApi = {
   inspect: vi.fn<() => Promise<MigrationPlan>>(),
   apply: vi.fn(),
+};
+
+const legacyApi = {
+  listProjects: vi.fn<() => Promise<LegacyImportProject[]>>(),
+  listSessions: vi.fn(),
+  importBatch: vi.fn(),
 };
 
 let container: HTMLDivElement;
@@ -60,9 +71,11 @@ beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   localStorage.clear();
   resetModalQueueForTests();
-  api.inspect.mockResolvedValue(PLAN);
+  agentApi.inspect.mockResolvedValue(PLAN);
+  legacyApi.listProjects.mockResolvedValue(LEGACY_PROJECTS);
   (window as unknown as { electronAPI: unknown }).electronAPI = {
-    agentMigration: api,
+    agentMigration: agentApi,
+    legacyImport: legacyApi,
     env: { platform: 'linux' },
   };
   container = document.createElement('div');
@@ -83,32 +96,63 @@ async function settle(): Promise<void> {
   });
 }
 
-describe('A-round: AgentMigrationPrompt (@/lib/aRoundTesting)', () => {
-  it('inspects and opens only when the switch is off', async () => {
+describe('AgentMigrationPrompt: Pi copy suppression + Claude Code / Codex guide', () => {
+  it('never inspects ~/.pi/agent while the Pi copy is suppressed', async () => {
     await act(() => root.render(createElement(AgentMigrationPrompt)));
     await settle();
 
-    expect(api.inspect).toHaveBeenCalledTimes(LOCAL_SETUP_ENTRY_DISABLED ? 0 : 1);
-    expect(document.body.textContent?.includes('Bring over your personal Pi setup')).toBe(
-      !LOCAL_SETUP_ENTRY_DISABLED
-    );
+    // PI_MIGRATION_DISABLED gates the inspect call: while on, no Pi scan runs.
+    expect(agentApi.inspect).toHaveBeenCalledTimes(PI_MIGRATION_DISABLED ? 0 : 1);
+    // The Claude Code / Codex scan always runs (unless the A-round gate closed
+    // the whole dialog before any IPC).
+    expect(legacyApi.listProjects).toHaveBeenCalledTimes(LOCAL_SETUP_ENTRY_DISABLED ? 0 : 1);
   });
 
-  it('migrationOfferWillOpen resolves false, without inspecting, only when the switch is on', async () => {
+  it('opens for the Claude Code / Codex guide when the Pi copy is suppressed', async () => {
+    await act(() => root.render(createElement(AgentMigrationPrompt)));
+    await settle();
+
+    if (LOCAL_SETUP_ENTRY_DISABLED) {
+      // The A-round gate suppresses the whole dialog before any IPC.
+      expect(document.body.textContent ?? '').not.toContain('Go to import');
+      return;
+    }
+    // The guide renders, and no Pi "Copy selected" button does.
+    expect(document.body.textContent?.includes('Go to import')).toBe(PI_MIGRATION_DISABLED);
+    expect(document.body.textContent?.includes('Copy selected')).toBe(!PI_MIGRATION_DISABLED);
+  });
+
+  it('migrationOfferWillOpen opens when there are Claude Code / Codex conversations, even with the Pi copy suppressed', async () => {
     const result = await migrationOfferWillOpen();
-    expect(api.inspect).toHaveBeenCalledTimes(LOCAL_SETUP_ENTRY_DISABLED ? 0 : 1);
-    expect(result).toBe(!LOCAL_SETUP_ENTRY_DISABLED);
+    if (LOCAL_SETUP_ENTRY_DISABLED) {
+      expect(result).toBe(false);
+      return;
+    }
+    // With the Pi copy suppressed there is no Pi inspect, but the legacy scan
+    // can still open the dialog.
+    expect(agentApi.inspect).toHaveBeenCalledTimes(PI_MIGRATION_DISABLED ? 0 : 1);
+    expect(result).toBe(true);
+  });
+
+  it('migrationOfferWillOpen resolves false when there is nothing to offer', async () => {
+    legacyApi.listProjects.mockResolvedValue([]);
+    const result = await migrationOfferWillOpen();
+    if (LOCAL_SETUP_ENTRY_DISABLED) {
+      expect(result).toBe(false);
+      return;
+    }
+    expect(result).toBe(!PI_MIGRATION_DISABLED);
   });
 });
 
-describe('A-round: AgentMigrationSettings (@/lib/aRoundTesting)', () => {
+describe('AgentMigrationSettings: Pi copy suppression', () => {
   function copyButton(): HTMLButtonElement | undefined {
     return [...document.body.querySelectorAll('button')].find((node) =>
       node.textContent?.includes('Copy selected')
     );
   }
 
-  it('stays on screen but disables every control while the switch is on', async () => {
+  it('stays on screen but disables every control while the Pi copy is suppressed', async () => {
     await act(() => root.render(createElement(AgentMigrationSettings)));
     await settle();
 
@@ -118,38 +162,32 @@ describe('A-round: AgentMigrationSettings (@/lib/aRoundTesting)', () => {
     const checkboxes = [...document.body.querySelectorAll('[role="checkbox"]')];
     expect(checkboxes.length).toBeGreaterThan(0);
     for (const box of checkboxes) {
-      expect(box.getAttribute('data-disabled') === '').toBe(LOCAL_SETUP_ENTRY_DISABLED);
+      expect(box.getAttribute('data-disabled') === '').toBe(PI_MIGRATION_DISABLED);
     }
 
     const overwriteSwitch = document.body.querySelector('[role="switch"]');
-    expect(overwriteSwitch?.getAttribute('data-disabled') === '').toBe(LOCAL_SETUP_ENTRY_DISABLED);
+    expect(overwriteSwitch?.getAttribute('data-disabled') === '').toBe(PI_MIGRATION_DISABLED);
 
-    // With the switch OFF every item is pre-ticked, so an enabled button here
-    // is the switch's own doing. With it ON, T099 also empties the selection,
-    // so the button is disabled twice over — belt and braces, deliberately: the
-    // copy must not become reachable by un-disabling one of the two.
-    expect(copyButton()?.disabled).toBe(LOCAL_SETUP_ENTRY_DISABLED);
+    // With the Pi copy available every item is pre-ticked, so an enabled button
+    // here is the flag's own doing. With it suppressed, the selection is also
+    // emptied, so the button is disabled twice over — belt and braces.
+    expect(copyButton()?.disabled).toBe(PI_MIGRATION_DISABLED);
   });
 
-  it('shows nothing as selected while the switch is on', async () => {
+  it('shows nothing as selected while the Pi copy is suppressed', async () => {
     await act(() => root.render(createElement(AgentMigrationSettings)));
     await settle();
 
-    // T099: `data-disabled` alone was not the whole story. The items were still
-    // pre-ticked underneath it, so the pane said "these three are queued" and
-    // "you cannot untick them" in the same breath — about a copy that, during
-    // A-round, would be the tester's own API keys. Frozen AND empty is the only
-    // pair of statements that is true here.
     const checkboxes = [...document.body.querySelectorAll('[role="checkbox"]')];
     expect(checkboxes.length).toBeGreaterThan(0);
     for (const box of checkboxes) {
-      expect(box.getAttribute('aria-checked')).toBe(LOCAL_SETUP_ENTRY_DISABLED ? 'false' : 'true');
-      expect(box.getAttribute('data-disabled') === '').toBe(LOCAL_SETUP_ENTRY_DISABLED);
+      expect(box.getAttribute('aria-checked')).toBe(PI_MIGRATION_DISABLED ? 'false' : 'true');
+      expect(box.getAttribute('data-disabled') === '').toBe(PI_MIGRATION_DISABLED);
     }
 
     // And the section says why, rather than leaving dead controls unexplained.
     expect(document.body.textContent?.includes('Not available during the test round.')).toBe(
-      LOCAL_SETUP_ENTRY_DISABLED
+      PI_MIGRATION_DISABLED
     );
   });
 });

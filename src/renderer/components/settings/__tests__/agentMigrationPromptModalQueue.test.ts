@@ -27,7 +27,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
 // This suite is about the modal queue, not A-round — mocked `false` so the
 // two dialogs actually open and there is something to queue.
-vi.mock('@/lib/aRoundTesting', () => ({ LOCAL_SETUP_ENTRY_DISABLED: false }));
+vi.mock('@/lib/aRoundTesting', () => ({
+  LOCAL_SETUP_ENTRY_DISABLED: false,
+  PI_MIGRATION_DISABLED: false,
+}));
 
 import { resetModalQueueForTests } from '@/stores/modalQueue';
 import { AnnouncementDialog } from '../../announcements/AnnouncementDialog';
@@ -89,6 +92,11 @@ beforeEach(() => {
   api.inspect.mockResolvedValue(PLAN);
   (window as unknown as { electronAPI: unknown }).electronAPI = {
     agentMigration: api,
+    legacyImport: {
+      listProjects: () => Promise.resolve([]),
+      listSessions: () => Promise.resolve([]),
+      importBatch: () => Promise.resolve({ results: [] }),
+    },
     env: { platform: 'linux' },
   };
   container = document.createElement('div');

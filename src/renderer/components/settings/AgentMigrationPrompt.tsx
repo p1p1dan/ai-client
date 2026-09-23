@@ -62,7 +62,7 @@ import type {
   MigrationOutcome,
   MigrationPlan,
 } from '@shared/agentMigration';
-import { ArrowRightLeft, Check, KeyRound, TriangleAlert } from 'lucide-react';
+import { ArrowRightLeft, Check, KeyRound, MessagesSquare, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -79,8 +79,9 @@ import {
 import { Ident } from '@/components/ui/ident';
 import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
-import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
+import { LOCAL_SETUP_ENTRY_DISABLED, PI_MIGRATION_DISABLED } from '@/lib/aRoundTesting';
 import { STORAGE_KEYS } from '../../App/storage';
+import { useSettingsIntentStore } from '../../stores/settingsIntent';
 import {
   defaultMigrationSelection,
   itemWouldCopy,
@@ -138,24 +139,43 @@ function alreadySettled(): boolean {
  * the first local entry of a user with no services. Cheap enough to prefer over
  * caching a startup decision across two unrelated components.
  */
+/**
+ * Whether this machine has Claude Code / Codex conversations worth
+ * importing. The startup dialog opens for this alone while the Pi-directory
+ * copy is suppressed.
+ */
+async function hasLegacyConversations(): Promise<boolean> {
+  try {
+    const projects = await window.electronAPI.legacyImport.listProjects();
+    return projects.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 export async function migrationOfferWillOpen(): Promise<boolean> {
   // A-round testing: this route is closed, so nothing else should defer to an
   // offer that will never appear. See the class comment above.
   if (LOCAL_SETUP_ENTRY_DISABLED) return false;
   if (alreadySettled()) return false;
-  try {
-    const plan = await window.electronAPI.agentMigration.inspect();
-    return shouldPromptMigration({ plan, asked: false });
-  } catch {
-    // An inspection that failed is not an offer, so the settings page is still
-    // the right place to send someone with nothing configured.
-    return false;
+  if (!PI_MIGRATION_DISABLED) {
+    try {
+      const plan = await window.electronAPI.agentMigration.inspect();
+      if (shouldPromptMigration({ plan, asked: false })) return true;
+    } catch {
+      // An inspection that failed is not an offer.
+    }
   }
+  // With the Pi copy suppressed the dialog still opens for the Claude Code /
+  // Codex history guide alone, whenever the machine has conversations to offer.
+  return hasLegacyConversations();
 }
 
 export function AgentMigrationPrompt() {
   const { t } = useI18n();
+  const requestSettings = useSettingsIntentStore((state) => state.requestSettings);
   const [plan, setPlan] = useState<MigrationPlan | null>(null);
+  const [legacyProjects, setLegacyProjects] = useState<number | null>(null);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<MigrationItemKind>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -173,18 +193,36 @@ export function AgentMigrationPrompt() {
     if (alreadySettled()) return;
     let cancelled = false;
     void (async () => {
-      try {
-        const next = await window.electronAPI.agentMigration.inspect();
-        if (cancelled) return;
-        if (!shouldPromptMigration({ plan: next, asked: false })) return;
-        setPlan(next);
-        setSelected(new Set(defaultMigrationSelection(next)));
-        setOpen(true);
-      } catch {
-        // An inspection that failed is not an offer. Stay silent and leave the
-        // flag unset, so a transient failure does not cost the user the one
-        // time we get to ask.
+      let piOffer = false;
+      // The Pi-directory copy is suppressed: do not inspect it, so its rows
+      // never appear and the dialog stands on the legacy guide alone.
+      if (!PI_MIGRATION_DISABLED) {
+        try {
+          const next = await window.electronAPI.agentMigration.inspect();
+          if (cancelled) return;
+          if (shouldPromptMigration({ plan: next, asked: false })) {
+            setPlan(next);
+            setSelected(new Set(defaultMigrationSelection(next)));
+            piOffer = true;
+          }
+        } catch {
+          // An inspection that failed is not an offer. Stay silent and leave
+          // the flag unset, so a transient failure does not cost the user the
+          // one time we get to ask.
+        }
       }
+      // The Claude Code / Codex history guide: any project on the machine is
+      // enough to open, regardless of the Pi copy being suppressed.
+      let legacyCount = 0;
+      try {
+        const projects = await window.electronAPI.legacyImport.listProjects();
+        if (cancelled) return;
+        legacyCount = projects.length;
+        setLegacyProjects(legacyCount);
+      } catch {
+        // A scan that failed is not an offer either.
+      }
+      if (!cancelled && (piOffer || legacyCount > 0)) setOpen(true);
     })();
     return () => {
       cancelled = true;
@@ -240,9 +278,16 @@ export function AgentMigrationPrompt() {
     }
   };
 
-  if (!plan) return null;
+  // The dialog renders when there is a Pi plan to show OR legacy
+  // conversations to guide to. With the Pi copy suppressed the dialog stands
+  // on the legacy guide alone.
+  const showLegacyGuide = (legacyProjects ?? 0) > 0;
+  if (!plan && !showLegacyGuide) return null;
 
-  const secrets = selectionCarriesSecrets([...selected]);
+  // The Pi copy is unavailable while suppressed: no plan was inspected, so
+  // there is nothing to tick. The legacy guide is the only actionable thing.
+  const piCopyAvailable = !PI_MIGRATION_DISABLED && plan !== null;
+  const secrets = piCopyAvailable && selectionCarriesSecrets([...selected]);
   const done = outcomes !== null;
 
   return (
@@ -259,13 +304,21 @@ export function AgentMigrationPrompt() {
     >
       <DialogPopup className="sm:max-w-lg" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{t('Bring over your personal Pi setup')}</DialogTitle>
+          <DialogTitle>
+            {piCopyAvailable
+              ? t('Bring over your personal Pi setup')
+              : t('Import conversations from Claude Code / Codex')}
+          </DialogTitle>
           <DialogDescription>
             {done
               ? t('Copy finished')
-              : t(
-                  'Found an existing Pi setup on this machine. Copying it over takes a moment and changes nothing in your own directory.'
-                )}
+              : piCopyAvailable
+                ? t(
+                    'Found an existing Pi setup on this machine. Copying it over takes a moment and changes nothing in your own directory.'
+                  )
+                : t(
+                    'Found Claude Code or Codex conversation history on this machine. Import it to keep working with those conversations here.'
+                  )}
           </DialogDescription>
         </DialogHeader>
 
@@ -274,37 +327,70 @@ export function AgentMigrationPrompt() {
             <PromptReport outcomes={outcomes} />
           ) : (
             <div className="space-y-3">
-              <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
-                <span>{t('Copy from')}</span>
-                <Ident className="min-w-0 break-all">{plan.sourceDir}</Ident>
-                <span>{t('Copy to')}</span>
-                <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
-              </div>
+              {piCopyAvailable && (
+                <>
+                  <div className="grid gap-1 text-meta text-muted-foreground sm:grid-cols-[80px_1fr] sm:gap-3">
+                    <span>{t('Copy from')}</span>
+                    <Ident className="min-w-0 break-all">{plan.sourceDir}</Ident>
+                    <span>{t('Copy to')}</span>
+                    <Ident className="min-w-0 break-all">{plan.targetDir}</Ident>
+                  </div>
 
-              <ul className="divide-y rounded-md border">
-                {plan.items.map((item) => (
-                  <PromptRow
-                    key={item.kind}
-                    item={item}
-                    checked={selected.has(item.kind)}
-                    disabled={busy}
-                    onCheckedChange={(checked) => toggle(item.kind, checked)}
-                  />
-                ))}
-              </ul>
+                  <ul className="divide-y rounded-md border">
+                    {plan.items.map((item) => (
+                      <PromptRow
+                        key={item.kind}
+                        item={item}
+                        checked={selected.has(item.kind)}
+                        disabled={busy}
+                        onCheckedChange={(checked) => toggle(item.kind, checked)}
+                      />
+                    ))}
+                  </ul>
 
-              {/* The consent sentence. Shown only while the item carrying secrets
-                  is actually ticked, so unticking it visibly removes the warning
-                  as well as the copy. */}
-              {secrets && (
-                <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-meta text-muted-foreground">
-                  <KeyRound className="h-4 w-4 shrink-0 text-warning" />
-                  <span>
-                    {t(
-                      'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
-                    )}
-                  </span>
-                </p>
+                  {/* The consent sentence. Shown only while the item carrying secrets
+                      is actually ticked, so unticking it visibly removes the warning
+                      as well as the copy. */}
+                  {secrets && (
+                    <p className="flex gap-2 rounded-sm border border-warning/30 bg-warning/8 p-3 text-meta text-muted-foreground">
+                      <KeyRound className="h-4 w-4 shrink-0 text-warning" />
+                      <span>
+                        {t(
+                          'Your AI services include API keys. Copying them stores a copy in this app’s own credential vault. Uncheck that row to leave them out.'
+                        )}
+                      </span>
+                    </p>
+                  )}
+                </>
+              )}
+
+              {showLegacyGuide && (
+                <div className="flex flex-col gap-3 rounded-md border border-info/30 bg-info/8 p-3">
+                  <div className="flex items-start gap-2">
+                    <MessagesSquare className="mt-0.5 h-4 w-4 shrink-0 text-info" />
+                    <div className="min-w-0">
+                      <p className="text-ui font-medium">
+                        {t('Import conversations from Claude Code / Codex')}
+                      </p>
+                      <p className="text-meta text-muted-foreground">
+                        {t(
+                          'Found Claude Code or Codex conversation history on this machine. Import it to keep working with those conversations here.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    onClick={() => {
+                      requestSettings('migration');
+                      setOpen(false);
+                    }}
+                  >
+                    {t('Go to import')}
+                  </Button>
+                </div>
               )}
 
               <p className="text-meta text-muted-foreground">
@@ -337,10 +423,12 @@ export function AgentMigrationPrompt() {
               <Button variant="outline" onClick={notNow} disabled={busy}>
                 {t('Not now')}
               </Button>
-              <Button onClick={() => void run()} disabled={busy || selected.size === 0}>
-                <ArrowRightLeft className="h-4 w-4" />
-                {busy ? t('Copying...') : t('Copy selected')}
-              </Button>
+              {piCopyAvailable && (
+                <Button onClick={() => void run()} disabled={busy || selected.size === 0}>
+                  <ArrowRightLeft className="h-4 w-4" />
+                  {busy ? t('Copying...') : t('Copy selected')}
+                </Button>
+              )}
             </>
           )}
         </DialogFooter>

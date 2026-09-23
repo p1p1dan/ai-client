@@ -42,7 +42,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Ident } from '@/components/ui/ident';
 import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
-import { LOCAL_SETUP_ENTRY_DISABLED } from '@/lib/aRoundTesting';
+import { PI_MIGRATION_DISABLED } from '@/lib/aRoundTesting';
 // H/21 P1: label and "would this copy anything" now live with the first-launch
 // prompt's rules, so the dialog and this pane cannot drift apart on either.
 import { defaultMigrationSelection, migrationKindLabel } from './migrationPromptModel';
@@ -75,7 +75,7 @@ export function AgentMigrationSettings() {
       // the one impression this route must not give during a test round, when
       // what it would copy is the tester's own API keys. Ticked-and-frozen is
       // a state the user cannot act on either way, so it says nothing true.
-      setSelected(new Set(LOCAL_SETUP_ENTRY_DISABLED ? [] : defaultMigrationSelection(next)));
+      setSelected(new Set(PI_MIGRATION_DISABLED ? [] : defaultMigrationSelection(next)));
       setError(null);
     } catch (cause) {
       setError(messageOf(cause));
@@ -129,7 +129,7 @@ export function AgentMigrationSettings() {
             {/* T099: the controls below are greyed out on purpose. Without this
                 line the pane is a wall of dead checkboxes with no reason given,
                 which reads as a bug rather than as a decision. */}
-            {LOCAL_SETUP_ENTRY_DISABLED && (
+            {PI_MIGRATION_DISABLED && (
               <span className="mt-1 block">{t('Not available during the test round.')}</span>
             )}
           </>
@@ -152,7 +152,7 @@ export function AgentMigrationSettings() {
             key={item.kind}
             item={item}
             checked={selected.has(item.kind)}
-            disabled={busy || LOCAL_SETUP_ENTRY_DISABLED}
+            disabled={busy || PI_MIGRATION_DISABLED}
             onCheckedChange={(checked) => toggle(item.kind, checked)}
           />
         ))}
@@ -168,7 +168,7 @@ export function AgentMigrationSettings() {
           <Switch
             checked={overwrite}
             onCheckedChange={setOverwrite}
-            disabled={busy || LOCAL_SETUP_ENTRY_DISABLED}
+            disabled={busy || PI_MIGRATION_DISABLED}
             aria-labelledby={overwriteLabelId}
           />
           <span className="min-w-0" id={overwriteLabelId}>
@@ -180,7 +180,7 @@ export function AgentMigrationSettings() {
         </div>
         <Button
           onClick={() => void run()}
-          disabled={busy || selected.size === 0 || LOCAL_SETUP_ENTRY_DISABLED}
+          disabled={busy || selected.size === 0 || PI_MIGRATION_DISABLED}
         >
           <ArrowRightLeft className="h-4 w-4" />
           {busy ? t('Copying...') : t('Copy selected')}
