@@ -418,6 +418,12 @@ jobs:
           if-no-files-found: error
 
   build-macos:
+    # 停止 macOS 发布（2026-09-23）：tag 发布链不再构建 macOS。产出的 dmg
+    # 本就 unsigned、从不作为正式下载发布；而 9-21 后 GitHub macos-14 image
+    # 的 hdiutil create 开始报 "Device not configured"（Python 已 pin 3.12，
+    # 非 plistlib 问题），每次 tag run 都会被它阻塞整条发布链。改为仅手动
+    # dispatch 时构建，保留验证能力；hdiutil 修复后恢复。
+    if: github.event_name == 'workflow_dispatch'
     needs: build-app
     timeout-minutes: 25
     # An unsigned x64 artifact closes the structural packaged gate on a native
@@ -607,7 +613,9 @@ jobs:
           retention-days: 1
 
   generate-release-notes:
-    needs: [build-windows, build-linux, build-macos, build-remote-runtime-linux]
+    # 停止 macOS 发布（2026-09-23）：build-macos 仅在 dispatch 时运行且
+    # 已不在依赖链上，tag 发布不再被它阻塞。
+    needs: [build-windows, build-linux, build-remote-runtime-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     timeout-minutes: 10
