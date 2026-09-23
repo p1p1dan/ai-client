@@ -114,11 +114,11 @@ describe('AgentMigrationPrompt: Pi copy suppression + Claude Code / Codex guide'
 
     if (LOCAL_SETUP_ENTRY_DISABLED) {
       // The A-round gate suppresses the whole dialog before any IPC.
-      expect(document.body.textContent ?? '').not.toContain('Go to import');
+      expect(document.body.textContent ?? '').not.toContain('Import conversations');
       return;
     }
     // The guide renders, and no Pi "Copy selected" button does.
-    expect(document.body.textContent?.includes('Go to import')).toBe(PI_MIGRATION_DISABLED);
+    expect(document.body.textContent?.includes('Import conversations')).toBe(PI_MIGRATION_DISABLED);
     expect(document.body.textContent?.includes('Copy selected')).toBe(!PI_MIGRATION_DISABLED);
   });
 

@@ -388,7 +388,7 @@ export function AgentMigrationPrompt() {
                       setOpen(false);
                     }}
                   >
-                    {t('Go to import')}
+                    {t('Import conversations')}
                   </Button>
                 </div>
               )}

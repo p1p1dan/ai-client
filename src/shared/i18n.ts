@@ -702,7 +702,11 @@ export const zhTranslations: Record<string, string> = {
 
   // H/21 C5：从 Claude Code / Codex 导入历史对话。
   'Import conversations from Claude Code / Codex': '从 Claude Code / Codex 导入历史对话',
-  'Go to import': '前往导入',
+  // Not the T099 wording "Go to …" that ends in the bare word triggering
+  // electron-vite's `vite:esm-shim` trap (see
+  // `src/main/__tests__/esmShimStringTrap.test.ts`). Any trailing word works;
+  // this one also reads better as a button.
+  'Import conversations': '前往导入',
   'Found Claude Code or Codex conversation history on this machine. Import it to keep working with those conversations here.':
     '在这台机器上检测到 Claude Code 或 Codex 的对话历史。导入后可以在这里继续查看和接着聊。',
   'Copies conversation history off this machine into this app, where you can read it and keep talking. The original files are only read, never changed.':

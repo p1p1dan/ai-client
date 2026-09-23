@@ -96,6 +96,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { APP_STATE_DIR, LEGACY_APP_STATE_DIR } from '@shared/defaultPaths';
 
 /** Written into the new root once something was actually copied. Presence short-circuits every later boot. */
 export const MIGRATION_MARKER_FILE_NAME = '.migrated-from-aiclient';
@@ -345,9 +346,14 @@ export function rewriteRuntimeIdentity(
     .map(escapeRegExp);
   const patterns: RegExp[] = [];
   if (names.length > 0) {
-    patterns.push(new RegExp(`([\\\\/])\\.pilab[\\\\/](?:${names.join('|')})(?=[\\\\/])`, 'i'));
+    patterns.push(
+      new RegExp(
+        String.raw`([\\/])${escapeRegExp(APP_STATE_DIR)}[\\/](?:${names.join('|')})(?=[\\/])`,
+        'i'
+      )
+    );
   }
-  patterns.push(/([\\/])\.aiclient(?=[\\/])/i);
+  patterns.push(new RegExp(String.raw`([\\/])${escapeRegExp(LEGACY_APP_STATE_DIR)}(?=[\\/])`, 'i'));
 
   for (const pattern of patterns) {
     const match = pattern.exec(identity);
@@ -355,7 +361,7 @@ export function rewriteRuntimeIdentity(
     const separator = match[1];
     const candidate =
       identity.slice(0, match.index) +
-      `${separator}.pilab${separator}${options.newProfileName}` +
+      `${separator}${APP_STATE_DIR}${separator}${options.newProfileName}` +
       identity.slice(match.index + match[0].length);
     return options.exists(candidate)
       ? { identity: candidate, outcome: 'rewritten' }
