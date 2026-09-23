@@ -503,10 +503,28 @@ jobs:
       - name: Fetch bundled Node runtime
         run: node scripts/fetch-node-runtime.mjs --platform ${{ steps.target.outputs.platform }}
 
+      # dmg-builder runs its vendored `dmgbuild` under whatever `python3` it
+      # finds (`dmgUtil.js` — `PYTHON_PATH` first, then `command -v python3`),
+      # and dmgbuild parses `hdiutil create`'s output with `plistlib`. On the
+      # runner's current Homebrew Python 3.14 that parse throws
+      # `plistlib.InvalidFileException: Invalid file` and the dmg never gets
+      # built — run 35804744714, while the same job on the same branch passed
+      # on 2026-09-21 (35597486859) before the image moved to 3.14.
+      #
+      # So the interpreter is pinned, and handed over by path rather than by
+      # PATH order: `PYTHON_PATH` is the first thing dmg-builder checks, which
+      # leaves no room for another python to win the lookup.
+      - name: Setup Python for dmg-builder
+        id: dmg-python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Build unsigned macOS candidate
         run: npx electron-builder --mac --${{ steps.target.outputs.arch }} --publish never -c.mac.identity=null -c.mac.notarize=false -c.dmg.sign=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          PYTHON_PATH: ${{ steps.dmg-python.outputs.python-path }}
 
       - name: Verify packaged Pi worker
         # Quoted: `productName` is "PiLab Ai", so the bundle path has a space in it.
