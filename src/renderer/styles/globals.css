@@ -51,8 +51,10 @@
   --text-2xs: 10px;
   --text-2xs--line-height: 14px;
   /* T-05: first real landing of the design-system.md:335/337 code/markdown tiers into @theme. */
-  --text-code: 0.75rem;        /* 12px -- A07 --t-code; optical compensation vs the 14px sans body (D25 §2.4, retuned by U01-a) */
-  --text-markdown: 0.875rem;   /* 14px -- A07 --t-md, tool rows share body copy's tier */
+  --text-code: 0.8125rem;        /* 13px -- A07 --t-code; optical compensation vs the 15px sans body (D25 §2.4, retuned by U01-a) */
+  --text-code--line-height: 1.5;
+  --text-markdown: 0.9375rem;    /* 15px -- A07 --t-md, tool rows share body copy's tier */
+  --text-markdown--line-height: 1.55;
   /*
    * D25: --text-meta is a separate token from --text-code on purpose -- code's
    * size is a mono-vs-sans optical compensation value, meta's is "secondary UI
@@ -60,13 +62,15 @@
    * (D25 §3.1). U01-a moved code 13->12 with the body; meta stayed at 13
    * because the body change is not its reason to move.
    *
-   * --text-markdown and --text-ui now hold the same 14px, exactly as they do in
+   * --text-markdown and --text-ui now hold the same 15px, exactly as they do in
    * pix. They stay two tokens for the same reason meta and code did at 13px:
    * equal values, different reasons to change.
    */
-  --text-meta: 0.8125rem;      /* 13px sans -- timestamps / statusline / meta rows */
-  --text-ui: 0.875rem;         /* 14px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
-  --text-title: 1.125rem;      /* 18px sans -- settings L1, the only tier above 15px */
+  --text-meta: 0.875rem;         /* 14px sans -- timestamps / statusline / meta rows */
+  --text-meta--line-height: 1.5;
+  --text-ui: 0.9375rem;          /* 15px sans -- sidebar rows, buttons, labels, tabs, dropdown triggers */
+  --text-ui--line-height: 1.5;
+  --text-title: 1.125rem;        /* 18px sans -- settings L1, the only tier above 15px */
 
   /*
    * T104: the chat area's two configurable tiers. These are the ONLY two
@@ -85,8 +89,8 @@
    * `documentElement` (see design-system.md "字体族（分域）" -- the deleted
    * `applyTerminalFont()` is what that red line was paid for).
    */
-  --text-chat-body: 16px;      /* D1 -- assistant/user prose, markdown incl. h1-h6, composer */
-  --text-chat-process: 13px;   /* D1 -- tool rows and thinking body (the downgraded tier) */
+  --text-chat-body: 17px;      /* D1 -- assistant/user prose, markdown incl. h1-h6, composer */
+  --text-chat-process: 14px;   /* D1 -- tool rows and thinking body (the downgraded tier) */
 
   /* D25 §3.4: reading column = 48 CJK chars @15px = Cursor reference; wide keeps the same -6.25% scaling */
   --container-reading: 45rem;
@@ -372,7 +376,7 @@
   body {
     @apply bg-background text-foreground;
     font-size: var(--text-ui);
-    line-height: 1.45;
+    line-height: 1.55;
   }
 
   button:not(:disabled),

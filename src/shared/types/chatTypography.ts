@@ -32,7 +32,7 @@ export const CHAT_BODY_FONT_SIZE_MAX = 24;
 export const CHAT_BODY_FONT_SIZE_MIN = 12;
 
 /** D1: the out-of-the-box body tier. Mirrors `--text-chat-body` in `globals.css`. */
-export const DEFAULT_CHAT_BODY_FONT_SIZE = 16;
+export const DEFAULT_CHAT_BODY_FONT_SIZE = 17;
 
 /** Upper bound of the process tier (px). Lower than the body's: it is the subordinate tier. */
 export const CHAT_PROCESS_FONT_SIZE_MAX = 20;
@@ -41,7 +41,7 @@ export const CHAT_PROCESS_FONT_SIZE_MAX = 20;
 export const CHAT_PROCESS_FONT_SIZE_MIN = 12;
 
 /** D1: the out-of-the-box process tier. Mirrors `--text-chat-process` in `globals.css`. */
-export const DEFAULT_CHAT_PROCESS_FONT_SIZE = 13;
+export const DEFAULT_CHAT_PROCESS_FONT_SIZE = 14;
 
 /** Empty string means "follow the app's `--font-sans`" — a real value, not a missing one. */
 export const DEFAULT_CHAT_FONT_FAMILY = '';
