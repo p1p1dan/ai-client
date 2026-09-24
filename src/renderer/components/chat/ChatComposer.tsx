@@ -31,7 +31,11 @@ import {
   createUnboundChatSession,
   stopChatSession,
 } from '@/stores/chatSessionActions';
-import { useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  acknowledgeFailedStatus,
+  statusForNextTurn,
+  useChatSessionsStore,
+} from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useMessageQueueStore } from '@/stores/messageQueue';
@@ -72,6 +76,7 @@ import { ComposerRoundButton } from './ComposerRoundButton';
 import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
+import { runCompactCommand } from './compactCommand';
 import { resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
@@ -126,6 +131,7 @@ import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
+import { failureCardOwnsError } from './sessionFailure';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
@@ -695,12 +701,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const canSend = Boolean(
     hasSendTarget && !disabled && !canStop && !stopping && activeSession?.status !== 'stopping'
   );
+  // D1: `status` now stays `'failed'` after a failed run closes (so the
+  // timeline's failure card renders); the queue gates read what the runtime
+  // actually reported, which for a closed run is `'idle'`.
+  const nextTurnStatus = statusForNextTurn(activeSession) ?? 'idle';
   const canSendQueuedNow = Boolean(
     hasSendTarget &&
       !disabled &&
       !stopping &&
       !otherSendInFlight &&
-      (canStop || activeSession?.status === 'idle' || activeSession?.status === 'completed')
+      (canStop || nextTurnStatus === 'idle' || nextTurnStatus === 'completed')
   );
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
@@ -943,15 +953,46 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         break;
       case 'archive': {
         if (!activeSessionId) return false;
-        await archiveSessionIndexEntry(activeSessionId, true, async () => undefined);
+        // `false` is a refusal the helper already chose not to force (e.g. the
+        // chat got bound to a runtime mid-request). It used to be dropped and
+        // the command cleared, which read as "archived" when nothing happened.
+        if (!(await archiveSessionIndexEntry(activeSessionId, true, async () => undefined))) {
+          toastManager.add({ type: 'error', title: t('Could not archive this conversation') });
+          return true;
+        }
         break;
       }
       case 'compact': {
         if (!activeSessionId) return false;
-        await window.electronAPI.chat.compactSession({
-          sessionId: activeSessionId,
-          ...(action.instructions ? { instructions: action.instructions } : {}),
+        // N1 (2026-09-24): refused while a turn runs, and every refusal used to
+        // be silent. The command stays in the box on any outcome but success,
+        // so one Enter after the turn ends runs it — see `compactCommand.ts`.
+        const outcome = await runCompactCommand({
+          turnRunning: canStop || stoppingRef.current || activeSession?.status === 'stopping',
+          compact: () =>
+            window.electronAPI.chat.compactSession({
+              sessionId: activeSessionId,
+              ...(action.instructions ? { instructions: action.instructions } : {}),
+            }),
         });
+        if (outcome.kind === 'turn-running') {
+          toastManager.add({
+            type: 'info',
+            title: t('Wait for this turn to finish before compacting'),
+            description: t(
+              '/compact stays in the input box — press Enter again once the turn ends.'
+            ),
+          });
+          return true;
+        }
+        if (outcome.kind === 'failed') {
+          toastManager.add({
+            type: 'error',
+            title: t('Could not compact the conversation'),
+            description: outcome.reason,
+          });
+          return true;
+        }
         break;
       }
     }
@@ -1490,7 +1531,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // A skip warning belongs to the paste that produced it, not to the next
     // turn. Sending is one of the three clear triggers (next attach / Send / x).
     dismissAttachmentNotice();
-    useChatSessionsStore.setState({ lastError: null });
+    // D1: a new turn retires the previous failure. Left in place, the stale
+    // `'failed'` would satisfy this send's own wait below (`status === 'failed'`)
+    // before the new run reported anything, and the old card would hang under
+    // the new message for the whole handshake.
+    useChatSessionsStore.setState((state) => ({
+      lastError: null,
+      sessions: acknowledgeFailedStatus(state.sessions, sessionId),
+    }));
 
     // T-28: all guards have passed and the send is committed — this is what
     // flips the middle column to the docked session state the same frame,
@@ -2593,7 +2641,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // latch is what makes the queue wait for the slot instead of fighting it.
     sending,
     isInFlight: () => inFlightRef.current || stoppingRef.current,
-    status: activeSession?.status ?? 'idle',
+    status: nextTurnStatus,
     runEntry: async (entry) => {
       // R3 fix: capture BEFORE runSend, off `entry.sessionId` (not
       // `activeSessionId` — see the comment below on why those can differ)
@@ -2879,7 +2927,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // `statusTone` stayed neutral and `largeHint` could still win over
   // `statusHint`. Deriving both from the same call is what keeps them agreeing.
   const emptySurface = deriveChatEmptySurface({
-    hasError: Boolean(lastError),
+    // D1: while the session is `failed`, the timeline's failure card reports
+    // this error; the box here would be a second, raw copy of it.
+    hasError: Boolean(lastError) && !failureCardOwnsError(activeSession?.status),
     hasWorkspace: Boolean(activeWorkspace),
     hasCwd: Boolean(cwd),
     // U28: a chat that has no session yet WILL be unbound — the first send

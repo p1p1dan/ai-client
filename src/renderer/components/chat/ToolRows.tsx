@@ -35,6 +35,7 @@ import {
   type FileLinkTarget,
   isDelegationTool,
   runningElapsedMs,
+  TOOL_RUN_OUTCOME_LABEL,
   type ToolRowView,
   toolRowArgClass,
   toolRowPermissionClass,
@@ -197,6 +198,14 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
       <span className={verbClass}>{t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
+      {/* N5: a call that never did its work says so in words — 「已拒绝」 for a
+          runtime refusal, 「未执行」 for one the run ended before. Same slot and
+          class as the permission word, since both say how the call ended. */}
+      {view.outcome && (
+        <span data-slot="tool-row-outcome" className={toolRowPermissionClass()}>
+          · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
+        </span>
+      )}
       {/* 2026-09-23 (user report: a 1800s command gave no sign of progress):
           the live clock on a running row — elapsed since `tool.started`, and
           the deadline the runtime will enforce when the input named one.
@@ -213,10 +222,11 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
               right, which is the per-row redundancy the zcode comparison was
               about. A preview, a failure and a whole-file write keep theirs —
               those three say something the verb does not. */}
-          {view.running || view.failed || view.diff.source === 'write-content' ? (
+          {view.running || view.outcome || view.failed || view.diff.source === 'write-content' ? (
             <>
               {t(
-                view.running
+                // A call that never ran shows what it ASKED to change (N5).
+                view.running || view.outcome
                   ? 'Modification preview'
                   : view.failed
                     ? 'Modification failed'
@@ -305,30 +315,21 @@ function ToolRowCollapsible({
   // Controlled on purpose: a disclosure changes LAYOUT, and the timeline's
   // scroll-follower needs to be told AFTER the panel has actually grown or
   // shrunk — `ThinkingFollowContext`'s callback records the new scrollHeight
-  // so the follow logic does not read the disclosure as new content. An
-  // uncontrolled Collapsible never re-renders this component on toggle, so
-  // there is no effect to hang that on.
+  // so the follow logic does not read the disclosure as new content, and an
+  // OPEN pauses following (C3). An uncontrolled Collapsible never re-renders
+  // this component on toggle, so there is no effect to hang that on.
   //
   // Every row reports, not just thoughts: a tool row opened at the bottom of a
   // streaming turn grows the page exactly the same way, and without the
   // report the follower scrolled its header out from under the click.
-  const follow = useContext(ThinkingFollowContext);
   const [open, setOpen] = useState(initialOpen);
-  // Deps-less layout effect + ref guard (the retired `ThinkingPreview`'s own
-  // pattern): runs after every render, does nothing unless the flag a toggle
-  // set is waiting to be consumed.
-  const followAfterLayout = useRef(false);
-  useLayoutEffect(() => {
-    if (!followAfterLayout.current) return;
-    followAfterLayout.current = false;
-    follow?.();
-  });
+  const markUserToggle = useUserDisclosureReport(open);
   return (
     <Collapsible
       open={open}
       onOpenChange={(next) => {
+        markUserToggle();
         setOpen(next);
-        followAfterLayout.current = true;
         if (sessionId) setToolRowExpanded(sessionId, view.key, next);
       }}
     >
@@ -783,10 +784,36 @@ function ToolRowOutputSegment({
 
 /**
  * The timeline's disclosure hook (`preserveDisclosurePosition`), called after
- * layout by every row that opens or closes. The name predates tool rows
- * joining the thoughts in using it.
+ * layout by every row that opens or closes, with the direction: opening pauses
+ * the timeline's bottom-following (`followAfterDisclosure`), closing does not.
+ * The name predates tool rows joining the thoughts in using it.
  */
-export const ThinkingFollowContext = createContext<(() => void) | null>(null);
+export const ThinkingFollowContext = createContext<((opened: boolean) => void) | null>(null);
+
+/**
+ * Report a USER toggle to the timeline, after the commit that resized it.
+ *
+ * Returns the function the click handler calls before it changes `open`. The
+ * deps-less layout effect (the retired `ThinkingPreview`'s pattern) consumes
+ * that mark on the next commit — the first one with the panel at its final
+ * height, which is the height the timeline has to record — and reports only if
+ * `open` really moved. A disclosure that opens or folds WITHOUT a click (a
+ * turn settling, a pending authorization forcing its group open) is not the
+ * reader's choice and is never reported, so it cannot pause following.
+ */
+export function useUserDisclosureReport(open: boolean): () => void {
+  const report = useContext(ThinkingFollowContext);
+  const toggledFrom = useRef<boolean | null>(null);
+  useLayoutEffect(() => {
+    const from = toggledFrom.current;
+    if (from === null) return;
+    toggledFrom.current = null;
+    if (from !== open) report?.(open);
+  });
+  return () => {
+    toggledFrom.current = open;
+  };
+}
 
 /**
  * The timeline's one-second clock (`useSecondsTick`), for running rows only.
@@ -806,7 +833,7 @@ export function ToolRowTimelineContext({
   nowMs,
   children,
 }: {
-  follow: () => void;
+  follow: (opened: boolean) => void;
   nowMs: number;
   children: ReactNode;
 }) {

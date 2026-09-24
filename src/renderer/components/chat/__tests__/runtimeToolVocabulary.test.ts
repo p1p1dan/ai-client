@@ -41,9 +41,11 @@ import {
   mcpToolLabel,
   outputMaxHeightClass,
   RUNTIME_TOOL_NAMES,
+  TOOL_RUN_OUTCOME_LABEL,
   TOOL_VERBS,
   type ToolClass,
   type ToolRun,
+  toolRunOutcome,
   toolVerb,
   UNKNOWN_TOOL_VERB,
 } from '../toolCard';
@@ -284,6 +286,111 @@ describe('the same words reach both surfaces', () => {
     const view = deriveToolRowView(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a'] }));
     expect(view.verb).toBe('Waited for subagents');
     expect(view.arg).toBe('1 delegation');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// N5 (devbox 2026-09-24) — a call that never did its work does not read as done
+// ---------------------------------------------------------------------------
+
+/**
+ * D2: the runtime refused five repeated idle `TaskStop` / `TaskWait` calls
+ * ("Refused: … has nothing left to act on"), and every one read as an ordinary
+ * grey 「已停止子 Agent / 已等待子 Agent」. D1: a loop-guard cut left 47 calls
+ * none of which executed, and they read 「已列出 / 已停止 / 已等待」 in red.
+ *
+ * The judgement is the result's structured `details` (`ToolOutcomeDetails`),
+ * which the projector forwards live and the history projection writes on
+ * replay — never the English prose next to it.
+ */
+describe('a call that never did its work', () => {
+  const refusedText =
+    'Refused: TaskWait has nothing left to act on, and this run has already said so.';
+  const refused = (tool: string) =>
+    run(
+      tool,
+      {},
+      {
+        output: refusedText,
+        result: {
+          content: [{ type: 'text', text: refusedText }],
+          details: { refused: true },
+        },
+      }
+    );
+  const notStarted = (tool: string, input: unknown = {}) =>
+    run(tool, input, {
+      status: 'failed',
+      output: 'The run ended before this call started.',
+      errorText: 'The run ended before this call started.',
+      result: {
+        content: [{ type: 'text', text: 'The run ended before this call started.' }],
+        details: { notStarted: true },
+      },
+    });
+
+  it.each([
+    [RUNTIME_TOOL_NAMES.taskWait, 'Wait for subagents', '等待子 Agent'],
+    [RUNTIME_TOOL_NAMES.taskStop, 'Stop subagents', '停止子 Agent'],
+    [RUNTIME_TOOL_NAMES.taskList, 'List subagents', '列出子 Agent'],
+  ])('[N5-REFUSED-1] a refused %s reads as the request plus 「已拒绝」', (tool, verb, zhVerb) => {
+    const view = deriveToolRowView(refused(tool));
+    expect(view.verb, 'the operation asked for, not a completed one').toBe(verb);
+    expect(view.outcome).toBe('refused');
+    expect(view.failed, 'a refusal is not a tool failure').toBe(false);
+    expect(zh(view.verb)).toBe(zhVerb);
+    expect(zh(TOOL_RUN_OUTCOME_LABEL.refused)).toBe('已拒绝');
+    // The runtime's reason stays one click away: it is the only account of why.
+    expect(view.body).toBe('output');
+    expect(view.output).toBe(refusedText);
+  });
+
+  it.each([
+    [RUNTIME_TOOL_NAMES.taskList, 'List subagents'],
+    [RUNTIME_TOOL_NAMES.read, 'Read'],
+    [RUNTIME_TOOL_NAMES.bash, 'Run'],
+  ])('[N5-NOTSTARTED-1] a %s the run ended before reads 「未执行」, not done and not red', (tool, verb) => {
+    const view = deriveToolRowView(notStarted(tool, PROBES[tool]?.input ?? {}));
+    expect(view.verb).toBe(verb);
+    expect(view.outcome).toBe('notStarted');
+    expect(view.failed, 'nothing was attempted, so nothing failed').toBe(false);
+    expect(view.running).toBe(false);
+    expect(zh(TOOL_RUN_OUTCOME_LABEL.notStarted)).toBe('未执行');
+    // No output of its own: only the runtime's English note, which the row's
+    // own word already says in the reader's language.
+    expect(view.body).toBeUndefined();
+    expect(view.output).toBeUndefined();
+  });
+
+  it('[N5-STRUCT-1] the words alone decide nothing — only the structured flag does', () => {
+    // The live payload before the projector forwarded the flag: text only.
+    const textOnly = deriveToolRowView(
+      run(RUNTIME_TOOL_NAMES.taskWait, {}, { output: refusedText })
+    );
+    expect(textOnly.outcome).toBeUndefined();
+    expect(textOnly.verb).toBe('Waited for subagents');
+    const failedText = deriveToolRowView(
+      run(
+        RUNTIME_TOOL_NAMES.bash,
+        {},
+        {
+          status: 'failed',
+          output: 'The run ended before this call started.',
+          errorText: 'The run ended before this call started.',
+        }
+      )
+    );
+    expect(failedText.outcome).toBeUndefined();
+    expect(failedText.failed).toBe(true);
+    // An ordinary structured result (a file change) is not an outcome either.
+    expect(toolRunOutcome({ result: { content: [], details: { review: {} } } })).toBeNull();
+    expect(toolRunOutcome({ result: { content: [], details: { refused: 'yes' } } })).toBeNull();
+  });
+
+  it('[N5-I18N-1] every outcome word has its Chinese entry', () => {
+    for (const key of Object.values(TOOL_RUN_OUTCOME_LABEL)) {
+      expect(zhTranslations, `${key} is missing from zhTranslations`).toHaveProperty(key);
+    }
   });
 });
 

@@ -515,6 +515,12 @@ export const zhTranslations: Record<string, string> = {
   'Start a new conversation': '开始一个新对话',
   'Archive this conversation': '归档当前对话',
   'Compact the context of this conversation': '压缩当前对话的上下文',
+  // 2026-09-24 N1: a local slash command that could not run says so.
+  'Wait for this turn to finish before compacting': '等这一轮结束后再压缩上下文',
+  '/compact stays in the input box — press Enter again once the turn ends.':
+    '/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。',
+  'Could not compact the conversation': '压缩上下文失败',
+  'Could not archive this conversation': '归档对话失败',
   'Remote repository is not connected yet': '远程仓库尚未连接',
   'Open terminal': '在终端中打开',
   'Open with': '打开方式',
@@ -2617,6 +2623,10 @@ export const zhTranslations: Record<string, string> = {
   'Stopped subagents': '已停止子 Agent',
   'Stopping subagents': '停止子 Agent 中',
   'Stop subagents': '停止子 Agent',
+  // N5 (2026-09-24): how a call that never did its work ended — the runtime
+  // refused it, or the run ended before it started (`TOOL_RUN_OUTCOME_LABEL`).
+  Refused: '已拒绝',
+  'Not run': '未执行',
   Called: '调用',
   Calling: '调用中',
   Call: '调用',

@@ -55,6 +55,19 @@ export type HistoryBlock =
       review?: SessionFileChange;
       error?: string;
       truncated?: boolean;
+      /**
+       * N5: the replay half of `ToolOutcomeDetails` (runtimeEvents.ts). The
+       * runtime refused the call instead of acting on it — copied from the
+       * result's own `details.refused`.
+       */
+      refused?: true;
+      /**
+       * N5: the call was never executed. Pi runs no tool call of an assistant
+       * message that ended `aborted` or `error`, and writes no result for it;
+       * the projection supplies this result so the row does not replay as
+       * still running.
+       */
+      notStarted?: true;
     };
 
 /**
@@ -204,6 +217,20 @@ export interface HistoryMessage {
   role: 'user' | 'assistant' | 'system';
   /** Epoch ms from the Pi entry timestamp when parseable. */
   timestamp?: number;
+  /**
+   * The latest Pi entry this message stands for, when that is LATER than its
+   * own `timestamp`: the message's own entry, every `toolResult` entry folded
+   * into its blocks, and the {@link RUN_STOP_CUSTOM_TYPE} entry stamped onto it
+   * — the maximum of the three. Absent when nothing later was folded in.
+   *
+   * An assistant entry is dated when the model finished WRITING it, i.e. before
+   * its tool calls ran. A run that ends on a tool result (Ctrl+Enter stops at
+   * the tool boundary) has no later assistant entry, so without this a
+   * replayed 20-second turn measured as the write of the call that started
+   * the 20 seconds (devbox 2026-09-24, N2: 「已工作 20 秒」 → 「1 秒」).
+   * Optional-field addition; older readers ignore it.
+   */
+  settledAt?: number;
   /** Assistant messages: provider/model when reported by Pi. */
   model?: string;
   blocks: HistoryBlock[];

@@ -4,6 +4,7 @@ import { BranchSwitcher } from '@/components/source-control/BranchSwitcher';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGitBranches, useGitCheckout, useGitCreateBranch } from '@/hooks/useGit';
 import { useI18n } from '@/i18n';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import type { BranchColumnModel } from './composerColumns';
 
 interface BranchColumnProps {
@@ -72,7 +73,10 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
           checkout.mutate(
             { workdir, branch },
             {
-              onError: (cause) => setError(`${t('Failed to switch branch')}: ${cause.message}`),
+              // N6 (2026-09-24): Electron's `Error invoking remote method …`
+              // wrapper filled the whole one-line chip; git's words go first.
+              onError: (cause) =>
+                setError(`${t('Failed to switch branch')}: ${unwrapIpcErrorMessage(cause)}`),
             }
           );
         }}
@@ -83,11 +87,7 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
           try {
             await createBranch.mutateAsync({ workdir, name });
           } catch (cause) {
-            setError(
-              `${t('Failed to create branch')}: ${
-                cause instanceof Error ? cause.message : String(cause)
-              }`
-            );
+            setError(`${t('Failed to create branch')}: ${unwrapIpcErrorMessage(cause)}`);
             // BranchSwitcher keeps the draft open when creation fails.
             throw cause;
           }
@@ -126,13 +126,13 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
             render={
               <span
                 role="alert"
-                className="inline-flex min-w-0 max-w-48 items-center text-ui text-destructive"
+                className="inline-flex min-w-0 max-w-80 items-center text-ui text-destructive"
               />
             }
           >
             <span className="truncate">{error}</span>
           </TooltipTrigger>
-          <TooltipPopup className="max-w-80">{error}</TooltipPopup>
+          <TooltipPopup className="max-w-80 whitespace-pre-wrap break-words">{error}</TooltipPopup>
         </Tooltip>
       )}
     </span>

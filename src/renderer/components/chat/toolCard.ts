@@ -1,6 +1,7 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { readStreamingToolArgs } from '@shared/streamingToolArgs';
+import type { ToolOutcomeDetails } from '@shared/types/runtimeEvents';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { isQuietPermissionActivity } from './permissionActivityRow';
@@ -441,6 +442,14 @@ export interface ToolRowView {
   running: boolean;
   failed: boolean;
   /**
+   * N5 (devbox 2026-09-24): the call never did its work — the runtime refused
+   * it, or the run ended before it started. Such a row reads as the operation
+   * that was asked for (the `refused` verb form) plus this word, never as a
+   * completed one; see `toolRunOutcome` for how it is decided. Absent on every
+   * call that actually ran, whatever came back.
+   */
+  outcome?: ToolRunOutcome;
+  /**
    * The `tool.started` stamp of a running row (2026-09-23), for its live
    * elapsed tail. Only the START is derived here; the elapsed is computed at
    * paint (`runningElapsedMs`) by the one leaf that reads the ticking clock,
@@ -553,19 +562,27 @@ interface ThinkingRowOptions {
 
 /** Single call row. A failed run always forces `body: 'output'` (sign-off ②: failures auto-expand). */
 export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): ToolRowView {
+  const outcome = toolRunOutcome(run) ?? undefined;
   const running = run.status === 'running';
-  const failed = run.status === 'failed';
+  // A call that never ran did not FAIL: nothing was attempted. Its row says
+  // what happened instead (`outcome`), in the row's ordinary tone — a
+  // loop-guard cut used to paint 47 red rows for calls none of which executed.
+  const failed = run.status === 'failed' && !outcome;
   // A refused call never ran, so it must not be described in the past tense —
-  // the collapsed row is the only thing most readers see (§6.4, G-9).
+  // the collapsed row is the only thing most readers see (§6.4, G-9). The same
+  // holds for a call the runtime refused or never started (N5).
   const verb = toolVerb(
     run.toolName,
-    toolRunWasRefused(run) ? 'refused' : running ? 'running' : 'done'
+    toolRunWasRefused(run) || outcome ? 'refused' : running ? 'running' : 'done'
   );
   const argDetail = formatToolArgDetail(run, options);
   const link = deriveFileLink(run) ?? undefined;
-  const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
+  const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
 
-  const showOutputBody = !running && (failed || Boolean(run.output));
+  // A never-started call has no output of its own — only the runtime's English
+  // note, which `outcome` already says in the reader's language. A refusal
+  // keeps its body: the runtime's reason is the only account of why.
+  const showOutputBody = !running && outcome !== 'notStarted' && (failed || Boolean(run.output));
   // 2026-09-23 (user report: a running command could not be expanded and its
   // full text was nowhere to be seen): a running call's input is now
   // expandable as a live preview. `tool.updated` rewrites
@@ -599,6 +616,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     argKind: argDetail?.kind,
     running,
     failed,
+    ...(outcome ? { outcome } : {}),
     runningStartedAtMs,
     runningTimeoutMs,
     expandable,
@@ -1018,6 +1036,46 @@ export function toolRunWasRefused(run: Pick<ToolRun, 'permission'>): boolean {
   const permission = run.permission;
   return permission?.resolved === true && permission.allowed === false;
 }
+
+/**
+ * N5: why a call that has a result never did its work, or `null` when it did.
+ *
+ * - `refused` — the runtime answered it with a refusal instead of acting (the
+ *   subagent plugin's repeated idle `TaskWait` / `TaskStop` / `TaskList`).
+ * - `notStarted` — the run ended after the model wrote the call and before the
+ *   runtime executed it (Stop, a loop-guard cut, a provider error).
+ *
+ * Read ONLY off the structured `details` the result carries
+ * (`ToolOutcomeDetails`: the projector copies `refused` from the tool's own
+ * result and stamps `notStarted` on the calls it settles; the history
+ * projection does the same on replay). Never off the text: "Refused:" and "The
+ * run ended before this call started." are prose for the model and for logs,
+ * and a row that matched them would change meaning with a reworded sentence.
+ *
+ * A call refused by its AUTHORIZATION is `toolRunWasRefused`'s case, not this
+ * one: it carries a decision word of its own.
+ */
+export type ToolRunOutcome = 'refused' | 'notStarted';
+
+export function toolRunOutcome(run: Pick<ToolRun, 'result'>): ToolRunOutcome | null {
+  const result = run.result;
+  if (!result || typeof result !== 'object' || !('details' in result)) return null;
+  const details = (result as { details?: unknown }).details;
+  if (!details || typeof details !== 'object') return null;
+  const flags = details as ToolOutcomeDetails;
+  if (flags.notStarted === true) return 'notStarted';
+  if (flags.refused === true) return 'refused';
+  return null;
+}
+
+/**
+ * The word a never-ran row ends with, as a catalog KEY (translated at the
+ * render site, like `verb`).
+ */
+export const TOOL_RUN_OUTCOME_LABEL: Readonly<Record<ToolRunOutcome, string>> = {
+  refused: 'Refused',
+  notStarted: 'Not run',
+};
 
 /**
  * The `tool_call` block ids in this list whose authorization was refused.

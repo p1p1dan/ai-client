@@ -16,6 +16,7 @@ import type {
   RuntimeEventDraft,
   SessionRecoveryNote,
   SessionRetryInfo,
+  ToolOutcomeDetails,
 } from '../../shared/types/runtimeEvents.ts';
 import type { RuntimeRunResult } from '../contracts.ts';
 import { streamingToolArgsKey, summarizeStreamingToolArgs } from './streamingToolArgs.ts';
@@ -95,6 +96,23 @@ function text(content: unknown): string {
  * shape nothing here can read, because dropping it would hide a result
  * entirely, which is worse than showing it raw.
  */
+/** The error a call that never ran is settled with (`settleUnfinishedToolRows`). */
+export const NOT_STARTED_ERROR = 'The run ended before this call started.';
+
+/**
+ * N5: the {@link ToolOutcomeDetails} a tool's own result reports, copied off
+ * its `details` — `undefined` when it reports none, so an ordinary result
+ * keeps its plain-string output.
+ */
+export function toolOutcomeDetails(result: unknown): ToolOutcomeDetails | undefined {
+  const details =
+    result && typeof result === 'object' && 'details' in result
+      ? (result as { details?: unknown }).details
+      : undefined;
+  if (!details || typeof details !== 'object') return undefined;
+  return (details as { refused?: unknown }).refused === true ? { refused: true } : undefined;
+}
+
 export function output(result: unknown): string {
   if (typeof result === 'string') return result;
   if (result && typeof result === 'object' && 'content' in result) {
@@ -432,6 +450,7 @@ export class RuntimeEventProjector {
    */
   private settleUnfinishedToolRows(): void {
     for (const [toolCallId, row] of this.streamingTools) {
+      const notStarted: ToolOutcomeDetails = { notStarted: true };
       this.emit({
         type: 'tool.completed',
         sessionId: this.sink.sessionId,
@@ -439,7 +458,10 @@ export class RuntimeEventProjector {
           messageId: row.messageId,
           toolCallId,
           ok: false,
-          error: 'The run ended before this call started.',
+          // N5: the flag is what the row reads; the sentence is for anything
+          // that only shows text.
+          output: { content: [{ type: 'text', text: NOT_STARTED_ERROR }], details: notStarted },
+          error: NOT_STARTED_ERROR,
         },
       });
       this.toolMessages.delete(toolCallId);
@@ -617,6 +639,7 @@ export class RuntimeEventProjector {
       }
       case 'tool_execution_end': {
         const review = !event.isError ? reviewFromToolResult(event.result) : undefined;
+        const outcome = toolOutcomeDetails(event.result);
         this.emit({
           type: 'tool.completed',
           sessionId,
@@ -624,9 +647,13 @@ export class RuntimeEventProjector {
             messageId: this.toolMessages.get(event.toolCallId) ?? this.ensureAssistant(),
             toolCallId: event.toolCallId,
             ok: !event.isError,
-            output: review
-              ? { content: [{ type: 'text', text: output(event.result) }], details: { review } }
-              : output(event.result),
+            output:
+              review || outcome
+                ? {
+                    content: [{ type: 'text', text: output(event.result) }],
+                    details: { ...(review ? { review } : {}), ...outcome },
+                  }
+                : output(event.result),
             ...(event.isError ? { error: output(event.result) || 'Tool call failed' } : {}),
           },
         });

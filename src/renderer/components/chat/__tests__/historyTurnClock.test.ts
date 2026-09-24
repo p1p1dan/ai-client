@@ -320,3 +320,63 @@ it('[TAIL-GLYPH-1] the tail row bullet carries no separator after it', async () 
     await unmount();
   }
 });
+
+/**
+ * N2 (devbox 2026-09-24): a turn ended by Ctrl+Enter read 「已工作 20 秒」 live
+ * and 「已工作 1 秒」 after a restart.
+ *
+ * Ctrl+Enter stops the run at the tool boundary, so the turn's last assistant
+ * entry is the one that ISSUED `sleep 20` — written before the 20 seconds ran.
+ * The history projection now carries the later dates it folds into that
+ * message (the tool result, the run-stop record) as `settledAt`, and the
+ * replayed clock has to end there. `settledAt` reaches `ChatMessage` through
+ * the store's history mapping (`chatSessionsHistory.test.ts [N2-MAP-1]`).
+ */
+it('[HIST-CLOCK-3] an interjected turn that ended on a tool result is timed to its settle', async () => {
+  const sleepCall: ChatMessage['blocks'] = [
+    {
+      id: 'h:a2:b1',
+      type: 'tool_call',
+      toolCallId: 'c2',
+      toolName: 'bash',
+      toolInput: { command: 'sleep 20' },
+    },
+    { id: 'h:a2:b2', type: 'tool_result', toolCallId: 'c2', toolOk: true, toolOutput: 'done' },
+  ];
+  const messages: ChatMessage[] = [
+    {
+      id: 'h:u1',
+      sessionId: 's',
+      role: 'user',
+      blocks: [{ id: 'h:u1:t', type: 'text', text: '长任务' }],
+      timestamp: SENT_AT,
+    },
+    {
+      id: 'h:a1',
+      sessionId: 's',
+      role: 'assistant',
+      blocks: TWO_CALL_BODY.slice(0, 4),
+      timestamp: SENT_AT + 150,
+      settledAt: SENT_AT + 200,
+    },
+    {
+      id: 'h:a2',
+      sessionId: 's',
+      role: 'assistant',
+      blocks: sleepCall,
+      stopCause: 'interjected',
+      timestamp: SENT_AT + 322,
+      settledAt: SENT_AT + 20_368,
+    },
+  ];
+  const { container, unmount } = await renderHistory(messages);
+  try {
+    const text = container.textContent ?? '';
+    expect(text).toContain(zh('Worked for {{seconds}}s', { seconds: 20 }));
+    expect(text, 'not the write of the call that started the 20 seconds').not.toContain(
+      zh('Worked for {{seconds}}s', { seconds: 1 })
+    );
+  } finally {
+    await unmount();
+  }
+});

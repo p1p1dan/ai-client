@@ -367,4 +367,150 @@ describe('run-stop records in history replay', () => {
     );
     expect(history[1]?.stopCause).toBeUndefined();
   });
+
+  /**
+   * N2 (devbox 2026-09-24): a turn ended by Ctrl+Enter showed 「已工作 20 秒」
+   * live and 「已工作 1 秒」 after a restart. Ctrl+Enter stops at the tool
+   * boundary, so nothing after `sleep 20`'s result is an assistant entry — the
+   * result's date and the run-stop record's date were the only record of when
+   * the run ended, and the projection dropped both when it folded them.
+   */
+  describe('settledAt — the latest entry folded into a message', () => {
+    const toolResult = (id: string, parentId: string, callId: string, second: number) => ({
+      type: 'message',
+      id,
+      parentId,
+      timestamp: at(second),
+      message: {
+        role: 'toolResult',
+        toolCallId: callId,
+        toolName: 'bash',
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      },
+    });
+    const call = (id: string) => [{ type: 'toolCall', id, name: 'bash', arguments: {} }];
+    const epochOf = (second: number) => Date.parse(at(second));
+
+    it('[N2-SETTLED-1] an interjected run that ended on a tool result settles at its run stop', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'long', 1),
+          assistant('a1', 'u1', call('c1'), 'toolUse', 2),
+          toolResult('r1', 'a1', 'c1', 3),
+          assistant('a2', 'r1', call('c2'), 'toolUse', 4),
+          toolResult('r2', 'a2', 'c2', 24),
+          runStop('s1', 'r2', 'interjected', 25),
+          user('u2', 's1', 'the interjection', 26),
+          assistant('a3', 'u2', [{ type: 'text', text: 'echo' }], 'stop', 27),
+        ])
+      );
+      const byEntry = new Map(history.map((message) => [message.entryId, message]));
+      // Own date, folded result, run stop: the latest of the three.
+      expect(byEntry.get('a2')?.timestamp).toBe(epochOf(4));
+      expect(byEntry.get('a2')?.settledAt).toBe(epochOf(25));
+      expect(byEntry.get('a1')?.settledAt).toBe(epochOf(3));
+      // Nothing later was folded into these, so nothing is added.
+      expect(byEntry.get('a3')).not.toHaveProperty('settledAt');
+      expect(byEntry.get('u1')).not.toHaveProperty('settledAt');
+    });
+
+    it('[N2-SETTLED-2] a normal and a stopped turn still end on their last assistant entry', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          // Normal: the answer is written after every result, so it is the end.
+          user('u1', null, 'normal', 1),
+          assistant('a1', 'u1', call('c1'), 'toolUse', 2),
+          toolResult('r1', 'a1', 'c1', 22),
+          assistant('a2', 'r1', [{ type: 'text', text: 'done' }], 'stop', 23),
+          // Stop mid-call: pi answers the abort with a placeholder assistant
+          // entry dated at the stop, which the run-stop record lands on.
+          user('u2', 'a2', 'stopped', 30),
+          assistant('a3', 'u2', call('c2'), 'toolUse', 31),
+          toolResult('r2', 'a3', 'c2', 34),
+          assistant('a4', 'r2', [], 'aborted', 34),
+          runStop('s1', 'a4', 'user_stop', 34),
+        ])
+      );
+      const byEntry = new Map(history.map((message) => [message.entryId, message]));
+      const turnEnd = (entries: string[]) =>
+        Math.max(
+          ...entries.map((id) => {
+            const message = byEntry.get(id);
+            return Math.max(message?.timestamp ?? 0, message?.settledAt ?? 0);
+          })
+        );
+      expect(turnEnd(['a1', 'a2']) - epochOf(1)).toBe(22_000);
+      expect(byEntry.get('a2')).not.toHaveProperty('settledAt');
+      expect(turnEnd(['a3', 'a4']) - epochOf(30)).toBe(4_000);
+      expect(byEntry.get('a4')?.stopCause).toBe('user_stop');
+      expect(byEntry.get('a4')).not.toHaveProperty('settledAt');
+    });
+  });
+
+  /**
+   * N5 (devbox 2026-09-24): the replay half of the projector's structured
+   * outcome flags.
+   */
+  describe('calls that never did their work', () => {
+    it('[N5-HIST-1] carries a result’s own refusal flag', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'wait', 1),
+          assistant(
+            'a1',
+            'u1',
+            [{ type: 'toolCall', id: 'w1', name: 'TaskWait', arguments: {} }],
+            'toolUse',
+            2
+          ),
+          {
+            type: 'message',
+            id: 'r1',
+            parentId: 'a1',
+            timestamp: at(3),
+            message: {
+              role: 'toolResult',
+              toolCallId: 'w1',
+              toolName: 'TaskWait',
+              content: [{ type: 'text', text: 'Refused: nothing left.' }],
+              details: { idle: true, refused: true },
+              isError: false,
+            },
+          },
+        ])
+      );
+      const result = history[1]?.blocks.find((block) => block.type === 'tool_result');
+      expect(result).toMatchObject({ ok: true, refused: true });
+    });
+
+    it('[N5-HIST-2] answers the calls of an aborted or failed reply as never started', () => {
+      const calls = (ids: string[]) =>
+        ids.map((id) => ({ type: 'toolCall', id, name: 'TaskList', arguments: {} }));
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'formB', 1),
+          assistant('a1', 'u1', calls(['c1', 'c2']), 'error', 2),
+          user('u2', 'a1', 'stop mid-call', 3),
+          assistant('a2', 'u2', calls(['c3']), 'aborted', 4),
+          // A reply that ended normally but whose call has no result (the app
+          // died while it ran) may have half-run: it is NOT claimed unstarted.
+          user('u3', 'a2', 'crash', 5),
+          assistant('a3', 'u3', calls(['c4']), 'toolUse', 6),
+        ])
+      );
+      const results = (entryId: string) =>
+        history
+          .find((message) => message.entryId === entryId)
+          ?.blocks.filter((block) => block.type === 'tool_result');
+      expect(results('a1')).toEqual([
+        expect.objectContaining({ toolCallId: 'c1', ok: false, notStarted: true }),
+        expect.objectContaining({ toolCallId: 'c2', ok: false, notStarted: true }),
+      ]);
+      expect(results('a2')).toEqual([
+        expect.objectContaining({ toolCallId: 'c3', ok: false, notStarted: true }),
+      ]);
+      expect(results('a3')).toEqual([]);
+    });
+  });
 });

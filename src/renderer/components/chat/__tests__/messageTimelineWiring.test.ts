@@ -605,10 +605,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The replayed body rows reach the span the same way, and as `completedAt`
     // ONLY: Pi dates an entry when it writes it, so claiming a `startedAt`
     // would make the first assistant's COMPLETION the turn's origin and report
-    // a six-minute turn as a few seconds.
-    expect(turn).toContain(
-      'getMetadata(message.id) ?? (message.timestamp === undefined ? undefined : { completedAt: message.timestamp })'
-    );
+    // a six-minute turn as a few seconds. `replayedSpanMetadata` is that rule
+    // (pinned by `turnTiming.test.ts`), and it also reads `settledAt` — the
+    // folded tool result / run stop — so a run that ended at a tool boundary
+    // is not measured to the write of its last call (N2, 2026-09-24).
+    expect(turn).toContain('getMetadata(message.id) ?? replayedSpanMetadata(message)');
     // Exactly one derivation of it: a second one elsewhere would be a fork of
     // the judgement this whole fix rests on.
     expect(SYNTAX.split('const turnStartedAtMs =').length - 1).toBe(1);
@@ -1365,8 +1366,10 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expectCalled('countTurnToolCalls(items)');
     // …falling back to the replayed row's own date, so a restored turn says
     // 「完成于 17:05」 instead of dropping the clause (2026-09-22).
+    // `replayedCompletedAt` is that date, or the later `settledAt` when the
+    // run ended on a tool result or a run-stop record (N2, 2026-09-24).
     expect(turn).toContain(
-      'completedAtMs: metadata?.completedAt ?? lastAssistant?.timestamp ?? null'
+      'completedAtMs: metadata?.completedAt ?? (lastAssistant ? replayedCompletedAt(lastAssistant) : null) ?? null'
     );
     expect(turn).toContain('thinkingMs: turnThinkingMs');
     // Token usage left the turn surface with the head. It is a CLOSED list of

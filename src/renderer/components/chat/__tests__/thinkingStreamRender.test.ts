@@ -142,8 +142,11 @@ it('both disclosure directions preserve the reading position instead of requesti
   );
   await clickTrigger();
   expect(follow).toHaveBeenCalledTimes(1);
+  // C3: the direction rides along — an open pauses the timeline's following.
+  expect(follow).toHaveBeenLastCalledWith(true);
   await clickTrigger();
   expect(follow).toHaveBeenCalledTimes(2);
+  expect(follow).toHaveBeenLastCalledWith(false);
 });
 
 /**

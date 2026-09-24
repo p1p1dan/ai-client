@@ -19,19 +19,39 @@ export interface PiHistorySessionManager {
 }
 
 /**
+ * Record that an entry dated `stamp` was folded into `message`: `settledAt`
+ * becomes the latest of the message's own date and every folded entry's, and
+ * stays absent while nothing later than the message itself was folded in.
+ */
+function foldSettledAt(message: HistoryMessage, stamp: number | undefined): HistoryMessage {
+  if (stamp === undefined) return message;
+  const latest = message.settledAt ?? message.timestamp;
+  if (latest !== undefined && stamp <= latest) return message;
+  return { ...message, settledAt: stamp };
+}
+
+/**
  * Fold a run-stop record onto the run it closes.
  *
  * The record is written after the run's last message, so the run's last
  * assistant message is the newest one since the last user message. A run
  * stopped before it produced any assistant message has nothing to carry the
  * cause, and none is invented.
+ *
+ * The record's own date is folded in too: it is written when the run ENDED,
+ * which for a run that stopped at a tool boundary is later than any assistant
+ * entry it wrote.
  */
-function stampRunStop(messages: HistoryMessage[], cause: TurnStopCause): void {
+function stampRunStop(
+  messages: HistoryMessage[],
+  cause: TurnStopCause,
+  stamp: number | undefined
+): void {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index];
     if (!message || message.role === 'user') return;
     if (message.role !== 'assistant') continue;
-    messages[index] = { ...message, stopCause: cause };
+    messages[index] = foldSettledAt({ ...message, stopCause: cause }, stamp);
     return;
   }
 }
@@ -181,7 +201,8 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
     if (entry.type === 'custom') {
       if (entry.customType === RUN_STOP_CUSTOM_TYPE) {
         const cause = recordOf(entry.data)?.cause;
-        if (cause === 'interjected' || cause === 'user_stop') stampRunStop(messages, cause);
+        if (cause === 'interjected' || cause === 'user_stop')
+          stampRunStop(messages, cause, timestamp);
         continue;
       }
       if (entry.customType === LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE) {
@@ -399,7 +420,7 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           }
         }
       }
-      const details = message.details as { patch?: unknown } | undefined;
+      const details = recordOf(message.details) as { patch?: unknown; refused?: unknown } | null;
       const review = message.isError !== true ? reviewFromToolResult(message) : undefined;
       const resultBlock: HistoryBlock = {
         type: 'tool_result',
@@ -412,10 +433,18 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           ? { patch: details.patch }
           : {}),
         ...(message.isError === true ? { error: output || 'Tool call failed' } : {}),
+        // N5: the same flag the live projector forwards (`toolOutcomeDetails`).
+        ...(details?.refused === true ? { refused: true as const } : {}),
       };
       if (target && messages[target.messageIndex]) {
         const owner = messages[target.messageIndex];
-        messages[target.messageIndex] = { ...owner, blocks: [...owner.blocks, resultBlock] };
+        // The result's date survives the fold as `settledAt`: it is when the
+        // call FINISHED, and for a run that stopped right after it nothing
+        // later records how long the call took.
+        messages[target.messageIndex] = foldSettledAt(
+          { ...owner, blocks: [...owner.blocks, resultBlock] },
+          timestamp
+        );
       } else {
         messages.push({
           id: messageId,
@@ -436,7 +465,51 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
     }
   }
 
-  return markIncompleteAssistantLeaves(messages);
+  return markIncompleteAssistantLeaves(settleUnstartedToolCalls(messages));
+}
+
+/** Mirrors the live projector's `NOT_STARTED_ERROR`, so both paths read alike. */
+const NOT_STARTED_ERROR = 'The run ended before this call started.';
+
+/**
+ * N5: give every call Pi never ran a result that says so.
+ *
+ * Pi's loop executes no tool call of an assistant message that ended `aborted`
+ * or `error` (`agent-loop.js`: it returns straight after `turn_end` with no
+ * tool results), so nothing in the file ever answers those calls. Left alone
+ * they replay as RUNNING — present-tense verbs on a finished transcript. This
+ * is the replay half of the live projector's `settleUnfinishedToolRows`.
+ *
+ * Runs after the whole branch is folded, because a result is written after
+ * its call and may sit several entries later.
+ */
+function settleUnstartedToolCalls(messages: HistoryMessage[]): HistoryMessage[] {
+  let changed = false;
+  const next = messages.map((message) => {
+    if (message.role !== 'assistant') return message;
+    if (message.stopReason !== 'aborted' && message.stopReason !== 'error') return message;
+    const answered = new Set(
+      message.blocks.flatMap((block) => (block.type === 'tool_result' ? [block.toolCallId] : []))
+    );
+    const unstarted: HistoryBlock[] = message.blocks.flatMap((block) =>
+      block.type === 'tool_call' && !answered.has(block.toolCallId)
+        ? [
+            {
+              type: 'tool_result' as const,
+              id: stablePartId(message.id, 'tool-result', block.toolCallId),
+              toolCallId: block.toolCallId,
+              ok: false,
+              error: NOT_STARTED_ERROR,
+              notStarted: true as const,
+            },
+          ]
+        : []
+    );
+    if (unstarted.length === 0) return message;
+    changed = true;
+    return { ...message, blocks: [...message.blocks, ...unstarted] };
+  });
+  return changed ? next : messages;
 }
 
 export function paginatePiSessionHistory(

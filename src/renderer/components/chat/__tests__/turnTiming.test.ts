@@ -11,6 +11,8 @@ import {
   formatWorkedForRow,
   initialTurnTimingRegistry,
   reduceTurnTiming,
+  replayedCompletedAt,
+  replayedSpanMetadata,
   splitWorkedForDuration,
   type TurnSpanMetadata,
   turnHasThinkingOnlyProcess,
@@ -746,5 +748,40 @@ describe('[WG-CLOCK-5] the turn head clock never runs backwards', () => {
     // The 4th second of silence, with an empty body. The old head had no clock
     // at all in this state once the composer snapshot's phase reset landed.
     expect(renderedSeconds({ at: SEND_AT + 4_500, running: true, metadata: [] })).toBe(4);
+  });
+});
+
+/**
+ * N2 (devbox 2026-09-24): a replayed message ends at the later of its own write
+ * and the latest entry folded into it (`settledAt`), and still claims no start.
+ */
+describe('replayedSpanMetadata / replayedCompletedAt', () => {
+  it('[N2-SPAN-1] the later of the two dates is the end, and nothing is a start', () => {
+    expect(replayedSpanMetadata({ timestamp: 322, settledAt: 20_368 })).toEqual({
+      completedAt: 20_368,
+    });
+    expect(replayedSpanMetadata({ timestamp: 500, settledAt: 400 })).toEqual({ completedAt: 500 });
+    expect(replayedSpanMetadata({ timestamp: 322 })).toEqual({ completedAt: 322 });
+    expect(replayedSpanMetadata({ settledAt: 90 })).toEqual({ completedAt: 90 });
+    expect(replayedSpanMetadata({})).toBeUndefined();
+    expect(replayedCompletedAt({})).toBeUndefined();
+  });
+
+  it('[N2-SPAN-2] an interjected turn replays as its real span, not as the write of its last call', () => {
+    const body = [
+      replayedSpanMetadata({ timestamp: 150, settledAt: 200 }),
+      replayedSpanMetadata({ timestamp: 322, settledAt: 20_368 }),
+    ];
+    expect(deriveTurnWorkedMs(body, 0)).toBe(20_368);
+    // A normal turn is unchanged: its answer is written after every result.
+    expect(
+      deriveTurnWorkedMs(
+        [
+          replayedSpanMetadata({ timestamp: 2_000, settledAt: 22_000 }),
+          replayedSpanMetadata({ timestamp: 23_000 }),
+        ],
+        1_000
+      )
+    ).toBe(22_000);
   });
 });

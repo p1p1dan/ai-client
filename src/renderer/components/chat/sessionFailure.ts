@@ -35,6 +35,8 @@
  * favour of a tidy summary would reproduce that complaint one level up.
  */
 
+import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+
 /**
  * What the user can do about it. Exactly one per reason, and deliberately not
  * a list: a card that offers three buttons has not decided what it thinks.
@@ -220,4 +222,19 @@ export function canContinueSession(
   hasResumableMessage: boolean
 ): boolean {
   return view.action === 'continue' && hasResumableMessage;
+}
+
+/**
+ * D1 (2026-09-24) — whether the timeline's failure card is the surface that
+ * reports this session's error, so the composer's red box must stay down.
+ *
+ * The card renders exactly while the session is `'failed'` and prints the
+ * same sentence the box would, under a title that names the kind of stop. The
+ * box became the only durable surface when the runtime's closing `idle` kept
+ * wiping `'failed'` (T062 round-2); now that the status survives, printing it a
+ * second time — raw and in English — above the composer is the duplicate the
+ * point-check photographed.
+ */
+export function failureCardOwnsError(sessionStatus: SessionRuntimeStatus | undefined): boolean {
+  return sessionStatus === 'failed';
 }

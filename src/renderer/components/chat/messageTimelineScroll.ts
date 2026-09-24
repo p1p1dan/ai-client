@@ -123,3 +123,26 @@ export function nextFollowState(
   if (input.scrollHeight !== input.prevScrollHeight) return input.following;
   return true;
 }
+
+/**
+ * The follow flag after the reader opens or closes a row (C3, 2026-09-24).
+ *
+ * OPENING a row pauses following. The click says where the reader is looking,
+ * and the growth that follows it is not a reason to move the page: before this
+ * rule the flag stayed armed across the open, the disclosure's own resize was
+ * skipped (it matched the height `preserveDisclosurePosition` recorded), and
+ * the NEXT streamed paragraph was followed — by its own height plus the whole
+ * panel's, so a 466px thought scrolled its header out of view ~160ms after the
+ * click (devbox measurement, `17-c3-thought.json`).
+ *
+ * Nothing here re-arms. Following resumes through the paths that already
+ * carry intent: a scroll that lands at the bottom with a stable height
+ * (`nextFollowState` rule 3), the jump-to-bottom button, a Send, a session
+ * switch.
+ *
+ * CLOSING leaves the flag alone: a shrinking panel makes nothing new to follow,
+ * and a reader who closes a row at the bottom of a live turn is still there.
+ */
+export function followAfterDisclosure(following: boolean, opened: boolean): boolean {
+  return opened ? false : following;
+}

@@ -27,7 +27,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { stopChatSession } from '@/stores/chatSessionActions';
 import type { ChatMessage } from '@/stores/chatSessions';
-import { useChatSessionsStore } from '@/stores/chatSessions';
+import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import {
   isPendingUserMessage,
@@ -103,7 +103,11 @@ import { loadOlderHistoryPage } from './historyPageRequest';
 // count, thinking time) were asked for by name. So `formatAbsoluteTime` now has
 // a permanent consumer here, not a hover-gated one.
 import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
-import { nextFollowState, shouldShowJumpToBottom } from './messageTimelineScroll';
+import {
+  followAfterDisclosure,
+  nextFollowState,
+  shouldShowJumpToBottom,
+} from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { PermissionActivityRows } from './PermissionActivityRows';
@@ -117,7 +121,7 @@ import { canContinueSession, deriveSessionFailure } from './sessionFailure';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
-import { ToolGroup, ToolRowTimelineContext } from './ToolRows';
+import { ToolGroup, ToolRowTimelineContext, useUserDisclosureReport } from './ToolRows';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
@@ -169,7 +173,12 @@ import {
 //   - `formatWorkedForRow` reports ONE message's latency; the row needs the
 //     whole turn's span, which is `deriveTurnElapsedMs` — the same reason
 //     2026-09-18 chose it for the head this row replaces.
-import { deriveTurnElapsedMs, type ThinkingTiming } from './turnTiming';
+import {
+  deriveTurnElapsedMs,
+  replayedCompletedAt,
+  replayedSpanMetadata,
+  type ThinkingTiming,
+} from './turnTiming';
 import { useMessageMetadata } from './useMessageMetadata';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 import { useTurnTiming } from './useTurnTiming';
@@ -329,6 +338,14 @@ export function MessageTimeline({
   );
   const historyPagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
+  );
+  // D1 (2026-09-24): `status` stays `'failed'` after a failed run closes (that
+  // is what keeps the failure card up), so "may page older history" reads the
+  // store's next-turn view instead. A string selector: re-renders only when it
+  // changes.
+  const nextTurnStatus = useChatSessionsStore(
+    (state) =>
+      statusForNextTurn(state.sessions.find((session) => session.id === sessionId)) ?? status
   );
   // 2026-09-18: `hasDurablePiSession` / `isIdle` / `treeOpen` and the
   // SessionTreeDialog they drove moved to `workspace-shell/SessionBar.tsx`. The
@@ -579,11 +596,13 @@ export function MessageTimeline({
    * bottom — `nextFollowState`'s "genuine arrival" case — and agrees with the
    * flag set here instead of overwriting it on the next frame.
    */
-  // A disclosure changes layout, not the reader's intent to follow new tokens.
+  // A disclosure's own resize is layout, not new content, so it is never
+  // followed; and opening one pauses following outright (`followAfterDisclosure`).
   const preserveDisclosurePositionRef = useRef<number | null>(null);
-  const preserveDisclosurePosition = useCallback(() => {
+  const preserveDisclosurePosition = useCallback((opened: boolean) => {
     const viewport = findViewport(scrollRootRef.current);
     preserveDisclosurePositionRef.current = viewport?.scrollHeight ?? null;
+    stickToBottomRef.current = followAfterDisclosure(stickToBottomRef.current, opened);
   }, []);
 
   const jumpToBottom = useCallback(() => {
@@ -747,7 +766,7 @@ export function MessageTimeline({
                     type="button"
                     variant="ghost"
                     size="sm"
-                    disabled={loadingOlderHistory || status !== 'idle'}
+                    disabled={loadingOlderHistory || nextTurnStatus !== 'idle'}
                     onClick={() => void loadOlderHistory()}
                   >
                     {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
@@ -1699,6 +1718,10 @@ function TurnProgressHead({
   // that is not the turn's first, and a turn whose span nothing measured; both
   // used to render an empty row, which is what the user saw as 「折叠头没了」.
   const { line, spinner } = useTurnClockLine({ zone, clock, items });
+  // The head is a disclosure like any row inside it: opening it by a click at
+  // the bottom of a live turn pauses bottom-following (C3), so the process the
+  // reader asked to see is not scrolled away by the next paragraph.
+  const markUserToggle = useUserDisclosureReport(open);
 
   return (
     <details className={turnBodyClass()} open={open}>
@@ -1706,6 +1729,7 @@ function TurnProgressHead({
         className={turnWorkGroupSummaryClass()}
         onClick={(event) => {
           event.preventDefault();
+          markUserToggle();
           onUserOpenChange(!open);
         }}
       >
@@ -1894,18 +1918,12 @@ const ChatTurn = memo(function ChatTurn({
   // Whole-turn metadata, for the two ownership questions that need evidence
   // rather than the absence of a latency (F2 / F4).
   //
-  // A replayed row has no registry entry, and falls back to the stamp the
-  // history file dated it with — as `completedAt` ONLY. Pi dates an entry when
-  // it writes it, so there is no start to claim, and claiming one would make
-  // `earliestTurnStartMs` take the first assistant's COMPLETION as the turn's
-  // origin and report a 6-minute turn as a few seconds.
+  // A replayed row has no registry entry, and falls back to the dates the
+  // history file gave it — as `completedAt` ONLY (`replayedSpanMetadata`), and
+  // the LATER of its own and the latest entry folded into it, so a run that
+  // stopped at a tool boundary still ends when its last call did.
   const bodyMetadata = useMemo(
-    () =>
-      turn.body.map(
-        (message) =>
-          getMetadata(message.id) ??
-          (message.timestamp === undefined ? undefined : { completedAt: message.timestamp })
-      ),
+    () => turn.body.map((message) => getMetadata(message.id) ?? replayedSpanMetadata(message)),
     [turn.body, getMetadata]
   );
 
@@ -2288,7 +2306,8 @@ const ChatTurn = memo(function ChatTurn({
     // replayed row's own date, which is the same instant recorded one layer
     // down — a turn restored from history says 「完成于 17:05」 rather than
     // dropping the clause.
-    completedAtMs: metadata?.completedAt ?? lastAssistant?.timestamp ?? null,
+    completedAtMs:
+      metadata?.completedAt ?? (lastAssistant ? replayedCompletedAt(lastAssistant) : null) ?? null,
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });

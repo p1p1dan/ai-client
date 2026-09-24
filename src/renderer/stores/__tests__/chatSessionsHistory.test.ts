@@ -1,6 +1,7 @@
 import type { RuntimeEvent, SessionHistoryEvent } from '@shared/types/runtimeEvents';
 import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { pairToolBlocks, toolRunOutcome } from '@/components/chat/toolCard';
 import { deriveSessionReview } from '@/components/workspace-shell/sessionReview';
 import {
   applyRuntimeEvent,
@@ -696,6 +697,98 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
 
     const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [undated] }));
     expect(patch.messages?.[SESSION_ID]?.[0]).not.toHaveProperty('timestamp');
+  });
+
+  /**
+   * N2 (devbox 2026-09-24): a Ctrl+Enter turn read 「已工作 20 秒」 live and
+   * 「1 秒」 after a restart, because the only record of when it ended — the
+   * tool result and run-stop entries folded into its last assistant message —
+   * never reached the timeline. `historyTurnClock.test.ts [HIST-CLOCK-3]` is
+   * the other end of this wire.
+   */
+  it('[N2-MAP-1] carries settledAt through, and omits the key when the projection had none', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const settled: HistoryMessage = {
+      id: 'h:uuid-settled',
+      role: 'assistant',
+      timestamp: 1_700_000_000_322,
+      settledAt: 1_700_000_020_368,
+      stopCause: 'interjected',
+      blocks: [{ type: 'text', id: 'b1', text: 'start' }],
+    };
+    const plain: HistoryMessage = {
+      id: 'h:uuid-plain',
+      role: 'assistant',
+      timestamp: 1_700_000_030_000,
+      blocks: [{ type: 'text', id: 'b2', text: 'done' }],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [settled, plain] }));
+    const [first, second] = patch.messages?.[SESSION_ID] ?? [];
+    expect(first?.settledAt).toBe(1_700_000_020_368);
+    expect(first?.timestamp).toBe(1_700_000_000_322);
+    expect(second).not.toHaveProperty('settledAt');
+  });
+
+  /**
+   * N5 (devbox 2026-09-24): the replay half of `ToolOutcomeDetails`. The flags
+   * land in `toolOutput.details` exactly where the live `tool.completed`
+   * output puts them, so the row reads one structured field on both paths.
+   */
+  it('[N5-MAP-1] maps refused / notStarted results into the structured details the row reads', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const call = (toolCallId: string, name: string) => ({
+      id: `${toolCallId}:call`,
+      type: 'tool_call' as const,
+      toolCallId,
+      name,
+      input: {},
+    });
+    const message: HistoryMessage = {
+      id: 'h:uuid-outcomes',
+      role: 'assistant',
+      blocks: [
+        call('w1', 'TaskWait'),
+        {
+          id: 'w1:result',
+          type: 'tool_result',
+          toolCallId: 'w1',
+          ok: true,
+          output: 'Refused: nothing left.',
+          refused: true,
+        },
+        call('l1', 'TaskList'),
+        {
+          id: 'l1:result',
+          type: 'tool_result',
+          toolCallId: 'l1',
+          ok: false,
+          error: 'The run ended before this call started.',
+          notStarted: true,
+        },
+        call('s1', 'TaskStop'),
+        { id: 's1:result', type: 'tool_result', toolCallId: 's1', ok: true, output: 'Stopped.' },
+      ],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [message] }));
+    const results = (patch.messages?.[SESSION_ID]?.[0]?.blocks ?? []).filter(
+      (block) => block.type === 'tool_result'
+    );
+    expect(results[0]?.toolOutput).toEqual({
+      content: [{ type: 'text', text: 'Refused: nothing left.' }],
+      details: { refused: true },
+    });
+    expect(results[1]?.toolOutput).toEqual({
+      content: [{ type: 'text', text: '' }],
+      details: { notStarted: true },
+    });
+    expect(results[1]?.text).toBe('The run ended before this call started.');
+    // An ordinary result keeps its plain string: nothing structured to carry.
+    expect(results[2]?.toolOutput).toBe('Stopped.');
+    // And the timeline reads them as the live path does.
+    const runs = pairToolBlocks(patch.messages?.[SESSION_ID]?.[0]?.blocks ?? []);
+    expect(runs.map((run) => toolRunOutcome(run))).toEqual(['refused', 'notStarted', null]);
   });
 });
 

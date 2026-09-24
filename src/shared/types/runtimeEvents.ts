@@ -347,6 +347,30 @@ export interface ToolStartedEvent extends RuntimeEventBase {
   };
 }
 
+/**
+ * N5 (devbox 2026-09-24): the flags a `tool.completed` output carries, in its
+ * `details`, for a call that did NOT do its work. Such an output is the
+ * `{ content, details }` shape (the same one a file-change `review` rides in),
+ * so the renderer store passes it through untouched.
+ *
+ * Structured on purpose: the only other trace of either case is prose — a
+ * refusal's text starts "Refused:", a never-run call's error is an English
+ * sentence — and a row must not decide what happened by matching words.
+ */
+export interface ToolOutcomeDetails {
+  /**
+   * The runtime answered the call with a refusal instead of acting on it (the
+   * subagent plugin's repeated idle `TaskWait`/`TaskStop`/`TaskList`). Copied
+   * from the tool result's own `details.refused`.
+   */
+  refused?: true;
+  /**
+   * The call was never executed: the run ended (Stop, a loop-guard cut, a
+   * provider error) after the model wrote the call and before it ran.
+   */
+  notStarted?: true;
+}
+
 export interface ToolCompletedEvent extends RuntimeEventBase {
   type: 'tool.completed';
   sessionId: string;
@@ -354,6 +378,11 @@ export interface ToolCompletedEvent extends RuntimeEventBase {
     messageId: string;
     toolCallId: string;
     ok: boolean;
+    /**
+     * A string, or `{ content, details }` when the result carries structured
+     * facts the timeline reads: `details.review` (a file change) and the
+     * {@link ToolOutcomeDetails} flags.
+     */
     output?: unknown;
     error?: string;
   };

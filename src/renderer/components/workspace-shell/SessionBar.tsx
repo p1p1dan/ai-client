@@ -11,7 +11,7 @@ import {
   createOrReuseChatSessionOnWorkspace,
   createOrReuseUnboundChatSession,
 } from '@/stores/chatSessionActions';
-import { useChatSessionsStore } from '@/stores/chatSessions';
+import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 
 interface SessionBarProps {
   /**
@@ -92,7 +92,10 @@ export function SessionBar({
   //    rewinding one mid-stream.
   const [treeOpen, setTreeOpen] = useState(false);
   const hasDurableSession = activeSession?.runtimeIdentity != null;
-  const isIdle = (activeSession?.status ?? 'idle') === 'idle';
+  // D1 (2026-09-24): `status` now stays `'failed'` after a failed run closes,
+  // and rewinding past the failed turn is exactly the recovery this dialog
+  // offers — so "idle" is read through the store's next-turn view.
+  const isIdle = (statusForNextTurn(activeSession) ?? 'idle') === 'idle';
 
   // "New chat" targets the folder the current chat lives in. With no folder
   // behind the current chat it starts a temporary one instead of doing nothing —

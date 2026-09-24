@@ -226,6 +226,44 @@ export interface TurnSpanMetadata {
 }
 
 /**
+ * The two dates a REPLAYED message can carry, named structurally so any
+ * `ChatMessage` fits: `timestamp` is when Pi wrote its entry, `settledAt` the
+ * latest entry folded into it (a tool result, a run-stop record — see
+ * `HistoryMessage.settledAt`).
+ */
+export interface ReplayedMessageStamps {
+  timestamp?: number;
+  settledAt?: number;
+}
+
+/**
+ * The last instant a replayed message can vouch for: the later of its two
+ * dates, `undefined` when it has neither.
+ *
+ * `settledAt` is what makes a run that stopped at a tool boundary measurable:
+ * its last assistant entry was written BEFORE the call ran, so `timestamp`
+ * alone reported a 20-second interjected turn as 「1 秒」 (devbox 2026-09-24,
+ * N2).
+ */
+export function replayedCompletedAt(message: ReplayedMessageStamps): number | undefined {
+  const { timestamp, settledAt } = message;
+  if (typeof settledAt !== 'number') return typeof timestamp === 'number' ? timestamp : undefined;
+  return typeof timestamp === 'number' ? Math.max(timestamp, settledAt) : settledAt;
+}
+
+/**
+ * A replayed message's contribution to `deriveTurnWorkedMs`: an END only.
+ *
+ * Pi dates an entry when it writes it, so there is no start to claim, and
+ * claiming one would make `earliestTurnStartMs` take the first assistant's
+ * COMPLETION as the turn's origin and report a 6-minute turn as a few seconds.
+ */
+export function replayedSpanMetadata(message: ReplayedMessageStamps): TurnSpanMetadata | undefined {
+  const completedAt = replayedCompletedAt(message);
+  return completedAt === undefined ? undefined : { completedAt };
+}
+
+/**
  * The earliest instant this turn can prove it existed at: the caller's own
  * anchor (the user message's `message.started`, i.e. the send), or failing that
  * the first body message that started.

@@ -959,6 +959,58 @@ describe('T101 · streaming tool rows', () => {
     expect(terminalAt).toBeLessThan(completedAt);
   });
 
+  /**
+   * N5 (devbox 2026-09-24): the 47 calls a loop-guard cut left behind read as
+   * completed ones. The flag is what the row reads; the sentence stays for
+   * anything that only shows text.
+   */
+  it('[N5-PROJ-1] marks a call the run ended before as notStarted, structurally', () => {
+    const { events, projection } = projector();
+    const message = partial({ path: 'a.txt', content: 'half a fi' });
+    projection.observe({ type: 'message_start', message });
+    projection.observe(update(message));
+    projection.finish({ success: false, stopReason: 'aborted' });
+    const terminal = events.find((event) => event.type === 'tool.completed');
+    expect(terminal?.payload).toMatchObject({
+      ok: false,
+      error: 'The run ended before this call started.',
+      output: {
+        content: [{ type: 'text', text: 'The run ended before this call started.' }],
+        details: { notStarted: true },
+      },
+    });
+  });
+
+  it('[N5-PROJ-2] forwards a tool result’s own refusal flag, and only that', () => {
+    const { events, projection } = projector();
+    const end = (toolCallId: string, result: unknown) =>
+      projection.observe({
+        type: 'tool_execution_end',
+        toolCallId,
+        toolName: 'TaskWait',
+        args: {},
+        result,
+        isError: false,
+      } as AgentEvent);
+    const refusal = 'Refused: TaskWait has nothing left to act on.';
+    end('r1', {
+      content: [{ type: 'text', text: refusal }],
+      details: { status: 'refused', delegations: [], idle: true, refused: true },
+    });
+    // The first idle call is answered in full — idle, not refused.
+    end('r2', { content: [{ type: 'text', text: 'Nothing is left.' }], details: { idle: true } });
+    const completed = events.filter((event) => event.type === 'tool.completed');
+    expect(completed[0]?.payload).toMatchObject({
+      ok: true,
+      output: { content: [{ type: 'text', text: refusal }], details: { refused: true } },
+    });
+    // Only the flags the timeline reads cross the wire, not the tool's whole bag.
+    expect((completed[0]?.payload.output as { details: object }).details).toEqual({
+      refused: true,
+    });
+    expect(completed[1]?.payload.output).toBe('Nothing is left.');
+  });
+
   it('leaves a row that really ran alone', () => {
     // The other side of the case above: a settled call must NOT also be
     // reported as cancelled when its turn ends.

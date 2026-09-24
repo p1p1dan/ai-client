@@ -205,6 +205,22 @@ export interface ChatSession {
    * stand.
    */
   stopCause?: 'turn_limit';
+  /**
+   * D1 (2026-09-24 point-check) — the runtime has reported `idle` since this
+   * session's last `session.failed`.
+   *
+   * Every failed run closes with `session.failed` followed by
+   * `session.status: idle`. The idle used to overwrite `failed` one event
+   * later, so the timeline's failure card (gated on `status === 'failed'`)
+   * never rendered on any path. `status` now stays `'failed'` across that idle
+   * and this flag records that the run is nevertheless at rest — the fact the
+   * idle carried, and the one the "may the next turn start" gates were written
+   * against. Read it only through `statusForNextTurn`.
+   *
+   * Cleared by every later status write (`upsertSessionStatus`), so it can
+   * never outlive the failure it qualifies.
+   */
+  failureSettled?: true;
 }
 
 export interface ChatBlock {
@@ -329,6 +345,14 @@ export interface ChatMessage {
    * prompt→reply wall clock, not the assistant message's own span.
    */
   timestamp?: number;
+  /**
+   * Replay only: `HistoryMessage.settledAt` — the latest Pi entry folded into
+   * this message (a tool result, a run-stop record) when it is LATER than
+   * `timestamp`. A run that stopped at a tool boundary has no later assistant
+   * entry, so this is the only record of when it ended; `turnTiming.ts`'s
+   * `replayedSpanMetadata` ends a replayed turn here (N2, 2026-09-24).
+   */
+  settledAt?: number;
 }
 
 interface PendingPermission {
@@ -562,7 +586,70 @@ function upsertSessionStatus(
   retry?: SessionRetryInfo
 ): ChatSession[] {
   return sessions.map((session) =>
-    session.id === sessionId ? { ...session, status, retry, updatedAt: Date.now() } : session
+    session.id === sessionId
+      ? { ...withoutFailureSettled(session), status, retry, updatedAt: Date.now() }
+      : session
+  );
+}
+
+/** Drop `failureSettled` without leaving an explicit `undefined` key behind. */
+function withoutFailureSettled(session: ChatSession): ChatSession {
+  if (!session.failureSettled) return session;
+  const { failureSettled: _settled, ...rest } = session;
+  return rest;
+}
+
+/**
+ * D1 — the run's closing `idle` after a `session.failed`.
+ *
+ * Keeps `status: 'failed'` so the failure card stays up, and records that the
+ * run is at rest. Everything else a status write does still happens: `retry`
+ * is cleared (the idle carries none) and `updatedAt` moves.
+ */
+function settleFailedStatus(
+  sessions: ChatSession[],
+  sessionId: string,
+  retry?: SessionRetryInfo
+): ChatSession[] {
+  return sessions.map((session) =>
+    session.id === sessionId
+      ? { ...session, status: 'failed', failureSettled: true, retry, updatedAt: Date.now() }
+      : session
+  );
+}
+
+/**
+ * D1 — the status every "may the next turn start" gate reads.
+ *
+ * Identical to `session.status` except for a failure the runtime has since
+ * closed with `idle`: `status` keeps saying `'failed'` for the failure card,
+ * while this says `'idle'` — what the runtime reported, and what the queue
+ * release, "Send now" and between-runs checks were written against. A failure
+ * with no closing idle yet (a crashed worker waiting for its restart) stays
+ * `'failed'` here too, so the queue keeps holding exactly as it did before.
+ */
+export function statusForNextTurn(
+  session: Pick<ChatSession, 'status' | 'failureSettled'> | undefined
+): SessionRuntimeStatus | undefined {
+  if (!session) return undefined;
+  return session.status === 'failed' && session.failureSettled ? 'idle' : session.status;
+}
+
+/**
+ * D1 — a new turn is being sent on this session, so its previous failure is no
+ * longer the thing on screen.
+ *
+ * Called at the composer's commit point. Without it the stale `'failed'` would
+ * sit there until the new run's first status arrived — long enough for the
+ * send's own wait to read it as THIS turn failing, and for the old card to hang
+ * under the new message through a whole resume handshake. Returns the same
+ * array when there is nothing to acknowledge.
+ */
+export function acknowledgeFailedStatus(sessions: ChatSession[], sessionId: string): ChatSession[] {
+  const current = sessions.find((session) => session.id === sessionId);
+  if (current?.status !== 'failed') return sessions;
+  return sessions.map((session) =>
+    session.id === sessionId ? { ...withoutFailureSettled(session), status: 'idle' } : session
   );
 }
 
@@ -677,7 +764,8 @@ function afterGateResolved(
 
 /** The session's last run has ended and no new one has reported in yet. */
 function isBetweenRuns(state: ChatSessionsState, sessionId: string): boolean {
-  const status = state.sessions.find((item) => item.id === sessionId)?.status;
+  // D1: a failure the runtime has closed with `idle` is between runs too.
+  const status = statusForNextTurn(state.sessions.find((item) => item.id === sessionId));
   return status === 'idle' || status === 'completed';
 }
 
@@ -761,13 +849,18 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         type: 'tool_result',
         toolCallId: block.toolCallId,
         toolOk: block.ok,
+        // N5: the outcome flags ride in `details` exactly as the live
+        // `tool.completed` output carries them (`ToolOutcomeDetails`), so a
+        // replayed row is judged by the same structured field as a live one.
         toolOutput:
-          block.patch || block.review
+          block.patch || block.review || block.refused || block.notStarted
             ? {
                 content: [{ type: 'text', text: block.output ?? '' }],
                 details: {
                   ...(block.patch ? { patch: block.patch } : {}),
                   ...(block.review ? { review: block.review } : {}),
+                  ...(block.refused ? { refused: true } : {}),
+                  ...(block.notStarted ? { notStarted: true } : {}),
                 },
               }
             : block.output,
@@ -827,6 +920,10 @@ function mapHistoryMessageToChatMessage(
     // fabricated stamp is exactly what A07 :2399 forbids.
     ...(typeof historyMessage.timestamp === 'number'
       ? { timestamp: historyMessage.timestamp }
+      : {}),
+    // Absent unless the projection folded in something dated later (N2).
+    ...(typeof historyMessage.settledAt === 'number'
+      ? { settledAt: historyMessage.settledAt }
       : {}),
   };
 }
@@ -1137,12 +1234,14 @@ function applyRuntimeEventCore(
         event.payload.disconnectReason === 'capacity_reclaimed'
           ? state.hostBoundSessionIds.filter((id) => id !== sessionId)
           : state.hostBoundSessionIds;
-      const status = upsertSessionStatus(
-        state.sessions,
-        sessionId,
-        event.payload.status,
-        event.payload.retry
-      );
+      // D1: a failed run closes with this idle. Letting it overwrite `failed`
+      // is what kept the failure card off the screen on every path.
+      const closesFailure =
+        event.payload.status === 'idle' &&
+        state.sessions.find((session) => session.id === sessionId)?.status === 'failed';
+      const status = closesFailure
+        ? settleFailedStatus(state.sessions, sessionId, event.payload.retry)
+        : upsertSessionStatus(state.sessions, sessionId, event.payload.status, event.payload.retry);
       // T034 (session-02): the file this session was opened from had to be
       // repaired. Applied as a second pass rather than as another
       // `upsertSessionStatus` argument precisely so it is NOT cleared when the

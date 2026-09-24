@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  followAfterDisclosure,
   JUMP_TO_BOTTOM_THRESHOLD_PX,
   nextFollowState,
   STICK_TO_BOTTOM_THRESHOLD_PX,
@@ -143,5 +144,36 @@ describe('shouldShowJumpToBottom (T12-d — the bottom anchor)', () => {
   it('honors a custom threshold', () => {
     expect(shouldShowJumpToBottom(0, 1000, 500, 600)).toBe(false); // distance 500 <= 600
     expect(shouldShowJumpToBottom(0, 1000, 500, 400)).toBe(true); // distance 500 > 400
+  });
+});
+
+/**
+ * C3 (devbox 2026-09-24): opening a row pauses following, closing does not
+ * touch it, and nothing here re-arms — the reader's own return to the bottom
+ * does (`nextFollowState` rule 3), which the mount-level case in
+ * `timelineDisclosureFollow.test.ts` drives end to end.
+ */
+describe('followAfterDisclosure', () => {
+  it('[C3-RULE-1] an open pauses following, whatever it was', () => {
+    expect(followAfterDisclosure(true, true)).toBe(false);
+    expect(followAfterDisclosure(false, true)).toBe(false);
+  });
+
+  it('[C3-RULE-2] a close leaves the flag exactly as it was', () => {
+    expect(followAfterDisclosure(true, false)).toBe(true);
+    expect(followAfterDisclosure(false, false)).toBe(false);
+  });
+
+  it('[C3-RULE-3] the paused flag re-arms only on a stable-height arrival at the bottom', () => {
+    const paused = followAfterDisclosure(true, true);
+    const geometry = { scrollHeight: 2000, clientHeight: 700, prevScrollHeight: 2000 };
+    // Still well above the bottom: stays paused.
+    expect(nextFollowState({ ...geometry, scrollTop: 900, following: paused })).toBe(false);
+    // Arriving while the page grows under it is not evidence of intent.
+    expect(
+      nextFollowState({ ...geometry, scrollTop: 1300, prevScrollHeight: 1970, following: paused })
+    ).toBe(false);
+    // The reader scrolled back to the bottom: following resumes.
+    expect(nextFollowState({ ...geometry, scrollTop: 1300, following: paused })).toBe(true);
   });
 });
