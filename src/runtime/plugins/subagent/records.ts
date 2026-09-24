@@ -164,6 +164,155 @@ export function readSubagentHistory(
   return [...byId.values()].sort((left, right) => left.startedAt - right.startedAt);
 }
 
+/** Error code a restored delegation carries when its process died before it settled. */
+export const DELEGATION_INTERRUPTED = 'delegation_interrupted';
+
+function messageText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      const candidate = block as { type?: unknown; text?: unknown };
+      return candidate.type === 'text' && typeof candidate.text === 'string' ? candidate.text : '';
+    })
+    .join('\n');
+}
+
+function idsOf(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (typeof item === 'string') return [item];
+    const id = (item as { delegationId?: unknown } | null)?.delegationId;
+    return typeof id === 'string' ? [id] : [];
+  });
+}
+
+/**
+ * Which delegations the conversation on disk shows the parent model received.
+ *
+ * Read off the messages rather than off a marker of our own, for two reasons:
+ * sessions written before this existed have no marker to read, and a marker
+ * written when the runtime DECIDED to deliver could claim a delivery whose
+ * message never reached the file. The deliveries all leave a trace the model
+ * actually saw:
+ *
+ * - a `TaskWait` result names every target with its status (`running` ones
+ *   were a heartbeat, not a report);
+ * - a `TaskStop` result lists what it delivered (`delivered`), or — before
+ *   that field existed — what it stopped and what it found finished;
+ * - the auto-resume message and the turn-ceiling wrap-up carry each report
+ *   under a `## agent (id) — status` heading, which a heartbeat line
+ *   (`agent (id), running, …`) never matches.
+ */
+export function deliveredDelegationIds(
+  entries: readonly { type: string; message?: unknown }[]
+): (delegationId: string) => boolean {
+  const delivered = new Set<string>();
+  const prompts: string[] = [];
+  for (const entry of entries) {
+    if (entry.type !== 'message') continue;
+    const message = entry.message as {
+      role?: unknown;
+      toolName?: unknown;
+      details?: unknown;
+      content?: unknown;
+    };
+    if (message?.role === 'user') {
+      prompts.push(messageText(message.content));
+      continue;
+    }
+    if (message?.role !== 'toolResult') continue;
+    const details = (message.details ?? {}) as Record<string, unknown>;
+    if (message.toolName === 'TaskWait') {
+      for (const item of Array.isArray(details.delegations) ? details.delegations : []) {
+        const { delegationId, status } = (item ?? {}) as {
+          delegationId?: unknown;
+          status?: unknown;
+        };
+        if (typeof delegationId === 'string' && status !== 'running') delivered.add(delegationId);
+      }
+    } else if (message.toolName === 'TaskStop') {
+      const named = Array.isArray(details.delivered)
+        ? idsOf(details.delivered)
+        : [...idsOf(details.stopped), ...idsOf(details.alreadyFinished)];
+      for (const id of named) delivered.add(id);
+    }
+  }
+  return (delegationId) =>
+    delivered.has(delegationId) || prompts.some((text) => text.includes(`(${delegationId}) — `));
+}
+
+/**
+ * The registry records a reopened session starts with.
+ *
+ * Every one is settled. A delegation with a start and no settlement is what a
+ * worker that died mid-run leaves behind; it is restored as ended (`aborted`,
+ * error {@link DELEGATION_INTERRUPTED}) and counted as delivered, because there
+ * is no report to hand over and "still running" would be a lie the auto-resume
+ * pass would then wait on. Its report says what happened, for a `TaskWait` or
+ * `TaskList` that asks.
+ */
+export function restorableDelegations(
+  entries: readonly { type: string; customType?: string; data?: unknown; message?: unknown }[]
+): {
+  delegationId: string;
+  agentName: string;
+  label?: string;
+  status: SubagentRunStatus;
+  startedAt: number;
+  completedAt: number;
+  result: SubagentRunResult;
+  deliveredAt?: number;
+  turns: number;
+  toolCalls: number;
+  lastActivityAt: number;
+}[] {
+  const wasDelivered = deliveredDelegationIds(entries);
+  return readSubagentHistory(entries).map((entry) => {
+    const interrupted = entry.status === 'interrupted';
+    const status: SubagentRunStatus = interrupted ? 'aborted' : (entry.status as SubagentRunStatus);
+    const completedAt = entry.completedAt ?? entry.startedAt;
+    const turns = entry.turns ?? 0;
+    const toolCalls = entry.toolCalls ?? 0;
+    const error = interrupted
+      ? {
+          code: DELEGATION_INTERRUPTED,
+          message: 'the app or its worker stopped before this subagent finished',
+        }
+      : entry.error;
+    const report = interrupted
+      ? `The ${entry.agentName} subagent was interrupted: the app or its worker stopped before it finished, and it left no report.`
+      : (entry.report ?? `(${status} without a report)`);
+    // A start failure was answered as the `Task` call's own result, which is
+    // why the live path marks it delivered at once.
+    const delivered =
+      interrupted ||
+      entry.error?.code === 'delegation_start_failed' ||
+      wasDelivered(entry.delegationId);
+    return {
+      delegationId: entry.delegationId,
+      agentName: entry.agentName,
+      ...(entry.label ? { label: entry.label } : {}),
+      status,
+      startedAt: entry.startedAt,
+      completedAt,
+      result: {
+        agentName: entry.agentName,
+        status,
+        report,
+        turns,
+        toolCalls,
+        ...(entry.usage ? { usage: entry.usage } : {}),
+        ...(error ? { error } : {}),
+      },
+      ...(delivered ? { deliveredAt: completedAt } : {}),
+      turns,
+      toolCalls,
+      lastActivityAt: completedAt,
+    };
+  });
+}
+
 /** Report text carried on a history summary. The full one stays on disk. */
 const MAX_HISTORY_REPORT_CHARS = 4_000;
 

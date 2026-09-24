@@ -138,7 +138,11 @@ describe('the argument shown is what the call was about', () => {
     expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: ['a'] }))).toBe(
       '1 delegation'
     );
-    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, {}))).toBe('all running');
+    // No ids: what the call said, never a claim that anything is running.
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, {}))).toBe('no delegation named');
+    expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskWait, { delegationIds: [] }))).toBe(
+      'no delegation named'
+    );
   });
 
   // chat-tool-03: the four arg strings T020 wrote were bare literals, so a
@@ -149,11 +153,22 @@ describe('the argument shown is what the call was about', () => {
       zhTranslations['a fresh window']
     );
     expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskList, {}), { t: zh })).toBe(
-      zhTranslations['running subagents']
+      zhTranslations['all delegations']
     );
     expect(formatToolArg(run(RUNTIME_TOOL_NAMES.taskStop, {}), { t: zh })).toBe(
-      zhTranslations['all running']
+      zhTranslations['no delegation named']
     );
+    // The 2026-09-24 loop: 「全部运行中」/「运行中的子 Agent」 on a row read as the
+    // tool reporting live subagents after every one had finished.
+    for (const input of [{}, { delegationIds: [] }]) {
+      for (const tool of [
+        RUNTIME_TOOL_NAMES.taskList,
+        RUNTIME_TOOL_NAMES.taskStop,
+        RUNTIME_TOOL_NAMES.taskWait,
+      ]) {
+        expect(formatToolArg(run(tool, input), { t: zh })).not.toContain('运行中');
+      }
+    }
     // Singular and plural are separate keys, the way every other counted arg in
     // this module already is -- one key plus "(s)" cannot be translated.
     expect(
@@ -394,7 +409,7 @@ const PROBES: Readonly<Record<string, ToolProbe>> = {
   new_context: { input: {}, arg: 'a fresh window' },
   Task: { input: { agent: 'explorer' }, arg: 'explorer' },
   TaskWait: { input: { delegationIds: ['a'] }, arg: '1 delegation' },
-  TaskList: { input: {}, arg: 'running subagents' },
+  TaskList: { input: {}, arg: 'all delegations' },
   TaskStop: { input: { delegationIds: ['a', 'b'] }, arg: '2 delegations' },
 };
 

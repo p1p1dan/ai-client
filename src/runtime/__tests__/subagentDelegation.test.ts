@@ -733,11 +733,14 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     expect(record.deliveredAt).toBeDefined();
   });
 
-  it('tells the parent nothing is running when it waits after everything settled', async () => {
-    // `TaskWait` with no ids means "the running ones", per contract. If they
-    // have all finished already there is nothing to wait FOR — and the report
-    // is not lost, because the auto-resume pass still owes it to the parent.
-    // Pinned because the two halves only make sense together.
+  it('hands an id-less TaskWait the report of a delegate that settled before the wait', async () => {
+    // 2026-09-24 loop: `TaskWait` with no ids used to mean "the running ones"
+    // only, so a delegate that finished while the parent was busy fell between
+    // the two paths — no longer running ("No subagents are currently
+    // running."), not yet delivered (the auto-resume pass still owed it) — and
+    // a model that kept asking got the same non-answer forever. It now covers
+    // running AND undelivered, so the wait itself is the delivery.
+    const results: { tool: string; text: string }[] = [];
     const handle = await build({
       parent: [
         () =>
@@ -750,13 +753,19 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
             stopReason: 'toolUse',
           });
         },
-        () => fauxAssistantMessage('nothing was running'),
         () => fauxAssistantMessage('integrated the late report'),
+        () => fauxAssistantMessage('SHOULD NOT HAPPEN: delivered again'),
       ],
       delegate: [() => fauxAssistantMessage('LATE-REPORT')],
     });
-    const result = await handle.run({ prompt: 'go' });
+    const result = await handle.run({ prompt: 'go', onEvent: toolResultCollector(results) });
+    const wait = results.find((entry) => entry.tool === 'TaskWait');
+    expect(wait?.text).toContain('LATE-REPORT');
+    expect(wait?.text).not.toContain('No subagents are currently running');
     expect(result.text).toContain('integrated the late report');
+    // Delivered by the wait, so the auto-resume pass has nothing left to add.
+    expect(result.text).not.toContain('SHOULD NOT HAPPEN');
+    expect(result.turns).toBe(3);
     expect(handle.ctx.runtimeSubagents.registry.all()[0].deliveredAt).toBeDefined();
   });
 

@@ -1,4 +1,5 @@
 import {
+  LOOP_GUARD_CUSTOM_TYPE,
   PI_SESSION_TREE_BACKEND_LIMIT,
   type PiLeafCheckpoint,
   RUN_STOP_CUSTOM_TYPE,
@@ -128,7 +129,11 @@ export function readPiLeafCheckpoint(manager: PiTreeSessionManager): PiLeafCheck
  * would take the `leaf` mark away from the message the user actually stopped
  * at. pi's own TUI tree hides `custom` entries by default for the same reason.
  */
-const HIDDEN_CUSTOM_TYPES: ReadonlySet<string> = new Set([RUN_STOP_CUSTOM_TYPE]);
+const HIDDEN_CUSTOM_TYPES: ReadonlySet<string> = new Set([
+  RUN_STOP_CUSTOM_TYPE,
+  // Written at the tip of the run a loop guard ended, for the same two reasons.
+  LOOP_GUARD_CUSTOM_TYPE,
+]);
 
 function isHiddenEntry(entry: PiTreeEntry): boolean {
   return (

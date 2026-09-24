@@ -120,6 +120,19 @@ export type TurnStopCause = 'interjected' | 'user_stop';
  */
 export const RUN_STOP_CUSTOM_TYPE = 'aiclient.runStop';
 
+/**
+ * `customType` of the record a subagent loop guard leaves when it fires.
+ *
+ * Written by the runtime's agent loop when it cuts a reply that kept repeating
+ * a subagent tool call, or wraps up a run whose replies kept calling the
+ * subagent tools with nothing left to act on. `data` is
+ * `{ rule, sessionId, runId, at, … }` plus what the rule saw (the repeated call
+ * signature and counts, or the idle replies' calls). Bookkeeping like
+ * {@link RUN_STOP_CUSTOM_TYPE}: never model context, never a message, never a
+ * tree node — it is evidence for a person reading the file.
+ */
+export const LOOP_GUARD_CUSTOM_TYPE = 'aiclient.loopGuard';
+
 /** Prefix of every history message id — the store's replace semantics key on it. */
 export const HISTORY_MESSAGE_ID_PREFIX = 'h:' as const;
 

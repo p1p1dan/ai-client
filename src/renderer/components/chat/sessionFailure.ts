@@ -115,6 +115,17 @@ const FAILURE_VIEWS = {
     hint: 'Continue to try again. If it fails the same way, send the detail below.',
     action: 'continue',
   },
+  // The runtime's subagent loop guard (2026-09-24): a reply that kept writing
+  // the same Task* call was cut while it streamed, and nothing in it ran.
+  // `continue` because the conversation before that reply is intact and a
+  // fresh message is exactly how the user carries on.
+  tool_call_repetition: {
+    title: 'The model repeated the same tool calls, so its reply was stopped',
+    reason:
+      'The model kept writing the same subagent tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.',
+    hint: 'Send a message to carry on — everything before this reply is kept. If it happens again, try another model.',
+    action: 'continue',
+  },
   no_assistant_message: {
     title: 'The model never answered',
     reason: 'The turn ended without the model producing a reply.',

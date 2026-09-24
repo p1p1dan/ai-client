@@ -2665,8 +2665,8 @@ export const zhTranslations: Record<string, string> = {
   'a fresh window': '一个干净的上下文',
   '{{count}} delegation': '{{count}} 个委派',
   '{{count}} delegations': '{{count}} 个委派',
-  'all running': '全部运行中',
-  'running subagents': '运行中的子 Agent',
+  'no delegation named': '未指定委派',
+  'all delegations': '全部委派',
   'working directory': '工作目录',
   'next moves': '后续计划',
 
@@ -3034,6 +3034,12 @@ export const zhTranslations: Record<string, string> = {
     '这一轮运行期间，本应用内部出了错。',
   'Continue to try again. If it fails the same way, send the detail below.':
     '点「继续」再试一次。如果还是同样的错，把下面那行细节发出来。',
+  'The model repeated the same tool calls, so its reply was stopped':
+    '模型输出出现重复调用，已中断',
+  'The model kept writing the same subagent tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.':
+    '模型在同一条回复里不停重复同一个子 Agent 工具调用，没有等任何结果。本应用中断了这条回复，其中的工具调用一个都没有执行。',
+  'Send a message to carry on — everything before this reply is kept. If it happens again, try another model.':
+    '可以继续发消息 —— 这条回复之前的内容都保留着。如果再次出现，换一个模型试试。',
   'The model never answered': '模型没有给出回答',
   'The turn ended without the model producing a reply.': '这一轮结束了，但模型没有产出任何回答。',
   'Continue to ask again. If it keeps happening, check the model settings.':

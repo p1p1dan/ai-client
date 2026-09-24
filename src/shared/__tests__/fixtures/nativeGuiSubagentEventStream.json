@@ -110,7 +110,7 @@
       "messageId": "asst-turn-1-2",
       "toolCallId": "call-task",
       "ok": true,
-      "output": "Delegation id-1 started: the explorer subagent is working in the background (survey notes). Continue your own independent work, then call TaskWait with this delegationId to converge, or TaskStop to stop it."
+      "output": "Delegation id-1 started: the explorer subagent is working in the background (survey notes). Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it."
     },
     "requestId": "turn-1"
   },

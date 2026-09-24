@@ -49,6 +49,7 @@ import {
   EVENTS_SERVICE,
   type ResolvedModel,
   type RuntimeModelRef,
+  type RuntimeSessionService,
   SESSION_SERVICE,
 } from '../../contracts.ts';
 import {
@@ -68,7 +69,9 @@ import {
   activityForSettlement,
   clampRecordedMessage,
   clampSubagentText,
+  DELEGATION_INTERRUPTED,
   readSubagentHistory,
+  restorableDelegations,
   SUBAGENT_ENTRY,
   type SubagentRecord,
   subagentHistoryUsage,
@@ -171,6 +174,31 @@ export const MAX_DELEGATION_TRANSCRIPT_BYTES = 2 * 1024 * 1024;
 const DRAIN_TIMEOUT_MS = 30_000;
 
 /**
+ * How long `TaskStop` waits for the delegates it asked to stop.
+ *
+ * The same bound as {@link DRAIN_TIMEOUT_MS} and for the same reason: the wait
+ * is there so "stopped" is true when it is said, and a delegate wedged on a
+ * host call must not turn one tool call into a turn that never ends. Past it
+ * the stragglers are settled as `timed_out`, exactly as `drain()` does.
+ */
+const STOP_TIMEOUT_MS = DRAIN_TIMEOUT_MS;
+
+/**
+ * How long one auto-resume pass waits on running delegates before it hands
+ * the parent a progress note instead of a report.
+ *
+ * The longest wait a model may ask `TaskWait` for, so the runtime is never more
+ * patient on the model's behalf than the model is allowed to be itself. It
+ * does not stop anything: the note says the delegates are still working, and
+ * the next pass waits again. What it removes is a run that sits silently
+ * forever behind a delegate that will never settle.
+ */
+const COLLECT_TIMEOUT_MS = TASKWAIT_MAX_TIMEOUT_SECONDS * 1000;
+
+/** Delegation ids a terminal note names before it summarizes the rest. */
+const MAX_TERMINAL_NOTE_IDS = 10;
+
+/**
  * `Task`'s description, minus the catalog block appended per run.
  *
  * Split out from the tool builder because {@link SubagentPlugin.taskDescription}
@@ -178,17 +206,21 @@ const DRAIN_TIMEOUT_MS = 30_000;
  * and the fixed half should not be rebuilt with it.
  */
 const TASK_DESCRIPTION_PREAMBLE: readonly string[] = [
-  'Start one subagent in the background and return immediately; you keep working while it runs, then converge with TaskWait when you need its report.',
+  'Start one subagent in the background and return immediately; you keep working while it runs, and its report is delivered to you when it finishes (TaskWait returns it sooner if you cannot continue without it).',
   'Use it when the work is separable: parallel exploration of independent directions (one Task per direction in the same assistant message), a multi-file implementation with a complete spec (fixer), an adversarial read-only review of a change you just made (code-reviewer), or a wide search / long log / multi-file survey whose intermediate output would otherwise fill this context (explorer, test-runner).',
   'Do not delegate what you can finish in a couple of tool calls, and do not delegate anything that needs the user — a subagent cannot ask a question or propose a plan on your behalf.',
   "`task` is the delegate's only instruction. It cannot see this conversation, and you cannot correct it while it runs, so state the goal, the paths and facts it cannot infer, and exactly what to report back.",
-  'To run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers their reports when they finish. Call TaskStop only to cancel.',
+  'To run delegates concurrently, emit several Task calls in one assistant message. A message that mixes Task with any other tool runs one call at a time. You may keep working or talk to the user while they run; the runtime delivers every report to you when its delegate finishes, whether or not you wait for it.',
 ];
 
+/**
+ * Opens an auto-resume message. It states what happened and what to do with
+ * it, and deliberately names no delegation tool: a model that was told "call
+ * X only if…" in every resume message learned to call X.
+ */
 const DELEGATION_RESUME_PROMPT =
-  'The following subagents have finished. Integrate their reports and continue the ' +
-  "user's original task. Call TaskStop only if you have decided a still-running " +
-  'delegate should not continue.';
+  'The following subagents have finished; their reports are below and are now delivered to you. ' +
+  "Integrate them and continue the user's original task.";
 
 export interface SubagentConfig {
   catalog: SubagentCatalog;
@@ -221,6 +253,13 @@ export interface SubagentConfig {
    * delegate transcript to reach it would spend the budget to prove it exists.
    */
   transcriptBudgetBytes?: number;
+  /**
+   * `TaskStop`'s wait bound override, defaulting to {@link STOP_TIMEOUT_MS}.
+   *
+   * Same reason `drain(timeoutMs)` takes one: the deadline path is the part
+   * worth pinning, and a test should not spend thirty seconds reaching it.
+   */
+  stopTimeoutMs?: number;
   /**
    * The project's instruction chain, rendered for a delegate's prompt.
    *
@@ -257,6 +296,21 @@ export interface SubagentConfig {
    * {@link DEFAULT_PROVIDER_IDLE_TIMEOUT_MS} when the host says nothing.
    */
   providerTimeoutMs?: number;
+  /**
+   * `AICLIENT_RUNTIME_LOOP_GUARD` (engineering standard §6), read once at
+   * bootstrap into `flags.loopGuardEnabled` and handed down here rather than
+   * read from `process.env` in this file. Defaults to `true` when absent —
+   * every caller that does not go through `createRuntime` (a direct plugin
+   * test, say) gets the protection on.
+   *
+   * Off drops only `idleVerdict`'s REFUSAL (form A's second-idle-call-on
+   * "Refused: …"): `idle: true` labelling, the terminal note it appends, and
+   * every other tool answer stay exactly as they are — those are fixes, not
+   * protection. See `delegationLoopGuard.ts`'s module doc for both guarded
+   * shapes and `AgentLoopConfig.loopGuardEnabled` for form A's other half (the
+   * forced wrap-up) and form B (the mid-stream cut), both in the agent loop.
+   */
+  loopGuardEnabled?: boolean;
 }
 
 /** Which run a delegation belongs to, for attribution on records and events. */
@@ -310,8 +364,16 @@ export interface SubagentService {
   /**
    * Wait for the delegates running right now and produce the text to feed the
    * parent, or undefined when there is nothing to wait for.
+   *
+   * Bounded by `timeoutMs` (default: the longest `TaskWait`). A pass that
+   * reaches it with delegates still running and nothing new to report returns
+   * a progress note with `timedOut` set, so the caller can decide what a
+   * silent delegate means for it rather than wait on it forever.
    */
-  collectFinished(signal?: AbortSignal): Promise<string | undefined>;
+  collectFinished(
+    signal?: AbortSignal,
+    timeoutMs?: number
+  ): Promise<DelegationCollection | undefined>;
   /** User Stop / dispose. Not parent idle. */
   abortAll(): void;
   /**
@@ -341,6 +403,17 @@ export interface SubagentService {
    * so their records and activity still name the right session.
    */
   endRun(): void;
+}
+
+/** One auto-resume pass's result; see {@link SubagentService.collectFinished}. */
+export interface DelegationCollection {
+  /** The message to hand the parent model. */
+  text: string;
+  /**
+   * True when the pass hit its deadline with delegates still running and no
+   * report to deliver: `text` is a progress note, not a delivery.
+   */
+  timedOut: boolean;
 }
 
 declare module 'cordis' {
@@ -420,6 +493,14 @@ export class SubagentPlugin extends Service implements SubagentService {
     string,
     { parentToolCallId: string; model: string; startedAt: number; runId: string }
   >();
+  /**
+   * Control calls this run answered while nothing was running and nothing was
+   * waiting to be delivered. The first gets a full answer; every later one is
+   * refused with the same instruction (see {@link idleVerdict}). Per run.
+   */
+  private idleCalls = 0;
+  /** Id sets `TaskWait` has re-read this run; a first re-read is real work. */
+  private readonly rereads = new Set<string>();
 
   constructor(ctx: Context, config: SubagentConfig) {
     super(ctx, SUBAGENT_SERVICE);
@@ -430,6 +511,7 @@ export class SubagentPlugin extends Service implements SubagentService {
     ).definitions;
     this.diagnostics = config.catalog.diagnostics;
     this.reportDiagnostics();
+    this.restoreFromSession();
     ctx.effect(() => () => {
       this.abortAll();
       this.listeners.clear();
@@ -549,6 +631,32 @@ export class SubagentPlugin extends Service implements SubagentService {
   bindRun(context: SubagentRunContext): void {
     this.runContext = context;
     this.runLive = true;
+    // A new user message is a new question: the model may legitimately ask
+    // once more what its delegates did.
+    this.idleCalls = 0;
+    this.rereads.clear();
+  }
+
+  /**
+   * Rebuild the registry from this session's own records, once, at open.
+   *
+   * Without it the registry only knew what this worker had started, so a
+   * reopened conversation full of delegations got "No subagents have been
+   * started in this session" from `TaskList`, a `TaskWait` by id answered
+   * "unknown", and a report that settled between runs was lost. Only facts
+   * come back — every restored record is settled; see `restorableDelegations`.
+   * A session that cannot be read is not a reason to refuse to start.
+   */
+  private restoreFromSession(): void {
+    let entries: ReturnType<RuntimeSessionService['snapshot']>['entries'] | undefined;
+    try {
+      entries = this.ctx.get(SESSION_SERVICE)?.snapshot().entries;
+    } catch (error) {
+      this.config.log?.('[subagent] could not read the session to restore delegations', error);
+      return;
+    }
+    if (!entries) return;
+    for (const record of restorableDelegations(entries)) this.registry.restore(record);
   }
 
   endRun(): void {
@@ -727,8 +835,20 @@ export class SubagentPlugin extends Service implements SubagentService {
       if (timer !== undefined) clearTimeout(timer);
     });
     if (converged) return;
+    this.settleStragglers(this.registry.running(), timeoutMs);
+  }
+
+  /**
+   * Settle delegates that were asked to stop and did not converge in time.
+   *
+   * Shared by `drain()` and `TaskStop`, so both bounded waits end the same way:
+   * the record says `timed_out`, everyone waiting on its completion is
+   * released, and its report says plainly why there is no more to it.
+   */
+  private settleStragglers(records: readonly DelegationRecord[], timeoutMs: number): void {
     const seconds = Math.max(1, Math.round(timeoutMs / 1000));
-    for (const record of this.registry.running()) {
+    for (const record of records) {
+      if (record.status !== 'running') continue;
       this.registry.requestStop(record, 'timed_out');
       this.settle(record, {
         agentName: record.agentName,
@@ -757,16 +877,44 @@ export class SubagentPlugin extends Service implements SubagentService {
    *   A delegate that finished while the parent was still working is no longer
    *   running by the time we get here, and reporting only the ones we waited
    *   for would silently drop its report.
+   *
+   * The wait itself is bounded (see {@link COLLECT_TIMEOUT_MS}): a delegate
+   * that never settles used to hold the run open forever with nothing on
+   * screen but a spinner.
    */
-  async collectFinished(signal?: AbortSignal): Promise<string | undefined> {
+  async collectFinished(
+    signal?: AbortSignal,
+    timeoutMs: number = COLLECT_TIMEOUT_MS
+  ): Promise<DelegationCollection | undefined> {
     const targets = this.registry.running();
+    let timedOut = false;
     if (targets.length > 0) {
-      await waitForDelegations(targets, targets.length, null, signal);
+      const endedEarly = await waitForDelegations(
+        targets,
+        targets.length,
+        Date.now() + timeoutMs,
+        signal
+      );
       if (signal?.aborted) return undefined;
+      timedOut = endedEarly;
     }
     const settled = this.registry.undelivered();
-    if (settled.length === 0) return undefined;
     const now = Date.now();
+    const still = this.registry.running();
+    const heartbeat = still.length
+      ? `Still running (each report is delivered when it finishes):\n${still.map((record) => formatDelegationHeartbeat(record, now)).join('\n')}`
+      : '';
+    if (settled.length === 0) {
+      if (!timedOut || still.length === 0) return undefined;
+      const minutes = Math.max(1, Math.round(timeoutMs / 60_000));
+      return {
+        timedOut: true,
+        text: [
+          `No subagent has finished in the last ${minutes} minute${minutes === 1 ? '' : 's'}, and nothing has failed. Continue the user's task with what you have; if a delegate's work is no longer needed you may stop it.`,
+          heartbeat,
+        ].join('\n\n'),
+      };
+    }
     this.registry.markDelivered(settled, now);
     const results = settled.map((record) => ({
       delegationId: record.delegationId,
@@ -774,13 +922,12 @@ export class SubagentPlugin extends Service implements SubagentService {
       status: record.status,
       report: record.result?.report ?? `(${record.status} without a report)`,
     }));
-    const still = this.registry.running();
-    const heartbeat = still.length
-      ? `Still running:\n${still.map((record) => formatDelegationHeartbeat(record, now)).join('\n')}`
-      : '';
-    return [DELEGATION_RESUME_PROMPT, formatDelegationResults(results), heartbeat]
-      .filter((part) => part.trim())
-      .join('\n\n');
+    return {
+      timedOut: false,
+      text: [DELEGATION_RESUME_PROMPT, formatDelegationResults(results), heartbeat]
+        .filter((part) => part.trim())
+        .join('\n\n'),
+    };
   }
 
   private publish(envelope: SubagentEventEnvelope): void {
@@ -1207,7 +1354,7 @@ export class SubagentPlugin extends Service implements SubagentService {
       content: [
         {
           type: 'text' as const,
-          text: `Delegation ${delegationId} started: the ${definition.name} subagent is working in the background${label ? ` (${label})` : ''}. Continue your own independent work, then call TaskWait with this delegationId to converge, or TaskStop to stop it.`,
+          text: `Delegation ${delegationId} started: the ${definition.name} subagent is working in the background${label ? ` (${label})` : ''}. Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it.`,
         },
       ],
       details: {
@@ -1307,7 +1454,21 @@ export class SubagentPlugin extends Service implements SubagentService {
     }
   }
 
-  private targetsFor(params: unknown): {
+  /**
+   * What a `TaskWait` or `TaskStop` call is about.
+   *
+   * Named ids are read as given (deduplicated, capped). Without ids the two
+   * tools differ on purpose: `TaskStop` can only act on what is running, while
+   * `TaskWait` also covers every delegation whose report the model has not
+   * received yet. A delegate that finished while the parent was busy used to
+   * fall between the two — no longer running, so an id-less wait said "nothing
+   * is running", and not yet delivered, so the auto-resume pass still owed it —
+   * and a model that kept asking got the same non-answer forever.
+   */
+  private targetsFor(
+    params: unknown,
+    tool: 'wait' | 'stop'
+  ): {
     targets: DelegationRecord[];
     ids: string[];
     unknownIds: string[];
@@ -1325,8 +1486,93 @@ export class SubagentPlugin extends Service implements SubagentService {
       ? ids
           .map((id) => this.registry.get(id))
           .filter((record): record is DelegationRecord => record !== undefined)
-      : this.registry.running();
+      : tool === 'wait'
+        ? this.registry
+            .all()
+            .filter((record) => record.status === 'running' || record.deliveredAt === undefined)
+        : this.registry.running();
     return { targets, ids, unknownIds: ids.filter((id) => !this.registry.has(id)) };
+  }
+
+  /**
+   * Whether a control call has anything to act on, and whether it is refused.
+   *
+   * Idle means nothing is running and nothing is waiting to be delivered: the
+   * call cannot produce anything the model has not already been given. The
+   * first idle call of a run gets its full answer plus {@link terminalNote};
+   * every later one is refused with that same note, because the answer has not
+   * changed and a model that asks again is looping (the agent loop ends the run
+   * if whole replies keep doing it). A `TaskWait` that names ids is a re-read,
+   * which is legitimate the first time for a given set — after a compaction the
+   * model may genuinely need a report back.
+   */
+  private idleVerdict(rereadKey?: string): { idle: boolean; refuse: boolean } {
+    if (this.registry.running().length > 0 || this.registry.undelivered().length > 0)
+      return { idle: false, refuse: false };
+    if (rereadKey !== undefined && !this.rereads.has(rereadKey)) {
+      this.rereads.add(rereadKey);
+      return { idle: false, refuse: false };
+    }
+    this.idleCalls += 1;
+    // AICLIENT_RUNTIME_LOOP_GUARD off (`this.config.loopGuardEnabled ??
+    // true`): still classified `idle` — the labelling in `TaskList`/`TaskWait`
+    // and the terminal note are fixes, not protection — but never refused.
+    const loopGuardEnabled = this.config.loopGuardEnabled ?? true;
+    return { idle: true, refuse: loopGuardEnabled && this.idleCalls > 1 };
+  }
+
+  /** How a settled delegation ended, for a model-facing line. */
+  private endedAs(record: DelegationRecord): string {
+    return record.result?.error?.code === DELEGATION_INTERRUPTED
+      ? 'interrupted, no report'
+      : record.status;
+  }
+
+  /**
+   * The terminal instruction: nothing is left, and what to do instead.
+   *
+   * Written as a statement of fact with the ids in it, and without the word
+   * "matching" or any suggestion to retry with other arguments — the old
+   * one-liners ("No matching running subagents to stop.") read as "try a
+   * different call", and a model did, thousands of times.
+   */
+  private terminalNote(): string {
+    const records = this.registry.all();
+    if (records.length === 0) {
+      return "No subagents have been started in this session, so there is nothing to wait for, stop or list. Do not call TaskWait, TaskStop or TaskList again for this; continue the user's task or answer the user.";
+    }
+    const shown = records
+      .slice(-MAX_TERMINAL_NOTE_IDS)
+      .map((record) => `${record.delegationId} (${record.agentName}, ${this.endedAs(record)})`);
+    const earlier = records.length - shown.length;
+    const state =
+      records.length === 1
+        ? 'the one delegation in this session has ended and its report has been delivered to you'
+        : `all ${records.length} delegations in this session have ended and every report has been delivered to you`;
+    return `Nothing is left to wait for: ${state} — ${shown.join('; ')}${earlier > 0 ? `; and ${earlier} earlier` : ''}. Do not call TaskWait, TaskStop or TaskList for them again; continue the user's task or answer the user.`;
+  }
+
+  /** A second idle call's answer; see {@link idleVerdict}. */
+  private refuseIdle(tool: string, details: Record<string, unknown>) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Refused: ${tool} has nothing left to act on, and this run has already said so. ${this.terminalNote()}`,
+        },
+      ],
+      details: { ...details, idle: true, refused: true },
+    };
+  }
+
+  /** The session's delegations by id, for a call that named ids nobody knows. */
+  private knownIdsNote(): string {
+    const records = this.registry.all();
+    if (records.length === 0) return ' No subagents have been started in this session.';
+    const shown = records
+      .slice(-MAX_TERMINAL_NOTE_IDS)
+      .map((record) => `${record.delegationId} (${record.agentName}, ${this.endedAs(record)})`);
+    return ` Delegations in this session: ${shown.join('; ')}.`;
   }
 
   private buildWaitTool(): AgentTool<TSchema, unknown> {
@@ -1334,12 +1580,12 @@ export class SubagentPlugin extends Service implements SubagentService {
       name: SUBAGENT_WAIT_TOOL_NAME,
       label: 'Task Wait',
       description:
-        'Wait for one or more subagents started by Task and return their reports. `delegationIds` defaults to every running subagent; use mode "any" with `minCompleted` to converge as soon as the first (or first N) finish. Settled delegations return immediately, so re-reading a report by id is cheap. A wait timeout is not a failure: unfinished delegates keep working and the runtime delivers their reports when they finish.',
+        'Wait for subagents started by Task and return their reports. Without `delegationIds` it covers every subagent that is still running or whose report you have not received yet; when there is neither it returns at once and says so. Use mode "any" with `minCompleted` to return as soon as the first (or first N) finish. Settled delegations return immediately, so re-reading a report by id is cheap. A wait timeout is not a failure: unfinished delegates keep working and the runtime delivers their reports when they finish.',
       parameters: Type.Object(
         {
           delegationIds: Type.Optional(
             Type.Array(Type.String({ description: 'Delegation ids returned by Task.' }), {
-              description: `Defaults to all running subagents. At most ${MAX_DELEGATION_IDS}.`,
+              description: `Defaults to every subagent still running or not yet reported to you. At most ${MAX_DELEGATION_IDS}.`,
               maxItems: MAX_DELEGATION_IDS,
             })
           ),
@@ -1366,7 +1612,15 @@ export class SubagentPlugin extends Service implements SubagentService {
       ),
       executionMode: 'sequential',
       execute: async (_toolCallId, params, signal) => {
-        const { targets, ids, unknownIds } = this.targetsFor(params);
+        const { targets, ids, unknownIds } = this.targetsFor(params, 'wait');
+        const verdict = this.idleVerdict(
+          ids.length > 0 && unknownIds.length === 0
+            ? `wait:${[...ids].sort().join(',')}`
+            : undefined
+        );
+        if (verdict.refuse)
+          return this.refuseIdle(SUBAGENT_WAIT_TOOL_NAME, { status: 'refused', delegations: [] });
+        const idle = verdict.idle ? { idle: true } : {};
         const mode = isRecord(params) && params.mode === 'any' ? 'any' : 'all';
         const minCompleted =
           isRecord(params) && typeof params.minCompleted === 'number'
@@ -1379,9 +1633,17 @@ export class SubagentPlugin extends Service implements SubagentService {
 
         if (targets.length === 0) {
           const text = ids.length
-            ? 'None of the requested delegation ids exist in this session. Call TaskList to see them.'
-            : 'No subagents are currently running.';
-          return { content: [{ type: 'text' as const, text }], details: { delegations: [] } };
+            ? `None of the requested delegation ids exist in this session.${this.knownIdsNote()}`
+            : 'No subagent is running and no report is waiting to be delivered.';
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: verdict.idle ? `${text} ${this.terminalNote()}` : text,
+              },
+            ],
+            details: { delegations: [], ...idle },
+          };
         }
         const targetCompleted =
           mode === 'all' ? targets.length : Math.min(Math.max(minCompleted, 1), targets.length);
@@ -1422,26 +1684,28 @@ export class SubagentPlugin extends Service implements SubagentService {
         const note = interrupted
           ? `Stopped waiting early because the user sent a new message: ${finished}/${targets.length} finished. Unfinished delegates keep working and the runtime will deliver their reports when they finish.${stillRunning ? `\n${stillRunning}` : ''}`
           : timedOut
-            ? `Still running after ${timeoutSeconds}s: ${finished}/${targets.length} finished. This is not a failure — unfinished delegates keep working and the runtime will deliver their reports when they finish. Call TaskStop only to cancel.\n${stillRunning}`
+            ? `Still running after ${timeoutSeconds}s: ${finished}/${targets.length} finished. This is not a failure: unfinished delegates keep working, and the runtime delivers each report to you when it finishes, whether or not you wait again.\n${stillRunning}`
             : mode === 'any'
               ? `Converged after ${finished} of ${targets.length} finished.`
               : undefined;
         const unknownNote = unknownIds.length
           ? `Unknown delegation ids (not found in this session): ${unknownIds.join(', ')}.`
           : undefined;
+        const body = formatDelegationResults(
+          results,
+          [note, unknownNote].filter(Boolean).join('\n') || undefined
+        );
         return {
           content: [
             {
               type: 'text' as const,
-              text: formatDelegationResults(
-                results,
-                [note, unknownNote].filter(Boolean).join('\n') || undefined
-              ),
+              text: verdict.idle ? `${body}\n\n${this.terminalNote()}` : body,
             },
           ],
           details: {
             status: timedOut ? 'timeout' : 'completed',
             ...(unknownIds.length ? { unknownIds } : {}),
+            ...idle,
             // subagent-core-12 — `details` is written into the session JSONL
             // verbatim by pi and is NOT model context, so it gets its own,
             // tighter budget than the text above. The full report lives on the
@@ -1457,23 +1721,50 @@ export class SubagentPlugin extends Service implements SubagentService {
     };
   }
 
+  /** One `TaskList` line's second half: where this delegation's report stands. */
+  private reportState(record: DelegationRecord): string {
+    if (record.status === 'running')
+      return 'still running; its report is delivered when it finishes';
+    if (record.result?.error?.code === DELEGATION_INTERRUPTED)
+      return 'interrupted before it finished; no report exists';
+    if (record.deliveredAt !== undefined) return 'report already delivered to you';
+    return 'report NOT yet delivered: call TaskWait with this id to read it';
+  }
+
   private buildListTool(): AgentTool<TSchema, unknown> {
     return {
       name: SUBAGENT_LIST_TOOL_NAME,
       label: 'Task List',
       description:
-        'List the subagents started by Task in this session with their status. Use it to check progress without waiting, or before TaskStop to choose what to stop.',
+        "List the subagents started by Task in this session, with each one's status and whether its report has been delivered to you. It never waits and never delivers a report.",
       parameters: Type.Object({}, { additionalProperties: false }),
       executionMode: 'sequential',
       execute: async () => {
+        const verdict = this.idleVerdict();
+        const summaries = () =>
+          this.registry.all().map((record) => ({
+            ...delegationSummary(record),
+            reportDelivered: record.deliveredAt !== undefined,
+          }));
+        if (verdict.refuse)
+          return this.refuseIdle(SUBAGENT_LIST_TOOL_NAME, { delegations: summaries() });
         const now = Date.now();
         const records = this.registry.all();
-        const text = records.length
-          ? records.map((record) => `- ${formatDelegationHeartbeat(record, now)}`).join('\n')
-          : 'No subagents have been started in this session.';
+        const running = this.registry.running();
+        const pending = this.registry.undelivered();
+        const lines = records.map(
+          (record) => `- ${formatDelegationHeartbeat(record, now)} — ${this.reportState(record)}`
+        );
+        const footer =
+          running.length > 0
+            ? `${running.length} still running; each report is delivered to you when it finishes.`
+            : pending.length > 0
+              ? `Nothing is running. ${pending.length} finished report${pending.length === 1 ? ' has' : 's have'} not been delivered to you yet; call TaskWait with ${pending.length === 1 ? 'that id' : 'those ids'} (${pending.map((record) => record.delegationId).join(', ')}) to read ${pending.length === 1 ? 'it' : 'them'}.`
+              : this.terminalNote();
+        const text = records.length ? [...lines, '', footer].join('\n') : footer;
         return {
           content: [{ type: 'text' as const, text }],
-          details: { delegations: records.map(delegationSummary) },
+          details: { delegations: summaries(), ...(verdict.idle ? { idle: true } : {}) },
         };
       },
     };
@@ -1484,12 +1775,12 @@ export class SubagentPlugin extends Service implements SubagentService {
       name: SUBAGENT_STOP_TOOL_NAME,
       label: 'Task Stop',
       description:
-        'Stop one or more running subagents. `delegationIds` defaults to every running subagent. Stopped subagents report as stopped; their partial work is lost.',
+        "Stop running subagents whose work you no longer need. Without `delegationIds` it stops every running one. Each stopped subagent's partial output comes back in the result, together with any finished report you have not received yet.",
       parameters: Type.Object(
         {
           delegationIds: Type.Optional(
             Type.Array(Type.String({ description: 'Delegation ids returned by Task.' }), {
-              description: `Defaults to all running subagents. At most ${MAX_DELEGATION_IDS}.`,
+              description: `Defaults to every running subagent. At most ${MAX_DELEGATION_IDS}.`,
               maxItems: MAX_DELEGATION_IDS,
             })
           ),
@@ -1497,60 +1788,118 @@ export class SubagentPlugin extends Service implements SubagentService {
         { additionalProperties: false }
       ),
       executionMode: 'sequential',
-      execute: async (_toolCallId, params) => {
-        const { targets } = this.targetsFor(params);
+      execute: async (_toolCallId, params, signal) => {
+        const { targets, ids, unknownIds } = this.targetsFor(params, 'stop');
+        const verdict = this.idleVerdict();
+        if (verdict.refuse)
+          return this.refuseIdle(SUBAGENT_STOP_TOOL_NAME, { stopped: [], delivered: [] });
         // Only what is still running can be stopped. A named id that had
         // already settled is not a stop at all, and the distinction is the
         // whole point of the split below.
         const running = targets.filter((record) => record.status === 'running');
         for (const record of running) this.registry.requestStop(record);
-        // Awaited on purpose. The P5-2-0 probe measured that aborting an
+        // Awaited on purpose — the P5-2-0 probe measured that aborting an
         // in-flight tool costs one more provider request before the loop
-        // closes, so returning here without waiting would report "stopped"
-        // while the delegate was still spending.
-        await Promise.all(running.map((record) => record.completion));
-        const stopped = targets.filter(
+        // closes, so returning at once would report "stopped" while the
+        // delegate was still spending — but BOUNDED, and cut by this call's own
+        // cancellation (Stop, or the user's Ctrl+Enter). Unbounded, one wedged
+        // delegate made the parent's turn unable to end at all.
+        const interrupt = this.runContext?.interrupt;
+        const cancel = interrupt
+          ? signal
+            ? AbortSignal.any([signal, interrupt])
+            : interrupt
+          : signal;
+        const timeoutMs = this.config.stopTimeoutMs ?? STOP_TIMEOUT_MS;
+        const endedEarly = running.length
+          ? await waitForDelegations(running, running.length, Date.now() + timeoutMs, cancel)
+          : false;
+        if (endedEarly && cancel?.aborted !== true) this.settleStragglers(running, timeoutMs);
+        const stopped = running.filter(
           (record) =>
-            record.stopRequested && (record.status === 'stopped' || record.status === 'aborted')
+            record.status === 'stopped' ||
+            record.status === 'aborted' ||
+            record.status === 'timed_out'
         );
-        // Everything else the model named had FINISHED — either before this
-        // call, or naturally while it was waiting. Its report is real work the
-        // parent has not read, and the reason for stopping ("the model gave up
-        // on it") does not apply to it. So it is answered here rather than
-        // dropped: marking it delivered without showing it is how a whole
-        // delegate run used to vanish from the parent's side of the session.
-        const finished = targets.filter(
+        // Cancelled mid-wait: asked to stop, not yet closed. Their output is
+        // delivered later, by whatever path sees them settle.
+        const closing = running.filter((record) => record.status === 'running');
+        // Everything else settled on its own — while this call was waiting, or
+        // before it (a named id). Its report is real work the parent has not
+        // read, and the reason for stopping does not apply to it.
+        const finishedMeanwhile = running.filter(
           (record) => record.status !== 'running' && !stopped.includes(record)
         );
-        const results = finished.map((record) => ({
+        const finishedBefore = targets.filter((record) => !running.includes(record));
+        const finished = [...finishedMeanwhile, ...finishedBefore];
+        // An id-less stop also hands over every other report still owed: the
+        // model is ending its delegations, and a report left behind would
+        // otherwise only surface after it had moved on.
+        const pending = ids.length
+          ? []
+          : this.registry
+              .undelivered()
+              .filter((record) => !stopped.includes(record) && !finished.includes(record));
+        const shown = [...stopped, ...finished, ...pending];
+        const results = shown.map((record) => ({
           delegationId: record.delegationId,
           agent: record.agentName,
           status: record.status,
           report: record.result?.report ?? `(${record.status} without a report)`,
         }));
-        // Delivered now because BOTH halves are in front of the model: the
-        // stopped ones as the count they asked for, the finished ones as their
-        // reports. The auto-resume pass must not repeat either.
-        this.registry.markDelivered(targets);
-        const head = stopped.length
-          ? `Stopped ${stopped.length} subagent${stopped.length === 1 ? '' : 's'}.`
-          : targets.length
-            ? 'Nothing was still running to stop.'
-            : 'No matching running subagents to stop.';
-        const text = results.length
+        // Delivered because every one of them is in front of the model right
+        // now, report and all — a stopped delegate's partial output included,
+        // which used to be counted as delivered without ever being shown.
+        this.registry.markDelivered(shown);
+        const plural = (count: number, one: string, many: string) => (count === 1 ? one : many);
+        const head = [
+          running.length === 0
+            ? ids.length
+              ? 'None of the delegations you named was still running, so nothing was stopped.'
+              : 'No subagent was running, so nothing was stopped.'
+            : `Stopped ${stopped.length} subagent${plural(stopped.length, '', 's')}.`,
+          finishedMeanwhile.length
+            ? `${finishedMeanwhile.length} finished on ${plural(finishedMeanwhile.length, 'its', 'their')} own before the stop landed.`
+            : '',
+          finishedBefore.length
+            ? `${finishedBefore.length} of the delegation${plural(finishedBefore.length, '', 's')} you named had already finished.`
+            : '',
+          pending.length
+            ? `${pending.length} finished report${plural(pending.length, ' was', 's were')} still waiting to be delivered to you.`
+            : '',
+          closing.length
+            ? `${closing.length} more ${plural(closing.length, 'was', 'were')} asked to stop and ${plural(closing.length, 'is', 'are')} still closing; ${plural(closing.length, 'its', 'their')} output will be delivered when ${plural(closing.length, 'it settles', 'they settle')}:\n${closing.map((record) => formatDelegationHeartbeat(record, Date.now())).join('\n')}`
+            : '',
+          unknownIds.length
+            ? `Unknown delegation ids (not found in this session): ${unknownIds.join(', ')}.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const body = results.length
           ? [
               head,
               formatDelegationResults(
                 results,
-                `${results.length} of the delegation${results.length === 1 ? '' : 's'} you named had already finished. ${results.length === 1 ? 'Its report follows' : 'Their reports follow'}; nothing else will deliver ${results.length === 1 ? 'it' : 'them'}.`
+                `${plural(results.length, 'Its report follows', 'Their reports follow')}; nothing else will deliver ${plural(results.length, 'it', 'them')}.`
               ),
             ].join('\n\n')
           : head;
         return {
-          content: [{ type: 'text' as const, text }],
+          content: [
+            {
+              type: 'text' as const,
+              text: verdict.idle ? `${body}\n\n${this.terminalNote()}` : body,
+            },
+          ],
           details: {
             stopped: stopped.map(delegationSummary),
             ...(finished.length ? { alreadyFinished: finished.map(delegationSummary) } : {}),
+            ...(closing.length ? { stillClosing: closing.map(delegationSummary) } : {}),
+            // What this result put in front of the model, by id: the fact a
+            // reopened session reads its delivery state back from.
+            delivered: shown.map((record) => record.delegationId),
+            ...(verdict.idle ? { idle: true } : {}),
           },
         };
       },

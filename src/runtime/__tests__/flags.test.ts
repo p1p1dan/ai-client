@@ -15,6 +15,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  LOOP_GUARD_ENV,
   PI_AGENT_DIR_ENV,
   RUNTIME_AGENT_DIR_ENV,
   RUNTIME_TRACE_DIR_ENV,
@@ -105,6 +106,16 @@ describe('runtime flags', () => {
     // Only the exact sentinel switches it off; anything else keeps the default.
     expect(readRuntimeFlags({ [STREAM_TOOL_ROWS_ENV]: 'false' }).streamToolRows).toBe(true);
     expect(readRuntimeFlags({ [STREAM_TOOL_ROWS_ENV]: '1' }).streamToolRows).toBe(true);
+  });
+
+  it('guards the subagent tool loop unless explicitly switched off with "0"', () => {
+    // Same opt-OUT shape as `streamToolRows`: shipped ON, and the variable is
+    // an emergency kill switch (engineering standard §6) rather than an opt-in.
+    expect(readRuntimeFlags({}).loopGuardEnabled).toBe(true);
+    expect(readRuntimeFlags({ [LOOP_GUARD_ENV]: '0' }).loopGuardEnabled).toBe(false);
+    // Only the exact sentinel switches it off; anything else keeps the default.
+    expect(readRuntimeFlags({ [LOOP_GUARD_ENV]: 'false' }).loopGuardEnabled).toBe(true);
+    expect(readRuntimeFlags({ [LOOP_GUARD_ENV]: '1' }).loopGuardEnabled).toBe(true);
   });
 
   it('is read by nothing in src/ or scripts/ — the switch is gone, not hidden', () => {

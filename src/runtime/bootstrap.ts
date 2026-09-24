@@ -316,6 +316,9 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       ...DEFAULT_AGENT_LOOP_CONFIG,
       singleTurn: !options.tools,
       providerTimeoutMs,
+      // See `LOOP_GUARD_ENV` in `flags.ts`; a caller-supplied `options.loop`
+      // still wins, same rule as `providerTimeoutMs` above.
+      loopGuardEnabled: flags.loopGuardEnabled,
       ...options.loop,
     };
     const agentDir = options.agentDir ?? flags.agentDir;
@@ -549,6 +552,10 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       const subagentFiber = await ctx.plugin(SubagentPlugin, {
         // The parent's number first, so a caller that pins one still wins.
         providerTimeoutMs,
+        // See `LOOP_GUARD_ENV` in `flags.ts`; a caller-supplied
+        // `options.subagents.loopGuardEnabled` still wins, same rule as
+        // `providerTimeoutMs` above.
+        loopGuardEnabled: flags.loopGuardEnabled,
         ...options.subagents,
         catalog: subagentCatalog,
         // subagent-data-02 — the same reader the bootstrap used, handed to the

@@ -76,8 +76,9 @@ export interface DelegationRecord {
    *
    * Set by whatever puts the outcome in front of the model: the auto-resume
    * pass, `TaskWait` for the targets that had settled, and `TaskStop` for the
-   * ones it stopped and reported on. `TaskList` does NOT set it — a heartbeat
-   * is a status line, not a report.
+   * ones it stopped (with their partial output) or found finished. `TaskList`
+   * does NOT set it — a heartbeat is a status line, not a report. A reopened
+   * session sets it from what the conversation on disk shows was delivered.
    */
   deliveredAt?: number;
   turns: number;
@@ -230,6 +231,29 @@ export class DelegationRegistry {
   }
 
   private readonly settleHandles = new Map<string, () => void>();
+
+  /**
+   * Put back a delegation this session recorded before the registry existed.
+   *
+   * The second write path next to {@link admit}, for a reopened session: the
+   * registry used to be memory only, so after a restart `TaskList` answered
+   * "no subagents have been started" about a conversation full of them, and a
+   * report that settled between runs was simply gone. Restored records are
+   * always SETTLED — a delegate cannot survive the process that ran it — so
+   * nothing here takes a slot, can be stopped, or can be waited on for long.
+   * An id already present wins: the live record knows more than the file.
+   */
+  restore(record: Omit<DelegationRecord, 'completion' | 'abort' | 'stopRequested'>): boolean {
+    if (record.status === 'running' || this.records.has(record.delegationId)) return false;
+    this.records.set(record.delegationId, {
+      ...record,
+      completion: Promise.resolve(),
+      abort: () => {},
+      stopRequested: false,
+    });
+    this.prune();
+    return true;
+  }
 
   /**
    * Record a settled run and wake everyone waiting on it.

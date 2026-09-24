@@ -7,7 +7,10 @@ import {
   migratePermissionTier,
   type RuntimePermissionSettings,
 } from '../../../shared/types/runtimePermission.ts';
-import { RUN_STOP_CUSTOM_TYPE } from '../../../shared/types/sessionHistory.ts';
+import {
+  LOOP_GUARD_CUSTOM_TYPE,
+  RUN_STOP_CUSTOM_TYPE,
+} from '../../../shared/types/sessionHistory.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import {
@@ -57,6 +60,9 @@ export const INTERNAL_CUSTOM_ENTRIES: readonly string[] = [
   // `session.*` event already says so; replay reads it through the history
   // projection, which folds it onto the run's last assistant message.
   RUN_STOP_CUSTOM_TYPE,
+  // Evidence a subagent loop guard left in the file; for a person reading the
+  // session, never a message in the timeline.
+  LOOP_GUARD_CUSTOM_TYPE,
 ];
 
 /**

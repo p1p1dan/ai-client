@@ -120,6 +120,7 @@ P5-5 起，**应用内**的模型目录不再从这个目录读：Main 在内存
 | `AICLIENT_RUNTIME_TRACE_DIR` | trace 落盘目录；不设则只留在内存 |
 
 | `AICLIENT_CONSOLE_CODEPAGE` | 覆盖控制台代码页探测（`src/shared/windowsCodePage.ts`）；全平台生效，主要给 Windows 现场机器逃生与 Linux 测试用 |
+| `AICLIENT_RUNTIME_LOOP_GUARD` | 子代理工具循环防空转总开关（`flags.ts` / `plugins/agent-loop/delegationLoopGuard.ts`）；默认开启，设为 `0` 紧急关闭。关闭后失效的只是拦截行为——形态 B 单条回复内重复调用的流式掐断、形态 A 连续空调用的拒绝与强制收尾、以及写入会话文件的 `aiclient.loopGuard` 取证记录；报告投递、`TaskStop` 有界等待、`TaskList` 状态标注等修正类行为不受影响 |
 
 ## trace 的分代戳 `config_version`
 

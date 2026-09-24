@@ -1356,16 +1356,23 @@ function formatToolArgDetail(
       // Singular and plural are separate keys:
       // `N delegation(s)` cannot be translated at all — Chinese has no plural
       // and the parenthesis is not a word in either language.
+      //
+      // No ids is described as what the CALL said, not as what the runtime
+      // found: "all running" read as the tool reporting live subagents, which
+      // is exactly the wrong impression when a model loops on these calls
+      // after every delegate has finished.
       raw =
         count > 0
           ? count === 1
             ? t('{{count}} delegation', { count })
             : t('{{count}} delegations', { count })
-          : t('all running');
+          : t('no delegation named');
       break;
     }
     case RUNTIME_TOOL_NAMES.taskList:
-      raw = t('running subagents');
+      // Neutral for the same reason: the list covers every delegation in the
+      // session, finished ones included.
+      raw = t('all delegations');
       break;
     case PI_TOOL_NAMES.ls: {
       // `path` is OPTIONAL on pi's `ls` — an argument-less call lists the

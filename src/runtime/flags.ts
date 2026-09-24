@@ -63,6 +63,24 @@ export const SKIP_USER_INSTRUCTIONS_ENV = 'AICLIENT_SKIP_USER_INSTRUCTIONS';
  */
 export const STREAM_TOOL_ROWS_ENV = 'AICLIENT_STREAM_TOOL_ROWS';
 
+/**
+ * The subagent tool loop guard (engineering standard §6; see
+ * `plugins/agent-loop/delegationLoopGuard.ts`'s module doc for the two
+ * measured failure shapes this protects against).
+ *
+ * Default ON, opt-out like {@link STREAM_TOOL_ROWS_ENV}: set to `0` to kill it
+ * in an emergency without a rebuild. Turning it off drops only the
+ * INTERCEPTING behaviour — form B's mid-stream cut (`guardReplyRepetition` in
+ * the agent loop), form A's refusal from the second idle `TaskWait` /
+ * `TaskList` / `TaskStop` call on (`idleVerdict` in the subagent plugin) and
+ * the turn-ceiling-style wrap-up that follows it, and the `aiclient.loopGuard`
+ * session record either of those writes. It does NOT touch the tool answers
+ * that were fixes rather than protection: report delivery, `TaskStop`'s
+ * bounded wait, `TaskList`'s status labelling, or any of the tools'
+ * descriptions — those stay exactly as they are with the switch off.
+ */
+export const LOOP_GUARD_ENV = 'AICLIENT_RUNTIME_LOOP_GUARD';
+
 export interface RuntimeFlags {
   /**
    * The engine that produced a run, carried into every trace's version stamp.
@@ -79,6 +97,8 @@ export interface RuntimeFlags {
   skipUserInstructions: boolean;
   /** See {@link STREAM_TOOL_ROWS_ENV}. Defaults to `true`. */
   streamToolRows: boolean;
+  /** See {@link LOOP_GUARD_ENV}. Defaults to `true`. */
+  loopGuardEnabled: boolean;
 }
 
 export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeFlags {
@@ -90,6 +110,9 @@ export function readRuntimeFlags(env: NodeJS.ProcessEnv = process.env): RuntimeF
     // Opt-OUT rather than opt-in, unlike every flag above: this one is the
     // behaviour we want shipped, and the variable exists to take it back.
     streamToolRows: env[STREAM_TOOL_ROWS_ENV] !== '0',
+    // Same opt-OUT shape as `streamToolRows`: shipped ON, and the variable is
+    // an emergency kill switch rather than an opt-in.
+    loopGuardEnabled: env[LOOP_GUARD_ENV] !== '0',
   };
 }
 

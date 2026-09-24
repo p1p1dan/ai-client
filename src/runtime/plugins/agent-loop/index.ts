@@ -14,7 +14,11 @@ import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import { markInternalMessage } from '../../../shared/internalMessage.ts';
 import { DEFAULT_PROVIDER_IDLE_TIMEOUT_MS } from '../../../shared/types/providerTimeout.ts';
-import { RUN_STOP_CUSTOM_TYPE, type TurnStopCause } from '../../../shared/types/sessionHistory.ts';
+import {
+  LOOP_GUARD_CUSTOM_TYPE,
+  RUN_STOP_CUSTOM_TYPE,
+  type TurnStopCause,
+} from '../../../shared/types/sessionHistory.ts';
 import {
   type AgentLoopService,
   EVENTS_SERVICE,
@@ -39,6 +43,16 @@ import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
 import { preparePrompt } from './attachments.ts';
+import {
+  delegationCallSignature,
+  describeRepetition,
+  displaySignature,
+  guardReplyRepetition,
+  isIdleDelegationResult,
+  MAX_IDLE_DELEGATION_REPLIES,
+  type RepetitionVerdict,
+  TOOL_CALL_REPETITION,
+} from './delegationLoopGuard.ts';
 import { sanitizeProviderErrorText } from './providerErrors.ts';
 import {
   createProviderRetryBudget,
@@ -181,6 +195,21 @@ export interface AgentLoopConfig {
    * of turns; the one production value is `DEFAULT_TURN_CEILING`.
    */
   turnCeiling: number;
+  /**
+   * `AICLIENT_RUNTIME_LOOP_GUARD` (engineering standard §6), read once at
+   * bootstrap into `flags.loopGuardEnabled` and handed down here rather than
+   * read from `process.env` in this file.
+   *
+   * Default `true`. Off drops only the INTERCEPTING half of the subagent tool
+   * loop guard (`delegationLoopGuard.ts`'s module doc): `streamFn` below no
+   * longer wraps the reply in `guardReplyRepetition` (form B's mid-stream
+   * cut), and `shouldStopAfterTurn` no longer counts idle-delegation replies
+   * or forces the wrap-up turn (form A's ceiling half — the refusal half lives
+   * in the subagent plugin's own `loopGuardEnabled`). Everything else —
+   * decision 040's turn ceiling, delegate reports, `TaskStop`'s bounded wait —
+   * is unrelated to this flag and keeps running.
+   */
+  loopGuardEnabled: boolean;
 }
 
 /** decision 040 — high enough that real long tasks never meet it. */
@@ -189,6 +218,39 @@ export const DEFAULT_TURN_CEILING = 500;
 /** What a tool call in the wrap-up turn gets back instead of running. */
 const TURN_CEILING_TOOL_REFUSAL =
   'Refused: this run has reached its turn ceiling. Do not call tools; write your summary for the user instead.';
+
+/** The same refusal, for a wrap-up the idle-delegation guard asked for. */
+const IDLE_DELEGATION_TOOL_REFUSAL =
+  'Refused: this run is wrapping up because the subagent tools had nothing left to act on. Do not call tools; write your reply to the user instead.';
+
+/**
+ * Why a run is wrapping up with one tool-less turn.
+ *
+ * - `turn_ceiling`: decision 040's ceiling on assistant turns.
+ * - `idle_delegation`: the model kept calling the subagent tools after every
+ *   delegate had finished and every report had been delivered, for
+ *   `MAX_IDLE_DELEGATION_REPLIES` replies in a row. Same mechanism — the
+ *   refusals already told it everything twice, and a summary is the one useful
+ *   thing left to ask for — but not a ceiling, so it reports no `turn_limit`.
+ */
+type WrapUpReason = 'turn_ceiling' | 'idle_delegation';
+
+/**
+ * The wrap-up request after the idle-delegation guard fired. Reports that
+ * arrived in between ride in front of it, as with the ceiling's.
+ */
+function idleDelegationPrompt(reports: readonly string[]): string {
+  const instruction = [
+    'Every subagent in this session has ended and every report has already been delivered to you, but you kept calling TaskList, TaskStop or TaskWait with nothing left for them to act on.',
+    'Stop now and do not call any tool — a tool call in this reply will be refused.',
+    ...(reports.length > 0
+      ? ['Account for the subagent reports above in your reply, but do not continue the work.']
+      : []),
+    'Write your final reply to the user, in the language they have been using: what you have done, where things stand, and what is left.',
+    'The user can reply "continue" to carry on from here.',
+  ].join(' ');
+  return [...reports, instruction].join('\n\n');
+}
 
 /**
  * decision 040 — the wrap-up request. Any delegate reports that arrived after
@@ -218,6 +280,7 @@ export const DEFAULT_AGENT_LOOP_CONFIG: AgentLoopConfig = {
   cacheRetention: 'long',
   providerTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
   turnCeiling: DEFAULT_TURN_CEILING,
+  loopGuardEnabled: true,
 };
 
 export class AgentLoopPlugin extends Service implements AgentLoopService {
@@ -523,10 +586,25 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // annotated `= 'none'` would be narrowed to `'none'` for the whole body.
     let turns = 0;
     let ceiling = 'none' as 'none' | 'reached' | 'wrapping';
+    let wrapReason = 'turn_ceiling' as WrapUpReason;
     // Once per run: every boundary after the interjection also stops, and the
     // trace only needs to say so once.
     let interjectionNoted = false;
     const heldReports: string[] = [];
+    /**
+     * The subagent loop guards' state for this run (see
+     * `delegationLoopGuard.ts`). `repetition` is set when a reply was cut
+     * mid-stream: the run then ends on that reply, with no further request of
+     * any kind — no auto-resume, no wrap-up. `idleReplies` counts consecutive
+     * replies whose tool calls were all idle delegation calls; `idleTrip` is
+     * what the idle rule saw when it fired.
+     */
+    // `as` for the same reason as `ceiling`: both are only ever written inside
+    // pi's callbacks, and an annotated uninitialized `let` would be narrowed
+    // to `undefined` for the whole body.
+    let repetition = undefined as RepetitionVerdict | undefined;
+    let idleReplies = 0;
+    let idleTrip = undefined as { replies: number; calls: string[] } | undefined;
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
     const retryBudget = createProviderRetryBudget({
@@ -621,24 +699,48 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       );
     };
     const agent = new Agent({
-      streamFn: (model, context, options) =>
-        createProviderRetryStream(
-          model,
-          context,
-          // Applied here rather than inside the retry factory so a retried
-          // request carries the same TTL as the one it replaces: a retry that
-          // downgraded to the SDK default would write a second, shorter entry
-          // for a prefix the first attempt already paid an hour for. The
-          // timeout rides along for the same reason — attempt 2 must not be
-          // more patient than attempt 1.
-          retryBudget.requestOptions({
-            ...options,
-            cacheRetention: this.config.cacheRetention,
-            timeoutMs: this.config.providerTimeoutMs,
-          }),
-          (retryOptions) => resolved.models.streamSimple(model, context, retryOptions),
-          retryBudget.controller
-        ),
+      streamFn: (model, context, options) => {
+        // Applied here rather than inside the retry factory so a retried
+        // request carries the same TTL as the one it replaces: a retry that
+        // downgraded to the SDK default would write a second, shorter entry
+        // for a prefix the first attempt already paid an hour for. The
+        // timeout rides along for the same reason — attempt 2 must not be
+        // more patient than attempt 1.
+        const stream = (signal?: AbortSignal) =>
+          createProviderRetryStream(
+            model,
+            context,
+            retryBudget.requestOptions({
+              ...options,
+              ...(signal ? { signal } : {}),
+              cacheRetention: this.config.cacheRetention,
+              timeoutMs: this.config.providerTimeoutMs,
+            }),
+            (retryOptions) => resolved.models.streamSimple(model, context, retryOptions),
+            retryBudget.controller
+          );
+        // AICLIENT_RUNTIME_LOOP_GUARD off: no repetition guard, so the reply
+        // streams exactly as pi and the retry layer produce it.
+        if (!this.config.loopGuardEnabled) return stream(options?.signal);
+        // Per request: the loop guard's own way to cancel THIS reply's
+        // provider request, alongside pi's run-wide signal.
+        const cut = new AbortController();
+        const signal = options?.signal ? AbortSignal.any([options.signal, cut.signal]) : cut.signal;
+        return guardReplyRepetition(stream(signal), {
+          abort: () => cut.abort(),
+          onTrip: (verdict) => {
+            repetition ??= verdict;
+            trace.note('note', {
+              event: 'tool_call_repetition',
+              rule: verdict.rule,
+              signature: displaySignature(verdict.signature),
+              occurrences: verdict.occurrences,
+              delegation_calls: verdict.delegationCalls,
+              tool_calls: verdict.toolCalls,
+            });
+          },
+        });
+      },
       // Per request rather than captured, so a key rewritten on disk between
       // turns of a long run is picked up. Empty string means "no key" and must
       // become undefined - pi-ai treats an empty key as a configured one.
@@ -658,7 +760,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // An interjection is not consumed here: it ends the whole run, so a
       // stream recovery or a wrap-up turn that follows also stops after one
       // turn instead of re-arming the loop.
-      shouldStopAfterTurn: () => {
+      shouldStopAfterTurn: (turn) => {
         if (interjection.requested) {
           if (!interjectionNoted) {
             interjectionNoted = true;
@@ -667,6 +769,27 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           return true;
         }
         if (this.config.singleTurn || ceiling !== 'none') return true;
+        // The idle-delegation guard: a reply whose every tool call was an
+        // idle `TaskList`/`TaskStop`/`TaskWait` (the plugin marks those) adds
+        // one; any reply that did real work resets it.
+        // AICLIENT_RUNTIME_LOOP_GUARD off: skip the count entirely, so an idle
+        // reply never forces the wrap-up turn (the subagent plugin's own
+        // `loopGuardEnabled` is what stops it from refusing those calls).
+        if (this.config.loopGuardEnabled && turn.toolResults.length > 0) {
+          idleReplies = turn.toolResults.every(isIdleDelegationResult) ? idleReplies + 1 : 0;
+          if (idleReplies >= MAX_IDLE_DELEGATION_REPLIES) {
+            const calls = turn.message.content.flatMap((block) =>
+              block.type === 'toolCall'
+                ? [displaySignature(delegationCallSignature(block.name, block.arguments))]
+                : []
+            );
+            idleTrip = { replies: idleReplies, calls };
+            ceiling = 'reached';
+            wrapReason = 'idle_delegation';
+            trace.note('note', { event: 'delegation_idle_loop', replies: idleReplies, calls });
+            return true;
+          }
+        }
         turns += 1;
         if (turns < this.config.turnCeiling) return false;
         ceiling = 'reached';
@@ -679,7 +802,14 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // with `terminate` so pi does not go back to the model with the refusal.
       beforeToolCall: async () =>
         ceiling === 'wrapping'
-          ? { block: true, reason: TURN_CEILING_TOOL_REFUSAL, terminate: true }
+          ? {
+              block: true,
+              reason:
+                wrapReason === 'idle_delegation'
+                  ? IDLE_DELEGATION_TOOL_REFUSAL
+                  : TURN_CEILING_TOOL_REFUSAL,
+              terminate: true,
+            }
           : undefined,
       // The turn boundary is where compaction is safe: the batch of tool
       // results that belongs to the turn just finished is already in the
@@ -733,6 +863,9 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let pendingStreamRetry: PendingStreamRetry | undefined;
     const claimStreamFailure = (message: AgentMessage): boolean => {
       if (!isAssistant(message) || message.stopReason !== 'error') return false;
+      // A reply the loop guard cut is not a provider fault, and re-asking
+      // would buy the same degenerate output again.
+      if (repetition) return false;
       // An abort is not a provider fault. pi spells it `stopReason: 'aborted'`,
       // so the guard above already covers the normal case; this one covers the
       // race where the user's Stop lands between the failure and this handler.
@@ -814,6 +947,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         }
       }
     };
+
+    /** The cut reply's account, with the run it happened in, for `error.message`. */
+    const repetitionText = (): string | undefined =>
+      repetition ? `${describeRepetition(repetition)} (run ${trace.runId})` : undefined;
 
     let thrown: Error | undefined;
     try {
@@ -900,26 +1037,43 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // wake signal cuts a wait already in progress; `collectFinished` returns
       // without marking anything delivered when it is cut, so every report —
       // settled or still to come — stays for the next run's own pass.
-      if (subagents) {
+      //
+      // Nor after a reply the loop guard cut (`repetition`): the model's last
+      // output was degenerate, and every further request — a resume carrying a
+      // report, a wrap-up — is another full-context request to a model that
+      // just lost the thread. The run ends on the cut; the user decides what
+      // happens next.
+      if (subagents && !repetition) {
         const waitSignal = request.signal
           ? AbortSignal.any([request.signal, interjection.wake.signal])
           : interjection.wake.signal;
         while (!request.signal?.aborted && !interjection.requested) {
-          const report = await subagents.collectFinished(waitSignal);
+          const collected = await subagents.collectFinished(waitSignal);
           // Folded per pass, not only at the end: a fan-out that settles
           // halfway through a long run should move the conversation total then,
           // not once everything is over.
           foldDelegatedUsage();
-          if (report === undefined) break;
+          if (collected === undefined) break;
           // decision 040: past the ceiling the parent takes no further turn per
           // report. The user chose to WAIT for running delegates rather than
           // stop them, so their reports are collected here and handed to the
-          // one wrap-up turn below.
+          // one wrap-up turn below. A pass that only timed out has no report
+          // to hold: the delegates it waited on are stopped instead (bounded),
+          // and the next pass collects what they had.
           if (ceiling !== 'none') {
-            heldReports.push(report);
+            if (collected.timedOut) {
+              trace.note('note', { event: 'delegation_collect_timeout', wrapping: true });
+              await subagents.drain();
+              continue;
+            }
+            heldReports.push(collected.text);
             continue;
           }
-          trace.note('note', { event: 'delegation_resume', report_bytes: report.length });
+          const report = collected.text;
+          trace.note('note', {
+            event: collected.timedOut ? 'delegation_collect_timeout' : 'delegation_resume',
+            report_bytes: report.length,
+          });
           // Marked, not plain text. pi wraps any prompt as `role: 'user'`, and
           // an unmarked one is indistinguishable from something the person
           // typed: the projector drew it as a user bubble carrying the real
@@ -939,26 +1093,39 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           );
           await agent.waitForIdle();
           await drainStreamRetries();
+          if (repetition) break;
         }
       }
       // An interjection skips the wrap-up: the user's next message is about to
       // give the model something better to do than summarise. The one
       // exception is held reports — they were marked delivered when collected,
       // and the wrap-up is the only request that can carry them, so dropping
-      // it would drop them. It is still a single tool-less turn.
+      // it would drop them. It is still a single tool-less turn. A cut reply
+      // skips it outright (see `repetition` above).
       if (
         ceiling === 'reached' &&
+        !repetition &&
         !request.signal?.aborted &&
         (!interjection.requested || heldReports.length > 0)
       ) {
         ceiling = 'wrapping';
-        trace.note('note', { event: 'turn_ceiling_wrap_up', held_reports: heldReports.length });
+        trace.note('note', {
+          event:
+            wrapReason === 'idle_delegation' ? 'delegation_idle_wrap_up' : 'turn_ceiling_wrap_up',
+          held_reports: heldReports.length,
+        });
         await agent.prompt(
           markInternalMessage(
             {
               role: 'user',
               content: [
-                { type: 'text', text: turnCeilingPrompt(this.config.turnCeiling, heldReports) },
+                {
+                  type: 'text',
+                  text:
+                    wrapReason === 'idle_delegation'
+                      ? idleDelegationPrompt(heldReports)
+                      : turnCeilingPrompt(this.config.turnCeiling, heldReports),
+                },
               ],
               timestamp: Date.now(),
             } satisfies AgentMessage,
@@ -968,6 +1135,26 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         await agent.waitForIdle();
         await drainStreamRetries();
       }
+      // Default-on evidence for either loop guard: one internal record in the
+      // session file, which needs no environment variable to exist and travels
+      // with the conversation the user would attach to a report. A cut reply
+      // also reaches main.log, through the run's `session.failed` line.
+      if (session && (repetition || idleTrip))
+        await recordLoopGuard(session, trace, {
+          sessionId,
+          runId: trace.runId,
+          ...(repetition
+            ? {
+                rule: repetition.rule,
+                signature: displaySignature(repetition.signature),
+                occurrences: repetition.occurrences,
+                delegationCalls: repetition.delegationCalls,
+                toolCalls: repetition.toolCalls,
+              }
+            : idleTrip
+              ? { rule: 'idle_replies', replies: idleTrip.replies, calls: idleTrip.calls }
+              : {}),
+        });
       await session?.flush();
     } catch (error) {
       // `Agent` encodes provider failures in the stream rather than throwing,
@@ -992,6 +1179,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           thrown,
           aborted: request.signal?.aborted === true,
           last: collected.turns.at(-1),
+          repetition: repetitionText(),
         }) === undefined;
       if (cleanInterjection) {
         // The one exit that leaves delegates running on purpose (see
@@ -1024,7 +1212,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
     const aborted = request.signal?.aborted === true;
     const last = collected.turns.at(-1);
-    const error = resolveError({ thrown, aborted, last });
+    const error = resolveError({ thrown, aborted, last, repetition: repetitionText() });
     // The last fold: `drain()` settles stragglers, and a run that failed or was
     // stopped never reached the loop above at all. `takeUsage()` drains, so
     // this cannot re-bill what the loop already took.
@@ -1052,7 +1240,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       ...(error ? { error } : {}),
       ...(interjected
         ? { stopCause: 'interjected' as const }
-        : ceiling === 'wrapping'
+        : ceiling === 'wrapping' && wrapReason === 'turn_ceiling'
           ? { stopCause: 'turn_limit' as const }
           : {}),
     };
@@ -1073,6 +1261,34 @@ interface RunInterjection {
   requested: boolean;
   /** Aborted by `interject()` so a wait on delegates ends at once. */
   readonly wake: AbortController;
+}
+
+/**
+ * Leave the loop guard's evidence in the session file.
+ *
+ * Internal like the run-stop record below: pi's context builder ignores it,
+ * the renderer never receives it as a message, and the session tree hides it.
+ * What it is for is the question "why did this turn end like that?" asked
+ * after the fact, with no trace directory configured. Never allowed to cost
+ * the run.
+ */
+async function recordLoopGuard(
+  session: RuntimeSessionService,
+  trace: TraceRun,
+  data: Record<string, unknown>
+): Promise<void> {
+  try {
+    await session.appendEntry({
+      type: 'custom',
+      customType: LOOP_GUARD_CUSTOM_TYPE,
+      data: { ...data, at: Date.now() },
+    });
+  } catch (error) {
+    trace.note('note', {
+      event: 'loop_guard_record_failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 /**
@@ -1214,6 +1430,8 @@ function resolveError(input: {
   thrown?: Error;
   aborted: boolean;
   last?: CollectedTurn;
+  /** Set when the loop guard cut the run's last reply; see `delegationLoopGuard.ts`. */
+  repetition?: string;
 }): { code: string; message: string } | undefined {
   if (input.aborted) return { code: 'aborted', message: 'the run was aborted by its caller' };
   if (input.thrown) {
@@ -1222,6 +1440,10 @@ function resolveError(input: {
       message: input.thrown.message,
     };
   }
+  // Its own code rather than `stop_error`: the renderer words this stop as
+  // "the model repeated itself, send a message to carry on", which is true,
+  // instead of "the provider cut the reply", which is not.
+  if (input.repetition) return { code: TOOL_CALL_REPETITION, message: input.repetition };
   if (!input.last) {
     return { code: 'no_assistant_message', message: 'the loop ended without an assistant turn' };
   }

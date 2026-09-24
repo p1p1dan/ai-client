@@ -84,6 +84,21 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
     expect(view.action).toBe('continue');
   });
 
+  it('names a reply the loop guard cut as the model repeating itself', () => {
+    // 2026-09-24: one GLM reply dictated the same three Task* calls ~1,900
+    // times. Reported as `stop_error` it would read "the provider cut the
+    // reply", which is false and sends the user to the wrong fix.
+    const view = deriveSessionFailure({
+      errorCode: 'tool_call_repetition',
+      error: 'The model wrote the same subagent tool call 3 times in one reply (TaskList {}).',
+    });
+    expect(view.title).toBe('The model repeated the same tool calls, so its reply was stopped');
+    expect(view.reason).toContain('ran none of the tool calls');
+    expect(view.action).toBe('continue');
+    expect(zhTranslations[view.title]).toBe('模型输出出现重复调用，已中断');
+    expect(zhTranslations[view.hint]).toContain('可以继续发消息');
+  });
+
   it('offers no Continue for a prompt that no longer fits', () => {
     // Re-sending is guaranteed to fail identically, so a button here would be
     // a button that cannot work — the rule `modelMissingError.ts` states.
@@ -130,6 +145,7 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'aborted',
       'loop_threw',
       'no_assistant_message',
+      'tool_call_repetition',
       'timeout',
       'lock_timeout',
       'model_missing',
@@ -241,6 +257,7 @@ describe('every failure sentence has a Chinese entry', () => {
       'aborted',
       'loop_threw',
       'no_assistant_message',
+      'tool_call_repetition',
       'timeout',
       'lock_timeout',
       'model_missing',
