@@ -181,12 +181,15 @@ export function getInitialState() {
     providerIdleTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
 
     // T104: chat typography. Empty family = follow the app's `--font-sans`.
-    // The two sizes are D1's 16 / 13, and MUST equal `globals.css`'s
-    // `--text-chat-body` / `--text-chat-process` defaults — the store value is
-    // what `ChatWorkspace` writes inline, so a mismatch would make the rendered
-    // chat disagree with the token a stylesheet-less consumer reads (and with
+    // The two sizes are D1's 17 / 14 (bumped from 16 / 13 on 2026-09-24, see
+    // `a86cefa4`), and MUST equal `globals.css`'s `--text-chat-body` /
+    // `--text-chat-process` defaults — the store value is what `ChatWorkspace`
+    // writes inline, so a mismatch would make the rendered chat disagree with
+    // the token a stylesheet-less consumer reads (and with
     // `DEFAULT_CHAT_BODY_FONT_SIZE`, which `middleColumnLayout`'s composer
-    // arithmetic is derived from).
+    // arithmetic is derived from). This new default only applies to fresh
+    // installs / users who never saved a size: existing users' persisted
+    // 16 / 13 is intentionally NOT migrated (user decision, 2026-09-24).
     chatFontFamily: DEFAULT_CHAT_FONT_FAMILY,
     chatBodyFontSize: DEFAULT_CHAT_BODY_FONT_SIZE,
     chatProcessFontSize: DEFAULT_CHAT_PROCESS_FONT_SIZE,

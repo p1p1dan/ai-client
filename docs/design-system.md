@@ -406,11 +406,11 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 | 语义档 | Size | Token | **字族** | 覆盖的用途 |
 |-------|------|-------|---------|-----------|
 | 2xs | **10px** | `--text-2xs` | **mono only** | `kbd` 快捷键 chip。**禁止承载 CJK**——中文 10px 不可读，见「CJK 级联规则」 |
-| code | **12px**（0.75rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
-| meta | **13px**（0.8125rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
-| ui | **14px**（0.875rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
-| markdown | **14px**（0.875rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
-| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >14px 的档） |
+| code | **13px**（0.8125rem） | `--text-code` | **mono** | 行内代码、代码块、工具行 ident 型参数、路径、hash、diff |
+| meta | **14px**（0.875rem） | `--text-meta` | sans | 时间戳、statusLine、meta 行、footer、次级说明 |
+| ui | **15px**（0.9375rem） | `--text-ui` | sans | 侧栏行、按钮、label、段头、tab、下拉触发器 |
+| markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
+| title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题（唯一 >15px 的档） |
 
 > **U01-a（2026-09-03）把 markdown 15→14、code 13→12**，对齐 pix 的正文与代码档
 > （[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)）。
@@ -418,15 +418,25 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 > 16px 与 UA 的 `normal` 行距。`html` 的 `--font-size-base: 16px` **不动**：它是整套 token 的 rem 基准，
 > 改它等于把全仓每个 rem 值一起缩放。Markdown 正文的 `leading-relaxed`（1.625）也**不动**，
 > 那是 F5 D1-b 针对长文阅读单独定的，与 UI 外壳的默认行距不是同一个问题。
+>
+> ⚠️ **2026-09-24（`a86cefa4`，style(theme): 全站字号分级整体上调一档）在 U01-a 基础上再上调一档**：
+> code 12→13px、meta 13→14px、ui/markdown 14→15px，并为 code/markdown/meta/ui 补上各自的
+> `--line-height`（1.5 / 1.55）；`body` 选择器的字号仍跟随 `--text-ui`（因此随之变为 15px），
+> 行高 1.45→1.55。**上表已是这次调整后的当前值**；`--text-title` 保持 18px 不变，仍是唯一高于
+> 15px 的档。聊天区两档默认值同步上调（16→17px / 13→14px），见下方「已记录偏离」一节；
+> **已保存的旧对话字号设置不做迁移**（用户决定，2026-09-24）。
 
-**`--text-markdown` 与 `--text-ui` 现在同为 14px，但仍是两个 token**——pix 也是这样（`--ui-font-size`
-与 `.pix-md` 都是 14）。理由与下面 meta/code 那条完全一样：**值相同，变更理由不同**。
+**`--text-markdown` 与 `--text-ui` 现在同为 15px，但仍是两个 token**——理由与下面 meta/code 那条
+完全一样：**值相同，变更理由不同**（U01-a / 2026-09-24 之前，两者曾同为 pix 对齐后的 14px）。
 
 **为什么 `--text-meta` 与 `--text-code` 必须是两个 token**：两者**变更理由不同**。
 `--text-code` 是「对 sans 正文的**光学补偿值**」——同 px 下 mono 的视觉体量比 sans 大 8~12%
 （平均 advance 0.6em vs 0.5em）。U01-a 把正文从 15 降到 14 时，它跟着从 13 降到 12，档比由 0.867 变 0.857，
-仍落在行业推荐带内——**这正是「跟着正文动」这条规则第一次真的生效**。
-`--text-meta` 的 13 是「次级 UI 文本」，正文变化不是它的变更理由，所以它**没有跟着动**。
+仍落在行业推荐带内——**这正是「跟着正文动」这条规则第一次真的生效**。2026-09-24 全站整体上调一档时，
+正文（sans body，即 `--text-markdown` / `--text-ui`）从 14 回升到 15，code 跟着从 12 回升到 13，
+档比回到 0.867——**同一条规则第二次生效**。
+`--text-meta` 现在是 **14px**（从 13px 上调）——但这次上调的理由依旧不是「跟着正文比例走」，
+而是与 code/ui/markdown 同批的整体分级上调；原则未变：两者各自的变更理由依旧不同，只是这次恰好同批发生。
 合成一个 token 的后果很具体：**未来一次 mono 调参会静默改掉全部时间戳字号。**
 
 **关键特征（照抄时最容易漏的一条）**：
@@ -453,9 +463,9 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 
 | 现有 | Tailwind | 归入 | 备注 |
 |------|---------|------|------|
-| 2xs 10px | `text-2xs` | **保留**（仅 mono 拉丁） | D25 修正原「→ ui 14px」：10px 档在等宽时代只是装饰，比例字体下它是**唯一能装 `kbd` 的档**；但**任何可能承载 CJK 的 10px 一律升到 `--text-meta`(13)** |
-| xs 12px | `text-xs` | → meta 13px / ui 14px / code 13px | 路径 / hash 类归 code，时间戳与次级说明归 meta，其余归 ui。**`text-xs` 在 `chat/` 与 `workspace-shell/` 已清零**（`chat/__tests__/fontDomainScan.test.ts` 有静态扫描断言守住） |
-| sm 14px | `text-sm` | → ui 14px | 已对齐 |
+| 2xs 10px | `text-2xs` | **保留**（仅 mono 拉丁） | D25 修正原「→ ui 14px」：10px 档在等宽时代只是装饰，比例字体下它是**唯一能装 `kbd` 的档**；但**任何可能承载 CJK 的 10px 一律升到 `--text-meta`(14px，2026-09-24 从 13px 上调)** |
+| xs 12px | `text-xs` | → meta 14px / ui 15px / code 13px | 路径 / hash 类归 code，时间戳与次级说明归 meta，其余归 ui。**`text-xs` 在 `chat/` 与 `workspace-shell/` 已清零**（`chat/__tests__/fontDomainScan.test.ts` 有静态扫描断言守住） |
+| sm 14px | `text-sm` | → ui 15px | 曾在 ui 14px 时代等值对齐，2026-09-24 ui 上调到 15px 后不再等值，仍归 ui 档 |
 | md 16px | `text-base` | → markdown 15px | 正文/次级标题 |
 | lg 18px | `text-lg` | → settings-title 18px | 仅设置页 L1 保留 |
 | xl 22px | `text-xl` | → markdown 15px + weight | **上游无此档**，标题不靠字号 |
@@ -471,7 +481,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 
 ### 已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）
 
-上表把 statusLine 归在 **meta（13px）**。聊天时间线的**回合状态行**不照这一格走，用 **`text-ui`（14px）**——两个形状一起改：`chatTimelineLayout.turnWorkGroupSummaryClass()`（工作组 `<summary>`：「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k tokens · 思考 20 秒」）与 `turnHeadClass()`（同一条线的非折叠形状）。
+上表把 statusLine 归在 **meta（14px）**。聊天时间线的**回合状态行**不照这一格走，用 **`text-ui`（15px）**——两个形状一起改：`chatTimelineLayout.turnWorkGroupSummaryClass()`（工作组 `<summary>`：「工作中 47 秒 · ↑ 12.0k tokens · ↓ 1.3k tokens · 思考 20 秒」）与 `turnHeadClass()`（同一条线的非折叠形状）。
 
 **理由**（完整版在 `turnWorkGroupSummaryClass()` 的注释里）：meta 档描述的是**被动陪衬**——时间戳、页脚、应用状态栏，看一眼或根本不看。这一行不是：一次等待里它经常是**屏幕上唯一在动的东西**，读者要盯着它看 20 秒，13px 被实测反馈为「太小，撑不起这个角色」。
 
@@ -485,29 +495,38 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 ### 已记录偏离：聊天区两档字号**运行时可变**（D1 / D2，T104，2026-09-19）
 
 上表的六档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
-**`--text-chat-body`**（默认 16px）与 **`--text-chat-process`**（默认 13px）**不照这条走**：
+**`--text-chat-body`**（默认 17px）与 **`--text-chat-process`**（默认 14px）**不照这条走**：
 它们是本仓库里**唯一一对运行时可变**的字号 token，由设置在 [12, 24] / [12, 20] 内连续调节。
 完整决策见 [决策 032](plantree/plans/runtime-hardening/decisions/032-chat-typography-configurable-two-tiers.md)。
 
+> ⚠️ **2026-09-24（`a86cefa4`，style(theme): 全站字号分级整体上调一档）**：出厂默认从
+> T104 上线时的 16px / 13px 上调为 **17px / 14px**（`chatTypography.ts` 的
+> `DEFAULT_CHAT_BODY_FONT_SIZE` / `DEFAULT_CHAT_PROCESS_FONT_SIZE` 同步）。
+> **已保存的旧对话字号设置不做迁移**——老用户持久化的 16 / 13 保持不变，
+> 新默认值只对新安装或从未保存过设置的用户生效（用户决定，2026-09-24）。
+
 | Token | 默认 | 范围 | 用途 |
 |---|---|---|---|
-| `--text-chat-body` | **16px** | 12 ~ 24 | 聊天区助手 / 用户正文、Markdown（**含 h1–h6**）、输入框 |
-| `--text-chat-process` | **13px** | 12 ~ 20 | 工具行、思考正文（从 `--text-markdown` 分出来的那一档） |
+| `--text-chat-body` | **17px** | 12 ~ 24 | 聊天区助手 / 用户正文、Markdown（**含 h1–h6**）、输入框 |
+| `--text-chat-process` | **14px** | 12 ~ 20 | 工具行、思考正文（从 `--text-markdown` 分出来的那一档） |
 
 **为什么这是有据偏离而不是破例**：这两档与六档的性质不同——六档回答「**哪一处 UI 该用哪一档**」，
 而这两档回答「**这一处由读者自己定多大**」。语义位置的切分（正文 / 过程）仍是设计判断，
 只有**取值**开放给了读者；两档之间仍是语义关系（正文档 > 过程档，层级由字号差与颜色共同承担）。
 数值边界也仍受本文件约束：两档下限取 **12px** 而非更低，是照「CJK 级联规则」第 3 条
-（任何可能出现中文的位置最小档是 `--text-meta` 13px）刻意留的一格余量——过程行装的就是中文动词，
+（任何可能出现中文的位置最小档是 `--text-meta` 14px）刻意留的一格余量——过程行装的就是中文动词，
 **不得再往下取**。
 
 **四条不要顺手扩大的边界**：
 
-- **回合状态行不参与**。`turnWorkGroupSummaryClass()` 与 `turnHeadClass()` 保持 `text-ui`（14px），
+- **回合状态行不参与**。`turnWorkGroupSummaryClass()` 与 `turnHeadClass()` 保持 `text-ui`（15px），
   见上方「已记录偏离：回合状态行用 `text-ui`（T097，2026-09-19）」。本次只管正文与过程。
 - **`--text-markdown` / `--text-ui` 未动**。本次是**切分与新增**，不是改档；六档的语义不变。
-- **默认值下观感不变**。16 / 13 这对出厂值下，不打开设置的用户看到的东西一格没动
-  （输入框行高由正文字号派生，16px 档的表达式恰好等于原来的 24px）。这条是本偏离能成立的底气。
+- **默认值内部自洽**。17 / 14 这对现行出厂值下，输入框行高仍由正文字号派生
+  （`--text-chat-body * 1.5`，17px 档算出 25.5px），表达式与档位数值保持一致——这条自洽性是本偏离
+  继续成立的底气。T104 上线时的出厂值曾是 16 / 13（那时 16px 档算出的 24px 与旧写死值完全重合），
+  2026-09-24 全站整体上调一档后，由「与旧写死值重合」让位为「与新档位算式自洽」；
+  **已保存的旧设置不受影响**（见上方 2026-09-24 说明）。
 - **仍是 token 不是任意值**，且**新增字号 token 的强制动作照旧**：必须同步注册进
   `tailwind-merge` 的 `font-size` 组（见上方工程注记），本次两个 token 均已注册。
 
@@ -790,7 +809,7 @@ Tailwind 的 `theme.css` 把 `--default-font-family` 定义为 `--theme(--font-s
    zh-CN 机器会直接把 Latin 交给 CJK 字面，正好触发规则 1 要防的那个失败。
    `--font-sans` 里**刻意没有**这一项，不要「顺手补上」。
 3. **10px 禁止承载 CJK。** `--text-2xs`(10px) 只给纯拉丁 / 数字（`kbd` 快捷键 chip）。
-   中文在 10px 下不可读——这不是审美判断，是识别率问题。任何可能出现中文的位置，最小档是 `--text-meta`(13px)。
+   中文在 10px 下不可读——这不是审美判断，是识别率问题。任何可能出现中文的位置，最小档是 `--text-meta`(14px，2026-09-24 从 13px 上调)。
 4. **负 `tracking` 禁止用于 CJK**，操作规则 = **「<18px 一律非负」**（见「Letter-spacing（字距梯度）」）。
 
 **两条附带纪律**：
