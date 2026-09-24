@@ -29,6 +29,7 @@ import {
   isWorkerForkPayload,
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
+  isWorkerInterjectPayload,
   isWorkerPermissionRespondPayload,
   isWorkerPreviewRespondPayload,
   isWorkerQuestionRespondPayload,
@@ -60,6 +61,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerInterjectResult,
   type WorkerModelCatalog,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondResult,
@@ -437,6 +439,9 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.stop':
           await this.handleStop(request);
+          break;
+        case 'worker.interject':
+          this.handleInterject(request);
           break;
         case 'worker.permission.respond':
           this.handlePermissionResponse(request);
@@ -820,6 +825,22 @@ export class PiWorkerRpcServer {
       return;
     }
     this.respondSuccess(request, await this.runtime.stop(request.payload));
+  }
+
+  private handleInterject(request: WorkerRpcRequest): void {
+    if (!isWorkerInterjectPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.interject requires logicalSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      this.respondSuccess(request, { interjected: false } satisfies WorkerInterjectResult);
+      return;
+    }
+    this.respondSuccess(request, this.runtime.interject(request.payload));
   }
 
   private handlePermissionResponse(request: WorkerRpcRequest): void {

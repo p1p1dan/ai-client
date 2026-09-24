@@ -601,6 +601,14 @@ export function registerChatHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.CHAT_INTERJECT,
+    async (_e, payload: { sessionId: string }): Promise<{ interjected: boolean }> => {
+      const interjected = await workerManager.interject(payload.sessionId);
+      return { interjected };
+    }
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.CHAT_CLOSE_SESSION,
     async (_e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       workerManager.releaseSession(payload.sessionId);

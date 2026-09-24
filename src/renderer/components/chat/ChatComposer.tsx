@@ -1026,6 +1026,29 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
   };
 
+  const handleInterject = async () => {
+    const trimmed = value.trim();
+    if (!trimmed || !activeSessionId) return;
+    const queued: QueuedMessage = {
+      id: nextQueuedMessageId(),
+      sessionId: activeSessionId,
+      text: trimmed,
+      attachments: attachments.drafts,
+      queuedAt: Date.now(),
+      priority: 'next',
+    };
+    const result = useMessageQueueStore.getState().interject(queued);
+    if (!result.ok) {
+      setQueueNotice(result.message);
+      return;
+    }
+    setQueueNotice(null);
+    updateValue('');
+    attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+    onSendStart?.('direct');
+    await window.electronAPI.chat.interject({ sessionId: activeSessionId });
+  };
+
   // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
   useEffect(() => {
     if (mentionQuery === null || !effectiveCwd) {
@@ -3170,7 +3193,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // message, and with attachments that is an expensive mistake.
           if (composingRef.current) return;
           event.preventDefault();
-          void handleSend();
+          if (event.ctrlKey && canStop) {
+            void handleInterject();
+          } else {
+            void handleSend();
+          }
         }
       }}
     />

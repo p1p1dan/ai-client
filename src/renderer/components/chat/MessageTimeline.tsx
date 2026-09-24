@@ -2193,6 +2193,12 @@ const ChatTurn = memo(function ChatTurn({
     () => splitTurnWorkGroup(segments, processSettled),
     [segments, processSettled]
   );
+  // A settled turn with no final answer was interrupted before producing a
+  // reply — its process group must stay expanded so the user can see what
+  // happened. During streaming (`processSettled=false`) this is always false,
+  // so it only fires for the interrupted-turn case.
+  const interruptedWithoutAnswer =
+    processSettled && !workSections.some((section) => section.kind === 'finalAnswer');
   // The turn's clock, in ONE derivation for both of the head's states. Running
   // it counts to `nowMs`; finished it counts to the turn's last completion (or,
   // for a stopped/failed turn, to the last stamp on record) — but from the SAME
@@ -2407,7 +2413,8 @@ const ChatTurn = memo(function ChatTurn({
           if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {
             return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
           }
-          const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
+          const groupForcedOpen =
+            turnWorkGroupAwaitsUser(section.segments) || interruptedWithoutAnswer;
           const headClock = !clockClaimed;
           clockClaimed = true;
           return (

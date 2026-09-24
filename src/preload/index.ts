@@ -1071,6 +1071,8 @@ const electronAPI = {
     }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
+    interject: (payload: { sessionId: string }): Promise<{ interjected: boolean }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERJECT, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),
     respondPermission: (payload: {

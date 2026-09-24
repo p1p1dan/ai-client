@@ -32,6 +32,8 @@ import type {
   WorkerForkResult,
   WorkerHistoryPayload,
   WorkerHistoryResult,
+  WorkerInterjectPayload,
+  WorkerInterjectResult,
   WorkerReloadPayload,
   WorkerReloadResult,
   WorkerRewindPayload,
@@ -490,6 +492,13 @@ export class NativeWorkerRuntime {
     // terminal event reports that it finished. `dispose` still waits, because
     // there the session lock has to be released before the call returns.
     return { stopped: true };
+  }
+
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (!this.handle || !this.turn) return { interjected: false };
+    this.handle.loop.interject();
+    return { interjected: true };
   }
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {

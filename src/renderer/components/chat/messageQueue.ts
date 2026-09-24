@@ -19,6 +19,16 @@ import { DEFAULT_ATTACHMENT_LIMITS } from './attachmentLimits';
 import type { AttachmentDraft } from './attachments';
 import { formatAttachmentSize, totalAttachmentBytes } from './attachments';
 
+/**
+ * Queue entry priority (Claude Code-style priority queue).
+ *
+ * - `'next'`: Ctrl+Enter interjection — the current turn finishes its
+ *   iteration, then stops gracefully so this entry can release as the next
+ *   turn. The worker-side `interject` signal is what earns the early stop.
+ * - `'later'`: ordinary queue — waits for the turn to end on its own.
+ */
+export type MessagePriority = 'next' | 'later';
+
 /** One message typed while its session could not start a new turn. */
 export interface QueuedMessage {
   id: string;
@@ -38,6 +48,13 @@ export interface QueuedMessage {
    * future T-19b that re-introduces queue-based failure tracking.
    */
   failure?: { message: string };
+  /**
+   * Defaults to `'later'` when absent. `'next'` entries trigger the
+   * `worker.interject` signal at enqueue time so the agent loop stops after
+   * its current iteration; the release mechanism itself does not distinguish
+   * priorities — any head entry releases when the session goes idle.
+   */
+  priority?: MessagePriority;
 }
 
 /**
@@ -198,6 +215,24 @@ export function enqueue(
     ok: true,
     state: { bySession: { ...state.bySession, [message.sessionId]: nextBucket } },
   };
+}
+
+// ---- interject (Ctrl+Enter) ----
+
+/**
+ * Enqueue one message as a `'next'`-priority interjection.
+ *
+ * Same guards and limits as `enqueue` — the only difference is the forced
+ * `priority: 'next'`. The priority tag is what tells the caller to also send
+ * the `worker.interject` signal; the queue release mechanism itself does not
+ * distinguish priorities (any head entry releases when the session goes idle).
+ */
+export function interject(
+  state: MessageQueueState,
+  message: QueuedMessage,
+  limits: EnqueueLimits = DEFAULT_ENQUEUE_LIMITS
+): EnqueueResult {
+  return enqueue(state, { ...message, priority: 'next' }, limits);
 }
 
 // ---- release plumbing (takeHead / restoreHead) ----

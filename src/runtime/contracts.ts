@@ -304,6 +304,8 @@ export interface RuntimeRunResult {
 /** P0-5. Registered as Cordis service {@link LOOP_SERVICE}. */
 export interface AgentLoopService {
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
+  /** Ask the loop to stop after the current turn completes. */
+  interject(): void;
 }
 
 export interface RuntimePromptService {

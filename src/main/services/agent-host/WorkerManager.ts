@@ -35,6 +35,7 @@ import {
   isWorkerDiscardForkResult,
   isWorkerForkResult,
   isWorkerHistoryResult,
+  isWorkerInterjectResult,
   isWorkerPermissionRespondResult,
   isWorkerQuestionRespondResult,
   isWorkerReloadResult,
@@ -60,6 +61,8 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerInterjectPayload,
+  type WorkerInterjectResult,
   type WorkerModelCatalog,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
@@ -1986,6 +1989,24 @@ export class WorkerManager {
       );
     }
     return requestId;
+  }
+
+  async interject(sessionId: string): Promise<boolean> {
+    const entry = this.entriesBySession.get(sessionId);
+    if (!entry?.slot || entry.state !== 'ready') return false;
+    entry.lastUsedAt = this.now();
+    const payload: WorkerInterjectPayload = { logicalSessionId: entry.logicalSessionId };
+    const result = await entry.slot.request<WorkerInterjectResult, WorkerInterjectPayload>(
+      'worker.interject',
+      payload
+    );
+    if (!isWorkerInterjectResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_interject_ack',
+        'Pi worker returned an invalid interject acknowledgement'
+      );
+    }
+    return result.interjected;
   }
 
   /**

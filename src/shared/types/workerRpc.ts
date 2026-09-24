@@ -573,6 +573,21 @@ export interface WorkerStopResult {
 }
 
 /**
+ * Ctrl+Enter interjection signal. Tells the agent loop to finish its current
+ * iteration and then stop gracefully — does NOT abort mid-turn. The actual
+ * message content travels through the renderer's queue; this RPC is purely a
+ * "stop at the next boundary" signal.
+ */
+export interface WorkerInterjectPayload {
+  logicalSessionId: string;
+}
+
+export interface WorkerInterjectResult {
+  /** False when no turn was active to interject into. */
+  interjected: boolean;
+}
+
+/**
  * The user's answer to one `permission.requested` event.
  *
  * Keyed by the `permissionId` the timeline block and the pending queue already
@@ -737,6 +752,7 @@ export type WorkerAcceptForkRequest = WorkerRpcRequest<
   WorkerAcceptForkPayload
 >;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
+export type WorkerInterjectRequest = WorkerRpcRequest<'worker.interject', WorkerInterjectPayload>;
 export type WorkerPermissionRespondRequest = WorkerRpcRequest<
   'worker.permission.respond',
   WorkerPermissionRespondPayload
@@ -1354,6 +1370,14 @@ export function isWorkerStopPayload(value: unknown): value is WorkerStopPayload 
 
 export function isWorkerStopResult(value: unknown): value is WorkerStopResult {
   return isRecord(value) && typeof value.stopped === 'boolean';
+}
+
+export function isWorkerInterjectPayload(value: unknown): value is WorkerInterjectPayload {
+  return isRecord(value) && typeof value.logicalSessionId === 'string';
+}
+
+export function isWorkerInterjectResult(value: unknown): value is WorkerInterjectResult {
+  return isRecord(value) && typeof value.interjected === 'boolean';
 }
 
 const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);

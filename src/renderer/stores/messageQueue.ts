@@ -16,6 +16,7 @@ import {
   type DraftPayload,
   type EnqueueResult,
   enqueue as enqueueReducer,
+  interject as interjectReducer,
   type MessageQueueState,
   moveEntry as moveEntryReducer,
   pauseSession as pauseSessionReducer,
@@ -35,6 +36,7 @@ interface MessageQueueStore {
   state: MessageQueueState;
 
   enqueue: (message: QueuedMessage) => EnqueueResult;
+  interject: (message: QueuedMessage) => EnqueueResult;
   takeHead: (sessionId: string) => QueuedMessage | null;
   restoreHead: (entry: QueuedMessage) => void;
   removeEntry: (sessionId: string, entryId: string) => void;
@@ -55,6 +57,12 @@ export const useMessageQueueStore = create<MessageQueueStore>()((set, get) => ({
 
   enqueue: (message) => {
     const result = enqueueReducer(get().state, message);
+    if (result.ok) set({ state: result.state });
+    return result;
+  },
+
+  interject: (message) => {
+    const result = interjectReducer(get().state, message);
     if (result.ok) set({ state: result.state });
     return result;
   },

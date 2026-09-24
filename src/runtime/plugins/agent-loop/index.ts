@@ -221,10 +221,31 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
   static inject = [MODEL_SERVICE, TRACE_SERVICE, PROMPT_SERVICE, EVENTS_SERVICE];
 
   private readonly config: AgentLoopConfig;
+  /**
+   * One-shot flag set by `interject()` (the worker.interject RPC handler).
+   * Consumed by `shouldStopAfterTurn` — read once, cleared immediately. When
+   * set, the current iteration finishes normally (tools run to completion,
+   * the assistant message is fully streamed), then the loop exits instead of
+   * continuing. The session goes idle, and the renderer's queue release
+   * mechanism picks up the interjection message as the next turn.
+   */
+  private _interjected = false;
 
   constructor(ctx: Context, config: AgentLoopConfig = DEFAULT_AGENT_LOOP_CONFIG) {
     super(ctx, LOOP_SERVICE);
     this.config = config;
+  }
+
+  /**
+   * Mark the current turn for graceful exit at its next iteration boundary.
+   *
+   * Called from `NativeWorkerRuntime.interject()` in response to the
+   * `worker.interject` RPC (triggered by Ctrl+Enter in the composer). Safe to
+   * call when no turn is running — the flag will be consumed by the next
+   * `shouldStopAfterTurn` check, which is harmless if the loop already exited.
+   */
+  interject(): void {
+    this._interjected = true;
   }
 
   async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
@@ -586,6 +607,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // reaches the ceiling, and every turn after that (the wrap-up, or a
       // stream recovery re-asking it) is the last one.
       shouldStopAfterTurn: () => {
+        if (this._interjected) {
+          this._interjected = false;
+          trace.note('note', { event: 'turn_stopped_by_interjection' });
+          return true;
+        }
         if (this.config.singleTurn || ceiling !== 'none') return true;
         turns += 1;
         if (turns < this.config.turnCeiling) return false;

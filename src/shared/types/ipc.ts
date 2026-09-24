@@ -366,6 +366,11 @@ export const IPC_CHANNELS = {
   CHAT_RELOAD_SESSION: 'chat:reloadSession',
   CHAT_SEND: 'chat:send',
   CHAT_STOP: 'chat:stop',
+  /**
+   * Ask the agent loop to stop after its current turn and deliver a queued
+   * message next. Ctrl+Enter in the composer.
+   */
+  CHAT_INTERJECT: 'chat:interject',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
   /**
    * Answer one `permission.requested`. Addressed by session plus the
