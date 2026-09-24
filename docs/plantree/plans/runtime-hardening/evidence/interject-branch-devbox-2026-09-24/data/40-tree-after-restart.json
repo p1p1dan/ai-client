@@ -1,0 +1,746 @@
+{
+  "at": "2026-09-24T13:27:57.959Z",
+  "sessions": [
+    {
+      "sid": "session-1790254889907-bpcop4v",
+      "resumed": {
+        "ok": true,
+        "requestId": "resume-1790256477962-1",
+        "waitedMs": 0
+      },
+      "fileEntries": 12,
+      "fileTypeHist": {
+        "session": 1,
+        "model_change": 1,
+        "thinking_level_change": 1,
+        "custom:aiclient.permissions": 1,
+        "message:user": 2,
+        "message:assistant": 3,
+        "message:toolResult": 2,
+        "custom:aiclient.runStop": 1
+      },
+      "customs": [
+        {
+          "id": "646bd703-427d-428e-aa75-4365a570edb9",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        },
+        {
+          "id": "fb6dc119-26c7-4d86-809c-6f09bc48d32a",
+          "customType": "aiclient.runStop",
+          "data": {
+            "cause": "interjected",
+            "runId": "send-1790254893029-5"
+          }
+        }
+      ],
+      "tree": {
+        "totalNodes": 10,
+        "hist": {
+          "model_change": 1,
+          "thinking_level_change": 1,
+          "custom": 1,
+          "message:user": 2,
+          "message:assistant": 3,
+          "message:toolResult": 2
+        },
+        "ids": [
+          "12b28c22-5003-4a1b-a61c-ae47ebace69e",
+          "5d9b0211-fcac-4652-b934-dfa8bcef3399",
+          "646bd703-427d-428e-aa75-4365a570edb9",
+          "4e8bfec5-d67c-48ee-b064-02d3dd051d87",
+          "df7fc0b1-4cae-49db-911b-4787d13d7f7e",
+          "03285180-701e-4019-9246-00740543ac3f",
+          "82a365ca-d0d1-4bde-996c-6e62687d6298",
+          "775b2062-2f61-49f9-aebb-8dafd7975a1d",
+          "a43b72ff-5f24-4957-8c51-2ba7c0968d40",
+          "b39857e3-62ff-41e0-b969-e97e6d6b599a"
+        ],
+        "previews": [
+          "model_change probe-fake/fake-sonnet",
+          "thinking_level_change medium",
+          "custom ",
+          "message:user ⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答",
+          "message:assistant 先做准备。",
+          "message:toolResult prep-ok [exit=0; exit]",
+          "message:assistant 开始长任务。",
+          "message:toolResult step-long-done [exit=0; exit]",
+          "message:user ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句",
+          "message:assistant ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句"
+        ]
+      },
+      "customNodesInTree": ["custom"],
+      "leakedCustomIds": [
+        {
+          "id": "646bd703-427d-428e-aa75-4365a570edb9",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        }
+      ]
+    },
+    {
+      "sid": "session-1790255141875-has4n58",
+      "resumed": {
+        "ok": true,
+        "requestId": "resume-1790256481041-2",
+        "waitedMs": 0
+      },
+      "fileEntries": 11,
+      "fileTypeHist": {
+        "session": 1,
+        "model_change": 1,
+        "thinking_level_change": 1,
+        "custom:aiclient.permissions": 1,
+        "message:user": 1,
+        "message:assistant": 3,
+        "message:toolResult": 2,
+        "custom:aiclient.runStop": 1
+      },
+      "customs": [
+        {
+          "id": "ea6e2a9a-3367-47bd-9887-ea6c8865fcf1",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        },
+        {
+          "id": "2cf68590-fcbf-4a91-b376-5d85f7c792fa",
+          "customType": "aiclient.runStop",
+          "data": {
+            "cause": "user_stop",
+            "runId": "send-1790255145422-15"
+          }
+        }
+      ],
+      "tree": {
+        "totalNodes": 9,
+        "hist": {
+          "model_change": 1,
+          "thinking_level_change": 1,
+          "custom": 1,
+          "message:user": 1,
+          "message:assistant": 3,
+          "message:toolResult": 2
+        },
+        "ids": [
+          "c5706532-6bea-455c-9d18-3bda15423935",
+          "227cad7f-a322-46b5-8156-5cc949389f54",
+          "ea6e2a9a-3367-47bd-9887-ea6c8865fcf1",
+          "a4e135b8-ed4c-461c-9b17-a02ba5804617",
+          "d7c5e528-bdad-484b-ae29-1e5a81d8215c",
+          "4c17b34c-112a-473b-9a71-5b16ccd2f6f2",
+          "9e45e54f-21ee-4ba0-9f96-cdd1ca55f080",
+          "7dbb7104-a210-4c61-b81d-17a401d7a8d8",
+          "c5cc599e-92cc-4638-ab73-a0e2aae1582c"
+        ],
+        "previews": [
+          "model_change probe-fake/fake-sonnet",
+          "thinking_level_change medium",
+          "custom ",
+          "message:user ⟦long⟧ A8-stop：sleep 中途点 Stop",
+          "message:assistant 先做准备。",
+          "message:toolResult prep-ok [exit=0; exit]",
+          "message:assistant 开始长任务。",
+          "message:toolResult (no output) [exit=null; aborted]",
+          "message:assistant "
+        ]
+      },
+      "customNodesInTree": ["custom"],
+      "leakedCustomIds": [
+        {
+          "id": "ea6e2a9a-3367-47bd-9887-ea6c8865fcf1",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        }
+      ]
+    },
+    {
+      "sid": "session-1790255259304-itxchqv",
+      "resumed": {
+        "ok": true,
+        "requestId": "resume-1790256483923-3",
+        "waitedMs": 0
+      },
+      "fileEntries": 19,
+      "fileTypeHist": {
+        "session": 1,
+        "model_change": 1,
+        "thinking_level_change": 1,
+        "custom:aiclient.permissions": 1,
+        "message:user": 3,
+        "message:assistant": 4,
+        "custom:aiclient.subagent": 6,
+        "message:toolResult": 1,
+        "custom:aiclient.runStop": 1
+      },
+      "customs": [
+        {
+          "id": "c0af4f34-6e58-41ee-bf28-68705082b1e7",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        },
+        {
+          "id": "dcbfe0a4-50ab-43e2-a947-d9a05e2a97b9",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "started",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "task": "⟦slowchild⟧ 这是点验用的慢子代理：先 sleep，再回报。",
+            "label": "慢子代理点验",
+            "model": {
+              "provider": "probe-fake",
+              "modelId": "fake-sonnet"
+            },
+            "startedAt": 1790255262981
+          }
+        },
+        {
+          "id": "0e7fa351-a593-4deb-855c-30f06dcf5e43",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "⟦slowchild⟧ 这是点验用的慢子代理：先 sleep，再回报。"
+                }
+              ],
+              "timestamp": 1790255262990
+            },
+            "at": 1790255262991
+          }
+        },
+        {
+          "id": "8a2241dc-37ee-420d-b686-f1410a708c31",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "先睡一会儿。"
+                },
+                {
+                  "type": "toolCall",
+                  "id": "toolu_20e01b34f4db4dadbd53257ebf22f04f",
+                  "name": "bash",
+                  "arguments": {
+                    "command": "sleep 45 && echo child-slept",
+                    "timeoutSeconds": 120
+                  }
+                }
+              ],
+              "api": "anthropic-messages",
+              "provider": "probe-fake",
+              "model": "fake-sonnet",
+              "usage": {
+                "input": 40,
+                "output": 30,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalTokens": 70,
+                "cost": {
+                  "input": 0,
+                  "output": 0,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0
+                },
+                "cacheWrite1h": 0
+              },
+              "stopReason": "toolUse",
+              "timestamp": 1790255262993,
+              "responseId": "msg_7bc1a814-9866-41d2-a5b8-a03c127cec15",
+              "rawStopReason": "tool_use"
+            },
+            "at": 1790255263009
+          }
+        },
+        {
+          "id": "d32449bb-a211-42ac-b42f-7ebb68351d40",
+          "customType": "aiclient.runStop",
+          "data": {
+            "cause": "interjected",
+            "runId": "send-1790255262816-22"
+          }
+        },
+        {
+          "id": "901a0225-eebb-4fd3-95e1-4c74a64a2aac",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "toolResult",
+              "toolCallId": "toolu_20e01b34f4db4dadbd53257ebf22f04f",
+              "toolName": "bash",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "child-slept\n\n[exit=0; exit]"
+                }
+              ],
+              "details": {
+                "exitCode": 0,
+                "signal": null,
+                "termination": "exit",
+                "stdoutBytes": 12,
+                "stderrBytes": 0,
+                "truncated": false
+              },
+              "isError": false,
+              "timestamp": 1790255308109
+            },
+            "at": 1790255308109
+          }
+        },
+        {
+          "id": "3fa4879d-6598-40af-a284-464ffd6038ee",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "CHILD-REPORT-SLOW: 慢子代理完成，睡了 45 秒。"
+                }
+              ],
+              "api": "anthropic-messages",
+              "provider": "probe-fake",
+              "model": "fake-sonnet",
+              "usage": {
+                "input": 40,
+                "output": 30,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalTokens": 70,
+                "cost": {
+                  "input": 0,
+                  "output": 0,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0
+                },
+                "cacheWrite1h": 0
+              },
+              "stopReason": "stop",
+              "timestamp": 1790255308110,
+              "responseId": "msg_1fae9337-b518-4f5a-bcd4-79aae6dae8cd",
+              "rawStopReason": "end_turn"
+            },
+            "at": 1790255308115
+          }
+        },
+        {
+          "id": "6e7c3a84-cc51-4145-bcc8-e329df467359",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "settled",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "status": "completed",
+            "turns": 2,
+            "toolCalls": 1,
+            "report": "CHILD-REPORT-SLOW: 慢子代理完成，睡了 45 秒。",
+            "usage": {
+              "input": 80,
+              "output": 60,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 140,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              },
+              "cacheWrite1h": 0
+            },
+            "completedAt": 1790255308116
+          }
+        }
+      ],
+      "tree": {
+        "totalNodes": 17,
+        "hist": {
+          "model_change": 1,
+          "thinking_level_change": 1,
+          "custom": 7,
+          "message:user": 3,
+          "message:assistant": 4,
+          "message:toolResult": 1
+        },
+        "ids": [
+          "5961796e-9e0a-4568-b0fd-4d0fd822c14a",
+          "b8dc9920-6ac3-4335-8acc-3260487fb575",
+          "c0af4f34-6e58-41ee-bf28-68705082b1e7",
+          "c6aa11cf-a3c9-4b3b-840e-f68b960beee6",
+          "db4fb1ba-833e-43d1-b13a-f570b66a692f",
+          "dcbfe0a4-50ab-43e2-a947-d9a05e2a97b9",
+          "0e7fa351-a593-4deb-855c-30f06dcf5e43",
+          "1936a0a6-7f04-4301-85fc-71c353f99320",
+          "8a2241dc-37ee-420d-b686-f1410a708c31",
+          "04b08cb0-27dc-4bfc-99a0-a8005d208312",
+          "fede889d-3381-4c2c-ae4a-cfb998777dca",
+          "d32d751e-d19d-4cd4-8c9f-41199b4bba26",
+          "901a0225-eebb-4fd3-95e1-4c74a64a2aac",
+          "3fa4879d-6598-40af-a284-464ffd6038ee",
+          "6e7c3a84-cc51-4145-bcc8-e329df467359",
+          "b390e01d-8a0d-4eff-87ae-111944139aac",
+          "03b7596f-12e0-4408-b154-b86e26ba9dc9"
+        ],
+        "previews": [
+          "model_change probe-fake/fake-sonnet",
+          "thinking_level_change medium",
+          "custom ",
+          "message:user ⟦sub⟧ A7 派慢子代理，然后插话",
+          "message:assistant 派出一个慢子代理。",
+          "custom ",
+          "custom ",
+          "message:toolResult Delegation 92851bc3-1be1-41c8-b494-f2e4c9e2b9a1 st",
+          "custom ",
+          "message:assistant SUB-DISPATCHED: 子代理在后台跑，我等它的报告。",
+          "message:user ⟦echo⟧ 插话-A7：子代理还在跑，先回我这句",
+          "message:assistant ECHO: ⟦echo⟧ 插话-A7：子代理还在跑，先回我这句",
+          "custom ",
+          "custom ",
+          "custom ",
+          "message:user The following subagents have finished; their repor",
+          "message:assistant REPORT-SEEN: 收到报告 The following subagents have fin"
+        ]
+      },
+      "customNodesInTree": ["custom"],
+      "leakedCustomIds": [
+        {
+          "id": "c0af4f34-6e58-41ee-bf28-68705082b1e7",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        },
+        {
+          "id": "dcbfe0a4-50ab-43e2-a947-d9a05e2a97b9",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "started",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "task": "⟦slowchild⟧ 这是点验用的慢子代理：先 sleep，再回报。",
+            "label": "慢子代理点验",
+            "model": {
+              "provider": "probe-fake",
+              "modelId": "fake-sonnet"
+            },
+            "startedAt": 1790255262981
+          }
+        },
+        {
+          "id": "0e7fa351-a593-4deb-855c-30f06dcf5e43",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "user",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "⟦slowchild⟧ 这是点验用的慢子代理：先 sleep，再回报。"
+                }
+              ],
+              "timestamp": 1790255262990
+            },
+            "at": 1790255262991
+          }
+        },
+        {
+          "id": "8a2241dc-37ee-420d-b686-f1410a708c31",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "先睡一会儿。"
+                },
+                {
+                  "type": "toolCall",
+                  "id": "toolu_20e01b34f4db4dadbd53257ebf22f04f",
+                  "name": "bash",
+                  "arguments": {
+                    "command": "sleep 45 && echo child-slept",
+                    "timeoutSeconds": 120
+                  }
+                }
+              ],
+              "api": "anthropic-messages",
+              "provider": "probe-fake",
+              "model": "fake-sonnet",
+              "usage": {
+                "input": 40,
+                "output": 30,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalTokens": 70,
+                "cost": {
+                  "input": 0,
+                  "output": 0,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0
+                },
+                "cacheWrite1h": 0
+              },
+              "stopReason": "toolUse",
+              "timestamp": 1790255262993,
+              "responseId": "msg_7bc1a814-9866-41d2-a5b8-a03c127cec15",
+              "rawStopReason": "tool_use"
+            },
+            "at": 1790255263009
+          }
+        },
+        {
+          "id": "901a0225-eebb-4fd3-95e1-4c74a64a2aac",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "toolResult",
+              "toolCallId": "toolu_20e01b34f4db4dadbd53257ebf22f04f",
+              "toolName": "bash",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "child-slept\n\n[exit=0; exit]"
+                }
+              ],
+              "details": {
+                "exitCode": 0,
+                "signal": null,
+                "termination": "exit",
+                "stdoutBytes": 12,
+                "stderrBytes": 0,
+                "truncated": false
+              },
+              "isError": false,
+              "timestamp": 1790255308109
+            },
+            "at": 1790255308109
+          }
+        },
+        {
+          "id": "3fa4879d-6598-40af-a284-464ffd6038ee",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "message",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "message": {
+              "role": "assistant",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "CHILD-REPORT-SLOW: 慢子代理完成，睡了 45 秒。"
+                }
+              ],
+              "api": "anthropic-messages",
+              "provider": "probe-fake",
+              "model": "fake-sonnet",
+              "usage": {
+                "input": 40,
+                "output": 30,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "totalTokens": 70,
+                "cost": {
+                  "input": 0,
+                  "output": 0,
+                  "cacheRead": 0,
+                  "cacheWrite": 0,
+                  "total": 0
+                },
+                "cacheWrite1h": 0
+              },
+              "stopReason": "stop",
+              "timestamp": 1790255308110,
+              "responseId": "msg_1fae9337-b518-4f5a-bcd4-79aae6dae8cd",
+              "rawStopReason": "end_turn"
+            },
+            "at": 1790255308115
+          }
+        },
+        {
+          "id": "6e7c3a84-cc51-4145-bcc8-e329df467359",
+          "customType": "aiclient.subagent",
+          "data": {
+            "kind": "settled",
+            "delegationId": "92851bc3-1be1-41c8-b494-f2e4c9e2b9a1",
+            "agentName": "explorer",
+            "parentToolCallId": "toolu_746a84328aa84eef92da4315972bd054",
+            "runId": "send-1790255262816-22",
+            "status": "completed",
+            "turns": 2,
+            "toolCalls": 1,
+            "report": "CHILD-REPORT-SLOW: 慢子代理完成，睡了 45 秒。",
+            "usage": {
+              "input": 80,
+              "output": 60,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 140,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              },
+              "cacheWrite1h": 0
+            },
+            "completedAt": 1790255308116
+          }
+        }
+      ]
+    },
+    {
+      "sid": "session-1790255671507-ok16sdf",
+      "resumed": {
+        "ok": true,
+        "requestId": "resume-1790256487058-4",
+        "waitedMs": 0
+      },
+      "fileEntries": 9,
+      "fileTypeHist": {
+        "session": 1,
+        "model_change": 1,
+        "thinking_level_change": 1,
+        "custom:aiclient.permissions": 1,
+        "message:user": 2,
+        "message:assistant": 2,
+        "custom:aiclient.loopGuard": 1
+      },
+      "customs": [
+        {
+          "id": "554d482e-8727-4428-94bc-2b518bc7bf57",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        },
+        {
+          "id": "8d19c2b3-dc57-4630-a081-d236e4081e44",
+          "customType": "aiclient.loopGuard",
+          "data": {
+            "sessionId": "session-1790255671507-ok16sdf",
+            "runId": "send-1790255675092-30",
+            "rule": "identical_call",
+            "signature": "TaskList {}",
+            "occurrences": 3,
+            "delegationCalls": 7,
+            "toolCalls": 47,
+            "at": 1790255687047
+          }
+        }
+      ],
+      "tree": {
+        "totalNodes": 7,
+        "hist": {
+          "model_change": 1,
+          "thinking_level_change": 1,
+          "custom": 1,
+          "message:user": 2,
+          "message:assistant": 2
+        },
+        "ids": [
+          "9bb77946-4d6a-4f71-8e6b-8c6a95367603",
+          "093ee667-5977-40e7-801d-94ec8699d23c",
+          "554d482e-8727-4428-94bc-2b518bc7bf57",
+          "28e1d3b8-7940-48aa-b071-0fd82547b7bd",
+          "dfd71205-aac5-4047-a495-88998edbb20b",
+          "7d74420e-1bca-4331-8a1a-7d81d36381ae",
+          "91efdb37-33a7-41e5-8c9c-8f59127e4d43"
+        ],
+        "previews": [
+          "model_change probe-fake/fake-sonnet",
+          "thinking_level_change medium",
+          "custom ",
+          "message:user ⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套",
+          "message:assistant 我来检查一下子代理的状态。",
+          "message:user ⟦echo⟧ D1 之后再发一条，看上下文",
+          "message:assistant ECHO: ⟦echo⟧ D1 之后再发一条，看上下文"
+        ]
+      },
+      "customNodesInTree": ["custom"],
+      "leakedCustomIds": [
+        {
+          "id": "554d482e-8727-4428-94bc-2b518bc7bf57",
+          "customType": "aiclient.permissions",
+          "data": {
+            "mode": "agent",
+            "gear": "auto"
+          }
+        }
+      ]
+    }
+  ]
+}

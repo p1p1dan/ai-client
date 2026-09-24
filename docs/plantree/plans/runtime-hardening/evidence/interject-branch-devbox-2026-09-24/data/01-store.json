@@ -1,0 +1,20 @@
+{
+  "active": "session-live-1790254704085-rdda7lo",
+  "sessions": 1,
+  "runtimeReady": true,
+  "projects": [
+    {
+      "id": "local:/tmp/ij/repo",
+      "name": "repo"
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "ws:main:/tmp/ij/repo",
+      "path": "/tmp/ij/repo",
+      "branch": "main",
+      "kind": "main",
+      "projectId": "local:/tmp/ij/repo"
+    }
+  ]
+}

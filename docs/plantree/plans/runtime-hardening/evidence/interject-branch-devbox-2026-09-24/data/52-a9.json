@@ -1,0 +1,243 @@
+{
+  "at": "2026-09-24T13:26:28.191Z",
+  "cases": [
+    {
+      "tag": "A2-interjected",
+      "sid": "session-1790254889907-bpcop4v",
+      "via": "sidebar",
+      "activeSessionId": "session-1790254889907-bpcop4v",
+      "turns": [
+        {
+          "head": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答 已工作 1 秒 先做准备。 终端 echo prep-ok 开",
+          "details": [
+            {
+              "open": true,
+              "summary": "已工作 1 秒"
+            }
+          ]
+        },
+        {
+          "head": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我",
+          "details": []
+        }
+      ],
+      "assistantStopCauses": [null, "interjected", null],
+      "targetDefault": [
+        {
+          "open": true,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": true
+      },
+      "targetAfterClick": [
+        {
+          "open": false,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A2-interjected-default.png"
+    },
+    {
+      "tag": "A4-interjected",
+      "sid": "session-1790254966174-4xupb8n",
+      "via": "sidebar",
+      "activeSessionId": "session-1790254966174-4xupb8n",
+      "turns": [
+        {
+          "head": "⟦long⟧ A4 优先级：长回合里先排两条再插话 已工作 1 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 slee",
+          "details": [
+            {
+              "open": true,
+              "summary": "已工作 1 秒"
+            }
+          ]
+        },
+        {
+          "head": "⟦echo⟧ 插话-A4（Ctrl+Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A4（Ctrl+Enter） ✻",
+          "details": []
+        },
+        {
+          "head": "⟦echo⟧ 排队-1（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-1（普通 Enter） ✻ 完成于 0",
+          "details": []
+        },
+        {
+          "head": "⟦echo⟧ 排队-2（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-2（普通 Enter） ✻ 完成于 0",
+          "details": []
+        }
+      ],
+      "assistantStopCauses": [null, "interjected", null, null, null],
+      "targetDefault": [
+        {
+          "open": true,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": true
+      },
+      "targetAfterClick": [
+        {
+          "open": false,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A4-interjected-default.png"
+    },
+    {
+      "tag": "A7-interjected",
+      "sid": "session-1790255259304-itxchqv",
+      "via": "store.selectSession",
+      "activeSessionId": "session-1790255259304-itxchqv",
+      "turns": [],
+      "assistantStopCauses": [],
+      "targetDefault": null,
+      "toggled": null,
+      "targetAfterClick": null,
+      "shotDefault": "shots/52-a9-A7-interjected-default.png"
+    },
+    {
+      "tag": "A8-stop",
+      "sid": "session-1790255141875-has4n58",
+      "via": "sidebar",
+      "activeSessionId": "session-1790255141875-has4n58",
+      "turns": [
+        {
+          "head": "⟦long⟧ A8-stop：sleep 中途点 Stop 已工作 4 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 ",
+          "details": [
+            {
+              "open": true,
+              "summary": "已工作 4 秒"
+            }
+          ]
+        }
+      ],
+      "assistantStopCauses": [null, null, "user_stop"],
+      "targetDefault": [
+        {
+          "open": true,
+          "summary": "已工作 4 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": true
+      },
+      "targetAfterClick": [
+        {
+          "open": false,
+          "summary": "已工作 4 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A8-stop-default.png"
+    },
+    {
+      "tag": "A8-normal",
+      "sid": "session-1790255173512-h20a3va",
+      "via": "sidebar",
+      "activeSessionId": "session-1790255173512-h20a3va",
+      "turns": [
+        {
+          "head": "⟦long⟧ A8-normal / C1：计时行采样，正常跑完 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完",
+          "details": [
+            {
+              "open": false,
+              "summary": "已工作 20 秒"
+            }
+          ]
+        }
+      ],
+      "assistantStopCauses": [null, null, null, null],
+      "targetDefault": [
+        {
+          "open": false,
+          "summary": "已工作 20 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": false
+      },
+      "targetAfterClick": [
+        {
+          "open": true,
+          "summary": "已工作 20 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A8-normal-default.png"
+    },
+    {
+      "tag": "A8-toolend",
+      "sid": "session-1790255201495-95u2tu7",
+      "via": "sidebar",
+      "activeSessionId": "session-1790255201495-95u2tu7",
+      "turns": [
+        {
+          "head": "⟦toolend⟧ A8-toolend：两次工具后空回复结束 已工作 1 秒 最终输出 Response interrupted befo",
+          "details": [
+            {
+              "open": false,
+              "summary": "已工作 1 秒"
+            }
+          ]
+        }
+      ],
+      "assistantStopCauses": [null, null, null],
+      "targetDefault": [
+        {
+          "open": false,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": false
+      },
+      "targetAfterClick": [
+        {
+          "open": true,
+          "summary": "已工作 1 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A8-toolend-default.png"
+    },
+    {
+      "tag": "A6-normal",
+      "sid": "session-1790255048446-z82ivrc",
+      "via": "sidebar",
+      "activeSessionId": "session-1790255048446-z82ivrc",
+      "turns": [
+        {
+          "head": "⟦long⟧ A6 运行中 Ctrl+Enter 发 /compact 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ",
+          "details": [
+            {
+              "open": false,
+              "summary": "已工作 20 秒"
+            }
+          ]
+        }
+      ],
+      "assistantStopCauses": [null, null, null, null],
+      "targetDefault": [
+        {
+          "open": false,
+          "summary": "已工作 20 秒"
+        }
+      ],
+      "toggled": {
+        "ok": true,
+        "before": false
+      },
+      "targetAfterClick": [
+        {
+          "open": true,
+          "summary": "已工作 20 秒"
+        }
+      ],
+      "shotDefault": "shots/52-a9-A6-normal-default.png"
+    }
+  ]
+}

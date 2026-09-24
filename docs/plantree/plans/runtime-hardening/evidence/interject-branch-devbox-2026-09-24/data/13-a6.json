@@ -1,0 +1,254 @@
+{
+  "startedAt": "2026-09-24T13:04:08.443Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790254966174-4xupb8n",
+    "after": "session-1790255048446-z82ivrc"
+  },
+  "sid": "session-1790255048446-z82ivrc",
+  "step1": {
+    "t": "2026-09-24T13:04:12.085Z",
+    "event": "response_complete",
+    "seq": 12,
+    "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790255052081.txt)",
+    "frames": 10,
+    "toolBlocksSent": 1,
+    "ms": 2
+  },
+  "typed": {
+    "len": 8,
+    "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…"
+  },
+  "popupAfterTyping": {
+    "options": [],
+    "value": "/compact"
+  },
+  "shotPopup": "shots/13-a6-slash-popup.png",
+  "ctrlEnter1": "2026-09-24T13:04:14.503Z",
+  "afterCtrlEnter1": {
+    "popup": {
+      "options": [],
+      "value": "/compact "
+    },
+    "composer": {
+      "t": "2026-09-24T13:04:15.209Z",
+      "value": "/compact ",
+      "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…",
+      "buttons": [
+        {
+          "label": "停止当前回合",
+          "disabled": false
+        },
+        {
+          "label": "立刻发送 — 打断当前回复",
+          "disabled": false
+        },
+        {
+          "label": "加入队列",
+          "disabled": false
+        }
+      ],
+      "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+    },
+    "queue": []
+  },
+  "ctrlEnter2": "2026-09-24T13:04:15.232Z",
+  "afterCtrlEnter2": {
+    "popup": {
+      "options": [],
+      "value": "/compact "
+    },
+    "composer": {
+      "t": "2026-09-24T13:04:16.434Z",
+      "value": "/compact ",
+      "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…",
+      "buttons": [
+        {
+          "label": "停止当前回合",
+          "disabled": false
+        },
+        {
+          "label": "立刻发送 — 打断当前回复",
+          "disabled": false
+        },
+        {
+          "label": "加入队列",
+          "disabled": false
+        }
+      ],
+      "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+    },
+    "queue": []
+  },
+  "shotAfter": "shots/13-a6-after-ctrl-enter.png",
+  "settle": {
+    "ok": true,
+    "trail": [
+      {
+        "status": "running",
+        "atMs": 8,
+        "t": "2026-09-24T13:04:16.548Z"
+      },
+      {
+        "status": "idle",
+        "atMs": 16200,
+        "t": "2026-09-24T13:04:32.743Z"
+      }
+    ],
+    "ms": 17607
+  },
+  "gateway": [
+    {
+      "t": "2026-09-24T13:04:11.951Z",
+      "seq": 11,
+      "route": "parent",
+      "reply": "long step0: bash prep",
+      "hasTools": true,
+      "lastText": "⟦long⟧ A6 运行中 Ctrl+Enter 发 /compact",
+      "slashCompactInUserText": false,
+      "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …"
+    },
+    {
+      "t": "2026-09-24T13:04:12.081Z",
+      "seq": 12,
+      "route": "parent",
+      "reply": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790255052081.txt)",
+      "hasTools": true,
+      "lastText": "",
+      "slashCompactInUserText": false,
+      "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …"
+    },
+    {
+      "t": "2026-09-24T13:04:32.145Z",
+      "seq": 13,
+      "route": "parent",
+      "reply": "long step2: bash echo",
+      "hasTools": true,
+      "lastText": "",
+      "slashCompactInUserText": false,
+      "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …"
+    },
+    {
+      "t": "2026-09-24T13:04:32.173Z",
+      "seq": 14,
+      "route": "parent",
+      "reply": "long done: text",
+      "hasTools": true,
+      "lastText": "",
+      "slashCompactInUserText": false,
+      "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …"
+    }
+  ],
+  "aborts": [],
+  "messages": [
+    {
+      "id": "user-send-1790255051885-13-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦long⟧ A6 运行中 Ctrl+Enter 发 /compact"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255051885-13-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "先做准备。"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo prep-ok\",\"timeoutSeconds\":30}"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": true,
+          "toolOutput": "\"prep-ok\\n\\n[exit=0; exit]\""
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255051885-13-3",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "开始长任务。"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"sleep 20; echo slept > /tmp/ij/markers/long-1790255052081.txt; echo step-long-done\",\"timeoutSeconds\":90}"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": true,
+          "toolOutput": "\"step-long-done\\n\\n[exit=0; exit]\""
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255051885-13-4",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo step-after-long\"}"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": true,
+          "toolOutput": "\"step-after-long\\n\\n[exit=0; exit]\""
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255051885-13-5",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "LONG-DONE: 长回合正常结束。"
+        }
+      ]
+    }
+  ],
+  "turns": [
+    {
+      "id": "user-send-1790255051885-13-1",
+      "head": "⟦long⟧ A6 运行中 Ctrl+Enter 发 /compact 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完成于 09:04 · 3 次工具调用",
+      "tail": "⟦long⟧ A6 运行中 Ctrl+Enter 发 /compact 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完成于 09:04 · 3 次工具调用",
+      "details": [
+        {
+          "open": false,
+          "summary": "已工作 20 秒"
+        }
+      ]
+    }
+  ],
+  "shotEnd": "shots/13-a6-end.png"
+}

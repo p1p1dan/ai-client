@@ -1,0 +1,147 @@
+{
+  "startedAt": "2026-09-24T13:02:46.171Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790254889907-bpcop4v",
+    "after": "session-1790254966174-4xupb8n"
+  },
+  "sid": "session-1790254966174-4xupb8n",
+  "step1": {
+    "t": "2026-09-24T13:02:49.809Z",
+    "event": "response_complete",
+    "seq": 7,
+    "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790254969806.txt)",
+    "frames": 10,
+    "toolBlocksSent": 1,
+    "ms": 2
+  },
+  "q1": {
+    "at": "2026-09-24T13:02:51.707Z",
+    "sid": "session-1790254966174-4xupb8n"
+  },
+  "q2": {
+    "at": "2026-09-24T13:02:53.132Z",
+    "sid": "session-1790254966174-4xupb8n"
+  },
+  "queueBeforeInterject": [
+    {
+      "text": "1 ⟦echo⟧ 排队-1（普通 Enter） 立刻发送",
+      "interjectionMarker": false,
+      "markerText": "⟦echo⟧ 排队-1（普通 Enter）"
+    },
+    {
+      "text": "2 ⟦echo⟧ 排队-2（普通 Enter）",
+      "interjectionMarker": false,
+      "markerText": "⟦echo⟧ 排队-2（普通 Enter）"
+    }
+  ],
+  "ij": {
+    "at": "2026-09-24T13:02:54.546Z",
+    "sid": "session-1790254966174-4xupb8n"
+  },
+  "queueAfterInterject": [
+    {
+      "text": "1 插话 ⟦echo⟧ 插话-A4（Ctrl+Enter） 立刻发送",
+      "interjectionMarker": true,
+      "markerText": "插话|⟦echo⟧ 插话-A4（Ctrl+Enter）"
+    },
+    {
+      "text": "2 ⟦echo⟧ 排队-1（普通 Enter）",
+      "interjectionMarker": false,
+      "markerText": "⟦echo⟧ 排队-1（普通 Enter）"
+    },
+    {
+      "text": "3 ⟦echo⟧ 排队-2（普通 Enter）",
+      "interjectionMarker": false,
+      "markerText": "⟦echo⟧ 排队-2（普通 Enter）"
+    }
+  ],
+  "composer": {
+    "t": "2026-09-24T13:02:55.552Z",
+    "value": "",
+    "placeholder": "已排队 3 条 —— 可以接着输入…",
+    "buttons": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": true
+      }
+    ],
+    "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+  },
+  "shot": "shots/12-a4-queue-order.png",
+  "requestOrder": [
+    {
+      "t": "2026-09-24T13:02:49.568Z",
+      "seq": 6,
+      "reply": "long step0: bash prep",
+      "lastText": "⟦long⟧ A4 优先级：长回合里先排两条再插话"
+    },
+    {
+      "t": "2026-09-24T13:02:49.806Z",
+      "seq": 7,
+      "reply": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790254969806.txt)",
+      "lastText": ""
+    },
+    {
+      "t": "2026-09-24T13:03:10.102Z",
+      "seq": 8,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ 插话-A4（Ctrl+Enter）"
+    },
+    {
+      "t": "2026-09-24T13:03:14.183Z",
+      "seq": 9,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ 排队-1（普通 Enter）"
+    },
+    {
+      "t": "2026-09-24T13:03:24.229Z",
+      "seq": 10,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ 排队-2（普通 Enter）"
+    }
+  ],
+  "step2Requested": false,
+  "userMessageOrder": [
+    "⟦long⟧ A4 优先级：长回合里先排两条再插话",
+    "⟦echo⟧ 插话-A4（Ctrl+Enter）",
+    "⟦echo⟧ 排队-1（普通 Enter）",
+    "⟦echo⟧ 排队-2（普通 Enter）"
+  ],
+  "turns": [
+    {
+      "id": "user-send-1790254969458-8-1",
+      "head": "⟦long⟧ A4 优先级：长回合里先排两条再插话 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 09:03 · 2 次工具调用",
+      "tail": "⟦long⟧ A4 优先级：长回合里先排两条再插话 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 09:03 · 2 次工具调用",
+      "details": [
+        {
+          "open": true,
+          "summary": "已工作 20 秒"
+        }
+      ]
+    },
+    {
+      "id": "user-send-1790254990030-9-1",
+      "head": "⟦echo⟧ 插话-A4（Ctrl+Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A4（Ctrl+Enter） ✻ 完成于 09:03",
+      "tail": "⟦echo⟧ 插话-A4（Ctrl+Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A4（Ctrl+Enter） ✻ 完成于 09:03",
+      "details": []
+    },
+    {
+      "id": "user-send-1790254994162-10-1",
+      "head": "⟦echo⟧ 排队-1（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-1（普通 Enter） ✻ 完成于 09:03",
+      "tail": "⟦echo⟧ 排队-1（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-1（普通 Enter） ✻ 完成于 09:03",
+      "details": []
+    },
+    {
+      "id": "user-send-1790255004202-11-1",
+      "head": "⟦echo⟧ 排队-2（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-2（普通 Enter） ✻ 完成于 09:03",
+      "tail": "⟦echo⟧ 排队-2（普通 Enter） 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 排队-2（普通 Enter） ✻ 完成于 09:03",
+      "details": []
+    }
+  ],
+  "shotAfter": "shots/12-a4-after.png"
+}

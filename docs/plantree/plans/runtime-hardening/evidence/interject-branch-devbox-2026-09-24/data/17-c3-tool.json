@@ -1,0 +1,564 @@
+{
+  "startedAt": "2026-09-24T13:12:50.901Z",
+  "target": "tool",
+  "sid": "session-1790255355055-wlyp2i7",
+  "before": {
+    "t": "2026-09-24T13:12:55.860Z",
+    "scrollTop": 12803,
+    "scrollHeight": 13535,
+    "clientHeight": 704,
+    "atBottom": false,
+    "vpTop": 68,
+    "vpBottom": 772,
+    "rows": [
+      {
+        "i": 0,
+        "text": "思考 片刻",
+        "expanded": "false",
+        "top": 479,
+        "bottom": 500,
+        "inView": true,
+        "cx": 522,
+        "cy": 490
+      },
+      {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "false",
+        "top": 544,
+        "bottom": 565,
+        "inView": true,
+        "cx": 522,
+        "cy": 555
+      },
+      {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "false",
+        "top": 569,
+        "bottom": 590,
+        "inView": true,
+        "cx": 522,
+        "cy": 580
+      }
+    ]
+  },
+  "pick": {
+    "i": 1,
+    "text": "终端 echo think-tool",
+    "expanded": "false",
+    "top": 544,
+    "bottom": 565,
+    "inView": true,
+    "cx": 522,
+    "cy": 555
+  },
+  "shotBefore": "shots/17-c3-tool-before.png",
+  "clickAt": "2026-09-24T13:12:56.005Z",
+  "click": {
+    "scrollTop": 12831,
+    "top": 516,
+    "inView": true,
+    "text": "终端\necho think-tool"
+  },
+  "samples": [
+    {
+      "t": "2026-09-24T13:12:56.011Z",
+      "scrollTop": 12831,
+      "scrollHeight": 13681,
+      "atBottom": false,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 516,
+        "bottom": 537,
+        "inView": true,
+        "cx": 522,
+        "cy": 527
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:56.168Z",
+      "scrollTop": 13004,
+      "scrollHeight": 13708,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 343,
+        "bottom": 364,
+        "inView": true,
+        "cx": 522,
+        "cy": 354
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:56.320Z",
+      "scrollTop": 13004,
+      "scrollHeight": 13708,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 343,
+        "bottom": 364,
+        "inView": true,
+        "cx": 522,
+        "cy": 354
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:56.477Z",
+      "scrollTop": 13032,
+      "scrollHeight": 13736,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 315,
+        "bottom": 336,
+        "inView": true,
+        "cx": 522,
+        "cy": 326
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:56.777Z",
+      "scrollTop": 13032,
+      "scrollHeight": 13763,
+      "atBottom": false,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 315,
+        "bottom": 336,
+        "inView": true,
+        "cx": 522,
+        "cy": 326
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:56.931Z",
+      "scrollTop": 13059,
+      "scrollHeight": 13763,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 288,
+        "bottom": 309,
+        "inView": true,
+        "cx": 522,
+        "cy": 299
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.085Z",
+      "scrollTop": 13087,
+      "scrollHeight": 13791,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 260,
+        "bottom": 281,
+        "inView": true,
+        "cx": 522,
+        "cy": 271
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.238Z",
+      "scrollTop": 13087,
+      "scrollHeight": 13791,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 260,
+        "bottom": 281,
+        "inView": true,
+        "cx": 522,
+        "cy": 271
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.391Z",
+      "scrollTop": 13115,
+      "scrollHeight": 13819,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 232,
+        "bottom": 253,
+        "inView": true,
+        "cx": 522,
+        "cy": 243
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.543Z",
+      "scrollTop": 13115,
+      "scrollHeight": 13819,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 232,
+        "bottom": 253,
+        "inView": true,
+        "cx": 522,
+        "cy": 243
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.696Z",
+      "scrollTop": 13142,
+      "scrollHeight": 13846,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 205,
+        "bottom": 226,
+        "inView": true,
+        "cx": 522,
+        "cy": 216
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:57.849Z",
+      "scrollTop": 13142,
+      "scrollHeight": 13846,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 205,
+        "bottom": 226,
+        "inView": true,
+        "cx": 522,
+        "cy": 216
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.001Z",
+      "scrollTop": 13170,
+      "scrollHeight": 13874,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 177,
+        "bottom": 198,
+        "inView": true,
+        "cx": 522,
+        "cy": 188
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.154Z",
+      "scrollTop": 13170,
+      "scrollHeight": 13874,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 177,
+        "bottom": 198,
+        "inView": true,
+        "cx": 522,
+        "cy": 188
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.307Z",
+      "scrollTop": 13198,
+      "scrollHeight": 13902,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 149,
+        "bottom": 170,
+        "inView": true,
+        "cx": 522,
+        "cy": 160
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.459Z",
+      "scrollTop": 13198,
+      "scrollHeight": 13902,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 149,
+        "bottom": 170,
+        "inView": true,
+        "cx": 522,
+        "cy": 160
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.615Z",
+      "scrollTop": 13225,
+      "scrollHeight": 13929,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 122,
+        "bottom": 143,
+        "inView": true,
+        "cx": 522,
+        "cy": 133
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.773Z",
+      "scrollTop": 13225,
+      "scrollHeight": 13929,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 122,
+        "bottom": 143,
+        "inView": true,
+        "cx": 522,
+        "cy": 133
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:58.925Z",
+      "scrollTop": 13253,
+      "scrollHeight": 13957,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 94,
+        "bottom": 115,
+        "inView": true,
+        "cx": 522,
+        "cy": 105
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.078Z",
+      "scrollTop": 13253,
+      "scrollHeight": 13957,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 94,
+        "bottom": 115,
+        "inView": true,
+        "cx": 522,
+        "cy": 105
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.235Z",
+      "scrollTop": 13280,
+      "scrollHeight": 13984,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 67,
+        "bottom": 88,
+        "inView": false,
+        "cx": 522,
+        "cy": 78
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.388Z",
+      "scrollTop": 13280,
+      "scrollHeight": 13984,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 67,
+        "bottom": 88,
+        "inView": false,
+        "cx": 522,
+        "cy": 78
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.541Z",
+      "scrollTop": 13308,
+      "scrollHeight": 14012,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 39,
+        "bottom": 60,
+        "inView": false,
+        "cx": 522,
+        "cy": 50
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.694Z",
+      "scrollTop": 13308,
+      "scrollHeight": 14012,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 39,
+        "bottom": 60,
+        "inView": false,
+        "cx": 522,
+        "cy": 50
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:59.847Z",
+      "scrollTop": 13336,
+      "scrollHeight": 14040,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 11,
+        "bottom": 32,
+        "inView": false,
+        "cx": 522,
+        "cy": 22
+      }
+    },
+    {
+      "t": "2026-09-24T13:13:00.001Z",
+      "scrollTop": 13336,
+      "scrollHeight": 14040,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": 11,
+        "bottom": 32,
+        "inView": false,
+        "cx": 522,
+        "cy": 22
+      }
+    },
+    {
+      "t": "2026-09-24T13:13:00.154Z",
+      "scrollTop": 13363,
+      "scrollHeight": 14067,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": -16,
+        "bottom": 5,
+        "inView": false,
+        "cx": 522,
+        "cy": -5
+      }
+    },
+    {
+      "t": "2026-09-24T13:13:00.307Z",
+      "scrollTop": 13363,
+      "scrollHeight": 14067,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": -16,
+        "bottom": 5,
+        "inView": false,
+        "cx": 522,
+        "cy": -5
+      }
+    },
+    {
+      "t": "2026-09-24T13:13:00.460Z",
+      "scrollTop": 13391,
+      "scrollHeight": 14095,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": -44,
+        "bottom": -23,
+        "inView": false,
+        "cx": 522,
+        "cy": -33
+      }
+    },
+    {
+      "t": "2026-09-24T13:13:00.612Z",
+      "scrollTop": 13391,
+      "scrollHeight": 14095,
+      "atBottom": true,
+      "target": {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "true",
+        "top": -44,
+        "bottom": -23,
+        "inView": false,
+        "cx": 522,
+        "cy": -33
+      }
+    }
+  ],
+  "shotAfter": "shots/17-c3-tool-after-click.png",
+  "shotLater": "shots/17-c3-tool-4s-later.png",
+  "settle": {
+    "ok": true,
+    "trail": [
+      {
+        "status": "running",
+        "atMs": 3,
+        "t": "2026-09-24T13:13:00.942Z"
+      },
+      {
+        "status": "idle",
+        "atMs": 38044,
+        "t": "2026-09-24T13:13:38.983Z"
+      }
+    ],
+    "ms": 39450
+  }
+}

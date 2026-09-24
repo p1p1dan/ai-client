@@ -1,0 +1,73 @@
+{
+  "before": {
+    "t": "2026-09-24T13:00:59.624Z",
+    "sid": "session-live-1790254704085-rdda7lo",
+    "status": "idle",
+    "title": "⟦echo⟧ 冒烟：假网关通不通",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "msgs": 2,
+    "active": "session-live-1790254704085-rdda7lo",
+    "hostBound": true
+  },
+  "sent": {
+    "at": "2026-09-24T13:01:00.003Z",
+    "sid": "session-live-1790254704085-rdda7lo"
+  },
+  "composerRightAfter": {
+    "t": "2026-09-24T13:01:00.607Z",
+    "value": "",
+    "placeholder": "继续输入…",
+    "buttons": [
+      {
+        "label": "发送消息",
+        "disabled": true
+      }
+    ],
+    "notices": ["本机"]
+  },
+  "queueRowsRightAfter": [],
+  "gatewayRequest": {
+    "seq": 2,
+    "t": "2026-09-24T13:01:00.031Z",
+    "lastText": "⟦echo⟧ A5 空闲时按 Ctrl+Enter",
+    "latencyMs": 28
+  },
+  "lastTwo": [
+    {
+      "id": "user-send-1790254859976-3-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦echo⟧ A5 空闲时按 Ctrl+Enter"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790254859976-3-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "ECHO: ⟦echo⟧ A5 空闲时按 Ctrl+Enter"
+        }
+      ]
+    }
+  ],
+  "composerLater": {
+    "t": "2026-09-24T13:01:03.115Z",
+    "value": "",
+    "placeholder": "继续输入…",
+    "buttons": [
+      {
+        "label": "发送消息",
+        "disabled": true
+      }
+    ],
+    "notices": ["本机"]
+  }
+}

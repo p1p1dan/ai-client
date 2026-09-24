@@ -1,0 +1,640 @@
+{
+  "startedAt": "2026-09-24T13:14:31.504Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790255355055-wlyp2i7",
+    "after": "session-1790255671507-ok16sdf"
+  },
+  "sid": "session-1790255671507-ok16sdf",
+  "degenerateRequest": {
+    "t": "2026-09-24T13:14:35.222Z",
+    "seq": 38,
+    "reply": "formB: degenerate reply, 940 tool calls"
+  },
+  "shotStreaming": "shots/20-d1-streaming.png",
+  "streamEnd": {
+    "t": "2026-09-24T13:14:47.031Z",
+    "event": "client_abort",
+    "seq": 38,
+    "label": "formB: degenerate reply, 940 tool calls",
+    "framesSent": 155,
+    "framesTotal": 3134,
+    "toolBlocksSent": 47,
+    "afterMs": 11809
+  },
+  "idle": {
+    "t": "2026-09-24T13:14:47.259Z",
+    "sid": "session-1790255671507-ok16sdf",
+    "status": "idle",
+    "title": "⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "msgs": 2,
+    "active": "session-1790255671507-ok16sdf",
+    "hostBound": true,
+    "waitedMs": 408
+  },
+  "requestsAfterDegenerate": [],
+  "sentinelExists": false,
+  "touchedExists": false,
+  "statusAfter": {
+    "t": "2026-09-24T13:15:02.458Z",
+    "sid": "session-1790255671507-ok16sdf",
+    "status": "idle",
+    "title": "⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "msgs": 2,
+    "active": "session-1790255671507-ok16sdf",
+    "hostBound": true
+  },
+  "failure": [],
+  "messages": [
+    {
+      "id": "user-send-1790255675092-30-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255675092-30-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "我来检查一下子代理的状态。"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*1.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-2\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-3\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":5}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m5\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*7.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-8\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "write",
+          "toolInput": "{\"path\":\"/tmp/loopguard-sentinel.txt\",\"content\":\"loop guard failed: this reply executed\\n\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":11}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m11\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*13.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-14\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-15\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":17}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m17\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"touch /tmp/loopguard-touched.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-20\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-21\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":23}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m23\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*25.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-26\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-27\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":29}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m29\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*31.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-32\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-33\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"shared.txt\",\"offset\":1,\"limit\":35}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"src/**/*.m35\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "read",
+          "toolInput": "{\"path\":\"README.md\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "glob",
+          "toolInput": "{\"pattern\":\"**/*37.txt\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "grep",
+          "toolInput": "{\"pattern\":\"needle-38\",\"path\":\".\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo mixed-39\"}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskList",
+          "toolInput": "{}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskStop",
+          "toolInput": "{\"delegationIds\":[]}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskWait",
+          "toolInput": "{\"delegationIds\":[],\"mode\":\"any\",\"timeoutSeconds\":3}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskList",
+          "toolInput": "{}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskStop",
+          "toolInput": "{\"delegationIds\":[]}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskWait",
+          "toolInput": "{\"delegationIds\":[],\"mode\":\"any\",\"timeoutSeconds\":3}"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "TaskList",
+          "toolInput": "{}"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        },
+        {
+          "type": "tool_result",
+          "toolOk": false,
+          "text": "The run ended before this call started."
+        }
+      ]
+    }
+  ],
+  "shotSettled": "shots/20-d1-settled.png",
+  "expanded": 1,
+  "rows": {
+    "text": "⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套\n\n已工作 1 秒\n\n我来检查一下子代理的状态。\n\n读取\nREADME.md\n搜索\n*1.txt（repo） **/\n搜索\nneedle-2（repo）\n终端\necho mixed-3\n读取\nshared.txt L1-5\n搜索\n*.m5（repo） src/**/\n读取\nREADME.md\n搜索\n*7.txt（repo） **/\n搜索\nneedle-8（repo）\n编辑\nloopguard-sentinel.txt tmp/\n读取\nshared.txt L1-11\n搜索\n*.m11（repo） src/**/\n读取\nREADME.md\n搜索\n*13.txt（repo） **/\n搜索\nneedle-14（repo）\n终端\necho mixed-15\n读取\nshared.txt L1-17\n搜索\n*.m17（repo） src/**/\n读取\nREADME.md\n终端\ntouch /tmp/loopguard-touched.txt\n搜索\nneedle-20（repo）\n终端\necho mixed-21\n读取\nshared.txt L1-23\n搜索\n*.m23（repo） src/**/\n读取\nREADME.md\n搜索\n*25.txt（repo） **/\n搜索\nneedle-26（repo）\n终端\necho mixed-27\n读取\nshared.txt L1-29\n搜索\n*.m29（repo） src/**/\n读取\nREADME.md\n搜索\n*31.txt（repo） **/\n搜索\nneedle-32（repo）\n终端\necho mixed-33\n读取\nshared.txt L1-35\n搜索\n*.m35（repo） src/**/\n读取\nREADME.md\n搜索\n*37.txt（repo） **/\n搜索\nneedle-38（repo）\n终端\necho mixed-39\n已列出子 Agent\n全部委派\n已停止子 Agent\n未指定委派\n已等待子 Agent\n未指定委派\n已列出子 Agent\n全部委派\n已停止子 Agent\n未指定委派\n已等待子 Agent\n未指定委派\n已列出子 Agent\n全部委派\n✻ 47 次工具调用",
+    "spinners": 0,
+    "candidateRows": [
+      "读取 README.md",
+      "搜索 *1.txt（repo） **/",
+      "搜索 needle-2（repo）",
+      "终端 echo mixed-3",
+      "读取 shared.txt L1-5",
+      "搜索 *.m5（repo） src/**/",
+      "搜索 *7.txt（repo） **/",
+      "搜索 needle-8（repo）",
+      "编辑 loopguard-sentinel.txt tmp/",
+      "读取 shared.txt L1-11",
+      "搜索 *.m11（repo） src/**/",
+      "搜索 *13.txt（repo） **/",
+      "搜索 needle-14（repo）",
+      "终端 echo mixed-15",
+      "读取 shared.txt L1-17",
+      "搜索 *.m17（repo） src/**/",
+      "终端 touch /tmp/loopguard-touched.txt",
+      "搜索 needle-20（repo）",
+      "终端 echo mixed-21",
+      "读取 shared.txt L1-23",
+      "搜索 *.m23（repo） src/**/",
+      "搜索 *25.txt（repo） **/",
+      "搜索 needle-26（repo）",
+      "终端 echo mixed-27",
+      "读取 shared.txt L1-29",
+      "搜索 *.m29（repo） src/**/",
+      "搜索 *31.txt（repo） **/",
+      "搜索 needle-32（repo）",
+      "终端 echo mixed-33",
+      "读取 shared.txt L1-35",
+      "搜索 *.m35（repo） src/**/",
+      "搜索 *37.txt（repo） **/",
+      "搜索 needle-38（repo）",
+      "终端 echo mixed-39"
+    ]
+  },
+  "turns": [
+    {
+      "id": "user-send-1790255675092-30-1",
+      "head": "⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套 已工作 1 秒 我来检查一下子代理的状态。 读取 README.md 搜索 *1.txt（repo） **/ 搜索 needle-2（repo） 终端 echo mixed-3 读取 shared.txt L1-5 搜索 *.m5（repo） ",
+      "tail": " 读取 shared.txt L1-35 搜索 *.m35（repo） src/**/ 读取 README.md 搜索 *37.txt（repo） **/ 搜索 needle-38（repo） 终端 echo mixed-39 已列出子 Agent 全部委派 已停止子 Agent 未指定委派 已等待子 Agent 未指定委派 已列出子 Agent 全部委派 已停止子 Agent 未指定委派 已等待子 Agent 未指定委派 已列出子 Agent 全部委派 ✻ 47 次工具调用",
+      "details": [
+        {
+          "open": true,
+          "summary": "已工作 1 秒"
+        }
+      ]
+    }
+  ],
+  "shotExpanded": "shots/20-d1-settled-expanded.png",
+  "nextRequest": {
+    "t": "2026-09-24T13:15:03.845Z",
+    "seq": 39,
+    "digest": [
+      "user:text(37)「⟦formB⟧ D1 形态B：一条回复里写 40 个杂调用再无限重复三件套」",
+      "user:text(21)「⟦echo⟧ D1 之后再发一条，看上下文」"
+    ],
+    "historyToolUseCount": 0,
+    "historyTaskListCount": 0,
+    "messageCount": 2
+  },
+  "messagesAfterNext": [
+    {
+      "id": "user-send-1790255703823-31-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦echo⟧ D1 之后再发一条，看上下文"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790255703823-31-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "ECHO: ⟦echo⟧ D1 之后再发一条，看上下文"
+        }
+      ]
+    }
+  ],
+  "shotNext": "shots/20-d1-next-message.png"
+}

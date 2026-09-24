@@ -1,0 +1,137 @@
+{
+  "startedAt": "2026-09-24T17:19:16.428Z",
+  "mode": "live-b-open",
+  "b": {
+    "live": {
+      "expanded": 0,
+      "rows": {
+        "rows": 47,
+        "hist": {
+          "读取 · 未执行": 13,
+          "搜索文件 · 未执行": 12,
+          "搜索内容 · 未执行": 7,
+          "运行 · 未执行": 7,
+          "编辑 · 未执行": 1,
+          "列出子 Agent · 未执行": 3,
+          "停止子 Agent · 未执行": 2,
+          "等待子 Agent · 未执行": 2
+        },
+        "colors": {
+          "· 未执行 oklab(0.6583 -0.000591029 0.00763034)": 47
+        },
+        "spinners": 0,
+        "destructiveRows": 0,
+        "first": [
+          {
+            "text": "读取README.md· 未执行",
+            "verb": "读取",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": false
+          },
+          {
+            "text": "搜索文件**/*1.txt（repo）· 未执行",
+            "verb": "搜索文件",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": false
+          },
+          {
+            "text": "搜索内容needle-2（repo）· 未执行",
+            "verb": "搜索内容",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": true
+          },
+          {
+            "text": "运行echo mixed-3· 未执行",
+            "verb": "运行",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": true
+          },
+          {
+            "text": "读取shared.txt L1-5· 未执行",
+            "verb": "读取",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": false
+          }
+        ],
+        "withOutcome": [
+          {
+            "text": "读取README.md· 未执行",
+            "verb": "读取",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": false
+          },
+          {
+            "text": "搜索文件**/*1.txt（repo）· 未执行",
+            "verb": "搜索文件",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": false
+          },
+          {
+            "text": "搜索内容needle-2（repo）· 未执行",
+            "verb": "搜索内容",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": true
+          },
+          {
+            "text": "运行echo mixed-3· 未执行",
+            "verb": "运行",
+            "outcome": "· 未执行",
+            "rowColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "outcomeColor": "oklab(0.6583 -0.000591029 0.00763034)",
+            "destructive": false,
+            "expandable": true
+          }
+        ]
+      },
+      "shotRows": "shots/r6-b-live-rows.png",
+      "open": {
+        "ok": true,
+        "row": "搜索内容needle-2（repo）· 未执行",
+        "expanded": "false",
+        "panel": null,
+        "englishNotStarted": null
+      },
+      "shotOpen": "shots/r6-b-live-row-open.png",
+      "open2": {
+        "ok": true,
+        "row": "运行echo mixed-3· 未执行",
+        "expanded": "true",
+        "panel": "{\n  \"command\": \"echo mixed-3\"\n}",
+        "englishNotStarted": false
+      },
+      "shotOpen2": "shots/r6-b-live-row-open-2.png",
+      "open3": {
+        "ok": true,
+        "row": "编辑loopguard-sentinel.txt tmp/· 未执行",
+        "expanded": "true",
+        "panel": "",
+        "englishNotStarted": false
+      },
+      "shotOpen3": "shots/r6-b-live-row-open-3.png"
+    }
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "sid": "session-live-1790254704085-rdda7lo",
+  "drive": {
+    "ok": false,
+    "reason": "never busy",
+    "trail": [
+      {
+        "status": "idle",
+        "atMs": 261,
+        "t": "2026-09-24T12:58:50.484Z"
+      }
+    ]
+  },
+  "gw": [
+    {
+      "t": "2026-09-24T12:58:51.578Z",
+      "event": "request",
+      "seq": 1,
+      "url": "/v1/messages",
+      "model": "fake-sonnet",
+      "route": "parent",
+      "plan": "echo",
+      "hasTools": true,
+      "toolCount": 14,
+      "tools": [
+        "ask",
+        "browser_preview",
+        "read",
+        "write",
+        "edit",
+        "bash",
+        "glob",
+        "grep",
+        "skill",
+        "new_context",
+        "Task",
+        "TaskWait",
+        "TaskList",
+        "TaskStop"
+      ],
+      "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …",
+      "messageCount": 1,
+      "digest": ["user:text(16)「⟦echo⟧ 冒烟：假网关通不通」"],
+      "lastRole": "user",
+      "lastText": "⟦echo⟧ 冒烟：假网关通不通",
+      "lastToolResults": [],
+      "historyToolUseCount": 0,
+      "historyTaskListCount": 0,
+      "userTextHas": {
+        "interject": false,
+        "childReport": false,
+        "slashCompact": false
+      },
+      "reply": "echo"
+    },
+    {
+      "t": "2026-09-24T12:58:51.581Z",
+      "event": "response_complete",
+      "seq": 1,
+      "label": "echo",
+      "frames": 6,
+      "toolBlocksSent": 0,
+      "ms": 3
+    }
+  ],
+  "msgs": [
+    {
+      "id": "user-send-1790254731473-2-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦echo⟧ 冒烟：假网关通不通"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790254731473-2-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "ECHO: ⟦echo⟧ 冒烟：假网关通不通"
+        }
+      ]
+    }
+  ]
+}

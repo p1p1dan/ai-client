@@ -1,0 +1,349 @@
+{
+  "startedAt": "2026-09-24T13:01:29.905Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-live-1790254704085-rdda7lo",
+    "after": "session-1790254889907-bpcop4v"
+  },
+  "firstSend": {
+    "at": "2026-09-24T13:01:32.139Z",
+    "sid": "session-1790254889907-bpcop4v"
+  },
+  "step1Response": {
+    "t": "2026-09-24T13:01:33.351Z",
+    "event": "response_complete",
+    "seq": 4,
+    "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790254893349.txt)",
+    "frames": 10,
+    "toolBlocksSent": 1,
+    "ms": 1
+  },
+  "statusWhileBash": {
+    "t": "2026-09-24T13:01:36.653Z",
+    "sid": "session-1790254889907-bpcop4v",
+    "status": "running",
+    "title": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "msgs": 3,
+    "active": "session-1790254889907-bpcop4v",
+    "hostBound": true
+  },
+  "a1Composer": {
+    "t": "2026-09-24T13:01:36.656Z",
+    "value": "",
+    "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…",
+    "buttons": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": true
+      }
+    ],
+    "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+  },
+  "bashRowWhileRunning": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 3s / 1m 30s",
+  "a1Shot": "shots/11-a1-running-placeholder.png",
+  "interject": {
+    "at": "2026-09-24T13:01:37.094Z",
+    "sid": "session-1790254889907-bpcop4v"
+  },
+  "a3Queue": [
+    {
+      "text": "1 插话 ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 立刻发送",
+      "interjectionMarker": true,
+      "markerText": "插话|⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句"
+    }
+  ],
+  "a3Composer": {
+    "t": "2026-09-24T13:01:38.003Z",
+    "value": "",
+    "placeholder": "已排队 1 条 —— 可以接着输入…",
+    "buttons": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": true
+      }
+    ],
+    "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+  },
+  "a3Shot": "shots/11-a3-queue-marker.png",
+  "statusTrail": [
+    {
+      "t": "2026-09-24T13:01:38.154Z",
+      "status": "running"
+    },
+    {
+      "t": "2026-09-24T13:01:53.664Z",
+      "status": "idle"
+    }
+  ],
+  "interjectRequest": {
+    "t": "2026-09-24T13:01:53.599Z",
+    "event": "request",
+    "seq": 5,
+    "url": "/v1/messages",
+    "model": "fake-sonnet",
+    "route": "parent",
+    "plan": "echo",
+    "hasTools": true,
+    "toolCount": 14,
+    "tools": [
+      "ask",
+      "browser_preview",
+      "read",
+      "write",
+      "edit",
+      "bash",
+      "glob",
+      "grep",
+      "skill",
+      "new_context",
+      "Task",
+      "TaskWait",
+      "TaskList",
+      "TaskStop"
+    ],
+    "systemHead": "You are the coding agent inside AI Client, a local-first desktop client for working in a user’s own …",
+    "messageCount": 6,
+    "digest": [
+      "user:text(38)「⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答」",
+      "assistant:text(5)「先做准备。」 tool_use×1{\"bash\":1}",
+      "user:tool_result×1",
+      "assistant:text(6)「开始长任务。」 tool_use×1{\"bash\":1}",
+      "user:tool_result×1",
+      "user:text(26)「⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句」"
+    ],
+    "lastRole": "user",
+    "lastText": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句",
+    "lastToolResults": [],
+    "historyToolUseCount": 2,
+    "historyTaskListCount": 0,
+    "userTextHas": {
+      "interject": true,
+      "childReport": false,
+      "slashCompact": false
+    },
+    "reply": "echo"
+  },
+  "settle": {
+    "ok": false,
+    "reason": "never busy",
+    "trail": [
+      {
+        "status": "idle",
+        "atMs": 3,
+        "t": "2026-09-24T13:01:53.876Z"
+      }
+    ]
+  },
+  "gateway": [
+    {
+      "t": "2026-09-24T13:01:33.116Z",
+      "event": "request",
+      "seq": 3,
+      "reply": "long step0: bash prep",
+      "lastText": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答",
+      "digest": ["user:text(38)「⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答」"],
+      "lastToolResults": []
+    },
+    {
+      "t": "2026-09-24T13:01:33.117Z",
+      "event": "response_complete",
+      "seq": 3,
+      "reply": "long step0: bash prep"
+    },
+    {
+      "t": "2026-09-24T13:01:33.350Z",
+      "event": "request",
+      "seq": 4,
+      "reply": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790254893349.txt)",
+      "lastText": "",
+      "digest": [
+        "user:text(38)「⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答」",
+        "assistant:text(5)「先做准备。」 tool_use×1{\"bash\":1}",
+        "user:tool_result×1"
+      ],
+      "lastToolResults": [
+        {
+          "isError": false,
+          "text": "prep-ok [exit=0; exit]"
+        }
+      ]
+    },
+    {
+      "t": "2026-09-24T13:01:33.351Z",
+      "event": "response_complete",
+      "seq": 4,
+      "reply": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790254893349.txt)"
+    },
+    {
+      "t": "2026-09-24T13:01:53.599Z",
+      "event": "request",
+      "seq": 5,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句",
+      "digest": [
+        "user:text(38)「⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答」",
+        "assistant:text(5)「先做准备。」 tool_use×1{\"bash\":1}",
+        "user:tool_result×1",
+        "assistant:text(6)「开始长任务。」 tool_use×1{\"bash\":1}",
+        "user:tool_result×1",
+        "user:text(26)「⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句」"
+      ],
+      "lastToolResults": []
+    },
+    {
+      "t": "2026-09-24T13:01:53.600Z",
+      "event": "response_complete",
+      "seq": 5,
+      "reply": "echo"
+    }
+  ],
+  "step2Requested": false,
+  "messages": [
+    {
+      "id": "user-send-1790254893029-5-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790254893029-5-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "先做准备。"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"echo prep-ok\",\"timeoutSeconds\":30}"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": true,
+          "toolOutput": "\"prep-ok\\n\\n[exit=0; exit]\""
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790254893029-5-3",
+      "role": "assistant",
+      "stopCause": "interjected",
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "开始长任务。"
+        },
+        {
+          "type": "tool_call",
+          "toolName": "bash",
+          "toolInput": "{\"command\":\"sleep 20; echo slept > /tmp/ij/markers/long-1790254893349.txt; echo step-long-done\",\"timeoutSeconds\":90}"
+        },
+        {
+          "type": "permission_activity"
+        },
+        {
+          "type": "tool_result",
+          "toolOk": true,
+          "toolOutput": "\"step-long-done\\n\\n[exit=0; exit]\""
+        }
+      ]
+    },
+    {
+      "id": "user-send-1790254913577-6-1",
+      "role": "user",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句"
+        }
+      ]
+    },
+    {
+      "id": "asst-send-1790254913577-6-2",
+      "role": "assistant",
+      "stopCause": null,
+      "stopReason": null,
+      "blocks": [
+        {
+          "type": "text",
+          "text": "ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句"
+        }
+      ]
+    }
+  ],
+  "markerFiles": [
+    {
+      "f": "long-1790254893349.txt",
+      "mtime": "2026-09-24T13:01:53.393Z"
+    }
+  ],
+  "turns": [
+    {
+      "id": "user-send-1790254893029-5-1",
+      "head": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 09:01 · 2 次工具调用",
+      "tail": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 09:01 · 2 次工具调用",
+      "details": [
+        {
+          "open": true,
+          "summary": "已工作 20 秒"
+        }
+      ]
+    },
+    {
+      "id": "user-send-1790254913577-6-1",
+      "head": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 ✻ 完成于 09:01",
+      "tail": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 ✻ 完成于 09:01",
+      "details": []
+    }
+  ],
+  "a8Shot": "shots/11-a8-interjected-turn-default.png",
+  "a8Toggle": {
+    "ok": true,
+    "before": true
+  },
+  "turnsAfterToggle": [
+    {
+      "id": "user-send-1790254893029-5-1",
+      "head": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答 已工作 20 秒 ✻ 完成于 09:01 · 2 次工具调用",
+      "tail": "⟦long⟧ A2 长回合：准备 → sleep 20 → 再一步 → 回答 已工作 20 秒 ✻ 完成于 09:01 · 2 次工具调用",
+      "details": [
+        {
+          "open": false,
+          "summary": "已工作 20 秒"
+        }
+      ]
+    },
+    {
+      "id": "user-send-1790254913577-6-1",
+      "head": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 ✻ 完成于 09:01",
+      "tail": "⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 已工作 1 秒 最终输出 ECHO: ⟦echo⟧ 插话-A2：这一步跑完就停，先回我这句 ✻ 完成于 09:01",
+      "details": []
+    }
+  ],
+  "a8ShotCollapsed": "shots/11-a8-interjected-turn-after-click.png",
+  "sid": "session-1790254889907-bpcop4v"
+}

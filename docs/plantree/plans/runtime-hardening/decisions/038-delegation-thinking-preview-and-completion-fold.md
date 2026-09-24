@@ -23,3 +23,7 @@
 - `toolCard.ts`：思考结束后保留预览，整轮收起交给外层。
 - `MessageTimeline.tsx` / `turnProcessFold.ts`：按运行/完成阶段区分手动选择、单项完成折叠与时钟归属。
 - [验证记录](../evidence/process-preview-2026-09-23/README.md)。任务状态以 [roadmap](../roadmap.md) 为准。
+
+## 后续注记（2026-09-24）
+
+规则 2（思考 200 字预览与尾部展开 / 收起按钮）已被[决策 043](043-thought-folded-and-interrupted-turns-open.md)替代：思考块改为与工具行一致的默认折叠（用户拍板，`20f172da` + `6e85aff2`）。本决策其余规则不变。

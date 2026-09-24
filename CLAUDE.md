@@ -2,12 +2,14 @@
 
 ## 当前任务
 
-本 worktree 专注于 **Runtime 自主化演进**（从 pi-coding-agent 整包依赖切换到自有 Cordis 插件式 runtime）。
+**Runtime 自主化演进已完成**：应用已从 pi-coding-agent 整包依赖切换到自有 Cordis 插件式 runtime（`src/runtime/`），当前处于加固与现场反馈修复阶段。`feat/runtime-evolution` 分支已于 2026-09-24 退役删除。
 
+- **当前分支**：`feat/ctrl-enter-interject`（Ctrl+Enter 插话、分支栏、时间线修复与子代理工具死循环防护）收口中，开发机点验与 Windows 实测通过后快进 main。
+- **分支约定**：此后新工作从 main 按主题开分支，做完验证后合回 main。
+- **规划入口**：`docs/plantree/README.md`（活跃计划、roadmap、进度看板、决策、证据）。
 - **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`
 - **参考**：[PI-Desktop 调研](docs/plans/2026-09-08-pi-desktop-study.md) · [DSH 调研](docs/plans/2026-08-18-deepseek-harness-study.md)
-- **代码入口**：`src/runtime/`（新建）与 `src/agent-host/`（现有，参考用）
-- **主分支上的完整规划体系**（plantree）在本 worktree 中已移除，只保留 runtime 相关文档
+- **代码入口**：`src/runtime/`（自有 runtime）与 `src/agent-host/`（worker 宿主与会话投影）
 
 ## 工程规范（Agent 项目）
 

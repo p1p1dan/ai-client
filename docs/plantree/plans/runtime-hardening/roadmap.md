@@ -64,6 +64,8 @@ Role: roadmap。本文件是任务身份、状态、顺序的唯一权威。建�
 
 ## In Progress
 
+- **批次 M（T118～T136，2026-09-24）**：Ctrl+Enter 插话分支收口，六项代码已落地未推送，开发机点验与 Windows 实测进行中，见下方批次 M。
+
 - **2026-09-23 展示收口（决策 038）**：委派两层、思考 200 字预览/全文页面跟随、完成后自动折叠已实现，定向交互与隔离 Electron 滚动验证通过；完整应用视觉验收待补，主项目类型检查受既有设置测试错误阻塞。见[规则](decisions/038-delegation-thinking-preview-and-completion-fold.md)与[验证记录](evidence/process-preview-2026-09-23/README.md)。
 
 - ✅ **T032** 上机检查单与开发机组 — 只读点验，证据随 `db8956a8` 提交（2026-09-17）。**正式检查单已产出** → [checklist-e.md](checklist-e.md)（计划根下，与本文件并列；批次 D 的草案作为存证保留原样）：四个来源合并去重完毕，新增 20 项（旧树 P5-2 六行 / P5-4-P5-5 四行 / H-20 两行 / P6-3 第 4 条 / P6-4 回退互读 / 四条审计静态推断项 / 三条旧树未覆盖项），并做了三条裁决（cordis 判据写反已改正、并发轮转已由 `trace.test.ts:350` 覆盖、CI 不触发测试已结案）。**开发机组 37 项（35 + DEV-36/37）当日全部处置完毕**，分七批执行：✅ 通过 28 项、⚠️ 部分成立 3 项（DEV-11 导入文案、DEV-32 GUI 侧覆盖层、DEV-36 插件页有条件句）、⛔ 判负或复现已知缺陷 3 项（DEV-3 兼容根子代理定义删除语义、DEV-10 Codex 子目录不可读整源静默消失、DEV-16 两个窗口对同一会话开 `pi --session` 静默分叉）、⛔ 当前不可执行 2 项（DEV-12 本机无真实旧格式 Codex 样本、DEV-18 Node 24 解析属死代码）、🚫 裁决不需人工 2 项（DEV-35 已由 `trace.test.ts:350` 覆盖、baseline-01 CI 已结案）。检查单同日更正 16 行：5.1 判据修正新增 15 行（DEV-22、DEV-33 ×2、DEV-11、DEV-5、DEV-13、DEV-1、DEV-2、DEV-15、DEV-32、DEV-17、DEV-24、DEV-25、DEV-29、DEV-36），5.2 新增 DEV-18（死代码不可执行）；另第 2.3 节 MODEL-48 放宽为「CDP 真鼠标序列可驱动」。点验产出 26 条疑似缺陷 D1～D26，收敛成新开的**批次 D4**（T060～T068）与两条待拍板问题 **Q016 / Q017**。方法与环境：模型除第二批 dev-A1 用了 `maxapi/grok-4.6` 真实回合外全部走本地假网关（vault 临时注册、每批还原），Electron 累计起 20 次，产品代码零改动，唯一新增仓库文件是测试用例 `src/runtime/__tests__/sessionAttachmentFill.test.ts`（2 条）。收口全量 Vitest（Linux 开发机、单 worker）**413 文件 / 6271 条全部通过，退出码 0，237.55 s**，存档 [closeout-vitest-full.txt](evidence/batch-e-devbox-2026-09-17/closeout-vitest-full.txt)；对比 T059 收口的 411 / 6268（2 failed 为开机时长相关的 `sessionWriterLock` 两条），本次 +2 文件（`pluginGraphIncomplete.test.ts` 已提交、`sessionAttachmentFill.test.ts` 新增）。证据：[evidence/batch-e-devbox-2026-09-17/README.md](evidence/batch-e-devbox-2026-09-17/README.md)。**本轮全部未提交**（提交需用户批准）。
@@ -334,13 +336,43 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ID | 任务 | 优先级 | 来源 | 验收 |
 |---|---|---|---|---|
 | ✅ T115 | `PRIOR_USER_DATA_DIR_NAMES` 写的是 `AiClient`，而改名前的安装实际写的是 `jyw-ai-client` | P0 | 2026-09-21 Windows 实测 | 已修 `d4b9445e`：名单补 `jyw-ai-client`，新增 `[PRIOR-1..4]` 守卫，`[PRIOR-1]` 在旧常量下失败已反向验证 |
-| ⬜ T116 | `<appData>/<名>/Local Storage/` 从不迁移，项目 / 仓库列表（`aiclient-repositories`）因此丢失 | P0 | 同上 | **不可复用 `copyTree`**：它逐文件跳过已存在项，而 leveldb 是带 MANIFEST 的多文件存储，半合并比不合并更糟 —— 必须**整目录**粒度，目标目录不存在时才整份复制。`session-state.json` 的 `localStorage` 镜像顶不上：`preload` 的 `sessionStorage` 桥渲染层零调用，镜像只写不读（实测 0 个键） |
-| ⬜ T117 | `<appData>/<名>/session-index.json` 从不迁移，**对话列表**因此丢失 | P0 | 同上 | 该文件就是对话列表（`SessionIndexService.ts:95`）。复制之外**必须改写**每条 `runtimeIdentity` 里的 `.pilab/<旧名>/` → `.pilab/<新名>/`（它是 jsonl 的绝对路径）；`workspacePath` 指向真实仓库目录，**不要改写** |
+| ✅ T116 | `<appData>/<名>/Local Storage/` 从不迁移，项目 / 仓库列表（`aiclient-repositories`）因此丢失 | P0 | 同上 | **不可复用 `copyTree`**：它逐文件跳过已存在项，而 leveldb 是带 MANIFEST 的多文件存储，半合并比不合并更糟 —— 必须**整目录**粒度，目标目录不存在时才整份复制。`session-state.json` 的 `localStorage` 镜像顶不上：`preload` 的 `sessionStorage` 桥渲染层零调用，镜像只写不读（实测 0 个键） **已落地（2026-09-24 核对补记）**：`8b3404b3`（`migratePriorUserData` 补迁 Local Storage 与 session-index.json，按 sessionId 合并并改写 runtimeIdentity；`importPriorLocalStorage` 对已有目标库按键合并）+ `c7a3f89a`（marker 读回确认后才写）；随 1.0.2 发布，Windows 现场复验未记录。 |
+| ✅ T117 | `<appData>/<名>/session-index.json` 从不迁移，**对话列表**因此丢失 | P0 | 同上 | 该文件就是对话列表（`SessionIndexService.ts:95`）。复制之外**必须改写**每条 `runtimeIdentity` 里的 `.pilab/<旧名>/` → `.pilab/<新名>/`（它是 jsonl 的绝对路径）；`workspacePath` 指向真实仓库目录，**不要改写** **已落地（2026-09-24 核对补记）**：`8b3404b3`（`migratePriorUserData` 补迁 Local Storage 与 session-index.json，按 sessionId 合并并改写 runtimeIdentity；`importPriorLocalStorage` 对已有目标库按键合并）+ `c7a3f89a`（marker 读回确认后才写）；随 1.0.2 发布，Windows 现场复验未记录。 |
 
 **验收必须在 Windows 真机**：装新版后首次启动即出现原有项目与对话、不要求重新登录、旧目录原样保留、重复启动不重复迁移。既有红线（只复制不移动、先写者优先、凭据 0600、失败不写标记）一条都不能放宽。
 
 **附带发现，未处理**（详见 topic §6）：`sessionStorage` 桥是死链路；`app:setLanguage` 没有主进程 handler，每次启动抛一次；`sessionWriterLock.test.ts` 在 CI 上会抖，`35604442339` 因它变红而同代码的 `35597486859` 是绿的。
 
+
+### 批次 M：Ctrl+Enter 插话分支收口（2026-09-24，代码审查 + v1.0.2 现场死循环）
+
+来源两路：① 对 `feat/ctrl-enter-interject` 分支 9 个提交做的代码审查，确认 15 条问题（另有若干轻微项）；② 用户在 v1.0.2 上用 glm-5.2 遇到的子代理工具死循环（一条回复写出 5709 个调用、零执行、约 19 分钟），会话文件分析后确认是**单条回复内**的生成退化。用户 2026-09-24 逐项拍板：插话后不等后台子代理（[决策 041](decisions/041-interject-does-not-wait-for-background-delegates.md)）、防空转只管子代理工具族并加紧急关闭开关（[决策 042](decisions/042-delegation-tool-loop-guard.md)）、思考块默认折叠且只有被插话或停止打断的回合默认展开（[决策 043](decisions/043-thought-folded-and-interrupted-turns-open.md)）、字号上调不迁移老用户已保存的设置。事实与审查摘要见 [review-and-loop-incident-2026-09-24](evidence/review-and-loop-incident-2026-09-24.md)。
+
+**验证状态（2026-09-24）**：三套 tsc 通过；全量 Vitest 493 文件 / 7461 例，仅 `updaterChannel.test.ts` 1 例既有失败（T124）；开发机 GUI 点验（本地假网关）21 项 18 ✅ / 2 ❌（C3、D1）/ 1 取证，另发现 8 个清单外问题（[interject-branch-devbox-2026-09-24](evidence/interject-branch-devbox-2026-09-24/README.md)），判负与本批相关的 6 项经 T128（`403b7575`）修复，GUI 复验 8 项全 ✅；Windows `1.0.3-test.1` 手动打包实测待做。下表 ✅ 表示代码与定向测试已落地，真机验证结果回填到各行。
+
+**分支流程**：`feat/runtime-evolution` 于 2026-09-24 退役并删除；本批验证后 `main` 快进到本分支，此后新工作从 main 按主题开分支。
+
+| ID | 任务 | 优先级 | 来源 | 验收 |
+|---|---|---|---|---|
+| ✅ T118 | Ctrl+Enter 插话：运行中消息以 next 优先级入队，在下一个回合边界交付 | P1 | 用户待办（运行中输入应在安全边界交给 Agent）；代码审查 #2 / #3 / #9 与轻微项 | `0a836f27` / `d2938de7` / `e1bf87b3` + 审查修复 `4a964c7d`：插话不等后台子代理、刚发出就插话不落空、与 Enter 共用发送前检查、结束原因写入会话文件 `aiclient.runStop` 并可回放。决策 041。真机：开发机点验 A 组 + Windows 清单 |
+| ✅ T119 | 目标栏三栏（仓库 / 分支 / 运行位置），分支列做真实 checkout | P1 | 用户待办（「git 是花瓶」）；代码审查 #5～#8、#10、#14 | `e23c6c1a` / `9f6963e2` + `568233a4`；`a5d2059d` 新增的底部状态栏已被 `e23c6c1a` 删除。真机：开发机点验 B 组 |
+| ✅ T120 | 运行中工具行可展开并显示「已耗时 / 超时上限」，过程区展开规则 | P1 | 用户待办（1800s 指令看不到进度）；代码审查 #1 / #4 / #11 / #12 | `20f172da` + `6e85aff2`：计时经渲染路径真正显示；只有被插话或停止打断的回合默认展开且可收起；长会话已结束回合不随 tick 重算；行面板去掉高度动画。决策 043。真机：开发机点验 C 组 |
+| ✅ T121 | 全站字号上调一档 | P2 | 用户诉求；代码审查 #13 | `a86cefa4` + 文档同步 `4be46769`；老用户已保存的对话字号有意不迁移（用户拍板） |
+| ✅ T122 | 子代理工具死循环防护 | P0 | v1.0.2 现场（glm-5.2） | `46789042`：单条回复内同一子代理工具同参第 3 次或总数超 16 即流式掐断、零执行、不自动再请求；跨回复第二次空调用拒绝、连续两条空转收尾；工具返回不再误导；重开会话恢复子代理登记表；取证 `aiclient.loopGuard`；开关 `AICLIENT_RUNTIME_LOOP_GUARD=0`。决策 042。真机：开发机点验 D 组 + Windows 用 glm-5.2 复现 |
+| ✅ T123 | 代码注释英文化（只改注释） | P3 | 代码审查 #15 与项目规范 | `645c65a0`（纯注释文件）；功能文件里的注释随各自提交改 |
+| ⬜ T124 | `updaterChannel.test.ts`「派生通道仍复现报错」在 electron-updater 6.7.3 下失败 | P2 | 2026-09-24 全量测试 | main 上即存在，与本批无关；可能意味着 `486855f9` 的根因推断需复核，见 [Q033](open-questions.md)。发版门禁若跑全量会被卡 |
+| ⬜ T125 | 被掐断或中止的回复用量记为 0，应用内看不到失控消耗 | P2 | 2026-09-24 事故分析 | aborted / 被掐断消息的 usage 在会话文件里全为 0（openai 兼容接口只在流结束时下发用量）；需要估算或补记，至少在界面上标注「本次消耗未知」 |
+| ⬜ T126 | 会话树里 `aiclient.permissions` / `aiclient.subagent` 条目仍是节点 | P2 | 用户待办 T6（Windows 会话分支全是 custom）；2026-09-24 插话修复时发现 | 复用本批 `piSessionTree.ts` 新增的隐藏名单（`HIDDEN_CUSTOM_TYPES`），并补测试；Windows 上用旧会话确认分支列表不再出现一串 custom |
+| ⬜ T127 | 全量测试出现过一次无法复现的偶发失败 | P3 | 2026-09-24 收口 | 那一轮日志只保留了末尾 40 行未能定位；此后全量两轮、时序敏感新测试连跑 3 遍均未复现。下次全量务必保留完整输出 |
+| ✅ T128 | 开发机点验判负与清单外问题修复（6 项） | P1 | [点验证据](evidence/interject-branch-devbox-2026-09-24/README.md)；用户 2026-09-24 拍板打包前修 | ① D1：死循环掐断后中文失败卡不出现（store 读数 `tool_call_repetition` 但状态被随后的 idle 覆盖）；② C3：流式期间点开思考块，展开后首次正文增长仍触发贴底跟随，标题被滚出视野；③ 运行中 `/compact` 被主进程拒绝而界面零提示；④ 被插话结束的回合重开后「已工作」从 20 秒变 1 秒；⑤ 被拒绝 / 未执行的子代理工具调用仍显示完成时动词；⑥ 切分支失败报错被截成「Error invoki…」。修复后 GUI 复验 **已落地** `403b7575`；GUI 复验 8 项全 ✅（[recheck-t128](evidence/interject-branch-devbox-2026-09-24/recheck-t128/README.md)）。 |
+| ⬜ T129 | 排队消息逐条发出间隔偏长（插话后隔 4.1 秒发排队-1，再隔 10 秒发排队-2，每条回复本身约 20ms） | P2 | 2026-09-24 开发机点验 A4 | 更早就有；先查队列释放为何要等数秒 |
+| ⬜ T130 | 被 Stop 中止的 bash 在 store 里记成成功（`toolOk=true`） | P2 | 2026-09-24 开发机点验 | 更早就有 |
+| ⬜ T131 | 开发机点验环境：GNOME login 密钥环锁定时默认 profile 启动卡死且无任何提示；`dev.env` 的 `AICLIENT_MANAGED_CREDENTIALS=1` 与点验手册（写 0）不一致 | P3 | 2026-09-24 开发机点验 | 点验改用隔离 profile + `--password-store=basic` 绕过，做法见点验证据；手册需回写，应用侧是否应在密钥环不可用时给提示另议 |
+| ⬜ T132 | 回合运行中执行 `/archive` 会直接归档并结束正在跑的回合，不像侧栏那样先弹确认 | P2 | 2026-09-24 T128 修复时排查内置命令发现 | 只记录未改；归档失败原先静默清空输入框已随 T128 改为提示 |
+| ⬜ T133 | 回合中途抛异常的失败路径（agent-loop 的 catch、NativeSessionIndexAdapter 的 catch）事件里没有 `errorCode`，失败卡只能显示兜底标题「这一轮停下了」 | P3 | 2026-09-24 T128 修复时排查失败路径发现 | 补 `errorCode` 时需同步改 `modelMissingWiring` 的 MMW-15（按字面检查那一行） |
+| ⬜ T134 | 失败与掐断后的显示细节：未执行的「编辑」行点开为空（时间线 `showDiff={false}`）；被掐断的回合实时显示「已工作 1 秒」（重开后才对）；侧栏失败徽标是英文 `failed`；`/compact` 成功后界面无任何反馈 | P3 | 2026-09-24 T128 GUI 复验 X1 / X2 / X4 / X6 | 均不阻塞本批 |
+| ⬜ T135 | 失败卡「继续」把上一条提示词作为新消息再发一次，模型会收到两条相同的 user 消息；在确定性输出下会原样复现同一次失败 | P2 | 2026-09-24 T128 GUI 复验 X3 | 是否改为「重试上一轮」语义需先定 |
+| ⬜ T136 | 点 Stop 后 trace 记了一次 `provider_retry`，但网关没有收到任何重试请求 | P3 | 2026-09-24 T128 GUI 复验 X8 | 只在 trace 中出现，先查是否为误记 |
 
 ## Deferred
 

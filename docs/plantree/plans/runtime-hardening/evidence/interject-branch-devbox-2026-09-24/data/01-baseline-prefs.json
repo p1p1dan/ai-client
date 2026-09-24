@@ -1,0 +1,7 @@
+{
+  "chatAgentDefaults": {
+    "model": "probe-fake/fake-sonnet"
+  },
+  "defaultTier": "fullopen",
+  "sessionModels": "{\"session-live\":\"automatic\",\"session-live-1790254606965-n6xfemc\":\"automatic\",\"session-live-1790254704085-rdda7lo\":\"probe-fake/fake-sonnet\"}"
+}

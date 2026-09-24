@@ -1,0 +1,31 @@
+{
+  "at": "2026-09-24T13:25:18.831Z",
+  "store": {
+    "active": "session-live-1790256297419-8zibbjv",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "title": "Live Agent Host"
+  },
+  "bar": {
+    "branchIcons": [
+      {
+        "hostTag": "BUTTON",
+        "text": "",
+        "top": 111,
+        "left": 13
+      },
+      {
+        "hostTag": "BUTTON",
+        "text": "main",
+        "top": 744,
+        "left": 623
+      }
+    ],
+    "textareaTop": 775,
+    "targetBarText": [
+      "repo main 本机 执行 · 全自动 fake-sonnet",
+      "repo main 本机 执行 · 全自动 fake-sonnet",
+      "repo main 本机"
+    ]
+  },
+  "shot": "shots/50-b4-plain-folder.png"
+}

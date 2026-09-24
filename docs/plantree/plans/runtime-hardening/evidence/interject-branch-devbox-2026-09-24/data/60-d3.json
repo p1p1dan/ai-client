@@ -1,0 +1,72 @@
+{
+  "startedAt": "2026-09-24T13:30:46.516Z",
+  "entry": "使用本机已有配置",
+  "newSession": {
+    "clicked": true,
+    "before": "session-live-1790256651060-yeofx89",
+    "after": "session-live-1790256651060-yeofx89"
+  },
+  "sid": "session-live-1790256651060-yeofx89",
+  "degenerateRequest": {
+    "t": "2026-09-24T13:30:58.079Z",
+    "seq": 49,
+    "reply": "formBshort: degenerate reply, 46 tool calls"
+  },
+  "streamEnd": {
+    "t": "2026-09-24T13:31:09.909Z",
+    "event": "response_complete",
+    "seq": 49,
+    "label": "formBshort: degenerate reply, 46 tool calls",
+    "frames": 159,
+    "toolBlocksSent": 46,
+    "ms": 11829
+  },
+  "drive": {
+    "ok": true,
+    "trail": [
+      {
+        "status": "running",
+        "atMs": 3,
+        "t": "2026-09-24T13:31:09.912Z"
+      },
+      {
+        "status": "idle",
+        "atMs": 713,
+        "t": "2026-09-24T13:31:10.615Z"
+      }
+    ],
+    "ms": 2120
+  },
+  "requests": [
+    {
+      "t": "2026-09-24T13:30:58.079Z",
+      "seq": 49,
+      "route": "parent",
+      "reply": "formBshort: degenerate reply, 46 tool calls",
+      "lastToolResultsCount": 0,
+      "refused": 0
+    },
+    {
+      "t": "2026-09-24T13:31:10.213Z",
+      "seq": 50,
+      "route": "parent",
+      "reply": "formBshort: after tools",
+      "lastToolResultsCount": 46,
+      "refused": 0
+    }
+  ],
+  "aborts": [],
+  "files": {
+    "sentinel": true,
+    "touched": true
+  },
+  "store": {
+    "status": "idle",
+    "runtimeError": null,
+    "runtimeErrorCode": null
+  },
+  "loopGuardEntries": 0,
+  "shot": "shots/60-d3-guard-off.png",
+  "shotExpanded": "shots/60-d3-guard-off-expanded.png",
+  "lastText": "FORMBSHORT-DONE: 工具都跑完了。"
+}

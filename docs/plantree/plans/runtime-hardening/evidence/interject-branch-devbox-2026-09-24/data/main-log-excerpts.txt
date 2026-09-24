@@ -1,0 +1,4 @@
+104:[2026-09-24 09:04:15.225] [error] Error occurred in handler for 'chat:compactSession': WorkerManagerError: Session session-1790255048446-z82ivrc cannot compact the conversation while active
+106:    at WorkerManager.compactSession (file:///home/ai/code/ai-client/out/main/index.js:110095:10)
+116:[2026-09-24 09:14:47.053] [warn]  [pi-worker:session-1790255671507-ok16sdf] turn failed: tool_call_repetition: The model wrote the same subagent tool call 3 times in one reply (TaskList {}), with 47 tool calls in that reply so far. The app interrupted the reply and ran none of its tool calls. (run send-1790255675092-30)
+119:[2026-09-24 09:16:57.100] [warn]  [pi-worker:session-1790255801635-buhmw1x] turn failed: tool_call_repetition: The model wrote the same subagent tool call 3 times in one reply (TaskList {}), with 47 tool calls in that reply so far. The app interrupted the reply and ran none of its tool calls. (run send-1790255805207-33)

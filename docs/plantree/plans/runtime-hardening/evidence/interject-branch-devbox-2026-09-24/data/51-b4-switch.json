@@ -1,0 +1,44 @@
+{
+  "at": "2026-09-24T13:25:51.532Z",
+  "trigger": {
+    "x": 566,
+    "y": 752
+  },
+  "items": [
+    {
+      "role": "option",
+      "text": "repo",
+      "x": 481,
+      "y": 531
+    },
+    {
+      "role": "option",
+      "text": "repo",
+      "x": 481,
+      "y": 596
+    },
+    {
+      "role": "option",
+      "text": "plain",
+      "x": 481,
+      "y": 624
+    }
+  ],
+  "shotMenu": "shots/51-b4-repo-menu.png",
+  "clickedPlain": true,
+  "store": {
+    "active": "session-live-1790256297419-8zibbjv",
+    "workspaceId": "ws:main:/tmp/ij/plain"
+  },
+  "bar": {
+    "branchButtons": [
+      {
+        "text": "",
+        "top": 111,
+        "left": 13
+      }
+    ],
+    "composerBar": ["plain"]
+  },
+  "shot": "shots/51-b4-plain-selected.png"
+}

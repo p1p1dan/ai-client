@@ -1,0 +1,47 @@
+{
+  "at": "2026-09-24T13:27:36.811Z",
+  "click": {
+    "ok": true,
+    "matches": 2
+  },
+  "turns": [
+    {
+      "id": "h:c6aa11cf-a3c9-4b3b-840e-f68b960beee6",
+      "head": "⟦sub⟧ A7 派慢子代理，然后插话 已工作 1 秒 派出一个慢子代理。 已委派 慢子代理点验 最终输出 SUB-DISPATCHED: 子代理在后台跑，我等它的报告。 ✻ 完成于 09:07 · 1 次工具调用",
+      "tail": "⟦sub⟧ A7 派慢子代理，然后插话 已工作 1 秒 派出一个慢子代理。 已委派 慢子代理点验 最终输出 SUB-DISPATCHED: 子代理在后台跑，我等它的报告。 ✻ 完成于 09:07 · 1 次工具调用",
+      "details": [
+        {
+          "open": true,
+          "summary": "已工作 1 秒"
+        }
+      ]
+    },
+    {
+      "id": "h:fede889d-3381-4c2c-ae4a-cfb998777dca",
+      "head": "⟦echo⟧ 插话-A7：子代理还在跑，先回我这句 已工作 42 秒 最终输出 ECHO: ⟦echo⟧ 插话-A7：子代理还在跑，先回我这句 REPORT-SEEN: 收到报告 The following subagents have finished; their reports are bel… ✻ 完成于 09",
+      "tail": "⟦echo⟧ 插话-A7：子代理还在跑，先回我这句 已工作 42 秒 最终输出 ECHO: ⟦echo⟧ 插话-A7：子代理还在跑，先回我这句 REPORT-SEEN: 收到报告 The following subagents have finished; their reports are bel… ✻ 完成于 09:08",
+      "details": []
+    }
+  ],
+  "stopCauses": [null, "interjected", null, null],
+  "shotDefault": "shots/53-a9-A7-interjected-default.png",
+  "toggle": {
+    "ok": true,
+    "before": true
+  },
+  "after": [
+    {
+      "head": "⟦sub⟧ A7 派慢子代理，然后插话 已工作 1 秒 最终输出 SUB-DISPATCHED: 子代理在后台跑，我等它",
+      "details": [
+        {
+          "open": false,
+          "summary": "已工作 1 秒"
+        }
+      ]
+    },
+    {
+      "head": "⟦echo⟧ 插话-A7：子代理还在跑，先回我这句 已工作 42 秒 最终输出 ECHO: ⟦echo⟧ 插话-A7：子",
+      "details": []
+    }
+  ]
+}

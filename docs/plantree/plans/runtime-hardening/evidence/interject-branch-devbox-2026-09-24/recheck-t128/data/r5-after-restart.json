@@ -1,0 +1,377 @@
+{
+  "startedAt": "2026-09-24T17:24:27.408Z",
+  "cases": {
+    "ij": {
+      "sid": "session-1790270035042-belrufe",
+      "before": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "switch": {
+        "sessionId": "session-1790270035042-belrufe",
+        "title": "⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter",
+        "clicked": {
+          "ok": true,
+          "matches": 2
+        },
+        "activeSessionId": "session-1790270035042-belrufe"
+      },
+      "after": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "afterStamps": [
+        {
+          "id": "h:73783926-b0a1-4789-9fca-8033059648e6",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": 1790270084414,
+          "settledAt": null,
+          "iso": "2026-09-24T17:14:44.414Z",
+          "settledIso": null
+        },
+        {
+          "id": "h:1fdbe652-f793-400a-8b6c-35a691e360bc",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270084459,
+          "settledAt": 1790270084559,
+          "iso": "2026-09-24T17:14:44.459Z",
+          "settledIso": "2026-09-24T17:14:44.559Z"
+        },
+        {
+          "id": "h:b426ec91-90d7-4e6a-beba-64bd52251fd8",
+          "role": "assistant",
+          "stopCause": "interjected",
+          "timestamp": 1790270084576,
+          "settledAt": 1790270104609,
+          "iso": "2026-09-24T17:14:44.576Z",
+          "settledIso": "2026-09-24T17:15:04.609Z"
+        },
+        {
+          "id": "h:3454d782-44bb-49ae-9a13-c37faaeeba48",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": 1790270104787,
+          "settledAt": null,
+          "iso": "2026-09-24T17:15:04.787Z",
+          "settledIso": null
+        },
+        {
+          "id": "h:45a65957-9af4-4658-9f12-f6c1708e359f",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270104797,
+          "settledAt": null,
+          "iso": "2026-09-24T17:15:04.797Z",
+          "settledIso": null
+        }
+      ],
+      "beforeStamps": [
+        {
+          "id": "user-send-1790270084403-26-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270084403-26-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270084403-26-3",
+          "role": "assistant",
+          "stopCause": "interjected",
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "user-send-1790270104776-27-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270104776-27-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "markers": [
+        {
+          "f": "long-1790270084570.txt",
+          "mtime": "2026-09-24T17:15:04.605Z"
+        }
+      ],
+      "replayedEnd": {
+        "timestamp": "2026-09-24T17:14:44.576Z",
+        "settledAt": "2026-09-24T17:15:04.609Z",
+        "hhmmTimestamp": "13:14",
+        "hhmmSettled": "13:15"
+      },
+      "markerHhmm": "13:15",
+      "same": {
+        "worked": true,
+        "completed": true
+      },
+      "shot": "shots/r5-ij-after-restart.png"
+    },
+    "stop": {
+      "sid": "session-1790270111776-7stp08a",
+      "before": {
+        "worked": "已工作 4 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-stop：sleep 中途点 Stop 已工作 4 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 4 秒"]
+      },
+      "switch": {
+        "sessionId": "session-1790270111776-7stp08a",
+        "title": "⟦long⟧ R5-stop：sleep 中途点 Stop",
+        "clicked": {
+          "ok": true,
+          "matches": 2
+        },
+        "activeSessionId": "session-1790270111776-7stp08a"
+      },
+      "after": {
+        "worked": "已工作 4 秒",
+        "completed": "完成于 13:15",
+        "tail": "做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… 最终输出 Response interrupted before any assistant content was saved. ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 4 秒"]
+      },
+      "afterStamps": [
+        {
+          "id": "h:bd525cc1-d284-4933-99dd-de82f0da2d2d",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": 1790270115289,
+          "settledAt": null,
+          "iso": "2026-09-24T17:15:15.289Z",
+          "settledIso": null
+        },
+        {
+          "id": "h:5512312a-1d79-4de8-8897-691140faa116",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270115376,
+          "settledAt": 1790270115529,
+          "iso": "2026-09-24T17:15:15.376Z",
+          "settledIso": "2026-09-24T17:15:15.529Z"
+        },
+        {
+          "id": "h:ad12d029-f1bc-4434-b2bc-a40c4b8076b8",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270115549,
+          "settledAt": 1790270119655,
+          "iso": "2026-09-24T17:15:15.549Z",
+          "settledIso": "2026-09-24T17:15:19.655Z"
+        },
+        {
+          "id": "h:8b07b054-d3df-461e-9b28-b47e61cdef3e",
+          "role": "assistant",
+          "stopCause": "user_stop",
+          "timestamp": 1790270119660,
+          "settledAt": 1790270119662,
+          "iso": "2026-09-24T17:15:19.660Z",
+          "settledIso": "2026-09-24T17:15:19.662Z"
+        }
+      ],
+      "beforeStamps": [
+        {
+          "id": "user-send-1790270115267-29-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270115267-29-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270115267-29-3",
+          "role": "assistant",
+          "stopCause": "user_stop",
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "markers": [],
+      "replayedEnd": {
+        "timestamp": "2026-09-24T17:15:19.660Z",
+        "settledAt": "2026-09-24T17:15:19.662Z",
+        "hhmmTimestamp": "13:15",
+        "hhmmSettled": "13:15"
+      },
+      "markerHhmm": null,
+      "same": {
+        "worked": true,
+        "completed": true
+      },
+      "shot": "shots/r5-stop-after-restart.png"
+    },
+    "norm": {
+      "sid": "session-1790270122939-bajoza5",
+      "before": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-norm 正常回合 / C1 计时 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完成于 13:15 · 3 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "switch": {
+        "sessionId": "session-1790270122939-bajoza5",
+        "title": "⟦long⟧ R5-norm 正常回合 / C1 计时",
+        "clicked": {
+          "ok": true,
+          "matches": 2
+        },
+        "activeSessionId": "session-1790270122939-bajoza5"
+      },
+      "after": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-norm 正常回合 / C1 计时 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完成于 13:15 · 3 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "afterStamps": [
+        {
+          "id": "h:b10b0302-b9de-49ef-b39d-77123def931f",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": 1790270126305,
+          "settledAt": null,
+          "iso": "2026-09-24T17:15:26.305Z",
+          "settledIso": null
+        },
+        {
+          "id": "h:d0407018-8103-49ff-b3b2-40d4051364da",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270126382,
+          "settledAt": 1790270126526,
+          "iso": "2026-09-24T17:15:26.382Z",
+          "settledIso": "2026-09-24T17:15:26.526Z"
+        },
+        {
+          "id": "h:aae3a20f-91b1-4f40-889a-29e6dfb7df7c",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270126544,
+          "settledAt": 1790270146597,
+          "iso": "2026-09-24T17:15:26.544Z",
+          "settledIso": "2026-09-24T17:15:46.597Z"
+        },
+        {
+          "id": "h:5eda9346-e34f-4b34-9f82-ccf940712cd4",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270146604,
+          "settledAt": 1790270146644,
+          "iso": "2026-09-24T17:15:46.604Z",
+          "settledIso": "2026-09-24T17:15:46.644Z"
+        },
+        {
+          "id": "h:6e774934-97f8-40eb-b7ed-835444278ed8",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": 1790270146656,
+          "settledAt": null,
+          "iso": "2026-09-24T17:15:46.656Z",
+          "settledIso": null
+        }
+      ],
+      "beforeStamps": [
+        {
+          "id": "user-send-1790270126283-32-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-3",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-4",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-5",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "markers": null,
+      "replayedEnd": {
+        "timestamp": "2026-09-24T17:15:46.656Z",
+        "settledAt": null,
+        "hhmmTimestamp": "13:15",
+        "hhmmSettled": null
+      },
+      "markerHhmm": null,
+      "same": {
+        "worked": true,
+        "completed": true
+      },
+      "shot": "shots/r5-norm-after-restart.png"
+    }
+  },
+  "enter": "already on main surface"
+}

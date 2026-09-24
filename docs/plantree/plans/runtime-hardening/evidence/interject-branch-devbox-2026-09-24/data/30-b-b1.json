@@ -1,0 +1,100 @@
+{
+  "startedAt": "2026-09-24T13:20:28.131Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790255991241-6b5hiwc",
+    "after": "session-1790255991241-6b5hiwc"
+  },
+  "headAtStart": "main",
+  "initial": {
+    "found": true,
+    "text": "main",
+    "disabled": false,
+    "width": 80,
+    "x": 654,
+    "y": 752,
+    "valueScrollWidth": 26,
+    "valueClientWidth": 26,
+    "truncated": false,
+    "maxWidthCss": "240px",
+    "lock": null,
+    "alerts": []
+  },
+  "shotInitial": "shots/30-b-initial.png",
+  "b1List": [
+    "dev",
+    "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+    "main"
+  ],
+  "b1ShotList": "shots/30-b1-branch-list.png",
+  "b1ToDev": {
+    "options": [
+      "dev",
+      "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "main"
+    ],
+    "labelChangedAfterMs": 508,
+    "finalHead": "dev",
+    "trail": [
+      {
+        "ms": 110,
+        "head": "dev"
+      },
+      {
+        "ms": 508,
+        "label": "dev",
+        "head": "dev"
+      }
+    ],
+    "after": {
+      "found": true,
+      "text": "dev",
+      "disabled": false,
+      "width": 74,
+      "x": 650,
+      "y": 752,
+      "valueScrollWidth": 20,
+      "valueClientWidth": 20,
+      "truncated": false,
+      "maxWidthCss": "240px",
+      "lock": null,
+      "alerts": []
+    }
+  },
+  "b1ShotDev": "shots/30-b1-switched-to-dev.png",
+  "b1BackToMain": {
+    "options": [
+      "dev",
+      "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "main"
+    ],
+    "labelChangedAfterMs": 451,
+    "finalHead": "main",
+    "trail": [
+      {
+        "ms": 107,
+        "head": "main"
+      },
+      {
+        "ms": 451,
+        "label": "main",
+        "head": "main"
+      }
+    ],
+    "after": {
+      "found": true,
+      "text": "main",
+      "disabled": false,
+      "width": 80,
+      "x": 654,
+      "y": 752,
+      "valueScrollWidth": 26,
+      "valueClientWidth": 26,
+      "truncated": false,
+      "maxWidthCss": "240px",
+      "lock": null,
+      "alerts": []
+    }
+  },
+  "headAtEnd": "main"
+}

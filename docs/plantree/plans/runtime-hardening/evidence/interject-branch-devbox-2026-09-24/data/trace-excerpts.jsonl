@@ -1,0 +1,7 @@
+{"run_id":"send-1790254893029-5","session":null,"notes":[{"event":"turn_stopped_by_interjection"}]}
+{"run_id":"send-1790254969458-8","session":null,"notes":[{"event":"turn_stopped_by_interjection"}]}
+{"run_id":"send-1790255262816-22","session":null,"notes":[{"event":"delegates_left_running","running":1}]}
+{"run_id":"send-1790255266106-23","session":null,"notes":[{"event":"delegation_resume","report_bytes":245}]}
+{"run_id":"send-1790255675092-30","session":null,"notes":[{"event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}]}
+{"run_id":"send-1790255805207-33","session":null,"notes":[{"event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}]}
+{"run_id":"send-1790255904926-35","session":null,"notes":[{"event":"delegation_resume","report_bytes":241},{"event":"delegation_idle_loop","replies":2,"calls":["TaskList {}","TaskStop {}","TaskWait {}"]},{"event":"delegation_idle_wrap_up","held_reports":0}]}

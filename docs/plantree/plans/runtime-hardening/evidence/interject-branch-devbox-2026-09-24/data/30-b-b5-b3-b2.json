@@ -1,0 +1,227 @@
+{
+  "startedAt": "2026-09-24T13:20:53.681Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790255991241-6b5hiwc",
+    "after": "session-1790255991241-6b5hiwc"
+  },
+  "headAtStart": "main",
+  "initial": {
+    "found": true,
+    "text": "main",
+    "disabled": false,
+    "width": 80,
+    "x": 654,
+    "y": 752,
+    "valueScrollWidth": 26,
+    "valueClientWidth": 26,
+    "truncated": false,
+    "maxWidthCss": "240px",
+    "lock": null,
+    "alerts": []
+  },
+  "shotInitial": "shots/30-b-initial.png",
+  "b5ToLong": {
+    "options": [
+      "dev",
+      "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "main"
+    ],
+    "labelChangedAfterMs": 563,
+    "finalHead": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+    "trail": [
+      {
+        "ms": 139,
+        "head": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24"
+      },
+      {
+        "ms": 563,
+        "label": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+        "head": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24"
+      }
+    ],
+    "after": {
+      "found": true,
+      "text": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "disabled": false,
+      "width": 240,
+      "x": 734,
+      "y": 752,
+      "valueScrollWidth": 486,
+      "valueClientWidth": 186,
+      "truncated": true,
+      "maxWidthCss": "240px",
+      "lock": null,
+      "alerts": []
+    }
+  },
+  "b5Trigger": {
+    "found": true,
+    "text": "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+    "disabled": false,
+    "width": 240,
+    "x": 734,
+    "y": 752,
+    "valueScrollWidth": 486,
+    "valueClientWidth": 186,
+    "truncated": true,
+    "maxWidthCss": "240px",
+    "lock": null,
+    "alerts": []
+  },
+  "b5Shot": "shots/30-b5-long-branch.png",
+  "b5BackToMain": {
+    "options": [
+      "dev",
+      "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "main"
+    ],
+    "labelChangedAfterMs": 518,
+    "finalHead": "main",
+    "trail": [
+      {
+        "ms": 136,
+        "head": "main"
+      },
+      {
+        "ms": 518,
+        "label": "main",
+        "head": "main"
+      }
+    ],
+    "after": {
+      "found": true,
+      "text": "main",
+      "disabled": false,
+      "width": 80,
+      "x": 654,
+      "y": 752,
+      "valueScrollWidth": 26,
+      "valueClientWidth": 26,
+      "truncated": false,
+      "maxWidthCss": "240px",
+      "lock": null,
+      "alerts": []
+    }
+  },
+  "b3Status": "M shared.txt",
+  "b3Attempt": {
+    "options": [
+      "dev",
+      "feature/very-long-branch-name-for-width-check-ctrl-enter-interject-pointcheck-2026-09-24",
+      "main"
+    ],
+    "labelChangedAfterMs": null,
+    "finalHead": "main",
+    "trail": [
+      {
+        "ms": 104,
+        "head": "main"
+      },
+      {
+        "ms": 210,
+        "label": "main",
+        "head": "main"
+      }
+    ],
+    "after": {
+      "found": true,
+      "text": "main",
+      "disabled": false,
+      "width": 80,
+      "x": 654,
+      "y": 752,
+      "valueScrollWidth": 26,
+      "valueClientWidth": 26,
+      "truncated": false,
+      "maxWidthCss": "240px",
+      "lock": null,
+      "alerts": [
+        "切换分支失败: Error invoking remote method 'git:branch:checkout': Error: error: Your local changes to the following files would be overwritten by checkout: shared.txt Please commit your changes or stash them before you switch branches. Aborting"
+      ]
+    }
+  },
+  "b3After": {
+    "found": true,
+    "text": "main",
+    "disabled": false,
+    "width": 80,
+    "x": 654,
+    "y": 752,
+    "valueScrollWidth": 26,
+    "valueClientWidth": 26,
+    "truncated": false,
+    "maxWidthCss": "240px",
+    "lock": null,
+    "alerts": [
+      "切换分支失败: Error invoking remote method 'git:branch:checkout': Error: error: Your local changes to the following files would be overwritten by checkout: shared.txt Please commit your changes or stash them before you switch branches. Aborting"
+    ]
+  },
+  "b3Shot": "shots/30-b3-checkout-refused.png",
+  "b3HeadAfter": "main",
+  "b3StatusRestored": "",
+  "b2Trigger": {
+    "found": true,
+    "text": "main",
+    "disabled": true,
+    "width": 80,
+    "x": 632,
+    "y": 874,
+    "valueScrollWidth": 26,
+    "valueClientWidth": 26,
+    "truncated": false,
+    "maxWidthCss": "240px",
+    "lock": "当前对话正在运行 —— 切换分支前先停止它",
+    "alerts": []
+  },
+  "b2Try": {
+    "t": {
+      "found": true,
+      "text": "main",
+      "disabled": true,
+      "width": 80,
+      "x": 632,
+      "y": 874,
+      "valueScrollWidth": 26,
+      "valueClientWidth": 26,
+      "truncated": false,
+      "maxWidthCss": "240px",
+      "lock": "当前对话正在运行 —— 切换分支前先停止它",
+      "alerts": []
+    },
+    "opened": false,
+    "clicks": 2,
+    "options": []
+  },
+  "b2Shot": "shots/30-b2-locked-while-running.png",
+  "b2Stop": {
+    "ok": true,
+    "at": "2026-09-24T13:21:17.010Z"
+  },
+  "b2Idle": {
+    "t": "2026-09-24T13:21:17.222Z",
+    "sid": "session-1790255991241-6b5hiwc",
+    "status": "idle",
+    "title": "⟦long⟧ B2 回合运行中分支栏应锁定",
+    "workspaceId": "ws:main:/tmp/ij/repo",
+    "msgs": 3,
+    "active": "session-1790255991241-6b5hiwc",
+    "hostBound": true,
+    "waitedMs": 447
+  },
+  "b2AfterStop": {
+    "found": true,
+    "text": "main",
+    "disabled": false,
+    "width": 80,
+    "x": 632,
+    "y": 874,
+    "valueScrollWidth": 26,
+    "valueClientWidth": 26,
+    "truncated": false,
+    "maxWidthCss": "240px",
+    "lock": null,
+    "alerts": []
+  },
+  "headAtEnd": "main"
+}

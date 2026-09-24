@@ -1,0 +1,304 @@
+{
+  "startedAt": "2026-09-24T17:11:33.376Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790269821099-n1wj3sa",
+    "after": "session-1790269893378-42uoidg"
+  },
+  "sid": "session-1790269893378-42uoidg",
+  "step1": {
+    "t": "2026-09-24T17:11:36.932Z",
+    "event": "response_complete",
+    "seq": 30,
+    "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790269896930.txt)",
+    "frames": 10,
+    "toolBlocksSent": 1,
+    "ms": 1
+  },
+  "enter": {
+    "presses": [
+      {
+        "at": "2026-09-24T17:11:39.268Z",
+        "before": {
+          "options": [],
+          "value": "/compact"
+        },
+        "after": {
+          "options": [],
+          "value": "/compact "
+        },
+        "toasts": [],
+        "queue": []
+      },
+      {
+        "at": "2026-09-24T17:11:40.502Z",
+        "before": {
+          "options": [],
+          "value": "/compact "
+        },
+        "after": {
+          "options": [],
+          "value": "/compact "
+        },
+        "toasts": [
+          {
+            "t": "2026-09-24T17:11:40.656Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          },
+          {
+            "t": "2026-09-24T17:11:40.808Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          },
+          {
+            "t": "2026-09-24T17:11:40.960Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          }
+        ],
+        "queue": []
+      }
+    ],
+    "typed": {
+      "len": 8,
+      "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…"
+    },
+    "shot": "shots/r4-enter-toast.png",
+    "composer": {
+      "t": "2026-09-24T17:11:41.106Z",
+      "value": "/compact ",
+      "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…",
+      "buttons": [
+        {
+          "label": "停止当前回合",
+          "disabled": false
+        },
+        {
+          "label": "立刻发送 — 打断当前回复",
+          "disabled": false
+        },
+        {
+          "label": "加入队列",
+          "disabled": false
+        }
+      ],
+      "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+    }
+  },
+  "ctrlEnter": {
+    "presses": [
+      {
+        "at": "2026-09-24T17:11:43.629Z",
+        "before": {
+          "options": [],
+          "value": "/compact "
+        },
+        "after": {
+          "options": [],
+          "value": "/compact "
+        },
+        "toasts": [
+          {
+            "t": "2026-09-24T17:11:43.783Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              },
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          },
+          {
+            "t": "2026-09-24T17:11:43.936Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              },
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          },
+          {
+            "t": "2026-09-24T17:11:44.093Z",
+            "toasts": [
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              },
+              {
+                "title": "等这一轮结束后再压缩上下文",
+                "description": "/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。"
+              }
+            ]
+          }
+        ],
+        "queue": []
+      }
+    ],
+    "shot": "shots/r4-ctrl-enter-toast.png",
+    "composer": {
+      "t": "2026-09-24T17:11:44.201Z",
+      "value": "/compact ",
+      "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…",
+      "buttons": [
+        {
+          "label": "停止当前回合",
+          "disabled": false
+        },
+        {
+          "label": "立刻发送 — 打断当前回复",
+          "disabled": false
+        },
+        {
+          "label": "加入队列",
+          "disabled": false
+        }
+      ],
+      "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+    }
+  },
+  "whileRunningRequests": [
+    {
+      "t": "2026-09-24T17:11:36.748Z",
+      "seq": 29,
+      "reply": "long step0: bash prep",
+      "hasTools": true,
+      "slashCompactInUserText": false,
+      "lastText": "⟦long⟧ R4 运行中执行 /compact"
+    },
+    {
+      "t": "2026-09-24T17:11:36.931Z",
+      "seq": 30,
+      "reply": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790269896930.txt)",
+      "hasTools": true,
+      "slashCompactInUserText": false,
+      "lastText": ""
+    }
+  ],
+  "settle": {
+    "ok": true,
+    "trail": [
+      {
+        "status": "running",
+        "atMs": 2,
+        "t": "2026-09-24T17:11:44.204Z"
+      },
+      {
+        "status": "idle",
+        "atMs": 13374,
+        "t": "2026-09-24T17:11:57.576Z"
+      }
+    ],
+    "ms": 14783
+  },
+  "afterTurn": {
+    "composer": {
+      "t": "2026-09-24T17:12:00.989Z",
+      "value": "/compact ",
+      "placeholder": "继续输入…",
+      "buttons": [
+        {
+          "label": "发送消息",
+          "disabled": false
+        }
+      ],
+      "notices": ["本机"]
+    },
+    "messages": ["user  ", "assistant  ", "assistant  ", "assistant  ", "assistant  "]
+  },
+  "shotAfterTurn": "shots/r4-after-turn-box-kept.png",
+  "finalPress": {
+    "before": {
+      "options": [],
+      "value": "/compact "
+    },
+    "at": "2026-09-24T17:12:01.071Z",
+    "toasts": [],
+    "after": {
+      "options": [],
+      "value": ""
+    }
+  },
+  "compactRequests": [
+    {
+      "t": "2026-09-24T17:12:01.074Z",
+      "event": "request",
+      "seq": 33,
+      "route": "child",
+      "reply": "side request: SUMMARY",
+      "hasTools": false,
+      "systemHead": "You are a context summarization assistant. Your task is to read a conversation between a user and an…",
+      "messageCount": 1,
+      "lastText": "<conversation> [User]: ⟦long⟧ R4 运行中执行 /compact [Assistant]: 先做准备。 [Assistant tool calls]: bash(command=\"echo prep-ok\", timeoutSeconds=30) [Tool result]: prep-ok [exit=0; exit] [Assistant]: 开始长任务。 [As"
+    },
+    {
+      "t": "2026-09-24T17:12:01.074Z",
+      "event": "response_complete",
+      "seq": 33,
+      "reply": "side request: SUMMARY",
+      "lastText": ""
+    }
+  ],
+  "sessionFile": {
+    "linesBefore": 12,
+    "linesAfter": 13,
+    "newEntries": [
+      {
+        "type": "compaction",
+        "summaryHead": "SUMMARY: 这是假网关给的摘要。",
+        "tokensBefore": 70,
+        "timestamp": 1790269921075
+      }
+    ]
+  },
+  "afterCompact": {
+    "composer": {
+      "t": "2026-09-24T17:12:10.114Z",
+      "value": "",
+      "placeholder": "继续输入…",
+      "buttons": [
+        {
+          "label": "发送消息",
+          "disabled": true
+        }
+      ],
+      "notices": ["本机"]
+    },
+    "messages": [
+      "user  text",
+      "assistant  text,tool_call,permission_activity,tool_result",
+      "assistant  text,tool_call,permission_activity,tool_result",
+      "assistant  tool_call,permission_activity,tool_result",
+      "assistant  text"
+    ]
+  },
+  "timelineTail": [
+    "⟦long⟧ R4 运行中执行 /compact",
+    "⟦long⟧ R4 运行中执行 /compact",
+    "⟦long⟧ R4 运行中执行 /compact",
+    "⟦long⟧ R4 运行中执行 /compact",
+    "⟦long⟧ R4 运行中执行 /compact",
+    "⟦long⟧ R4 运行中执行 /compact"
+  ],
+  "shotAfterCompact": "shots/r4-after-compact.png",
+  "mainLog": []
+}

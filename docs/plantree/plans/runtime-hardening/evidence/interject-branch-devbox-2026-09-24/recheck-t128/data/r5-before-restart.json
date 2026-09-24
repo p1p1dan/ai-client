@@ -1,0 +1,458 @@
+{
+  "startedAt": "2026-09-24T17:13:55.040Z",
+  "cases": {
+    "ij": {
+      "newSession": {
+        "clicked": true,
+        "before": "session-1790269893378-42uoidg",
+        "after": "session-1790270035042-belrufe"
+      },
+      "alignedAt": "2026-09-24T17:14:43.067Z",
+      "sid": "session-1790270035042-belrufe",
+      "sentAt": "2026-09-24T17:14:43.442Z",
+      "step1": {
+        "t": "2026-09-24T17:14:44.571Z",
+        "event": "response_complete",
+        "seq": 35,
+        "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790270084570.txt)",
+        "frames": 10,
+        "toolBlocksSent": 1,
+        "ms": 0
+      },
+      "interject": {
+        "at": "2026-09-24T17:14:48.996Z",
+        "sid": "session-1790270035042-belrufe"
+      },
+      "interjectRequest": {
+        "t": "2026-09-24T17:15:04.795Z",
+        "seq": 36,
+        "lastToolResults": [],
+        "digest": [
+          "user:text(40)「⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter」",
+          "assistant:text(5)「先做准备。」 tool_use×1{\"bash\":1}",
+          "user:tool_result×1",
+          "assistant:text(6)「开始长任务。」 tool_use×1{\"bash\":1}",
+          "user:tool_result×1",
+          "user:text(20)「⟦echo⟧ 插话-R5：这一步跑完就停」"
+        ]
+      },
+      "settle": {
+        "ok": false,
+        "reason": "never busy",
+        "trail": [
+          {
+            "status": "idle",
+            "atMs": 2,
+            "t": "2026-09-24T17:15:04.953Z"
+          }
+        ]
+      },
+      "markers": [
+        {
+          "f": "long-1790270084570.txt",
+          "mtime": "2026-09-24T17:15:04.605Z"
+        }
+      ],
+      "gateway": [
+        "2026-09-24T17:14:44.448Z #34 long step0: bash prep | ⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter",
+        "2026-09-24T17:14:44.571Z #35 long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790270084570.txt) | ",
+        "2026-09-24T17:15:04.795Z #36 echo | ⟦echo⟧ 插话-R5：这一步跑完就停"
+      ],
+      "step2Requested": false,
+      "stopCauses": [null, "interjected", null],
+      "live": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter 已工作 20 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "liveStamps": [
+        {
+          "id": "user-send-1790270084403-26-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270084403-26-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270084403-26-3",
+          "role": "assistant",
+          "stopCause": "interjected",
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "user-send-1790270104776-27-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270104776-27-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "shot": "shots/r5-ij-live.png"
+    },
+    "stop": {
+      "newSession": {
+        "clicked": true,
+        "before": "session-1790270035042-belrufe",
+        "after": "session-1790270111776-7stp08a"
+      },
+      "sid": "session-1790270111776-7stp08a",
+      "step1": {
+        "t": "2026-09-24T17:15:15.544Z",
+        "event": "response_complete",
+        "seq": 38,
+        "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790270115543.txt)",
+        "frames": 10,
+        "toolBlocksSent": 1,
+        "ms": 1
+      },
+      "stopClick": {
+        "ok": true,
+        "at": "2026-09-24T17:15:19.649Z"
+      },
+      "idle": {
+        "t": "2026-09-24T17:15:20.357Z",
+        "sid": "session-1790270111776-7stp08a",
+        "status": "idle",
+        "title": "⟦long⟧ R5-stop：sleep 中途点 Stop",
+        "workspaceId": "ws:main:/tmp/ij/repo",
+        "msgs": 3,
+        "active": "session-1790270111776-7stp08a",
+        "hostBound": true,
+        "waitedMs": 690
+      },
+      "markers": [],
+      "live": {
+        "worked": "已工作 4 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-stop：sleep 中途点 Stop 已工作 4 秒 先做准备。 终端 echo prep-ok 开始长任务。 终端 sleep 20; echo slept > /tmp/ij/markers/l… ✻ 完成于 13:15 · 2 次工具调用",
+        "summary": ["已工作 4 秒"]
+      },
+      "liveStamps": [
+        {
+          "id": "user-send-1790270115267-29-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270115267-29-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270115267-29-3",
+          "role": "assistant",
+          "stopCause": "user_stop",
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "shot": "shots/r5-stop-live.png"
+    },
+    "norm": {
+      "newSession": {
+        "clicked": true,
+        "before": "session-1790270111776-7stp08a",
+        "after": "session-1790270122939-bajoza5"
+      },
+      "sid": "session-1790270122939-bajoza5",
+      "step1": {
+        "t": "2026-09-24T17:15:26.539Z",
+        "event": "response_complete",
+        "seq": 40,
+        "label": "long step1: bash sleep 20 (marker /tmp/ij/markers/long-1790270126538.txt)",
+        "frames": 10,
+        "toolBlocksSent": 1,
+        "ms": 0
+      },
+      "c1Shot": "shots/r8-c1-running-clock.png",
+      "c1Samples": [
+        {
+          "wallIso": "2026-09-24T17:15:26.703Z",
+          "sinceStep1Ms": 164,
+          "text": null
+        },
+        {
+          "wallIso": "2026-09-24T17:15:27.204Z",
+          "sinceStep1Ms": 665,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 1s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:27.705Z",
+          "sinceStep1Ms": 1166,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 1s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:28.205Z",
+          "sinceStep1Ms": 1666,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 2s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:28.706Z",
+          "sinceStep1Ms": 2167,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 2s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:29.206Z",
+          "sinceStep1Ms": 2667,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 3s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:29.707Z",
+          "sinceStep1Ms": 3168,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 3s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:30.208Z",
+          "sinceStep1Ms": 3669,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 4s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:30.709Z",
+          "sinceStep1Ms": 4170,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 4s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:31.211Z",
+          "sinceStep1Ms": 4672,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 5s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:31.711Z",
+          "sinceStep1Ms": 5172,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 5s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:32.212Z",
+          "sinceStep1Ms": 5673,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 6s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:32.712Z",
+          "sinceStep1Ms": 6173,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 6s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:33.213Z",
+          "sinceStep1Ms": 6674,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 7s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:33.713Z",
+          "sinceStep1Ms": 7174,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 7s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:34.214Z",
+          "sinceStep1Ms": 7675,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 8s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:34.715Z",
+          "sinceStep1Ms": 8176,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 8s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:35.215Z",
+          "sinceStep1Ms": 8676,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 9s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:35.716Z",
+          "sinceStep1Ms": 9177,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 9s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:36.216Z",
+          "sinceStep1Ms": 9677,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 10s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:36.716Z",
+          "sinceStep1Ms": 10177,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 10s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:37.216Z",
+          "sinceStep1Ms": 10677,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 11s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:37.716Z",
+          "sinceStep1Ms": 11177,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 11s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:38.217Z",
+          "sinceStep1Ms": 11678,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 12s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:38.718Z",
+          "sinceStep1Ms": 12179,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 12s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:39.218Z",
+          "sinceStep1Ms": 12679,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 13s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:39.719Z",
+          "sinceStep1Ms": 13180,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 13s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:40.219Z",
+          "sinceStep1Ms": 13680,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 14s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:40.720Z",
+          "sinceStep1Ms": 14181,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 14s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:41.221Z",
+          "sinceStep1Ms": 14682,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 15s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:41.721Z",
+          "sinceStep1Ms": 15182,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 15s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:42.221Z",
+          "sinceStep1Ms": 15682,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 16s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:42.721Z",
+          "sinceStep1Ms": 16182,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 16s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:43.221Z",
+          "sinceStep1Ms": 16682,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 17s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:43.722Z",
+          "sinceStep1Ms": 17183,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 17s / 1m 30s"
+        },
+        {
+          "wallIso": "2026-09-24T17:15:44.222Z",
+          "sinceStep1Ms": 17683,
+          "text": "运行中 sleep 20; echo slept > /tmp/ij/markers/l… · 18s / 1m 30s"
+        }
+      ],
+      "settle": {
+        "ok": true,
+        "trail": [
+          {
+            "status": "running",
+            "atMs": 2,
+            "t": "2026-09-24T17:15:44.724Z"
+          },
+          {
+            "status": "idle",
+            "atMs": 2465,
+            "t": "2026-09-24T17:15:46.927Z"
+          }
+        ],
+        "ms": 3871
+      },
+      "live": {
+        "worked": "已工作 20 秒",
+        "completed": "完成于 13:15",
+        "tail": "⟦long⟧ R5-norm 正常回合 / C1 计时 已工作 20 秒 最终输出 LONG-DONE: 长回合正常结束。 ✻ 完成于 13:15 · 3 次工具调用",
+        "summary": ["已工作 20 秒"]
+      },
+      "liveStamps": [
+        {
+          "id": "user-send-1790270126283-32-1",
+          "role": "user",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-2",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-3",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-4",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        },
+        {
+          "id": "asst-send-1790270126283-32-5",
+          "role": "assistant",
+          "stopCause": null,
+          "timestamp": null,
+          "settledAt": null,
+          "iso": null,
+          "settledIso": null
+        }
+      ],
+      "shot": "shots/r5-norm-live.png"
+    }
+  }
+}

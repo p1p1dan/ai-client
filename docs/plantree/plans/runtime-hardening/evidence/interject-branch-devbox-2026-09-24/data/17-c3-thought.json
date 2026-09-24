@@ -1,0 +1,564 @@
+{
+  "startedAt": "2026-09-24T13:11:50.514Z",
+  "target": "thought",
+  "sid": "session-1790255355055-wlyp2i7",
+  "before": {
+    "t": "2026-09-24T13:11:55.482Z",
+    "scrollTop": 8440,
+    "scrollHeight": 9171,
+    "clientHeight": 704,
+    "atBottom": false,
+    "vpTop": 68,
+    "vpBottom": 772,
+    "rows": [
+      {
+        "i": 0,
+        "text": "思考 片刻",
+        "expanded": "false",
+        "top": 479,
+        "bottom": 500,
+        "inView": true,
+        "cx": 522,
+        "cy": 489
+      },
+      {
+        "i": 1,
+        "text": "终端 echo think-tool",
+        "expanded": "false",
+        "top": 544,
+        "bottom": 565,
+        "inView": true,
+        "cx": 522,
+        "cy": 554
+      },
+      {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "false",
+        "top": 569,
+        "bottom": 590,
+        "inView": true,
+        "cx": 522,
+        "cy": 580
+      }
+    ]
+  },
+  "pick": {
+    "i": 2,
+    "text": "思考 片刻",
+    "expanded": "false",
+    "top": 569,
+    "bottom": 590,
+    "inView": true,
+    "cx": 522,
+    "cy": 580
+  },
+  "shotBefore": "shots/17-c3-thought-before.png",
+  "clickAt": "2026-09-24T13:11:55.630Z",
+  "click": {
+    "scrollTop": 8467,
+    "top": 542,
+    "inView": true,
+    "text": "思考\n片刻"
+  },
+  "samples": [
+    {
+      "t": "2026-09-24T13:11:55.643Z",
+      "scrollTop": 8467,
+      "scrollHeight": 9609,
+      "atBottom": false,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 542,
+        "bottom": 563,
+        "inView": true,
+        "cx": 522,
+        "cy": 553
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:55.803Z",
+      "scrollTop": 8933,
+      "scrollHeight": 9637,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 76,
+        "bottom": 97,
+        "inView": true,
+        "cx": 522,
+        "cy": 87
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:55.955Z",
+      "scrollTop": 8933,
+      "scrollHeight": 9637,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 76,
+        "bottom": 97,
+        "inView": true,
+        "cx": 522,
+        "cy": 87
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:56.110Z",
+      "scrollTop": 8960,
+      "scrollHeight": 9664,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 49,
+        "bottom": 70,
+        "inView": false,
+        "cx": 522,
+        "cy": 60
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:56.426Z",
+      "scrollTop": 8988,
+      "scrollHeight": 9692,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 21,
+        "bottom": 42,
+        "inView": false,
+        "cx": 522,
+        "cy": 32
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:56.580Z",
+      "scrollTop": 8988,
+      "scrollHeight": 9692,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": 21,
+        "bottom": 42,
+        "inView": false,
+        "cx": 522,
+        "cy": 32
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:56.732Z",
+      "scrollTop": 9016,
+      "scrollHeight": 9720,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -7,
+        "bottom": 14,
+        "inView": false,
+        "cx": 522,
+        "cy": 4
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:56.884Z",
+      "scrollTop": 9016,
+      "scrollHeight": 9720,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -7,
+        "bottom": 14,
+        "inView": false,
+        "cx": 522,
+        "cy": 4
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.039Z",
+      "scrollTop": 9043,
+      "scrollHeight": 9747,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -34,
+        "bottom": -13,
+        "inView": false,
+        "cx": 522,
+        "cy": -23
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.192Z",
+      "scrollTop": 9043,
+      "scrollHeight": 9747,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -34,
+        "bottom": -13,
+        "inView": false,
+        "cx": 522,
+        "cy": -23
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.347Z",
+      "scrollTop": 9071,
+      "scrollHeight": 9775,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -62,
+        "bottom": -41,
+        "inView": false,
+        "cx": 522,
+        "cy": -51
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.501Z",
+      "scrollTop": 9071,
+      "scrollHeight": 9775,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -62,
+        "bottom": -41,
+        "inView": false,
+        "cx": 522,
+        "cy": -51
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.653Z",
+      "scrollTop": 9099,
+      "scrollHeight": 9803,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -90,
+        "bottom": -69,
+        "inView": false,
+        "cx": 522,
+        "cy": -79
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.806Z",
+      "scrollTop": 9099,
+      "scrollHeight": 9803,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -90,
+        "bottom": -69,
+        "inView": false,
+        "cx": 522,
+        "cy": -79
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:57.960Z",
+      "scrollTop": 9126,
+      "scrollHeight": 9830,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -117,
+        "bottom": -96,
+        "inView": false,
+        "cx": 522,
+        "cy": -106
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.116Z",
+      "scrollTop": 9126,
+      "scrollHeight": 9830,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -117,
+        "bottom": -96,
+        "inView": false,
+        "cx": 522,
+        "cy": -106
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.269Z",
+      "scrollTop": 9154,
+      "scrollHeight": 9858,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -145,
+        "bottom": -124,
+        "inView": false,
+        "cx": 522,
+        "cy": -134
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.422Z",
+      "scrollTop": 9154,
+      "scrollHeight": 9858,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -145,
+        "bottom": -124,
+        "inView": false,
+        "cx": 522,
+        "cy": -134
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.578Z",
+      "scrollTop": 9181,
+      "scrollHeight": 9885,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -172,
+        "bottom": -151,
+        "inView": false,
+        "cx": 522,
+        "cy": -161
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.732Z",
+      "scrollTop": 9181,
+      "scrollHeight": 9885,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -172,
+        "bottom": -151,
+        "inView": false,
+        "cx": 522,
+        "cy": -161
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:58.885Z",
+      "scrollTop": 9209,
+      "scrollHeight": 9913,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -200,
+        "bottom": -179,
+        "inView": false,
+        "cx": 522,
+        "cy": -189
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.037Z",
+      "scrollTop": 9209,
+      "scrollHeight": 9913,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -200,
+        "bottom": -179,
+        "inView": false,
+        "cx": 522,
+        "cy": -189
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.190Z",
+      "scrollTop": 9237,
+      "scrollHeight": 9941,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -228,
+        "bottom": -207,
+        "inView": false,
+        "cx": 522,
+        "cy": -217
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.343Z",
+      "scrollTop": 9237,
+      "scrollHeight": 9941,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -228,
+        "bottom": -207,
+        "inView": false,
+        "cx": 522,
+        "cy": -217
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.495Z",
+      "scrollTop": 9264,
+      "scrollHeight": 9968,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -255,
+        "bottom": -234,
+        "inView": false,
+        "cx": 522,
+        "cy": -244
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.648Z",
+      "scrollTop": 9264,
+      "scrollHeight": 9968,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -255,
+        "bottom": -234,
+        "inView": false,
+        "cx": 522,
+        "cy": -244
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.800Z",
+      "scrollTop": 9292,
+      "scrollHeight": 9996,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -283,
+        "bottom": -262,
+        "inView": false,
+        "cx": 522,
+        "cy": -272
+      }
+    },
+    {
+      "t": "2026-09-24T13:11:59.952Z",
+      "scrollTop": 9292,
+      "scrollHeight": 9996,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -283,
+        "bottom": -262,
+        "inView": false,
+        "cx": 522,
+        "cy": -272
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:00.106Z",
+      "scrollTop": 9320,
+      "scrollHeight": 10024,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -311,
+        "bottom": -290,
+        "inView": false,
+        "cx": 522,
+        "cy": -300
+      }
+    },
+    {
+      "t": "2026-09-24T13:12:00.258Z",
+      "scrollTop": 9320,
+      "scrollHeight": 10024,
+      "atBottom": true,
+      "target": {
+        "i": 2,
+        "text": "思考 片刻",
+        "expanded": "true",
+        "top": -311,
+        "bottom": -290,
+        "inView": false,
+        "cx": 522,
+        "cy": -300
+      }
+    }
+  ],
+  "shotAfter": "shots/17-c3-thought-after-click.png",
+  "shotLater": "shots/17-c3-thought-4s-later.png",
+  "settle": {
+    "ok": true,
+    "trail": [
+      {
+        "status": "running",
+        "atMs": 38,
+        "t": "2026-09-24T13:12:00.614Z"
+      },
+      {
+        "status": "idle",
+        "atMs": 37980,
+        "t": "2026-09-24T13:12:38.556Z"
+      }
+    ],
+    "ms": 39387
+  }
+}

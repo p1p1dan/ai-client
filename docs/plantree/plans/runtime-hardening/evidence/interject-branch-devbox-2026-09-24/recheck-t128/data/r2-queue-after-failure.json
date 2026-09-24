@@ -1,0 +1,158 @@
+{
+  "startedAt": "2026-09-24T17:02:26.754Z",
+  "newSession": {
+    "clicked": true,
+    "before": "session-1790269221613-7azbnm0",
+    "after": "session-1790269346757-bpm5zu1"
+  },
+  "sid": "session-1790269346757-bpm5zu1",
+  "degenerateRequest": {
+    "t": "2026-09-24T17:02:30.107Z",
+    "seq": 6
+  },
+  "queued": {
+    "at": "2026-09-24T17:02:33.037Z",
+    "sid": "session-1790269346757-bpm5zu1"
+  },
+  "interject": {
+    "at": "2026-09-24T17:02:34.693Z",
+    "sid": "session-1790269346757-bpm5zu1"
+  },
+  "queueRows": [
+    {
+      "text": "1 插话 ⟦echo⟧ R2-插话（Ctrl+Enter） 立刻发送",
+      "interjectionMarker": true,
+      "markerText": "插话|⟦echo⟧ R2-插话（Ctrl+Enter）"
+    },
+    {
+      "text": "2 ⟦echo⟧ R2-排队（普通 Enter）",
+      "interjectionMarker": false,
+      "markerText": "⟦echo⟧ R2-排队（普通 Enter）"
+    }
+  ],
+  "composer": {
+    "t": "2026-09-24T17:02:35.701Z",
+    "value": "",
+    "placeholder": "已排队 2 条 —— 可以接着输入…",
+    "buttons": [
+      {
+        "label": "停止当前回合",
+        "disabled": false
+      },
+      {
+        "label": "加入队列",
+        "disabled": true
+      }
+    ],
+    "notices": ["Loading", "当前对话正在运行 —— 切换分支前先停止它", "本机"]
+  },
+  "shotQueued": "shots/r2-queued-while-streaming.png",
+  "samples": [
+    {
+      "key": "running||2",
+      "t": "2026-09-24T17:02:35.806Z",
+      "status": "running",
+      "failureSettled": null,
+      "card": [],
+      "queue": ["1 插话 ⟦echo⟧ R2-插话（Ctrl+Enter） 立刻发送", "2 ⟦echo⟧ R2-排队（普通 Enter）"]
+    },
+    {
+      "key": "idle||1",
+      "t": "2026-09-24T17:02:42.067Z",
+      "status": "idle",
+      "failureSettled": null,
+      "card": [],
+      "queue": ["1 ⟦echo⟧ R2-排队（普通 Enter） 立刻发送"]
+    },
+    {
+      "key": "idle||0",
+      "t": "2026-09-24T17:02:43.383Z",
+      "status": "idle",
+      "failureSettled": null,
+      "card": [],
+      "queue": []
+    }
+  ],
+  "shotCard": null,
+  "cutAt": "2026-09-24T17:02:41.911Z",
+  "streamEnd": {
+    "t": "2026-09-24T17:02:41.911Z",
+    "event": "client_abort",
+    "seq": 6,
+    "label": "formB: degenerate reply, 940 tool calls",
+    "framesSent": 155,
+    "framesTotal": 3134,
+    "toolBlocksSent": 47,
+    "afterMs": 11803
+  },
+  "requests": [
+    {
+      "t": "2026-09-24T17:02:30.107Z",
+      "seq": 6,
+      "reply": "formB: degenerate reply, 940 tool calls",
+      "lastText": "⟦formB⟧ R2 运行中排队 + 插话，然后被掐断",
+      "digest": ["user:text(27)「⟦formB⟧ R2 运行中排队 + 插话，然后被掐断」"],
+      "historyToolUseCount": 0
+    },
+    {
+      "t": "2026-09-24T17:02:42.093Z",
+      "seq": 7,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ R2-插话（Ctrl+Enter）",
+      "digest": [
+        "user:text(27)「⟦formB⟧ R2 运行中排队 + 插话，然后被掐断」",
+        "user:text(24)「⟦echo⟧ R2-插话（Ctrl+Enter）」"
+      ],
+      "historyToolUseCount": 0
+    },
+    {
+      "t": "2026-09-24T17:02:43.201Z",
+      "seq": 8,
+      "reply": "echo",
+      "lastText": "⟦echo⟧ R2-排队（普通 Enter）",
+      "digest": [
+        "user:text(27)「⟦formB⟧ R2 运行中排队 + 插话，然后被掐断」",
+        "user:text(24)「⟦echo⟧ R2-插话（Ctrl+Enter）」",
+        "assistant:text(30)「ECHO: ⟦echo⟧ R2-插话（Ctrl+Enter）」",
+        "user:text(22)「⟦echo⟧ R2-排队（普通 Enter）」"
+      ],
+      "historyToolUseCount": 0
+    }
+  ],
+  "responses": [
+    {
+      "t": "2026-09-24T17:02:41.911Z",
+      "seq": 6,
+      "event": "client_abort",
+      "label": "formB: degenerate reply, 940 tool calls"
+    },
+    {
+      "t": "2026-09-24T17:02:42.097Z",
+      "seq": 7,
+      "event": "response_complete",
+      "label": "echo"
+    },
+    {
+      "t": "2026-09-24T17:02:43.203Z",
+      "seq": 8,
+      "event": "response_complete",
+      "label": "echo"
+    }
+  ],
+  "userOrder": [
+    "⟦formB⟧ R2 运行中排队 + 插话，然后被掐断",
+    "⟦echo⟧ R2-插话（Ctrl+Enter）",
+    "⟦echo⟧ R2-排队（普通 Enter）"
+  ],
+  "storeEnd": {
+    "t": "2026-09-24T17:02:46.536Z",
+    "status": "idle",
+    "failureSettled": null,
+    "runtimeError": null,
+    "runtimeErrorCode": null,
+    "title": "⟦formB⟧ R2 运行中排队 + 插话，然后被掐断",
+    "lastError": null,
+    "nextTurnStatus": "idle"
+  },
+  "shotEnd": "shots/r2-end.png"
+}

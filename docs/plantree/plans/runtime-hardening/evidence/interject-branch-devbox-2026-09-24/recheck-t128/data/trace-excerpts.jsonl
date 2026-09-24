@@ -1,0 +1,10 @@
+{"run_id":"send-1790269224844-4","input":"⟦formB⟧ R1 形态B：等它被掐断，看失败卡","at":"2026-09-24T17:00:36.728Z","event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}
+{"run_id":"send-1790269252758-6","input":"⟦formB⟧ R1c 再掐断一次，然后点「继续」","at":"2026-09-24T17:01:04.575Z","event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}
+{"run_id":"send-1790269266882-7","input":"⟦formB⟧ R1c 再掐断一次，然后点「继续」","at":"2026-09-24T17:01:18.739Z","event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}
+{"run_id":"send-1790269349971-9","input":"⟦formB⟧ R2 运行中排队 + 插话，然后被掐断","at":"2026-09-24T17:02:41.912Z","event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}
+{"run_id":"send-1790270084403-26","input":"⟦long⟧ R5-ij 插话回合：sleep 20 期间 Ctrl+Enter","at":"2026-09-24T17:15:04.609Z","event":"turn_stopped_by_interjection"}
+{"run_id":"send-1790270115267-29","input":"⟦long⟧ R5-stop：sleep 中途点 Stop","at":"2026-09-24T17:15:19.659Z","event":"provider_retry","code":"PROVIDER_ERROR","attempt":1,"delay_ms":3000,"attempt_started_at":1790270119658,"retry_at":1790270122659}
+{"run_id":"send-1790270248120-34","input":"⟦formA⟧ R6-A 形态A：被拒的空转调用","at":"2026-09-24T17:17:28.324Z","event":"delegation_resume","report_bytes":241}
+{"run_id":"send-1790270248120-34","input":"⟦formA⟧ R6-A 形态A：被拒的空转调用","at":"2026-09-24T17:17:28.362Z","event":"delegation_idle_loop","replies":2,"calls":["TaskList {}","TaskStop {}","TaskWait {}"]}
+{"run_id":"send-1790270248120-34","input":"⟦formA⟧ R6-A 形态A：被拒的空转调用","at":"2026-09-24T17:17:28.362Z","event":"delegation_idle_wrap_up","held_reports":0}
+{"run_id":"send-1790270269377-36","input":"⟦formB⟧ R6-B 形态B：未执行的调用","at":"2026-09-24T17:18:01.254Z","event":"tool_call_repetition","rule":"identical_call","signature":"TaskList {}","occurrences":3,"delegation_calls":7,"tool_calls":47}
