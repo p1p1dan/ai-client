@@ -667,6 +667,21 @@ describe('deriveQueueStripModel', () => {
     ).toEqual({ visible: false, entries: [], pausedLabel: null, permissionHint: null });
   });
 
+  it('flags only the Ctrl+Enter interjections as `interjection`', () => {
+    const model = deriveQueueStripModel({
+      entries: [
+        entry({ id: 'q-1', priority: 'next' }),
+        entry({ id: 'q-2' }),
+        entry({ id: 'q-3', priority: 'later' }),
+      ],
+      paused: null,
+      hasPendingPermissionHere: false,
+    });
+    // The absent tag and an explicit `'later'` mean the same thing here: only
+    // `'next'` earns the marker, which is what the strip renders.
+    expect(model.entries.map((e) => e.interjection)).toEqual([true, false, false]);
+  });
+
   it('numbers entries from 1 and derives adjacent-move boundaries', () => {
     const model = deriveQueueStripModel({
       entries: [entry({ id: 'q-1' }), entry({ id: 'q-2' }), entry({ id: 'q-3' })],

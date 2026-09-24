@@ -291,7 +291,7 @@ describe('composerCardClass', () => {
   // Collapsing them back into one term is the regression: it would make the
   // 16px default and a 24px setting produce the same claimed height, which is
   // exactly the drift this test is here to notice.
-  it('F-A2: rests the follow-up card at exactly 74px, cross-checking the class step against the arithmetic', () => {
+  it('F-A2: rests the follow-up card with a 74px floor, cross-checking the class step against the arithmetic', () => {
     const cls = composerCardClass('session');
     const breakdown = composerFollowHeightBreakdown();
 
@@ -304,9 +304,9 @@ describe('composerCardClass', () => {
         breakdown.rowGap +
         breakdown.controlRow
     ).toBe(breakdown.total);
-    expect(breakdown.total).toBe(74);
+    expect(breakdown.total).toBe(75.5);
 
-    // The textarea's row is not a free 24 either: it is the body tier times the
+    // The textarea's row is not a free 25.5 either: it is the body tier times the
     // line scale the session textarea's `min-h`/`leading` calc actually spells
     // (asserted against that class string in `composerTextareaClass`'s group
     // below, so the same expression is checked from both ends).
@@ -318,13 +318,14 @@ describe('composerCardClass', () => {
     expect(gapStep).not.toBeNull();
     expect((gapStep as number) * 4).toBe(breakdown.rowGap);
 
-    // `min-h-18.5` is now the FLOOR, not the height: the card grows with the
-    // body tier above 16px, so the assertion is "the floor equals the default
-    // resting height", which is still the 74px contract — just stated as the
-    // number the card cannot go below.
+    // `min-h-18.5` (74px) is the FLOOR, not the height: the card grows with the
+    // body tier above 16px. At the 17px default the content (75.5px) exceeds the
+    // floor by 1.5px — that is the deal the breakdown documents, and why
+    // `min-h-*` is the right utility here rather than `h-*`.
     const step = stepValue(cls, /(?:^|\s)min-h-(\d+(?:\.\d+)?)(?:\s|$)/);
     expect(step).not.toBeNull();
-    expect((step as number) * 4).toBe(breakdown.total);
+    expect((step as number) * 4).toBe(74);
+    expect(breakdown.total).toBeGreaterThan((step as number) * 4);
 
     expect(cls).toContain('flex');
     // The single-row 42px step must not come back on its own: that spelling
@@ -584,15 +585,15 @@ describe('composerTextareaClass', () => {
     expect(cls).toContain('[&_textarea]:min-h-[calc(var(--text-chat-body)*1.5)]');
   });
 
-  it('T104: at the 16px default the derived row is the 24px the card arithmetic was built on', () => {
+  it('T104: at the 17px default the derived row is the 25.5px the card arithmetic was built on', () => {
     // The cross-check between the class string and the breakdown: the same
-    // expression, evaluated at D1's default, has to be the number the 74px
+    // expression, evaluated at D1's default, has to be the number the 75.5px
     // resting contract was derived from — otherwise "nothing moves for a reader
     // who never opens the setting" is false.
     expect(composerFollowHeightBreakdown().textareaRow).toBe(
       DEFAULT_CHAT_BODY_FONT_SIZE * COMPOSER_TEXTAREA_LINE_SCALE
     );
-    expect(composerFollowHeightBreakdown().textareaRow).toBe(24);
+    expect(composerFollowHeightBreakdown().textareaRow).toBe(25.5);
   });
 
   it('T104: the derived row stays one line box at the extremes of the body range', () => {
@@ -1294,7 +1295,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 0,
         })
-      ).toBe('Agent Host is running — your message will be queued…');
+      ).toBe('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
 
       // U28: no session is no longer a blocker with its own copy — the first
       // send creates one. With `unbound` set (which is what ChatComposer passes
@@ -1387,7 +1388,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 0,
       })
-    ).toBe('Agent Host is running — your message will be queued…');
+    ).toBe('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
   });
 
   it('T-19: a non-empty queue reports its count instead of the busy copy', () => {

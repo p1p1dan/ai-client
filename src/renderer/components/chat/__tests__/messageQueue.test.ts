@@ -9,6 +9,7 @@ import {
   createEmptyState,
   DEFAULT_ENQUEUE_LIMITS,
   enqueue,
+  interject,
   type MessageQueueState,
   moveEntry,
   pauseSession,
@@ -507,6 +508,156 @@ describe('pauseSession / clearPause', () => {
   it('clearPause is a no-op for an unknown session', () => {
     const state = createEmptyState();
     expect(clearPause(state, 'unknown')).toBe(state);
+  });
+});
+
+describe('interject', () => {
+  it('admits the first message with priority next', () => {
+    const result = interject(createEmptyState(), message({ text: 'stop and do this instead' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(selectSessionQueue(result.state, 's1').entries).toHaveLength(1);
+    expect(selectSessionQueue(result.state, 's1').entries[0]?.priority).toBe('next');
+  });
+
+  it('jumps ahead of entries already queued as later', () => {
+    const first = message({ sessionId: 's1' });
+    const second = message({ sessionId: 's1' });
+    let state = createEmptyState();
+    for (const m of [first, second]) {
+      const result = enqueue(state, m);
+      if (result.ok) state = result.state;
+    }
+    const interjected = message({ sessionId: 's1', text: 'interjection' });
+    const result = interject(state, interjected);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // Head first: this ordering is the whole point — the release mechanism pops
+    // the head, so anything else would deliver the interjection last.
+    expect(selectSessionQueue(result.state, 's1').entries.map((e) => e.id)).toEqual([
+      interjected.id,
+      first.id,
+      second.id,
+    ]);
+  });
+
+  it('keeps multiple interjections in the order they were typed, ahead of later entries', () => {
+    const queued = message({ sessionId: 's1' });
+    let state = createEmptyState();
+    const queuedResult = enqueue(state, queued);
+    if (queuedResult.ok) state = queuedResult.state;
+
+    const a = message({ sessionId: 's1' });
+    const b = message({ sessionId: 's1' });
+    const c = message({ sessionId: 's1' });
+    for (const m of [a, b, c]) {
+      const result = interject(state, m);
+      expect(result.ok).toBe(true);
+      if (result.ok) state = result.state;
+    }
+    expect(selectSessionQueue(state, 's1').entries.map((e) => e.id)).toEqual([
+      a.id,
+      b.id,
+      c.id,
+      queued.id,
+    ]);
+  });
+
+  it('preserves the identity and relative order of the later entries it jumped', () => {
+    const a = message({ sessionId: 's1' });
+    const b = message({ sessionId: 's1' });
+    const c = message({ sessionId: 's1' });
+    let state = createEmptyState();
+    for (const m of [a, b, c]) {
+      const result = enqueue(state, m);
+      if (result.ok) state = result.state;
+    }
+    const result = interject(state, message({ sessionId: 's1' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const entries = selectSessionQueue(result.state, 's1').entries;
+    expect(entries.slice(1)).toEqual([a, b, c]);
+    // Payload identity, not just id equality — a rewrite here would drop
+    // attachments the user already handed over.
+    expect(entries[1]).toBe(a);
+    expect(entries[2]).toBe(b);
+    expect(entries[3]).toBe(c);
+  });
+
+  it('leaves a single later entry alone when it is already the only one', () => {
+    const only = message({ sessionId: 's1' });
+    const enqueued = enqueue(createEmptyState(), only);
+    if (!enqueued.ok) throw new Error('setup failed');
+    const result = interject(enqueued.state, message({ sessionId: 's1' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(selectSessionQueue(result.state, 's1').entries[1]).toBe(only);
+  });
+
+  it('takes the head on release, which is now the interjection and not the earlier queue', () => {
+    const queued = message({ sessionId: 's1' });
+    const enqueued = enqueue(createEmptyState(), queued);
+    if (!enqueued.ok) throw new Error('setup failed');
+    const interjected = message({ sessionId: 's1' });
+    const result = interject(enqueued.state, interjected);
+    if (!result.ok) throw new Error('setup failed');
+    const taken = takeHead(result.state, 's1');
+    expect(taken.entry?.id).toBe(interjected.id);
+    expect(selectSessionQueue(taken.state, 's1').entries.map((e) => e.id)).toEqual([queued.id]);
+  });
+
+  it('rejects an empty interjection and leaves state untouched', () => {
+    const state = createEmptyState();
+    const result = interject(state, message({ text: '   ' }));
+    expect(result.ok).toBe(false);
+    expect(result.state).toBe(state);
+  });
+
+  it('is held to the same per-session cap as enqueue', () => {
+    let state = createEmptyState();
+    for (let i = 0; i < DEFAULT_ENQUEUE_LIMITS.maxEntries; i += 1) {
+      const result = enqueue(state, message({ sessionId: 's1' }));
+      if (result.ok) state = result.state;
+    }
+    const result = interject(state, message({ sessionId: 's1' }));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('too-many');
+    expect(result.state).toBe(state);
+  });
+
+  it('is held to the same attachment byte budget as enqueue', () => {
+    const full = draft({ byteLength: DEFAULT_ENQUEUE_LIMITS.maxTotalBytes });
+    const seeded = enqueue(createEmptyState(), message({ sessionId: 's1', attachments: [full] }));
+    if (!seeded.ok) throw new Error('setup failed');
+    const result = interject(
+      seeded.state,
+      message({ sessionId: 's1', attachments: [draft({ byteLength: 1 })] })
+    );
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.reason).toBe('too-large');
+    expect(result.state).toBe(seeded.state);
+  });
+
+  it('queues into a session with no bucket yet, without touching other sessions', () => {
+    const other = message({ sessionId: 's2' });
+    const seeded = enqueue(createEmptyState(), other);
+    if (!seeded.ok) throw new Error('setup failed');
+    const result = interject(seeded.state, message({ sessionId: 's1' }));
+    if (!result.ok) throw new Error('setup failed');
+    expect(selectSessionQueue(result.state, 's2').entries).toEqual([other]);
+    expect(selectSessionQueue(result.state, 's1').entries).toHaveLength(1);
+  });
+
+  it('thaws a stopped pause the same way enqueue does', () => {
+    const seeded = enqueue(createEmptyState(), message({ sessionId: 's1' }));
+    if (!seeded.ok) throw new Error('setup failed');
+    const paused = pauseSession(seeded.state, 's1', 'stopped');
+    const result = interject(paused, message({ sessionId: 's1' }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(selectSessionQueue(result.state, 's1').paused).toBeNull();
   });
 });
 

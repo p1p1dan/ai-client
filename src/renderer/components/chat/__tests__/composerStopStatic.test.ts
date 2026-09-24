@@ -64,6 +64,29 @@ function only(needle: string): number {
   return found[0];
 }
 
+/**
+ * End offset of the brace-delimited block that starts at `start`, i.e. the
+ * index one past the `}` matching the first `{` at or after it.
+ *
+ * Used to scope a source scan to one `if` block instead of a character budget:
+ * a budget silently under-reads as the block grows, which is exactly how
+ * `[E-1]` went red when a branch was added inside the Enter handler.
+ */
+function matchingBraceEnd(src: string, start: number): number {
+  const open = src.indexOf('{', start);
+  expect(open, 'expected an opening brace after the block start').toBeGreaterThan(-1);
+  let depth = 0;
+  for (let i = open; i < src.length; i += 1) {
+    const char = src[i];
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return i + 1;
+    }
+  }
+  throw new Error('unbalanced braces: the block never closed');
+}
+
 describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', () => {
   /**
    * THE precondition for the wait predicate's `sendGenerationRef.current !==
@@ -875,7 +898,19 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // between the popups and the send, not after it.
     const sendEnterAt = source.indexOf("if (event.key === 'Enter' && !event.shiftKey) {", escAt);
     expect(sendEnterAt).toBeGreaterThan(escAt);
-    expect(source.slice(sendEnterAt, sendEnterAt + 400)).toContain('void handleSend();');
+    // A BRACE-SCOPED slice, not a character budget. This used to read a flat
+    // 400 characters, which silently stopped meaning "the Enter block" the
+    // moment a branch was added inside it (2026-09-23's Ctrl+Enter added
+    // ~60 characters ahead of the send and pushed it out of the window —
+    // the send was still there, the assertion just could not see it).
+    // Scanning to the handler's own closing brace is what the test was always
+    // trying to say, and it cannot drift as the block grows.
+    const entered = source.slice(sendEnterAt, matchingBraceEnd(source, sendEnterAt));
+    // Both halves of the Enter key: plain Enter sends, Ctrl+Enter interjects.
+    // Pinned as a pair so neither can be dropped while the other keeps this
+    // green.
+    expect(entered).toContain('void handleSend();');
+    expect(entered).toContain('void handleInterject();');
     // The stopper's body, whitespace-normalised so a reformat cannot break the
     // guard: IME first, then the Stop button's own `canStop` gate, and
     // `preventDefault` only on the path that actually stops.
