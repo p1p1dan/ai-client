@@ -756,17 +756,27 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // T105: `settled` left this call's arguments. It is still a prop of the
     // head (spinner, label, current-action clause) — it just no longer decides
     // whether the group is open. 2026-09-21 flipped that default from closed
-    // to open; T107 restores closed process groups with prose outside. What did NOT
-    // change is that this call takes three facts and no fourth, which is what
-    // keeps "is this card unanswered" the only thing that can force it.
-    expectCalled("turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked' })");
+    // to open; T107 restores closed process groups with prose outside.
+    //
+    // 2026-09-24 added a fourth fact, `endedByUser` (Ctrl+Enter / Stop), and it
+    // is a DEFAULT, not a force: `turnWorkGroupOpen` ranks it below the user's
+    // click (`[WG-OPEN-5]`). What did NOT change is that `forcedOpen` is fed by
+    // the authorization predicate alone — the 0a836f27 cut OR-ed "settled with
+    // no final answer" into it, which pinned every such turn open for good.
+    expectCalled(
+      "turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked', endedByUser, })"
+    );
+    expectWired('const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);');
+    expectCalled('endedByUser={endedByUser}');
+    expectCalled('turnEndedByUser(turn.body)');
+    expectUnwired('interruptedWithoutAnswer');
 
     const group = nodeSource(topLevelFunction('TurnProgressHead'));
     expect(group, 'the panel renders its children unconditionally').toContain(
       `<div className={cn(turnProcessShellClass(), 'pt-2')}>{children}</div>`
     );
     expect(group, 'the open bit must be the derived one, not a second rule').toContain(
-      "const open = turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked' });"
+      "const open = turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked', endedByUser, });"
     );
     // Base UI's panel carries `overflow-hidden` (COLLAPSIBLE_PANEL_BASE_CLASS),
     // which creates a containing block — the standing prohibition on the turn
@@ -855,6 +865,14 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // The two ticking props reach the in-flight turn only.
     expectCalled('nowMs={isLastTurn ? nowMs : STATIC_NOW_MS}');
     expectCalled('sendStatus={isLastTurn ? attachedSendStatus : null}');
+    // Review 2026-09-24: the tool-start lookup changes on every tool event, so
+    // it follows the same last-turn-only rule; and the tool group itself is a
+    // memo with no clock prop — the tick reaches a running row through
+    // `ToolRowClockContext` (render-counted in `timelineToolClock.test.ts`).
+    expectCalled('getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}');
+    expectCalled('memo(function ToolGroupItem');
+    expectCalled('<ToolRowTimelineContext');
+    expect(nodeSource(topLevelFunction('ToolGroupItem'))).not.toContain('nowMs');
   });
 
   /**

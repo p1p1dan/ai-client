@@ -13,14 +13,14 @@ import {
  * subscribes to Runtime Events for the active session and folds
  * `thinking.started`/`thinking.completed` — and, since 2026-09-23,
  * `tool.started`/`tool.completed` for the running rows' live elapsed tail —
- * into a per-block duration lookup, without touching the red-line
+ * into per-block duration lookups, without touching the red-line
  * `chatSessions` store.
  */
 
 export interface UseTurnTimingResult {
   getThinking: (blockId: string) => ThinkingTiming | undefined;
-  /** Tool timing, keyed by toolCallId (= the `tool_call` block id). */
-  getTool: (blockId: string) => ThinkingTiming | undefined;
+  /** `tool.started` stamp, keyed by `toolCallId`. Only a running row reads it. */
+  getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
 }
 
 export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
@@ -43,11 +43,16 @@ export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
     };
   }, [sessionId]);
 
-  // Stable across renders that did not change the registry — same reason as
-  // `useMessageMetadata`'s `get` (review batch F7): it feeds a prop of the
-  // memoized `ChatTurn`.
-  const getThinking = useCallback((blockId: string) => registry.byBlock[blockId], [registry]);
-  const getTool = useCallback((blockId: string) => registry.byBlock[blockId], [registry]);
+  // Stable across renders that did not change THEIR map — same reason as
+  // `useMessageMetadata`'s `get` (review batch F7): both feed props of the
+  // memoized `ChatTurn`. Keyed on the map, not the registry, so a tool event
+  // leaves `getThinking` (read by every turn) untouched.
+  const { byBlock, byToolCall } = registry;
+  const getThinking = useCallback((blockId: string) => byBlock[blockId], [byBlock]);
+  const getToolStartedAtMs = useCallback(
+    (toolCallId: string) => byToolCall[toolCallId]?.startedAt,
+    [byToolCall]
+  );
 
-  return { getThinking, getTool };
+  return { getThinking, getToolStartedAtMs };
 }

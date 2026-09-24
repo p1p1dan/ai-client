@@ -34,6 +34,7 @@ import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
   type FileLinkTarget,
   isDelegationTool,
+  runningElapsedMs,
   type ToolRowView,
   toolRowArgClass,
   toolRowPermissionClass,
@@ -196,16 +197,14 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
       <span className={verbClass}>{t(view.verb)}</span>
       <ToolRowArg view={view} onOpenFile={onOpenFile} />
       <ToolRowPermission view={view} />
-      {/* 2026-09-23 (user report 「1800s 的指令不知道进度」): the live clock on a
-          running row — elapsed since `tool.started`, and the deadline the
-          runtime will enforce when the input named one. "12s / 30m" reads
-          without a label because the row's own verb already says Running. */}
-      {view.running && typeof view.runningElapsedMs === 'number' && (
-        <span className="shrink-0 text-meta tabular-nums">
-          · {formatWorkedForDuration(view.runningElapsedMs)}
-          {typeof view.runningTimeoutMs === 'number' &&
-            ` / ${formatWorkedForDuration(view.runningTimeoutMs)}`}
-        </span>
+      {/* 2026-09-23 (user report: a 1800s command gave no sign of progress):
+          the live clock on a running row — elapsed since `tool.started`, and
+          the deadline the runtime will enforce when the input named one.
+          "12s / 30m" reads without a label because the row's own verb already
+          says Running. A leaf of its own so the per-second tick re-renders
+          this span and nothing above it. */}
+      {view.running && typeof view.runningStartedAtMs === 'number' && (
+        <RunningToolClock startedAtMs={view.runningStartedAtMs} timeoutMs={view.runningTimeoutMs} />
       )}
       {showDiff && view.diff && (
         <span className="shrink-0 text-meta tabular-nums">
@@ -233,11 +232,12 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
     </>
   );
 
-  // 2026-09-23 (user decision 「思考默认折叠，点击展开全部」): a thought row is
-  // an ordinary collapsible row again — the special `ThinkingPreview` branch
-  // (always-visible 200-char preview + inline 展开/收起 button) was the shape
-  // the user asked to remove. What survives from it is the blank-line
-  // filtering, now inside `ToolRowBody`'s 'thinking' case.
+  // 2026-09-23 (user decision: thoughts start collapsed and a click opens the
+  // whole text): a thought row is an ordinary collapsible row again — the
+  // special `ThinkingPreview` branch (always-visible 200-char preview + inline
+  // expand/collapse button) was the shape the user asked to remove. What
+  // survives from it is the blank-line filtering, now inside `ToolRowBody`'s
+  // 'thinking' case.
   const row = !view.expandable ? (
     <div className={rowClass}>{rowContent}</div>
   ) : (
@@ -257,6 +257,28 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
 
   return row;
 }
+
+/**
+ * The row panel opens and closes in ONE frame: the Base UI panel's measured
+ * height transition (`COLLAPSIBLE_PANEL_BASE_CLASS`, 150ms) is switched off.
+ *
+ * The timeline's scroll-follower tells a disclosure from new content by
+ * comparing the height it sees against the one `ThinkingFollowContext`
+ * recorded in the toggle's layout pass. With the transition on, that record is
+ * the height BEFORE the animation (the panel starts at `h-0`), every frame of
+ * the animation missed it, and each one was followed as new content — so
+ * opening a long thought while pinned to the bottom of a streaming turn
+ * scrolled the row just clicked out of view, frame by frame. With the panel at
+ * its final height inside the toggle's own commit, the record and the next
+ * resize agree, as they did for the retired instant-toggle `ThinkingPreview`.
+ *
+ * `duration-0` is also what makes Base UI classify the panel as unanimated, so
+ * it mounts and unmounts the body synchronously instead of waiting for
+ * `transitionend`. The turn's own process group (a native `<details>`) has
+ * never animated either, so the timeline's disclosures now behave alike.
+ */
+const TOOL_ROW_PANEL_CLASS =
+  'h-auto transition-none duration-0 data-starting-style:h-auto data-ending-style:h-auto';
 
 /**
  * Seed from session memory when a body first appears. Explicit choices survive
@@ -280,12 +302,16 @@ function ToolRowCollapsible({
 }) {
   const [initialOpen] = useState(() => resolveToolRowOpen(view, readToolExpandMemory(sessionId)));
   const setToolRowExpanded = useToolExpansionStore((state) => state.setToolRowExpanded);
-  // Controlled on purpose: a thought's disclosure changes LAYOUT, and the
-  // timeline's scroll-follower needs to be told AFTER the panel has actually
-  // grown or shrunk — `ThinkingFollowContext`'s callback records the new
-  // scrollHeight so the follow logic does not read the disclosure as new
-  // content. An uncontrolled Collapsible never re-renders this component on
-  // toggle, so there is no effect to hang that on.
+  // Controlled on purpose: a disclosure changes LAYOUT, and the timeline's
+  // scroll-follower needs to be told AFTER the panel has actually grown or
+  // shrunk — `ThinkingFollowContext`'s callback records the new scrollHeight
+  // so the follow logic does not read the disclosure as new content. An
+  // uncontrolled Collapsible never re-renders this component on toggle, so
+  // there is no effect to hang that on.
+  //
+  // Every row reports, not just thoughts: a tool row opened at the bottom of a
+  // streaming turn grows the page exactly the same way, and without the
+  // report the follower scrolled its header out from under the click.
   const follow = useContext(ThinkingFollowContext);
   const [open, setOpen] = useState(initialOpen);
   // Deps-less layout effect + ref guard (the retired `ThinkingPreview`'s own
@@ -302,7 +328,7 @@ function ToolRowCollapsible({
       open={open}
       onOpenChange={(next) => {
         setOpen(next);
-        if (view.body === 'thinking') followAfterLayout.current = true;
+        followAfterLayout.current = true;
         if (sessionId) setToolRowExpanded(sessionId, view.key, next);
       }}
     >
@@ -325,7 +351,7 @@ function ToolRowCollapsible({
             seeing both in `docs/examples/process-rows-zcode-style.html`. */}
         {children}
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent className={TOOL_ROW_PANEL_CLASS}>
         <ToolRowBody view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
       </CollapsibleContent>
     </Collapsible>
@@ -755,7 +781,53 @@ function ToolRowOutputSegment({
   }
 }
 
+/**
+ * The timeline's disclosure hook (`preserveDisclosurePosition`), called after
+ * layout by every row that opens or closes. The name predates tool rows
+ * joining the thoughts in using it.
+ */
 export const ThinkingFollowContext = createContext<(() => void) | null>(null);
+
+/**
+ * The timeline's one-second clock (`useSecondsTick`), for running rows only.
+ *
+ * A context rather than a prop so the tick reaches the one leaf that prints it
+ * (`RunningToolClock`) without passing through `deriveToolGroupRows` — a prop
+ * would re-derive every row of every group in the running turn once a second,
+ * which is the whole-turn scan review batch F7 split `ToolGroupItem` out to
+ * remove. `null` outside the timeline (e.g. `QuestionCard`'s lone row): no
+ * clock, no readout.
+ */
+export const ToolRowClockContext = createContext<number | null>(null);
+
+/** The two timeline-scoped row contexts, provided together by `MessageTimeline`. */
+export function ToolRowTimelineContext({
+  follow,
+  nowMs,
+  children,
+}: {
+  follow: () => void;
+  nowMs: number;
+  children: ReactNode;
+}) {
+  return (
+    <ThinkingFollowContext value={follow}>
+      <ToolRowClockContext value={nowMs}>{children}</ToolRowClockContext>
+    </ThinkingFollowContext>
+  );
+}
+
+function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; timeoutMs?: number }) {
+  const nowMs = useContext(ToolRowClockContext);
+  const elapsedMs = runningElapsedMs(startedAtMs, nowMs);
+  if (elapsedMs === undefined) return null;
+  return (
+    <span data-slot="tool-row-clock" className="shrink-0 text-meta tabular-nums">
+      · {formatWorkedForDuration(elapsedMs)}
+      {typeof timeoutMs === 'number' && ` / ${formatWorkedForDuration(timeoutMs)}`}
+    </span>
+  );
+}
 
 /**
  * A thought's expanded body (2026-09-23): the full text, nothing trimmed, no

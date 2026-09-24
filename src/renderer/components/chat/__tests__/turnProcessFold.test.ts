@@ -280,6 +280,29 @@ describe('turnWorkGroupOpen — running open, completed closed', () => {
       expect(open(true, userOpen), `${userOpen}`).toBe(true);
     }
   });
+
+  /**
+   * User decision 2026-09-24: a settled turn the user ended (Ctrl+Enter or
+   * Stop) starts open. It is a DEFAULT, not a pin — the user's click still
+   * decides — which is the difference from `forcedOpen` above.
+   */
+  it('[WG-OPEN-5] a turn the user ended opens by default, and the click still wins', () => {
+    const ended = (userOpen: boolean | null, settled = true) =>
+      turnWorkGroupOpen({ forcedOpen: false, userOpen, settled, endedByUser: true });
+    expect(ended(null)).toBe(true);
+    expect(ended(false), 'a click closes it').toBe(false);
+    expect(ended(true)).toBe(true);
+    // Running is open either way; the flag changes nothing there.
+    expect(ended(null, false)).toBe(true);
+    // Without the flag a settled turn still folds.
+    expect(
+      turnWorkGroupOpen({ forcedOpen: false, userOpen: null, settled: true, endedByUser: false })
+    ).toBe(false);
+    // And the authorization pin still outranks the click on such a turn.
+    expect(
+      turnWorkGroupOpen({ forcedOpen: true, userOpen: false, settled: true, endedByUser: true })
+    ).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------

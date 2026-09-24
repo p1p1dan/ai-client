@@ -7,12 +7,17 @@ import { classifyTool, pairToolBlocks, refusedToolCallIds } from './toolCard';
  * `thinking.completed` Runtime Events into a per-block duration lookup.
  *
  * Since 2026-09-23 the same registry also folds `tool.started` /
- * `tool.completed`, keyed by the `toolCallId` (which IS the `tool_call` block
- * id the store mints, `chatSessions.ts`). A07 screen 5 still has no per-tool
- * duration COLUMN — that "right-hand latency column" stays cut — but a RUNNING
- * row needs its start instant for the live 「已运行 Ns / 上限 Ms」 tail the user
- * asked for after being stuck behind an unexplained 1800s command. Settled
- * tool rows do not read the registry: their span is not surfaced anywhere.
+ * `tool.completed`, keyed by the `toolCallId`, into a SEPARATE map
+ * (`byToolCall`). A07 screen 5 still has no per-tool duration COLUMN — that
+ * "right-hand latency column" stays cut — but a RUNNING row needs its start
+ * instant for the live "elapsed / limit" tail the user asked for after being
+ * stuck behind a long command with no sign of progress. Settled tool rows do
+ * not read the registry: their span is not surfaced anywhere.
+ *
+ * Two maps rather than one keyed space because the lookups built on them feed
+ * memoized components (review batch F7): a tool event must not change the
+ * identity of the thinking lookup, or every settled turn in a long session
+ * re-derives its rows on every tool call.
  *
  * The turn's own "Worked for Ns" head is not folded either: it is DERIVED from
  * the T-06 metadata the message registry already holds, by
@@ -30,15 +35,16 @@ export interface ThinkingTiming {
   durationMs?: number | null;
 }
 
-/** A timing entry keyed by block id — thinking blocks and tool_call blocks share the shape. */
-export type BlockTiming = ThinkingTiming;
-
 export interface TurnTimingRegistry {
+  /** `thinking.*` timing, keyed by the thinking block id. */
   byBlock: Record<string, ThinkingTiming>;
+  /** `tool.*` timing, keyed by `toolCallId`. Same entry shape, separate identity. */
+  byToolCall: Record<string, ThinkingTiming>;
 }
 
 export const initialTurnTimingRegistry: TurnTimingRegistry = {
   byBlock: {},
+  byToolCall: {},
 };
 
 interface TurnTimingEvent {
@@ -77,7 +83,9 @@ function readToolCallId(event: TurnTimingEvent): string | undefined {
  * Fold one Runtime Event into the registry. Pure; only the four timing events
  * (`thinking.started` / `thinking.completed` / `tool.started` /
  * `tool.completed`) are handled — everything else returns `prev` by reference
- * so callers can skip a re-render.
+ * so callers can skip a re-render. A thinking event leaves `byToolCall` alone
+ * by reference and a tool event leaves `byBlock` alone, so a lookup keyed on
+ * one map keeps its identity across the other's events.
  */
 export function reduceTurnTiming(
   prev: TurnTimingRegistry,
@@ -86,29 +94,28 @@ export function reduceTurnTiming(
   const isThinking = event.type === 'thinking.started' || event.type === 'thinking.completed';
   const isTool = event.type === 'tool.started' || event.type === 'tool.completed';
   if (!isThinking && !isTool) return prev;
-  const blockId = isTool ? readToolCallId(event) : readBlockId(event);
-  if (!blockId) return prev;
+  const key = isTool ? readToolCallId(event) : readBlockId(event);
+  if (!key) return prev;
 
-  const existing = prev.byBlock[blockId] ?? {};
-  if (event.type === 'thinking.started' || event.type === 'tool.started') {
-    return {
-      byBlock: {
-        ...prev.byBlock,
-        [blockId]: { ...existing, startedAt: event.timestamp ?? null },
-      },
-    };
+  const started = event.type === 'thinking.started' || event.type === 'tool.started';
+  if (isTool) {
+    return { ...prev, byToolCall: foldTiming(prev.byToolCall, key, started, event.timestamp) };
   }
+  return { ...prev, byBlock: foldTiming(prev.byBlock, key, started, event.timestamp) };
+}
 
-  // *.completed
+function foldTiming(
+  map: Record<string, ThinkingTiming>,
+  key: string,
+  started: boolean,
+  timestamp: number | undefined
+): Record<string, ThinkingTiming> {
+  const existing = map[key] ?? {};
+  if (started) return { ...map, [key]: { ...existing, startedAt: timestamp ?? null } };
   const startedAt = existing.startedAt ?? null;
-  const completedAt = event.timestamp ?? null;
+  const completedAt = timestamp ?? null;
   const durationMs = startedAt != null && completedAt != null ? completedAt - startedAt : null;
-  return {
-    byBlock: {
-      ...prev.byBlock,
-      [blockId]: { ...existing, completedAt, durationMs },
-    },
-  };
+  return { ...map, [key]: { ...existing, completedAt, durationMs } };
 }
 
 /** Short-thought threshold: below this, the row says "briefly" instead of a second count. */

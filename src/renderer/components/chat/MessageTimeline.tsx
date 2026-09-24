@@ -117,10 +117,11 @@ import { canContinueSession, deriveSessionFailure } from './sessionFailure';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
-import { ThinkingFollowContext, ToolGroup } from './ToolRows';
+import { ToolGroup, ToolRowTimelineContext } from './ToolRows';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
+import { turnEndedByUser } from './turnEndCause';
 import {
   deriveSendStatusBinding,
   hasLiveTurnEvidence,
@@ -223,6 +224,16 @@ function useSecondsTick(enabled: boolean): number {
  * ticks; the value is never read.
  */
 const STATIC_NOW_MS = 0;
+
+/**
+ * The tool-start lookup for a turn that cannot have a live row clock (review
+ * 2026-09-24). Every turn but the last gets it, for the same reason as
+ * `STATIC_NOW_MS`: the real lookup changes identity on every tool event, and
+ * handing it to every turn made each one re-derive its tool groups per event.
+ * A settled last turn gets it too — a row a Stop cut off stays `running`
+ * forever, and its clock must not keep counting.
+ */
+const NO_TOOL_STARTS = (_toolCallId: string): undefined => undefined;
 const EMPTY_PENDING_USER_MESSAGES: PendingUserMessage[] = [];
 
 interface MessageTimelineProps {
@@ -391,7 +402,7 @@ export function MessageTimeline({
     delegateDisplayName(state, sessionRetry?.delegationId)
   );
   const { get: getMeta } = useMessageMetadata(sessionId);
-  const { getThinking, getTool } = useTurnTiming(sessionId);
+  const { getThinking, getToolStartedAtMs } = useTurnTiming(sessionId);
 
   const sessionMessages = useMemo(() => {
     const authoritative = bucket ?? [];
@@ -526,15 +537,6 @@ export function MessageTimeline({
   const getThinkingDurationMs = useCallback(
     (blockId: string) => getThinking(blockId)?.durationMs,
     [getThinking]
-  );
-
-  // 2026-09-23: a running tool row's live elapsed tail reads the `tool.started`
-  // stamp out of the same registry the thinking durations come from. Same
-  // stable-identity rule as `getThinkingDurationMs` (F7): it feeds the memoized
-  // `ChatTurn`.
-  const getToolStartedAtMs = useCallback(
-    (blockId: string) => getTool(blockId)?.startedAt,
-    [getTool]
   );
 
   // Stick-to-bottom scroll following. `scrollRootRef` wraps `ScrollArea` (the
@@ -727,7 +729,10 @@ export function MessageTimeline({
           BOTTOM-ONLY. It was narrowed to soften the hard bottom clip under the
           composer; a top fade has nothing left to do now that no band is pinned
           up there, and adding one back would only wash out live prose. */}
-      <ThinkingFollowContext value={preserveDisclosurePosition}>
+      {/* 2026-09-24: the second clock rides along with the disclosure
+          callback, so a tick reaches a running row's elapsed tail as a context
+          update and re-renders that one leaf, not the tool groups around it. */}
+      <ToolRowTimelineContext follow={preserveDisclosurePosition} nowMs={nowMs}>
         <ScrollArea className="min-h-0 flex-1" scrollFade="bottom">
           {/* Padding stays outside ReadingColumn — inside it would shave 24px off
             the documented 45rem/60rem (D25 §3.4) reading width (T-22 spec §2.13). */}
@@ -804,7 +809,7 @@ export function MessageTimeline({
                       thinkingEnabled={thinkingEnabled}
                       repoName={repoName}
                       getThinkingDurationMs={getThinkingDurationMs}
-                      getToolStartedAtMs={getToolStartedAtMs}
+                      getToolStartedAtMs={isLastTurn ? getToolStartedAtMs : NO_TOOL_STARTS}
                       // The progress head needs the SPAN, not just the settled
                       // duration: a thought that has started and not finished is
                       // the whole point of a live 「思考 N 秒」 clause, and
@@ -962,7 +967,7 @@ export function MessageTimeline({
             </ReadingColumn>
           </div>
         </ScrollArea>
-      </ThinkingFollowContext>
+      </ToolRowTimelineContext>
       {/* Round-13 (user request 17): the prompt-history rail. Same floating
           contract as the jump button below — mounted inside this `relative`
           wrapper, OUTSIDE the ScrollArea, so it hovers over the timeline
@@ -1457,8 +1462,11 @@ interface ChatTurnProps {
   thinkingEnabled: boolean;
   repoName?: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  /** 2026-09-23: `tool.started` stamps for running rows' live elapsed tail. */
-  getToolStartedAtMs: (blockId: string) => number | null | undefined;
+  /**
+   * `tool.started` stamps, keyed by `toolCallId`, for running rows' live
+   * elapsed tail. `NO_TOOL_STARTS` for every turn but the last.
+   */
+  getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
   /** The whole span, for the head's live 「思考 N 秒」 clause (`sumTurnThinkingMs`). */
   getThinkingTiming: (blockId: string) => ThinkingTiming | undefined;
 }
@@ -1641,6 +1649,7 @@ function TurnProgressHead({
   zone,
   clock,
   forcedOpen,
+  endedByUser,
   userOpen,
   onUserOpenChange,
   children,
@@ -1666,11 +1675,18 @@ function TurnProgressHead({
   clock: boolean;
   /** An unanswered permission/question is inside: the group may not close. */
   forcedOpen: boolean;
+  /** The user ended the turn (Ctrl+Enter / Stop): open once settled, until clicked. */
+  endedByUser: boolean;
   userOpen: boolean | null;
   onUserOpenChange: (open: boolean) => void;
   children: React.ReactNode;
 }) {
-  const open = turnWorkGroupOpen({ forcedOpen, userOpen, settled: zone.kind === 'worked' });
+  const open = turnWorkGroupOpen({
+    forcedOpen,
+    userOpen,
+    settled: zone.kind === 'worked',
+    endedByUser,
+  });
 
   // Decision 034: the head reports the turn's CLOCK, and nothing else. The step
   // count and the call count that used to sit here were cut by the user on
@@ -2160,8 +2176,7 @@ const ChatTurn = memo(function ChatTurn({
       repoName={repoName}
       streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
       getThinkingDurationMs={getThinkingDurationMs}
-      getToolStartedAtMs={getToolStartedAtMs}
-      nowMs={nowMs}
+      getToolStartedAtMs={rowToolStartedAtMs}
     />
   );
 
@@ -2193,12 +2208,17 @@ const ChatTurn = memo(function ChatTurn({
     () => splitTurnWorkGroup(segments, processSettled),
     [segments, processSettled]
   );
-  // A settled turn with no final answer was interrupted before producing a
-  // reply — its process group must stay expanded so the user can see what
-  // happened. During streaming (`processSettled=false`) this is always false,
-  // so it only fires for the interrupted-turn case.
-  const interruptedWithoutAnswer =
-    processSettled && !workSections.some((section) => section.kind === 'finalAnswer');
+  // User decision 2026-09-24: a turn the USER ended — Ctrl+Enter interjection
+  // or Stop, read off its last assistant message (`turnEndCause.ts`, live and
+  // replayed alike) — keeps its process open once settled, so the reader sees
+  // where it was cut off. A DEFAULT, not a pin: unlike an unanswered
+  // authorization it goes through `turnWorkGroupOpen`'s user-choice rule, so a
+  // click closes it. Every other settled turn folds as usual, including one
+  // that ends on a tool call or fails.
+  const endedByUser = useMemo(() => turnEndedByUser(turn.body), [turn.body]);
+  // Only a running turn's rows read the tool-start registry: a settled turn's
+  // leftover `running` row (a call a Stop cut off) must show no clock.
+  const rowToolStartedAtMs = processSettled ? NO_TOOL_STARTS : getToolStartedAtMs;
   // The turn's clock, in ONE derivation for both of the head's states. Running
   // it counts to `nowMs`; finished it counts to the turn's last completion (or,
   // for a stopped/failed turn, to the last stamp on record) — but from the SAME
@@ -2413,8 +2433,7 @@ const ChatTurn = memo(function ChatTurn({
           if (!processSettled && !turnProcessGroupFolds(groupedProcessItems)) {
             return <Fragment key={groupKey}>{section.segments.map(renderGroupSegment)}</Fragment>;
           }
-          const groupForcedOpen =
-            turnWorkGroupAwaitsUser(section.segments) || interruptedWithoutAnswer;
+          const groupForcedOpen = turnWorkGroupAwaitsUser(section.segments);
           const headClock = !clockClaimed;
           clockClaimed = true;
           return (
@@ -2424,6 +2443,7 @@ const ChatTurn = memo(function ChatTurn({
               zone={workZone}
               clock={headClock}
               forcedOpen={groupForcedOpen}
+              endedByUser={endedByUser}
               userOpen={workGroupUserOpen[groupStateKey] ?? null}
               onUserOpenChange={(open) =>
                 setWorkGroupUserOpen((previous) => ({
@@ -2681,9 +2701,8 @@ interface TurnItemViewProps {
   /** The one block in this item's source message that may still be streaming, if any. */
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  /** 2026-09-23: running rows' live clock inputs, see `ToolGroupItem`. */
-  getToolStartedAtMs: (blockId: string) => number | null | undefined;
-  nowMs: number;
+  /** Running rows' start stamps, see `ToolGroupItem`. The clock itself is context. */
+  getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
 }
 
 /**
@@ -2789,7 +2808,6 @@ function TurnItemView({
   streamingBlockId,
   getThinkingDurationMs,
   getToolStartedAtMs,
-  nowMs,
 }: TurnItemViewProps) {
   switch (item.kind) {
     /**
@@ -2832,7 +2850,6 @@ function TurnItemView({
           streamingBlockId={streamingBlockId}
           getThinkingDurationMs={getThinkingDurationMs}
           getToolStartedAtMs={getToolStartedAtMs}
-          nowMs={nowMs}
         />
       );
 
@@ -2892,8 +2909,17 @@ function TurnItemView({
  * whole-session sweep once a second. As its own component the `useMemo` below
  * is legal, and the group's entries are reference-stable between ticks
  * (`flattenTurnItems` only re-runs when the turn's messages actually change).
+ *
+ * ## No clock in here (review 2026-09-24)
+ *
+ * A running row's elapsed tail ticks once a second, and it must not take this
+ * derivation with it. So the rows carry only the tool's START stamp
+ * (`getToolStartedAtMs`, which changes on tool events, and only reaches the
+ * running turn — `NO_TOOL_STARTS` everywhere else), while the ticking clock
+ * reaches the one leaf that prints it through `ToolRowClockContext`. `memo`
+ * then lets a tick skip the whole group: every prop here is stable across one.
  */
-function ToolGroupItem({
+const ToolGroupItem = memo(function ToolGroupItem({
   item,
   sessionId,
   thinkingEnabled,
@@ -2901,7 +2927,6 @@ function ToolGroupItem({
   streamingBlockId,
   getThinkingDurationMs,
   getToolStartedAtMs,
-  nowMs,
 }: {
   item: Extract<TurnItem, { kind: 'toolGroup' }>;
   sessionId: string;
@@ -2909,8 +2934,7 @@ function ToolGroupItem({
   repoName?: string | null;
   streamingBlockId: string | null;
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
-  getToolStartedAtMs: (blockId: string) => number | null | undefined;
-  nowMs: number;
+  getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
 }) {
   const { t } = useI18n();
   const rows = useMemo(
@@ -2920,7 +2944,6 @@ function ToolGroupItem({
         thinkingDurationMs: getThinkingDurationMs,
         isStreamingBlockId: streamingBlockId,
         toolStartedAtMs: getToolStartedAtMs,
-        nowMs,
         t,
       }),
     [
@@ -2930,12 +2953,11 @@ function ToolGroupItem({
       getThinkingDurationMs,
       streamingBlockId,
       getToolStartedAtMs,
-      nowMs,
       t,
     ]
   );
   return <ToolGroup rows={rows} sessionId={sessionId} showDiff={false} />;
-}
+});
 
 /*
  * `TurnMetaTail` retired with the meta row (T12-b, user decision 2026-08-29).

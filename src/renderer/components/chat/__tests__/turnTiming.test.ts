@@ -113,24 +113,53 @@ describe('reduceTurnTiming', () => {
     expect(reduceTurnTiming(reg, event('message.completed'))).toBe(reg);
   });
 
-  // 2026-09-23: tool timing folds into the same registry, keyed by toolCallId
-  // (= the tool_call block id). A running row's live 「已运行 Ns / 上限 Ms」 tail
-  // reads `startedAt` from here; the settled span is not surfaced anywhere.
-  it('records tool.started/tool.completed by toolCallId', () => {
+  // 2026-09-23: tool timing folds into the same registry, keyed by toolCallId.
+  // A running row's live "elapsed / limit" tail reads `startedAt` from here;
+  // the settled span is not surfaced anywhere.
+  it('records tool.started/tool.completed by toolCallId, in their own map', () => {
     let reg = reduceTurnTiming(
       initialTurnTimingRegistry,
       toolEvent('tool.started', { toolCallId: 'call-1', timestamp: 2000 })
     );
-    expect(reg.byBlock['call-1']).toEqual({ startedAt: 2000 });
+    expect(reg.byToolCall['call-1']).toEqual({ startedAt: 2000 });
     reg = reduceTurnTiming(
       reg,
       toolEvent('tool.completed', { toolCallId: 'call-1', timestamp: 9000 })
     );
-    expect(reg.byBlock['call-1']).toEqual({
+    expect(reg.byToolCall['call-1']).toEqual({
       startedAt: 2000,
       completedAt: 9000,
       durationMs: 7000,
     });
+    expect(reg.byBlock['call-1']).toBeUndefined();
+  });
+
+  // Review 2026-09-24: `useTurnTiming` keys each lookup on ONE map. A tool
+  // event that rebuilt the thinking map changed the identity of the lookup
+  // every turn reads, and every settled turn re-derived its tool groups on
+  // every tool call of a long session.
+  it('a tool event keeps the thinking map by reference, and vice versa', () => {
+    const withThought = reduceTurnTiming(
+      initialTurnTimingRegistry,
+      event('thinking.started', { blockId: 'th1', timestamp: 1000 })
+    );
+    const afterTool = reduceTurnTiming(
+      withThought,
+      toolEvent('tool.started', { toolCallId: 'call-1', timestamp: 2000 })
+    );
+    expect(afterTool.byBlock).toBe(withThought.byBlock);
+    expect(afterTool.byToolCall).not.toBe(withThought.byToolCall);
+    const afterCompleted = reduceTurnTiming(
+      afterTool,
+      toolEvent('tool.completed', { toolCallId: 'call-1', timestamp: 3000 })
+    );
+    expect(afterCompleted.byBlock).toBe(withThought.byBlock);
+
+    const afterThought = reduceTurnTiming(
+      afterCompleted,
+      event('thinking.completed', { blockId: 'th1', timestamp: 4000 })
+    );
+    expect(afterThought.byToolCall).toBe(afterCompleted.byToolCall);
   });
 
   it('a tool event without a toolCallId leaves the registry untouched by reference', () => {

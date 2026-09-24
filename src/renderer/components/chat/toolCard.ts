@@ -441,11 +441,13 @@ export interface ToolRowView {
   running: boolean;
   failed: boolean;
   /**
-   * Live elapsed for a running row (2026-09-23), derived from the
-   * `tool.started` timestamp and the ticking `nowMs`. Undefined when no
-   * timestamp is known — omitted, never zero (the A07 :2399 rule).
+   * The `tool.started` stamp of a running row (2026-09-23), for its live
+   * elapsed tail. Only the START is derived here; the elapsed is computed at
+   * paint (`runningElapsedMs`) by the one leaf that reads the ticking clock,
+   * so a tick never re-derives a row. Undefined when no stamp is known —
+   * omitted, never zero (the A07 :2399 rule).
    */
-  runningElapsedMs?: number;
+  runningStartedAtMs?: number;
   /**
    * The timeout the runtime will enforce on a running row, when the input
    * names one. Bash-family only; read from `timeoutSeconds`/`timeoutMs` with
@@ -532,13 +534,13 @@ export interface ToolCardOptions {
    */
   t?: Translate;
   /**
-   * 2026-09-23 (user report 「1800s 的指令既点不开也不知道进度」): a running
-   * row's live elapsed readout. Lookup into the turn-timing registry, keyed by
-   * the `tool_call` block id; the value is the `tool.started` event timestamp.
+   * 2026-09-23 (user report: a 1800s command could neither be expanded nor
+   * show any progress): the start stamp behind a running row's live elapsed
+   * readout. Lookup into the turn-timing registry, keyed by `toolCallId`; the
+   * value is the `tool.started` event timestamp. Omit it (or return nothing)
+   * for a turn that is not running, and the row shows no clock.
    */
-  toolStartedAtMs?: (blockId: string) => number | null | undefined;
-  /** Clock for the elapsed readout. Ticking on the active turn; static elsewhere. */
-  nowMs?: number;
+  toolStartedAtMs?: (toolCallId: string) => number | null | undefined;
 }
 
 /** Injected thinking-duration lookup, shared by the group/aggregate row builders. */
@@ -564,8 +566,9 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const hitSource = isHitListTool(run.toolName) ? run.output : undefined;
 
   const showOutputBody = !running && (failed || Boolean(run.output));
-  // 2026-09-23 (user report 「执行中的指令点不开、看不到完整命令」): a running
-  // call's input is now expandable as a live preview. `tool.updated` rewrites
+  // 2026-09-23 (user report: a running command could not be expanded and its
+  // full text was nowhere to be seen): a running call's input is now
+  // expandable as a live preview. `tool.updated` rewrites
   // `toolInput` in the store, so the preview follows the input the same way the
   // settled body does — the old T-05 rule (input hidden until the call settles)
   // made the one command a reader most wants to watch, a long-running bash,
@@ -577,19 +580,15 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const diff = recordedChange ? null : deriveToolDiff(run);
   const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
 
-  // The live clock. `tool.started` is stamped when the call is issued, so the
-  // elapsed includes any approval wait that preceded execution — that is the
-  // honest "how long has this row been on screen" number, and the alternative
-  // (measuring from the exec start) has no event to read. Guarded to undefined
-  // whenever either input is missing, so non-active turns (STATIC_NOW_MS) and
-  // un-timestamped history simply omit the readout.
-  const startedAtMs = running ? options.toolStartedAtMs?.(run.blockId) : undefined;
-  const runningElapsedMs =
-    typeof startedAtMs === 'number' &&
-    typeof options.nowMs === 'number' &&
-    options.nowMs >= startedAtMs
-      ? options.nowMs - startedAtMs
-      : undefined;
+  // The live clock's origin. `tool.started` is stamped when the call is
+  // issued, so the elapsed includes any approval wait that preceded execution
+  // — that is the honest "how long has this row been on screen" number, and
+  // the alternative (measuring from the exec start) has no event to read.
+  // Keyed by `toolCallId`, the registry's own key. Undefined whenever no stamp
+  // is on record, so a turn that is not running (the caller passes no lookup)
+  // and un-timestamped history simply omit the readout.
+  const startedAtMs = running ? options.toolStartedAtMs?.(run.toolCallId) : undefined;
+  const runningStartedAtMs = typeof startedAtMs === 'number' ? startedAtMs : undefined;
   const runningTimeoutMs = running ? bashTimeoutMsFromInput(run) : undefined;
 
   return {
@@ -600,7 +599,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     argKind: argDetail?.kind,
     running,
     failed,
-    runningElapsedMs,
+    runningStartedAtMs,
     runningTimeoutMs,
     expandable,
     body: showOutputBody ? 'output' : undefined,
@@ -682,8 +681,9 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // (`COMMAND_SUMMARY_MAX_CHARS`), so listing `command` as covered made every
   // character past the cut permanently unreachable — the input body was never
   // built, running or settled, and a long command could not be read in full at
-  // any point in its life. This is what 「超长指令完全不知情」 turned out to be
-  // made of. `description` stays covered: it is what the summary prints.
+  // any point in its life. That is what the report of an over-long command
+  // the user could learn nothing about came down to. `description` stays
+  // covered: it is what the summary prints.
   [RUNTIME_TOOL_NAMES.bash]: ['description'],
   [RUNTIME_TOOL_NAMES.browserPreview]: ['path'],
   // Empty on purpose, and declared rather than left to the default: the arg is
@@ -761,6 +761,20 @@ function bashTimeoutMsFromInput(run: ToolRun): number | undefined {
 }
 
 /**
+ * A running row's live elapsed, computed at paint from its
+ * `runningStartedAtMs` and the timeline's one-second clock. Undefined when
+ * either is missing, or when the clock reads earlier than the stamp — that is
+ * unknown time, not negative time.
+ */
+export function runningElapsedMs(
+  startedAtMs: number | undefined,
+  nowMs: number | null | undefined
+): number | undefined {
+  if (typeof startedAtMs !== 'number' || typeof nowMs !== 'number') return undefined;
+  return nowMs >= startedAtMs ? nowMs - startedAtMs : undefined;
+}
+
+/**
  * One tool group -> its top-level rows. One row per entry, in order.
  *
  * A run becomes a tool row (`deriveToolRowView`); a thinking entry becomes a
@@ -780,8 +794,11 @@ export function deriveToolGroupRows(
   entries: readonly ToolGroupEntry[],
   options: ToolCardOptions & ThinkingRowOptions = {}
 ): ToolRowView[] {
-  const { thinkingDurationMs, isStreamingBlockId, toolStartedAtMs, nowMs, ...cardOptions } =
-    options;
+  // Only the two thinking-only fields are split off. Everything else —
+  // `toolStartedAtMs` included — stays on `cardOptions` for the tool rows: an
+  // earlier cut destructured the clock inputs out here and then dropped them,
+  // so no running row in the timeline ever showed its elapsed.
+  const { thinkingDurationMs, isStreamingBlockId, ...cardOptions } = options;
   // `t` belongs to both halves: the rest-spread keeps it on `cardOptions` for
   // the tool rows, and it is named again here so thought rows get it too.
   const thinkingOptions: ThinkingRowOptions = {
@@ -837,11 +854,12 @@ function buildThoughtRow(block: ChatBlock, options: ThinkingRowOptions): ToolRow
   // ordinary expandable row with `defaultOpen: true`, on the argument that a
   // 12-20s think must not look like a frozen window. What the user reported
   // after living with that is that the open-by-default preview (200 chars +
-  // an inline 展开/收起 button) was itself the noise: 「思考的展示形式不喜欢，
-  // 改成默认折叠，点击后展开所有内容，去掉预览按钮」. The frozen-window worry is
-  // now carried elsewhere — the turn head's live 「思考 N 秒」 clause still shows
-  // that thinking is happening — so the row starts closed, one click opens the
-  // full text, and `resolveToolRowOpen` keeps that choice across the settle.
+  // an inline expand/collapse button) was itself the noise: they asked for the
+  // thought to start collapsed, open to its full text on a click, and lose the
+  // preview button. The frozen-window worry is now carried elsewhere — the
+  // turn head's live "thinking N s" clause still shows that thinking is
+  // happening — so the row starts closed, one click opens the full text, and
+  // `resolveToolRowOpen` keeps that choice across the settle.
   return {
     key: block.id,
     verb,

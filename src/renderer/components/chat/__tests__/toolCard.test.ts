@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { englishTranslate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { EMPTY_TOOL_EXPAND_MEMORY, resolveToolRowOpen } from '@/stores/toolExpansion';
@@ -17,6 +18,7 @@ import {
   normalizeToolOutput,
   type PermissionJoinable,
   pairToolBlocks,
+  runningElapsedMs,
   shortPath,
   TOOL_VERBS,
   type ToolGroupEntry,
@@ -360,10 +362,11 @@ describe('buildThoughtRow empty-block behavior (via deriveToolGroupRows)', () =>
  * 2026-09-19 fix made a streaming thought an ordinary expandable row with
  * `defaultOpen: true`, on the argument that a 12-20s think must not look like a
  * frozen window. What the user reported after living with that is that the
- * open-by-default preview (200 chars + an inline 展开/收起 button) was itself the
- * noise — 「改成默认折叠，点击后展开所有内容，去掉预览按钮」 — so the row now
- * starts closed. The "thinking is happening" signal survives at the turn head's
- * live 「思考 N 秒」 clause, which never depended on this row's default.
+ * open-by-default preview (200 chars + an inline expand/collapse button) was
+ * itself the noise — they asked for it to start collapsed, open to the full
+ * text on a click, and lose the preview button — so the row now starts closed.
+ * The "thinking is happening" signal survives at the turn head's live
+ * "thinking N s" clause, which never depended on this row's default.
  */
 describe('buildThoughtRow streaming body (via deriveToolGroupRows)', () => {
   it('gives a streaming thought a body but mounts it collapsed', () => {
@@ -662,7 +665,8 @@ describe('deriveToolRowView', () => {
     // minting a body for a run that has nothing else to show.
   });
 
-  // Reversed 2026-09-23 (user report 「执行中的指令点不开也看不到」): a running
+  // Reversed 2026-09-23 (user report: a running command could neither be
+  // expanded nor read): a running
   // bash row IS expandable — into its live input. What stays closed while
   // running is the OUTPUT body (`showOutputBody`), which does not exist until
   // the result lands; the old blanket rule made a long command unreadable for
@@ -768,9 +772,10 @@ describe('deriveToolRowView', () => {
 });
 
 /**
- * 2026-09-23 (user report 「执行中的指令点不开、看不到完整命令、不知道进度」):
- * a RUNNING call now expands into its live input, and carries the elapsed /
- * timeout pair the renderer prints as the 「12s / 30m」 tail.
+ * 2026-09-23 (user report: a running command could not be expanded, its full
+ * text was nowhere to be seen, and nothing showed how long it had been going):
+ * a RUNNING call now expands into its live input, and carries the start stamp
+ * and timeout the renderer turns into the "12s / 30m" tail.
  */
 describe('deriveToolRowView — running input preview and live clock', () => {
   it('expands a running bash row into its full input', () => {
@@ -803,72 +808,107 @@ describe('deriveToolRowView — running input preview and live clock', () => {
     expect(view.input).toBeUndefined();
   });
 
-  it('derives the elapsed tail from tool.started and the clock, omitting it when either is missing', () => {
-    const run = makeRun('b4', 'bash', { command: 'sleep 30' }, 'running');
-    const startedAt = 10_000;
-    const withBoth = deriveToolRowView(run, {
-      toolStartedAtMs: (blockId) => (blockId === 'b4' ? startedAt : undefined),
-      nowMs: 42_000,
+  it('reads the start stamp by toolCallId, omitting it when none is on record', () => {
+    // blockId deliberately differs from toolCallId: the registry is keyed by
+    // the event's `toolCallId`, and a history-mapped block need not share it.
+    const run = makeRun('call-b4', 'bash', { command: 'sleep 30' }, 'running', {
+      blockId: 'block-b4',
     });
-    expect(withBoth.runningElapsedMs).toBe(32_000);
+    const withStamp = deriveToolRowView(run, {
+      toolStartedAtMs: (toolCallId) => (toolCallId === 'call-b4' ? 10_000 : undefined),
+    });
+    expect(withStamp.runningStartedAtMs).toBe(10_000);
 
-    // No lookup threaded (e.g. a caller that never heard of the registry).
-    expect(deriveToolRowView(run).runningElapsedMs).toBeUndefined();
+    // No lookup threaded (a turn that is not running passes none).
+    expect(deriveToolRowView(run).runningStartedAtMs).toBeUndefined();
     // Lookup threaded but no start stamp on record (history replay).
     expect(
-      deriveToolRowView(run, { toolStartedAtMs: () => undefined, nowMs: 42_000 }).runningElapsedMs
+      deriveToolRowView(run, { toolStartedAtMs: () => undefined }).runningStartedAtMs
     ).toBeUndefined();
-    // Start stamp but a static clock (a turn that is not the active one).
     expect(
-      deriveToolRowView(run, { toolStartedAtMs: () => startedAt }).runningElapsedMs
-    ).toBeUndefined();
-    // A clock that predates the stamp is unknown time, not negative time.
-    expect(
-      deriveToolRowView(run, { toolStartedAtMs: () => startedAt, nowMs: 5_000 }).runningElapsedMs
+      deriveToolRowView(run, { toolStartedAtMs: () => null }).runningStartedAtMs
     ).toBeUndefined();
   });
 
   it('reads the timeout the input asked for, with the runtime 120s default', () => {
     const seconds = deriveToolRowView(
-      makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running'),
-      { toolStartedAtMs: () => 0, nowMs: 1000 }
+      makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running')
     );
     expect(seconds.runningTimeoutMs).toBe(1_800_000);
 
     const ms = deriveToolRowView(
-      makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running'),
-      { toolStartedAtMs: () => 0, nowMs: 1000 }
+      makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running')
     );
     expect(ms.runningTimeoutMs).toBe(300_000);
 
-    const neither = deriveToolRowView(makeRun('b7', 'bash', { command: 'ls' }, 'running'), {
-      toolStartedAtMs: () => 0,
-      nowMs: 1000,
-    });
+    const neither = deriveToolRowView(makeRun('b7', 'bash', { command: 'ls' }, 'running'));
     expect(neither.runningTimeoutMs).toBe(120_000);
 
     // timeoutSeconds wins over timeoutMs — the interface a model reaches for.
     const both = deriveToolRowView(
-      makeRun('b8', 'bash', { command: 'ls', timeoutSeconds: 60, timeoutMs: 300_000 }, 'running'),
-      { toolStartedAtMs: () => 0, nowMs: 1000 }
+      makeRun('b8', 'bash', { command: 'ls', timeoutSeconds: 60, timeoutMs: 300_000 }, 'running')
     );
     expect(both.runningTimeoutMs).toBe(60_000);
 
     // Non-bash tools name no deadline this side can read.
-    const read = deriveToolRowView(makeRun('b9', 'read', { path: '/repo/a.ts' }, 'running'), {
-      toolStartedAtMs: () => 0,
-      nowMs: 1000,
-    });
+    const read = deriveToolRowView(makeRun('b9', 'read', { path: '/repo/a.ts' }, 'running'));
     expect(read.runningTimeoutMs).toBeUndefined();
   });
 
   it('a settled row carries neither clock field', () => {
     const view = deriveToolRowView(makeRun('b10', 'bash', { command: 'ls' }), {
       toolStartedAtMs: () => 0,
-      nowMs: 1000,
     });
-    expect(view.runningElapsedMs).toBeUndefined();
+    expect(view.runningStartedAtMs).toBeUndefined();
     expect(view.runningTimeoutMs).toBeUndefined();
+  });
+});
+
+/**
+ * Review 2026-09-24: the clock inputs have to survive the GROUP builder, which
+ * is the only path the timeline uses (`MessageTimeline`'s `ToolGroupItem`).
+ * The first cut destructured `toolStartedAtMs` out of the options there and
+ * never handed it on, so every running row in the app lost its clock while the
+ * `deriveToolRowView` tests above stayed green.
+ */
+describe('deriveToolGroupRows — running rows keep their clock', () => {
+  it('forwards the start lookup to every running tool row, beside thought rows', () => {
+    const rows = deriveToolGroupRows(
+      [
+        thinkEntry(thinkingBlock('th1', 'Planning the build')),
+        runEntry(makeRun('c1', 'read', { path: '/repo/a.ts' })),
+        runEntry(makeRun('c2', 'bash', { command: 'pnpm build', timeoutSeconds: 1800 }, 'running')),
+      ],
+      // The exact option set `ToolGroupItem` passes.
+      {
+        repoName: 'ai-client',
+        thinkingDurationMs: () => 12_000,
+        isStreamingBlockId: null,
+        toolStartedAtMs: (toolCallId) => (toolCallId === 'c2' ? 5_000 : 1_000),
+        t: englishTranslate,
+      }
+    );
+    const running = rows.find((row) => row.key === 'c2');
+    expect(running?.running).toBe(true);
+    expect(running?.runningStartedAtMs).toBe(5_000);
+    expect(running?.runningTimeoutMs).toBe(1_800_000);
+    // A settled row reads no stamp even when one is on record.
+    expect(rows.find((row) => row.key === 'c1')?.runningStartedAtMs).toBeUndefined();
+    // The thinking half of the options still reaches the thought row.
+    expect(rows.find((row) => row.key === 'th1')?.arg).toBe('for 12s');
+  });
+});
+
+describe('runningElapsedMs — the paint-time half of the clock', () => {
+  it('is now minus the stamp, and undefined whenever it cannot be measured', () => {
+    expect(runningElapsedMs(10_000, 42_000)).toBe(32_000);
+    expect(runningElapsedMs(10_000, 10_000)).toBe(0);
+    // No stamp (history), no clock (outside the timeline).
+    expect(runningElapsedMs(undefined, 42_000)).toBeUndefined();
+    expect(runningElapsedMs(10_000, null)).toBeUndefined();
+    expect(runningElapsedMs(10_000, undefined)).toBeUndefined();
+    // A clock that predates the stamp is unknown time, not negative time.
+    expect(runningElapsedMs(10_000, 5_000)).toBeUndefined();
   });
 });
 

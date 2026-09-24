@@ -231,13 +231,24 @@ export interface TurnWorkGroupOpenInput {
   /** The user's own click, or `null` while they have not expressed one. */
   userOpen: boolean | null;
   settled?: boolean;
+  /**
+   * The user ended this turn — Ctrl+Enter interjection or Stop
+   * (`turnEndedByUser`). A settled turn like that starts OPEN instead of
+   * folding (user decision 2026-09-24), but only as a default: unlike
+   * `forcedOpen` it ranks below the user's click.
+   */
+  endedByUser?: boolean;
 }
 
-/** Authorization wins; manual choices apply within the current turn phase. */
+/**
+ * Authorization wins; manual choices apply within the current turn phase;
+ * otherwise running groups are open and settled ones fold, except a settled
+ * turn the user ended.
+ */
 export function turnWorkGroupOpen(input: TurnWorkGroupOpenInput): boolean {
   if (input.forcedOpen) return true;
   if (input.userOpen !== null) return input.userOpen;
-  return !input.settled;
+  return !input.settled || input.endedByUser === true;
 }
 
 /**
