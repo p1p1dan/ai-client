@@ -115,9 +115,9 @@ export function BranchSwitcher({
       >
         {isCheckingOut ? (
           <Loader2 className="h-3 w-3 animate-spin shrink-0" />
-        ) : size !== 'xs' ? (
-          <GitBranchIcon className={cn('shrink-0', size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
-        ) : null}
+        ) : (
+          <GitBranchIcon className={cn('shrink-0', size === 'xs' ? 'h-3 w-3' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+        )}
         <SelectValue className={cn(size === 'xs' && 'text-xs')}>
           {currentBranch || t('Select branch')}
         </SelectValue>

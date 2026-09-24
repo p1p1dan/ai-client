@@ -16,6 +16,7 @@ import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { useGitStatus } from '@/hooks/useGit';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
@@ -35,6 +36,7 @@ import { LeftDock } from './LeftDock';
 import { SessionBar } from './SessionBar';
 import { SessionReviewPanel } from './SessionReviewPanel';
 import { ShellResizeHandle } from './ShellResizeHandle';
+import { StatusBar } from './StatusBar';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
@@ -178,6 +180,13 @@ export function WorkspaceShell({
 
   // D12: one sentence when the pool reclaims an idle conversation.
   useCapacityReclaimNotice();
+
+  const gitStatus = useGitStatus(selectedRepoPath);
+  const currentBranch = gitStatus.data?.current ?? null;
+  const repoName =
+    repositories.find((r) => r.path === selectedRepoPath)?.name ??
+    selectedRepoPath?.split(/[/\\]/).pop() ??
+    null;
 
   // D12 (U24): the open-tab mirror and its pruning effect went with the tab
   // strip. `activeSessionId` is the whole answer to "what is the center column
@@ -504,6 +513,12 @@ export function WorkspaceShell({
           </span>
         </div>
       )}
+
+      <StatusBar
+        repoName={repoName}
+        workdir={selectedRepoPath}
+        currentBranch={currentBranch}
+      />
     </div>
   );
 }
