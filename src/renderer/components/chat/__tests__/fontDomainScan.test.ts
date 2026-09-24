@@ -98,7 +98,11 @@ const FONT_MONO_WHITELIST: readonly string[] = [
   // diagnostic under the explanation, labelled as evidence to forward — the
   // same machine-text domain, and lifted from the card above.
   'components/chat/PiModelSyncNotice.tsx',
-  'components/chat/TargetBranchSelect.tsx',
+  // Same path/hash/branch display domain as `TargetBranchSelect.tsx` was: the
+  // session-mode repository label carries the checkout's full path in its
+  // tooltip. (That entry was removed with the worktree dropdown on 2026-09-24 —
+  // this takes its place, for the same reason the whitelist admits it.)
+  'components/chat/LockedRepoLabel.tsx',
   'components/chat/ToolRows.tsx',
   'components/chat/toolCard.ts',
   'components/files/EditorLineComment.tsx',

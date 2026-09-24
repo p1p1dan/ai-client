@@ -47,9 +47,12 @@ import { computeEverHostBound } from './sessionBinding';
 export interface UseComposerTargetResult {
   target: ActiveTarget;
   folderMenu: FolderMenuModel;
+  /** @deprecated UNUSED since 2026-09-24 with the worktree dropdown — see `composerTarget.ts`'s `BranchMenuEntry`. Computed here, read by nobody. */
   branchMenu: BranchMenuModel;
   blocked: boolean;
+  /** @deprecated UNUSED since 2026-09-24 — the branch column gates on `buildBranchColumn().workdir` instead. */
   showBranchSelect: boolean;
+  /** @deprecated UNUSED since 2026-09-24 — the branch column reads the branch off the checkout. */
   branchLabel: string | null;
   runLocation: { text: string; tone: 'local' | 'remote' } | null;
   /** User picked a workspace in either dropdown. */
@@ -175,6 +178,14 @@ export function useComposerTarget(input: {
     [projects, workspaces, sessions, target.workspace?.id]
   );
 
+  /**
+   * @deprecated UNUSED since 2026-09-24 with the worktree dropdown.
+   *
+   * Still computed rather than deleted: `buildBranchMenu` itself is kept (see
+   * its own note), and the memo is its only remaining exercise. Deleting this
+   * would leave that function with no caller at all AND no run-time coverage,
+   * which is a larger change than this slice should make.
+   */
   const branchMenu = useMemo(
     () =>
       buildBranchMenu({
@@ -186,7 +197,9 @@ export function useComposerTarget(input: {
     [target.workspace?.projectId, target.workspace?.id, workspaces, sessions]
   );
 
+  /** @deprecated UNUSED since 2026-09-24 — see the `UseComposerTargetResult` notes. */
   const showBranchSelect = shouldShowBranchSelect(target.workspace);
+  /** @deprecated UNUSED since 2026-09-24 — see the `UseComposerTargetResult` notes. */
   const branchLabel = targetWorktreeLabel(target.workspace);
 
   // Run location is a repository property (T-27 decision #6): resolve the

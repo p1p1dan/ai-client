@@ -2412,6 +2412,22 @@ export const zhTranslations: Record<string, string> = {
   'No worktrees found': '未找到 worktree',
   'This PC': '本机',
   'Run location': '运行位置',
+  // 2026-09-24: the composer target row's three columns. The branch column is
+  // the one control in it that mutates the repository, so both of its lock
+  // reasons name the blocker rather than just disabling the control.
+  'This conversation is running — stop it before switching branches':
+    '当前对话正在运行 —— 切换分支前先停止它',
+  'Another conversation is running in this checkout — stop it before switching branches':
+    '同一检出下有另一个对话在运行 —— 切换分支前先停止它',
+  'This conversation is bound to its repository — start a new chat to change it':
+    '当前对话已绑定该仓库 —— 要换仓库请新建对话',
+  'Switching branch': '正在切换分支',
+  Repository: '仓库',
+  'Search repositories…': '搜索仓库…',
+  'No repositories found': '没有找到仓库',
+  'Select repository': '选择仓库',
+  'Read-only. The run location is a property of the repository: local means this computer, remote shows the connection name.':
+    '只读。运行位置是仓库的属性：本机表示这台电脑，远程则显示连接名。',
   'Read-only indicator. The run location is derived from the repository: local shows This PC, remote shows the connection name; it is hidden entirely when unknown.':
     '只读指示器，不是下拉。运行位置由仓库属性派生：本机显示 This PC，远程显示连接名；数据缺失时整块隐藏。',
   'Session is running — stop it before changing the target': '会话运行中——先停止再切换目标',

@@ -396,6 +396,27 @@ export function buildFolderMenu(input: {
   return { recents, local, remote };
 }
 
+/**
+ * @deprecated UNUSED since 2026-09-24 — no production caller.
+ *
+ * This was the data source for the composer row's worktree dropdown
+ * (`TargetBranchSelect.tsx`), which listed one entry per `main`/`worktree`
+ * workspace of the active project, main pinned on top, the rest split into
+ * Recent (by last session activity) and an alphabetical remainder.
+ *
+ * That dropdown was removed when the worktree concept left the row (user
+ * ruling 2026-09-24: 「暂时不需要这个 worktree 的概念，就用默认的」). The
+ * conversation now lands on the repository's default checkout
+ * (`resolveProjectDefaultWorkspaceId`) and the row's second column is a real
+ * `git checkout` (`composerColumns.ts`).
+ *
+ * KEPT deliberately rather than deleted, with its tests, in case worktree
+ * selection comes back: the grouping rule (main / recent / others) and the
+ * `recentLimit` semantics are non-obvious and were worth keeping as a worked
+ * reference. Nothing imports it — reintroduce it by wiring a caller, not by
+ * copying it, so the `ws.branch ?? ws.name` labelling that made it read as a
+ * branch switcher gets reconsidered at the same time.
+ */
 export interface BranchMenuEntry {
   workspaceId: string;
   label: string; // targetWorktreeLabel
@@ -404,6 +425,7 @@ export interface BranchMenuEntry {
   current: boolean;
 }
 
+/** @deprecated UNUSED since 2026-09-24 — see {@link BranchMenuEntry}. */
 export interface BranchMenuModel {
   main: BranchMenuEntry | null;
   recent: BranchMenuEntry[]; // <= limit (default 3), excludes main
@@ -411,6 +433,7 @@ export interface BranchMenuModel {
   total: number;
 }
 
+/** @deprecated UNUSED since 2026-09-24 — see {@link BranchMenuEntry}. */
 export function buildBranchMenu(input: {
   projectId: string | null;
   workspaces: readonly ChatWorkspace[];

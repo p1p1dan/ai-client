@@ -64,10 +64,40 @@ function collectImportStatements(content: string, file: string): string[] {
   return stripComments(content, file).match(/import\s+[\s\S]*?from\s+['"][^'"]+['"];?/g) ?? [];
 }
 
+/**
+ * The chat tree has exactly ONE in-place checkout, and this is it.
+ *
+ * T-27 (2026-07-29) banned checkout from `components/chat` outright, because the
+ * row's model was "a branch is a property of a worktree": switching branch meant
+ * switching to the workspace that had it checked out, so an in-place checkout
+ * would have given `ChatWorkspace.branch` a second source and broken the
+ * "display value is always derived from `workspaceId`, never stored" rule.
+ *
+ * 2026-09-24 the worktree concept was dropped from the row by user ruling
+ * (「暂时不需要这个 worktree 的概念，就用默认的」). With no worktree to switch to,
+ * an in-place `git checkout` is the only way left to answer "switch this chat's
+ * branch" — and the alternative that was tried (a second switcher in the shell
+ * status bar) built a parallel copy of the same data outside this boundary.
+ *
+ * The ban is therefore narrowed rather than deleted: the boundary still exists,
+ * and it is still worth a red test, but it now admits one named entry point.
+ * Everything else under `components/chat` must go through it so the two locks
+ * below cannot be bypassed by a second call site.
+ */
 describe('no in-place checkout from the chat tree', () => {
-  it('never references git.checkout / onCheckout / useGitCheckout under components/chat', () => {
+  it('references useGitCheckout in exactly one file, BranchColumn.tsx', () => {
     const offenders = findMatches(/git\.checkout|onCheckout|useGitCheckout/);
-    expect(offenders).toEqual([]);
+    expect(offenders).toEqual(['BranchColumn.tsx']);
+  });
+
+  it('BranchColumn.tsx is the only chat file that may name the checkout IPC', () => {
+    // The single entry point is what carries the two locks
+    // (`session-running` / `checkout-busy`, see composerColumns.ts). A second
+    // call site would be a switch with neither.
+    const columnPath = path.join(CHAT_DIR, 'BranchColumn.tsx');
+    const column = stripComments(readFileSync(columnPath, 'utf8'), columnPath);
+    expect(column).toContain('useGitCheckout');
+    expect(column).toContain('column.lock');
   });
 
   it('never imports BranchSelector', () => {
@@ -169,8 +199,13 @@ describe('branch data source', () => {
   // T-27 decision #5). The old assertions never matched real source and
   // would have stayed green through a regression. Rewritten to scan actual
   // `useGitBranches` import/call sites instead of a stale filename.
+  //
+  // 2026-09-24: `TargetBranchSelect.tsx` was deleted with the worktree concept,
+  // so the only remaining call site is the branch column. The assertions now
+  // name it, and pin the `skipMerged` flag that keeps a permanently-mounted
+  // picker off the `gh pr list` shell-out.
 
-  it('useGitBranches is imported by exactly one file under components/chat: TargetBranchSelect.tsx', () => {
+  it('useGitBranches is imported by exactly one file under components/chat: BranchColumn.tsx', () => {
     const importers: string[] = [];
     for (const file of sourceFiles) {
       const content = readFileSync(file, 'utf8');
@@ -179,24 +214,21 @@ describe('branch data source', () => {
         importers.push(path.relative(CHAT_DIR, file));
       }
     }
-    expect(importers).toEqual(['TargetBranchSelect.tsx']);
+    expect(importers).toEqual(['BranchColumn.tsx']);
   });
 
-  it('TargetBranchSelect.tsx gates its useGitBranches call on worktreeDialogOpen via `enabled:`', () => {
-    const file = sourceFiles.find(
-      (candidate) => path.basename(candidate) === 'TargetBranchSelect.tsx'
-    );
+  it('BranchColumn.tsx passes skipMerged, keeping the mounted picker off gh pr list', () => {
+    const file = sourceFiles.find((candidate) => path.basename(candidate) === 'BranchColumn.tsx');
     expect(file).toBeDefined();
 
     const lines = readFileSync(file as string, 'utf8').split('\n');
     const callLineIndex = lines.findIndex((line) => /useGitBranches\s*\(/.test(line));
     expect(callLineIndex).toBeGreaterThanOrEqual(0);
 
-    // `enabled:` and the guarding variable may sit on the call line itself or
-    // spill onto the next couple of lines for a multi-line call — scan a
-    // small window (call line + 3) instead of requiring an exact line match.
+    // `skipMerged` may sit on the call line or spill onto the next couple of
+    // lines for a multi-line call — scan a small window rather than requiring
+    // an exact line match.
     const window = lines.slice(callLineIndex, callLineIndex + 4).join('\n');
-    expect(window).toMatch(/enabled\s*:/);
-    expect(window).toMatch(/worktreeDialogOpen/);
+    expect(window).toContain('skipMerged: true');
   });
 });
