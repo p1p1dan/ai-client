@@ -106,8 +106,12 @@ export function BranchSwitcher({
         className={cn(
           'min-w-0 border border-transparent bg-transparent shadow-none ring-0 ring-transparent before:shadow-none before:!shadow-none transition-colors dark:bg-transparent shrink-0 rounded-md',
           'focus-visible:ring-0 focus-visible:border-input hover:ring-0 hover:shadow-none hover:before:shadow-none hover:border-input',
+          // xs is the composer target row's branch column: 240px (the budget the
+          // removed worktree dropdown gave its label) so names like
+          // `feat/ctrl-enter-interject` stay readable, and `shrink` so a narrow
+          // row truncates the name instead of overflowing.
           size === 'xs' &&
-            'h-auto min-h-0 w-auto max-w-20 gap-0 px-2 py-1 text-xs text-muted-foreground hover:text-foreground sm:!min-h-0 sm:!h-auto',
+            'h-auto min-h-0 w-auto max-w-60 shrink gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground sm:!min-h-0 sm:!h-auto',
           size === 'sm' && 'h-6 min-h-6 w-auto max-w-32 gap-1 px-2 text-xs',
           size === 'md' && 'h-7 min-h-7 w-auto max-w-40 gap-1.5 px-2 text-sm'
         )}
@@ -116,9 +120,9 @@ export function BranchSwitcher({
         {isCheckingOut ? (
           <Loader2 className="h-3 w-3 animate-spin shrink-0" />
         ) : (
-          <GitBranchIcon className={cn('shrink-0', size === 'xs' ? 'h-3 w-3' : size === 'sm' ? 'h-3 w-3' : 'h-3.5 w-3.5')} />
+          <GitBranchIcon className={cn('shrink-0', size === 'md' ? 'h-3.5 w-3.5' : 'h-3 w-3')} />
         )}
-        <SelectValue className={cn(size === 'xs' && 'text-xs')}>
+        <SelectValue className={cn('min-w-0 flex-1 truncate', size === 'xs' && 'text-xs')}>
           {currentBranch || t('Select branch')}
         </SelectValue>
       </SelectTrigger>

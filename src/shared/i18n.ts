@@ -2423,11 +2423,6 @@ export const zhTranslations: Record<string, string> = {
     '当前对话已绑定该仓库 —— 要换仓库请新建对话',
   'Switching branch': '正在切换分支',
   Repository: '仓库',
-  'Search repositories…': '搜索仓库…',
-  'No repositories found': '没有找到仓库',
-  'Select repository': '选择仓库',
-  'Read-only. The run location is a property of the repository: local means this computer, remote shows the connection name.':
-    '只读。运行位置是仓库的属性：本机表示这台电脑，远程则显示连接名。',
   'Read-only indicator. The run location is derived from the repository: local shows This PC, remote shows the connection name; it is hidden entirely when unknown.':
     '只读指示器，不是下拉。运行位置由仓库属性派生：本机显示 This PC，远程显示连接名；数据缺失时整块隐藏。',
   'Session is running — stop it before changing the target': '会话运行中——先停止再切换目标',

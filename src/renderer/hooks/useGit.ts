@@ -73,13 +73,17 @@ export function useGitCommit() {
   });
 }
 
+/**
+ * Everything a HEAD move makes stale. Every checkout / create-branch entry
+ * point goes through `useGitCheckout` / `useGitCreateBranch`, so this is the
+ * one place that decides what refreshes.
+ */
 function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
   return Promise.all(
     [
       gitQueryKeys.status(workdir),
       gitQueryKeys.branches(workdir),
-      // The picker's own key. Without it a checkout would leave the branch
-      // column showing the branch that is no longer checked out.
+      // The picker's own list.
       gitQueryKeys.branchNames(workdir),
       gitQueryKeys.fileChanges(workdir),
       gitQueryKeys.fileDiff(workdir),
@@ -87,6 +91,14 @@ function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
       gitQueryKeys.logInfinite(workdir),
       gitQueryKeys.submodules(workdir),
       gitQueryKeys.submoduleChanges(workdir),
+      // The checked-out branch the UI SHOWS (`ChatWorkspace.branch`: the
+      // composer branch column and the sidebar chip) is derived from
+      // `worktree.list`, not from any key above. Without this a switch left the
+      // old name on the button, and switching back was swallowed as a no-op
+      // because it matched that stale name. Prefix keys: they are per
+      // REPOSITORY root, and `workdir` may be a linked worktree of it.
+      ['worktree', 'list'],
+      ['worktree', 'listMultiple'],
     ].map((queryKey) => queryClient.invalidateQueries({ queryKey }))
   );
 }

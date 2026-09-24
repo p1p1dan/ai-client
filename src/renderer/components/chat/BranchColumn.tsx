@@ -23,9 +23,10 @@ interface BranchColumnProps {
  * no worktrees showed one entry that appeared to do nothing.
  *
  * Renders nothing when there is no checkout to talk about — empty mode before a
- * repository is picked (user ruling 2026-09-24: 「第一列的 workspace 选择后，才
- * 显示 git 分支」), and any workspace with no usable path. A disabled branch chip
- * with no name would be worse than no chip.
+ * repository is picked (user ruling 2026-09-24: the git branch appears only
+ * after the first column's workspace is chosen), and any workspace that is not
+ * a local git checkout (see `buildBranchColumn`). A disabled branch chip with
+ * no name would be worse than no chip.
  *
  * The error line is part of this component on purpose. A checkout is refused by
  * git whenever local changes would be clobbered, and without a rendered error

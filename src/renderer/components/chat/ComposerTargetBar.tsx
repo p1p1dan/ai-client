@@ -80,9 +80,11 @@ export function ComposerTargetBar({
     sessions,
     workspaces,
     activeSessionId,
-    // Empty mode has no session, so the checkout to switch is the one the
-    // conversation would land on: the repository column's current entry.
-    fallbackWorkspaceId: repoColumn.entries.find((entry) => entry.current)?.workspaceId ?? null,
+    // Without a session checkout, switch the one the conversation will start
+    // in: the target itself. The repository column's entry is the repository
+    // DEFAULT (prefers `main`), which is a different directory whenever the
+    // target is a worktree.
+    fallbackWorkspaceId: target.workspace?.id ?? null,
     sending,
   });
 

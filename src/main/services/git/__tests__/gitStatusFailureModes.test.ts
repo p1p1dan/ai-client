@@ -134,4 +134,30 @@ describe('getBranches distinguishes an unborn repo from a lost branch listing (Q
     });
     await expect(service.getBranches()).rejects.toThrow(/output was lost/);
   });
+
+  // `skipMerged` only drops the PR-merged marking. It must not skip these two
+  // judgements: the composer's branch picker passes it, and an early return
+  // before them gave a fresh repo an empty picker and a lost listing a
+  // confident "no branches".
+  it('keeps the "(no commits yet)" entry with skipMerged', async () => {
+    const service = new GitService(initRepo(false));
+    await expect(service.getBranches({ skipMerged: true })).resolves.toEqual([
+      { name: 'main', current: true, commit: '', label: '(no commits yet)' },
+    ]);
+  });
+
+  it('still fails on a lost listing with skipMerged', async () => {
+    const service = new GitService(initRepo(true));
+    (service as unknown as { git: { branch: () => unknown } }).git.branch = async () => ({
+      branches: {},
+    });
+    await expect(service.getBranches({ skipMerged: true })).rejects.toThrow(/output was lost/);
+  });
+
+  it('lists the real branches with skipMerged and no merged marking', async () => {
+    const service = new GitService(initRepo(true));
+    const branches = await service.getBranches({ skipMerged: true });
+    expect(branches.map((branch) => [branch.name, branch.current])).toEqual([['main', true]]);
+    expect(branches[0]).not.toHaveProperty('merged');
+  });
 });

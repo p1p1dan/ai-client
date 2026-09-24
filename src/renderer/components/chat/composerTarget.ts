@@ -25,13 +25,25 @@ export interface TargetChangeInput {
   sending?: boolean;
 }
 
-const BLOCKING_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
+/**
+ * Statuses during which a session is mid-work. The ONE list the composer
+ * target row locks on: `decideTargetChange` blocks target changes with it, and
+ * the branch column (`composerColumns.ts`) locks checkouts with it. Two copies
+ * that mean "busy" drift apart, and a control then ends up enabled in one place
+ * and disabled in the other.
+ */
+const BUSY_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
   'starting',
   'running',
   'stopping',
   'waiting_permission',
   'waiting_question',
 ]);
+
+/** Whether a session in this status is mid-work; `undefined` counts as idle. */
+export function isSessionBusy(status: SessionRuntimeStatus | undefined): boolean {
+  return BUSY_STATUSES.has(status ?? 'idle');
+}
 
 /**
  * Decide whether changing the Composer target should retarget the active
@@ -41,8 +53,7 @@ export function decideTargetChange(input: TargetChangeInput): TargetChangeOutcom
   if (input.sending === true) {
     return 'blocked';
   }
-  const status = input.status ?? 'idle';
-  if (BLOCKING_STATUSES.has(status)) {
+  if (isSessionBusy(input.status)) {
     return 'blocked';
   }
   if (input.messageCount === 0 && input.hostBound === false) {
@@ -163,11 +174,16 @@ export function isTargetableWorkspace(ws: ChatWorkspace | undefined): boolean {
   return !!ws && ws.path.trim() !== '';
 }
 
+/**
+ * Whether this workspace is a local git checkout the branch column may switch.
+ *
+ * Only `main` and `worktree` qualify: a non-git folder has nothing to switch,
+ * a remote workspace's checkout is not a local one, and temp workspaces carry
+ * no branch UI by design (see `deriveChatWorkspaceTree`). `gitEnabled` must be
+ * exactly `true`: `undefined` (still loading) and `false` (not a repository)
+ * both hide it.
+ */
 export function shouldShowBranchSelect(ws: ChatWorkspace | undefined): boolean {
-  // T-27 fix: gitEnabled must be exactly `true` — undefined (unknown/loading)
-  // and false (worktree.list failed or is still empty) both hide the branch
-  // dropdown, since the dropdown's data source (buildBranchMenu) would have
-  // nothing real to show yet.
   return !!ws && (ws.kind === 'main' || ws.kind === 'worktree') && ws.gitEnabled === true;
 }
 
@@ -275,8 +291,8 @@ export interface FolderMenuModel {
  * several branches/worktrees produced one row PER BRANCH (each carrying the
  * branch name as `secondary`), mixing branch identity into a folder-only
  * list. Deduping by `projectId` instead folds those into a single row with
- * no branch suffix (branch picking now lives exclusively in
- * `buildBranchMenu`/TargetBranchSelect).
+ * no branch suffix (branch picking lives in the branch column,
+ * `composerColumns.ts`).
  */
 export function buildFolderMenu(input: {
   projects: readonly ChatProject[];
@@ -405,10 +421,10 @@ export function buildFolderMenu(input: {
  * Recent (by last session activity) and an alphabetical remainder.
  *
  * That dropdown was removed when the worktree concept left the row (user
- * ruling 2026-09-24: 「暂时不需要这个 worktree 的概念，就用默认的」). The
- * conversation now lands on the repository's default checkout
- * (`resolveProjectDefaultWorkspaceId`) and the row's second column is a real
- * `git checkout` (`composerColumns.ts`).
+ * ruling 2026-09-24: worktrees are not needed in the row for now; use the
+ * default checkout). The conversation now lands on the repository's default
+ * checkout (`resolveProjectDefaultWorkspaceId`) and the row's second column is
+ * a real `git checkout` (`composerColumns.ts`).
  *
  * KEPT deliberately rather than deleted, with its tests, in case worktree
  * selection comes back: the grouping rule (main / recent / others) and the

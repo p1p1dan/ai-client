@@ -74,7 +74,8 @@ function collectImportStatements(content: string, file: string): string[] {
  * "display value is always derived from `workspaceId`, never stored" rule.
  *
  * 2026-09-24 the worktree concept was dropped from the row by user ruling
- * (「暂时不需要这个 worktree 的概念，就用默认的」). With no worktree to switch to,
+ * (worktrees are not needed here for now; use the default checkout). With no
+ * worktree to switch to,
  * an in-place `git checkout` is the only way left to answer "switch this chat's
  * branch" — and the alternative that was tried (a second switcher in the shell
  * status bar) built a parallel copy of the same data outside this boundary.
@@ -110,6 +111,26 @@ describe('no in-place checkout from the chat tree', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+/**
+ * The branch column's fallback checkout is the composer TARGET, not the
+ * repository column's entry. That entry is the repository default (it prefers
+ * `main`), so when the target is a worktree the column would show and switch
+ * main's branch while the conversation starts in the worktree. The wiring sits
+ * in a component that no unit test mounts, so the guard reads it.
+ */
+describe('the branch column switches the checkout the conversation uses', () => {
+  const barPath = path.join(CHAT_DIR, 'ComposerTargetBar.tsx');
+  const bar = stripComments(readFileSync(barPath, 'utf8'), barPath);
+
+  it('passes target.workspace as the fallback checkout', () => {
+    expect(bar).toMatch(/fallbackWorkspaceId:\s*target\.workspace\?\.id\b/);
+  });
+
+  it('does not derive the fallback from the repository column', () => {
+    expect(bar).not.toMatch(/fallbackWorkspaceId:\s*repoColumn/);
   });
 });
 

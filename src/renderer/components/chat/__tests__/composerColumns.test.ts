@@ -7,12 +7,15 @@
  * sessions can share one workspace, and `git checkout` rewrites every file in it.
  *
  * Also pinned: empty mode's branch column only appears once a repository is
- * selected, and it targets THAT repository's checkout (user ruling 2026-09-24).
+ * selected, and it targets THAT repository's checkout (user ruling 2026-09-24);
+ * the column exists only for a local git checkout; and the empty-state path
+ * takes the same two locks as a live session.
  */
 
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
-import { buildBranchColumn, buildRepoColumn, isSessionBusy } from '../composerColumns';
+import { buildBranchColumn, buildRepoColumn } from '../composerColumns';
+import { isSessionBusy } from '../composerTarget';
 
 function project(overrides: Partial<ChatProject> = {}): ChatProject {
   return { id: 'p1', name: 'myrepo', ...overrides };
@@ -237,6 +240,24 @@ describe('buildBranchColumn — session mode', () => {
     expect(model.workdir).toBe('/home/pi/code/myrepo');
   });
 
+  it('locks on a peer in the same DIRECTORY even under another workspace id', () => {
+    // One directory can back two workspaces (a parent repository's worktree
+    // entry and a registered folder's own main). git does not care which id the
+    // peer was opened under.
+    const model = buildBranchColumn({
+      sessions: [
+        session({ id: 's1', workspaceId: 'w-main', status: 'idle' }),
+        session({ id: 's2', workspaceId: 'w-alias', status: 'running' }),
+      ],
+      workspaces: [
+        workspace({ id: 'w-main', path: '/code/aaa', branch: 'main' }),
+        workspace({ id: 'w-alias', kind: 'worktree', path: '/code/aaa/', branch: 'main' }),
+      ],
+      activeSessionId: 's1',
+    });
+    expect(model.lock).toBe('checkout-busy');
+  });
+
   it('prefers the active session lock over the peer lock when both apply', () => {
     const model = buildBranchColumn({
       sessions: [
@@ -290,10 +311,9 @@ describe('buildBranchColumn — empty mode', () => {
     expect(model).toEqual({ workdir: null, currentBranch: null, lock: 'no-checkout' });
   });
 
-  it('targets the SELECTED repository checkout, and is never locked', () => {
-    // Nothing is running in empty mode, so there is no lock to take — and this
-    // is the control the old layout lacked entirely: picking a branch before
-    // the first message.
+  it('targets the SELECTED repository checkout, unlocked when nothing runs there', () => {
+    // The control the old layout lacked entirely: picking a branch before the
+    // first message.
     const model = buildBranchColumn({
       sessions: [],
       workspaces: [
@@ -318,13 +338,103 @@ describe('buildBranchColumn — empty mode', () => {
     expect(model.lock).toBe('no-checkout');
   });
 
-  it('does not consult session locks when there is no active session', () => {
+  it('locks when ANY conversation is running in the checkout it would switch', () => {
+    // A new conversation lands on the repository's default checkout — the
+    // directory where a peer is most likely running. A checkout there would
+    // rewrite the tree under that peer.
     const model = buildBranchColumn({
       sessions: [session({ id: 's2', status: 'running' })],
       workspaces: [workspace({ branch: 'main' })],
       activeSessionId: null,
       fallbackWorkspaceId: 'w1',
     });
+    expect(model.lock).toBe('checkout-busy');
+    expect(model.workdir).toBe('/home/pi/code/myrepo');
+  });
+
+  it('does not lock on a conversation running in a DIFFERENT checkout', () => {
+    const model = buildBranchColumn({
+      sessions: [session({ id: 's2', workspaceId: 'w2', status: 'running' })],
+      workspaces: [
+        workspace({ id: 'w1', branch: 'main' }),
+        workspace({ id: 'w2', kind: 'worktree', path: '/code/feat', branch: 'feat' }),
+      ],
+      activeSessionId: null,
+      fallbackWorkspaceId: 'w1',
+    });
     expect(model.lock).toBeNull();
+  });
+
+  it('locks while the first message is being sent, before any session status exists', () => {
+    const model = buildBranchColumn({
+      sessions: [],
+      workspaces: [workspace({ branch: 'main' })],
+      activeSessionId: null,
+      fallbackWorkspaceId: 'w1',
+      sending: true,
+    });
+    expect(model.lock).toBe('session-running');
+  });
+
+  it('keeps both locks on the fallback path of a session whose workspace is gone', () => {
+    // The session exists but its workspace is not in the tree, so the column
+    // falls back to the target checkout — the locks must come along with it.
+    const orphan = session({ id: 's1', workspaceId: 'w-gone', status: 'running' });
+    const running = buildBranchColumn({
+      sessions: [orphan],
+      workspaces: [workspace({ id: 'w1', branch: 'main' })],
+      activeSessionId: 's1',
+      fallbackWorkspaceId: 'w1',
+    });
+    expect(running.lock).toBe('session-running');
+
+    const peerBusy = buildBranchColumn({
+      sessions: [
+        session({ id: 's1', workspaceId: 'w-gone', status: 'idle' }),
+        session({ id: 's2', workspaceId: 'w1', status: 'waiting_permission' }),
+      ],
+      workspaces: [workspace({ id: 'w1', branch: 'main' })],
+      activeSessionId: 's1',
+      fallbackWorkspaceId: 'w1',
+    });
+    expect(peerBusy.lock).toBe('checkout-busy');
+  });
+});
+
+describe('buildBranchColumn — only a local git checkout gets a branch column', () => {
+  const notACheckout: Array<[string, Partial<ChatWorkspace>]> = [
+    ['a temp workspace', { kind: 'temp', gitEnabled: true }],
+    ['a remote workspace', { kind: 'remote', gitEnabled: true }],
+    ['a folder that is not a git repository', { gitEnabled: false }],
+    ['a folder whose git status is still unknown', { gitEnabled: undefined }],
+  ];
+
+  it.each(notACheckout)('hides the column for %s in session mode', (_, overrides) => {
+    const model = buildBranchColumn({
+      sessions: [session({ status: 'idle' })],
+      workspaces: [workspace(overrides)],
+      activeSessionId: 's1',
+    });
+    expect(model).toEqual({ workdir: null, currentBranch: null, lock: 'no-checkout' });
+  });
+
+  it.each(notACheckout)('hides the column for %s in empty mode', (_, overrides) => {
+    const model = buildBranchColumn({
+      sessions: [],
+      workspaces: [workspace(overrides)],
+      activeSessionId: null,
+      fallbackWorkspaceId: 'w1',
+    });
+    expect(model).toEqual({ workdir: null, currentBranch: null, lock: 'no-checkout' });
+  });
+
+  it('shows it for a linked worktree that git knows about', () => {
+    const model = buildBranchColumn({
+      sessions: [session({ workspaceId: 'w-wt', status: 'idle' })],
+      workspaces: [workspace({ id: 'w-wt', kind: 'worktree', path: '/code/feat', branch: 'feat' })],
+      activeSessionId: 's1',
+    });
+    expect(model.workdir).toBe('/code/feat');
+    expect(model.currentBranch).toBe('feat');
   });
 });

@@ -1,7 +1,6 @@
 import { Folder, Lock } from 'lucide-react';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useI18n } from '@/i18n';
-import { targetTriggerClass } from './middleColumnLayout';
 
 interface LockedRepoLabelProps {
   label: string;
@@ -20,9 +19,12 @@ interface LockedRepoLabelProps {
  * and deliver a different chat instead.
  *
  * Three cues say "not a control", matching `RunLocationIndicator`: no chevron
- * for a menu, no hover background, and the default cursor. The lock glyph and
- * its tooltip say WHY, because a disabled-looking chip with no explanation reads
- * as a bug.
+ * for a menu, no hover background, and the default cursor. That is why the
+ * class is spelled out here instead of reusing `targetTriggerClass`, whose
+ * hover / focus / open fills are exactly the control affordances this label
+ * must not have; it keeps the same height, inset and type so the row still
+ * lines up. The lock glyph and its tooltip say WHY, because a disabled-looking
+ * chip with no explanation reads as a bug.
  */
 export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
   const { t } = useI18n();
@@ -34,12 +36,12 @@ export function LockedRepoLabel({ label, path, reason }: LockedRepoLabelProps) {
           <span
             role="note"
             aria-label={`${t('Repository')}: ${label}`}
-            className={`${targetTriggerClass('muted')} cursor-default whitespace-nowrap`}
+            className="inline-flex h-6 min-w-0 cursor-default items-center gap-1.5 whitespace-nowrap px-2 text-ui text-muted-foreground"
           />
         }
       >
         <Folder className="size-3.5 shrink-0" />
-        <span className="max-w-60 truncate">{label}</span>
+        <span className="min-w-0 max-w-60 truncate">{label}</span>
         <Lock className="size-3 shrink-0" />
       </TooltipTrigger>
       <TooltipPopup className="max-w-80">

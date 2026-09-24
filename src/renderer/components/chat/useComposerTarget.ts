@@ -1,9 +1,9 @@
 /**
  * T-27: single effect-collection point for the Composer target bar. UI
- * components (ComposerTargetBar / TargetFolderSelect / TargetBranchSelect /
- * RunLocationIndicator) only read the derived data below and call the
- * exposed callbacks — every store read/write and query lives here so those
- * components stay presentational.
+ * components (ComposerTargetBar / TargetFolderSelect / RunLocationIndicator)
+ * only read the derived data below and call the exposed callbacks — every
+ * store read/write and query lives here so those components stay
+ * presentational.
  *
  * Batch 3 adds the pending-target flow: `createTempTarget` (New Folder) and
  * `awaitWorkspaceAtPath` (New worktree success) both stash the path they're
@@ -25,8 +25,6 @@ import { useSettingsStore } from '@/stores/settings';
 import { useTempWorkspaceStore } from '@/stores/tempWorkspace';
 import {
   type ActiveTarget,
-  type BranchMenuModel,
-  buildBranchMenu,
   buildFolderMenu,
   decideTargetChange,
   type FolderMenuModel,
@@ -35,8 +33,6 @@ import {
   resolveActiveTarget,
   resolveRuntimeRepoPath,
   runLocationLabel,
-  shouldShowBranchSelect,
-  targetWorktreeLabel,
 } from './composerTarget';
 import { markForkDraftCarry } from './forkDraftCarry';
 // D48 S1: `computeEverHostBound` moved out of this file — the agent picker's
@@ -47,13 +43,7 @@ import { computeEverHostBound } from './sessionBinding';
 export interface UseComposerTargetResult {
   target: ActiveTarget;
   folderMenu: FolderMenuModel;
-  /** @deprecated UNUSED since 2026-09-24 with the worktree dropdown — see `composerTarget.ts`'s `BranchMenuEntry`. Computed here, read by nobody. */
-  branchMenu: BranchMenuModel;
   blocked: boolean;
-  /** @deprecated UNUSED since 2026-09-24 — the branch column gates on `buildBranchColumn().workdir` instead. */
-  showBranchSelect: boolean;
-  /** @deprecated UNUSED since 2026-09-24 — the branch column reads the branch off the checkout. */
-  branchLabel: string | null;
   runLocation: { text: string; tone: 'local' | 'remote' } | null;
   /** User picked a workspace in either dropdown. */
   selectTarget: (workspaceId: string) => void;
@@ -177,30 +167,6 @@ export function useComposerTarget(input: {
       }),
     [projects, workspaces, sessions, target.workspace?.id]
   );
-
-  /**
-   * @deprecated UNUSED since 2026-09-24 with the worktree dropdown.
-   *
-   * Still computed rather than deleted: `buildBranchMenu` itself is kept (see
-   * its own note), and the memo is its only remaining exercise. Deleting this
-   * would leave that function with no caller at all AND no run-time coverage,
-   * which is a larger change than this slice should make.
-   */
-  const branchMenu = useMemo(
-    () =>
-      buildBranchMenu({
-        projectId: target.workspace?.projectId ?? null,
-        workspaces,
-        sessions,
-        activeWorkspaceId: target.workspace?.id ?? null,
-      }),
-    [target.workspace?.projectId, target.workspace?.id, workspaces, sessions]
-  );
-
-  /** @deprecated UNUSED since 2026-09-24 — see the `UseComposerTargetResult` notes. */
-  const showBranchSelect = shouldShowBranchSelect(target.workspace);
-  /** @deprecated UNUSED since 2026-09-24 — see the `UseComposerTargetResult` notes. */
-  const branchLabel = targetWorktreeLabel(target.workspace);
 
   // Run location is a repository property (T-27 decision #6): resolve the
   // project's main/remote workspace path, not the currently targeted
@@ -384,10 +350,7 @@ export function useComposerTarget(input: {
   return {
     target,
     folderMenu,
-    branchMenu,
     blocked,
-    showBranchSelect,
-    branchLabel,
     runLocation,
     selectTarget,
     createTempTarget,

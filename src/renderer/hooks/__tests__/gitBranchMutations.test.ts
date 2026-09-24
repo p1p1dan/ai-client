@@ -26,12 +26,18 @@ function Probe() {
 const affectedKeys = [
   gitQueryKeys.status('/repo'),
   gitQueryKeys.branches('/repo'),
+  gitQueryKeys.branchNames('/repo'),
   gitQueryKeys.fileChanges('/repo'),
   gitQueryKeys.fileDiff('/repo'),
   gitQueryKeys.log('/repo', 30),
   gitQueryKeys.logInfinite('/repo'),
   gitQueryKeys.submodules('/repo'),
   gitQueryKeys.submoduleChanges('/repo'),
+  // Where the DISPLAYED branch comes from (`ChatWorkspace.branch`): the
+  // worktree list, keyed by repository root — which is not `/repo` when the
+  // checkout is a linked worktree of it.
+  ['worktree', 'list', '/repo-root'],
+  ['worktree', 'listMultiple', '/repo-root'],
 ];
 
 beforeEach(async () => {
@@ -58,6 +64,18 @@ afterEach(async () => {
 });
 
 describe('branch mutations refresh the active workspace', () => {
+  it('refreshes the worktree lists the branch label is derived from', async () => {
+    // Without this a switch main -> feature left "main" on the button, and
+    // picking main again was swallowed as "already on it".
+    await act(async () => {
+      await checkout.mutateAsync({ workdir: '/repo', branch: 'feature' });
+    });
+    expect(client.getQueryState(['worktree', 'list', '/repo-root'])?.isInvalidated).toBe(true);
+    expect(client.getQueryState(['worktree', 'listMultiple', '/repo-root'])?.isInvalidated).toBe(
+      true
+    );
+  });
+
   it.each([
     'local-topic',
     'remotes/origin/topic',

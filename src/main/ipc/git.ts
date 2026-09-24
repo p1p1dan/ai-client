@@ -115,6 +115,20 @@ function getGitRepoService(workdir: string): GitService | null {
   return getGitServiceForPath(validated.path);
 }
 
+/**
+ * For mutations the caller must see fail. Readers may answer "nothing here" for
+ * a non-repository (an empty list is a truthful answer), but a create-branch or
+ * checkout that returns normally reads as SUCCESS — the UI then shows a switch
+ * or a new branch that never happened.
+ */
+function requireGitRepoService(workdir: string): GitService {
+  const git = getGitRepoService(workdir);
+  if (!git) {
+    throw new Error(`Not a git repository: ${workdir}`);
+  }
+  return git;
+}
+
 function isRemoteWorkdir(workdir: string): boolean {
   return isRemoteVirtualPath(workdir);
 }
@@ -194,11 +208,7 @@ export function registerGitHandlers(): void {
         await remoteRepositoryBackend.createBranch(workdir, name, startPoint);
         return;
       }
-      const git = getGitRepoService(workdir);
-      if (!git) {
-        return;
-      }
-      await git.createBranch(name, startPoint);
+      await requireGitRepoService(workdir).createBranch(name, startPoint);
     }
   );
 
@@ -207,11 +217,7 @@ export function registerGitHandlers(): void {
       await remoteRepositoryBackend.checkout(workdir, branch);
       return;
     }
-    const git = getGitRepoService(workdir);
-    if (!git) {
-      return;
-    }
-    await git.checkout(branch);
+    await requireGitRepoService(workdir).checkout(branch);
   });
 
   ipcMain.handle(

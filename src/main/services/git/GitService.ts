@@ -385,10 +385,6 @@ export class GitService {
       label: info.label,
     }));
 
-    if (options?.skipMerged) {
-      return branches;
-    }
-
     if (branches.length === 0) {
       // An empty listing has two causes and they need opposite answers: a repo
       // with no commits yet, or a `git branch -a -v` whose output never made it
@@ -425,6 +421,12 @@ export class GitService {
       } catch {
         return [];
       }
+    }
+
+    // After the empty-listing judgement, not before: a picker needs the
+    // synthetic unborn-HEAD entry and the lost-output error just as much.
+    if (options?.skipMerged) {
+      return branches;
     }
 
     // Determine base branch for merge detection
@@ -885,11 +887,11 @@ export class GitService {
   async checkIgnored(paths: string[]): Promise<Set<string>> {
     if (paths.length === 0) return new Set();
     try {
-      // git check-ignore 返回被忽略的文件列表
+      // git check-ignore prints the ignored paths
       const result = await this.git.checkIgnore(paths);
       return new Set(result);
     } catch {
-      // 没有被忽略的文件时会抛出错误（exit code 1）
+      // Exits 1 (and throws) when none of the paths is ignored
       return new Set();
     }
   }
@@ -1102,7 +1104,7 @@ export class GitService {
           head,
           status,
           initialized,
-          // 默认值，后续会更新
+          // Defaults, filled in below
           tracking: undefined,
           ahead: 0,
           behind: 0,
@@ -1112,7 +1114,7 @@ export class GitService {
         });
       }
 
-      // 为已初始化的子模块获取详细状态
+      // Fetch detailed status for initialized submodules
       for (const submodule of submodules) {
         if (submodule.initialized) {
           try {
@@ -1129,7 +1131,7 @@ export class GitService {
               subStatus.modified.length + subStatus.deleted.length + subStatus.not_added.length;
           } catch (error) {
             console.debug(`Failed to get status for submodule ${submodule.path}:`, error);
-            // 子模块状态获取失败，保持默认值
+            // Submodule status failed; keep the defaults
           }
         }
       }
@@ -1191,10 +1193,10 @@ export class GitService {
   }
 
   /**
-   * 智能 Pull（公共逻辑）
-   * 1. 先尝试 fast-forward only
-   * 2. 失败则尝试 rebase
-   * 3. 冲突则 abort 并抛出错误
+   * Smart pull (shared logic)
+   * 1. Try fast-forward only first
+   * 2. Fall back to rebase
+   * 3. On conflict, abort and throw
    */
   private async smartPull(git: SimpleGit): Promise<void> {
     try {
@@ -1214,8 +1216,8 @@ export class GitService {
   }
 
   /**
-   * 智能 Push（公共逻辑）
-   * 如果 non-fast-forward，自动先 pull 再重试
+   * Smart push (shared logic)
+   * On non-fast-forward, pull first and retry
    */
   private async smartPush(
     pushFn: () => Promise<unknown>,
@@ -1267,7 +1269,7 @@ export class GitService {
   }
 
   /**
-   * Fetch 单个子模块
+   * Fetch a single submodule
    */
   async fetchSubmodule(submodulePath: string): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1275,7 +1277,7 @@ export class GitService {
   }
 
   /**
-   * Pull 单个子模块
+   * Pull a single submodule
    */
   async pullSubmodule(submodulePath: string): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1283,7 +1285,7 @@ export class GitService {
   }
 
   /**
-   * Push 单个子模块
+   * Push a single submodule
    */
   async pushSubmodule(submodulePath: string): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1303,7 +1305,7 @@ export class GitService {
   }
 
   /**
-   * 暂存子模块文件
+   * Stage files in a submodule
    */
   async stageSubmodule(submodulePath: string, paths: string[]): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1311,7 +1313,7 @@ export class GitService {
   }
 
   /**
-   * 取消暂存子模块文件
+   * Unstage files in a submodule
    */
   async unstageSubmodule(submodulePath: string, paths: string[]): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1319,7 +1321,7 @@ export class GitService {
   }
 
   /**
-   * 丢弃子模块文件变更
+   * Discard file changes in a submodule
    */
   async discardSubmodule(submodulePath: string, paths: string[]): Promise<void> {
     const subGit = this.getSubmoduleGit(submodulePath);
@@ -1330,7 +1332,7 @@ export class GitService {
     const untrackedPaths: string[] = [];
 
     for (const filePath of paths) {
-      // 检查符号链接
+      // Check for symlinks
       const initialPath = path.join(submoduleDir, filePath);
       const initialStats = await fs.lstat(initialPath).catch(() => null);
       if (initialStats?.isSymbolicLink()) {
@@ -1344,7 +1346,7 @@ export class GitService {
       }
     }
 
-    // 删除 untracked 文件/目录
+    // Remove untracked files/directories
     for (const absolutePath of untrackedPaths) {
       const stat = await fs.stat(absolutePath).catch(() => null);
       if (stat?.isDirectory()) {
@@ -1354,14 +1356,14 @@ export class GitService {
       }
     }
 
-    // 恢复 tracked 文件
+    // Restore tracked files
     if (trackedPaths.length > 0) {
       await subGit.checkout(['--', ...trackedPaths]);
     }
   }
 
   /**
-   * 从 git status 结果解析文件变更列表（共用逻辑）
+   * Parse the file-change list from a git status result (shared logic)
    */
   private parseStatusToChanges(status: StatusResult): FileChange[] {
     const changes: FileChange[] = [];
@@ -1450,22 +1452,22 @@ export class GitService {
     let modified = '';
 
     try {
-      // 获取 HEAD 版本
+      // HEAD version
       original = await gitShow(fullSubPath, `HEAD:${filePath}`);
     } catch {
-      // 新文件，没有 HEAD 版本
+      // New file: no HEAD version
     }
 
     try {
       if (staged) {
-        // 暂存区版本
+        // Index (staged) version
         modified = await gitShow(fullSubPath, `:${filePath}`);
       } else {
-        // 工作区版本
+        // Working-tree version
         modified = await readWorkingTreeFile(fullFilePath).then((buffer) => decodeBuffer(buffer));
       }
     } catch {
-      // 删除的文件
+      // Deleted file
     }
 
     return { path: filePath, original, modified };

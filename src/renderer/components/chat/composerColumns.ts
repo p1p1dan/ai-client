@@ -17,42 +17,23 @@
  * anywhere that actually switched branches.
  *
  * As-built, the worktree concept is dropped from this row entirely (user ruling
- * 2026-09-24: 「暂时不需要这个 worktree 的概念，就用默认的」). Column 1 picks a
- * REPOSITORY and the conversation lands on its default checkout; column 2 is a
- * real `git checkout`. Worktree creation still lives in the folder dropdown's
- * footer actions, which this module does not touch.
+ * 2026-09-24: worktrees are not needed here for now; use the default checkout).
+ * Column 1 picks a REPOSITORY and the conversation lands on its default
+ * checkout; column 2 is a real `git checkout`. Worktree creation still lives in
+ * the folder dropdown's footer actions, which this module does not touch.
  *
  * Pure module: type-only imports plus pure helpers, so it stays testable under
  * the node-env vitest run (same posture as `composerTarget.ts`).
  */
 
-import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { canonicalPathKey } from '@shared/utils/path';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
-import { isTargetableWorkspace, resolveProjectDefaultWorkspaceId } from './composerTarget';
-
-// ---- is this session busy? ----
-
-/**
- * Statuses during which a conversation owns its checkout and must not have the
- * ground moved under it.
- *
- * Deliberately the same set `decideTargetChange` (`composerTarget.ts`) blocks
- * on, reached through one exported predicate rather than a second literal — two
- * lists that mean "busy" and drift apart is how a control ends up enabled in one
- * place and disabled in the other.
- */
-const BUSY_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
-  'starting',
-  'running',
-  'stopping',
-  'waiting_permission',
-  'waiting_question',
-]);
-
-/** Whether a session in this status is mid-work and locks the controls. */
-export function isSessionBusy(status: SessionRuntimeStatus | undefined): boolean {
-  return BUSY_STATUSES.has(status ?? 'idle');
-}
+import {
+  isSessionBusy,
+  isTargetableWorkspace,
+  resolveProjectDefaultWorkspaceId,
+  shouldShowBranchSelect,
+} from './composerTarget';
 
 // ---- column 1: repository ----
 
@@ -145,33 +126,39 @@ export interface BranchColumnModel {
   lock: BranchLockReason | null;
 }
 
+const NO_CHECKOUT: BranchColumnModel = { workdir: null, currentBranch: null, lock: 'no-checkout' };
+
 /**
  * Whether a branch switch is allowed right now, and the checkout it applies to.
  *
- * Empty mode has no session yet, so the checkout is the one the conversation
- * WOULD land on: the target repository's default workspace. There is nothing to
- * lock against — the row's own `disabled` prop covers the composer being
- * unusable — and this is the control the old layout was missing entirely, so a
- * user could not pick a branch before starting a conversation at all.
+ * The checkout is the active session's workspace. With no active session — or
+ * one whose workspace is not in the tree — it is `fallbackWorkspaceId`, the
+ * composer's target workspace: the checkout the conversation would start in.
+ * A session whose workspace IS known never borrows the fallback, or the column
+ * would offer a switch in a directory this conversation is not in.
  *
- * Session mode locks twice, because two different things can be broken:
+ * The column only exists for a local `main` / `worktree` git checkout
+ * (`shouldShowBranchSelect`). Elsewhere it has nothing to switch: a non-git
+ * folder got an empty picker whose "create branch" had nowhere to land.
  *
- *  - `session-running` — the ACTIVE conversation is mid-turn.
- *  - `checkout-busy` — some OTHER conversation is live in the SAME directory.
- *    A checkout rewrites every file there, and an idle conversation's UI must
- *    not let that happen to a peer still reading that tree. This is the lock the
- *    old single-dropdown layout had no way to express, because nothing there
- *    named the directory.
+ * Two locks, applied on BOTH paths, because what they protect is the
+ * directory, not whichever conversation happens to be on screen:
  *
- * `sending` is folded into `session-running`: `ChatComposer` latches a send
- * before the session status flips, so a status-only check would leave a window
- * where the turn has started and the store has not said so yet.
+ *  - `session-running` — this conversation is mid-turn, or a send is in flight.
+ *    `sending` is folded in because `ChatComposer` latches a send before the
+ *    session status flips, so a status-only check would leave a window where
+ *    the first message is on its way and the store has not said so yet.
+ *  - `checkout-busy` — some OTHER conversation is live in the same directory.
+ *    A checkout rewrites every file there, and an idle (or not yet started)
+ *    conversation's UI must not let that happen to a peer still reading that
+ *    tree. A new conversation lands on the repository's default checkout,
+ *    which is exactly where a peer is most likely to be running.
  */
 export function buildBranchColumn(input: {
   sessions: readonly ChatSession[];
   workspaces: readonly ChatWorkspace[];
   activeSessionId: string | null;
-  /** Fallback checkout for empty mode — the repository column's current entry. */
+  /** The composer's target workspace, used when there is no session checkout. */
   fallbackWorkspaceId?: string | null;
   sending?: boolean;
 }): BranchColumnModel {
@@ -181,39 +168,55 @@ export function buildBranchColumn(input: {
   const sessionWorkspace = active
     ? input.workspaces.find((ws) => ws.id === active.workspaceId)
     : undefined;
+  const checkout =
+    active && sessionWorkspace
+      ? sessionWorkspace
+      : input.fallbackWorkspaceId
+        ? input.workspaces.find((ws) => ws.id === input.fallbackWorkspaceId)
+        : undefined;
 
-  // Session mode: the checkout is the session's own workspace.
-  if (active && sessionWorkspace) {
-    if (!sessionWorkspace.path || !isTargetableWorkspace(sessionWorkspace)) {
-      return { workdir: null, currentBranch: null, lock: 'no-checkout' };
-    }
-    const locked: BranchLockReason | null = (() => {
-      if (input.sending === true || isSessionBusy(active.status)) return 'session-running';
-      const peerBusy = input.sessions.some(
-        (session) =>
-          session.id !== active.id &&
-          session.workspaceId === active.workspaceId &&
-          isSessionBusy(session.status)
-      );
-      return peerBusy ? 'checkout-busy' : null;
-    })();
-    return {
-      workdir: sessionWorkspace.path,
-      currentBranch: sessionWorkspace.branch ?? null,
-      lock: locked,
-    };
-  }
-
-  // Empty mode: the checkout the conversation would land on.
-  const fallback = input.fallbackWorkspaceId
-    ? input.workspaces.find((ws) => ws.id === input.fallbackWorkspaceId)
-    : undefined;
-  if (!fallback || !fallback.path || !isTargetableWorkspace(fallback)) {
-    return { workdir: null, currentBranch: null, lock: 'no-checkout' };
+  if (!checkout || !isTargetableWorkspace(checkout) || !shouldShowBranchSelect(checkout)) {
+    return NO_CHECKOUT;
   }
   return {
-    workdir: fallback.path,
-    currentBranch: fallback.branch ?? null,
-    lock: null,
+    workdir: checkout.path,
+    currentBranch: checkout.branch ?? null,
+    lock: resolveBranchLock({
+      sessions: input.sessions,
+      workspaces: input.workspaces,
+      checkout,
+      own: active,
+      sending: input.sending,
+    }),
   };
+}
+
+/**
+ * The lock for switching `checkout`, `own` being the conversation on screen
+ * (if any). "Same directory" compares canonical paths rather than workspace
+ * ids: one directory can back two workspaces (a parent repository's worktree
+ * entry and a registered folder's own `main`), and git does not care which id
+ * a peer was opened under.
+ */
+function resolveBranchLock(input: {
+  sessions: readonly ChatSession[];
+  workspaces: readonly ChatWorkspace[];
+  checkout: ChatWorkspace;
+  own: ChatSession | undefined;
+  sending?: boolean;
+}): BranchLockReason | null {
+  if (input.sending === true || isSessionBusy(input.own?.status)) {
+    return 'session-running';
+  }
+  const checkoutKey = canonicalPathKey(input.checkout.path);
+  const pathById = new Map(input.workspaces.map((ws) => [ws.id, ws.path] as const));
+  const peerBusy = input.sessions.some((session) => {
+    if (session.id === input.own?.id || !isSessionBusy(session.status)) return false;
+    if (session.workspaceId === input.checkout.id) return true;
+    const peerPath = pathById.get(session.workspaceId);
+    return (
+      peerPath !== undefined && peerPath.trim() !== '' && canonicalPathKey(peerPath) === checkoutKey
+    );
+  });
+  return peerBusy ? 'checkout-busy' : null;
 }
