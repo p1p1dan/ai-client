@@ -481,7 +481,7 @@ export interface PermissionFileChange {
  * S3 slice 4 widened both arms. Every addition is OPTIONAL and the protocol
  * version is unchanged, so an older Host stays correct by omission. The one
  * non-additive change is `exec.command`, which went from required to optional:
- * the generated contract types it `["string","null"]` [契约], i.e. a command-less
+ * the generated contract types it `["string","null"]` [contract], i.e. a command-less
  * approval is a declared shape (zsh-exec-bridge subcommand approvals), not a
  * malformed frame. Relaxing it is safe because the only producer is the Codex
  * approval path added in the same slice and the only consumer is the card body,
@@ -512,7 +512,7 @@ export type PermissionDetail =
       omittedFileCount?: number;
       /**
        * Allowing this patch ALSO allows writes anywhere under this root for the
-       * remainder of the session [契约, marked UNSTABLE upstream]. Present only
+       * remainder of the session [contract, marked UNSTABLE upstream]. Present only
        * when codex asked for it. The card has to state it, or an Allow meant
        * for one patch silently grants a directory.
        */
@@ -690,7 +690,7 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
   payload?: {
     error?: string;
     /**
-     * T066 回炉 — the machine-readable half, beside the sentence rather than
+     * T066 rework — the machine-readable half, beside the sentence rather than
      * inside it.
      *
      * `error` is what the renderer shows, so it stays the provider's or the
@@ -710,11 +710,16 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
      * work is intact and a plain "continue" carries on — which is why it rides
      * on the completed event instead of `session.failed` + `errorCode`.
      *
+     * `interjected`: Ctrl+Enter ended the run at a turn boundary so the queued
+     * message can go next. Delegates the run started may still be working in
+     * the background, so a reader must not treat their lanes or their pending
+     * approval cards as over.
+     *
      * Optional-field addition, the same compatibility precedent as
      * `SessionLivenessNote`: a renderer that predates it reads a plain
      * completion.
      */
-    stopCause?: 'turn_limit';
+    stopCause?: 'turn_limit' | 'interjected';
   };
 }
 

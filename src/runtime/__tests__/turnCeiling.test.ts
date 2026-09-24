@@ -150,6 +150,34 @@ describe('decision 040 · the interactive turn ceiling', () => {
     expect(completed?.payload).toMatchObject({ stopCause: 'turn_limit' });
   });
 
+  it('skips the wrap-up when Ctrl+Enter lands after the ceiling, and reports the interjection', async () => {
+    // The user's next message is already queued: a summary written for a
+    // "say continue" pause would answer a question nobody asked.
+    const { runtime, requests, events } = await build(
+      {
+        parent: [
+          () => readCall('r1'),
+          () => readCall('r2'),
+          () => readCall('r3'),
+          () => fauxAssistantMessage('the wrap-up the interjection prevented'),
+        ],
+      },
+      3
+    );
+    const result = await runtime.run({
+      prompt: 'work',
+      onEvent: (event: AgentEvent) => {
+        if (event.type === 'agent_end') runtime.loop.interject();
+      },
+    });
+
+    expect(requests.parent).toHaveLength(3);
+    expect(result.success).toBe(true);
+    expect(result.stopCause).toBe('interjected');
+    const completed = events.find((event) => event.type === 'session.completed');
+    expect(completed?.payload).toMatchObject({ stopCause: 'interjected' });
+  });
+
   it('refuses a tool call in the wrap-up turn instead of running it, and ends there', async () => {
     const toolResults: { id: string; isError: boolean; text: string }[] = [];
     const { runtime, requests } = await build(

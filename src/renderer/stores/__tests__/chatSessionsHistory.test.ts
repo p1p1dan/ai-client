@@ -1008,6 +1008,39 @@ describe('T32 Pi hydration generations and pagination', () => {
     });
   });
 
+  it('carries the run-stop cause from replayed history onto the message', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const { lastPatch } = applyAll(state, [
+      makeResumedEvent(),
+      makeHistoryEvent({
+        mode: 'initial',
+        messages: [
+          {
+            id: 'h:interjected',
+            entryId: 'interjected',
+            role: 'assistant',
+            blocks: [{ type: 'text', id: 'h:interjected:text:0', text: 'reading' }],
+            stopReason: 'toolUse',
+            stopCause: 'interjected',
+          },
+          {
+            id: 'h:plain',
+            entryId: 'plain',
+            role: 'assistant',
+            blocks: [{ type: 'text', id: 'h:plain:text:0', text: 'done' }],
+            stopReason: 'stop',
+          },
+        ],
+        totalCount: 2,
+        hasMore: false,
+      }),
+    ]);
+    const messages = lastPatch.messages?.[SESSION_ID] ?? [];
+    expect(messages[0]?.stopCause).toBe('interjected');
+    // Absent, not `undefined`-valued: exact-shape assertions elsewhere hold.
+    expect(messages[1] && 'stopCause' in messages[1]).toBe(false);
+  });
+
   it('keeps an interrupted empty Pi assistant visible with recovery metadata', () => {
     const state = baseState({ sessions: [makeSession()] });
     const { lastPatch } = applyAll(state, [

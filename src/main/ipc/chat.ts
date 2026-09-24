@@ -603,8 +603,11 @@ export function registerChatHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.CHAT_INTERJECT,
     async (e, payload: { sessionId: string }): Promise<{ interjected: boolean }> => {
-      // Same claim as CHAT_STOP above: the signal is addressed by session id,
-      // and without this any window could stop a turn it does not own.
+      // Same claim CHAT_STOP makes above. It is NOT an ownership check — any
+      // window may interject any session id it names. It routes this
+      // session's events (approval cards included) to the window that sent
+      // the signal, so the turn it is about to end, and the queued message
+      // that follows, report back to the window the user is looking at.
       claimSessionForSender(e, payload.sessionId);
       const interjected = await workerManager.interject(payload.sessionId);
       return { interjected };

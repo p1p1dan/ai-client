@@ -14,6 +14,7 @@ import type { Context } from 'cordis';
 import { Service } from 'cordis';
 import { markInternalMessage } from '../../../shared/internalMessage.ts';
 import { DEFAULT_PROVIDER_IDLE_TIMEOUT_MS } from '../../../shared/types/providerTimeout.ts';
+import { RUN_STOP_CUSTOM_TYPE, type TurnStopCause } from '../../../shared/types/sessionHistory.ts';
 import {
   type AgentLoopService,
   EVENTS_SERVICE,
@@ -23,8 +24,10 @@ import {
   RuntimeConfigError,
   type RuntimeRunRequest,
   type RuntimeRunResult,
+  type RuntimeSessionService,
   SESSION_SERVICE,
   TRACE_SERVICE,
+  type TraceRun,
 } from '../../contracts.ts';
 import { RuntimeHostError } from '../../host/errors.ts';
 import { compactionNeeded, contextBudget } from '../context/budget.ts';
@@ -222,9 +225,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
   private readonly config: AgentLoopConfig;
   /**
-   * Per-run interjection state, re-created by every `execute()` and cleared on
-   * its way out. Held on the plugin because `interject()` arrives over RPC and
-   * has no other route to the live run.
+   * Per-run interjection state, created by every `run()` before its first
+   * `await` and cleared once the run is past its last turn boundary. Held on
+   * the plugin because `interject()` arrives over RPC and has no other route to
+   * the live run.
    *
    * This is deliberately NOT a bare boolean field: a flag owned by the plugin
    * outlives the run that armed it, so a signal arriving after the loop had
@@ -233,8 +237,15 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
    * Boxed per run, a stale write can only ever reach the run that is live when
    * it lands — and `interject()` reports `false` when no run is live, which is
    * what the composer shows the user (`interjected: false`).
+   *
+   * Created synchronously in `run()` rather than inside `execute()`: the worker
+   * marks its turn active the moment `run()` is called, and `execute()` spends
+   * several awaits (session flush, prompt assembly, catalog refresh) before it
+   * reaches the loop. A box created after those left a window in which the
+   * composer's Ctrl+Enter was answered "no running turn" and the turn then ran
+   * to completion.
    */
-  private activeRun: { interjected: boolean } | null = null;
+  private activeRun: RunInterjection | null = null;
 
   constructor(ctx: Context, config: AgentLoopConfig = DEFAULT_AGENT_LOOP_CONFIG) {
     super(ctx, LOOP_SERVICE);
@@ -254,17 +265,28 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
    * assistant message is fully streamed — then the loop exits. The session goes
    * idle, and the renderer's queue release mechanism picks up the interjection
    * message as the next turn.
+   *
+   * The run does NOT wait for its delegates on the way out: a parent parked on
+   * a ten-minute background `Task` would otherwise hold the interjection for
+   * ten minutes. Delegates keep running; the next run's own collection pass
+   * (or `TaskWait`) hands their reports to the model.
    */
   interject(): boolean {
-    if (!this.activeRun) return false;
-    this.activeRun.interjected = true;
+    const run = this.activeRun;
+    if (!run) return false;
+    run.requested = true;
+    // Wakes a wait on delegates at once instead of when they settle.
+    run.wake.abort();
     return true;
   }
 
   async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
     const runId = request.runId ?? randomUUID();
+    // Before the first await; see `activeRun`.
+    const interjection: RunInterjection = { requested: false, wake: new AbortController() };
+    this.activeRun = interjection;
     try {
-      return await this.execute({ ...request, runId });
+      return await this.execute({ ...request, runId }, interjection);
     } catch (error) {
       const sessionId =
         request.logicalSessionId ?? this.ctx.get(SESSION_SERVICE)?.metadata().id ?? runId;
@@ -281,10 +303,18 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         payload: { status: 'idle' },
       });
       throw error;
+    } finally {
+      // `execute` clears it on every path that reaches its own `finally`; this
+      // covers a throw before that (e.g. an empty catalog). Identity-checked so
+      // a run that outlived its replacement never clears the newer box.
+      if (this.activeRun === interjection) this.activeRun = null;
     }
   }
 
-  private async execute(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
+  private async execute(
+    request: RuntimeRunRequest,
+    interjection: RunInterjection
+  ): Promise<RuntimeRunResult> {
     const session = this.ctx.get(SESSION_SERVICE);
     await session?.flush();
     const snapshot = session?.snapshot();
@@ -403,6 +433,9 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       runId: trace.runId,
       model: resolved.ref,
       thinkingLevel,
+      // A `TaskWait` in flight is a wait on delegates too; Ctrl+Enter must be
+      // able to end it, or the turn cannot reach the boundary it stops at.
+      interrupt: interjection.wake.signal,
     });
 
     // subagent-data-03 / decision 005 — what THIS session's earlier runs'
@@ -490,11 +523,9 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // annotated `= 'none'` would be narrowed to `'none'` for the whole body.
     let turns = 0;
     let ceiling = 'none' as 'none' | 'reached' | 'wrapping';
-    // This run's interjection box — the only thing `interject()` can arm. The
-    // `finally` below clears it before `execute` returns, so the next run
-    // starts with a fresh box and can never inherit this one's signal.
-    const interjection = { interjected: false };
-    this.activeRun = interjection;
+    // Once per run: every boundary after the interjection also stops, and the
+    // trace only needs to say so once.
+    let interjectionNoted = false;
     const heldReports: string[] = [];
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
@@ -624,10 +655,15 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // probe — answer once, then stop. A multi-turn run stops at the turn that
       // reaches the ceiling, and every turn after that (the wrap-up, or a
       // stream recovery re-asking it) is the last one.
+      // An interjection is not consumed here: it ends the whole run, so a
+      // stream recovery or a wrap-up turn that follows also stops after one
+      // turn instead of re-arming the loop.
       shouldStopAfterTurn: () => {
-        if (interjection.interjected) {
-          interjection.interjected = false;
-          trace.note('note', { event: 'turn_stopped_by_interjection' });
+        if (interjection.requested) {
+          if (!interjectionNoted) {
+            interjectionNoted = true;
+            trace.note('note', { event: 'turn_stopped_by_interjection' });
+          }
           return true;
         }
         if (this.config.singleTurn || ceiling !== 'none') return true;
@@ -858,9 +894,18 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // The runtime waits, not the model: a parent that simply stopped calling
       // tools still gets its delegates' reports and continues toward the user's
       // original goal, which is the behaviour the reference's D328 settled on.
+      //
+      // Except after an interjection: the user asked for the next message to go
+      // now, so this run neither starts nor stays in a wait on delegates. The
+      // wake signal cuts a wait already in progress; `collectFinished` returns
+      // without marking anything delivered when it is cut, so every report —
+      // settled or still to come — stays for the next run's own pass.
       if (subagents) {
-        while (!request.signal?.aborted) {
-          const report = await subagents.collectFinished(request.signal);
+        const waitSignal = request.signal
+          ? AbortSignal.any([request.signal, interjection.wake.signal])
+          : interjection.wake.signal;
+        while (!request.signal?.aborted && !interjection.requested) {
+          const report = await subagents.collectFinished(waitSignal);
           // Folded per pass, not only at the end: a fan-out that settles
           // halfway through a long run should move the conversation total then,
           // not once everything is over.
@@ -896,7 +941,16 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           await drainStreamRetries();
         }
       }
-      if (ceiling === 'reached' && !request.signal?.aborted) {
+      // An interjection skips the wrap-up: the user's next message is about to
+      // give the model something better to do than summarise. The one
+      // exception is held reports — they were marked delivered when collected,
+      // and the wrap-up is the only request that can carry them, so dropping
+      // it would drop them. It is still a single tool-less turn.
+      if (
+        ceiling === 'reached' &&
+        !request.signal?.aborted &&
+        (!interjection.requested || heldReports.length > 0)
+      ) {
         ceiling = 'wrapping';
         trace.note('note', { event: 'turn_ceiling_wrap_up', held_reports: heldReports.length });
         await agent.prompt(
@@ -922,14 +976,38 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // propagating, because a caller that gets a rejection loses the trace.
       thrown = error instanceof Error ? error : new Error(String(error));
     } finally {
-      // Whatever ended this run — a Stop, a structural failure, or a normal
-      // finish — no delegate of it may outlive it. On the normal path the loop
-      // above already emptied the registry and this returns at once; on a Stop
-      // it is what makes "the run ended" mean "nothing is still spending".
-      await subagents?.drain();
+      // First, before any await: the loop is past its last boundary, so an
+      // interjection landing from here on would stop nothing and must be told
+      // so (`interject()` answers false) instead of promising a stop.
       // Closure over the run (not a null-out of whatever is current): a run
       // that somehow outlived its replacement must not clear the newer box.
       if (this.activeRun === interjection) this.activeRun = null;
+      // Clean means the run will report `session.completed` with
+      // `stopCause: 'interjected'` — the one ending the renderer reads as
+      // "delegates still working". A run that failed or was aborted on its
+      // way out reports that ending, and nothing of it outlives it.
+      const cleanInterjection =
+        interjection.requested &&
+        resolveError({
+          thrown,
+          aborted: request.signal?.aborted === true,
+          last: collected.turns.at(-1),
+        }) === undefined;
+      if (cleanInterjection) {
+        // The one exit that leaves delegates running on purpose (see
+        // `interject()`): the registry belongs to the session, so the next
+        // run's collection pass or `TaskWait` picks their reports up.
+        const running = subagents?.registry.running().length ?? 0;
+        if (running > 0) trace.note('note', { event: 'delegates_left_running', running });
+      } else {
+        // Whatever else ended this run — a Stop, a structural failure, or a
+        // normal finish — no delegate of it may outlive it. On the normal path
+        // the loop above already emptied the registry and this returns at
+        // once; on a Stop it is what makes "the run ended" mean "nothing is
+        // still spending".
+        await subagents?.drain();
+      }
+      subagents?.endRun();
       request.signal?.removeEventListener('abort', onAbort);
       unsubscribe();
       unsubscribePermissions?.();
@@ -951,6 +1029,17 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // stopped never reached the loop above at all. `takeUsage()` drains, so
     // this cannot re-bill what the loop already took.
     foldDelegatedUsage();
+    // Only a clean exit reports the interjection; a run that failed or was
+    // aborted on its way out reports that ending instead. It outranks the turn
+    // ceiling: the user's next message is already queued, so a "paused, say
+    // continue" notice would be answering a question nobody asked.
+    const interjected = interjection.requested && !error;
+    const userStop: TurnStopCause | undefined = aborted
+      ? 'user_stop'
+      : interjected
+        ? 'interjected'
+        : undefined;
+    if (session && userStop) await recordRunStop(session, trace, userStop);
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,
@@ -961,7 +1050,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       latencyMs: 0,
       turns: collected.turns.length,
       ...(error ? { error } : {}),
-      ...(ceiling === 'wrapping' ? { stopCause: 'turn_limit' as const } : {}),
+      ...(interjected
+        ? { stopCause: 'interjected' as const }
+        : ceiling === 'wrapping'
+          ? { stopCause: 'turn_limit' as const }
+          : {}),
     };
     const finished = await trace.finish({
       final_output: result.text,
@@ -971,6 +1064,44 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     });
     projected.finish(result);
     return { ...result, latencyMs: finished.latency_ms, trace: finished };
+  }
+}
+
+/** One run's interjection state; see `AgentLoopPlugin.activeRun`. */
+interface RunInterjection {
+  /** Armed by `interject()`; once set, every later turn boundary stops. */
+  requested: boolean;
+  /** Aborted by `interject()` so a wait on delegates ends at once. */
+  readonly wake: AbortController;
+}
+
+/**
+ * Write down that the USER ended this run, for history replay.
+ *
+ * Live, the terminal `session.*` event already carries the cause; a reopened
+ * session only has the file. A pi-native `custom` entry, so pi's own reader
+ * ignores it for context and its TUI tree hides it; the history projection
+ * folds it onto the run's last assistant message and the session tree skips
+ * it. Never allowed to cost the run: a session that cannot take one more line
+ * is noted on the trace and the run reports as it would have anyway.
+ */
+async function recordRunStop(
+  session: RuntimeSessionService,
+  trace: TraceRun,
+  cause: TurnStopCause
+): Promise<void> {
+  try {
+    await session.appendEntry({
+      type: 'custom',
+      customType: RUN_STOP_CUSTOM_TYPE,
+      data: { cause, runId: trace.runId },
+    });
+  } catch (error) {
+    trace.note('note', {
+      event: 'run_stop_record_failed',
+      cause,
+      message: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

@@ -98,6 +98,28 @@ export interface SubagentHistorySummary {
   model?: string;
 }
 
+/**
+ * Why a run ended when the USER ended it, rather than the model finishing.
+ *
+ * - `interjected`: Ctrl+Enter stopped the run at a turn boundary so the queued
+ *   message could go next.
+ * - `user_stop`: the run was aborted (the Stop button, "send now", or the
+ *   session closing mid-run — all of them abort the same run signal).
+ *
+ * A run that ended on its own carries no cause at all.
+ */
+export type TurnStopCause = 'interjected' | 'user_stop';
+
+/**
+ * `customType` of the session entry that records a {@link TurnStopCause}.
+ *
+ * A plain pi `custom` entry (`{ type: 'custom', customType, data }`), which pi's
+ * own context builder ignores and its TUI tree hides as bookkeeping. `data` is
+ * `{ cause: TurnStopCause, runId: string }`. The history projection folds it
+ * onto the run's last assistant message; the session tree skips it.
+ */
+export const RUN_STOP_CUSTOM_TYPE = 'aiclient.runStop';
+
 /** Prefix of every history message id — the store's replace semantics key on it. */
 export const HISTORY_MESSAGE_ID_PREFIX = 'h:' as const;
 
@@ -176,6 +198,13 @@ export interface HistoryMessage {
   incomplete?: boolean;
   /** Pi stop reason retained for diagnostics and future rewind UI. */
   stopReason?: string;
+  /**
+   * Assistant messages only: set on the LAST assistant message of a run the
+   * user ended (see {@link TurnStopCause}), off the run's
+   * {@link RUN_STOP_CUSTOM_TYPE} entry. Optional-field addition; older readers
+   * ignore it.
+   */
+  stopCause?: TurnStopCause;
   /**
    * 2026-08-10 optional-field widening (protocol version unchanged, same
    * discipline as `message.started.attachments`): user turns only, present

@@ -234,7 +234,7 @@ function formatRuntimeEvent(event: { type: string; payload?: unknown }): string 
 /**
  * Renders an `eventRing.ts` ring for the `rawEvents=[...]` diagnostic lines
  * below. A dropped-events prefix comes first (partial-messages build spec
- * §2 "片 2") so a reader sees the trail is incomplete before scanning it.
+ * §2 "slice 2") so a reader sees the trail is incomplete before scanning it.
  */
 function formatSeenEvents(ring: EventRing): string {
   const dropped = ring.dropped();
@@ -347,6 +347,14 @@ type WaitResult =
   | 'cancelled'
   /** The silence ceiling (or the absolute loop bound) elapsed. NOT a verdict. */
   | 'ceiling';
+
+/**
+ * What a queued draft does once `handleSend`'s shared gate says "enqueue":
+ * `queue` waits its turn (Enter), `sendNow` jumps the queue and stops the
+ * running turn at once, `interject` (Ctrl+Enter) jumps the queue and asks the
+ * running turn to stop at its next boundary.
+ */
+type ComposerSendMode = 'queue' | 'sendNow' | 'interject';
 
 /**
  * Fixed-deadline expiry rule, for the two handshake waits whose semantics did
@@ -531,8 +539,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // node right after that remount, instead of leaving the user to re-click
   // into the box they were just typing in.
   const hadFocusRef = useRef(false);
-  // T-07 @ 文件引用：popup 态、搜索结果、选中索引、IME 合成态。delayed 焦点
-  // 恢复通过 setTimeout 在 React 提交后再 setSelectionRange。
+  // T-07 @ file mentions: popup state, search results, selected index, IME
+  // composition state. Delayed focus restore calls setSelectionRange from a
+  // setTimeout, after React has committed.
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
   // R02-c slash commands. Unlike the @ popup above this needs NO cwd: the
@@ -951,10 +960,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     return true;
   };
 
-  const handleSend = async (sendNow = false) => {
+  /**
+   * The one keyboard/button send path. Enter, the Send button, "send now" and
+   * Ctrl+Enter all come through here, so every one of them gets the same
+   * pre-send gate — built-in slash commands run locally first, a stale session
+   * binding sends nothing, and `decideSendAction` answers disabled / still
+   * reading attachments / empty — before the mode decides what a queued entry
+   * does.
+   *
+   * `interject` (Ctrl+Enter while a turn runs) differs only after that gate:
+   * the entry jumps the queue as `priority: 'next'` and the running turn is
+   * asked to stop at its next boundary. If the turn already ended, the gate
+   * returns `'send'` and Ctrl+Enter is an ordinary send.
+   */
+  const handleSend = async (mode: ComposerSendMode = 'queue') => {
     const trimmed = value.trim();
     // Before `decideSendAction`: these commands are actions in this window, not
-    // turns, so they must not be queued behind a running one either.
+    // turns, so they must not be queued behind a running one either — and a
+    // Ctrl+Enter `/compact` must not interrupt the turn to reach the model.
     if (await runBuiltinSlash(trimmed)) return;
     if (useChatSessionsStore.getState().activeSessionId !== activeSessionId) return;
     const action = decideSendAction({
@@ -1003,15 +1026,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       text: trimmed,
       attachments: attachments.drafts,
       queuedAt: Date.now(),
+      ...(mode === 'interject' ? { priority: 'next' as const } : {}),
     };
-    const result = useMessageQueueStore.getState().enqueue(queued);
+    const queue = useMessageQueueStore.getState();
+    const result = mode === 'interject' ? queue.interject(queued) : queue.enqueue(queued);
     if (!result.ok) {
       // Decision 1/7: reject and keep the draft exactly as typed — never
       // silently drop it.
       setQueueNotice(result.message);
       return;
     }
-    if (sendNow) {
+    if (mode === 'sendNow') {
       useMessageQueueStore.getState().prioritizeEntry(activeSessionId, queued.id);
       if (canStop) handleStop();
     }
@@ -1024,36 +1049,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+    if (mode === 'interject') await signalInterjection(activeSessionId);
   };
 
-  const handleInterject = async () => {
-    const trimmed = value.trim();
-    if (!trimmed || !activeSessionId) return;
-    const queued: QueuedMessage = {
-      id: nextQueuedMessageId(),
-      sessionId: activeSessionId,
-      text: trimmed,
-      attachments: attachments.drafts,
-      queuedAt: Date.now(),
-      priority: 'next',
-    };
-    const result = useMessageQueueStore.getState().interject(queued);
-    if (!result.ok) {
-      setQueueNotice(result.message);
-      return;
-    }
-    setQueueNotice(null);
-    updateValue('');
-    attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
-    onSendStart?.('direct');
-    // The queue entry above is already committed, so a failure here cannot drop
-    // the message — it only means the "stop at the next turn boundary" signal
-    // did not land. Say so rather than leaving the user waiting on a turn that
-    // is never going to end early.
+  /**
+   * Ctrl+Enter's second half: ask the running turn to stop at its next
+   * boundary so the entry just queued goes next.
+   *
+   * The queue entry is already committed, so a failure here cannot drop the
+   * message — it only means the stop signal did not land. Say so rather than
+   * leaving the user waiting on a turn that is never going to end early.
+   */
+  const signalInterjection = async (sessionId: string) => {
     try {
-      const { interjected } = await window.electronAPI.chat.interject({
-        sessionId: activeSessionId,
-      });
+      const { interjected } = await window.electronAPI.chat.interject({ sessionId });
       if (!interjected) {
         setQueueNotice(t('No turn is running — the message was queued normally'));
       }
@@ -1066,7 +1075,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }
   };
 
-  // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。
+  const handleInterject = () => handleSend('interject');
+
+  // T-07 @ file search: 150ms debounce; results clear when cwd is missing or the mention closes.
   useEffect(() => {
     if (mentionQuery === null || !effectiveCwd) {
       setMentionResults([]);
@@ -1152,7 +1163,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       setMentionQuery(null);
       return;
     }
-    // setTimeout 读取 React 提交后的 selectionStart（与 EnhancedInput 同套路）。
+    // setTimeout reads selectionStart after React commits (same approach as EnhancedInput).
     setTimeout(() => {
       const ta = textareaRef.current;
       if (!ta) {
@@ -1459,7 +1470,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // Starting a fresh send invalidates any prior failure's retryable prompt:
     // the new prompt is what the user wants now, and a stale ghost Retry would
     // linger if the prior failed stream happened to settle later (see the
-    // "Retry 重影" bug — flow aborted without result, `retryable` stayed, a
+    // "ghost Retry" bug — flow aborted without result, `retryable` stayed, a
     // late assistant bubble appeared, Retry showed next to Send wrongly).
     setRetryable(null);
     // S5 (round-2 iteration-3 review): same commit point — a stale marker
@@ -1969,7 +1980,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           text: trimmed,
           // Same B11 rule as the create payload above. On the Codex axis this key
           // is what D40's `turn/start` override rides on, and an override is
-          // STICKY there [实测 06-probes P1] — so sending a model the user did
+          // STICKY there [measured, 06-probes P1] — so sending a model the user did
           // not pick would silently re-default the whole thread, not just a turn.
           ...(model ? { model } : {}),
           ...(effort ? { effort } : {}),
@@ -2711,7 +2722,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // echoed user bubble. This is the ending the 2026-08-10 Stop-hang fix
         // taught the WAIT about (assistantProgress.ts) but this chain, added
         // eight days later, did not port — without it a stopped-with-no-blocks
-        // turn kept the watch armed and the head read 「工作中」 forever while
+        // turn kept the watch armed and the head read "Working" forever while
         // every later Stop answered `stopped: false`.
         resolvePendingReplyLanded(watch.sessionId);
       }
@@ -3163,7 +3174,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             return;
           }
         }
-        // T-07 @ popup：popup 开时拦截方向键 / Enter / Esc，避免误发。
+        // T-07 @ popup: while it is open, arrow keys / Enter / Esc belong to it, so nothing is sent by mistake.
         if (mentionOpen) {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
@@ -3305,7 +3316,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               key="send-now"
               kind="send-now"
               disabled={disabled || stopping || !hasSendTarget || attachments.reading > 0}
-              onClick={() => void handleSend(true)}
+              onClick={() => void handleSend('sendNow')}
             />
           );
         }
@@ -3380,7 +3391,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
   return (
     // Wraps both the error banner and the composer card so they share the
-    // timeline's reading width (T-22 spec §2.13 — "Composer 同栏宽"). The host
+    // timeline's reading width (T-22 spec §2.13 — "composer shares the column width"). The host
     // div in ChatWorkspace (`middleColumnHostClass`) owns the padding and the
     // shrink/grow behaviour for both modes now — no border/background here.
     <ReadingColumn>
@@ -3454,7 +3465,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         />
       )}
       <div className={composerCardClass(mode, { hasProtrusion })} ref={composerCardRef}>
-        {/* T-07 @ 文件搜索 popup——放 textarea 上方/下方，避免被 overflow-hidden 容器裁掉 */}
+        {/* T-07 @ file search popup: placed above/below the textarea so an overflow-hidden container cannot clip it */}
         {slashOpen && (
           <div
             className={cn(

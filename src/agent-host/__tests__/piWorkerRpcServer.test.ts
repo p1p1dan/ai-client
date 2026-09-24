@@ -100,6 +100,7 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     discardFork: notCalled('discardFork') as PiWorkerRuntime['discardFork'],
     acceptFork: notCalled('acceptFork') as PiWorkerRuntime['acceptFork'],
     stop: async () => ({ stopped: true }),
+    interject: () => ({ interjected: false }),
     respondPermission: notCalled('respondPermission') as PiWorkerRuntime['respondPermission'],
     respondQuestion: notCalled('respondQuestion') as PiWorkerRuntime['respondQuestion'],
     respondPreview: notCalled('respondPreview') as PiWorkerRuntime['respondPreview'],

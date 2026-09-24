@@ -362,6 +362,39 @@ describe('reduceSubagentActivity — session terminal sweep', () => {
     expect(state.lanes.toolu_other.status).toBe('running');
   });
 
+  it('leaves lanes running when a Ctrl+Enter completion ends the parent run', () => {
+    // The runtime ends an interjected run without stopping its delegates;
+    // each lane is settled by that delegate's own terminal status later.
+    const state = fold([
+      started(),
+      {
+        type: 'permission.requested',
+        sessionId: SESSION,
+        payload: { permissionId: 'perm-live', toolName: 'Bash', agentId: 'agent-1' },
+      },
+      {
+        type: 'session.completed',
+        sessionId: SESSION,
+        payload: { stopCause: 'interjected' },
+      },
+    ]);
+    expect(state.lanes[PARENT].status).toBe('running');
+    expect(state.lanes[PARENT].pendingPermission).not.toBeNull();
+    const settled = fold([activity({ kind: 'status', status: 'completed' })], state);
+    expect(settled.lanes[PARENT].status).toBe('completed');
+  });
+
+  it('still sweeps on a user Stop and on a plain completion', () => {
+    for (const terminal of [
+      { type: 'session.stopped', sessionId: SESSION },
+      { type: 'session.completed', sessionId: SESSION },
+      { type: 'session.completed', sessionId: SESSION, payload: { stopCause: 'turn_limit' } },
+    ]) {
+      const state = fold([started(), terminal]);
+      expect(state.lanes[PARENT].status).toBe('cancelled');
+    }
+  });
+
   it('a terminal for a session with nothing to sweep returns the same reference', () => {
     const state = fold([started(), activity({ kind: 'status', status: 'completed' })]);
     expect(reduceSubagentActivity(state, { type: 'session.failed', sessionId: SESSION })).toBe(

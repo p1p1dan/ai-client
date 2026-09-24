@@ -19,8 +19,8 @@
  *   model adapter in-process, and delegate tools come from our registry under
  *   their lowercase names.
  * - `Task*` is registered with `write` access so the tools plugin's existing
- *   plan-mode filter removes all four in plan mode. The contract's "父 plan
- *   模式不委派" then holds by construction rather than by a second rule that
+ *   plan-mode filter removes all four in plan mode. The contract's rule "no
+ *   delegation from a plan-mode parent" then holds by construction rather than by a second rule that
  *   could drift from the first.
  * - Only `Task` is `executionMode: 'parallel'`; the other three are sequential.
  *   The P5-2-0 probe measured that 0.84.4 serializes any batch containing one
@@ -114,7 +114,7 @@ const MAX_TASKWAIT_RESULT_CHARS = 50_000;
 /**
  * The persisted half of a `TaskWait` result, which is a separate budget.
  *
- * subagent-core-12 — the contract asks for "UI/details/持久化分开限额", and the
+ * subagent-core-12 — the contract asks for "separate limits for UI, details and persistence", and the
  * third one was missing: `details.delegations` carried every target's FULL
  * report (12k each) and pi writes `details` into the session JSONL verbatim, so
  * a ten-way wait wrote ~120 KB of text the model never sees and a fifty-id
@@ -142,7 +142,7 @@ const MAX_DELEGATION_IDS = 50;
  * kept so the two paths bound the same thing the same way.
  *
  * Terminal status, the report and usage are NOT counted and never suppressed —
- * the contract's "不允许阻断终态、usage 或完整报告" is the whole reason the cap
+ * the contract's "never block the terminal status, usage or full report" is the whole reason the cap
  * is applied here rather than inside the events plugin.
  */
 export const MAX_ACTIVITY_EVENTS_PER_DELEGATION = 200;
@@ -197,7 +197,7 @@ export interface SubagentConfig {
   /**
    * Re-read the catalog from disk, for the top of a new top-level run.
    *
-   * subagent-data-02 — the contract's "每个顶层用户 run 重新读取活动定义" was
+   * subagent-data-02 — the contract's "re-read the active definitions on every top-level user run" was
    * never implemented: the catalog was loaded once per worker and frozen into
    * this plugin, so a definition edited (or created) from the settings page did
    * not reach a session already open. Absent leaves the bootstrap snapshot in
@@ -274,6 +274,13 @@ export interface SubagentRunContext {
    * third tier reads this instead of the dead `SubagentConfig.thinkingLevel`.
    */
   thinkingLevel?: ThinkingLevel;
+  /**
+   * Aborted when the user interjects (Ctrl+Enter). Ends a `TaskWait` in
+   * progress early — the delegates keep running — so the parent's turn can
+   * reach the boundary the interjection stops at instead of sitting out the
+   * wait's own timeout (up to fifteen minutes).
+   */
+  interrupt?: AbortSignal;
 }
 
 export interface SubagentService {
@@ -324,6 +331,16 @@ export interface SubagentService {
    * delegations from another's.
    */
   bindRun(context: SubagentRunContext): void;
+  /**
+   * The run bound by {@link bindRun} has returned.
+   *
+   * Only observable when a run leaves delegates running, which only an
+   * interjected run does: they keep working and keep reporting, but nothing
+   * they do may claim the session is running any more — the worker has no turn
+   * and the renderer has already been told `idle`. The binding itself stays,
+   * so their records and activity still name the right session.
+   */
+  endRun(): void;
 }
 
 declare module 'cordis' {
@@ -368,7 +385,18 @@ export class SubagentPlugin extends Service implements SubagentService {
   private readonly config: SubagentConfig;
   private readonly listeners = new Set<(envelope: SubagentEventEnvelope) => void>();
   private usage: Usage | undefined;
+  /**
+   * Delegations whose spend is in {@link usage} and not yet taken.
+   *
+   * Their `settled` records may already be on disk, and {@link historyUsage}
+   * reads those records — so a delegate that settled BETWEEN runs (left
+   * running by an interjection) would otherwise be counted twice by the next
+   * run: once from the file, once from `takeUsage()`.
+   */
+  private readonly untakenUsage = new Set<string>();
   private runContext?: SubagentRunContext;
+  /** True between `bindRun()` and `endRun()`; see {@link SubagentService.endRun}. */
+  private runLive = false;
   /**
    * The active definition list. Not `readonly` any more: {@link refresh}
    * replaces it wholesale between top-level runs (subagent-data-02).
@@ -513,11 +541,18 @@ export class SubagentPlugin extends Service implements SubagentService {
   historyUsage(): { usage: Usage | undefined; delegations: number } {
     const entries = this.ctx.get(SESSION_SERVICE)?.snapshot().entries;
     if (!entries) return { usage: undefined, delegations: 0 };
-    return subagentHistoryUsage(readSubagentHistory(entries));
+    return subagentHistoryUsage(
+      readSubagentHistory(entries).filter((entry) => !this.untakenUsage.has(entry.delegationId))
+    );
   }
 
   bindRun(context: SubagentRunContext): void {
     this.runContext = context;
+    this.runLive = true;
+  }
+
+  endRun(): void {
+    this.runLive = false;
   }
 
   get busy(): boolean {
@@ -632,7 +667,9 @@ export class SubagentPlugin extends Service implements SubagentService {
   private publishRetry(delegationId: string, info: SessionRetryInfo | undefined): void {
     const events = this.ctx.get(EVENTS_SERVICE);
     const sessionId = this.runContext?.sessionId;
-    if (!events || !sessionId) return;
+    // Between runs this status would flip an idle session back to `running`
+    // with no run left to ever send `idle` again.
+    if (!events || !sessionId || !this.runLive) return;
     events.emit({
       type: 'session.status',
       sessionId,
@@ -643,6 +680,7 @@ export class SubagentPlugin extends Service implements SubagentService {
   takeUsage(): Usage | undefined {
     const usage = this.usage;
     this.usage = undefined;
+    this.untakenUsage.clear();
     return usage;
   }
 
@@ -768,7 +806,9 @@ export class SubagentPlugin extends Service implements SubagentService {
         delegationId: envelope.delegationId,
         agentName: envelope.agentName,
         parentToolCallId: envelope.parentToolCallId,
-        runId: this.runContext.runId,
+        // The run that STARTED the delegation: one left running by an
+        // interjection keeps talking while a later run is bound.
+        runId: this.started.get(envelope.delegationId)?.runId ?? this.runContext.runId,
         message: envelope.event.message,
         at: Date.now(),
       });
@@ -1227,7 +1267,10 @@ export class SubagentPlugin extends Service implements SubagentService {
     // cannot bill the same delegate twice. The same guard is what makes the
     // records and the terminal events below fire exactly once.
     if (!settled) return;
-    if (result.usage) this.usage = addUsage(this.usage, result.usage);
+    if (result.usage) {
+      this.usage = addUsage(this.usage, result.usage);
+      this.untakenUsage.add(record.delegationId);
+    }
     const start = this.started.get(record.delegationId);
     this.started.delete(record.delegationId);
     const completedAt = record.completedAt ?? Date.now();
@@ -1342,12 +1385,15 @@ export class SubagentPlugin extends Service implements SubagentService {
         }
         const targetCompleted =
           mode === 'all' ? targets.length : Math.min(Math.max(minCompleted, 1), targets.length);
+        const interrupt = this.runContext?.interrupt;
         const timedOut = await waitForDelegations(
           targets,
           targetCompleted,
           Date.now() + timeoutSeconds * 1000,
-          signal
+          interrupt ? (signal ? AbortSignal.any([signal, interrupt]) : interrupt) : signal
         );
+        // Ended by the user's new message rather than by a Stop or the clock.
+        const interrupted = interrupt?.aborted === true && signal?.aborted !== true;
         const now = Date.now();
         // Whatever settled is being put in front of the model right here, so
         // the auto-resume pass must not hand it over a second time. The ones
@@ -1369,14 +1415,17 @@ export class SubagentPlugin extends Service implements SubagentService {
               : (record.result?.report ?? `(${record.status} without a report)`),
         }));
         const finished = results.filter((entry) => entry.status !== 'running').length;
-        const note = timedOut
-          ? `Still running after ${timeoutSeconds}s: ${finished}/${targets.length} finished. This is not a failure — unfinished delegates keep working and the runtime will deliver their reports when they finish. Call TaskStop only to cancel.\n${targets
-              .filter((record) => record.status === 'running')
-              .map((record) => formatDelegationHeartbeat(record, now))
-              .join('\n')}`
-          : mode === 'any'
-            ? `Converged after ${finished} of ${targets.length} finished.`
-            : undefined;
+        const stillRunning = targets
+          .filter((record) => record.status === 'running')
+          .map((record) => formatDelegationHeartbeat(record, now))
+          .join('\n');
+        const note = interrupted
+          ? `Stopped waiting early because the user sent a new message: ${finished}/${targets.length} finished. Unfinished delegates keep working and the runtime will deliver their reports when they finish.${stillRunning ? `\n${stillRunning}` : ''}`
+          : timedOut
+            ? `Still running after ${timeoutSeconds}s: ${finished}/${targets.length} finished. This is not a failure — unfinished delegates keep working and the runtime will deliver their reports when they finish. Call TaskStop only to cancel.\n${stillRunning}`
+            : mode === 'any'
+              ? `Converged after ${finished} of ${targets.length} finished.`
+              : undefined;
         const unknownNote = unknownIds.length
           ? `Unknown delegation ids (not found in this session): ${unknownIds.join(', ')}.`
           : undefined;

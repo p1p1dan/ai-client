@@ -5,15 +5,35 @@ import {
   LEGACY_IMPORT_CUSTOM_TYPE_DISPLAY,
   LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE,
 } from '../shared/types/legacyImport.ts';
-import type {
-  HistoryAttachment,
-  HistoryBlock,
-  HistoryMessage,
-  SessionHistoryPage,
+import {
+  type HistoryAttachment,
+  type HistoryBlock,
+  type HistoryMessage,
+  RUN_STOP_CUSTOM_TYPE,
+  type SessionHistoryPage,
+  type TurnStopCause,
 } from '../shared/types/sessionHistory.ts';
 
 export interface PiHistorySessionManager {
   getBranch(): unknown[];
+}
+
+/**
+ * Fold a run-stop record onto the run it closes.
+ *
+ * The record is written after the run's last message, so the run's last
+ * assistant message is the newest one since the last user message. A run
+ * stopped before it produced any assistant message has nothing to carry the
+ * cause, and none is invented.
+ */
+function stampRunStop(messages: HistoryMessage[], cause: TurnStopCause): void {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role === 'user') return;
+    if (message.role !== 'assistant') continue;
+    messages[index] = { ...message, stopCause: cause };
+    return;
+  }
 }
 
 /**
@@ -159,6 +179,11 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
       continue;
     }
     if (entry.type === 'custom') {
+      if (entry.customType === RUN_STOP_CUSTOM_TYPE) {
+        const cause = recordOf(entry.data)?.cause;
+        if (cause === 'interjected' || cause === 'user_stop') stampRunStop(messages, cause);
+        continue;
+      }
       if (entry.customType === LEGACY_IMPORT_CUSTOM_TYPE_PROVENANCE) {
         const data = recordOf(entry.data);
         const sourceSessionId =

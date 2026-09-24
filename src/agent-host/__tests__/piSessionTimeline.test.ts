@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { translate } from '../../shared/i18n.ts';
+import { RUN_STOP_CUSTOM_TYPE } from '../../shared/types/sessionHistory.ts';
 import { paginatePiSessionHistory, projectPiSessionHistory } from '../piSessionTimeline.ts';
 
 function manager(branch: unknown[]) {
@@ -259,5 +260,111 @@ describe('imported-history banner (T023)', () => {
     // A missing dictionary entry makes `translate` return the key, which would
     // still read like a sentence — so assert it actually changed.
     expect(chinese).not.toBe(block.notice.key);
+  });
+});
+
+describe('run-stop records in history replay', () => {
+  const at = (second: number) => `2026-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
+  const user = (id: string, parentId: string | null, text: string, second: number) => ({
+    type: 'message',
+    id,
+    parentId,
+    timestamp: at(second),
+    message: { role: 'user', content: [{ type: 'text', text }] },
+  });
+  const assistant = (
+    id: string,
+    parentId: string,
+    content: unknown[],
+    stopReason: string,
+    second: number
+  ) => ({
+    type: 'message',
+    id,
+    parentId,
+    timestamp: at(second),
+    message: { role: 'assistant', content, stopReason },
+  });
+  const runStop = (id: string, parentId: string, cause: string, second: number) => ({
+    type: 'custom',
+    id,
+    parentId,
+    timestamp: at(second),
+    customType: RUN_STOP_CUSTOM_TYPE,
+    data: { cause, runId: `run-${id}` },
+  });
+
+  it("puts the cause on the run's last assistant message and on nothing else", () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant(
+          'a1',
+          'u1',
+          [{ type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'a.ts' } }],
+          'toolUse',
+          2
+        ),
+        {
+          type: 'message',
+          id: 'r1',
+          parentId: 'a1',
+          timestamp: at(3),
+          message: {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'read',
+            content: [{ type: 'text', text: 'contents' }],
+            isError: false,
+          },
+        },
+        assistant('a2', 'r1', [{ type: 'text', text: 'still reading' }], 'stop', 4),
+        runStop('s1', 'a2', 'interjected', 5),
+        user('u2', 's1', 'the interjection', 6),
+        assistant('a3', 'u2', [{ type: 'text', text: 'partial' }], 'aborted', 7),
+        runStop('s2', 'a3', 'user_stop', 8),
+        user('u3', 's2', 'third', 9),
+        assistant('a4', 'u3', [{ type: 'text', text: 'done' }], 'stop', 10),
+      ])
+    );
+
+    expect(
+      history.map((message) => [message.entryId, message.role, message.stopCause ?? null])
+    ).toEqual([
+      ['u1', 'user', null],
+      ['a1', 'assistant', null],
+      ['a2', 'assistant', 'interjected'],
+      ['u2', 'user', null],
+      ['a3', 'assistant', 'user_stop'],
+      ['u3', 'user', null],
+      ['a4', 'assistant', null],
+    ]);
+    // The record itself is not a message of any kind.
+    expect(history.some((message) => message.entryId === 's1' || message.entryId === 's2')).toBe(
+      false
+    );
+  });
+
+  it('does not reach back into the previous turn when the stopped run had no reply yet', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant('a1', 'u1', [{ type: 'text', text: 'answer' }], 'stop', 2),
+        user('u2', 'a1', 'second', 3),
+        runStop('s1', 'u2', 'user_stop', 4),
+      ])
+    );
+    expect(history.every((message) => message.stopCause === undefined)).toBe(true);
+  });
+
+  it('ignores a record whose cause this build does not know', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant('a1', 'u1', [{ type: 'text', text: 'answer' }], 'stop', 2),
+        runStop('s1', 'a1', 'something_newer', 3),
+      ])
+    );
+    expect(history[1]?.stopCause).toBeUndefined();
   });
 });

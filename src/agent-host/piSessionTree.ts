@@ -1,6 +1,7 @@
 import {
   PI_SESSION_TREE_BACKEND_LIMIT,
   type PiLeafCheckpoint,
+  RUN_STOP_CUSTOM_TYPE,
   type SessionTreeNode,
   type SessionTreeSnapshot,
 } from '../shared/types/sessionHistory.ts';
@@ -119,6 +120,24 @@ export function readPiLeafCheckpoint(manager: PiTreeSessionManager): PiLeafCheck
   };
 }
 
+/**
+ * Custom entries that are never a place in the conversation, so never a node.
+ *
+ * The run-stop record sits at the tip of every run the user ended; as a node
+ * it would add one more unlabeled `custom` row per Stop / Ctrl+Enter, and it
+ * would take the `leaf` mark away from the message the user actually stopped
+ * at. pi's own TUI tree hides `custom` entries by default for the same reason.
+ */
+const HIDDEN_CUSTOM_TYPES: ReadonlySet<string> = new Set([RUN_STOP_CUSTOM_TYPE]);
+
+function isHiddenEntry(entry: PiTreeEntry): boolean {
+  return (
+    entry.type === 'custom' &&
+    typeof entry.customType === 'string' &&
+    HIDDEN_CUSTOM_TYPES.has(entry.customType)
+  );
+}
+
 export function buildPiSessionTreeSnapshot(input: {
   manager: PiTreeSessionManager;
   logicalSessionId: string;
@@ -133,9 +152,27 @@ export function buildPiSessionTreeSnapshot(input: {
       'Pi session does not expose iterable session entries'
     );
   }
-  const entries = rawEntries
+  const normalized = rawEntries
     .map(normalizeEntry)
     .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+  const normalizedById = new Map(normalized.map((entry) => [entry.id, entry]));
+  // A hidden entry is spliced out: whatever hung off it hangs off its nearest
+  // visible ancestor instead, and a leaf that IS one marks that ancestor.
+  const visibleAncestor = (id: string | null): string | null => {
+    const seen = new Set<string>();
+    let cursor = id;
+    while (cursor !== null) {
+      const entry = normalizedById.get(cursor);
+      if (!entry || !isHiddenEntry(entry)) return cursor;
+      if (seen.has(cursor)) return null;
+      seen.add(cursor);
+      cursor = entry.parentId;
+    }
+    return null;
+  };
+  const entries = normalized
+    .filter((entry) => !isHiddenEntry(entry))
+    .map((entry) => ({ ...entry, parentId: visibleAncestor(entry.parentId) }));
   const byId = new Map(entries.map((entry) => [entry.id, entry]));
   const children = new Map<string, string[]>();
   const roots: string[] = [];
@@ -155,7 +192,7 @@ export function buildPiSessionTreeSnapshot(input: {
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
       .map((entry) => entry.id)
   );
-  const leafId = input.manager.getLeafId?.() ?? null;
+  const leafId = visibleAncestor(input.manager.getLeafId?.() ?? null);
   const limit = Math.max(
     1,
     Math.min(input.limit ?? PI_SESSION_TREE_BACKEND_LIMIT, PI_SESSION_TREE_BACKEND_LIMIT)

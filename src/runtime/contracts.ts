@@ -294,10 +294,16 @@ export interface RuntimeRunResult {
   turns: number;
   error?: { code: string; message: string };
   /**
-   * decision 040 — set when the run paused at the interactive turn ceiling
-   * after its wrap-up turn. Carried onto `session.completed` by the projector.
+   * decision 040 — `turn_limit` when the run paused at the interactive turn
+   * ceiling after its wrap-up turn.
+   *
+   * `interjected` when Ctrl+Enter ended the run at a turn boundary (and it did
+   * not fail or get aborted on the way out). Delegates the run started may
+   * still be working; their reports go to the next run.
+   *
+   * Carried onto `session.completed` by the projector.
    */
-  stopCause?: 'turn_limit';
+  stopCause?: 'turn_limit' | 'interjected';
   trace: RunTrace;
 }
 

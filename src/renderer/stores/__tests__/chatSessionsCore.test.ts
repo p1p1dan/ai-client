@@ -1385,7 +1385,27 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
     const patch = applyRuntimeEvent(state, event);
 
     expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
-    // No `messages` key in the patch at all — content is preserved untouched.
+    // Content is preserved untouched; the only change is the stop marker on
+    // the run's last assistant message (see `withRunStopCause`).
+    expect(patch.messages?.[SESSION_ID]).toEqual([{ ...message, stopCause: 'user_stop' }]);
+  });
+
+  it('does not stamp the previous turn when the stopped run had no reply yet', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({ id: 'asst-old', blocks: [{ id: 'b1', type: 'text', text: 'old' }] }),
+          makeMessage({ id: 'user-new', role: 'user' }),
+        ],
+      },
+    });
+    const patch = applyRuntimeEvent(state, {
+      type: 'session.stopped',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    });
     expect(patch.messages).toBeUndefined();
   });
 
@@ -1407,6 +1427,86 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
     const updated = patch.messages?.[SESSION_ID]?.find((item) => item.id === 'asst-1');
 
     expect(updated?.blocks).toEqual([{ id: 'b1', type: 'text', text: 'late text' }]);
+  });
+});
+
+describe('applyRuntimeEvent — run stop causes (Ctrl+Enter vs Stop)', () => {
+  function runningWithCard(): ChatSessionsState {
+    return baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({ id: 'user-1', role: 'user' }),
+          makeMessage({ id: 'asst-1', blocks: [{ id: 'b1', type: 'text', text: 'working' }] }),
+        ],
+      },
+      // A delegate's approval card, still parked in the worker.
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'perm-d', messageId: 'asst-1' }],
+    });
+  }
+
+  it('an interjected completion stamps the run and keeps the delegate card', () => {
+    const patch = applyRuntimeEvent(runningWithCard(), {
+      type: 'session.completed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { stopCause: 'interjected' },
+    });
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+    expect(patch.messages?.[SESSION_ID]?.[1]?.stopCause).toBe('interjected');
+    // No `pendingPermissions` key: the card the delegate is waiting on stays.
+    expect(patch.pendingPermissions).toBeUndefined();
+    // Not the session-level ceiling notice either.
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.stopCause).toBeUndefined();
+  });
+
+  it('a user Stop stamps the run and still clears the card', () => {
+    const patch = applyRuntimeEvent(runningWithCard(), {
+      type: 'session.stopped',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    });
+    expect(patch.messages?.[SESSION_ID]?.[1]?.stopCause).toBe('user_stop');
+    expect(patch.pendingPermissions).toEqual([]);
+  });
+
+  it('a background delegate asking between runs shows its card without marking the session waiting', () => {
+    const state = baseState({
+      sessions: [makeSession({ status: 'idle' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'asst-1' })] },
+    });
+    const request = (agentId?: string): RuntimeEvent => ({
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-bg', toolName: 'Bash', ...(agentId ? { agentId } : {}) },
+    });
+
+    const fromDelegate = applyRuntimeEvent(state, request('delegation-1'));
+    expect(fromDelegate.pendingPermissions).toHaveLength(1);
+    expect(
+      fromDelegate.sessions?.find((session) => session.id === SESSION_ID)?.status ?? 'idle'
+    ).toBe('idle');
+
+    // The parent's own request (no agentId) keeps the existing behaviour.
+    const fromParent = applyRuntimeEvent(state, request());
+    expect(fromParent.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe(
+      'waiting_permission'
+    );
+  });
+
+  it('a plain completion stamps nothing and still clears the card', () => {
+    const patch = applyRuntimeEvent(runningWithCard(), {
+      type: 'session.completed',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+    });
+    expect(patch.messages).toBeUndefined();
+    expect(patch.pendingPermissions).toEqual([]);
   });
 });
 

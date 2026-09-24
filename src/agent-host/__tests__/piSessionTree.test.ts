@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { RUN_STOP_CUSTOM_TYPE } from '../../shared/types/sessionHistory.ts';
 import { buildPiSessionTreeSnapshot, readPiLeafCheckpoint } from '../piSessionTree.ts';
 
 function message(id: string, parentId: string | null, text: string) {
@@ -79,5 +80,95 @@ describe('piSessionTree', () => {
         getLeafId: () => null,
       })
     ).toEqual({ activeEntryId: null, fileTailEntryId: 'a' });
+  });
+});
+
+describe('run-stop records in the session tree', () => {
+  const assistant = (id: string, parentId: string, text: string) => ({
+    type: 'message',
+    id,
+    parentId,
+    timestamp: '2026-01-01T00:00:01.000Z',
+    message: { role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' },
+  });
+  const runStop = (id: string, parentId: string) => ({
+    type: 'custom',
+    id,
+    parentId,
+    timestamp: '2026-01-01T00:00:02.000Z',
+    customType: RUN_STOP_CUSTOM_TYPE,
+    data: { cause: 'interjected', runId: 'run-1' },
+  });
+  const permissions = (id: string, parentId: string) => ({
+    type: 'custom',
+    id,
+    parentId,
+    timestamp: '2026-01-01T00:00:00.500Z',
+    customType: 'aiclient.permissions',
+    data: { mode: 'default', gear: 'auto' },
+  });
+
+  it('never becomes a node, and hands the leaf mark to the message it closes', () => {
+    const entries = [
+      message('u', null, 'question'),
+      assistant('a', 'u', 'answer'),
+      runStop('stop', 'a'),
+    ];
+    const snapshot = buildPiSessionTreeSnapshot({
+      manager: { getEntries: () => entries, getBranch: () => entries, getLeafId: () => 'stop' },
+      logicalSessionId: 'logical',
+      sessionFile: '/sessions/stop.jsonl',
+      workspacePath: '/repo',
+    });
+
+    expect(snapshot.nodes.map((node) => node.id)).toEqual(['u', 'a']);
+    expect(snapshot.nodes.find((node) => node.id === 'a')).toMatchObject({
+      leaf: true,
+      childCount: 0,
+    });
+    expect(snapshot.totalNodes).toBe(2);
+    // The file checkpoint is about the file, not the display: it still names
+    // the record, so a stale-checkpoint comparison keeps working.
+    expect(snapshot.leaf).toEqual({ activeEntryId: 'stop', fileTailEntryId: 'stop' });
+  });
+
+  it('re-parents whatever hangs off it onto the message it closes', () => {
+    const entries = [
+      message('u', null, 'question'),
+      assistant('a', 'u', 'answer'),
+      runStop('stop', 'a'),
+      message('u2', 'stop', 'the interjection'),
+      assistant('a2', 'u2', 'second answer'),
+    ];
+    const snapshot = buildPiSessionTreeSnapshot({
+      manager: { getEntries: () => entries, getBranch: () => entries, getLeafId: () => 'a2' },
+      logicalSessionId: 'logical',
+      sessionFile: '/sessions/stop.jsonl',
+      workspacePath: '/repo',
+    });
+
+    expect(snapshot.nodes.map((node) => [node.id, node.parentId, node.depth])).toEqual([
+      ['u', null, 0],
+      ['a', 'u', 1],
+      ['u2', 'a', 2],
+      ['a2', 'u2', 3],
+    ]);
+    expect(snapshot.nodes.find((node) => node.id === 'a2')?.leaf).toBe(true);
+    // A fork point after the record is still offered.
+    expect(snapshot.nodes.find((node) => node.id === 'u2')?.forkable).toBe(true);
+  });
+
+  it('leaves every other custom entry exactly where it was', () => {
+    const entries = [message('u', null, 'question'), permissions('perm', 'u')];
+    const snapshot = buildPiSessionTreeSnapshot({
+      manager: { getEntries: () => entries, getBranch: () => entries, getLeafId: () => 'perm' },
+      logicalSessionId: 'logical',
+      sessionFile: '/sessions/stop.jsonl',
+      workspacePath: '/repo',
+    });
+    expect(snapshot.nodes.map((node) => [node.id, node.entryType, node.leaf])).toEqual([
+      ['u', 'message', false],
+      ['perm', 'custom', true],
+    ]);
   });
 });

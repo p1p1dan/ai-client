@@ -859,7 +859,7 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    * the port of the 2026-08-10 Stop-hang fix (which taught the WAIT about the
    * same event) to the watch batch F2 added eight days later — without it, a
    * turn stopped with no new assistant blocks kept the watch armed, the head
-   * read 「工作中」 forever, and every later Stop answered `stopped: false`
+   * read "Working" forever, and every later Stop answered `stopped: false`
    * (the "stop has no effect" field report).
    */
   it('[D-5] a user Stop clears the pending watch too', () => {
@@ -940,5 +940,64 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     ]) {
       expect(body, `pending branch must not contain ${writer}`).not.toContain(writer);
     }
+  });
+});
+
+/**
+ * `[I-1]` — Ctrl+Enter goes through Enter's own pre-send gate.
+ *
+ * `handleInterject` used to be a second send path with none of `handleSend`'s
+ * checks: a `/compact` typed while a turn ran was queued as plain text,
+ * interrupted the turn and went to the model; an image still being read was
+ * dropped; `disabled` and a stale session binding were ignored; and a draft
+ * with only attachments did nothing at all. The guard below pins the fix as a
+ * structure rather than a list of re-implemented checks: there is exactly ONE
+ * place that writes an interjection into the queue, and it sits after every
+ * check `handleSend` runs.
+ */
+describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
+  it('[I-1] handleInterject is handleSend in interject mode, not a second send path', () => {
+    const at = only('const handleInterject = ');
+    const definition = source.slice(at, source.indexOf(';', at) + 1).replace(/\s+/g, ' ');
+    expect(definition).toBe("const handleInterject = () => handleSend('interject');");
+  });
+
+  it('[I-1] the only queue interjection happens after every pre-send check', () => {
+    const sendAt = only('const handleSend = async (');
+    const body = source.slice(sendAt, matchingBraceEnd(source, source.indexOf('=>', sendAt)));
+    // One writer, and it is inside handleSend.
+    const writerAt = only('.interject(queued)');
+    expect(writerAt).toBeGreaterThan(sendAt);
+    expect(writerAt).toBeLessThan(sendAt + body.length);
+
+    const order = [
+      'runBuiltinSlash(trimmed)',
+      'useChatSessionsStore.getState().activeSessionId !== activeSessionId',
+      'decideSendAction({',
+      "if (action === 'blocked') return;",
+      "if (action === 'send') {",
+      '.interject(queued)',
+    ].map((needle) => {
+      const index = body.indexOf(needle);
+      expect(index, `handleSend must contain ${needle}`).toBeGreaterThan(-1);
+      return index;
+    });
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+
+    // The gate itself: disabled, still-reading attachments, and content that
+    // counts attachments (so an image-only Ctrl+Enter is not a silent no-op).
+    const gate = body.slice(body.indexOf('decideSendAction({'));
+    expect(gate).toContain('disabled: Boolean(disabled)');
+    expect(gate).toContain('reading: attachments.reading');
+    expect(gate).toContain('hasContent: Boolean(trimmed) || attachments.drafts.length > 0');
+  });
+
+  it('[I-1] the stop signal is sent only after the entry is committed', () => {
+    const sendAt = only('const handleSend = async (');
+    const body = source.slice(sendAt, matchingBraceEnd(source, source.indexOf('=>', sendAt)));
+    const committed = body.indexOf("updateValue('');");
+    const signalled = body.indexOf("if (mode === 'interject') await signalInterjection(");
+    expect(committed).toBeGreaterThan(-1);
+    expect(signalled).toBeGreaterThan(committed);
   });
 });

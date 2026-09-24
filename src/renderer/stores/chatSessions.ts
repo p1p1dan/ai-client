@@ -17,6 +17,7 @@ import {
   type HistoryAttachment,
   type HistoryMessage,
   type HistoryNotice,
+  type TurnStopCause,
 } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
 // Leaf module (no imports of its own): the permission-activity record shape and
@@ -292,6 +293,14 @@ export interface ChatMessage {
   /** Pi history leaf ended before a complete assistant response was saved. */
   incomplete?: boolean;
   stopReason?: string;
+  /**
+   * Set on the LAST assistant message of a run the user ended — Ctrl+Enter
+   * (`interjected`) or Stop (`user_stop`). Written live off the terminal
+   * `session.completed` / `session.stopped` event and on replay off the
+   * history projection, so both paths agree. Read it through
+   * `turnEndCause.ts`, not directly. Optional-field addition.
+   */
+  stopCause?: TurnStopCause;
   /** Exact Pi session entry id. Present only on persisted Pi history rows. */
   entryId?: string;
   /**
@@ -666,6 +675,12 @@ function afterGateResolved(
   return { sessions: upsertSessionStatus(state.sessions, sessionId, status) };
 }
 
+/** The session's last run has ended and no new one has reported in yet. */
+function isBetweenRuns(state: ChatSessionsState, sessionId: string): boolean {
+  const status = state.sessions.find((item) => item.id === sessionId)?.status;
+  return status === 'idle' || status === 'completed';
+}
+
 /** Drop every parked prompt of one session (terminal events). Same identity rule as {@link withoutPermission}. */
 function withoutSessionPermissions(
   state: ChatSessionsState,
@@ -682,6 +697,34 @@ function withBucket(
   bucket: ChatMessage[]
 ): Record<string, ChatMessage[]> {
   return { ...state.messages, [sessionId]: bucket };
+}
+
+/**
+ * Live half of {@link ChatMessage.stopCause}: stamp the run that just ended on
+ * its last assistant message — the same message the history projection
+ * stamps on replay, so a live turn and its reopened copy read the same.
+ *
+ * Walks back only as far as the newest user message: a run stopped before it
+ * produced a reply has nothing to carry the cause, and the previous turn's
+ * reply must not inherit it.
+ */
+function withRunStopCause(
+  state: ChatSessionsState,
+  sessionId: string,
+  cause: TurnStopCause
+): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
+  const bucket = state.messages[sessionId];
+  if (!bucket) return {};
+  for (let index = bucket.length - 1; index >= 0; index -= 1) {
+    const message = bucket[index];
+    if (!message || message.role === 'user') return {};
+    if (message.role !== 'assistant') continue;
+    if (message.stopCause === cause) return {};
+    const next = bucket.slice();
+    next[index] = { ...message, stopCause: cause };
+    return { messages: withBucket(state, sessionId, next) };
+  }
+  return {};
 }
 
 /**
@@ -771,6 +814,7 @@ function mapHistoryMessageToChatMessage(
     blocks,
     ...(historyMessage.incomplete ? { incomplete: true } : {}),
     ...(historyMessage.stopReason ? { stopReason: historyMessage.stopReason } : {}),
+    ...(historyMessage.stopCause ? { stopCause: historyMessage.stopCause } : {}),
     ...(historyMessage.entryId ? { entryId: historyMessage.entryId } : {}),
     // Absent unless the history actually carried attachments — keeps exact-shape
     // assertions on attachment-free messages untouched (same rule as
@@ -888,7 +932,9 @@ export function applyRuntimeEvent(
   // output) and a failure clear the notice.
   const stopCause =
     event.type === 'session.completed'
-      ? event.payload?.stopCause
+      ? event.payload?.stopCause === 'turn_limit'
+        ? 'turn_limit'
+        : undefined
       : event.type === 'session.failed' || recovered
         ? undefined
         : current.stopCause;
@@ -1116,6 +1162,19 @@ function applyRuntimeEventCore(
       // still has this session parked, so any leftover entries here are
       // stale (Host crash / dropped event) — clear them so no ghost card
       // stays clickable forever (see withoutSessionPermissions).
+      //
+      // Except a Ctrl+Enter completion: that run ended at a turn boundary
+      // (so the parent itself has nothing parked) while its background
+      // delegates kept running — a card still here is a delegate's live
+      // question, and clearing it would leave that delegate waiting on an
+      // answer nobody can give.
+      if (event.payload?.stopCause === 'interjected') {
+        return {
+          sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+          unreadSessionIds: markSessionUnread(state, sessionId),
+          ...withRunStopCause(state, sessionId, 'interjected'),
+        };
+      }
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
         unreadSessionIds: markSessionUnread(state, sessionId),
@@ -1136,6 +1195,7 @@ function applyRuntimeEventCore(
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
         ...withoutSessionPermissions(state, sessionId),
+        ...withRunStopCause(state, sessionId, 'user_stop'),
       };
     }
 
@@ -1436,7 +1496,14 @@ function applyRuntimeEventCore(
                   : {}),
               },
             ],
-        sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_permission'),
+        // A delegate asking while no turn runs is one a Ctrl+Enter run left
+        // working in the background. Its card shows, but the session is not
+        // marked waiting: once answered, `afterGateResolved` would turn that
+        // into `running`, and with no run left to send `idle` the session —
+        // and the queued message behind it — would be stuck there.
+        ...(event.payload.agentId && isBetweenRuns(state, sessionId)
+          ? {}
+          : { sessions: upsertSessionStatus(state.sessions, sessionId, 'waiting_permission') }),
       };
     }
 

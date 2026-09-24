@@ -7,6 +7,7 @@ import {
   migratePermissionTier,
   type RuntimePermissionSettings,
 } from '../../../shared/types/runtimePermission.ts';
+import { RUN_STOP_CUSTOM_TYPE } from '../../../shared/types/sessionHistory.ts';
 import type { RuntimeHostIoService } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
 import {
@@ -52,6 +53,10 @@ export const INTERNAL_CUSTOM_ENTRIES: readonly string[] = [
   // channel for the same activity is `subagent.activity`, which is bounded,
   // projected and lands in the delegation's own panel.
   'aiclient.subagent',
+  // Why the user ended a run (Ctrl+Enter or Stop). Live, the terminal
+  // `session.*` event already says so; replay reads it through the history
+  // projection, which folds it onto the run's last assistant message.
+  RUN_STOP_CUSTOM_TYPE,
 ];
 
 /**

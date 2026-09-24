@@ -662,6 +662,10 @@ function reduceSessionTerminal(
 ): SubagentActivityState {
   const sessionId = asString(event.sessionId);
   if (!sessionId) return prev;
+  // A Ctrl+Enter completion ends the parent run and deliberately leaves its
+  // delegates running; their own terminal `status` payload settles each lane.
+  if (event.type === 'session.completed' && asRecord(event.payload)?.stopCause === 'interjected')
+    return prev;
   let lanes: Record<string, SubagentLane> | null = null;
   for (const [key, lane] of Object.entries(prev.lanes)) {
     if (lane.sessionId !== sessionId) continue;

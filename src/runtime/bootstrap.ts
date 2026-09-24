@@ -649,6 +649,11 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           const outcomes = await Promise.allSettled([runtimeExec.shutdown(), ...active]);
           for (const outcome of outcomes)
             if (outcome.status === 'rejected') failures.push(outcome.reason);
+          // A run ended by Ctrl+Enter leaves its delegates running into the
+          // idle gap, so "no run is active" no longer means "no delegate is".
+          // Stopped and awaited (bounded) while the session can still take
+          // their settlement records, the same thing a run's own exit does.
+          await step(() => ctx.get(SUBAGENT_SERVICE)?.drain());
           await step(() => ctx.runtimeTrace.flush());
           await step(() => session?.close());
           await step(() => runtimeIo.shutdown());
