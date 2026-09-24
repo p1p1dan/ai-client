@@ -2,8 +2,9 @@
  * P5-2-3 gate — SA20's runtime half: `browser_preview` end to end inside the
  * worker, from the tool call to the host's answer.
  *
- * What these pin down is the seam the contract names: "工作区 HTML 预览、编辑
- * 后自动刷新、前台归属、不可用明确错误". The window itself is Electron's and is
+ * What these pin down is the seam the contract names: "workspace HTML preview,
+ * auto-refresh after edits, foreground ownership, and a clear error when
+ * unavailable". The window itself is Electron's and is
  * covered on the Main side; everything up to the request leaving the runtime,
  * and everything after the answer comes back, is here.
  *

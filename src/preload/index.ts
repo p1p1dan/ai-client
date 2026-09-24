@@ -914,7 +914,7 @@ const electronAPI = {
     /**
      * The inverse of `enterApp`: leave the user's own credentials behind and
      * drop this run's entry, so the gate routes back to the sign-in screen.
-     * Every in-app "登录 / 重新登录" button goes through this — re-querying the
+     * Every in-app "Sign in / Sign in again" button goes through this — re-querying the
      * gate alone can never route while the entry latch is set.
      */
     requestSignIn: (): Promise<import('@shared/types/auth').AuthSignInRequestResult> =>

@@ -11,7 +11,7 @@
  * Three things are ours:
  *
  * 1. **Reading goes through a port, not `node:fs`.** ARD D11 point 4 names
- *    "skills 加载" as one of the surfaces that must converge on the two host
+ *    "skill loading" as one of the surfaces that must converge on the two host
  *    service exits, because the encrypted Windows target serves plaintext per
  *    process. pi-agent-core ships `loadSkills()`, but it takes an
  *    `ExecutionEnv` whose filesystem reads bypass that exit — so this is a

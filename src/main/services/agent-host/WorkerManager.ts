@@ -2893,7 +2893,7 @@ export class WorkerManager {
       return;
     }
     if (event.type === 'session.failed') {
-      // T066 回炉: the 2026-09-17 field pass found this line reading `turn
+      // T066 rework: the 2026-09-17 field pass found this line reading `turn
       // failed: session exceeds the configured size budget` — no code to grep
       // for. A run that ends in failure carries the code beside the sentence;
       // one that throws already has it in front of the sentence, hence the
@@ -3206,7 +3206,7 @@ export class WorkerManager {
    * lazily — a freshly created session has no worker until its first send — so
    * "no entries" is the idle state of a perfectly healthy manager, not a
    * stopped one. Deriving `stopped` from it made the renderer show
-   * "Pi session service 已停止 · 点击 Retry" on a service that answered the
+   * "Pi session service stopped · click Retry" on a service that answered the
    * very next message, which is the one thing a status ribbon must never do.
    *
    * `stopped` is therefore only ever set by the two paths that really stop the

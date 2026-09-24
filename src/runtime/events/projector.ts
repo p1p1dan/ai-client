@@ -168,7 +168,7 @@ export class RuntimeEventProjector {
    *
    * Kept beside the rollup rather than inside it: the rollup's totals INCLUDE
    * this (a session total that excluded delegated work would contradict the
-   * contract's "会话/轮级总成本含子调用"), and this is the slice of them that
+   * contract's "session and turn totals include delegated calls"), and this is the slice of them that
    * says how much was delegated.
    */
   private delegatedUsage: PiTurnUsage | undefined;
@@ -813,7 +813,7 @@ export class RuntimeEventProjector {
     this.emit({
       type,
       sessionId: this.sink.sessionId,
-      // T066 回炉: the code travels beside the message, not inside it. A run
+      // T066 rework: the code travels beside the message, not inside it. A run
       // that ENDS in failure reports the provider's own sentence to the user,
       // so prefixing it would put `stop_error:` in front of a 503; the log and
       // any later branching reader read `errorCode` instead.

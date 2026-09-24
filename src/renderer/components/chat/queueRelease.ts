@@ -106,7 +106,7 @@ export interface DecideQueueReleaseInput {
  * check below).
  * `idle`/`completed` are the only two releasing statuses; the other seven all
  * hold as `not-idle`, including `failed` and `disconnected` (retry/reconnect
- * only, never auto-release — decision 3.2's "退避" rule).
+ * only, never auto-release — decision 3.2's "back off" rule).
  *
  * `head-failed`: DORMANT in the current wiring — the T-19 fix review (R5)
  * reverted batch 3's "released entry's turn fails, requeue at the head with

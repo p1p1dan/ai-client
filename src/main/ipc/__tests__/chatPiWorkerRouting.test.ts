@@ -428,7 +428,7 @@ describe('Pi WorkerSlot chat routing', () => {
     });
 
     /**
-     * T040 追加项 — the aftermath of main-aux-03. Since the scratch service only
+     * T040 addendum — the aftermath of main-aux-03. Since the scratch service only
      * remembers the roots THIS run resolved from the setting, a user who
      * changed the temp-session path and restarted comes back with an index row
      * whose cwd is under the old root: not recognised as scratch and not on

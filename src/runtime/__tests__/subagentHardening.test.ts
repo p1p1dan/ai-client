@@ -639,7 +639,7 @@ describe('T020 · wired', () => {
       session: { totalTokens: number; toolResults: number };
     };
     expect(last.delegated.totalTokens).toBe(result.subagentUsage?.totalTokens);
-    // The contract's "会话/轮级总成本含子调用": the conversation total is the
+    // The contract's "session and turn totals include delegated calls": the conversation total is the
     // sum, and `delegated` says how much of it was delegated.
     expect(last.session.totalTokens).toBeGreaterThanOrEqual(last.delegated.totalTokens);
     expect(last.session.toolResults).toBe(1);

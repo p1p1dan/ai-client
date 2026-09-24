@@ -166,7 +166,7 @@ function nextPausedAfterEnqueue(bucket: SessionQueue): QueuePauseReason | null {
  *
  * `nextPausedAfterEnqueue` above owns what this does to an existing pause.
  * Rejections never touch state (same reference returned) — the caller keeps
- * the textarea text exactly as typed (decision 7: "队列满 ... 绝不静默丢字"),
+ * the textarea text exactly as typed (decision 7: "queue full ... never silently drop what was typed"),
  * and a refused message is not the user handing anything over, so a frozen
  * queue stays frozen.
  */

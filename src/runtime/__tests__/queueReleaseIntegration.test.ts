@@ -1,20 +1,26 @@
 /**
- * 排队消息在**真实 worker**上按先进先出释放。
+ * Queued messages are released first-in, first-out on a **real worker**.
  *
- * 这个用例原来在 `scripts/__tests__/pi-queue-release-integration.test.mjs`，驱动的是
- * 旧引擎 `PiWorkerSession`；P6-5 把那个引擎退役后，用例跟着搬到自有 runtime——要验的
- * 事情一个字没变，换的只是底下那台发动机。
+ * This case used to live in `scripts/__tests__/pi-queue-release-integration.test.mjs`
+ * and drove the old `PiWorkerSession` engine; when P6-5 retired that engine the
+ * case moved to the self-owned runtime. What it verifies is unchanged — only
+ * the engine underneath is different.
  *
- * 为什么值得单独验一遍：排队逻辑本身（`messageQueue.ts` / `queueReleaseTransaction.ts`）
- * 有自己的单测，但它们只知道「取一条、跑一条、跑砸了放回去」。真正会出事的是**引擎这一侧
- * 的接缝**——一条回合还没结算就收下一条会不会串、附件拼进提示词时会不会丢。所以这里用
- * 真实 RPC server + 真实 NativeWorkerRuntime + 真实会话文件，只把 provider 换成 pi-ai
- * 自己的 faux。
+ * Why it is worth verifying on its own: the queue logic itself
+ * (`messageQueue.ts` / `queueReleaseTransaction.ts`) has its own unit tests,
+ * but those only know "take one, run one, put it back if it failed". What can
+ * actually break is **the seam on the engine side** — whether a message taken
+ * before the previous turn settled gets mixed into it, and whether attachments
+ * are lost on their way into the prompt. So this uses a real RPC server, a real
+ * NativeWorkerRuntime and a real session file, with only the provider swapped
+ * for pi-ai's own faux.
  *
- * **不 import 渲染层那两个模块**：它们经 `attachments.ts` 一路牵进 `@shared/*` 与 `@/`
- * 两套路径别名，而 `src/runtime` 是独立子包、tsconfig 里没有这些别名——把别名加进去等于
- * 让 runtime 包认识渲染层。排队那几步（取队首、跑、跑砸了放回去）在这里按同样的顺序手写，
- * 它们自己的行为由渲染层的单测钉住。
+ * **It does not import those two renderer modules**: through `attachments.ts`
+ * they pull in both the `@shared/*` and `@/` path aliases, and `src/runtime` is
+ * a separate subpackage whose tsconfig has neither — adding them would teach
+ * the runtime package about the renderer. The queue steps (take the head, run
+ * it, put it back on failure) are hand-written here in the same order; their
+ * own behaviour is pinned by the renderer's unit tests.
  */
 
 import { mkdtemp, rm } from 'node:fs/promises';

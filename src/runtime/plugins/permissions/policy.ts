@@ -28,7 +28,7 @@ export interface RuntimePermissionPolicy {
  * the switch is consulted at all. "Highest priority" is NOT, because
  * `mergePermissionScopes` is last-wins and the shipped policy documents the
  * opposite order in as many words — `agent-host/permissionPolicy.mjs` says
- * "随包默认 < 用户 / 受管 agentDir 配置 < 项目 .pi 配置" and "the user always
+ * "bundled defaults < user / managed agentDir config < project .pi config" and "the user always
  * wins", which is D-Q9 from 2026-08-29. Moving `bundled` to the end would let
  * the shipped table delete every rule a user wrote, which is a different
  * product, not a merge-order tweak. What is genuinely un-overridable already

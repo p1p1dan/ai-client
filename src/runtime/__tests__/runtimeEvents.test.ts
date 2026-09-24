@@ -475,7 +475,7 @@ describe('T017 · projection seams', () => {
   });
 
   /**
-   * T066 回炉. A run that ends in failure used to report `error` alone, so the
+   * T066 rework. A run that ends in failure used to report `error` alone, so the
    * operator log had no code to grep and read `turn failed: session exceeds the
    * configured size budget`. The code rides BESIDE the sentence rather than in
    * front of it, because this sentence is the one the renderer shows — putting

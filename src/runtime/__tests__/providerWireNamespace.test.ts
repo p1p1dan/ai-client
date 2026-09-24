@@ -1,5 +1,5 @@
 /**
- * T061 回炉 — what the app's own keys do at the boundary.
+ * T061 rework — what the app's own keys do at the boundary.
  *
  * `attachmentRider.ts` claimed a rider "never reaches the provider" because
  * every pi-ai adapter rebuilds the block it sends. That holds for nine of the

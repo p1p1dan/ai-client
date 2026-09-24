@@ -649,7 +649,7 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
   });
 
   it('offers no delegation at all in plan mode', async () => {
-    // The contract's "父 plan 模式不委派", including read-only delegates: there
+    // The contract's "no delegation from a plan-mode parent", including read-only delegates: there
     // is no first-version exception. Holds by construction — Task* is
     // registered with `write` access, which the tools plugin already filters.
     const handleForPlan = scriptedProvider({

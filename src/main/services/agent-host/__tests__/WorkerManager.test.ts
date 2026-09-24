@@ -2429,7 +2429,7 @@ describe('WorkerManager isolation and crash recovery', () => {
   });
 });
 
-// 2026-09-04 bug: creating a session showed "Pi session service 已停止 · 点击
+// 2026-09-04 bug: creating a session showed "Pi session service stopped · click
 // Retry" while the very next message answered normally. Workers spawn lazily,
 // so an empty pool is the manager's IDLE state — deriving `stopped` from it
 // turned a healthy service into a scary ribbon with a Retry button.
@@ -3045,7 +3045,7 @@ describe('WorkerManager notable-event logging (T066)', () => {
   });
 
   /**
-   * T066 回炉 — the 2026-09-17 field pass found this line reading `turn failed:
+   * T066 rework — the 2026-09-17 field pass found this line reading `turn failed:
    * session exceeds the configured size budget`: the code sits in the payload,
    * not in the sentence, for every run that ENDS in failure (the sentence is
    * the user's, so the projector does not prefix it). With nothing to grep for,

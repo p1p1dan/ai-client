@@ -6,7 +6,7 @@
  * builtin it was written to replace, a pinned model that falls back to the
  * session's expensive one. None of those throws. They just make the delegate
  * behave like a different delegate, which is exactly the class of defect the
- * P5-2 contract's "整体等价基线" exists to prevent.
+ * P5-2 contract's "overall equivalence baseline" exists to prevent.
  */
 
 import { join, sep } from 'node:path';

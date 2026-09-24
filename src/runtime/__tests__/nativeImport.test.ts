@@ -345,7 +345,7 @@ describe('NativeLegacyImportWriter', () => {
  * IM04 — an imported conversation is not an archive, it is a session you can
  * carry on.
  *
- * H/21 made "可续聊" the hard acceptance for conversation import, and switching
+ * H/21 made "the conversation can be continued" the hard acceptance for conversation import, and switching
  * backends must not quietly downgrade it. Run offline against pi-ai's faux
  * provider: what is being proved is that the imported turns become MODEL
  * CONTEXT, not that a gateway answers.

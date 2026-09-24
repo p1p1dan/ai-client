@@ -426,7 +426,7 @@ describe('Bash AST unresolved operands under auto', () => {
  * The fourth gear, and the one the previous suite explains the need for.
  *
  * `auto` raises a card for an operand the static analysis could not read — a
- * `$VAR`, a `$(…)`, a loop variable — which is exactly the "全自动还弹授权卡"
+ * `$VAR`, a `$(…)`, a loop variable — which is exactly the "fully automatic, yet it still pops an approval card"
  * the field pass kept reporting. `bypass` answers those too. What it must NOT
  * do is acquire authority: every deny is decided before any gear is consulted,
  * so the second half of this suite is the list of things that still refuse.
