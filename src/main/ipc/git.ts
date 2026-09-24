@@ -174,7 +174,7 @@ export function registerGitHandlers(): void {
     return git.getHeadSignature();
   });
 
-  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_LIST, async (_, workdir: string) => {
+  ipcMain.handle(IPC_CHANNELS.GIT_BRANCH_LIST, async (_, workdir: string, skipMerged?: boolean) => {
     if (isRemoteWorkdir(workdir)) {
       return remoteRepositoryBackend.getBranches(workdir);
     }
@@ -182,7 +182,9 @@ export function registerGitHandlers(): void {
     if (!git) {
       return [];
     }
-    return git.getBranches();
+    // `skipMerged` is for permanently-mounted branch pickers: the merged mark
+    // costs a `gh pr list` shell-out with a 5 s timeout on every call.
+    return git.getBranches(skipMerged ? { skipMerged: true } : undefined);
   });
 
   ipcMain.handle(

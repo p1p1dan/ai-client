@@ -6,6 +6,14 @@ import { useShouldPoll } from './useWindowFocus';
 
 interface GitQueryOptions {
   enabled?: boolean;
+  /**
+   * Omit the PR-merged marking. Use it for a PERMANENTLY-MOUNTED branch picker:
+   * the marking shells out to `gh pr list` with a 5 s timeout on every call, so
+   * a picker that is always on screen would pay it constantly (and pay the whole
+   * timeout on a machine with no authenticated `gh`). The key changes with it, so
+   * the two shapes never share a cache entry.
+   */
+  skipMerged?: boolean;
 }
 
 export function useGitStatus(workdir: string | null, isActive = true) {
@@ -30,12 +38,13 @@ export function useGitStatus(workdir: string | null, isActive = true) {
 
 export function useGitBranches(workdir: string | null, options?: GitQueryOptions) {
   const queryEnabled = options?.enabled ?? true;
+  const skipMerged = options?.skipMerged ?? false;
 
   return useQuery({
-    queryKey: gitQueryKeys.branches(workdir),
+    queryKey: skipMerged ? gitQueryKeys.branchNames(workdir) : gitQueryKeys.branches(workdir),
     queryFn: async () => {
       if (!workdir) return [];
-      const branches = await window.electronAPI.git.getBranches(workdir);
+      const branches = await window.electronAPI.git.getBranches(workdir, skipMerged);
       return branches;
     },
     enabled: !!workdir && queryEnabled,
@@ -69,6 +78,9 @@ function invalidateBranchQueries(queryClient: QueryClient, workdir: string) {
     [
       gitQueryKeys.status(workdir),
       gitQueryKeys.branches(workdir),
+      // The picker's own key. Without it a checkout would leave the branch
+      // column showing the branch that is no longer checked out.
+      gitQueryKeys.branchNames(workdir),
       gitQueryKeys.fileChanges(workdir),
       gitQueryKeys.fileDiff(workdir),
       gitQueryKeys.log(workdir),

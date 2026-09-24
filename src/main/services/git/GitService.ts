@@ -360,7 +360,23 @@ export class GitService {
     return { head, ref, refs: createHash('sha1').update(refLines).digest('hex') };
   }
 
-  async getBranches(): Promise<GitBranch[]> {
+  /**
+   * Branches of this repository.
+   *
+   * ## `skipMerged`
+   *
+   * The PR-merged marking below shells out to `gh pr list` with a 5 s timeout,
+   * unconditionally. That is affordable for the one caller that WANTS the mark
+   * (the branch list App fetches for worktree creation), and unaffordable for a
+   * branch PICKER that is permanently mounted: every mount would pay the call,
+   * and on a machine with no authenticated `gh` it pays the whole timeout before
+   * the catch swallows it.
+   *
+   * Callers that only need names to switch between pass `skipMerged: true` and
+   * get `git branch -a -v` alone — no `gh`, no `merged` field. Absent means the
+   * old behaviour, so every existing caller is untouched.
+   */
+  async getBranches(options?: { skipMerged?: boolean }): Promise<GitBranch[]> {
     const result = await this.git.branch(['-a', '-v']);
     const branches = Object.entries(result.branches).map(([name, info]) => ({
       name,
@@ -368,6 +384,10 @@ export class GitService {
       commit: info.commit,
       label: info.label,
     }));
+
+    if (options?.skipMerged) {
+      return branches;
+    }
 
     if (branches.length === 0) {
       // An empty listing has two causes and they need opposite answers: a repo

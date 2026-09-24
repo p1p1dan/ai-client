@@ -141,8 +141,9 @@ const electronAPI = {
       submodulePath?: string
     ): Promise<GitLogEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_LOG, workdir, maxCount, skip, submodulePath),
-    getBranches: (workdir: string): Promise<GitBranch[]> =>
-      ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH_LIST, workdir),
+    /** `skipMerged` omits the PR-merged marking — see `GitService.getBranches`. */
+    getBranches: (workdir: string, skipMerged?: boolean): Promise<GitBranch[]> =>
+      ipcRenderer.invoke(IPC_CHANNELS.GIT_BRANCH_LIST, workdir, skipMerged),
     /** T100: `null` for a repository with no cheap local fingerprint (remote workdirs). */
     getHeadSignature: (workdir: string): Promise<GitHeadSignature | null> =>
       ipcRenderer.invoke(IPC_CHANNELS.GIT_HEAD_SIGNATURE, workdir),

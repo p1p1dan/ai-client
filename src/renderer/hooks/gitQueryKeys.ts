@@ -74,8 +74,19 @@ function scopedKeyBuilder(...segments: string[]) {
 export const gitQueryKeys = {
   status: scopedKeyBuilder('git', 'status'),
   branches: scopedKeyBuilder('git', 'branches'),
+  /**
+   * Branch NAMES for a picker, without the PR-merged marking.
+   *
+   * A separate key from `branches` on purpose: the two responses differ (this
+   * one has no `merged` field), and sharing a key would let whichever fetch
+   * landed first serve both — leaving callers that need `merged` silently
+   * without it, or a picker paying for a `gh pr list` it does not use. The key
+   * suffix also keeps React Query from serving one shape as the other's cache
+   * entry after a refetch.
   /** T100: the polled HEAD/branch-ref fingerprint (`useGitHeadSignature.ts`). */
   headSignature: scopedKeyBuilder('git', 'head-signature'),
+  /** Same as {@link branches} but for `skipMerged: true` responses. */
+  branchNames: scopedKeyBuilder('git', 'branch-names'),
   fileChanges: scopedKeyBuilder('git', 'file-changes'),
   submodules: scopedKeyBuilder('git', 'submodules'),
 
