@@ -16,7 +16,7 @@
  * in the pure layer as a dormant field for a future T-19b; this view simply
  * does not consume them anymore.
  */
-import { ArrowDown, ArrowUp, Pencil, X, Zap } from 'lucide-react';
+import { ArrowDown, ArrowUp, CornerDownRight, Pencil, X, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { queueStripWrapperClass } from './middleColumnLayout';
@@ -121,6 +121,18 @@ function QueueEntryRow({
       className="flex h-7 items-center gap-1.5 rounded-sm border border-border bg-muted/50 px-2 text-meta"
     >
       <span className="shrink-0 tabular-nums text-muted-foreground">{entry.index}</span>
+      {entry.interjection && (
+        // Ctrl+Enter rows sit mixed in with ordinary queue traffic and differ
+        // only in when they deliver, so the marker is the only thing that tells
+        // the user which one stopped the turn.
+        <span
+          className="flex shrink-0 items-center gap-1 text-muted-foreground"
+          title={t('Interjected with Ctrl+Enter — sent at the next turn boundary')}
+        >
+          <CornerDownRight className="size-3" />
+          {t('Next')}
+        </span>
+      )}
       <span className="min-w-0 flex-1 truncate" title={entry.preview}>
         {entry.preview}
       </span>

@@ -602,7 +602,10 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_INTERJECT,
-    async (_e, payload: { sessionId: string }): Promise<{ interjected: boolean }> => {
+    async (e, payload: { sessionId: string }): Promise<{ interjected: boolean }> => {
+      // Same claim as CHAT_STOP above: the signal is addressed by session id,
+      // and without this any window could stop a turn it does not own.
+      claimSessionForSender(e, payload.sessionId);
       const interjected = await workerManager.interject(payload.sessionId);
       return { interjected };
     }

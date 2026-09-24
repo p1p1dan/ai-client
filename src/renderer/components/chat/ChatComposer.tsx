@@ -1046,7 +1046,24 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
     onSendStart?.('direct');
-    await window.electronAPI.chat.interject({ sessionId: activeSessionId });
+    // The queue entry above is already committed, so a failure here cannot drop
+    // the message — it only means the "stop at the next turn boundary" signal
+    // did not land. Say so rather than leaving the user waiting on a turn that
+    // is never going to end early.
+    try {
+      const { interjected } = await window.electronAPI.chat.interject({
+        sessionId: activeSessionId,
+      });
+      if (!interjected) {
+        setQueueNotice(t('No turn is running — the message was queued normally'));
+      }
+    } catch (error) {
+      setQueueNotice(
+        t('Could not send the interject signal — the message is still queued: {{error}}', {
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
+    }
   };
 
   // T-07 @ 文件搜索：150ms 防抖，cwd 缺失或 mention 关闭时清空结果。

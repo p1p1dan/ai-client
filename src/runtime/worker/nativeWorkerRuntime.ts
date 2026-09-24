@@ -497,8 +497,10 @@ export class NativeWorkerRuntime {
   interject(input: WorkerInterjectPayload): WorkerInterjectResult {
     this.assertLogicalSession(input.logicalSessionId);
     if (!this.handle || !this.turn) return { interjected: false };
-    this.handle.loop.interject();
-    return { interjected: true };
+    // The loop's own answer, not `true` by assumption: the turn can end between
+    // the two lines above and this check, and claiming otherwise would have the
+    // composer tell the user a stop is coming that never will.
+    return { interjected: this.handle.loop.interject() };
   }
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {

@@ -2509,6 +2509,13 @@ export const zhTranslations: Record<string, string> = {
   'Queue message': '加入队列',
   'Send now': '立刻发送',
   'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
+  'Interjected with Ctrl+Enter — sent at the next turn boundary':
+    'Ctrl+Enter 插话 —— 在下一个回合边界发送',
+  Next: '插话',
+  'No turn is running — the message was queued normally':
+    '当前没有正在运行的回合 —— 消息已作为普通排队等待发送',
+  'Could not send the interject signal — the message is still queued: {{error}}':
+    '插话信号发送失败 —— 消息仍在排队中：{{error}}',
 
   // D47 S5 §1.4: the three-state user profile chip (WindowTitleBar /
   // UserProfileCard, `deriveUserProfilePresentation`) — 'attention'
@@ -2743,8 +2750,8 @@ export const zhTranslations: Record<string, string> = {
   'Sending {{count}} attachments to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
   'Add more optional details…': '可以再补充一些信息…',
   'Queued {{count}} — type another follow-up…': '已排队 {{count}} 条 —— 可以接着输入…',
-  'Agent Host is running — your message will be queued…':
-    'Agent Host 正在运行 —— 你的消息会先排队…',
+  'Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…':
+    'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…',
   'Active session has no workspace…': '当前会话没有工作区…',
   'Choose a working directory to start…': '先选一个工作目录…',
   'Send follow-up…': '继续输入…',

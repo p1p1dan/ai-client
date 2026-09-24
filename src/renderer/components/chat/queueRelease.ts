@@ -744,6 +744,13 @@ export interface QueueStripEntryModel {
   canSendNow: boolean;
   failed: boolean;
   failureMessage?: string;
+  /**
+   * Ctrl+Enter: this entry is an interjection — it jumped ahead of the `later`
+   * entries and its `worker.interject` signal is what stopped the running turn
+   * early. The strip marks it so the user can tell the two apart, since they sit
+   * in one list and differ only in when they will be delivered.
+   */
+  interjection: boolean;
 }
 
 export interface QueueStripModel {
@@ -795,6 +802,7 @@ export function deriveQueueStripModel(input: DeriveQueueStripModelInput): QueueS
       canSendNow: index === 0,
       failed: entry.failure != null,
       ...(entry.failure ? { failureMessage: entry.failure.message } : {}),
+      interjection: entry.priority === 'next',
     })),
     pausedLabel: input.paused != null ? pausedLabelFor(input.paused, input.entries.length) : null,
     permissionHint: input.hasPendingPermissionHere ? QUEUE_PERMISSION_HINT : null,

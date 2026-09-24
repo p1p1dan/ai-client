@@ -61,6 +61,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerInterjectPayload,
   type WorkerInterjectResult,
   type WorkerModelCatalog,
   type WorkerPermissionRespondResult,
@@ -120,6 +121,13 @@ export interface PiWorkerRuntime {
   /** session-index-04 — the fork became a real session; stop claiming it. */
   acceptFork(input: WorkerAcceptForkPayload): Promise<WorkerAcceptForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
+  /**
+   * Ctrl+Enter — ask the loop to stop at its next turn boundary. Synchronous
+   * and non-promise because it only arms a flag on the live run: there is no
+   * I/O to await, and `interjected: false` is the answer for "no run was live",
+   * not a failure.
+   */
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult;
   /** Answer one `permission.requested`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
   /** F5 — answer one `question.requested`. */

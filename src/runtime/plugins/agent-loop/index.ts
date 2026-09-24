@@ -222,14 +222,19 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
 
   private readonly config: AgentLoopConfig;
   /**
-   * One-shot flag set by `interject()` (the worker.interject RPC handler).
-   * Consumed by `shouldStopAfterTurn` — read once, cleared immediately. When
-   * set, the current iteration finishes normally (tools run to completion,
-   * the assistant message is fully streamed), then the loop exits instead of
-   * continuing. The session goes idle, and the renderer's queue release
-   * mechanism picks up the interjection message as the next turn.
+   * Per-run interjection state, re-created by every `execute()` and cleared on
+   * its way out. Held on the plugin because `interject()` arrives over RPC and
+   * has no other route to the live run.
+   *
+   * This is deliberately NOT a bare boolean field: a flag owned by the plugin
+   * outlives the run that armed it, so a signal arriving after the loop had
+   * already exited used to be consumed by the NEXT run's first
+   * `shouldStopAfterTurn` and stop a turn the user never asked to stop.
+   * Boxed per run, a stale write can only ever reach the run that is live when
+   * it lands — and `interject()` reports `false` when no run is live, which is
+   * what the composer shows the user (`interjected: false`).
    */
-  private _interjected = false;
+  private activeRun: { interjected: boolean } | null = null;
 
   constructor(ctx: Context, config: AgentLoopConfig = DEFAULT_AGENT_LOOP_CONFIG) {
     super(ctx, LOOP_SERVICE);
@@ -237,15 +242,23 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
   }
 
   /**
-   * Mark the current turn for graceful exit at its next iteration boundary.
+   * Mark the live run for graceful exit at its next iteration boundary.
    *
    * Called from `NativeWorkerRuntime.interject()` in response to the
-   * `worker.interject` RPC (triggered by Ctrl+Enter in the composer). Safe to
-   * call when no turn is running — the flag will be consumed by the next
-   * `shouldStopAfterTurn` check, which is harmless if the loop already exited.
+   * `worker.interject` RPC (triggered by Ctrl+Enter in the composer). Returns
+   * whether a run was actually there to receive it: `false` means the turn had
+   * already ended, so nothing will stop early and the caller must not tell the
+   * user otherwise.
+   *
+   * The current iteration finishes normally — tools run to completion, the
+   * assistant message is fully streamed — then the loop exits. The session goes
+   * idle, and the renderer's queue release mechanism picks up the interjection
+   * message as the next turn.
    */
-  interject(): void {
-    this._interjected = true;
+  interject(): boolean {
+    if (!this.activeRun) return false;
+    this.activeRun.interjected = true;
+    return true;
   }
 
   async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
@@ -477,6 +490,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // annotated `= 'none'` would be narrowed to `'none'` for the whole body.
     let turns = 0;
     let ceiling = 'none' as 'none' | 'reached' | 'wrapping';
+    // This run's interjection box — the only thing `interject()` can arm. The
+    // `finally` below clears it before `execute` returns, so the next run
+    // starts with a fresh box and can never inherit this one's signal.
+    const interjection = { interjected: false };
+    this.activeRun = interjection;
     const heldReports: string[] = [];
     // One budget per run: a 429 burst and a later gateway fault each get their
     // own bounded allowance, and neither may borrow from the other.
@@ -607,8 +625,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // reaches the ceiling, and every turn after that (the wrap-up, or a
       // stream recovery re-asking it) is the last one.
       shouldStopAfterTurn: () => {
-        if (this._interjected) {
-          this._interjected = false;
+        if (interjection.interjected) {
+          interjection.interjected = false;
           trace.note('note', { event: 'turn_stopped_by_interjection' });
           return true;
         }
@@ -909,6 +927,9 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // above already emptied the registry and this returns at once; on a Stop
       // it is what makes "the run ended" mean "nothing is still spending".
       await subagents?.drain();
+      // Closure over the run (not a null-out of whatever is current): a run
+      // that somehow outlived its replacement must not clear the newer box.
+      if (this.activeRun === interjection) this.activeRun = null;
       request.signal?.removeEventListener('abort', onAbort);
       unsubscribe();
       unsubscribePermissions?.();

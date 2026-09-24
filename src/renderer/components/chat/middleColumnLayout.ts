@@ -1187,7 +1187,11 @@ export function composerPlaceholder(
     return t('Queued {{count}} — type another follow-up…', { count: input.queuedCount ?? 0 });
   }
   if (input.busy) {
-    return t('Agent Host is running — your message will be queued…');
+    // The Ctrl+Enter affordance has no button of its own — it is a key on a
+    // field the user is already typing in — so the busy copy is the only place
+    // it can be discovered. Said here rather than globally: it names a key that
+    // only does anything while a turn is running.
+    return t('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
   }
   // U28 removed a `!hasSession -> "Select a session in the left nav"` branch
   // here. It named a prerequisite that no longer exists: `runSend` creates the

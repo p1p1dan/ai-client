@@ -20,11 +20,12 @@ import type { AttachmentDraft } from './attachments';
 import { formatAttachmentSize, totalAttachmentBytes } from './attachments';
 
 /**
- * Queue entry priority (Claude Code-style priority queue).
+ * Queue entry priority.
  *
  * - `'next'`: Ctrl+Enter interjection — the current turn finishes its
  *   iteration, then stops gracefully so this entry can release as the next
- *   turn. The worker-side `interject` signal is what earns the early stop.
+ *   turn. The worker-side `interject` signal is what earns the early stop; the
+ *   ordering is what puts this entry at the head.
  * - `'later'`: ordinary queue — waits for the turn to end on its own.
  */
 export type MessagePriority = 'next' | 'later';
@@ -49,10 +50,11 @@ export interface QueuedMessage {
    */
   failure?: { message: string };
   /**
-   * Defaults to `'later'` when absent. `'next'` entries trigger the
-   * `worker.interject` signal at enqueue time so the agent loop stops after
-   * its current iteration; the release mechanism itself does not distinguish
-   * priorities — any head entry releases when the session goes idle.
+   * Defaults to `'later'` when absent. `'next'` entries sit ahead of every
+   * `'later'` one (`interject` is what inserts them there) and trigger the
+   * `worker.interject` signal at enqueue time so the agent loop stops after its
+   * current iteration. `decideQueueRelease` still pops the head — the ordering
+   * above is what makes the head the interjection.
    */
   priority?: MessagePriority;
 }
@@ -220,19 +222,67 @@ export function enqueue(
 // ---- interject (Ctrl+Enter) ----
 
 /**
- * Enqueue one message as a `'next'`-priority interjection.
+ * Admit one message as a `'next'`-priority interjection — ahead of every
+ * `'later'` entry already queued.
  *
- * Same guards and limits as `enqueue` — the only difference is the forced
- * `priority: 'next'`. The priority tag is what tells the caller to also send
- * the `worker.interject` signal; the queue release mechanism itself does not
- * distinguish priorities (any head entry releases when the session goes idle).
+ * The `'next'` tag is written HERE, onto the entry that goes into the queue,
+ * and the caller's object is not reused: `enqueue` appends the exact message
+ * object it is handed, so tagging a copy on the way past it would leave the
+ * queued entry untagged — an interjection that jumps the queue at insert time
+ * but reports `'later'` ever after (and loses the `worker.interject` signal's
+ * only record on the wire). Callers may pass the tag themselves; whatever they
+ * pass, the queued entry ends up tagged.
+ *
+ * Same guards and limits as `enqueue`, with one difference: where the entry
+ * lands. `enqueue` appends to the tail, which for an interjection is the wrong
+ * end of the queue — the release mechanism pops the HEAD, so a message typed
+ * mid-turn while an earlier message sat queued would be delivered only after
+ * that earlier one, defeating the point of the interjection (and of the
+ * `worker.interject` signal sent alongside it).
+ *
+ * The entry is inserted after any existing `'next'` entries and before the
+ * first `'later'` one, so interjections keep their own FIFO order (press
+ * Ctrl+Enter twice and they deliver in the order typed) while still jumping
+ * ahead of ordinary queue traffic. Relies on the invariant that `'next'`
+ * entries are always at the front — which this function is the only writer
+ * of: `enqueue` appends `'later'` entries behind them, and `prioritizeEntry`
+ * promotes to the head.
  */
 export function interject(
   state: MessageQueueState,
   message: QueuedMessage,
   limits: EnqueueLimits = DEFAULT_ENQUEUE_LIMITS
 ): EnqueueResult {
-  return enqueue(state, { ...message, priority: 'next' }, limits);
+  const tagged: QueuedMessage = { ...message, priority: 'next' };
+  const result = enqueue(state, tagged, limits);
+  if (!result.ok) return result;
+
+  const bucket = result.state.bySession[tagged.sessionId];
+  if (!bucket) return result;
+  // `enqueue` appended `tagged` to the tail (identity, not a copy — see
+  // `takeEntryIntoDraft`/`restoreHead`, which rely on entry identity too).
+  // The insertion point is the boundary between the existing `'next'` run and
+  // the first `'later'` entry: after any interjection already waiting (they
+  // keep their own order) and ahead of every ordinary queue entry. Counted
+  // with a loop rather than `findIndex`, because the boundary is exactly "how
+  // many leading `'next'` entries are there".
+  const rest = bucket.entries.slice(0, -1);
+  let ahead = 0;
+  while (ahead < rest.length && rest[ahead]?.priority === 'next') ahead += 1;
+  if (ahead === rest.length) return result;
+
+  return {
+    ok: true,
+    state: {
+      bySession: {
+        ...result.state.bySession,
+        [tagged.sessionId]: {
+          ...bucket,
+          entries: [...rest.slice(0, ahead), tagged, ...rest.slice(ahead)],
+        },
+      },
+    },
+  };
 }
 
 // ---- release plumbing (takeHead / restoreHead) ----
