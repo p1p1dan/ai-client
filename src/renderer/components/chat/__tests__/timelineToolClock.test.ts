@@ -52,9 +52,27 @@ import { deriveToolGroupRows, type ToolGroupEntry } from '../toolCard';
 const NOW = Date.UTC(2026, 8, 24, 9, 0, 0);
 const deriveSpy = vi.mocked(deriveToolGroupRows);
 
-const call = (id: string, toolName: string, toolInput: unknown, done = true) => [
+// T146 — the running clock's "/ limit" tail now only shows once the block
+// carries an `execStartedAtMs` (from `toolExecStartedAt`, a live `tool.updated`
+// field `bash` publishes right before `runtimeExec.run`). `execStartedAt` here
+// is that fixture field, not the `tool.started` timestamp the tests still emit
+// separately below to exercise the registry / re-derivation machinery.
+const call = (
+  id: string,
+  toolName: string,
+  toolInput: unknown,
+  done = true,
+  execStartedAt?: number
+) => [
   // Live, the store mints the `tool_call` block with id = toolCallId.
-  { id, type: 'tool_call' as const, toolCallId: id, toolName, toolInput },
+  {
+    id,
+    type: 'tool_call' as const,
+    toolCallId: id,
+    toolName,
+    toolInput,
+    ...(execStartedAt !== undefined ? { toolExecStartedAt: execStartedAt } : {}),
+  },
   ...(done
     ? [
         {
@@ -68,27 +86,50 @@ const call = (id: string, toolName: string, toolInput: unknown, done = true) => 
     : []),
 ];
 
-/** A finished turn with a folded two-call group, then the running turn. */
-const MESSAGES: ChatMessage[] = [
-  { id: 'u1', sessionId: 's', role: 'user', blocks: [{ id: 'u1:t', type: 'text', text: 'Look' }] },
-  {
-    id: 'a1',
-    sessionId: 's',
-    role: 'assistant',
-    blocks: [
-      ...call('old-1', 'Read', { file_path: '/repo/a.ts' }),
-      ...call('old-2', 'Bash', { command: 'ls' }),
-      { id: 'a1:t', type: 'text', text: 'Done looking.' },
-    ],
-  },
-  { id: 'u2', sessionId: 's', role: 'user', blocks: [{ id: 'u2:t', type: 'text', text: 'Build' }] },
-  {
-    id: 'a2',
-    sessionId: 's',
-    role: 'assistant',
-    blocks: call('live-1', 'Bash', { command: 'pnpm build', timeoutSeconds: 1800 }, false),
-  },
-];
+/**
+ * A finished turn with a folded two-call group, then the running turn.
+ * `liveExecStartedAt` seeds `live-1`'s `toolExecStartedAt` — each test names
+ * its own origin (or omits it, for the pre-exec/no-limit case), so the value
+ * cannot be shared as one module-level constant.
+ */
+function buildMessages(liveExecStartedAt?: number): ChatMessage[] {
+  return [
+    {
+      id: 'u1',
+      sessionId: 's',
+      role: 'user',
+      blocks: [{ id: 'u1:t', type: 'text', text: 'Look' }],
+    },
+    {
+      id: 'a1',
+      sessionId: 's',
+      role: 'assistant',
+      blocks: [
+        ...call('old-1', 'Read', { file_path: '/repo/a.ts' }),
+        ...call('old-2', 'Bash', { command: 'ls' }),
+        { id: 'a1:t', type: 'text', text: 'Done looking.' },
+      ],
+    },
+    {
+      id: 'u2',
+      sessionId: 's',
+      role: 'user',
+      blocks: [{ id: 'u2:t', type: 'text', text: 'Build' }],
+    },
+    {
+      id: 'a2',
+      sessionId: 's',
+      role: 'assistant',
+      blocks: call(
+        'live-1',
+        'Bash',
+        { command: 'pnpm build', timeoutSeconds: 1800 },
+        false,
+        liveExecStartedAt
+      ),
+    },
+  ];
+}
 
 let unmount: (() => Promise<void>) | null = null;
 
@@ -108,13 +149,13 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function renderRunning() {
+async function renderRunning(liveExecStartedAt?: number) {
   useChatSessionsStore.setState({
     activeSessionId: 's',
     sessions: [
       { id: 's', title: 's', projectId: 'p', workspaceId: 'w', status: 'running', updatedAt: 0 },
     ],
-    messages: { s: MESSAGES },
+    messages: { s: buildMessages(liveExecStartedAt) },
     lastError: null,
     pendingPermissions: [],
     pendingQuestions: [],
@@ -162,7 +203,10 @@ function derivedCallIds(): string[] {
 }
 
 it('[ROW-CLOCK-1] a running row in the timeline shows elapsed / limit, and it ticks', async () => {
-  const container = await renderRunning();
+  // T146 — the limit only shows once the row has an `execStartedAtMs`; the
+  // `tool.started` timestamp emitted below still drives the registry (and the
+  // re-derivation this test also checks), but no longer the clock's numbers.
+  const container = await renderRunning(NOW - 32_000);
   await emit({ type: 'tool.started', timestamp: NOW - 32_000, payload: { toolCallId: 'live-1' } });
   // The derivation ran for the live row — the tail below comes out of it.
   expect(derivedCallIds()).toContain('live-1');
@@ -174,7 +218,7 @@ it('[ROW-CLOCK-1] a running row in the timeline shows elapsed / limit, and it ti
 });
 
 it('[ROW-CLOCK-2] a tick re-derives no tool group, while the running tail still moves', async () => {
-  const container = await renderRunning();
+  const container = await renderRunning(NOW - 5_000);
   // Non-vacuity: the spy sees both turns' groups at mount.
   expect(derivedCallIds()).toEqual(expect.arrayContaining(['old-1', 'old-2', 'live-1']));
   await emit({ type: 'tool.started', timestamp: NOW - 5_000, payload: { toolCallId: 'live-1' } });
@@ -188,6 +232,21 @@ it('[ROW-CLOCK-2] a tick re-derives no tool group, while the running tail still 
   await tick(10_000);
   expect(deriveSpy).not.toHaveBeenCalled();
   expect(container.textContent).toContain('· 16s / 30m');
+});
+
+it('[ROW-CLOCK-4] with no execStartedAt yet (pre-exec), the row shows elapsed and no limit', async () => {
+  // T146 — a row still waiting on approval or a path re-check (no
+  // `toolExecStartedAt` on the block yet) must not show a limit against the
+  // `tool.started` origin; that combination is exactly the field report's
+  // "elapsed already past the limit" illusion. The elapsed itself stays live.
+  const container = await renderRunning();
+  await emit({ type: 'tool.started', timestamp: NOW - 16_000, payload: { toolCallId: 'live-1' } });
+  expect(derivedCallIds()).toContain('live-1');
+  expect(container.textContent).toContain('· 16s');
+  expect(container.textContent?.match(/ \/ \d+m/g)).toBeNull();
+  await tick();
+  expect(container.textContent).toContain('· 17s');
+  expect(container.textContent?.match(/ \/ \d+m/g)).toBeNull();
 });
 
 it('[ROW-CLOCK-3] a tool event re-derives the running turn only, never a finished one', async () => {
