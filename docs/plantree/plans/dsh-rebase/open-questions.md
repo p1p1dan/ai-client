@@ -27,3 +27,4 @@
 ## Q004 DSH 版本钉在哪个通道
 
 - npm `latest` 落后（2026-09-25 查 `@deepseek-ai/dsh-base` 的 `latest` 为 `0.0.1-rc.1`，调研时 `@deepseek-ai/dsh` 的 `next` 为 `0.1.7-rc.2`）。P0 先钉 `next` 的具体版本号；升级节奏在 P2 定。
+- P0-2 实测（[证据](evidence/p0-2-goal-and-plugins-2026-09-25.md)）：社区目录下载量前 150 的插件里，有 9 个把 DSH peer 精确钉在旧 rc 上（例如 `0.1.7-rc.1`），按 DSH 的准入规则在 0.1.7-rc.2 上会被拒绝。也就是说，DSH 每升一个 rc，都会让一批白名单插件失效。定升级节奏时，要连同白名单插件的复核一起算进去。

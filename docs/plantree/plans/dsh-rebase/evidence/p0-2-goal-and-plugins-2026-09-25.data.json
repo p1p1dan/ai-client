@@ -1,0 +1,1938 @@
+{
+  "probe": "P0-2 goal, todo, jobs, community plugin (dsh-rebase plan)",
+  "date": "2026-09-25",
+  "driver": "src/dsh-host/goal-probe.ts",
+  "gateway": "docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs --plan dsh-p0-2",
+  "primaryRun": {
+    "startedAt": "2026-09-25T13:22:46.005Z",
+    "finishedAt": "2026-09-25T13:23:20.661Z",
+    "node": "<repo>/out-node-runtime/node",
+    "plugin": "dsh-office-tools@1.0.4",
+    "toolsBeforeInstall": [
+      "bash",
+      "create_goal",
+      "edit",
+      "exit_plan_mode",
+      "get_goal",
+      "glob",
+      "grep",
+      "interrupt_agent",
+      "job_kill",
+      "job_list",
+      "job_output",
+      "list_agents",
+      "read",
+      "read_image",
+      "send_message",
+      "skill",
+      "subagent",
+      "subagent_fork",
+      "todo_write",
+      "update_goal",
+      "workflow",
+      "write"
+    ],
+    "hosts": [
+      {
+        "label": "host-1",
+        "readyMs": 673,
+        "census": {
+          "active": 77,
+          "disabled": 18,
+          "inactive": []
+        },
+        "graceful": true,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "leftover": [],
+        "children": [
+          {
+            "pid": 90142,
+            "ppid": 90096,
+            "cmd": "bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c sleep 8; echo slow-check-done",
+            "firstSeenMs": 13124,
+            "lastSeenMs": 14628
+          },
+          {
+            "pid": 90143,
+            "ppid": 90142,
+            "cmd": "bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c sleep 8; echo slow-check-done",
+            "firstSeenMs": 13124,
+            "lastSeenMs": 14628
+          },
+          {
+            "pid": 90144,
+            "ppid": 90143,
+            "cmd": "bash -c sleep 8; echo slow-check-done",
+            "firstSeenMs": 13124,
+            "lastSeenMs": 14628
+          },
+          {
+            "pid": 90145,
+            "ppid": 90144,
+            "cmd": "sleep 8",
+            "firstSeenMs": 13124,
+            "lastSeenMs": 14628
+          },
+          {
+            "pid": 90149,
+            "ppid": 90096,
+            "cmd": "bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done",
+            "firstSeenMs": 21156,
+            "lastSeenMs": 23916
+          },
+          {
+            "pid": 90150,
+            "ppid": 90149,
+            "cmd": "bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done",
+            "firstSeenMs": 21156,
+            "lastSeenMs": 23916
+          },
+          {
+            "pid": 90151,
+            "ppid": 90150,
+            "cmd": "bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done",
+            "firstSeenMs": 21156,
+            "lastSeenMs": 23916
+          },
+          {
+            "pid": 90152,
+            "ppid": 90151,
+            "cmd": "sleep 1",
+            "firstSeenMs": 21156,
+            "lastSeenMs": 21909
+          },
+          {
+            "pid": 90153,
+            "ppid": 90151,
+            "cmd": "sleep 1",
+            "firstSeenMs": 22160,
+            "lastSeenMs": 22912
+          },
+          {
+            "pid": 90155,
+            "ppid": 90151,
+            "cmd": "sleep 1",
+            "firstSeenMs": 23163,
+            "lastSeenMs": 23916
+          },
+          {
+            "pid": 90157,
+            "ppid": 90096,
+            "cmd": "<main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs config get registry",
+            "firstSeenMs": 24166,
+            "lastSeenMs": 24427
+          },
+          {
+            "pid": 90170,
+            "ppid": 90096,
+            "cmd": "<main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs view dsh-office-tools@1.0.4 name version peerDependencies --json --registry=https://registry.npmjs.org/ --config.fetch-retries=0",
+            "firstSeenMs": 24670,
+            "lastSeenMs": 25172
+          },
+          {
+            "pid": 90182,
+            "ppid": 90096,
+            "cmd": "<main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs add dsh-office-tools@1.0.4 --registry=https://registry.npmjs.org/",
+            "firstSeenMs": 25427,
+            "lastSeenMs": 26175
+          }
+        ],
+        "stderrTail": "[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] stopped (ipc) in 29ms\n[dsh-host] lingering after dispose: [\"PipeWrap\",\"PipeWrap\",\"Timeout\",\"Timeout\",\"Timeout\",\"Timeout\",\"Timeout\",\"Timeout\",\"Timeout\",\"Timeout\"]\n"
+      },
+      {
+        "label": "host-2",
+        "readyMs": 815,
+        "census": {
+          "active": 78,
+          "disabled": 18,
+          "inactive": []
+        },
+        "graceful": true,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "leftover": [],
+        "children": [],
+        "stderrTail": "[dsh-host] stopped (ipc) in 24ms\n[dsh-host] lingering after dispose: [\"PipeWrap\",\"PipeWrap\",\"Timeout\"]\n"
+      }
+    ],
+    "gateway": {
+      "requests": 44,
+      "authValues": ["p0-key-from-host-cwd-dotenv"],
+      "paths": ["/v1/messages?beta=true"],
+      "toolsOffered": [22, 30]
+    },
+    "hooks": {
+      "spawns": [
+        {
+          "tMs": 823,
+          "kind": "spawn-sync",
+          "file": "bwrap",
+          "args": [
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--",
+            "true"
+          ]
+        },
+        {
+          "tMs": 837,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-6bdb3bd2858a",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-6bdb3bd2858a.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 879,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "echo \"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLIENT_DSH_GATEWAY_KEY:+present}\"; echo \"names: $(env | cut -d= -f1 | sort | tr \"\\n\" \" \")\""
+          ]
+        },
+        {
+          "tMs": 1613,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-72a935344eb1",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-72a935344eb1.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 1618,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "echo round-1 > progress.txt && cat progress.txt"
+          ]
+        },
+        {
+          "tMs": 1677,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-d5b350672a01",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-d5b350672a01.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 1683,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "cat progress.txt"
+          ]
+        },
+        {
+          "tMs": 5311,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-e57b159e6e9d",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-e57b159e6e9d.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 5316,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "cat /nonexistent/p0-config.json"
+          ]
+        },
+        {
+          "tMs": 5401,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-4c05038c9993",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-4c05038c9993.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 5405,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "cat /nonexistent/p0-config.json"
+          ]
+        },
+        {
+          "tMs": 5501,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-dfa39d473c1b",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-dfa39d473c1b.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 5506,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "cat /nonexistent/p0-config.json"
+          ]
+        },
+        {
+          "tMs": 12977,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-6989b2fcf9d9",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-6989b2fcf9d9.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 12982,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "sleep 8; echo slow-check-done"
+          ]
+        },
+        {
+          "tMs": 20839,
+          "kind": "spawn-sync",
+          "file": "systemd-run",
+          "args": [
+            "--user",
+            "--scope",
+            "--quiet",
+            "--collect",
+            "--expand-environment=no",
+            "--unit=dsh-subprocess-probe-90096-5e5db07c26d6",
+            "--",
+            "systemctl",
+            "--user",
+            "show",
+            "dsh-subprocess-probe-90096-5e5db07c26d6.scope",
+            "--property=ActiveState",
+            "--value"
+          ]
+        },
+        {
+          "tMs": 20848,
+          "kind": "spawn",
+          "file": "bwrap",
+          "args": [
+            "bwrap",
+            "--ro-bind",
+            "/",
+            "/",
+            "--dev",
+            "/dev",
+            "--unshare-pid",
+            "--proc",
+            "/proc",
+            "--die-with-parent",
+            "--tmpfs",
+            "/tmp",
+            "--bind",
+            "<scratch>/run/workspace",
+            "<scratch>/run/workspace",
+            "--",
+            "bash",
+            "-c",
+            "for i in 1 2 3; do echo tick-$i; sleep 1; done"
+          ]
+        },
+        {
+          "tMs": 23915,
+          "kind": "spawn",
+          "file": "<main-checkout>/out-node-runtime/node",
+          "args": [
+            "<main-checkout>/out-node-runtime/node",
+            "<repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs",
+            "config",
+            "get",
+            "registry"
+          ]
+        },
+        {
+          "tMs": 24487,
+          "kind": "spawn",
+          "file": "<main-checkout>/out-node-runtime/node",
+          "args": [
+            "<main-checkout>/out-node-runtime/node",
+            "<repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs",
+            "view",
+            "dsh-office-tools@1.0.4",
+            "name",
+            "version",
+            "peerDependencies",
+            "--json",
+            "--registry=https://registry.npmjs.org/",
+            "--config.fetch-retries=0"
+          ]
+        },
+        {
+          "tMs": 25246,
+          "kind": "spawn",
+          "file": "<main-checkout>/out-node-runtime/node",
+          "args": [
+            "<main-checkout>/out-node-runtime/node",
+            "<repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs",
+            "add",
+            "dsh-office-tools@1.0.4",
+            "--registry=https://registry.npmjs.org/"
+          ]
+        }
+      ],
+      "workerThreads": [],
+      "netBlocked": [],
+      "netLoopback": ["127.0.0.1:41827", "127.0.0.1:41827", "127.0.0.1:41827"],
+      "dnsLookups": []
+    },
+    "events": {
+      "sessionEventTypes": {
+        "permission/preset": 8,
+        "sandbox/mode": 8,
+        "approval/policy": 8,
+        "agent/inbox/spliced": 38,
+        "turn/start": 16,
+        "step/start": 44,
+        "system/message": 8,
+        "user/message": 27,
+        "request/header": 16,
+        "request/context": 8,
+        "session/title": 7,
+        "assistant/message": 44,
+        "tool/call": 29,
+        "tool/result": 29,
+        "step/end": 44,
+        "turn/end": 16,
+        "approval/asked": 1,
+        "approval/decided": 1,
+        "goal/change": 10,
+        "todo/write": 2,
+        "command/run": 3,
+        "command/done": 3
+      },
+      "surfaceOps": {
+        "system/message": ["append"],
+        "user/message": ["append"],
+        "assistant/message": ["append"],
+        "tool/result": ["append"]
+      },
+      "cordisDispatch": {
+        "session/created": {
+          "emit": 8
+        },
+        "session/event": {
+          "emit": 370
+        },
+        "session/flush": {
+          "emit": 161
+        },
+        "agent/created": {
+          "serial": 8
+        },
+        "agent/inbox/inserted": {
+          "emit": 19
+        },
+        "agent/status": {
+          "emit": 32
+        },
+        "agent/inbox/claimed": {
+          "emit": 19
+        },
+        "system-prompt/assemble": {
+          "waterfall": 44
+        },
+        "agent/pre-step": {
+          "waterfall": 44
+        },
+        "domain/changed": {
+          "emit": 25
+        },
+        "agent/request": {
+          "waterfall": 44
+        },
+        "llm/stream": {
+          "waterfall": 44
+        },
+        "agent/assistant-stream": {
+          "emit": 360
+        },
+        "tools/pre-execute": {
+          "waterfall": 29
+        },
+        "tools/execute": {
+          "waterfall": 29
+        },
+        "tools/post-execute": {
+          "waterfall": 29
+        },
+        "tools/result": {
+          "emit": 29
+        },
+        "agent/turn-stopping": {
+          "serial": 15
+        },
+        "fs/write-intent": {
+          "waterfall": 2
+        },
+        "approval/request": {
+          "waterfall": 1
+        },
+        "fs/observed": {
+          "emit": 1
+        },
+        "goal/activation-changed": {
+          "emit": 10
+        },
+        "goal/changed": {
+          "emit": 10
+        },
+        "plugin-manager/install-log": {
+          "emit": 7
+        },
+        "plugin-manager/changed": {
+          "emit": 1
+        }
+      },
+      "approvals": [
+        {
+          "tMs": 1151,
+          "kind": "approval",
+          "toolName": "write",
+          "callId": "toolu_39b06d51-ae37-4597-a6d1-95418379e23a",
+          "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace.",
+          "outcome": "allowed-once"
+        }
+      ]
+    },
+    "scenarios": {
+      "ENV": {
+        "sessionId": "p0-2-env",
+        "idle": {
+          "requestId": "r4",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-ENV: print the env canaries.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"5f3fb4c7-9793-45ec-a2a5-69b76f07ca37\"}]}",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-ENV: print the env canaries.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"5f3fb4c7-9793-45ec-a2a5-69b76f07ca37\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-ENV: print the env canaries.\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_542144fa-de11-4b77-9407-5c29e77cdb41\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"echo \\\\\\\"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unse",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_542144fa-de11-4b77-9407-5c29e77cdb41\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"echo \\\\\\\"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLI",
+          "#15 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_542144fa-de11-4b77-9407-5c29e77cdb41\"},\"toolCallId\":\"toolu_542144fa-de11-4b77-9407-5c29e77cdb41\",\"content\":[{\"type\":\"text\",\"text\":\"ws=unset hostcwd=from-hos",
+          "#16 step/end {\"turn\":1,\"step\":1}",
+          "#17 step/start {\"turn\":1,\"step\":2}",
+          "#18 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Env canaries printed.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"version\":2,\"api\":",
+          "#19 step/end {\"turn\":1,\"step\":2}",
+          "#20 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": ["1 ENV r0 s0 -> bash", "2 ENV r0 s1 -> text"]
+      },
+      "APPROVAL": {
+        "sessionId": "p0-2-approval",
+        "written": "written after approval\n",
+        "idle": {
+          "requestId": "r7",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-APPROVAL: write a file outside the workspace, path=<scratch>/run/outside/approved.txt\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\"",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-APPROVAL: write a file outside the workspace, path=<scratch>/run/outside/approved.txt\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"3312c815-e400-4860-bb12-142d1da17570\"",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-APPROVAL: write a file outside\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_60085d79-01a0-4488-a2d7-9c6497496b96\",\"name\":\"write\",\"arguments\":\"{\\\"file_path\\\":\\\"<scratch>/run/outside/approved.txt",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_60085d79-01a0-4488-a2d7-9c6497496b96\",\"name\":\"write\",\"arguments\":\"{\\\"file_path\\\":\\\"<scratch>/run/outside/approved.txt\\\",\\\"content\\\":\\\"written after approval\\\\n\\\"}\"}",
+          "#15 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_60085d79-01a0-4488-a2d7-9c6497496b96\"},\"toolCallId\":\"toolu_60085d79-01a0-4488-a2d7-9c6497496b96\",\"content\":[{\"type\":\"text\",\"text\":\"Error: [sandbox: file acc",
+          "#16 step/end {\"turn\":1,\"step\":1}",
+          "#17 step/start {\"turn\":1,\"step\":2}",
+          "#18 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_39b06d51-ae37-4597-a6d1-95418379e23a\",\"name\":\"write\",\"arguments\":\"{\\\"file_path\\\":\\\"<scratch>/run/outside/approved.txt",
+          "#19 tool/call {\"turn\":1,\"step\":2,\"callId\":\"toolu_39b06d51-ae37-4597-a6d1-95418379e23a\",\"name\":\"write\",\"arguments\":\"{\\\"file_path\\\":\\\"<scratch>/run/outside/approved.txt\\\",\\\"content\\\":\\\"written after approval\\\\n\\\",\\\"sandbox_pe",
+          "#20 approval/asked {\"id\":\"69f52a9f-b6c1-45d0-ae65-e591e75f8d24\",\"toolName\":\"write\",\"callId\":\"toolu_39b06d51-ae37-4597-a6d1-95418379e23a\",\"reason\":\"escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace.\"}",
+          "#21 approval/decided {\"id\":\"69f52a9f-b6c1-45d0-ae65-e591e75f8d24\",\"outcome\":\"allowed-once\"}",
+          "#22 tool/result [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_39b06d51-ae37-4597-a6d1-95418379e23a\"},\"toolCallId\":\"toolu_39b06d51-ae37-4597-a6d1-95418379e23a\",\"content\":[{\"type\":\"text\",\"text\":\"<path>/var/tmp/aiclient-d",
+          "#23 step/end {\"turn\":1,\"step\":2}",
+          "#24 step/start {\"turn\":1,\"step\":3}",
+          "#25 assistant/message [append] {\"turn\":1,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Write outside the workspace attempted.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"",
+          "#26 step/end {\"turn\":1,\"step\":3}",
+          "#27 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "3 APPROVAL r0 s0 -> write",
+          "4 APPROVAL r0 s1 -> write",
+          "5 APPROVAL r0 s2 -> text"
+        ]
+      },
+      "GOAL-COMPLETE": {
+        "sessionId": "p0-2-goal-complete",
+        "expect": "complete",
+        "reached": true,
+        "final": {
+          "id": "goal-d40e5bfe-6f7f-4546-b017-8f657533e7ee",
+          "revision": 2,
+          "objective": "P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+          "phase": "complete",
+          "roundsStarted": 2,
+          "maxGoalRounds": 4,
+          "activation": "disarmed"
+        },
+        "timeline": [
+          {
+            "tMs": 1570
+          },
+          {
+            "tMs": 1870,
+            "phase": "complete",
+            "roundsStarted": 2,
+            "revision": 2,
+            "activation": "disarmed"
+          }
+        ],
+        "noFurtherRounds": true,
+        "idle": {
+          "requestId": "r12",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-COMPLETE: make progress.txt in the workspace and verify it; keep going until done.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"f559d0fa-56e7-4262-917",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-COMPLETE: make progress.txt in the workspace and verify it; keep going until done.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"f559d0fa-56e7-4262-9175-5697eed040f5\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-GOAL-COMPLETE: make progress.txt in t\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_328a5297-d519-4b5d-a649-1fc11c0c4863\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_328a5297-d519-4b5d-a649-1fc11c0c4863\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\",\\\"max_goal_rounds\\\":4}\"}",
+          "#15 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"create\",\"goal\":{\"id\":\"goal-d40e5bfe-6f7f-4546-b017-8f657533e7ee\",\"revision\":1,\"objective\":\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\",\"phase\":\"active\",\"maxGoalRounds",
+          "#16 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_328a5297-d519-4b5d-a649-1fc11c0c4863\"},\"toolCallId\":\"toolu_328a5297-d519-4b5d-a649-1fc11c0c4863\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#17 step/end {\"turn\":1,\"step\":1}",
+          "#18 step/start {\"turn\":1,\"step\":2}",
+          "#19 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Goal created; automatic rounds will do the work.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\"",
+          "#20 step/end {\"turn\":1,\"step\":2}",
+          "#21 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}",
+          "#22 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nRound: 1/4\\n\\nContinue working toward the objective in this s",
+          "#23 turn/start {\"turn\":2}",
+          "#24 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#25 step/start {\"turn\":2,\"step\":1}",
+          "#26 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nRound: 1/4\\n\\nContinue working toward the objective in this same session. Treat the current workspace, to",
+          "#28 assistant/message [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_92bf61c9-2584-45c0-bf4a-478ae2abcf13\",\"name\":\"todo_write\",\"arguments\":\"{\\\"todos\\\":[{\\\"content\\\":\\\"Write progress.txt\\\",\\\"status\\\":\\\"in_progress\\\"},{",
+          "#29 tool/call {\"turn\":2,\"step\":1,\"callId\":\"toolu_92bf61c9-2584-45c0-bf4a-478ae2abcf13\",\"name\":\"todo_write\",\"arguments\":\"{\\\"todos\\\":[{\\\"content\\\":\\\"Write progress.txt\\\",\\\"status\\\":\\\"in_progress\\\"},{\\\"content\\\":\\\"Verify progress.txt\\\",\\\"status\\\":\\\"pending\\",
+          "#30 todo/write {\"todos\":[{\"content\":\"Write progress.txt\",\"status\":\"in_progress\"},{\"content\":\"Verify progress.txt\",\"status\":\"pending\"}]}",
+          "#31 tool/result [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_92bf61c9-2584-45c0-bf4a-478ae2abcf13\"},\"toolCallId\":\"toolu_92bf61c9-2584-45c0-bf4a-478ae2abcf13\",\"content\":[{\"type\":\"text\",\"text\":\"Updated todo list: 1 pend",
+          "#32 step/end {\"turn\":2,\"step\":1}",
+          "#33 step/start {\"turn\":2,\"step\":2}",
+          "#34 assistant/message [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_b6e4e95e-cae7-4431-96d5-207d2501aff6\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"echo round-1 > progress.txt && cat progress.txt\\\",\\\"description\\\":\\\"",
+          "#35 tool/call {\"turn\":2,\"step\":2,\"callId\":\"toolu_b6e4e95e-cae7-4431-96d5-207d2501aff6\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"echo round-1 > progress.txt && cat progress.txt\\\",\\\"description\\\":\\\"Write progress file\\\"}\"}",
+          "#36 tool/result [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_b6e4e95e-cae7-4431-96d5-207d2501aff6\"},\"toolCallId\":\"toolu_b6e4e95e-cae7-4431-96d5-207d2501aff6\",\"content\":[{\"type\":\"text\",\"text\":\"round-1\\n\"}],\"isError\":fa",
+          "#37 step/end {\"turn\":2,\"step\":2}",
+          "#38 step/start {\"turn\":2,\"step\":3}",
+          "#39 assistant/message [append] {\"turn\":2,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Round 1: wrote progress.txt; verification remains for the next round.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState",
+          "#40 step/end {\"turn\":2,\"step\":3}",
+          "#41 turn/end {\"turn\":2,\"reason\":{\"kind\":\"completed\"}}",
+          "#42 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nRound: 2/4\\n\\nContinue working toward the objective in this s",
+          "#43 turn/start {\"turn\":3}",
+          "#44 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#45 step/start {\"turn\":3,\"step\":1}",
+          "#46 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nRound: 2/4\\n\\nContinue working toward the objective in this same session. Treat the current workspace, to",
+          "#48 assistant/message [append] {\"turn\":3,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_f8762409-9c7c-41bb-b2c4-2081e32555d7\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat progress.txt\\\",\\\"description\\\":\\\"Verify progress file\\\"}\"}],\"sou",
+          "#49 tool/call {\"turn\":3,\"step\":1,\"callId\":\"toolu_f8762409-9c7c-41bb-b2c4-2081e32555d7\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat progress.txt\\\",\\\"description\\\":\\\"Verify progress file\\\"}\"}",
+          "#50 tool/result [append] {\"turn\":3,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_f8762409-9c7c-41bb-b2c4-2081e32555d7\"},\"toolCallId\":\"toolu_f8762409-9c7c-41bb-b2c4-2081e32555d7\",\"content\":[{\"type\":\"text\",\"text\":\"round-1\\n\"}],\"isError\":fa",
+          "#51 step/end {\"turn\":3,\"step\":1}",
+          "#52 step/start {\"turn\":3,\"step\":2}",
+          "#53 assistant/message [append] {\"turn\":3,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_f9e9617c-a86d-47cd-aa68-f3501d8ff5c8\",\"name\":\"todo_write\",\"arguments\":\"{\\\"todos\\\":[{\\\"content\\\":\\\"Write progress.txt\\\",\\\"status\\\":\\\"completed\\\"},{\\\"",
+          "#54 tool/call {\"turn\":3,\"step\":2,\"callId\":\"toolu_f9e9617c-a86d-47cd-aa68-f3501d8ff5c8\",\"name\":\"todo_write\",\"arguments\":\"{\\\"todos\\\":[{\\\"content\\\":\\\"Write progress.txt\\\",\\\"status\\\":\\\"completed\\\"},{\\\"content\\\":\\\"Verify progress.txt\\\",\\\"status\\\":\\\"completed\\",
+          "#55 todo/write {\"todos\":[{\"content\":\"Write progress.txt\",\"status\":\"completed\"},{\"content\":\"Verify progress.txt\",\"status\":\"completed\"}]}",
+          "#56 tool/result [append] {\"turn\":3,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_f9e9617c-a86d-47cd-aa68-f3501d8ff5c8\"},\"toolCallId\":\"toolu_f9e9617c-a86d-47cd-aa68-f3501d8ff5c8\",\"content\":[{\"type\":\"text\",\"text\":\"Updated todo list: 0 pend",
+          "#57 step/end {\"turn\":3,\"step\":2}",
+          "#58 step/start {\"turn\":3,\"step\":3}",
+          "#59 assistant/message [append] {\"turn\":3,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_ac84634b-5123-4e48-8774-19e39c280dcf\",\"name\":\"get_goal\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#60 tool/call {\"turn\":3,\"step\":3,\"callId\":\"toolu_ac84634b-5123-4e48-8774-19e39c280dcf\",\"name\":\"get_goal\",\"arguments\":\"{}\"}",
+          "#61 tool/result [append] {\"turn\":3,\"step\":3,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_ac84634b-5123-4e48-8774-19e39c280dcf\"},\"toolCallId\":\"toolu_ac84634b-5123-4e48-8774-19e39c280dcf\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#62 step/end {\"turn\":3,\"step\":3}",
+          "#63 step/start {\"turn\":3,\"step\":4}",
+          "#64 assistant/message [append] {\"turn\":3,\"step\":4,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_e04d7f59-0547-43a3-a58f-89dc4ece9dfc\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-d40e5bfe-6f7f-4546-b017-8f657533e7ee\\\",\\\"revision\\\":1,\\\"",
+          "#65 tool/call {\"turn\":3,\"step\":4,\"callId\":\"toolu_e04d7f59-0547-43a3-a58f-89dc4ece9dfc\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-d40e5bfe-6f7f-4546-b017-8f657533e7ee\\\",\\\"revision\\\":1,\\\"action\\\":\\\"complete\\\"}\"}",
+          "#66 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"complete\",\"goal\":{\"id\":\"goal-d40e5bfe-6f7f-4546-b017-8f657533e7ee\",\"revision\":2,\"objective\":\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\",\"phase\":\"complete\",\"maxGoalRo",
+          "#67 tool/result [append] {\"turn\":3,\"step\":4,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_e04d7f59-0547-43a3-a58f-89dc4ece9dfc\"},\"toolCallId\":\"toolu_e04d7f59-0547-43a3-a58f-89dc4ece9dfc\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#68 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_complete>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nThe goal is marked complete and this autonomous run is end",
+          "#69 step/end {\"turn\":3,\"step\":4}",
+          "#70 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#71 step/start {\"turn\":3,\"step\":5}",
+          "#72 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_complete>\\nObjective: \\\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\\\"\\nThe goal is marked complete and this autonomous run is ending. Write the closing message to the user n",
+          "#73 assistant/message [append] {\"turn\":3,\"step\":5,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Wrapping up the goal for the user.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"vers",
+          "#74 step/end {\"turn\":3,\"step\":5}",
+          "#75 turn/end {\"turn\":3,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "6 GOAL-COMPLETE r0 s0 -> create_goal",
+          "7 GOAL-COMPLETE r0 s1 -> text",
+          "8 GOAL-COMPLETE r1 s0 -> todo_write",
+          "9 GOAL-COMPLETE r1 s1 -> bash",
+          "10 GOAL-COMPLETE r1 s2 -> text",
+          "11 GOAL-COMPLETE r2 s0 -> bash",
+          "12 GOAL-COMPLETE r2 s1 -> todo_write",
+          "13 GOAL-COMPLETE r2 s2 -> get_goal",
+          "14 GOAL-COMPLETE r2 s3 -> update_goal"
+        ]
+      },
+      "GOAL-BLOCKED": {
+        "sessionId": "p0-2-goal-blocked",
+        "expect": "blocked",
+        "reached": true,
+        "final": {
+          "id": "goal-7d5b6100-1d7d-422c-8f06-70dddadaf435",
+          "revision": 2,
+          "objective": "P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it",
+          "phase": "blocked",
+          "blockedReason": {
+            "code": "model-reported",
+            "message": "Config /nonexistent/p0-config.json is still missing (round 3)."
+          },
+          "roundsStarted": 3,
+          "maxGoalRounds": 6,
+          "activation": "disarmed"
+        },
+        "timeline": [
+          {
+            "tMs": 5280
+          },
+          {
+            "tMs": 5586,
+            "phase": "active",
+            "roundsStarted": 3,
+            "revision": 1,
+            "activation": "armed"
+          },
+          {
+            "tMs": 5887,
+            "phase": "blocked",
+            "roundsStarted": 3,
+            "revision": 2,
+            "blockedReason": {
+              "code": "model-reported",
+              "message": "Config /nonexistent/p0-config.json is still missing (round 3)."
+            },
+            "activation": "disarmed"
+          }
+        ],
+        "noFurtherRounds": true,
+        "idle": {
+          "requestId": "r19",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it; keep trying until done.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"69c9264f-a092-4e96-857e-f",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it; keep trying until done.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"69c9264f-a092-4e96-857e-fbcd4819aa51\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-GOAL-BLOCKED: load /nonexistent/p0-co\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_1a655353-e85a-44dd-8dbc-a3f72230e97b\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_1a655353-e85a-44dd-8dbc-a3f72230e97b\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\",\\\"max_goal_rounds\\\":6}\"}",
+          "#15 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"create\",\"goal\":{\"id\":\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\",\"revision\":1,\"objective\":\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\",\"phase\":\"active\",\"maxGoalRounds\":6},\"r",
+          "#16 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_1a655353-e85a-44dd-8dbc-a3f72230e97b\"},\"toolCallId\":\"toolu_1a655353-e85a-44dd-8dbc-a3f72230e97b\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#17 step/end {\"turn\":1,\"step\":1}",
+          "#18 step/start {\"turn\":1,\"step\":2}",
+          "#19 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Goal created.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"version\":2,\"api\":\"anthrop",
+          "#20 step/end {\"turn\":1,\"step\":2}",
+          "#21 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}",
+          "#22 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 1/6\\n\\nContinue working toward the objective in this same ses",
+          "#23 turn/start {\"turn\":2}",
+          "#24 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#25 step/start {\"turn\":2,\"step\":1}",
+          "#26 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 1/6\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool resu",
+          "#28 assistant/message [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_35f2cf04-448e-42b5-8491-ae9ff8ae8ca7\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\",
+          "#29 tool/call {\"turn\":2,\"step\":1,\"callId\":\"toolu_35f2cf04-448e-42b5-8491-ae9ff8ae8ca7\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\\"}\"}",
+          "#30 tool/result [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_35f2cf04-448e-42b5-8491-ae9ff8ae8ca7\"},\"toolCallId\":\"toolu_35f2cf04-448e-42b5-8491-ae9ff8ae8ca7\",\"content\":[{\"type\":\"text\",\"text\":\"[stderr]\\ncat: /nonexiste",
+          "#31 step/end {\"turn\":2,\"step\":1}",
+          "#32 step/start {\"turn\":2,\"step\":2}",
+          "#33 assistant/message [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_df7337c4-c4e2-4325-91c7-ab56e40d400d\",\"name\":\"get_goal\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#34 tool/call {\"turn\":2,\"step\":2,\"callId\":\"toolu_df7337c4-c4e2-4325-91c7-ab56e40d400d\",\"name\":\"get_goal\",\"arguments\":\"{}\"}",
+          "#35 tool/result [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_df7337c4-c4e2-4325-91c7-ab56e40d400d\"},\"toolCallId\":\"toolu_df7337c4-c4e2-4325-91c7-ab56e40d400d\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#36 step/end {\"turn\":2,\"step\":2}",
+          "#37 step/start {\"turn\":2,\"step\":3}",
+          "#38 assistant/message [append] {\"turn\":2,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_f67ac41a-5f99-4208-a35e-2b308657c57a\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"",
+          "#39 tool/call {\"turn\":2,\"step\":3,\"callId\":\"toolu_f67ac41a-5f99-4208-a35e-2b308657c57a\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"action\\\":\\\"blocked\\\",\\\"blocked_reason\\\":\\\"Config /nonexis",
+          "#40 tool/result [append] {\"turn\":2,\"step\":3,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_f67ac41a-5f99-4208-a35e-2b308657c57a\"},\"toolCallId\":\"toolu_f67ac41a-5f99-4208-a35e-2b308657c57a\",\"content\":[{\"type\":\"text\",\"text\":\"Error: blocked requires a",
+          "#41 step/end {\"turn\":2,\"step\":3}",
+          "#42 step/start {\"turn\":2,\"step\":4}",
+          "#43 assistant/message [append] {\"turn\":2,\"step\":4,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Round 1: still blocked, the blocker was not accepted yet.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response",
+          "#44 step/end {\"turn\":2,\"step\":4}",
+          "#45 turn/end {\"turn\":2,\"reason\":{\"kind\":\"completed\"}}",
+          "#46 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 2/6\\n\\nContinue working toward the objective in this same ses",
+          "#47 turn/start {\"turn\":3}",
+          "#48 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#49 step/start {\"turn\":3,\"step\":1}",
+          "#50 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 2/6\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool resu",
+          "#52 assistant/message [append] {\"turn\":3,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_7f284bdb-a26e-493f-974e-9399bea8565e\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\",
+          "#53 tool/call {\"turn\":3,\"step\":1,\"callId\":\"toolu_7f284bdb-a26e-493f-974e-9399bea8565e\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\\"}\"}",
+          "#54 tool/result [append] {\"turn\":3,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_7f284bdb-a26e-493f-974e-9399bea8565e\"},\"toolCallId\":\"toolu_7f284bdb-a26e-493f-974e-9399bea8565e\",\"content\":[{\"type\":\"text\",\"text\":\"[stderr]\\ncat: /nonexiste",
+          "#55 step/end {\"turn\":3,\"step\":1}",
+          "#56 step/start {\"turn\":3,\"step\":2}",
+          "#57 assistant/message [append] {\"turn\":3,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_358afda1-6bf9-49c1-8b57-0e6b317cac15\",\"name\":\"get_goal\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#58 tool/call {\"turn\":3,\"step\":2,\"callId\":\"toolu_358afda1-6bf9-49c1-8b57-0e6b317cac15\",\"name\":\"get_goal\",\"arguments\":\"{}\"}",
+          "#59 tool/result [append] {\"turn\":3,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_358afda1-6bf9-49c1-8b57-0e6b317cac15\"},\"toolCallId\":\"toolu_358afda1-6bf9-49c1-8b57-0e6b317cac15\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#60 step/end {\"turn\":3,\"step\":2}",
+          "#61 step/start {\"turn\":3,\"step\":3}",
+          "#62 assistant/message [append] {\"turn\":3,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_7ed073e1-6cff-4d4b-91ff-ab77201e2341\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"",
+          "#63 tool/call {\"turn\":3,\"step\":3,\"callId\":\"toolu_7ed073e1-6cff-4d4b-91ff-ab77201e2341\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"action\\\":\\\"blocked\\\",\\\"blocked_reason\\\":\\\"Config /nonexis",
+          "#64 tool/result [append] {\"turn\":3,\"step\":3,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_7ed073e1-6cff-4d4b-91ff-ab77201e2341\"},\"toolCallId\":\"toolu_7ed073e1-6cff-4d4b-91ff-ab77201e2341\",\"content\":[{\"type\":\"text\",\"text\":\"Error: blocked requires a",
+          "#65 step/end {\"turn\":3,\"step\":3}",
+          "#66 step/start {\"turn\":3,\"step\":4}",
+          "#67 assistant/message [append] {\"turn\":3,\"step\":4,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Round 2: still blocked, the blocker was not accepted yet.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response",
+          "#68 step/end {\"turn\":3,\"step\":4}",
+          "#69 turn/end {\"turn\":3,\"reason\":{\"kind\":\"completed\"}}",
+          "#70 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 3/6\\n\\nContinue working toward the objective in this same ses",
+          "#71 turn/start {\"turn\":4}",
+          "#72 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#73 step/start {\"turn\":4,\"step\":1}",
+          "#74 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nRound: 3/6\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool resu",
+          "#76 assistant/message [append] {\"turn\":4,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_806b9a62-f8d0-4107-8fbd-4c1c4e475040\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\",
+          "#77 tool/call {\"turn\":4,\"step\":1,\"callId\":\"toolu_806b9a62-f8d0-4107-8fbd-4c1c4e475040\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"cat /nonexistent/p0-config.json\\\",\\\"description\\\":\\\"Read the config\\\"}\"}",
+          "#78 tool/result [append] {\"turn\":4,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_806b9a62-f8d0-4107-8fbd-4c1c4e475040\"},\"toolCallId\":\"toolu_806b9a62-f8d0-4107-8fbd-4c1c4e475040\",\"content\":[{\"type\":\"text\",\"text\":\"[stderr]\\ncat: /nonexiste",
+          "#79 step/end {\"turn\":4,\"step\":1}",
+          "#80 step/start {\"turn\":4,\"step\":2}",
+          "#81 assistant/message [append] {\"turn\":4,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_966eafa5-c0e2-4cae-b78a-e8ee5ce882ba\",\"name\":\"get_goal\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#82 tool/call {\"turn\":4,\"step\":2,\"callId\":\"toolu_966eafa5-c0e2-4cae-b78a-e8ee5ce882ba\",\"name\":\"get_goal\",\"arguments\":\"{}\"}",
+          "#83 tool/result [append] {\"turn\":4,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_966eafa5-c0e2-4cae-b78a-e8ee5ce882ba\"},\"toolCallId\":\"toolu_966eafa5-c0e2-4cae-b78a-e8ee5ce882ba\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#84 step/end {\"turn\":4,\"step\":2}",
+          "#85 step/start {\"turn\":4,\"step\":3}",
+          "#86 assistant/message [append] {\"turn\":4,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_c1e55b3a-e190-4b89-8865-83106974f625\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"",
+          "#87 tool/call {\"turn\":4,\"step\":3,\"callId\":\"toolu_c1e55b3a-e190-4b89-8865-83106974f625\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\\\",\\\"revision\\\":1,\\\"action\\\":\\\"blocked\\\",\\\"blocked_reason\\\":\\\"Config /nonexis",
+          "#88 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"block\",\"goal\":{\"id\":\"goal-7d5b6100-1d7d-422c-8f06-70dddadaf435\",\"revision\":2,\"objective\":\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\",\"phase\":\"blocked\",\"maxGoalRounds\":6,\"bl",
+          "#89 tool/result [append] {\"turn\":4,\"step\":3,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_c1e55b3a-e190-4b89-8865-83106974f625\"},\"toolCallId\":\"toolu_c1e55b3a-e190-4b89-8865-83106974f625\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#90 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_blocked>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nBlocked: \\\"Config /nonexistent/p0-config.json is still missing (ro",
+          "#91 step/end {\"turn\":4,\"step\":3}",
+          "#92 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#93 step/start {\"turn\":4,\"step\":4}",
+          "#94 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_blocked>\\nObjective: \\\"P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it\\\"\\nBlocked: \\\"Config /nonexistent/p0-config.json is still missing (round 3).\\\"\\nThe goal is marked blocked and th",
+          "#95 assistant/message [append] {\"turn\":4,\"step\":4,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Wrapping up the goal for the user.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"vers",
+          "#96 step/end {\"turn\":4,\"step\":4}",
+          "#97 turn/end {\"turn\":4,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "16 GOAL-BLOCKED r0 s0 -> create_goal",
+          "17 GOAL-BLOCKED r0 s1 -> text",
+          "18 GOAL-BLOCKED r1 s0 -> bash",
+          "19 GOAL-BLOCKED r1 s1 -> get_goal",
+          "20 GOAL-BLOCKED r1 s2 -> update_goal",
+          "21 GOAL-BLOCKED r1 s3 -> text",
+          "22 GOAL-BLOCKED r2 s0 -> bash",
+          "23 GOAL-BLOCKED r2 s1 -> get_goal",
+          "24 GOAL-BLOCKED r2 s2 -> update_goal",
+          "25 GOAL-BLOCKED r2 s3 -> text",
+          "26 GOAL-BLOCKED r3 s0 -> bash",
+          "27 GOAL-BLOCKED r3 s1 -> get_goal",
+          "28 GOAL-BLOCKED r3 s2 -> update_goal"
+        ]
+      },
+      "GOAL-ROUNDLIMIT": {
+        "sessionId": "p0-2-goal-roundlimit",
+        "expect": "blocked (round-limit)",
+        "reached": true,
+        "final": {
+          "id": "goal-9b085936-2153-4567-a567-01ed4e06d6ec",
+          "revision": 2,
+          "objective": "P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing",
+          "phase": "blocked",
+          "blockedReason": {
+            "code": "round-limit",
+            "message": "Goal reached its configured limit of 2 rounds."
+          },
+          "roundsStarted": 2,
+          "maxGoalRounds": 2,
+          "activation": "disarmed"
+        },
+        "timeline": [
+          {
+            "tMs": 9297
+          },
+          {
+            "tMs": 9598,
+            "phase": "blocked",
+            "roundsStarted": 2,
+            "revision": 2,
+            "blockedReason": {
+              "code": "round-limit",
+              "message": "Goal reached its configured limit of 2 rounds."
+            },
+            "activation": "disarmed"
+          }
+        ],
+        "noFurtherRounds": true,
+        "idle": {
+          "requestId": "r25",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-ROUNDLIMIT: keep polishing; this is a long-running objective.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"740dd758-0704-4264-bcc2-7e04e921e66e\"}]}",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-GOAL-ROUNDLIMIT: keep polishing; this is a long-running objective.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"740dd758-0704-4264-bcc2-7e04e921e66e\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-GOAL-ROUNDLIMIT: keep polishing; this\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_a80779d6-d67c-42d2-a031-2bca0e940add\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\"",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_a80779d6-d67c-42d2-a031-2bca0e940add\",\"name\":\"create_goal\",\"arguments\":\"{\\\"objective\\\":\\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\",\\\"max_goal_rounds\\\":2}\"}",
+          "#15 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"create\",\"goal\":{\"id\":\"goal-9b085936-2153-4567-a567-01ed4e06d6ec\",\"revision\":1,\"objective\":\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\",\"phase\":\"active\",\"maxGoalRounds\":2},\"rounds",
+          "#16 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_a80779d6-d67c-42d2-a031-2bca0e940add\"},\"toolCallId\":\"toolu_a80779d6-d67c-42d2-a031-2bca0e940add\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#17 step/end {\"turn\":1,\"step\":1}",
+          "#18 step/start {\"turn\":1,\"step\":2}",
+          "#19 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Goal created.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"version\":2,\"api\":\"anthrop",
+          "#20 step/end {\"turn\":1,\"step\":2}",
+          "#21 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}",
+          "#22 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\"\\nRound: 1/2\\n\\nContinue working toward the objective in this same session.",
+          "#23 turn/start {\"turn\":2}",
+          "#24 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#25 step/start {\"turn\":2,\"step\":1}",
+          "#26 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\"\\nRound: 1/2\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool results, ",
+          "#28 assistant/message [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Still polishing (round 1); work remains.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\"",
+          "#29 step/end {\"turn\":2,\"step\":1}",
+          "#30 turn/end {\"turn\":2,\"reason\":{\"kind\":\"completed\"}}",
+          "#31 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\"\\nRound: 2/2\\n\\nContinue working toward the objective in this same session.",
+          "#32 turn/start {\"turn\":3}",
+          "#33 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#34 step/start {\"turn\":3,\"step\":1}",
+          "#35 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\\\"\\nRound: 2/2\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool results, ",
+          "#37 assistant/message [append] {\"turn\":3,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Still polishing (round 2); work remains.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\"",
+          "#38 step/end {\"turn\":3,\"step\":1}",
+          "#39 turn/end {\"turn\":3,\"reason\":{\"kind\":\"completed\"}}",
+          "#40 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"block\",\"goal\":{\"id\":\"goal-9b085936-2153-4567-a567-01ed4e06d6ec\",\"revision\":2,\"objective\":\"P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\",\"phase\":\"blocked\",\"maxGoalRounds\":2,\"blocked"
+        ],
+        "gateway": [
+          "30 GOAL-ROUNDLIMIT r0 s0 -> create_goal",
+          "31 GOAL-ROUNDLIMIT r0 s1 -> text",
+          "32 GOAL-ROUNDLIMIT r1 s0 -> text",
+          "33 GOAL-ROUNDLIMIT r2 s0 -> text"
+        ]
+      },
+      "GOAL-PAUSE": {
+        "sessionId": "p0-2-goal-pause",
+        "created": {
+          "kind": "success",
+          "text": "Goal created\nStatus: active\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\nRounds: 0/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear"
+        },
+        "bashIssued": true,
+        "treeWhileRunning": "PID    PPID     ELAPSED   RSS CMD\n  90096   90081       00:14 138416 <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.ts\n  90142   90096       00:01  2308 bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c sleep 8; echo slow-check-done\n  90143   90142       00:01  1472 bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c sleep 8; echo slow-check-done\n  90144   90143       00:01  3796 bash -c sleep 8; echo slow-check-done\n  90145   90144       00:01  7672 sleep 8",
+        "pausedCommand": {
+          "kind": "success",
+          "text": "Goal paused\nStatus: paused\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\nRounds: 1/256\nActivation: disarmed\n\nCommands: /goal edit <objective>, /goal resume, /goal clear"
+        },
+        "paused": {
+          "reached": true,
+          "final": {
+            "id": "goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670",
+            "revision": 2,
+            "objective": "P0-GOAL-PAUSE: run the slow check, then finish",
+            "phase": "paused",
+            "roundsStarted": 1,
+            "maxGoalRounds": 256,
+            "activation": "disarmed"
+          },
+          "timeline": [
+            {
+              "tMs": 14734,
+              "phase": "paused",
+              "roundsStarted": 1,
+              "revision": 2,
+              "activation": "disarmed"
+            }
+          ]
+        },
+        "idleAfterPause": {
+          "requestId": "r31",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "treeAfterPause": "PID    PPID     ELAPSED   RSS CMD\n  90096   90081       00:16 140272 <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.ts",
+        "quietWhilePaused": {
+          "roundsStarted": 1,
+          "newGatewayRequests": 0
+        },
+        "resumedCommand": {
+          "kind": "success",
+          "text": "Goal resumed\nStatus: active\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\nRounds: 1/256\nActivation: armed\n\nCommands: /goal edit <objective>, /goal pause, /goal clear"
+        },
+        "resumed": {
+          "reached": true,
+          "final": {
+            "id": "goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670",
+            "revision": 4,
+            "objective": "P0-GOAL-PAUSE: run the slow check, then finish",
+            "phase": "complete",
+            "roundsStarted": 2,
+            "maxGoalRounds": 256,
+            "activation": "disarmed"
+          },
+          "timeline": [
+            {
+              "tMs": 20162,
+              "phase": "active",
+              "roundsStarted": 1,
+              "revision": 3,
+              "activation": "armed"
+            },
+            {
+              "tMs": 20463,
+              "phase": "complete",
+              "roundsStarted": 2,
+              "revision": 4,
+              "activation": "disarmed"
+            }
+          ]
+        },
+        "idle": {
+          "requestId": "r36",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 command/run {\"commandId\":\"cmd-6a9a1645-1\",\"name\":\"goal\",\"args\":\" P0-GOAL-PAUSE: run the slow check, then finish\",\"source\":{\"kind\":\"user\"}}",
+          "#4 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"create\",\"goal\":{\"id\":\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\",\"revision\":1,\"objective\":\"P0-GOAL-PAUSE: run the slow check, then finish\",\"phase\":\"active\",\"maxGoalRounds\":256},\"roundsStarted\":",
+          "#5 command/done {\"commandId\":\"cmd-6a9a1645-1\",\"kind\":\"success\",\"text\":\"Goal created\\nStatus: active\\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\\nRounds: 0/256\\nActivation: armed\\n\\nCommands: /goal edit <objective>, /goal pause, /goal clear\"}",
+          "#6 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nRound: 1/256\\n\\nContinue working toward the objective in this same session. Treat th",
+          "#7 turn/start {\"turn\":1}",
+          "#8 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#9 step/start {\"turn\":1,\"step\":1}",
+          "#11 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nRound: 1/256\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool results, and durab",
+          "#12 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#15 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_cc8558c2-70e1-46d3-9a93-88bb60a6df90\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"sleep 8; echo slow-check-done\\\",\\\"description\\\":\\\"Slow check\\\"}\"}],\"",
+          "#16 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_cc8558c2-70e1-46d3-9a93-88bb60a6df90\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"sleep 8; echo slow-check-done\\\",\\\"description\\\":\\\"Slow check\\\"}\"}",
+          "#17 command/run {\"commandId\":\"cmd-6a9a1645-2\",\"name\":\"goal\",\"args\":\" pause\",\"source\":{\"kind\":\"user\"}}",
+          "#18 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"pause\",\"goal\":{\"id\":\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\",\"revision\":2,\"objective\":\"P0-GOAL-PAUSE: run the slow check, then finish\",\"phase\":\"paused\",\"maxGoalRounds\":256},\"roundsStarted\":1",
+          "#19 command/done {\"commandId\":\"cmd-6a9a1645-2\",\"kind\":\"success\",\"text\":\"Goal paused\\nStatus: paused\\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\\nRounds: 1/256\\nActivation: disarmed\\n\\nCommands: /goal edit <objective>, /goal resume, /goal clea",
+          "#20 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_cc8558c2-70e1-46d3-9a93-88bb60a6df90\"},\"toolCallId\":\"toolu_cc8558c2-70e1-46d3-9a93-88bb60a6df90\",\"content\":[{\"type\":\"text\",\"text\":\"Error: tool call aborted\"",
+          "#21 step/end {\"turn\":1,\"step\":1}",
+          "#22 turn/end {\"turn\":1,\"reason\":{\"kind\":\"aborted\",\"reason\":{\"kind\":\"user\"}}}",
+          "#23 command/run {\"commandId\":\"cmd-6a9a1645-3\",\"name\":\"goal\",\"args\":\" resume\",\"source\":{\"kind\":\"user\"}}",
+          "#24 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"resume\",\"goal\":{\"id\":\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\",\"revision\":3,\"objective\":\"P0-GOAL-PAUSE: run the slow check, then finish\",\"phase\":\"active\",\"maxGoalRounds\":256},\"roundsStarted\":",
+          "#25 command/done {\"commandId\":\"cmd-6a9a1645-3\",\"kind\":\"success\",\"text\":\"Goal resumed\\nStatus: active\\nObjective: P0-GOAL-PAUSE: run the slow check, then finish\\nRounds: 1/256\\nActivation: armed\\n\\nCommands: /goal edit <objective>, /goal pause, /goal clear\"}",
+          "#26 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nRound: 2/256\\n\\nContinue working toward the objective in this same session. Treat th",
+          "#27 turn/start {\"turn\":2}",
+          "#28 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#29 step/start {\"turn\":2,\"step\":1}",
+          "#30 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_round>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nRound: 2/256\\n\\nContinue working toward the objective in this same session. Treat the current workspace, tool results, and durab",
+          "#32 assistant/message [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_358e7fd5-cdf6-4c2f-937d-61e0c8da19cf\",\"name\":\"get_goal\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#33 tool/call {\"turn\":2,\"step\":1,\"callId\":\"toolu_358e7fd5-cdf6-4c2f-937d-61e0c8da19cf\",\"name\":\"get_goal\",\"arguments\":\"{}\"}",
+          "#34 tool/result [append] {\"turn\":2,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_358e7fd5-cdf6-4c2f-937d-61e0c8da19cf\"},\"toolCallId\":\"toolu_358e7fd5-cdf6-4c2f-937d-61e0c8da19cf\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#35 step/end {\"turn\":2,\"step\":1}",
+          "#36 step/start {\"turn\":2,\"step\":2}",
+          "#37 assistant/message [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_fca36f2a-f5a9-4618-aad7-1c1cb8bb0654\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\\\",\\\"revision\\\":3,\\\"",
+          "#38 tool/call {\"turn\":2,\"step\":2,\"callId\":\"toolu_fca36f2a-f5a9-4618-aad7-1c1cb8bb0654\",\"name\":\"update_goal\",\"arguments\":\"{\\\"goal_id\\\":\\\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\\\",\\\"revision\\\":3,\\\"action\\\":\\\"complete\\\"}\"}",
+          "#39 goal/change {\"kind\":\"goal/change\",\"version\":1,\"operation\":\"complete\",\"goal\":{\"id\":\"goal-98d5b4fd-b806-4512-ab43-cc7b5c8a8670\",\"revision\":4,\"objective\":\"P0-GOAL-PAUSE: run the slow check, then finish\",\"phase\":\"complete\",\"maxGoalRounds\":256},\"roundsStart",
+          "#40 tool/result [append] {\"turn\":2,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_fca36f2a-f5a9-4618-aad7-1c1cb8bb0654\"},\"toolCallId\":\"toolu_fca36f2a-f5a9-4618-aad7-1c1cb8bb0654\",\"content\":[{\"type\":\"text\",\"text\":\"{\\\"goal\\\":{\\\"id\\\":\\\"goal-",
+          "#41 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"<goal_complete>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nThe goal is marked complete and this autonomous run is ending. Write the closing ",
+          "#42 step/end {\"turn\":2,\"step\":2}",
+          "#43 agent/inbox/spliced {\"target\":\"next-step\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#44 step/start {\"turn\":2,\"step\":3}",
+          "#45 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"<goal_complete>\\nObjective: \\\"P0-GOAL-PAUSE: run the slow check, then finish\\\"\\nThe goal is marked complete and this autonomous run is ending. Write the closing message to the user now: state the outcome, ",
+          "#46 assistant/message [append] {\"turn\":2,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Wrapping up the goal for the user.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"vers",
+          "#47 step/end {\"turn\":2,\"step\":3}",
+          "#48 turn/end {\"turn\":2,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "34 GOAL-PAUSE r1 s0 -> bash",
+          "35 GOAL-PAUSE r2 s0 -> get_goal",
+          "36 GOAL-PAUSE r2 s1 -> update_goal"
+        ]
+      },
+      "JOBS": {
+        "sessionId": "p0-2-jobs",
+        "treeWhileRunning": "PID    PPID     ELAPSED   RSS CMD\n  90096   90081       00:22 143844 <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.ts\n  90149   90096       00:01  2336 bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done\n  90150   90149       00:01  1476 bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done\n  90151   90150       00:01  3796 bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done\n  90153   90151       00:00  7820 sleep 1",
+        "idle": {
+          "requestId": "r39",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-JOBS: run a background ticker.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"3f45af81-ab08-49bb-9a7c-2f92d4cead72\"}]}",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-JOBS: run a background ticker.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"3f45af81-ab08-49bb-9a7c-2f92d4cead72\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-JOBS: run a background ticker.\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_586ed204-e861-4a8f-9265-e7d92700872f\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"for i in 1 2 3; do echo tick-$i; sleep 1; done\\\",\\\"description\\\":\\\"B",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_586ed204-e861-4a8f-9265-e7d92700872f\",\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"for i in 1 2 3; do echo tick-$i; sleep 1; done\\\",\\\"description\\\":\\\"Background ticker\\\",\\\"run_in_background\\\":true}\"}",
+          "#15 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_586ed204-e861-4a8f-9265-e7d92700872f\"},\"toolCallId\":\"toolu_586ed204-e861-4a8f-9265-e7d92700872f\",\"content\":[{\"type\":\"text\",\"text\":\"started background job ba",
+          "#16 step/end {\"turn\":1,\"step\":1}",
+          "#17 step/start {\"turn\":1,\"step\":2}",
+          "#18 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_16a44bad-b66e-4421-825b-f6ef3499a94c\",\"name\":\"job_list\",\"arguments\":\"{}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"",
+          "#19 tool/call {\"turn\":1,\"step\":2,\"callId\":\"toolu_16a44bad-b66e-4421-825b-f6ef3499a94c\",\"name\":\"job_list\",\"arguments\":\"{}\"}",
+          "#20 tool/result [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_16a44bad-b66e-4421-825b-f6ef3499a94c\"},\"toolCallId\":\"toolu_16a44bad-b66e-4421-825b-f6ef3499a94c\",\"content\":[{\"type\":\"text\",\"text\":\"bash-8 [bash] running — f",
+          "#21 step/end {\"turn\":1,\"step\":2}",
+          "#22 step/start {\"turn\":1,\"step\":3}",
+          "#23 assistant/message [append] {\"turn\":1,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_75eab135-c215-49a9-a415-a6040334a7c1\",\"name\":\"job_output\",\"arguments\":\"{\\\"job_id\\\":\\\"bash-8\\\",\\\"wait\\\":true,\\\"timeout_ms\\\":15000}\"}],\"source\":{\"kind",
+          "#24 tool/call {\"turn\":1,\"step\":3,\"callId\":\"toolu_75eab135-c215-49a9-a415-a6040334a7c1\",\"name\":\"job_output\",\"arguments\":\"{\\\"job_id\\\":\\\"bash-8\\\",\\\"wait\\\":true,\\\"timeout_ms\\\":15000}\"}",
+          "#25 tool/result [append] {\"turn\":1,\"step\":3,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_75eab135-c215-49a9-a415-a6040334a7c1\"},\"toolCallId\":\"toolu_75eab135-c215-49a9-a415-a6040334a7c1\",\"content\":[{\"type\":\"text\",\"text\":\"tick-1\\ntick-2\\ntick-3\\n[",
+          "#26 step/end {\"turn\":1,\"step\":3}",
+          "#27 step/start {\"turn\":1,\"step\":4}",
+          "#28 assistant/message [append] {\"turn\":1,\"step\":4,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Background job collected.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"version\":2,\"a",
+          "#29 step/end {\"turn\":1,\"step\":4}",
+          "#30 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "38 JOBS r0 s0 -> bash",
+          "39 JOBS r0 s1 -> job_list",
+          "40 JOBS r0 s2 -> job_output",
+          "41 JOBS r0 s3 -> text"
+        ]
+      },
+      "OFFICE": {
+        "sessionId": "p0-2-office",
+        "install": {
+          "stage": "enable",
+          "target": "dsh-office-tools",
+          "enabled": true,
+          "changed": true,
+          "application": "restart-required",
+          "registries": ["https://registry.npmjs.org/"],
+          "packageResult": {
+            "exitCode": 0,
+            "output": "Progress: resolved 1, reused 0, downloaded 0, added 0\n\ndependencies:\n+ dsh-office-tools 1.0.4\n\nPackages: +1\n+\n\n   ╭─────────────────────────────────────────╮\n   │                                         │\n   │   Update available! 11.7.0 → 12.6.0.    │\n   │   Changelog: https://pnpm.io/v/12.6.0   │\n   │    To update, run: pnpm add -g pnpm     │\n   │                                         │\n   ╰───…",
+            "truncated": false,
+            "logPath": "<scratch>/run/dsh-home/profiles/aiclient/.plugin-manager/logs/operation-5f59Ru/pnpm.log"
+          },
+          "bundle": "dsh-office-tools",
+          "warnings": []
+        },
+        "officeToolsAfterRestart": [
+          "excel_create",
+          "excel_read",
+          "excel_update",
+          "ppt_create",
+          "ppt_read",
+          "word_create",
+          "word_read",
+          "word_update"
+        ],
+        "docx": {
+          "bytes": 7190
+        },
+        "idle": {
+          "requestId": "r45",
+          "type": "idle",
+          "idle": true,
+          "status": "idle"
+        },
+        "transcript": [
+          "#0 permission/preset {\"preset\":\"workspace-write\"}",
+          "#1 sandbox/mode {\"mode\":\"workspace-write\"}",
+          "#2 approval/policy {\"policy\":\"ask\"}",
+          "#3 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"inserted\":[{\"content\":[{\"type\":\"text\",\"text\":\"P0-OFFICE: create the report document.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"e3bcaec4-7b01-4357-8cee-86e12d3cb08c\"}]}",
+          "#4 turn/start {\"turn\":1}",
+          "#5 agent/inbox/spliced {\"target\":\"next-turn\",\"start\":0,\"removedCount\":1,\"inserted\":[]}",
+          "#6 step/start {\"turn\":1,\"step\":1}",
+          "#8 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"P0-OFFICE: create the report document.\"}],\"source\":{\"kind\":\"user\"},\"role\":\"user\",\"id\":\"e3bcaec4-7b01-4357-8cee-86e12d3cb08c\"}",
+          "#9 user/message [append] {\"content\":[{\"type\":\"text\",\"text\":\"Current runtime context. This snapshot supersedes earlier runtime-context snapshots.\\n\\nCurrent DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files u",
+          "#12 session/title {\"title\":\"P0-OFFICE: create the report document.\",\"messageSeqs\":[8],\"source\":{\"kind\":\"fallback\"}}",
+          "#13 assistant/message [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_08feb268-0a43-427b-ab26-7e198e49e488\",\"name\":\"word_create\",\"arguments\":\"{\\\"path\\\":\\\"p0-report.docx\\\",\\\"title\\\":\\\"P0-2 report\\\",\\\"paragraphs\\\":[\\\"Wri",
+          "#14 tool/call {\"turn\":1,\"step\":1,\"callId\":\"toolu_08feb268-0a43-427b-ab26-7e198e49e488\",\"name\":\"word_create\",\"arguments\":\"{\\\"path\\\":\\\"p0-report.docx\\\",\\\"title\\\":\\\"P0-2 report\\\",\\\"paragraphs\\\":[\\\"Written by dsh-office-tools through the fake gateway.\\\"],\\\"b",
+          "#15 tool/result [append] {\"turn\":1,\"step\":1,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_08feb268-0a43-427b-ab26-7e198e49e488\"},\"toolCallId\":\"toolu_08feb268-0a43-427b-ab26-7e198e49e488\",\"content\":[{\"type\":\"text\",\"text\":\"Created Word document p0-",
+          "#16 step/end {\"turn\":1,\"step\":1}",
+          "#17 step/start {\"turn\":1,\"step\":2}",
+          "#18 assistant/message [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"tool-call\",\"id\":\"toolu_9a8b2cbb-1176-4acd-9025-042721a45011\",\"name\":\"word_read\",\"arguments\":\"{\\\"path\\\":\\\"p0-report.docx\\\"}\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient",
+          "#19 tool/call {\"turn\":1,\"step\":2,\"callId\":\"toolu_9a8b2cbb-1176-4acd-9025-042721a45011\",\"name\":\"word_read\",\"arguments\":\"{\\\"path\\\":\\\"p0-report.docx\\\"}\"}",
+          "#20 tool/result [append] {\"turn\":1,\"step\":2,\"message\":{\"role\":\"tool\",\"source\":{\"kind\":\"tool\",\"callId\":\"toolu_9a8b2cbb-1176-4acd-9025-042721a45011\"},\"toolCallId\":\"toolu_9a8b2cbb-1176-4acd-9025-042721a45011\",\"content\":[{\"type\":\"text\",\"text\":\"P0-2 report\\n\\nWritten by",
+          "#21 step/end {\"turn\":1,\"step\":2}",
+          "#22 step/start {\"turn\":1,\"step\":3}",
+          "#23 assistant/message [append] {\"turn\":1,\"step\":3,\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"Office document created and read back.\"}],\"source\":{\"kind\":\"model\",\"provider\":\"aiclient-gateway\",\"model\":\"fake-1\",\"replayState\":{\"response\":{\"kind\":\"pi-ai\",\"",
+          "#24 step/end {\"turn\":1,\"step\":3}",
+          "#25 turn/end {\"turn\":1,\"reason\":{\"kind\":\"completed\"}}"
+        ],
+        "gateway": [
+          "42 OFFICE r0 s0 -> word_create",
+          "43 OFFICE r0 s1 -> word_read",
+          "44 OFFICE r0 s2 -> text"
+        ]
+      }
+    }
+  },
+  "straceRun": {
+    "startedAt": "2026-09-25T13:23:55.286Z",
+    "finishedAt": "2026-09-25T13:24:37.357Z",
+    "outcomes": {
+      "GOAL-COMPLETE": "complete",
+      "GOAL-BLOCKED": "blocked",
+      "GOAL-ROUNDLIMIT": "blocked (round-limit)",
+      "GOAL-PAUSE": "paused -> complete",
+      "APPROVAL": "written after allowed-once",
+      "OFFICE": "docx 7190 bytes",
+      "JOBS": "idle",
+      "ENV": "idle"
+    },
+    "hostsReadyMs": [2020, 3125],
+    "strace": [
+      {
+        "host": "host-1",
+        "dotenvOpens": ["<run>/host-cwd/.env => opened", "<run>/dsh-home/.env => opened"],
+        "execs": [
+          "<repo>/out-node-runtime/node :: <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.t",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent -- true",
+          "/usr/bin/true :: true",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-dd1139cdc784 -- systemctl --user show dsh-subprocess-probe-90303-dd1139cdc784.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c echo \\\"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_D",
+          "/usr/bin/bash :: bash -c echo \\\"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLIENT_DSH_GATEWAY_KEY:+present}\\\"; echo \\\"names: $(env | cut -d= -f1 | sort | tr \\\"\\\\n\\\" \\\" \\\")\\\"",
+          "/usr/bin/env :: env",
+          "/usr/bin/cut :: cut -d= -f1",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-e8dab55fc709 -- systemctl --user show dsh-subprocess-probe-90303-e8dab55fc709.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c echo round-1 > progress.txt && cat progress.txt",
+          "/usr/bin/bash :: bash -c echo round-1 > progress.txt && cat progress.txt",
+          "/usr/bin/cat :: cat progress.txt",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-e66c7f038fca -- systemctl --user show dsh-subprocess-probe-90303-e66c7f038fca.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c cat progress.txt",
+          "/usr/bin/bash :: bash -c cat progress.txt",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-78378a96c26c -- systemctl --user show dsh-subprocess-probe-90303-78378a96c26c.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c cat /nonexistent/p0-config.json",
+          "/usr/bin/bash :: bash -c cat /nonexistent/p0-config.json",
+          "/usr/bin/cat :: cat /nonexistent/p0-config.json",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-574b9572c051 -- systemctl --user show dsh-subprocess-probe-90303-574b9572c051.scope --property=ActiveState --value",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-85da8f9189cd -- systemctl --user show dsh-subprocess-probe-90303-85da8f9189cd.scope --property=ActiveState --value",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-b00c35c39d38 -- systemctl --user show dsh-subprocess-probe-90303-b00c35c39d38.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c sleep 8; echo slow-check-done",
+          "/usr/bin/bash :: bash -c sleep 8; echo slow-check-done",
+          "/usr/bin/sleep :: sleep 8",
+          "/usr/bin/systemd-run :: systemd-run --user --scope --quiet --collect --expand-environment=no --unit=dsh-subprocess-probe-90303-30f1768807bc -- systemctl --user show dsh-subprocess-probe-90303-30f1768807bc.scope --property=ActiveState --value",
+          "/usr/bin/bwrap :: bwrap --ro-bind / / --dev /dev --unshare-pid --proc /proc --die-with-parent --tmpfs /tmp --bind <scratch>/run/workspace <scratch>/run/workspace -- bash -c for i in 1 2 3; do echo tick-$i; sleep 1; done",
+          "/usr/bin/sleep :: sleep 1",
+          "<main-checkout>/out-node-runtime/node :: <main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs config get registry",
+          "<main-checkout>/out-node-runtime/node :: <main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs view dsh-office-tools@1.0.4 name version peerDependencies --json --registry=https://registry.npmjs.org/ --config.fetch-retries=0",
+          "<main-checkout>/out-node-runtime/node :: <main-checkout>/out-node-runtime/node <repo>/src/dsh-host/node_modules/pnpm/bin/pnpm.mjs add dsh-office-tools@1.0.4 --registry=https://registry.npmjs.org/"
+        ],
+        "nativeAddons": [
+          "<repo>/src/dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+          "<repo>/src/dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+          "<repo>/src/dsh-host/node_modules/node-addon-require-builtin-linux-x64-gnu/prebuilt/linux-x64-gnu-napi-v9.node",
+          "<scratch>/run/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node"
+        ],
+        "foreignReads": [
+          "<repo>/node_modules/supports-color",
+          "<main-checkout>/node_modules/has-flag",
+          "<main-checkout>/node_modules/supports-color",
+          "<main-checkout>/out-node-runtime/node",
+          "<scratch>/run/dsh-home/profiles/aiclient/node_modules/dsh-office-tools",
+          "<scratch>/run/dsh-home/profiles/aiclient/node_modules/dsh-office-tools_tmp_90594_1"
+        ],
+        "writesByBucket": {
+          "sandbox-other": [
+            "<scratch>/run/events.jsonl",
+            "<scratch>/run/hooks.jsonl",
+            "<scratch>/run/outside/.approved.txt.90303.70338e04-4911-48b6-8ced-ed512ea4c653.tmpdir/approved.txt.tmp",
+            "link <scratch>/run/outside/approved.txt",
+            "mkdir <scratch>/run/outside/.approved.txt.90303.70338e04-4911-48b6-8ced-ed512ea4c653.tmpdir",
+            "unlink <scratch>/run/outside/.approved.txt.90303.70338e04-4911-48b6-8ced-ed512ea4c653.tmpdir/approved.txt.tmp"
+          ],
+          "DSH_HOME": {
+            "count": 128,
+            "sample": [
+              "$DSH_HOME/profiles/aiclient/.plugin-manager/logs/operation-pyBhOZ/pnpm.log",
+              "$DSH_HOME/profiles/aiclient/.plugin-manager/run.json.5b978dbcf27b.tmp",
+              "$DSH_HOME/profiles/aiclient/_tmp_90594_aca7d22896983053f08902bb9caec465",
+              "$DSH_HOME/profiles/aiclient/cordis.patch.yml",
+              "$DSH_HOME/profiles/aiclient/cordis.yml",
+              "$DSH_HOME/profiles/aiclient/node_modules/.modules.yaml",
+              "$DSH_HOME/profiles/aiclient/node_modules/.pnpm-workspace-state-v1.json.3635973103",
+              "$DSH_HOME/profiles/aiclient/node_modules/.pnpm/lock.yaml.2088561158",
+              "$DSH_HOME/profiles/aiclient/node_modules/dsh-office-tools_tmp_90594_1/LICENSE",
+              "$DSH_HOME/profiles/aiclient/package.json",
+              "$DSH_HOME/profiles/aiclient/package.json.2856409931",
+              "$DSH_HOME/profiles/aiclient/package.json.2b599f561add.tmp",
+              "$DSH_HOME/profiles/aiclient/package.json.lock",
+              "$DSH_HOME/profiles/aiclient/pnpm-workspace.yaml",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-approval/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-approval/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-approval/session.v4.jsonl.zstd.4dc3c26eba9f.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-env/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-env/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-env/session.v4.jsonl.zstd.9623a7b3edf6.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-blocked/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-blocked/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-blocked/session.v4.jsonl.zstd.0b85f25e8769.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-complete/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-complete/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-complete/session.v4.jsonl.zstd.0340ca9716e1.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-pause/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-pause/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-pause/session.v4.jsonl.zstd.190aed6e3d19.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-roundlimit/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-roundlimit/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-goal-roundlimit/session.v4.jsonl.zstd.1018d28b0293.tmp",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-jobs/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-jobs/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-jobs/session.v4.jsonl.zstd.e9b3be970709.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.08b0f894-aca3-4b0b-b260-c7d40cb9baa1.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.0fd71024-d741-403c-bc89-d83bbfbf993a.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.18155916-5aa6-45cc-85af-28e1b4acf4b6.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.21c5ae32-f805-4cba-84b4-3a5de8dcca81.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.2830dc50-42ef-4c34-b81d-1e55c78aed2d.tmp"
+            ]
+          },
+          "TMPDIR": [
+            "$TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/.linux-x64-gnu-napi-v9.node.90303.1617cfd00857c8.tmp",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/080c8a00.Em2bZL",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/0d095a40.9aYrnN",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/10383579.bfoapq",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/3d3da392.uXe5nD",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/6fd68e8e.33WI6W",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/8565fcf9.mAhD5s",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/93ed723c.e6kUIZ",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/9887caa9.dnjgCn",
+            "$TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/dc33918c.FNfHzC",
+            "link $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+            "mkdir $TMPDIR/dsh-spill-00fC4q",
+            "mkdir $TMPDIR/dsh-subprocess-IDR11t",
+            "mkdir $TMPDIR/node-addon-native-custom-loader-1000",
+            "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache",
+            "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu",
+            "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6",
+            "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu",
+            "mkdir $TMPDIR/node-compile-cache",
+            "mkdir $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/080c8a00",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/0d095a40",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/10383579",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/3d3da392",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/6fd68e8e",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/8565fcf9",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/93ed723c",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/9887caa9",
+            "rename $TMPDIR/node-compile-cache/v24.18.0-x64-cf738c9d-1000/dc33918c",
+            "unlink $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/.linux-x64-gnu-napi-v9.node.90303.1617cfd00857c8.tmp"
+          ],
+          "dev-proc": ["/dev/null"],
+          "workspace": ["gid_map", "progress.txt", "setgroups", "uid_map"],
+          "OUTSIDE": [
+            "symlink /newroot/dev/core",
+            "symlink /newroot/dev/fd",
+            "symlink /newroot/dev/ptmx",
+            "symlink /newroot/dev/stderr",
+            "symlink /newroot/dev/stdin",
+            "symlink /newroot/dev/stdout"
+          ],
+          "HOME": {
+            "count": 299,
+            "sample": [
+              "$HOME/.cache/pnpm/lockfile-verified.jsonl",
+              "$HOME/.cache/pnpm/v11/metadata/registry.npmjs.org/dsh-office-tools.jsonl_tmp_90594_0",
+              "$HOME/.cache/pnpm/v11/metadata/registry.npmjs.org/pnpm.jsonl_tmp_90594_0",
+              "$HOME/.local/share/pnpm/store/v11/index.db",
+              "$HOME/.local/share/pnpm/store/v11/index.db-journal",
+              "$HOME/.local/share/pnpm/store/v11/index.db-shm",
+              "$HOME/.local/share/pnpm/store/v11/index.db-wal",
+              "link $HOME/.local/share/pnpm/_tmp_90594_178add71e0302924ed6a3a7540b36fe5/_tmp_90594_731ea7972738cf8ee21575e8be0fb89a",
+              "mkdir $HOME/.cache",
+              "mkdir $HOME/.cache/pnpm",
+              "mkdir $HOME/.cache/pnpm/v11",
+              "mkdir $HOME/.cache/pnpm/v11/metadata",
+              "mkdir $HOME/.cache/pnpm/v11/metadata/registry.npmjs.org",
+              "mkdir $HOME/.local/share",
+              "mkdir $HOME/.local/share/pnpm",
+              "mkdir $HOME/.local/share/pnpm/_tmp_90594_178add71e0302924ed6a3a7540b36fe5",
+              "mkdir $HOME/.local/share/pnpm/store",
+              "mkdir $HOME/.local/share/pnpm/store/v11",
+              "mkdir $HOME/.local/share/pnpm/store/v11/projects",
+              "mkdir $HOME/.local/state",
+              "mkdir $HOME/.local/state/pnpm",
+              "rename $HOME/.cache/pnpm/v11/metadata/registry.npmjs.org/pnpm.jsonl",
+              "rename $HOME/.local/state/pnpm/pnpm-state.json",
+              "symlink $HOME/.local/share/pnpm/store/v11/projects/a5fd3a162dde975c4e306d3924205c4c",
+              "unlink $HOME/.local/share/pnpm/_tmp_90594_178add71e0302924ed6a3a7540b36fe5/_tmp_90594_731ea7972738cf8ee21575e8be0fb89a",
+              "unlink $HOME/.local/share/pnpm/store/v11/index.db-journal",
+              "unlink $HOME/.local/share/pnpm/store/v11/index.db-shm",
+              "unlink $HOME/.local/share/pnpm/store/v11/index.db-wal"
+            ]
+          }
+        }
+      },
+      {
+        "host": "host-2",
+        "dotenvOpens": ["<run>/host-cwd/.env => opened", "<run>/dsh-home/.env => opened"],
+        "execs": [
+          "<repo>/out-node-runtime/node :: <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.t"
+        ],
+        "nativeAddons": [
+          "<repo>/src/dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+          "<repo>/src/dsh-host/node_modules/node-addon-require-builtin-linux-x64-gnu/prebuilt/linux-x64-gnu-napi-v9.node",
+          "<scratch>/run/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node"
+        ],
+        "foreignReads": [
+          "<main-checkout>/out-node-runtime/node",
+          "<scratch>/run/dsh-home/profiles/aiclient/node_modules/dsh-office-tools"
+        ],
+        "writesByBucket": {
+          "sandbox-other": ["<scratch>/run/events.jsonl", "<scratch>/run/hooks.jsonl"],
+          "DSH_HOME": {
+            "count": 9,
+            "sample": [
+              "$DSH_HOME/profiles/aiclient/cordis.yml",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office/session.lock",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office/session.v4.jsonl.zstd",
+              "$DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office/session.v4.jsonl.zstd.9252d4c23dd5.tmp",
+              "$DSH_HOME/storages/session_projcache/sessions/.d6b93c96-2813-40f9-a3e9-e5e6c3ab9cc2.tmp",
+              "link $DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office/session.v4.jsonl.zstd",
+              "mkdir $DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office",
+              "rename $DSH_HOME/storages/session_projcache/sessions/p0-2-office.json",
+              "unlink $DSH_HOME/sessions/--<scratch>-run-workspace--/p0-2-office/session.v4.jsonl.zstd.9252d4c23dd5.tmp"
+            ]
+          },
+          "TMPDIR": ["mkdir $TMPDIR/dsh-spill-QPUOKX"],
+          "workspace": [
+            "$workspace/.p0-report.docx.90637.a1d7e78e-17bf-4366-9f66-d6efe3a63568.tmpdir/p0-report.docx.tmp",
+            "mkdir $workspace/.p0-report.docx.90637.a1d7e78e-17bf-4366-9f66-d6efe3a63568.tmpdir",
+            "rename $workspace/p0-report.docx"
+          ]
+        }
+      }
+    ]
+  },
+  "communityPluginSelection": {
+    "catalog": "dsh-plugin-catalog@2026.925.4511 (4311 entries)",
+    "script": "src/dsh-host/lib/select-community-plugin.mjs --top 150",
+    "runtime": "0.1.7-rc.2",
+    "scanned": 150,
+    "withClient": 121,
+    "notBundle": 12,
+    "peerRefused": [
+      {
+        "npm": "@deepseek-harness-tui/dsh-tui",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-ptc-runtime-node@0.1.7-rc.1",
+          "@deepseek-ai/dsh-agent-preset-registry@0.1.7-rc.1"
+        ]
+      },
+      {
+        "npm": "dsh-token-usage-stats",
+        "unsatisfied": ["@deepseek-ai/dsh-util-values@0.1.2-alpha.2"]
+      },
+      {
+        "npm": "@tnnevol/dsh-codex-auth",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-fs@0.1.0-rc.7",
+          "@deepseek-ai/dsh-llm@0.1.0-rc.7",
+          "@deepseek-ai/dsh-tools@0.1.0-rc.7",
+          "@deepseek-ai/dsh-timeout@0.1.0-rc.7",
+          "@deepseek-ai/dsh-settings@0.1.0-rc.7",
+          "@deepseek-ai/dsh-llm-pi-ai@0.1.0-rc.7",
+          "@deepseek-ai/dsh-attachment@0.1.0-rc.7",
+          "@deepseek-ai/dsh-home-paths@0.1.0-rc.7",
+          "@deepseek-ai/dsh-invariants@0.1.0-rc.7",
+          "@deepseek-ai/dsh-credentials@0.1.0-rc.7",
+          "@deepseek-ai/dsh-atomic-write@0.1.0-rc.7",
+          "@deepseek-ai/dsh-client-locale@0.1.0-rc.7",
+          "@deepseek-ai/dsh-client-runtime@0.1.0-rc.7",
+          "@deepseek-ai/dsh-host-webserver@0.1.0-rc.7",
+          "@deepseek-ai/dsh-client-ui-slots@0.1.0-rc.7",
+          "@deepseek-ai/dsh-client-ui-settings@0.1.0-rc.7",
+          "@deepseek-ai/dsh-launch-environment@0.1.0-rc.7",
+          "@deepseek-ai/dsh-client-ui-settings-plugins@0.1.0-rc.7"
+        ]
+      },
+      {
+        "npm": "dsh-codex-connect",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-fs@0.1.7-rc.1",
+          "@deepseek-ai/dsh-llm@0.1.7-rc.1",
+          "@deepseek-ai/dsh-web@0.1.7-rc.1",
+          "@deepseek-ai/dsh-agent@0.1.7-rc.1",
+          "@deepseek-ai/dsh-tools@0.1.7-rc.1",
+          "@deepseek-ai/dsh-session@0.1.7-rc.1",
+          "@deepseek-ai/dsh-commands@0.1.7-rc.1",
+          "@deepseek-ai/dsh-settings@0.1.7-rc.1",
+          "@deepseek-ai/dsh-llm-pi-ai@0.1.7-rc.1",
+          "@deepseek-ai/dsh-attachment@0.1.7-rc.1",
+          "@deepseek-ai/dsh-compaction@0.1.7-rc.1",
+          "@deepseek-ai/dsh-home-paths@0.1.7-rc.1",
+          "@deepseek-ai/dsh-invariants@0.1.7-rc.1",
+          "@deepseek-ai/dsh-util-values@0.1.7-rc.1",
+          "@deepseek-ai/dsh-atomic-write@0.1.7-rc.1",
+          "@deepseek-ai/dsh-client-ui-chat@0.1.7-rc.1",
+          "@deepseek-ai/dsh-client-ui-tool@0.1.7-rc.1",
+          "@deepseek-ai/dsh-host-webserver@0.1.7-rc.1",
+          "@deepseek-ai/dsh-client-ui-layout@0.1.7-rc.1",
+          "@deepseek-ai/dsh-client-ui-primitives@0.1.7-rc.1"
+        ]
+      },
+      {
+        "npm": "@tnnevol/dsh-fnos",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-settings@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-locale@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-runtime@0.1.1-rc.2",
+          "@deepseek-ai/dsh-host-webserver@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-slots@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-theme@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-settings@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-workspace@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-primitives@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-conversation@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-input-trigger@0.1.1-rc.2",
+          "@deepseek-ai/dsh-client-ui-settings-plugins@0.1.1-rc.2"
+        ]
+      },
+      {
+        "npm": "stratagate-dsh",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-llm@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-tools@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-session@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-settings@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-system-prompt@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-native-command@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-session-format@0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-agent-default-model@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-client-ui-conversation@0.1.2-rc.1 || 0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-session-format-catalog@0.1.5-rc.2 || 0.1.6-alpha.1",
+          "@deepseek-ai/dsh-session-format-v0-to-v1@0.1.5-rc.2 || 0.1.6-alpha.1"
+        ]
+      },
+      {
+        "npm": "dsh-coding-subscription-oauth",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-llm@0.1.1-rc.2",
+          "@deepseek-ai/dsh-tools@0.1.1-rc.2",
+          "@deepseek-ai/dsh-llm-pi-ai@0.1.1-rc.2",
+          "@deepseek-ai/dsh-attachment@0.1.1-rc.2",
+          "@deepseek-ai/dsh-home-paths@0.1.1-rc.2",
+          "@deepseek-ai/dsh-invariants@0.1.1-rc.2",
+          "@deepseek-ai/dsh-credentials@0.1.1-rc.2",
+          "@deepseek-ai/dsh-atomic-write@0.1.1-rc.2",
+          "@deepseek-ai/dsh-host-webserver@0.1.1-rc.2"
+        ]
+      },
+      {
+        "npm": "dsh-win32",
+        "unsatisfied": ["@deepseek-ai/dsh-subprocess-local@>=0.1.0-rc.5 <0.1.0-rc.7"]
+      },
+      {
+        "npm": "@anysearch/anysearch-dsh",
+        "unsatisfied": [
+          "@deepseek-ai/dsh-web@0.0.1-rc.5 || >=0.1.0-rc.2 <=0.1.0-rc.8 || >=0.1.1-rc.1 <=0.1.1-rc.2 || >=0.1.2-alpha.2 <=0.1.2-rc.1 || 0.1.3-alpha.2 || >=0.1.5-alpha.1 <=0.1.5-rc.2 || >=0.1.6-alpha.1 <=0.1.6-alpha.2",
+          "@deepseek-ai/dsh-tools@0.0.1-rc.5 || >=0.1.0-rc.2 <=0.1.0-rc.8 || >=0.1.1-rc.1 <=0.1.1-rc.2 || >=0.1.2-alpha.2 <=0.1.2-rc.1 || 0.1.3-alpha.2 || >=0.1.5-alpha.1 <=0.1.5-rc.2 || >=0.1.6-alpha.1 <=0.1.6-alpha.2",
+          "@deepseek-ai/dsh-tool-web@0.0.1-rc.5 || >=0.1.0-rc.2 <=0.1.0-rc.8 || >=0.1.1-rc.1 <=0.1.1-rc.2 || >=0.1.2-alpha.2 <=0.1.2-rc.1 || 0.1.3-alpha.2 || >=0.1.5-alpha.1 <=0.1.5-rc.2 || >=0.1.6-alpha.1 <=0.1.6-alpha.2",
+          "@deepseek-ai/dsh-credentials@0.0.1-rc.5 || >=0.1.0-rc.2 <=0.1.0-rc.8 || >=0.1.1-rc.1 <=0.1.1-rc.2 || >=0.1.2-alpha.2 <=0.1.2-rc.1 || 0.1.3-alpha.2 || >=0.1.5-alpha.1 <=0.1.5-rc.2 || >=0.1.6-alpha.1 <=0.1.6-alpha.2",
+          "@deepseek-ai/dsh-system-prompt@0.0.1-rc.5 || >=0.1.0-rc.2 <=0.1.0-rc.8 || >=0.1.1-rc.1 <=0.1.1-rc.2 || >=0.1.2-alpha.2 <=0.1.2-rc.1 || 0.1.3-alpha.2 || >=0.1.5-alpha.1 <=0.1.5-rc.2 || >=0.1.6-alpha.1 <=0.1.6-alpha.2"
+        ]
+      }
+    ],
+    "hostOnlyCompatible": [
+      {
+        "npm": "billion-context",
+        "version": "0.1.147",
+        "downloads": 137364,
+        "category": "session",
+        "dependencies": 1,
+        "dshPeers": 0,
+        "capabilities": ["shell", "fs-write", "fs-read", "network", "env", "llm"],
+        "redLines": ["uses literal IP 1.3.101.112 for network access"],
+        "description": "The official billion-context plugin: a context-compression plugin for small context windows (a 100K context is"
+      },
+      {
+        "npm": "@vectorize-io/hindsight-coding-agents",
+        "version": "0.7.0",
+        "downloads": 45493,
+        "category": "memory",
+        "dependencies": 5,
+        "dshPeers": 0,
+        "capabilities": [],
+        "redLines": [],
+        "description": "Hindsight, agent memory that learns: long-term project memory with auto recall and retain, knowledge pages, de"
+      },
+      {
+        "npm": "dsh-find-plugin",
+        "version": "0.3.7",
+        "downloads": 21137,
+        "category": "market",
+        "dependencies": 0,
+        "dshPeers": 1,
+        "capabilities": ["fs-read", "network"],
+        "redLines": [],
+        "description": "Find plugins without leaving the agent: search this curated registry by keyword or category, with ready-to-run"
+      },
+      {
+        "npm": "@openviking/dsh-memory-plugin",
+        "version": "0.5.5",
+        "downloads": 19535,
+        "category": "memory",
+        "dependencies": 0,
+        "dshPeers": 3,
+        "capabilities": ["env"],
+        "redLines": [],
+        "description": "OpenViking memory and context bundle for DeepSeek Harness: pre-step auto-recall and profile injection, session"
+      },
+      {
+        "npm": "@furongjun1999/dsh-memory",
+        "version": "0.5.0",
+        "downloads": 13512,
+        "category": "agi",
+        "dependencies": 0,
+        "dshPeers": 4,
+        "capabilities": ["shell", "fs-write", "fs-read", "network", "env"],
+        "redLines": [],
+        "description": "White-box AGI architecture exploration: metacognition (self-cognition loop), continual learning (knowledge fly"
+      },
+      {
+        "npm": "dsh-builtin-browser",
+        "version": "0.1.22",
+        "downloads": 12912,
+        "category": "browser",
+        "dependencies": 1,
+        "dshPeers": 3,
+        "capabilities": ["shell", "fs-write", "fs-read", "network", "env"],
+        "redLines": [],
+        "description": "Shared real browser for DSH: a native Electron window the human can watch and take over, driven by the agent o"
+      },
+      {
+        "npm": "@aiwayds/dsh-tui-pi",
+        "version": "2.23.1",
+        "downloads": 11580,
+        "category": "ui",
+        "dependencies": 10,
+        "dshPeers": 3,
+        "capabilities": ["shell", "fs-write", "fs-read", "credentials", "env"],
+        "redLines": ["runs code at install time (postinstall)"],
+        "description": "Full-featured TUI for DeepSeek Harness: streaming conversation, powerline status bar, real-time think/tool/tod"
+      },
+      {
+        "npm": "huaweicloud-devkit",
+        "version": "1.1.7",
+        "downloads": 10187,
+        "category": "dev",
+        "dependencies": 1,
+        "dshPeers": 0,
+        "capabilities": ["shell", "fs-write", "fs-read", "network", "env"],
+        "redLines": ["runs code at install time (postinstall)"],
+        "description": "HuaweiCloud DevKit gives AI agents complete command of Huawei Cloud — build, deploy, operate, always governed,"
+      },
+      {
+        "npm": "dsh-office-tools",
+        "version": "1.0.4",
+        "downloads": 7441,
+        "category": "docs",
+        "dependencies": 0,
+        "dshPeers": 5,
+        "capabilities": ["fs-read"],
+        "redLines": [],
+        "description": "Workspace-safe Office tools for agents: create/read Word, create/read/update Excel, and create/read PowerPoint"
+      },
+      {
+        "npm": "@openma/deepseek-harness-acp",
+        "version": "0.4.33",
+        "downloads": 7100,
+        "category": "notify",
+        "dependencies": 3,
+        "dshPeers": 1,
+        "capabilities": [
+          "shell",
+          "fs-write",
+          "fs-read",
+          "network",
+          "credentials",
+          "env",
+          "subagent",
+          "llm"
+        ],
+        "redLines": ["reads credentials/secrets AND has network access"],
+        "description": "ACP profile plugin and standalone stdio server for using the full DSH agent from Zed and other ACP clients whi"
+      },
+      {
+        "npm": "agents-gitflow-guard",
+        "version": "0.1.0",
+        "downloads": 6915,
+        "category": "git",
+        "dependencies": 0,
+        "dshPeers": 1,
+        "capabilities": ["shell", "fs-write", "fs-read", "env"],
+        "redLines": [],
+        "description": "Branch-role guard for AI coding agents: configurable integration/preview/production/archive roles, blocking di"
+      },
+      {
+        "npm": "codsh-bundle",
+        "version": "0.24.1",
+        "downloads": 6328,
+        "category": "ui",
+        "dependencies": 39,
+        "dshPeers": 14,
+        "capabilities": [],
+        "redLines": [],
+        "description": "Terminal coding agent for DeepSeek Harness with a full-screen alternate-screen UI, turn-aware session navigati"
+      },
+      {
+        "npm": "dsh-ssh-tui",
+        "version": "0.7.3",
+        "downloads": 5960,
+        "category": "ui",
+        "dependencies": 2,
+        "dshPeers": 16,
+        "capabilities": ["shell", "fs-write", "fs-read", "network", "credentials", "env"],
+        "redLines": ["reads credentials/secrets AND has network access"],
+        "description": "Terminal UI for DeepSeek Harness on jump hosts and high-latency links: plain ANSI, incremental repaint, and a "
+      },
+      {
+        "npm": "lunheng-article-pipeline",
+        "version": "18.11.0",
+        "downloads": 5958,
+        "category": "skill",
+        "dependencies": 0,
+        "dshPeers": 3,
+        "capabilities": ["shell", "dynamic-code", "fs-write", "fs-read", "network", "env"],
+        "redLines": [],
+        "description": "DeepSeek Harness bundle registering one skill that turns long-form production (academic papers, industry analy"
+      }
+    ]
+  }
+}
