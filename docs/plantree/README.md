@@ -1,6 +1,6 @@
 # Plantree — 规划入口
 
-本仓库当前只有一个活跃执行计划：[Runtime 加固与收口](plans/runtime-hardening/README.md)。它承接 2026-09-14 只读审计确认的 185 条缺陷、补审与最后一次现场。此前的 runtime-evolution（P0～P6 + GUI）已执行完并收口为参考与证据基线（[决策 001](plans/runtime-hardening/decisions/001-open-hardening-plan-root.md)）。
+本仓库当前的活跃执行计划是 [Runtime 加固与收口](plans/runtime-hardening/README.md)（1.0.x 维护）；另有规划中的 [DSH 二开迁移](plans/dsh-rebase/README.md)（2026-09-25 立项，B 路线）。它承接 2026-09-14 只读审计确认的 185 条缺陷、补审与最后一次现场。此前的 runtime-evolution（P0～P6 + GUI）已执行完并收口为参考与证据基线（[决策 001](plans/runtime-hardening/decisions/001-open-hardening-plan-root.md)）。
 
 分支约定：`feat/runtime-evolution` 已于 2026-09-24 退役并删除（本地与远端，内容全部在 main）。当前收口分支是 `feat/ctrl-enter-interject`，验证后快进 main；此后新工作从 main 按主题开分支。
 
@@ -20,6 +20,7 @@
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
 | Runtime 加固与收口 | In Progress | 批次 M（Ctrl+Enter 插话分支收口，T118～T136）六个提交已落地未推送，待开发机点验与 Windows `1.0.3-test.1` 实测后快进 main；此前各批次状态见看板与 roadmap | [T001～T136](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
+| DSH 二开迁移（B 路线） | Planning | 2026-09-25 用户批准 B 路线与调研 §9 六点（[决策 001](plans/dsh-rebase/decisions/001-route-b-and-scope.md)）；P0 探针待开工 | [P0～P2](plans/dsh-rebase/roadmap.md) | — |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。

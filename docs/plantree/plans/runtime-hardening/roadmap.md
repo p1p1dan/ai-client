@@ -374,11 +374,12 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ⬜ T135 | 失败卡「继续」把上一条提示词作为新消息再发一次，模型会收到两条相同的 user 消息；在确定性输出下会原样复现同一次失败 | P2 | 2026-09-24 T128 GUI 复验 X3 | 已拍板改为「重试上一轮」（[决策 045](decisions/045-failure-card-continue-retries-last-turn.md)） |
 | ⬜ T136 | 点 Stop 后 trace 记了一次 `provider_retry`，但网关没有收到任何重试请求 | P3 | 2026-09-24 T128 GUI 复验 X8 | 只在 trace 中出现，先查是否为误记 |
 | ⬜ T137 | 单条过程段也折叠，与多条统一 | P2 | 用户待办 T11，2026-09-24 拍板 | [决策 044](decisions/044-single-step-process-also-folds.md)：推翻 T112 的单条直出，恢复「1 个步骤」词条；未应答授权强制展开对单项组仍生效 |
-| ⬜ T138 | goal 模式 + 对齐 DeepSeek Harness 最新版的差距调研 | P2 | 用户 2026-09-24：「参考 Claude / Codex 的 goal 模式……需要全面向它看齐」 | 用户当日把范围扩大为「整个产品基于 DSH 二开」。调研档 [2026-09-24-dsh-rebase-feasibility-study](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md) 推荐 B 路线（DSH 宿主当 worker 引擎），goal 模式并入其 P0 / P1；§9 六个拍板点待定 |
+| ➡️ T138 | goal 模式 + 对齐 DeepSeek Harness 最新版的差距调研 | P2 | 用户 2026-09-24：「参考 Claude / Codex 的 goal 模式……需要全面向它看齐」 | 用户当日把范围扩大为「整个产品基于 DSH 二开」。调研档 [2026-09-24-dsh-rebase-feasibility-study](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md) 推荐 B 路线（DSH 宿主当 worker 引擎），goal 模式并入其 P0 / P1。**2026-09-25 调研结案、用户批准 B 路线**，goal 模式移交 [DSH 二开迁移](../dsh-rebase/roadmap.md) 的 P0-2 / P1（[决策 001](../dsh-rebase/decisions/001-route-b-and-scope.md)），本计划不再跟踪 |
 | ✅ T139 | read 读不了图片（现场：粘贴图片后模型 read xx.png 失败） | P0 | 用户待办 D1 | `7fe97881`：read 支持 PNG / JPEG / GIF / WebP，单张上限同粘贴附件，单次运行总量计入附件额度，边长 > 8000px 拒读；trace / 子代理记录 / projector 三处不再携带或截坏 base64 |
 | ✅ T140 | 点开任意图片 / PDF 预览整屏报错「Failed to construct 'URL': Invalid URL」 | P0 | 用户待办 D1，2026-09-24 用户 Windows 复现 | `9fabb28b`：local-file 是 standard scheme，Chromium 下 `new URL('local-file://')` 空主机抛错，所有平台所有路径都崩，Node 里的单测测不出；改为字符串拼接 `local-file://localhost/…`，真实 Electron 探针 24 种路径往返正确。另加局部错误边界、复制错误信息、错误进主进程日志、「用系统程序打开」。Windows 真机复验待做 |
 | ✅ T141 | 模型未声明图片输入时粘贴的图片被静默丢弃 | P2 | T139 调查发现 | `df995820`：模型选项贯通 `input` 字段，输入框提示「模型看不到这张图」，不阻断发送 |
 | ⬜ T142 | 子代理面板里被 Stop 的 bash 仍显示为红色失败行 | P3 | T130 落地时发现 | `subagent.activity` 的 `tool.completed` 只带 `ok` 与通用 `errorText`（`subagent/records.ts:629-639`），需把 outcome 标记带上这条通道 |
+| ✅ T143 | 系统提示词没告诉模型工作目录：Windows 上 `@xxx.md` 引用 `F:\tmp` 下的文件，模型先去 C 盘根目录找 | P1 | 用户 2026-09-25 现场反馈 | 根因：换成自有 runtime 后丢了 pi 提示词末尾的 `Current working directory`，8 个槽位都不带 cwd / 平台 / shell。修法：新增 session 段 `environment`（工作目录、相对路径与 `@path` 的含义、平台、bash 实际的 shell、会话开始日期），主循环与子代理都带；静态前缀字节不变；`RUNTIME_CONFIG_VERSION` 升到 `runtime_p6_hardening_v2`。分支 `fix/prompt-working-directory` |
 
 **2026-09-25 收口（T124 / T139～T141 / T125 / T130）**：三套 tsc 通过；全量 Vitest 单 worker **506 文件 / 7674 例全部通过，264 s**（对比 09-24 的 493 / 7461、1 例既有失败即 T124），完整输出按 T127 的要求保留在本机 `/tmp/closeout/vitest-full.txt`。版本 `1.0.3-test.2` 手动打包供 Windows 复验（T140 预览、T139 读图、T130、T125），批次 M 的 Windows 实测清单一并在该包上执行。
 
