@@ -18,6 +18,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { RUN_STOP_CUSTOM_TYPE } from '../../shared/types/sessionHistory.ts';
 import { createRuntime, DISPOSE_RUN_GRACE_MS, type RuntimeHandle } from '../bootstrap.ts';
+import { RuntimeHostError } from '../host/errors.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
 describe('Stop reaches a run from its first await (decision 046)', () => {
@@ -145,6 +146,54 @@ describe('Stop reaches a run from its first await (decision 046)', () => {
     // late `running` and never `failed`.
     expect(shape(events)).toEqual(['session.stopped', 'status:idle']);
     expect(events[0]).toMatchObject({ payload: { errorCode: 'aborted' } });
+  });
+
+  // The losing side of the race keeps running, and the graph can be torn down
+  // under it: its late failure must be consumed, never left unhandled.
+  it('[T144-loop-06] a prompt assembly the Stop outran fails late without an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const handle = await boot();
+      const late = () =>
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new RuntimeHostError('runtime_disposed', 'host IO is disposed')),
+            5
+          )
+        );
+
+      // Already aborted: the assembly is still awaited, and its failure is the
+      // run's to report (as a stop, since the signal is dead).
+      handle.prompt.compose = late;
+      const dead = new AbortController();
+      dead.abort();
+      await expect(handle.run({ prompt: 'dead', signal: dead.signal })).rejects.toMatchObject({
+        code: 'runtime_disposed',
+      });
+
+      // Aborted mid-assembly: the run stops waiting at once, and the assembly
+      // fails afterwards with nobody awaiting it.
+      let entered!: () => void;
+      const composing = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      handle.prompt.compose = () => {
+        entered();
+        return late();
+      };
+      const controller = new AbortController();
+      const run = handle.run({ prompt: 'go', signal: controller.signal });
+      await composing;
+      controller.abort();
+      await expect(run).rejects.toThrow();
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
   });
 
   it('[T144-loop-03] start refuses an overlapping run synchronously; run still rejects', async () => {

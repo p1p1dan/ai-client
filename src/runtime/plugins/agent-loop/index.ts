@@ -426,7 +426,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // the Stop, so every await before it races the signal instead. A Stop that
     // lands here ends the run now rather than after a slow flush, prompt
     // assembly or catalog re-read; before `startRun` that is a throw, which
-    // `run()` reports as `session.stopped` without ever saying `running`.
+    // `run()` reports as `session.stopped` without ever saying `running`. (A
+    // signal already dead on entry takes the ordinary path; see the helper.)
     if (session) await unlessAborted(session.flush(), request.signal);
     const snapshot = session?.snapshot();
     const adapter = this.ctx.runtimeModel;
@@ -1326,11 +1327,17 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
  * decision 046 (H3a) — `work`, or a rejection as soon as `signal` aborts.
  *
  * For the awaits a run makes before its `Agent` exists, where nothing else
- * reacts to a Stop. `work` itself keeps going; the run only stops waiting.
+ * reacts to a Stop. `work` itself keeps going; the run only stops waiting, and
+ * `work`'s own handlers below stay attached, so a late failure of the losing
+ * side (host IO disposed under it) is consumed rather than left unhandled.
+ *
+ * A signal that is ALREADY aborted is not raced: `work` is awaited as it was
+ * before decision 046, and the run then ends on its normal stopped path, which
+ * resolves with the aborted result a caller passing a dead signal relies on.
+ * Only a Stop that lands during the wait cuts it short.
  */
 function unlessAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
-  if (!signal) return work;
-  if (signal.aborted) return Promise.reject(abortReason(signal));
+  if (!signal || signal.aborted) return work;
   return new Promise<T>((resolve, reject) => {
     const onAbort = () => reject(abortReason(signal));
     signal.addEventListener('abort', onAbort, { once: true });
