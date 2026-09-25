@@ -23,3 +23,14 @@ export interface FileReadResult {
   byteLength?: number;
   maxPreviewBytes?: number;
 }
+
+/**
+ * T5 — outcome of `file:openWithSystemViewer`.
+ *
+ * `rejected` means Main refused before touching the OS (not a previewable
+ * existing file); `failed` means the OS was asked and said no. `error` is
+ * diagnostic text only, never shown as-is.
+ */
+export type SystemViewerOpenResult =
+  | { ok: true }
+  | { ok: false; reason: 'rejected' | 'failed'; error?: string };

@@ -3295,6 +3295,21 @@ export const zhTranslations: Record<string, string> = {
   '30 seconds': '30 秒',
   '1 minute': '1 分钟',
   '2 minutes': '2 分钟',
+
+  // --- 图片 / PDF 预览与错误边界（T4 / T5，2026-09-24 现场崩溃）-----------------
+  // 「预览不了」时给出原因和出路：工作区以外的文件预览协议不放行，所以同时给
+  // 「用系统程序打开」。错误卡片的「复制错误信息」复制的内容与写进日志的一致。
+  'Copy error details': '复制错误信息',
+  'Image preview unavailable': '无法预览图片',
+  'This path cannot be previewed here.': '这个路径无法在这里预览。',
+  'Image dimensions exceed the {{count}} megapixel preview limit.':
+    '图片尺寸超过了 {{count}} 百万像素的预览上限。',
+  'The image could not be loaded. Files outside the open workspace cannot be previewed here, and the file may also be missing or not a valid image.':
+    '图片加载失败。当前工作区以外的文件无法在这里预览；文件也可能已不存在，或不是有效的图片。',
+  'Files outside the open workspace cannot be previewed here.':
+    '当前工作区以外的文件无法在这里预览。',
+  'Open with system viewer': '用系统程序打开',
+  'Could not open the file with the system viewer.': '无法用系统程序打开这个文件。',
 };
 
 export function normalizeLocale(input?: string): Locale {

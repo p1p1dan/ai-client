@@ -10,10 +10,10 @@ const base = {
 describe('resolveMarkdownImageSrc', () => {
   it('resolves file-relative and workspace-root-relative images', () => {
     expect(resolveMarkdownImageSrc({ ...base, src: './img/a.png' })).toBe(
-      'local-file:///repo/docs/img/a.png'
+      'local-file://localhost/repo/docs/img/a.png'
     );
     expect(resolveMarkdownImageSrc({ ...base, src: '/assets/a.png' })).toBe(
-      'local-file:///repo/assets/a.png'
+      'local-file://localhost/repo/assets/a.png'
     );
   });
 

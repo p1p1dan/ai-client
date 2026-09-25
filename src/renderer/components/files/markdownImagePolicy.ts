@@ -43,12 +43,21 @@ export function resolveMarkdownImageSrc(input: MarkdownImagePolicyInput): string
   if (URL_SCHEME_REGEX.test(raw)) return undefined;
   if (!rootPath) return undefined;
 
-  const rootBaseUrl = toLocalFileBaseUrl(rootPath);
-  const fileDirBaseUrl = toLocalFileBaseUrl(getDirname(markdownFilePath));
-  const normalizedSrc = raw.replace(/\\/g, '/');
-  const resolvedUrl = normalizedSrc.startsWith('/')
-    ? new URL(normalizedSrc.slice(1), rootBaseUrl)
-    : new URL(normalizedSrc, fileDirBaseUrl);
+  // Runs inside react-markdown's `img` renderer: a throw here is a throw during
+  // render, which used to take the whole window down to the root error card.
+  // An unresolvable image is simply not shown.
+  let rootBaseUrl: URL;
+  let resolvedUrl: URL;
+  try {
+    rootBaseUrl = toLocalFileBaseUrl(rootPath);
+    const fileDirBaseUrl = toLocalFileBaseUrl(getDirname(markdownFilePath));
+    const normalizedSrc = raw.replace(/\\/g, '/');
+    resolvedUrl = normalizedSrc.startsWith('/')
+      ? new URL(normalizedSrc.slice(1), rootBaseUrl)
+      : new URL(normalizedSrc, fileDirBaseUrl);
+  } catch {
+    return undefined;
+  }
 
   const rootPathname = normalizePathnameForCompare(rootBaseUrl.pathname, platform);
   const resolvedPathname = normalizePathnameForCompare(resolvedUrl.pathname, platform);

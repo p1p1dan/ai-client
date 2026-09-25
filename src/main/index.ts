@@ -91,6 +91,7 @@ import {
 } from './services/SharedSessionState';
 import { webInspectorServer } from './services/webInspector';
 import log, { initLogger } from './utils/logger';
+import { registerProcessGoneLogging } from './utils/processGoneLogging';
 import { openLocalWindow } from './windows/WindowManager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -951,6 +952,9 @@ app.on('will-quit', (event) => {
       app.exit(0);
     });
 });
+
+// T4: a dead renderer / helper process leaves a log line (policy unchanged).
+registerProcessGoneLogging(app, log);
 
 // Handle uncaught errors
 process.on('uncaughtException', (error) => {

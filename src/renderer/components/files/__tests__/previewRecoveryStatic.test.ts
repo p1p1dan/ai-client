@@ -21,6 +21,17 @@ describe('preview recovery wiring', () => {
     expect(source).toContain('clampPdfScale');
   });
 
+  it('previews build their URL through the non-throwing builder, never new URL() in render', () => {
+    for (const name of ['ImagePreview.tsx', 'PdfPreview.tsx']) {
+      const source = readSource(name);
+      expect(source, name).toContain('buildPreviewUrl(path, retryKey)');
+      expect(source, name).not.toContain('new URL(');
+      expect(source, name).not.toContain('toLocalFileUrl');
+      // T5: a load failure offers the OS viewer as the way out.
+      expect(source, name).toContain('<OpenWithSystemViewerButton path={path} />');
+    }
+  });
+
   it('PDF.js and its worker are Vite-local imports rather than CDN resources', () => {
     const source = readSource('pdfSetup.ts');
     expect(source).toContain("from 'pdfjs-dist/build/pdf.worker.min.mjs?worker&url'");

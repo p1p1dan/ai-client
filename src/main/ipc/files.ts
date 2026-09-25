@@ -7,6 +7,7 @@ import {
   type FileEntry,
   type FileReadResult,
   IPC_CHANNELS,
+  type SystemViewerOpenResult,
 } from '@shared/types';
 import { app, BrowserWindow, ipcMain, shell, type WebContents } from 'electron';
 import iconv from 'iconv-lite';
@@ -20,6 +21,7 @@ import {
 } from '../services/files/LocalFileAccess';
 import { takePickedAttachmentPath } from '../services/files/PickedAttachmentAccess';
 import { readPreviewFile } from '../services/files/previewFileRead';
+import { resolveSystemViewerTarget } from '../services/files/systemViewerTarget';
 import { createSimpleGit, normalizeGitRelativePath } from '../services/git/runtime';
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { createRemoteError } from '../services/remote/RemoteI18n';
@@ -555,6 +557,22 @@ export function registerFileHandlers(): void {
         grant,
         options?.maxBytes
       );
+    }
+  );
+
+  /**
+   * T5 — the image / PDF preview's "Open with system viewer" fallback. The
+   * decision lives in `resolveSystemViewerTarget` (existing regular file with
+   * a preview extension, symlink target included); this handler only asks
+   * the OS once that says yes.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.FILE_OPEN_WITH_SYSTEM_VIEWER,
+    async (_, filePath: unknown): Promise<SystemViewerOpenResult> => {
+      const target = await resolveSystemViewerTarget(filePath);
+      if (!target) return { ok: false, reason: 'rejected' };
+      const error = await shell.openPath(target);
+      return error ? { ok: false, reason: 'failed', error } : { ok: true };
     }
   );
 

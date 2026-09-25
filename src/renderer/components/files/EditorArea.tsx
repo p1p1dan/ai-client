@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { normalizePath } from '@/App/storage';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { DiffViewer } from '@/components/source-control/DiffViewer';
 import {
   Breadcrumb,
@@ -1465,10 +1466,16 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                     </EmptyDescription>
                   </EmptyHeader>
                 </Empty>
-              ) : isImage ? (
-                <ImagePreview path={activeTab.path} />
-              ) : isPdf ? (
-                <PdfPreview path={activeTab.path} />
+              ) : isImage || isPdf ? (
+                // T4: a preview that throws takes down this pane only, and the
+                // tab bar above stays usable; switching tabs remounts it.
+                <ErrorBoundary key={activeTab.path} scope="file-preview" className="h-full min-h-0">
+                  {isImage ? (
+                    <ImagePreview path={activeTab.path} />
+                  ) : (
+                    <PdfPreview path={activeTab.path} />
+                  )}
+                </ErrorBoundary>
               ) : (
                 <Editor
                   width="100%"

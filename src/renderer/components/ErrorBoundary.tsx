@@ -11,10 +11,22 @@ import {
 } from '@/components/ui/card';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
+import { errorMessageOf, errorStackOf, formatErrorReport } from './errorReport';
 
 interface ErrorBoundaryProps {
-  children: React.ReactNode;
+  children?: React.ReactNode;
   className?: string;
+  /**
+   * Names the boundary in the log line (`[ErrorBoundary:<scope>]`), so a
+   * report says WHICH part of the window failed. Absent on the root one.
+   */
+  scope?: string;
+  /**
+   * When this value changes while the fallback is showing, the boundary
+   * retries on its own — e.g. the editor column's active tab, so closing or
+   * switching away from the file that failed brings the column back.
+   */
+  resetKey?: unknown;
 }
 
 interface ErrorBoundaryState {
@@ -23,34 +35,46 @@ interface ErrorBoundaryState {
   componentStack: string | null;
 }
 
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message || error.name;
-  }
-  return String(error);
-}
-
-function getErrorStack(error: unknown): string | null {
-  if (error instanceof Error) {
-    return error.stack ?? null;
-  }
-  return null;
-}
+/** How long the copy button reads "Copied" before reverting. */
+const COPY_CONFIRM_MS = 1500;
 
 function ErrorFallback({
   className,
   error,
   componentStack,
+  scope,
   onRetry,
 }: {
   className?: string;
   error: unknown;
   componentStack: string | null;
+  scope?: string;
   onRetry: () => void;
 }) {
   const { t } = useI18n();
-  const errorMessage = getErrorMessage(error);
-  const errorStack = getErrorStack(error);
+  const [copied, setCopied] = React.useState(false);
+  const timerRef = React.useRef<number | null>(null);
+  const errorMessage = errorMessageOf(error);
+  const errorStack = errorStackOf(error);
+
+  React.useEffect(
+    () => () => {
+      if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    },
+    []
+  );
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(formatErrorReport({ error, componentStack, scope }));
+    } catch {
+      // Claiming "Copied" after a failed write would be worse than no feedback.
+      return;
+    }
+    setCopied(true);
+    if (timerRef.current != null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), COPY_CONFIRM_MS);
+  };
 
   return (
     <div className={cn('flex min-h-dvh w-full items-center justify-center p-6', className)}>
@@ -86,6 +110,9 @@ function ErrorFallback({
         </CardPanel>
 
         <CardFooter className="justify-end gap-2">
+          <Button onClick={() => void handleCopy()} variant="outline">
+            {copied ? t('Copied') : t('Copy error details')}
+          </Button>
           <Button onClick={onRetry} variant="secondary">
             {t('Retry')}
           </Button>
@@ -108,8 +135,19 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   componentDidCatch(error: unknown, info: React.ErrorInfo) {
-    console.error('[ErrorBoundary]', error, info.componentStack);
-    this.setState({ componentStack: info.componentStack ?? null });
+    const componentStack = info.componentStack ?? null;
+    // One string, not `(error, stack)`: `console` is electron-log's in the app
+    // (`renderer/index.tsx`), and `error` level always crosses its IPC to the
+    // main-process log file. A pre-formatted report reads the same there no
+    // matter how the transport would have serialised an Error object.
+    console.error(formatErrorReport({ error, componentStack, scope: this.props.scope }));
+    this.setState({ componentStack });
+  }
+
+  componentDidUpdate(prevProps: ErrorBoundaryProps) {
+    if (this.state.hasError && !Object.is(prevProps.resetKey, this.props.resetKey)) {
+      this.handleRetry();
+    }
   }
 
   private handleRetry = () => {
@@ -123,6 +161,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           className={this.props.className}
           error={this.state.error}
           componentStack={this.state.componentStack}
+          scope={this.props.scope}
           onRetry={this.handleRetry}
         />
       );

@@ -79,6 +79,7 @@ import type {
   SessionTreeSnapshot,
   ShellConfig,
   ShellInfo,
+  SystemViewerOpenResult,
   TempWorkspaceCheckResult,
   TempWorkspaceCreateResult,
   TempWorkspaceRemoveResult,
@@ -386,6 +387,10 @@ const electronAPI = {
       options: AttachmentReadOptions
     ): Promise<AttachmentReadResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_READ_ATTACHMENT, filePath, options),
+    // T5: the preview's "Open with system viewer". Main only opens an existing
+    // image/PDF file; anything else resolves `{ ok: false }` without opening.
+    openWithSystemViewer: (filePath: string): Promise<SystemViewerOpenResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.FILE_OPEN_WITH_SYSTEM_VIEWER, filePath),
     write: (filePath: string, content: string, encoding?: string): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.FILE_WRITE, filePath, content, encoding),
     saveToTemp: (

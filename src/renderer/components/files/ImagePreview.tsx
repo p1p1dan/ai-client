@@ -3,34 +3,39 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
 } from '@/components/ui/empty';
-import { toLocalFileUrl } from '@/lib/localFileUrl';
+import { useI18n } from '@/i18n';
+import { OpenWithSystemViewerButton } from './OpenWithSystemViewerButton';
 import { imageDimensionsAllowed, MAX_IMAGE_PIXELS } from './previewResourceLimits';
+import { buildPreviewUrl } from './previewUrl';
+
+/** Why the image is not on screen; worded at render time so it follows the locale. */
+type ImageError = 'load' | 'too-large';
 
 interface ImagePreviewProps {
   path: string;
 }
 
 export function ImagePreview({ path }: ImagePreviewProps) {
+  const { t } = useI18n();
   const [scale, setScale] = useState(1);
   const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(
     null
   );
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ImageError | null>(null);
   const [retryKey, setRetryKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
 
-  // Convert file path to local-file:// URL (Electron custom protocol)
-  const imageUrl = useMemo(() => {
-    const url = new URL(toLocalFileUrl(path));
-    url.searchParams.set('retry', String(retryKey));
-    return url.toString();
-  }, [path, retryKey]);
+  // Convert file path to local-file:// URL (Electron custom protocol). Never
+  // throws: a path that cannot become a URL is this component's error state,
+  // not a render-time exception for an error boundary to catch.
+  const preview = useMemo(() => buildPreviewUrl(path, retryKey), [path, retryKey]);
 
   // Reset scale when image changes
   // biome-ignore lint/correctness/useExhaustiveDependencies: path change should reset scale
@@ -90,9 +95,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
     const img = e.currentTarget;
     if (!imageDimensionsAllowed(img.naturalWidth, img.naturalHeight)) {
       setImageDimensions(null);
-      setError(
-        `Image dimensions exceed the ${Math.round(MAX_IMAGE_PIXELS / 1_000_000)} megapixel preview limit.`
-      );
+      setError('too-large');
       return;
     }
     setError(null);
@@ -102,26 +105,40 @@ export function ImagePreview({ path }: ImagePreviewProps) {
     });
   };
 
-  if (error) {
+  if (!preview.ok || error) {
+    const description = !preview.ok
+      ? t('This path cannot be previewed here.')
+      : error === 'too-large'
+        ? t('Image dimensions exceed the {{count}} megapixel preview limit.', {
+            count: Math.round(MAX_IMAGE_PIXELS / 1_000_000),
+          })
+        : t(
+            'The image could not be loaded. Files outside the open workspace cannot be previewed here, and the file may also be missing or not a valid image.'
+          );
     return (
       <Empty className="h-full">
         <EmptyMedia variant="icon">
           <FileX className="h-4.5 w-4.5" />
         </EmptyMedia>
         <EmptyHeader>
-          <EmptyTitle>Image preview unavailable</EmptyTitle>
-          <EmptyDescription>{error}</EmptyDescription>
+          <EmptyTitle>{t('Image preview unavailable')}</EmptyTitle>
+          <EmptyDescription>{description}</EmptyDescription>
         </EmptyHeader>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setError(null);
-            setRetryKey((value) => value + 1);
-          }}
-        >
-          Retry
-        </Button>
+        <EmptyContent className="flex-row flex-wrap justify-center gap-2">
+          <OpenWithSystemViewerButton path={path} />
+          {preview.ok && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setError(null);
+                setRetryKey((value) => value + 1);
+              }}
+            >
+              {t('Retry')}
+            </Button>
+          )}
+        </EmptyContent>
       </Empty>
     );
   }
@@ -145,7 +162,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
       {/* Image */}
       <img
         ref={imageRef}
-        src={imageUrl}
+        src={preview.url}
         alt={path.split('/').pop() || 'Preview'}
         className="max-h-full max-w-full object-contain"
         style={{
@@ -156,7 +173,7 @@ export function ImagePreview({ path }: ImagePreviewProps) {
         onLoad={handleImageLoad}
         onError={() => {
           setImageDimensions(null);
-          setError('The file is missing, blocked, or not a valid supported image.');
+          setError('load');
         }}
         draggable={false}
       />

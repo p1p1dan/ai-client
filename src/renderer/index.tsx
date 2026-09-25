@@ -29,7 +29,7 @@ async function startApp(): Promise<void> {
 
   createRoot(root).render(
     <StrictMode>
-      <ErrorBoundary>
+      <ErrorBoundary scope="root">
         <QueryClientProvider client={queryClient}>
           <ToastProvider>
             <Root />

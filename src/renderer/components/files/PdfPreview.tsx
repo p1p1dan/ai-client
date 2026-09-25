@@ -2,10 +2,11 @@ import { ChevronLeft, ChevronRight, Loader2, ZoomIn, ZoomOut } from 'lucide-reac
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
-import { toLocalFileUrl } from '@/lib/localFileUrl';
 import { cn } from '@/lib/utils';
+import { OpenWithSystemViewerButton } from './OpenWithSystemViewerButton';
 import { getPDFJS, type PDFDocumentProxy, type PDFLoadingTask } from './pdfSetup';
 import { clampPdfScale } from './previewResourceLimits';
+import { buildPreviewUrl } from './previewUrl';
 
 interface PdfPreviewProps {
   path: string;
@@ -29,12 +30,10 @@ export function PdfPreview({ path }: PdfPreviewProps) {
   const renderTaskRef = useRef<{ cancel: () => void } | null>(null);
   const loadingTaskRef = useRef<PDFLoadingTask | null>(null);
 
-  // Convert file path to local-file:// URL (Electron custom protocol)
-  const pdfUrl = useMemo(() => {
-    const url = new URL(toLocalFileUrl(path));
-    url.searchParams.set('retry', String(retryKey));
-    return url.toString();
-  }, [path, retryKey]);
+  // Convert file path to local-file:// URL (Electron custom protocol). Never
+  // throws; `null` renders this component's own error state instead.
+  const preview = useMemo(() => buildPreviewUrl(path, retryKey), [path, retryKey]);
+  const pdfUrl = preview.ok ? preview.url : null;
 
   const cancelInFlightWork = useCallback(() => {
     renderTaskRef.current?.cancel();
@@ -46,6 +45,8 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
   // Load the PDF document
   useEffect(() => {
+    if (!pdfUrl) return;
+    const url = pdfUrl;
     let cancelled = false;
     let currentDoc: PDFDocumentProxy | null = null;
 
@@ -64,7 +65,7 @@ export function PdfPreview({ path }: PdfPreviewProps) {
 
         // Load through the local-file:// protocol
         const loadingTask = pdfjs.getDocument({
-          url: pdfUrl,
+          url,
         });
         loadingTaskRef.current = loadingTask;
 
@@ -220,6 +221,15 @@ export function PdfPreview({ path }: PdfPreviewProps) {
     setZoomMode('fit-width');
   };
 
+  if (!preview.ok) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
+        <div className="text-sm text-destructive">{t('This path cannot be previewed here.')}</div>
+        <OpenWithSystemViewerButton path={path} />
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center bg-muted/30">
@@ -234,17 +244,25 @@ export function PdfPreview({ path }: PdfPreviewProps) {
   if (error) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-4 bg-muted/30">
-        <div className="text-sm text-destructive">{error}</div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            setError(null);
-            setRetryKey((value) => value + 1);
-          }}
-        >
-          {t('Retry')}
-        </Button>
+        <div className="flex max-w-sm flex-col items-center gap-1 text-center">
+          <div className="text-sm text-destructive">{error}</div>
+          <div className="text-sm text-muted-foreground">
+            {t('Files outside the open workspace cannot be previewed here.')}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <OpenWithSystemViewerButton path={path} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setError(null);
+              setRetryKey((value) => value + 1);
+            }}
+          >
+            {t('Retry')}
+          </Button>
+        </div>
       </div>
     );
   }

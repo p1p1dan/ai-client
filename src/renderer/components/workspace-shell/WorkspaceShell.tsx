@@ -1,5 +1,6 @@
 import type { TempWorkspaceItem } from '@shared/types';
 import {
+  type ComponentProps,
   type CSSProperties,
   type Ref,
   useCallback,
@@ -13,6 +14,7 @@ import { useShallow } from 'zustand/shallow';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
 import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
@@ -43,6 +45,31 @@ import { useSyncChatWorkspaceTree } from './useSyncChatWorkspaceTree';
 import { useWorkspaceSearch } from './useWorkspaceSearch';
 
 const NO_REVIEW_ENTRIES: SessionReviewEntry[] = [];
+
+/**
+ * T4: the editor column behind its own error boundary, so a file view that
+ * throws while rendering takes down this column instead of the whole window
+ * (the 2026-09-24 field crash reached the root card from an image preview).
+ *
+ * The boundary retries by itself when the active tab or the tab count
+ * changes — the fallback covers the tab bar, so picking another file in the
+ * tree (or closing the failed tab from anywhere else) has to be enough to
+ * bring the column back. Subscribed here, not in the shell, so a tab switch
+ * does not re-render the whole shell.
+ */
+function GuardedEditorColumn(props: ComponentProps<typeof EditorColumn>) {
+  const activeTabPath = useEditorStore((state) => state.activeTabPath);
+  const tabCount = useEditorStore((state) => state.tabs.length);
+  return (
+    <ErrorBoundary
+      scope="editor-column"
+      className="h-full min-h-0"
+      resetKey={`${tabCount}:${activeTabPath ?? ''}`}
+    >
+      <EditorColumn {...props} />
+    </ErrorBoundary>
+  );
+}
 
 interface WorkspaceShellProps {
   onOpenSettings?: () => void;
@@ -457,7 +484,7 @@ export function WorkspaceShell({
                 )}
                 style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}
               >
-                <EditorColumn expanded={expanded} onToggleExpanded={toggleExpanded} />
+                <GuardedEditorColumn expanded={expanded} onToggleExpanded={toggleExpanded} />
               </div>
             )}
             {reviewOpen && (

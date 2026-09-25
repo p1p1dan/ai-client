@@ -97,6 +97,10 @@ export const IPC_CHANNELS = {
   // D4: raw bytes for ONE user-picked attachment (path -> bytes). Distinct
   // from FILE_READ, which decodes text and returns '' for binary content.
   FILE_READ_ATTACHMENT: 'file:readAttachment',
+  // T5: hand ONE previewable file (image / PDF) to the OS default viewer, for
+  // the preview's "Open with system viewer" fallback. Existing regular files
+  // with a preview extension only — never a directory or an executable.
+  FILE_OPEN_WITH_SYSTEM_VIEWER: 'file:openWithSystemViewer',
   FILE_WRITE: 'file:write',
   FILE_SAVE_TO_TEMP: 'file:save-to-temp',
   FILE_CREATE: 'file:create',
