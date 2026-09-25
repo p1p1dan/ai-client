@@ -23,6 +23,7 @@ Role: plan-entrypoint。建立日期：2026-09-25。状态：Planning → P0 待
 - [roadmap.md](roadmap.md)：分期与任务，任务身份、状态、顺序的唯一权威。
 - [decisions/](decisions/)：[001 B 路线与六点拍板](decisions/001-route-b-and-scope.md)。
 - [open-questions.md](open-questions.md)：P0 实测后才能定的问题。
+- [topics/](topics/)：上机检查单（[P0-4 加密机](topics/p0-4-encrypted-machine-checklist.md)）。
 - 调研与依据：[DSH 二开可行性调研](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)（生态、许可、功能落点、方案对比、goal 对照、差距表）。
 
 ## 权威顺序

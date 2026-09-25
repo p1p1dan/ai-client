@@ -1,0 +1,115 @@
+{
+  "kit": "dsh-rebase P0-4 encrypted-machine kit",
+  "builtAt": "2026-09-25T15:43:43.518Z",
+  "platform": "win32-x64",
+  "builtWith": {
+    "node": "v22.23.2",
+    "host": "linux-x64"
+  },
+  "expectedNode": "v24.18.0 (resources\\node-runtime\\node.exe of the installed app)",
+  "source": {
+    "host.ts": "f22d94b3051624680202e3f5ee515b4f9904a06bf3c2df32040597cd91e6af30",
+    "p0-4-probe.ts": "6dd6167614549cb5a6f5ac7505f34de7a7e71adf9153f4a06117b61b5e576713",
+    "p0-4-report.ts": "5bad810a8f651c1af1f4c8204cc3327771d5053da4e69e215ec0f0aa066e7408",
+    "package-lock.json": "a020fea7e0cc0905222eabe4f80953d50834dab24909dd4768e5d78a4ece4b0e"
+  },
+  "versions": {
+    "@deepseek-ai/dsh-base": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-app-boot": "0.1.7-rc.2",
+    "@deepseek-ai/cordis": "4.0.4",
+    "koffi": "3.3.1",
+    "node-pty": "1.2.0-beta.15",
+    "@vscode/ripgrep": "1.18.0",
+    "node-addon-require-builtin": "0.1.6",
+    "pnpm": "11.7.0"
+  },
+  "files": 10880,
+  "bytes": 132124705,
+  "longestRelativePath": 181,
+  "natives": [
+    {
+      "file": "host/node_modules/@img/sharp-win32-x64/lib/libvips-42.dll",
+      "format": "PE32+ x86-64",
+      "bytes": 18614784,
+      "sha256": "e6cc51bbc763e7deda536c6f56ce96b4c51ea769690ce4f4ed07607527b81dae"
+    },
+    {
+      "file": "host/node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.6.dll",
+      "format": "PE32+ x86-64",
+      "bytes": 333312,
+      "sha256": "4f458afdb7b8a4290dbda3f287d7db037b239b8a9d21f0b87333f92192cdee76"
+    },
+    {
+      "file": "host/node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.4.node",
+      "format": "PE32+ x86-64",
+      "bytes": 442368,
+      "sha256": "d5347c1c88194ea56164e5e420de4628da5f07ce0f220795c875147630e0657c"
+    },
+    {
+      "file": "host/node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node",
+      "format": "PE32+ x86-64",
+      "bytes": 1047552,
+      "sha256": "072efa48190587a6181be48f99f28d52db106c4d2137fe237de0d49b892a00f6"
+    },
+    {
+      "file": "host/node_modules/@vscode/ripgrep-win32-x64/bin/rg.exe",
+      "format": "PE32+ x86-64",
+      "bytes": 5429760,
+      "sha256": "f9dde63498b3193f098355dbec97af99dc4f6b8fa0df5ed04114a03012c042cb"
+    },
+    {
+      "file": "host/node_modules/node-addon-require-builtin-win32-x64-msvc/prebuilt/win32-x64-msvc-napi-v9.node",
+      "format": "PE32+ x86-64",
+      "bytes": 343552,
+      "sha256": "e23ba1b0c33c63940625aa954011b53c66d855f7dfac75b29c829b25e06f20df"
+    },
+    {
+      "file": "host/node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
+      "format": "PE32+ x86-64",
+      "bytes": 1062472,
+      "sha256": "7f68c840226505004215c0b82d4e502c24b5bc3f4b93c4baaaa19bd679c0def8"
+    },
+    {
+      "file": "host/node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll",
+      "format": "PE32+ x86-64",
+      "bytes": 110152,
+      "sha256": "3319b484b80bb53d1f4d0a9eb0ea60fd0f61da69db7280ca43b84215f19245ff"
+    },
+    {
+      "file": "host/node_modules/node-pty/prebuilds/win32-x64/conpty.node",
+      "format": "PE32+ x86-64",
+      "bytes": 291328,
+      "sha256": "ec2fd8545c30e051ee3fa17d26127f7e615919814879c7f746cf4c80845226e0"
+    },
+    {
+      "file": "host/node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node",
+      "format": "PE32+ x86-64",
+      "bytes": 134656,
+      "sha256": "d46800643f90fc56b9fd67398f04a04a871521de0e825211c8382d187859d3ed"
+    },
+    {
+      "file": "host/node_modules/node-pty/third_party/conpty/1.25.260303002/win10-x64/OpenConsole.exe",
+      "format": "PE32+ x86-64",
+      "bytes": 1062472,
+      "sha256": "7f68c840226505004215c0b82d4e502c24b5bc3f4b93c4baaaa19bd679c0def8"
+    },
+    {
+      "file": "host/node_modules/node-pty/third_party/conpty/1.25.260303002/win10-x64/conpty.dll",
+      "format": "PE32+ x86-64",
+      "bytes": 110152,
+      "sha256": "3319b484b80bb53d1f4d0a9eb0ea60fd0f61da69db7280ca43b84215f19245ff"
+    },
+    {
+      "file": "host/node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-x64-msvc/reflink.win32-x64-msvc.node",
+      "format": "PE32+ x86-64",
+      "bytes": 361472,
+      "sha256": "370cdee825881d1f0c3e87a85df5589ee51f1a7eec3bca3c252255b6521224dc"
+    },
+    {
+      "file": "host/node_modules/pnpm/dist/vendor/fastlist-0.3.0-x64.exe",
+      "format": "PE32+ x86-64",
+      "bytes": 271872,
+      "sha256": "d1a71f9ac1728082c1b276392725c3e010b98714888579b99152e401abedbf11"
+    }
+  ]
+}
