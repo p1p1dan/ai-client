@@ -17,4 +17,4 @@ Stop、插话、结束对话原先都是只发不回的信号：worker 没有活
 4. **禁用的按钮不能把点击穿透成别的动作**（队列行「立即发送」禁用时不得触发「取回编辑」），并说明为何不可用。
 5. **接纳要真实**：worker 只在 run 真正被接纳后才回 accepted；前置拒绝要发 `session.failed` 加 idle。
 
-看门狗时长由实现定（建议 8～10 秒），定下后回写本条。
+看门狗时长：**10 秒**（`WorkerManager.ts` `STOP_WATCHDOG_MS`），在发出 `worker.stop` 之前启动，第二次 Stop 不顺延期限；worker 端 dispose 等被中止回合最多 **2 秒**（`bootstrap.ts` `DISPOSE_RUN_GRACE_MS`），低于 Main 等 dispose 回执的 3 秒。

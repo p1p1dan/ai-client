@@ -585,6 +585,11 @@ export interface WorkerInterjectPayload {
 export interface WorkerInterjectResult {
   /** False when no turn was active to interject into. */
   interjected: boolean;
+  /**
+   * decision 046 — whether the worker holds a turn at all. `false` lets Main
+   * drop a busy latch the worker no longer backs; absent means "not reported".
+   */
+  turnActive?: boolean;
 }
 
 /**
@@ -1377,7 +1382,11 @@ export function isWorkerInterjectPayload(value: unknown): value is WorkerInterje
 }
 
 export function isWorkerInterjectResult(value: unknown): value is WorkerInterjectResult {
-  return isRecord(value) && typeof value.interjected === 'boolean';
+  return (
+    isRecord(value) &&
+    typeof value.interjected === 'boolean' &&
+    (value.turnActive === undefined || typeof value.turnActive === 'boolean')
+  );
 }
 
 const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);

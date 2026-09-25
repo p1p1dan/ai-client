@@ -383,12 +383,25 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     } catch (error) {
       const sessionId =
         request.logicalSessionId ?? this.ctx.get(SESSION_SERVICE)?.metadata().id ?? runId;
-      this.ctx.runtimeEvents.emit({
-        type: 'session.failed',
-        sessionId,
-        requestId: runId,
-        payload: { error: thrownRunErrorText(error) },
-      });
+      // decision 046 (H3a) — a Stop that landed before the run reached its own
+      // finish path is still a stop: the worker already said `stopping`, and
+      // the terminal that answers it must say `stopped`, not `failed`.
+      if (request.signal?.aborted) {
+        this.ctx.get('runtimeSubagents')?.abortAll();
+        this.ctx.runtimeEvents.emit({
+          type: 'session.stopped',
+          sessionId,
+          requestId: runId,
+          payload: { error: 'the run was aborted by its caller', errorCode: 'aborted' },
+        });
+      } else {
+        this.ctx.runtimeEvents.emit({
+          type: 'session.failed',
+          sessionId,
+          requestId: runId,
+          payload: { error: thrownRunErrorText(error) },
+        });
+      }
       this.ctx.runtimeEvents.emit({
         type: 'session.status',
         sessionId,
@@ -409,7 +422,12 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     interjection: RunInterjection
   ): Promise<RuntimeRunResult> {
     const session = this.ctx.get(SESSION_SERVICE);
-    await session?.flush();
+    // decision 046 (H3a) — until the `Agent` below exists nothing listens for
+    // the Stop, so every await before it races the signal instead. A Stop that
+    // lands here ends the run now rather than after a slow flush, prompt
+    // assembly or catalog re-read; before `startRun` that is a throw, which
+    // `run()` reports as `session.stopped` without ever saying `running`.
+    if (session) await unlessAborted(session.flush(), request.signal);
     const snapshot = session?.snapshot();
     const adapter = this.ctx.runtimeModel;
     const saved = snapshot?.model;
@@ -440,7 +458,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let systemPrompt = request.systemPrompt;
     let composed: ComposedPrompt | undefined;
     if (systemPrompt === undefined) {
-      composed = await this.ctx.runtimePrompt.compose();
+      composed = await unlessAborted(this.ctx.runtimePrompt.compose(), request.signal);
       systemPrompt = composed.text;
     }
     // Before the trace and before `startRun`: the text the model is given is the
@@ -513,7 +531,15 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // note has always claimed ("an edit lands on the next turn by itself").
     // Before the tools snapshot below, because `Task`'s description carries the
     // menu. Delegates already running keep their own definition object.
-    await subagents?.refresh();
+    //
+    // decision 046 (H3a): past `startRun`, so a Stop here must not escape as a
+    // throw — it falls through to the `throwIfAborted` inside the try below,
+    // which ends the run on its normal stopped path.
+    if (subagents) {
+      await unlessAborted(subagents.refresh(), request.signal).catch((error: unknown) => {
+        if (!request.signal?.aborted) throw error;
+      });
+    }
 
     // P5-2-4 — delegations started from here belong to this session and this
     // run. Bound before any tool can fire, because the first thing `Task` does
@@ -988,6 +1014,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       repetition ? `${describeRepetition(repetition)} (run ${trace.runId})` : undefined;
 
     let thrown: Error | undefined;
+    // Whether this run's prompt reached the model loop (and so the session).
+    let prompted = false;
     try {
       request.signal?.throwIfAborted();
       // New input must fit on its own; only the completed history can be
@@ -1054,6 +1082,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // ended before another turn boundary came round. Draining here puts it in
       // this run's first request, right after the user's own message.
       flushDiscoveredInstructions();
+      prompted = true;
       await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
       await agent.waitForIdle();
       await drainStreamRetries();
@@ -1262,7 +1291,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       : interjected
         ? 'interjected'
         : undefined;
-    if (session && userStop) await recordRunStop(session, trace, userStop);
+    // decision 046: a Stop that landed before the prompt did (now reachable
+    // from the run's first await) leaves this run nothing in the file to mark;
+    // the record would be folded onto the PREVIOUS turn's reply on replay.
+    if (session && userStop && prompted) await recordRunStop(session, trace, userStop);
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,
@@ -1288,6 +1320,37 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     projected.finish(result);
     return { ...result, latencyMs: finished.latency_ms, trace: finished };
   }
+}
+
+/**
+ * decision 046 (H3a) — `work`, or a rejection as soon as `signal` aborts.
+ *
+ * For the awaits a run makes before its `Agent` exists, where nothing else
+ * reacts to a Stop. `work` itself keeps going; the run only stops waiting.
+ */
+function unlessAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return work;
+  if (signal.aborted) return Promise.reject(abortReason(signal));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new RuntimeHostError('aborted', 'the run was aborted by its caller');
 }
 
 /** One run's interjection state; see `AgentLoopPlugin.activeRun`. */

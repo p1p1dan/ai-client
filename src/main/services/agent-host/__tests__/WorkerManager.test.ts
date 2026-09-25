@@ -19,6 +19,7 @@ const slotKey = (p: string) => sessionWorkerKey(p);
 import {
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
+  STOP_WATCHDOG_MS,
   WorkerManager,
 } from '../WorkerManager';
 import type { WorkerSlotLifecycleEvent } from '../WorkerSlot';
@@ -3107,5 +3108,310 @@ describe('WorkerManager notable-event logging (T066)', () => {
     });
 
     expect(lines()).toEqual([]);
+  });
+});
+
+/**
+ * decision 046 / T144 — Stop always settles; Main mirrors the worker's view of
+ * "is a turn running" and reconciles its own latch against it.
+ *
+ * Field report 2026-09-25 (Windows `1.0.3-test.2`): after the failure card's
+ * 「继续」 the session showed "running" forever; Stop, Esc and Ctrl+Enter did
+ * nothing, and ending the conversation did not clear it. The renderer only
+ * leaves "running" on a terminal event, and every path below used to end in
+ * none.
+ */
+describe('WorkerManager Stop always settles (decision 046)', () => {
+  const TERMINALS = ['session.completed', 'session.failed', 'session.stopped'];
+
+  /** `type` for terminals, `status:<x>` for statuses — the order the renderer sees. */
+  function sequence(events: Array<Record<string, unknown>>): string[] {
+    return events
+      .filter((event) => TERMINALS.includes(String(event.type)) || event.type === 'session.status')
+      .map((event) => {
+        const payload = (event.payload ?? {}) as { status?: string; stopCause?: string };
+        return event.type === 'session.status'
+          ? `status:${payload.status}`
+          : `${String(event.type)}${payload.stopCause ? `(${payload.stopCause})` : ''}`;
+      });
+  }
+
+  function stopAnswers(record: FakeSlotRecord, answer: { stopped: boolean }) {
+    const original = record.request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    record.request.mockImplementation(async (type: string, payload: unknown) =>
+      type === 'worker.stop' ? answer : original(type, payload)
+    );
+  }
+
+  async function running(h: ReturnType<typeof createHarness>): Promise<string> {
+    await create(h.manager, 's1', 7);
+    const turnId = await h.manager.send({
+      sessionId: 's1',
+      attemptId: 'a1',
+      text: 'resent prompt',
+      ownerWebContentsId: 7,
+    });
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'running' } });
+    h.events.length = 0;
+    return turnId;
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('[T144-wm-01] a stop that finds no turn settles the session and drops the pinned latch', async () => {
+    const h = createHarness();
+    const turnId = await running(h);
+    stopAnswers(h.records[0], { stopped: false });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await h.manager.stop('s1');
+    } finally {
+      warn.mockRestore();
+    }
+
+    expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
+    expect(h.events.every((event) => event.requestId === turnId)).toBe(true);
+    // The latch the worker no longer backed is gone: the next send is admitted.
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'next', ownerWebContentsId: 7 })
+    ).resolves.toMatch(/^send-/);
+  });
+
+  it('[T144-wm-02] a stop with no ready worker still gets a terminal answer', async () => {
+    const h = createHarness();
+    await h.manager.stop('never-created');
+    expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
+    expect(h.events.every((event) => event.sessionId === 'never-created')).toBe(true);
+  });
+
+  it("[T144-wm-03] the turn's own terminal answers an accepted stop and disarms the watchdog", async () => {
+    vi.useFakeTimers();
+    const h = createHarness();
+    await running(h);
+    await h.manager.stop('s1');
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'stopping' } });
+    h.records[0].emit({ type: 'session.stopped', sessionId: 's1', payload: {} });
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'idle' } });
+
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS * 2);
+    expect(sequence(h.events)).toEqual(['status:stopping', 'session.stopped', 'status:idle']);
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.records[0].dispose).not.toHaveBeenCalled();
+  });
+
+  it('[T144-wm-04] an accepted stop with no terminal is forced after the watchdog, through the crash path', async () => {
+    vi.useFakeTimers();
+    const h = createHarness();
+    const turnId = await running(h);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    // Wedged, so it misses its dispose ACK too; the slot still confirms the
+    // exit, which is all the replacement needs.
+    const created = (await h.createSlot.mock.results[0]?.value) as { slot: { state: string } };
+    h.records[0].dispose.mockImplementation(async () => {
+      created.slot.state = 'disposed';
+      throw new Error('Worker request worker.dispose timed out after 3000ms');
+    });
+    try {
+      await h.manager.stop('s1');
+      h.records[0].emit({
+        type: 'session.status',
+        sessionId: 's1',
+        payload: { status: 'stopping' },
+      });
+      // A second Stop keeps the first deadline instead of extending it.
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS / 2);
+      await h.manager.stop('s1');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS / 2 - 1);
+      expect(sequence(h.events)).toEqual(['status:stopping']);
+
+      await vi.advanceTimersByTimeAsync(1);
+      // The settle comes first; the restart's own history refresh follows it.
+      expect(sequence(h.events).slice(0, 3)).toEqual([
+        'status:stopping',
+        'session.stopped(forced)',
+        'status:idle',
+      ]);
+      expect(h.events.find((event) => event.type === 'session.stopped')?.requestId).toBe(turnId);
+      expect(warn.mock.calls.flat().join(' ')).toContain(
+        `stop did not settle within ${STOP_WATCHDOG_MS}ms`
+      );
+
+      // The wedged worker is replaced, not waited on.
+      await vi.waitFor(() => expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace'));
+      await vi.waitFor(() =>
+        expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ state: 'ready', generation: 2 })
+      );
+      // A late terminal from the old generation changes nothing.
+      const settled = h.events.length;
+      h.records[0].emit({ type: 'session.stopped', sessionId: 's1', payload: {} });
+      expect(h.events).toHaveLength(settled);
+      await expect(
+        h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'again', ownerWebContentsId: 7 })
+      ).resolves.toMatch(/^send-/);
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
+  });
+
+  it('[T144-wm-05] a worker that dies while stopping answers the stop as forced, not failed', async () => {
+    vi.useFakeTimers();
+    const h = createHarness();
+    await running(h);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await h.manager.stop('s1');
+      h.records[0].crash('killed');
+      expect(sequence(h.events)).toEqual(['session.stopped(forced)', 'status:idle']);
+      // The watchdog went with the dead worker: nothing fires a second terminal.
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS * 2);
+      expect(h.events.filter((event) => TERMINALS.includes(String(event.type)))).toHaveLength(1);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('[T144-wm-06] closing a session mid-turn says stopped before disconnected', async () => {
+    const h = createHarness();
+    const turnId = await running(h);
+    await h.manager.closeSession('s1');
+
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-dispose');
+    expect(sequence(h.events)).toEqual(['session.stopped(forced)', 'status:disconnected']);
+    expect(h.events.every((event) => event.requestId === turnId)).toBe(true);
+    // Stop and interject on the ended session stay answerable.
+    h.events.length = 0;
+    await h.manager.stop('s1');
+    await expect(h.manager.interject('s1')).resolves.toBe(false);
+    expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
+  });
+
+  it('[T144-wm-07] closing an idle session announces nothing', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    h.events.length = 0;
+    await h.manager.closeSession('s1');
+    expect(h.events).toEqual([]);
+  });
+
+  it('[T144-wm-08] a re-claim does not replay a latch the worker never confirmed as running', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'hi', ownerWebContentsId: 7 });
+    h.events.length = 0;
+
+    // Nothing reported yet: no status is re-announced at all.
+    await create(h.manager, 's1', 8);
+    expect(sequence(h.events)).toEqual([]);
+
+    // Once the worker says where the turn is, that is what a re-claim repeats.
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'running' } });
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'stopping' } });
+    h.events.length = 0;
+    await create(h.manager, 's1', 7);
+    expect(sequence(h.events)).toEqual(['status:stopping']);
+
+    // And after the turn is over, idle.
+    h.records[0].emit({ type: 'session.stopped', sessionId: 's1', payload: {} });
+    h.events.length = 0;
+    await create(h.manager, 's1', 8);
+    expect(sequence(h.events)).toEqual(['status:idle']);
+  });
+
+  it('[T144-wm-09] a crash with no turn still leaves the renderer settled', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    h.events.length = 0;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      h.records[0].crash('killed');
+      expect(sequence(h.events)).toEqual(['status:disconnected']);
+      await vi.waitFor(() => expect(sequence(h.events).at(-1)).toBe('status:idle'));
+      expect(h.events.some((event) => TERMINALS.includes(String(event.type)))).toBe(false);
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('[T144-wm-10] interject with no turn in the worker settles like a stop that found nothing', async () => {
+    const h = createHarness();
+    const turnId = await running(h);
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    let answer: Record<string, unknown> = { interjected: false, turnActive: true };
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) =>
+      type === 'worker.interject' ? answer : original(type, payload)
+    );
+
+    // Too late for this turn: its own terminal is on the way, nothing to do.
+    await expect(h.manager.interject('s1')).resolves.toBe(false);
+    expect(h.events).toEqual([]);
+
+    // No turn at all: the latch goes, and the queued message can be released.
+    answer = { interjected: false, turnActive: false };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(h.manager.interject('s1')).resolves.toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+    expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
+    expect(h.events.every((event) => event.requestId === turnId)).toBe(true);
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'queued', ownerWebContentsId: 7 })
+    ).resolves.toMatch(/^send-/);
+  });
+
+  it('[T144-wm-11] a send the worker refused up front does not pin the latch', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    const record = h.records[0];
+    const original = record.request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    // What the worker does now (decision 046 rule 5): report the refusal as
+    // this request's failure, settle, and reject the send instead of acking it.
+    record.request.mockImplementationOnce(async (type: string, payload: unknown) => {
+      if (type !== 'worker.send') return original(type, payload);
+      const requestId = (payload as { requestId: string }).requestId;
+      record.emit({
+        type: 'session.failed',
+        sessionId: 's1',
+        requestId,
+        payload: { error: 'runtime_busy: a run is already active in this runtime' },
+      });
+      record.emit({
+        type: 'session.status',
+        sessionId: 's1',
+        requestId,
+        payload: { status: 'idle' },
+      });
+      throw Object.assign(new Error('WORKER_SESSION_BUSY: runtime_busy'), {
+        code: 'WORKER_RPC_REMOTE_ERROR',
+      });
+    });
+    h.events.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await expect(
+        h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'hi', ownerWebContentsId: 7 })
+      ).rejects.toThrow(/runtime_busy/);
+    } finally {
+      warn.mockRestore();
+    }
+    expect(sequence(h.events)).toEqual(['session.failed', 'status:idle']);
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ active: false });
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'hi again', ownerWebContentsId: 7 })
+    ).resolves.toMatch(/^send-/);
   });
 });

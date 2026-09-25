@@ -7,6 +7,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
   isWorkerInspectImportedSessionPayload,
+  isWorkerInterjectResult,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
   isWorkerReloadResult,
@@ -332,6 +333,10 @@ describe('worker RPC boundary guards', () => {
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'user' })).toBe(true);
     expect(isWorkerStopPayload({ logicalSessionId: 'logical-1', reason: 'later' })).toBe(false);
     expect(isWorkerStopResult({ stopped: false })).toBe(true);
+    // decision 046: `turnActive` is optional (absent = not reported) but typed.
+    expect(isWorkerInterjectResult({ interjected: false })).toBe(true);
+    expect(isWorkerInterjectResult({ interjected: false, turnActive: false })).toBe(true);
+    expect(isWorkerInterjectResult({ interjected: false, turnActive: 'no' })).toBe(false);
   });
 
   it('validates sessionless utility requests and terminal events', () => {

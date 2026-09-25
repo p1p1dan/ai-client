@@ -756,8 +756,19 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
      * Optional-field addition, the same compatibility precedent as
      * `SessionLivenessNote`: a renderer that predates it reads a plain
      * completion.
+     *
+     * decision 046 adds two causes that only Main synthesizes, and only on
+     * `session.stopped` (always followed by a settling `session.status`):
+     *
+     * `no_active_turn`: a Stop (or Ctrl+Enter) reached a worker with no turn
+     * running. Nothing was interrupted; the event only settles a session some
+     * reader still believed was running, and must not mark a turn as stopped.
+     *
+     * `forced`: the turn did not end on its own — Main tore its worker down
+     * (the Stop watchdog expired, the worker died while stopping, or the
+     * session was closed mid-turn).
      */
-    stopCause?: 'turn_limit' | 'interjected';
+    stopCause?: 'turn_limit' | 'interjected' | 'no_active_turn' | 'forced';
   };
 }
 

@@ -16,6 +16,7 @@ import type {
   RuntimeEvent,
   RuntimeEventDraft,
   SessionRetryInfo,
+  SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
 import {
   DEFAULT_RUNTIME_PERMISSION,
@@ -250,6 +251,18 @@ interface ManagedSlot {
    */
   stderrForwarded?: number;
   stderrForwardTurn?: string | null;
+  /**
+   * decision 046 — armed when a `worker.stop` goes out, cleared by the turn's
+   * terminal event or by anything that takes the slot away. Firing means the
+   * worker never finished the turn it was told to stop.
+   */
+  stopWatchdog?: NodeJS.Timeout;
+  /**
+   * The last busy `session.status` the worker itself reported for the active
+   * turn: what a re-claim may re-announce. Unset until the worker says
+   * anything, so a latch it never confirmed is not replayed as `running`.
+   */
+  reportedStatus?: SessionRuntimeStatus;
 }
 
 export interface WorkerManagerOptions {
@@ -336,6 +349,8 @@ export interface WorkerManagerOptions {
   idleSweepIntervalMs?: number;
   maxRestartAttempts?: number;
   restartWindowMs?: number;
+  /** decision 046 — see {@link STOP_WATCHDOG_MS}. */
+  stopWatchdogMs?: number;
 }
 
 export interface WorkerManagerSlotSnapshot {
@@ -356,6 +371,22 @@ const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_IDLE_SWEEP_INTERVAL_MS = 60_000;
 const DEFAULT_MAX_RESTART_ATTEMPTS = 2;
 const DEFAULT_RESTART_WINDOW_MS = 60_000;
+
+/**
+ * decision 046 — how long a Stop the worker accepted may take to produce the
+ * turn's terminal event before Main restarts that worker itself. 10 s: well
+ * past a healthy stop (provider abort, the 2 s bash cleanup, a session flush),
+ * short enough that "stopping" cannot become the new "running forever".
+ */
+export const STOP_WATCHDOG_MS = 10_000;
+
+/** Statuses that mean a turn is over (or was never there); see `reportedStatus`. */
+const SETTLED_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
+  'idle',
+  'completed',
+  'failed',
+  'disconnected',
+]);
 
 let commandSequence = 0;
 function nextRequestId(prefix: string): string {
@@ -487,6 +518,7 @@ export class WorkerManager {
   private readonly idleTimeoutMs: number;
   private readonly maxRestartAttempts: number;
   private readonly restartWindowMs: number;
+  private readonly stopWatchdogMs: number;
   private readonly entriesByKey = new Map<string, ManagedSlot>();
   private readonly entriesBySession = new Map<string, ManagedSlot>();
   private readonly resumeFlights = new Map<
@@ -557,6 +589,10 @@ export class WorkerManager {
     this.restartWindowMs = positiveInteger(
       options.restartWindowMs ?? DEFAULT_RESTART_WINDOW_MS,
       'Worker restart window'
+    );
+    this.stopWatchdogMs = positiveInteger(
+      options.stopWatchdogMs ?? STOP_WATCHDOG_MS,
+      'Worker stop watchdog'
     );
     const sweepInterval = nonNegativeFinite(
       options.idleSweepIntervalMs ?? DEFAULT_IDLE_SWEEP_INTERVAL_MS,
@@ -903,12 +939,18 @@ export class WorkerManager {
               ...this.gatePayload(existing),
             },
           });
-          this.dispatch({
-            type: 'session.status',
-            sessionId: existing.logicalSessionId,
-            requestId,
-            payload: { status: existing.activeRequestId ? 'running' : 'idle' },
-          });
+          // decision 046 — re-announce only what the worker itself last said
+          // about the turn. Replaying a latch it never confirmed as `running`
+          // is how a turn that never started kept a re-opened session spinning.
+          const status = existing.activeRequestId ? existing.reportedStatus : 'idle';
+          if (status) {
+            this.dispatch({
+              type: 'session.status',
+              sessionId: existing.logicalSessionId,
+              requestId,
+              payload: { status },
+            });
+          }
         }
         return;
       }
@@ -1950,6 +1992,7 @@ export class WorkerManager {
       ...(input.effort ? { effort: input.effort } : {}),
     };
     entry.activeRequestId = requestId;
+    entry.reportedStatus = undefined;
     entry.lastUsedAt = this.now();
     try {
       const result = await entry.slot?.request<WorkerSendResult, WorkerSendPayload>(
@@ -1972,21 +2015,39 @@ export class WorkerManager {
     }
   }
 
+  /**
+   * decision 046 rule 2 — a Stop always ends in `session.stopped` + a settling
+   * status, within {@link STOP_WATCHDOG_MS}:
+   *
+   *  - no worker Main can reach, or a worker with no turn: Main answers at once
+   *    (`stopCause: 'no_active_turn'`) and drops its own latch;
+   *  - a worker that took the stop: the turn's own terminal answers, and the
+   *    watchdog restarts the worker (`stopCause: 'forced'`) if it never comes.
+   */
   async stop(sessionId: string): Promise<string> {
     const requestId = nextRequestId('stop');
     const entry = this.entriesBySession.get(sessionId);
-    if (!entry?.slot || entry.state !== 'ready') return requestId;
+    if (!entry?.slot || entry.state !== 'ready') {
+      // Nothing here can be running a turn: a crash or a close already
+      // reported the one it cut short, and a slot still spawning has none.
+      this.settleWithoutTurn(sessionId, entry, requestId);
+      return requestId;
+    }
     entry.lastUsedAt = this.now();
+    const slot = entry.slot;
+    // Armed before the request, not on the ACK: a worker too wedged to answer
+    // `worker.stop` at all is exactly the case the watchdog is for.
+    this.armStopWatchdog(entry, slot);
     const payload: WorkerStopPayload = { logicalSessionId: sessionId, reason: 'user' };
-    const result = await entry.slot.request<WorkerStopResult, WorkerStopPayload>(
-      'worker.stop',
-      payload
-    );
+    const result = await slot.request<WorkerStopResult, WorkerStopPayload>('worker.stop', payload);
     if (!isWorkerStopResult(result)) {
       throw new WorkerManagerError(
         'worker_invalid_stop_ack',
         'Pi worker returned an invalid stop acknowledgement'
       );
+    }
+    if (!result.stopped && this.ownsLiveSlot(entry, slot)) {
+      this.settleWithoutTurn(sessionId, entry, requestId);
     }
     return requestId;
   }
@@ -1995,8 +2056,9 @@ export class WorkerManager {
     const entry = this.entriesBySession.get(sessionId);
     if (!entry?.slot || entry.state !== 'ready') return false;
     entry.lastUsedAt = this.now();
+    const slot = entry.slot;
     const payload: WorkerInterjectPayload = { logicalSessionId: entry.logicalSessionId };
-    const result = await entry.slot.request<WorkerInterjectResult, WorkerInterjectPayload>(
+    const result = await slot.request<WorkerInterjectResult, WorkerInterjectPayload>(
       'worker.interject',
       payload
     );
@@ -2006,7 +2068,112 @@ export class WorkerManager {
         'Pi worker returned an invalid interject acknowledgement'
       );
     }
+    // decision 046: `false` because the turn is already past its last boundary
+    // needs nothing — its terminal is on the way. `false` because the worker has
+    // no turn at all is settled the way a Stop that found nothing is, so a
+    // stale latch cannot outlive it and the queued message can go.
+    if (!result.interjected && result.turnActive === false && this.ownsLiveSlot(entry, slot)) {
+      this.settleWithoutTurn(sessionId, entry, nextRequestId('interject'));
+    }
     return result.interjected;
+  }
+
+  /** `slot` is still the one this session's live, ready entry runs on. */
+  private ownsLiveSlot(entry: ManagedSlot, slot: WorkerSlot): boolean {
+    return (
+      entry.slot === slot &&
+      entry.state === 'ready' &&
+      this.entriesBySession.get(entry.logicalSessionId) === entry
+    );
+  }
+
+  /**
+   * decision 046 rule 2 — answer a Stop that found no turn to stop.
+   *
+   * Main's latch goes too: a turn the worker does not have is not one Main may
+   * keep refusing sends for. Idempotent on purpose — the renderer may already
+   * be idle, and `no_active_turn` tells it nothing was interrupted.
+   */
+  private settleWithoutTurn(
+    sessionId: string,
+    entry: ManagedSlot | undefined,
+    requestId: string
+  ): void {
+    const latched = entry?.activeRequestId ?? null;
+    if (entry) {
+      this.clearStopWatchdog(entry);
+      entry.activeRequestId = null;
+      entry.reportedStatus = undefined;
+      entry.lastIdleAt = this.now();
+    }
+    if (latched) {
+      console.warn(
+        `[worker-manager] ${sessionId}: dropped turn ${latched}, which its worker was no longer running`
+      );
+    }
+    const eventRequestId = latched ?? requestId;
+    this.dispatch({
+      type: 'session.stopped',
+      sessionId,
+      requestId: eventRequestId,
+      payload: { stopCause: 'no_active_turn' },
+    });
+    this.dispatch({
+      type: 'session.status',
+      sessionId,
+      requestId: eventRequestId,
+      payload: { status: 'idle' },
+    });
+  }
+
+  /** A second Stop keeps the first deadline rather than extending it. */
+  private armStopWatchdog(entry: ManagedSlot, slot: WorkerSlot): void {
+    if (entry.stopWatchdog !== undefined) return;
+    const generation = entry.generation;
+    const timer = setTimeout(() => {
+      if (entry.stopWatchdog === timer) entry.stopWatchdog = undefined;
+      this.forceStop(entry, slot, generation);
+    }, this.stopWatchdogMs);
+    timer.unref?.();
+    entry.stopWatchdog = timer;
+  }
+
+  private clearStopWatchdog(entry: ManagedSlot): void {
+    if (entry.stopWatchdog === undefined) return;
+    clearTimeout(entry.stopWatchdog);
+    entry.stopWatchdog = undefined;
+  }
+
+  /**
+   * decision 046 rule 2 — the watchdog fired: the worker took the Stop and never
+   * ended the turn. Main stops waiting on it and restarts the slot through the
+   * crash path, which is the one teardown that does not need the worker's help.
+   */
+  private forceStop(entry: ManagedSlot, slot: WorkerSlot, generation: number): void {
+    if (!this.ownsLiveSlot(entry, slot) || !this.isAuthoritative(entry, generation)) return;
+    const reason = `stop did not settle within ${this.stopWatchdogMs}ms`;
+    console.warn(`[worker-manager] ${entry.logicalSessionId}: ${reason}; restarting its worker`);
+    const { turnId } = this.enterCrashed(entry, reason);
+    this.dispatchForcedStop(entry.logicalSessionId, turnId);
+    this.updateManagerState();
+    void this.serialize(() => this.restartEntry(entry));
+  }
+
+  /** `session.stopped` (`forced`) and the idle that settles it. */
+  private dispatchForcedStop(sessionId: string, turnId: string | null): void {
+    const requestId = turnId ?? nextRequestId('stop');
+    this.dispatch({
+      type: 'session.stopped',
+      sessionId,
+      requestId,
+      payload: { stopCause: 'forced' },
+    });
+    this.dispatch({
+      type: 'session.status',
+      sessionId,
+      requestId,
+      payload: { status: 'idle' },
+    });
   }
 
   /**
@@ -2797,6 +2964,13 @@ export class WorkerManager {
    * belongs.
    */
   private retireEntry(entry: ManagedSlot): void {
+    // decision 046 rule 3 — a turn in flight, or a Stop still waiting on one,
+    // ends here for everyone outside the worker: its own terminal will meet the
+    // closed gate below. Main says so, before the session goes disconnected.
+    const turnId = entry.activeRequestId;
+    const interrupted = turnId !== null || entry.stopWatchdog !== undefined;
+    this.clearStopWatchdog(entry);
+    entry.reportedStatus = undefined;
     entry.acceptEvents = false;
     // main-host-03: routing stops here, the event stream does not. The worker
     // emits its parked resolutions during `worker.dispose`, so the window
@@ -2813,6 +2987,21 @@ export class WorkerManager {
     }
     entry.ownerWebContentsId = null;
     entry.activeRequestId = null;
+    if (interrupted) {
+      const requestId = turnId ?? nextRequestId('close');
+      this.dispatch({
+        type: 'session.stopped',
+        sessionId: entry.logicalSessionId,
+        requestId,
+        payload: { stopCause: 'forced' },
+      });
+      this.dispatch({
+        type: 'session.status',
+        sessionId: entry.logicalSessionId,
+        requestId,
+        payload: { status: 'disconnected' },
+      });
+    }
   }
 
   private handleWorkerEvent(entry: ManagedSlot, slot: WorkerSlot, message: WorkerRpcEvent): void {
@@ -2851,13 +3040,21 @@ export class WorkerManager {
       // per completed message until it lands, and nothing afterwards.
       void this.ensureIdentityCommitted(entry, message.generation);
     }
+    if (event.type === 'session.status' && entry.activeRequestId !== null) {
+      entry.reportedStatus = SETTLED_STATUSES.has(event.payload.status)
+        ? undefined
+        : event.payload.status;
+    }
     if (
       event.type === 'session.completed' ||
       event.type === 'session.failed' ||
       event.type === 'session.stopped'
     ) {
       entry.activeRequestId = null;
+      entry.reportedStatus = undefined;
       entry.lastIdleAt = this.now();
+      // decision 046: the turn a pending Stop was waiting on has ended.
+      this.clearStopWatchdog(entry);
       void this.syncLeafCheckpoint(entry, message.generation);
     }
     this.logNotableEvent(entry, event);
@@ -2929,13 +3126,15 @@ export class WorkerManager {
     ) {
       return;
     }
-    entry.state = 'crashed';
-    entry.error = event.error.message;
-    this.dumpWorkerStderr(entry, `crashed: ${event.error.message}`);
-    const activeRequestId = entry.activeRequestId;
-    entry.activeRequestId = null;
-    entry.lastIdleAt = this.now();
-    if (activeRequestId) {
+    const { turnId: activeRequestId, stopping } = this.enterCrashed(
+      entry,
+      event.error.message,
+      `crashed: ${event.error.message}`
+    );
+    if (stopping) {
+      // Died on its way out of a Stop: for the user that IS the stop, forced.
+      this.dispatchForcedStop(entry.logicalSessionId, activeRequestId);
+    } else if (activeRequestId) {
       this.dispatch({
         type: 'session.status',
         sessionId: entry.logicalSessionId,
@@ -2948,9 +3147,41 @@ export class WorkerManager {
         requestId: activeRequestId,
         payload: { error: event.error.message },
       });
+    } else {
+      // decision 046: no turn Main knew of, but a renderer that still thinks
+      // one runs must not stay "running" on a dead worker. The restart below
+      // settles it to idle again.
+      this.dispatch({
+        type: 'session.status',
+        sessionId: entry.logicalSessionId,
+        requestId: nextRequestId('crash'),
+        payload: { status: 'disconnected' },
+      });
     }
     this.updateManagerState();
     void this.serialize(() => this.restartEntry(entry));
+  }
+
+  /**
+   * Take a live entry out of service ahead of `restartEntry`: a crash, or a
+   * Stop the watchdog gave up on. Reports the turn it cut short, and whether a
+   * Stop was waiting on it, so each caller can say how that turn ended.
+   */
+  private enterCrashed(
+    entry: ManagedSlot,
+    error: string,
+    dumpReason = error
+  ): { turnId: string | null; stopping: boolean } {
+    const stopping = entry.stopWatchdog !== undefined;
+    this.clearStopWatchdog(entry);
+    entry.state = 'crashed';
+    entry.error = error;
+    this.dumpWorkerStderr(entry, dumpReason);
+    const turnId = entry.activeRequestId;
+    entry.activeRequestId = null;
+    entry.reportedStatus = undefined;
+    entry.lastIdleAt = this.now();
+    return { turnId, stopping };
   }
 
   private async restartEntry(entry: ManagedSlot): Promise<void> {
@@ -2998,7 +3229,14 @@ export class WorkerManager {
         // Never open the same JSONL in a replacement until old-process exit is
         // confirmed. A failed disposal remains physically owned for app-close
         // force kill and consumes the bounded restart budget.
-        await oldSlot.dispose('slot-replace');
+        try {
+          await oldSlot.dispose('slot-replace');
+        } catch (error) {
+          // decision 046: a worker the stop watchdog gave up on is wedged, so
+          // missing its dispose ACK is expected. The exit is what the
+          // replacement needs, and `disposed` is the slot confirming it.
+          if (oldSlot.state !== 'disposed') throw error;
+        }
         this.ownedSlots.delete(oldSlot);
       }
       entry.generation += 1;

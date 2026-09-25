@@ -1,8 +1,13 @@
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
-import type { RuntimeBootstrapOptions, RuntimeHandle } from '../bootstrap.ts';
+import {
+  DISPOSE_RUN_GRACE_MS,
+  type RuntimeBootstrapOptions,
+  type RuntimeHandle,
+} from '../bootstrap.ts';
 import type { RuntimeHostConfig, RuntimeRunRequest, RuntimeRunResult } from '../contracts.ts';
+import { RuntimeHostError } from '../host/errors.ts';
 import { NativeWorkerRuntime } from '../worker/nativeWorkerRuntime.ts';
 
 /**
@@ -87,6 +92,10 @@ function fakeRuntime(
     disposeFails?: boolean;
     /** Present = this graph has compaction; absent = it was built without it. */
     prepareTurn?: FakePrepareTurn;
+    /** decision 046 — make `start` refuse the run the way the real graph can. */
+    refuse?: Error;
+    /** What `loop.interject()` answers while a turn is live. */
+    interject?: () => boolean;
   } = {}
 ): Fake {
   let listener: ((event: RuntimeEventDraft) => void) | undefined;
@@ -161,7 +170,11 @@ function fakeRuntime(
           },
         }
       : {}),
-    run: (request: RuntimeRunRequest) => {
+    loop: { interject: overrides.interject ?? (() => true) },
+    run: (request: RuntimeRunRequest) => fake.handle.start(request),
+    // Refusals throw synchronously, like the real graph's (decision 046 rule 5).
+    start: (request: RuntimeRunRequest) => {
+      if (overrides.refuse) throw overrides.refuse;
       fake.runs.push(request);
       return new Promise<RuntimeRunResult>((resolve) => {
         resolveRun = resolve;
@@ -603,6 +616,80 @@ describe('NativeWorkerRuntime turns', () => {
       stopped: false,
     });
   });
+
+  // decision 046 — the worker answers "no turn" and stays silent; settling the
+  // session from that answer is Main's job (see WorkerManager.test.ts), which is
+  // why interject has to say "no turn" as plainly as stop does.
+  it('[T144-nwr-01] stop and interject with no turn say so, and emit nothing', async () => {
+    const fake = fakeRuntime();
+    const { runtime, events } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    events.length = 0;
+    await expect(runtime.stop({ logicalSessionId: 'logical-1', reason: 'user' })).resolves.toEqual({
+      stopped: false,
+    });
+    expect(runtime.interject({ logicalSessionId: 'logical-1' })).toEqual({
+      interjected: false,
+      turnActive: false,
+    });
+    expect(events).toEqual([]);
+  });
+
+  it('[T144-nwr-02] interject past the last boundary is "too late", not "no turn"', async () => {
+    const fake = fakeRuntime({ interject: () => false });
+    const { runtime } = build(fake);
+    live = runtime;
+    await runtime.startSend({
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-1',
+      attemptId: 'a1',
+      text: 'hello',
+    });
+    expect(runtime.interject({ logicalSessionId: 'logical-1' })).toEqual({
+      interjected: false,
+      turnActive: true,
+    });
+    fake.settle();
+  });
+
+  // decision 046 rule 5 / H3c. The refusal used to be swallowed after
+  // `accepted: true` had already gone out: Main latched a turn that never
+  // existed and nothing ever told the renderer it was over.
+  it('[T144-nwr-03] a run the graph refuses up front is failed and settled, never accepted', async () => {
+    const refusal = new RuntimeHostError('runtime_busy', 'a run is already active in this runtime');
+    const fake = fakeRuntime({ refuse: refusal });
+    const { runtime, events } = build(fake);
+    live = runtime;
+    await runtime.bootstrap();
+    events.length = 0;
+    await expect(
+      runtime.startSend({
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-2',
+        attemptId: 'a2',
+        text: 'resent prompt',
+      })
+    ).rejects.toMatchObject({ code: 'WORKER_SESSION_BUSY', retryable: true });
+    expect(events).toEqual([
+      {
+        type: 'session.failed',
+        sessionId: 'logical-1',
+        requestId: 'turn-2',
+        payload: { error: 'runtime_busy: a run is already active in this runtime' },
+      },
+      {
+        type: 'session.status',
+        sessionId: 'logical-1',
+        requestId: 'turn-2',
+        payload: { status: 'idle' },
+      },
+    ]);
+    // Nothing was admitted, so nothing holds the slot.
+    await expect(runtime.stop({ logicalSessionId: 'logical-1', reason: 'user' })).resolves.toEqual({
+      stopped: false,
+    });
+  });
 });
 
 describe('NativeWorkerRuntime session reads and lifecycle', () => {
@@ -764,6 +851,38 @@ describe('NativeWorkerRuntime session reads and lifecycle', () => {
     expect(events.length).toBe(before);
     await runtime.dispose();
     expect(fake.disposed).toBe(1);
+  });
+
+  // decision 046 — a run stuck on an await that ignores its abort used to hold
+  // dispose (and with it the dispose ACK and the session lock) forever.
+  it('[T144-nwr-04] dispose gives up on a turn that ignores its abort', async () => {
+    vi.useFakeTimers();
+    try {
+      const fake = fakeRuntime();
+      const logged: string[] = [];
+      const { runtime } = build(fake, {
+        log: (...args: unknown[]) => logged.push(String(args[0])),
+      });
+      await runtime.startSend({
+        logicalSessionId: 'logical-1',
+        requestId: 'turn-1',
+        attemptId: 'a1',
+        text: 'hello',
+      });
+      let disposed = false;
+      const disposing = runtime.dispose().then(() => {
+        disposed = true;
+      });
+      await vi.advanceTimersByTimeAsync(DISPOSE_RUN_GRACE_MS - 1);
+      expect(disposed).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      await disposing;
+      expect(fake.runs[0]?.signal?.aborted).toBe(true);
+      expect(fake.disposed).toBe(1);
+      expect(logged.join(' ')).toContain('did not settle');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('finishes disposing even when the graph tear-down rejects', async () => {

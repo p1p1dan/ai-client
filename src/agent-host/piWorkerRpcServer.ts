@@ -845,7 +845,10 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      this.respondSuccess(request, { interjected: false } satisfies WorkerInterjectResult);
+      this.respondSuccess(request, {
+        interjected: false,
+        turnActive: false,
+      } satisfies WorkerInterjectResult);
       return;
     }
     this.respondSuccess(request, this.runtime.interject(request.payload));
