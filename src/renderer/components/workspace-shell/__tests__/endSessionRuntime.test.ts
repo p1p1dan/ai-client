@@ -1,7 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { selectSessionQueue } from '@/components/chat/messageQueue';
+import { decideQueueRelease } from '@/components/chat/queueRelease';
+import { onSessionEnded } from '@/components/chat/sessionEndSignal';
 import type { ChatMessage, ChatProject, ChatWorkspace } from '@/stores/chatSessions';
-import { useChatSessionsStore } from '@/stores/chatSessions';
-import { endSessionRuntime } from '../endSessionRuntime';
+import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageQueueStore } from '@/stores/messageQueue';
+import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
+import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
+import { END_SESSION_ACK_CEILING_MS, endSessionRuntime } from '../endSessionRuntime';
 import { buildSidebarFolders } from '../sidebarTree';
 
 /**
@@ -161,5 +167,134 @@ describe('endSessionRuntime', () => {
     expect(state.hostBoundSessionIds).toEqual(['s2']);
     expect(state.messages.s1).toEqual(TIMELINE);
     expect(state.sessions.find((item) => item.id === 's1')).toBeDefined();
+  });
+});
+
+/**
+ * Decision 046 rule 3 — ending resets everything the renderer holds for the
+ * session. Field report: after "End conversation" the session kept looking
+ * busy, a new message went into the queue, and that queue never drained.
+ */
+describe('endSessionRuntime resets the ended session (decision 046)', () => {
+  const pendingBubble = (sessionId: string, attemptId: string) => ({
+    attemptId,
+    sessionId,
+    text: 'stuck send',
+    attachments: [],
+    startedAt: 1,
+  });
+
+  function seedTurnState() {
+    useTurnSendStatusStore.setState({
+      status: {
+        owner: 7,
+        sessionId: 's1',
+        phase: 'handshake',
+        elapsedSeconds: 42,
+        turnStartedAtMs: 1,
+        budgetMs: 1,
+        attachmentCount: 0,
+        attachmentBytes: 0,
+        promptChars: 10,
+      },
+      baseline: { sessionId: 's1', messageId: 'm-2' },
+      pendingReply: { sessionId: 's1', turnStartedAtMs: 1 },
+    });
+    usePendingUserMessagesStore.setState({
+      bySession: {
+        s1: [pendingBubble('s1', 's1:7')],
+        s2: [pendingBubble('s2', 's2:8')],
+      },
+    });
+  }
+
+  afterEach(() => {
+    vi.useRealTimers();
+    useTurnSendStatusStore.setState({ status: null, baseline: null, pendingReply: null });
+    usePendingUserMessagesStore.setState({ bySession: {} });
+    useMessageQueueStore.setState({ state: { bySession: {} } });
+  });
+
+  it('releases the turn head, the optimistic bubble and the composer latches', async () => {
+    stubChat(Promise.resolve({ requestId: 'req-1' }));
+    seedTurnState();
+    const ended = vi.fn();
+    const unsubscribe = onSessionEnded(ended);
+    try {
+      await endSessionRuntime('s1');
+    } finally {
+      unsubscribe();
+    }
+
+    // The composer is told, so it can cancel the handshake and open its stop
+    // latch (both component refs — see `sessionEndSignal.ts`).
+    expect(ended).toHaveBeenCalledWith('s1');
+    const turn = useTurnSendStatusStore.getState();
+    expect(turn.status).toBeNull();
+    expect(turn.pendingReply).toBeNull();
+    // The baseline only tells a later send's turn from this one; it runs nothing.
+    expect(turn.baseline).toEqual({ sessionId: 's1', messageId: 'm-2' });
+    // The bubble that was waiting for an echo that will not come is gone; a
+    // neighbour's is untouched.
+    expect(usePendingUserMessagesStore.getState().bySession).toEqual({
+      s2: [pendingBubble('s2', 's2:8')],
+    });
+  });
+
+  it("leaves another session's turn head alone", async () => {
+    stubChat(Promise.resolve({ requestId: 'req-1' }));
+    seedTurnState();
+    await endSessionRuntime('s2');
+    const turn = useTurnSendStatusStore.getState();
+    expect(turn.status?.sessionId).toBe('s1');
+    expect(turn.pendingReply?.sessionId).toBe('s1');
+  });
+
+  it('resets in bounded time even when the detach never answers', async () => {
+    vi.useFakeTimers();
+    stubChat(new Promise(() => {}));
+    seedTurnState();
+    const ended = vi.fn();
+    const unsubscribe = onSessionEnded(ended);
+    try {
+      const result = endSessionRuntime('s1');
+      await vi.advanceTimersByTimeAsync(END_SESSION_ACK_CEILING_MS);
+      await expect(result).resolves.toBe(false);
+    } finally {
+      unsubscribe();
+    }
+    expect(ended).toHaveBeenCalledWith('s1');
+    expect(useChatSessionsStore.getState().sessions[0]?.status).toBe('disconnected');
+    expect(useTurnSendStatusStore.getState().status).toBeNull();
+  });
+
+  it('keeps the queue, and the ended session releases it like idle — no deadlock', async () => {
+    stubChat(Promise.resolve({ requestId: 'req-1' }));
+    useMessageQueueStore.getState().enqueue({
+      id: 'q1',
+      sessionId: 's1',
+      text: 'typed while stuck',
+      attachments: [],
+      queuedAt: 1,
+    });
+
+    await endSessionRuntime('s1');
+
+    const queue = selectSessionQueue(useMessageQueueStore.getState().state, 's1');
+    expect(queue.entries.map((entry) => entry.id)).toEqual(['q1']);
+    expect(queue.paused).toBeNull();
+    const session = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
+    expect(
+      decideQueueRelease({
+        sessionId: 's1',
+        entries: queue.entries,
+        paused: queue.paused,
+        hasTarget: true,
+        disabled: false,
+        sending: false,
+        inFlight: false,
+        status: statusForNextTurn(session) ?? 'idle',
+      })
+    ).toEqual({ type: 'release', entryId: 'q1' });
   });
 });

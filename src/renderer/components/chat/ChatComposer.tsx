@@ -121,8 +121,11 @@ import {
   deriveActionButtons,
   deriveQueueStripModel,
   type FailureAffordanceContext,
+  FORCE_STOP_TITLE,
   isAdmittedOutcome,
-  isRunningStatus,
+  isStoppableStatus,
+  QUEUED_SEND_NOW_BLOCKER_COPY,
+  queuedSendNowBlocker,
   type RestoredDraftMarker,
   type RunEntryOutcome,
   type RunSendOrigin,
@@ -134,8 +137,10 @@ import {
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
+import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
+import { onSessionEnded } from './sessionEndSignal';
 import { failureCardOwnsError } from './sessionFailure';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
@@ -180,12 +185,21 @@ function nextQueuedMessageId(): string {
   return `queued-${Date.now().toString(36)}-${queuedMessageSeq}`;
 }
 
-// M6 fix: delegate to queueRelease.ts's exported `isRunningStatus` instead of
-// hand-copying the four-status list — a second copy is exactly the "must be
-// kept in sync by inspection" risk the T-19 fix review flagged.
+// M6 fix: delegate to queueRelease.ts's exported `isStoppableStatus` instead of
+// hand-copying the status list — a second copy is exactly the "must be kept in
+// sync by inspection" risk the T-19 fix review flagged. Decision 046: this now
+// includes `stopping`, so Stop and Esc survive the stop being acknowledged.
 function isStoppable(status: SessionRuntimeStatus | undefined): boolean {
-  return status != null && isRunningStatus(status);
+  return status != null && isStoppableStatus(status);
 }
+
+/**
+ * Decision 046 rule 2: the latest bound on this composer's stop latch. The
+ * latch normally opens when the stop IPC settles or the session's terminal
+ * event arrives; this only matters when neither ever comes, and must outlast
+ * Main's own stop watchdog (8–10 s) so it never races a real settle.
+ */
+const STOP_LATCH_CEILING_MS = 12_000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -401,8 +415,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
    * per-session one every user-facing affordance reads.
    */
   const [sendingSessionId, setSendingSessionId] = useState<string | null>(null);
-  const [stopping, setStopping] = useState(false);
+  /**
+   * The stop latch: the session whose Stop was pressed and has not settled
+   * yet. `stopping` stays GLOBAL and gates new sends and the queue exactly as
+   * the old boolean did; the id only decides which session's Stop reads as
+   * "force stop". `stoppingRef` is its synchronous mirror.
+   */
+  const [stoppingSessionId, setStoppingSessionId] = useState<string | null>(null);
+  const stopping = stoppingSessionId !== null;
   const stoppingRef = useRef(false);
+  // Decision 046 rule 2: the press that currently owns the stop latch. A later
+  // press takes it over, so the earlier press's IPC settle or ceiling cannot
+  // reopen what the later one closed.
+  const stopTokenRef = useRef(0);
+  const stopTargetRef = useRef<string | null>(null);
   /**
    * The GLOBAL latch: a send is in flight SOMEWHERE. Exactly three readers, and
    * each of them is dispatch-layer, not presentation:
@@ -472,6 +498,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // already told the Host to abort the turn the user was looking at,
   // silently starting a turn they had just explicitly cancelled.
   const sendGenerationRef = useRef(0);
+  // Decision 046 rule 2: the in-flight attempt's cancel signal. The generation
+  // above can only be read between awaits; this one also wakes the handshake
+  // awaits themselves (see `sendCancellation.ts`).
+  const sendCancellationRef = useRef<SendCancellation | null>(null);
   // F2 (2026-08-18 §4.2/§5.1): the `'pending'` branch's own record of a turn
   // the Host ADMITTED and is still running, which this renderer stopped waiting
   // for. It is not a failure marker any more — its predecessor
@@ -711,13 +741,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // timeline's failure card renders); the queue gates read what the runtime
   // actually reported, which for a closed run is `'idle'`.
   const nextTurnStatus = statusForNextTurn(activeSession) ?? 'idle';
-  const canSendQueuedNow = Boolean(
-    hasSendTarget &&
-      !disabled &&
-      !stopping &&
-      !otherSendInFlight &&
-      (canStop || nextTurnStatus === 'idle' || nextTurnStatus === 'completed')
-  );
+  // Decision 046 rule 4: one pure gate, which also names the reason when the
+  // row's "Send now" is disabled. It opens for `disconnected` exactly as the
+  // release gate does, and an unsettled Stop no longer closes it.
+  const sendNowBlocker = queuedSendNowBlocker({
+    hasTarget: hasSendTarget,
+    disabled: Boolean(disabled),
+    canStop,
+    nextTurnStatus,
+    otherSendInFlight,
+  });
+  const canSendQueuedNow = sendNowBlocker === null;
   const { getSessionModel } = useSessionModel();
   const { getSessionEffort } = useSessionEffort();
   const chatAgentDefaults = useSettingsStore((state) => state.chatAgentDefaults);
@@ -1459,6 +1493,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // snapshot to notice.
     sendGenerationRef.current += 1;
     const myGeneration = sendGenerationRef.current;
+    // Decision 046 rule 2: every handshake await below races this, so a Stop
+    // (or ending the conversation) releases this attempt at once instead of
+    // after whatever IPC it happens to be waiting on. Armed alongside the
+    // generation because `cancelInFlightSend` fires both.
+    const cancellation = createSendCancellation();
+    sendCancellationRef.current = cancellation;
 
     // U05-b: `let`, because an unbound chat's directory does not exist yet.
     // It is filled in inside the handshake below (after `ensureHost`, so a
@@ -1902,7 +1942,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // this wait before our own send had echoed — reachable now that a Stop
       // returns `runSend` immediately instead of at 45s, because the next
       // send can start while the Host is still tearing the stopped turn down
-      // (`'stopping'` is not a busy status — see `isRunningStatus`) — and the
+      // (the status can already read `idle` while Main settles it) — and the
       // Stop exit would then classify a turn the Host had JUST admitted as
       // never-admitted, bouncing the user's text back with a Retry that
       // double-sends. A Stop landing before our echo is covered by the
@@ -1939,7 +1979,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     };
 
     /** Create or claim the session's authoritative WorkerSlot, then wait for its event. */
-    const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout'> => {
+    const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout' | 'cancelled'> => {
       // WorkerManager.createSession is idempotent for an existing logical
       // session. Never close/sleep/recreate here: that was a singleton Host
       // registry workaround and would discard an authoritative slot.
@@ -1961,31 +2001,39 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // a fact only this call site can state, and one the outer catch cannot
       // tell apart from an `ensureHost()` failure. The error text still reaches
       // the same error card it always did.
-      let createResult: Awaited<ReturnType<typeof window.electronAPI.chat.createSession>>;
+      let createResult:
+        | Awaited<ReturnType<typeof window.electronAPI.chat.createSession>>
+        | typeof SEND_CANCELLED;
       try {
-        createResult = await window.electronAPI.chat.createSession({
-          sessionId,
-          workspacePath,
-          // B11: `Automatic` omits the key entirely rather than sending an
-          // `undefined` value — `model: undefined` still serialises as a present
-          // key on some paths, and "no model" has to be indistinguishable from
-          // "field not supported" for the runtime default to apply.
-          ...(model ? { model } : {}),
-          ...(effort ? { effort } : {}),
-          ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
-        });
+        createResult = await cancellation.race(
+          window.electronAPI.chat.createSession({
+            sessionId,
+            workspacePath,
+            // B11: `Automatic` omits the key entirely rather than sending an
+            // `undefined` value — `model: undefined` still serialises as a present
+            // key on some paths, and "no model" has to be indistinguishable from
+            // "field not supported" for the runtime default to apply.
+            ...(model ? { model } : {}),
+            ...(effort ? { effort } : {}),
+            ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
+          })
+        );
       } catch (error) {
         useChatSessionsStore.setState({
           lastError: error instanceof Error ? error.message : String(error),
         });
         return 'fatal';
       }
+      // A late create result is dropped here; WorkerManager.createSession is
+      // idempotent, so the next send simply creates (claims) it again.
+      if (createResult === SEND_CANCELLED) return 'cancelled';
       setCurrentRequestId(createResult?.requestId ?? null);
 
       const created = await waitUntil(
-        () => sawSessionCreated || Boolean(fatalHostError),
+        () => sawSessionCreated || Boolean(fatalHostError) || cancellation.cancelled,
         deadlineAt(5000)
       );
+      if (cancellation.cancelled) return 'cancelled';
       if (fatalHostError) return 'fatal';
       if (!created) return 'timeout';
 
@@ -2030,19 +2078,21 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // whose own requestId is not yet known at dispatch time. See
       // `runCreateSequence`'s identical reset for the full rationale.
       setCurrentRequestId(null);
-      const sendResult = await window.electronAPI.chat
-        .send({
-          sessionId,
-          attemptId,
-          text: trimmed,
-          // Same B11 rule as the create payload above. On the Codex axis this key
-          // is what D40's `turn/start` override rides on, and an override is
-          // STICKY there [measured, 06-probes P1] — so sending a model the user did
-          // not pick would silently re-default the whole thread, not just a turn.
-          ...(model ? { model } : {}),
-          ...(effort ? { effort } : {}),
-          ...(wireAttachments ? { attachments: wireAttachments } : {}),
-        })
+      const sendResult = await cancellation
+        .race(
+          window.electronAPI.chat.send({
+            sessionId,
+            attemptId,
+            text: trimmed,
+            // Same B11 rule as the create payload above. On the Codex axis this key
+            // is what D40's `turn/start` override rides on, and an override is
+            // STICKY there [measured, 06-probes P1] — so sending a model the user did
+            // not pick would silently re-default the whole thread, not just a turn.
+            ...(model ? { model } : {}),
+            ...(effort ? { effort } : {}),
+            ...(wireAttachments ? { attachments: wireAttachments } : {}),
+          })
+        )
         .catch((error: unknown) => {
           // The WorkerManager can refuse a send outright — an idle-evicted
           // slot answers `session_not_found`, a slot still tearing down the
@@ -2063,6 +2113,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           useChatSessionsStore.setState({ lastError: fatalHostError });
           return null;
         });
+      // Decision 046 rule 2: Stop landed while the dispatch itself was still
+      // pending. Classified exactly like a Stop landing during the wait below
+      // (the Host may still have taken it; Stop is aborting that turn anyway).
+      if (sendResult === SEND_CANCELLED) return 'cancelled';
       // F2: MUST happen synchronously right here — the instant this
       // attempt's own requestId is known — not lazily on next use, or a
       // fast-arriving `host.error` for THIS send (already stashed above)
@@ -2148,6 +2202,57 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return released ? 'progress' : 'ceiling';
     };
 
+    /**
+     * The Stop exit, shared by the wait's `'terminal'`/`'cancelled'` outcomes
+     * and by every handshake await that a Stop (or ending the conversation)
+     * cut short (decision 046 rule 2).
+     *
+     * Stop-hang fix (2026-08-10): this attempt ENDED — the Host said so on the
+     * wire (`session.stopped` for a Stop, `session.completed` for a turn that
+     * finished without producing a single assistant block), or `handleStop`
+     * cancelled it and the confirmation is still in flight.
+     *
+     * Neither ending is a failure or an abandonment: no error card, no pending
+     * watch (there is no still-running turn left to watch), and deliberately
+     * NO `unbindHost()` — the binding is healthy. A handshake cut short never
+     * bound anything in the first place.
+     */
+    const settleStoppedAttempt = (): RunEntryOutcome => {
+      useChatSessionsStore.setState({ lastError: null });
+      // Admission evidence still decides the outcome — same classifier as
+      // every other exit. An echoed/progressed turn is SPENT ('committed':
+      // the text is already in the timeline, and quite possibly in the
+      // CLI's own transcript, so a resend would double-send it). A turn the
+      // Host never admitted is 'rejected', so a release-origin entry goes
+      // back on the queue instead of being swallowed (decision 3.3) and a
+      // direct/Retry-origin one gets its payload back via
+      // `decideFailureAffordance`.
+      const stopOutcome = decideRunEntryOutcome({
+        fatalHostError: true,
+        sawAssistantProgress,
+        sawUserEcho,
+      });
+      if (
+        stopOutcome === 'rejected' &&
+        origin === 'release' &&
+        sendGenerationRef.current !== myGeneration
+      ) {
+        // 'rejected' here means neither echo nor progress was ever seen,
+        // so the bubble has no authoritative counterpart coming.
+        retirePendingAttempt();
+        return 'skipped';
+      }
+      if (stopOutcome === 'committed') {
+        // Same clean exit as the success case below — a turn the Host
+        // admitted and then ended is a turn that FINISHED, not one that
+        // failed, so it must not hand the user a Retry or replay its
+        // payload into a composer they have moved on from.
+        setRetryable(null);
+        return 'committed';
+      }
+      return finalizeOutcome(stopOutcome);
+    };
+
     // T-19: every non-success path below now calls `setRetryable(committed)`
     // — previously only the catch block and the final "no progress" branch
     // set `retryable`, so the `runCreateSequence` timeout/fatal branches lost
@@ -2156,18 +2261,27 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // consumed) is the single snapshot every one of these branches now
     // reaches for, so none of them can forget it.
     try {
-      await window.electronAPI.chat.ensureHost();
+      // Decision 046 rule 2: a worker restart can hold this for a whole
+      // bootstrap; Stop must not have to wait it out.
+      if ((await cancellation.race(window.electronAPI.chat.ensureHost())) === SEND_CANCELLED) {
+        return settleStoppedAttempt();
+      }
       if (!workspacePath) {
         // U05-a/b: allocate this unbound chat's isolated directory now, on its
         // first send — not when the chat row was created, so a chat the user
         // never actually uses leaves nothing on disk. Main is idempotent, so a
         // Retry or a second send reuses the same directory rather than
         // stranding the first one.
-        workspacePath = await useScratchWorkspaceStore.getState().ensure(sessionId);
+        const scratchPath = await cancellation.race(
+          useScratchWorkspaceStore.getState().ensure(sessionId)
+        );
+        if (scratchPath === SEND_CANCELLED) return settleStoppedAttempt();
+        workspacePath = scratchPath;
       }
 
       if (preamble.action === 'create') {
         const seq = await runCreateSequence();
+        if (seq === 'cancelled') return settleStoppedAttempt();
         if (seq === 'fatal') {
           // R2: this turn provably never reached the Host — createSession
           // itself failed, `sendAndWait` was never called, `sawUserEcho`/
@@ -2195,28 +2309,35 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // rationale as `runCreateSequence`'s reset above.
         setCurrentRequestId(null);
         let resumeDispatchError: string | null = null;
-        const resumeResult = await window.electronAPI.chat
-          .resumeSession({
-            sessionId,
-            runtimeIdentity: preamble.runtimeIdentity,
-            workspacePath,
-            // B11, third dispatch site: same rule as create and send. A resume
-            // that named `model: undefined` would pin the Host registry entry's
-            // model to nothing EXPLICITLY, which is not what `Automatic` means —
-            // it means the field never existed.
-            ...(model ? { model } : {}),
-            ...(effort ? { effort } : {}),
-            ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
-          })
+        const resumeResult = await cancellation
+          .race(
+            window.electronAPI.chat.resumeSession({
+              sessionId,
+              runtimeIdentity: preamble.runtimeIdentity,
+              workspacePath,
+              // B11, third dispatch site: same rule as create and send. A resume
+              // that named `model: undefined` would pin the Host registry entry's
+              // model to nothing EXPLICITLY, which is not what `Automatic` means —
+              // it means the field never existed.
+              ...(model ? { model } : {}),
+              ...(effort ? { effort } : {}),
+              ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
+            })
+          )
           .catch((error: unknown) => {
             resumeDispatchError = error instanceof Error ? error.message : String(error);
             return undefined;
           });
+        if (resumeResult === SEND_CANCELLED) return settleStoppedAttempt();
         setCurrentRequestId(resumeResult?.requestId ?? null);
 
         const resumed = resumeDispatchError
           ? false
-          : await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), deadlineAt(5000));
+          : await waitUntil(
+              () => sawSessionResumed || Boolean(fatalHostError) || cancellation.cancelled,
+              deadlineAt(5000)
+            );
+        if (cancellation.cancelled) return settleStoppedAttempt();
         if (!resumed || fatalHostError) {
           // A known Pi session file is authoritative. Never replace a missing,
           // corrupt, or cross-cwd resume target with a fresh session: doing so
@@ -2335,23 +2456,30 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           sawSessionResumed = false;
           setCurrentRequestId(null);
           let reopenError: string | null = null;
-          const reopen = await window.electronAPI.chat
-            .resumeSession({
-              sessionId,
-              runtimeIdentity: knownIdentity,
-              workspacePath,
-              ...(model ? { model } : {}),
-              ...(effort ? { effort } : {}),
-              ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
-            })
+          const reopen = await cancellation
+            .race(
+              window.electronAPI.chat.resumeSession({
+                sessionId,
+                runtimeIdentity: knownIdentity,
+                workspacePath,
+                ...(model ? { model } : {}),
+                ...(effort ? { effort } : {}),
+                ...(spawnPermissions ? { permissions: spawnPermissions } : {}),
+              })
+            )
             .catch((error: unknown) => {
               reopenError = error instanceof Error ? error.message : String(error);
               return undefined;
             });
+          if (reopen === SEND_CANCELLED) return settleStoppedAttempt();
           setCurrentRequestId(reopen?.requestId ?? null);
           const reopened = reopenError
             ? false
-            : await waitUntil(() => sawSessionResumed || Boolean(fatalHostError), deadlineAt(5000));
+            : await waitUntil(
+                () => sawSessionResumed || Boolean(fatalHostError) || cancellation.cancelled,
+                deadlineAt(5000)
+              );
+          if (cancellation.cancelled) return settleStoppedAttempt();
           if (!reopened || fatalHostError) {
             const encodedError = encodePiResumeError(
               reopenError ??
@@ -2381,6 +2509,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // zero-turn session whose worker disappeared before Pi materialized
           // a JSONL file. This is the sole safe create fallback.
           const seq = await runCreateSequence();
+          if (seq === 'cancelled') return settleStoppedAttempt();
           if (seq === 'fatal') {
             unbindHost();
             return finalizeOutcome(
@@ -2440,9 +2569,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // caught host-side by the TTFT watchdog's evidence-gated abort (F1).
         const state = useChatSessionsStore.getState();
         const session = state.sessions.find((item) => item.id === sessionId);
-        const hostAfter = await window.electronAPI.chat.getHostStatus().catch((err: unknown) => ({
-          error: err instanceof Error ? err.message : String(err),
-        }));
+        // Raced like the handshake: a diagnostic probe must not be the one IPC
+        // that can still hold the send latch after Stop.
+        const hostProbe = await cancellation
+          .race(window.electronAPI.chat.getHostStatus())
+          .catch((err: unknown) => ({
+            error: err instanceof Error ? err.message : String(err),
+          }));
+        const hostAfter =
+          hostProbe === SEND_CANCELLED ? { error: 'stopped before the probe answered' } : hostProbe;
 
         // a3: this used to end with "Check Claude auth / API in your
         // CLAUDE_CONFIG_DIR settings.json" unconditionally — wrong on this
@@ -2547,54 +2682,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         }
         case 'terminal':
         case 'cancelled': {
-          // Stop-hang fix (2026-08-10): this attempt ENDED — the Host said so
-          // on the wire (`session.stopped` for a Stop, `session.completed` for
-          // a turn that finished without producing a single assistant block),
-          // or `handleStop` bumped the generation and the confirmation is still
-          // in flight.
-          //
           // As its own case rather than an `if` ahead of the success gate: the
           // ordering that used to matter (this must be decided BEFORE anything
           // reads `statusAfter`, or the same user action comes out as a clean
           // end or as an abandon depending on a flush timer) is now structural
           // — the labels are mutually exclusive, so no gate below can claim it.
-          //
-          // Neither ending is a failure or an abandonment: no error card, no
-          // pending watch (there is no still-running turn left to watch), and
-          // deliberately NO `unbindHost()` — the binding is healthy.
-          useChatSessionsStore.setState({ lastError: null });
-          // Admission evidence still decides the outcome — same classifier as
-          // every other exit. An echoed/progressed turn is SPENT ('committed':
-          // the text is already in the timeline, and quite possibly in the
-          // CLI's own transcript, so a resend would double-send it). A turn the
-          // Host never admitted is 'rejected', so a release-origin entry goes
-          // back on the queue instead of being swallowed (decision 3.3) and a
-          // direct/Retry-origin one gets its payload back via
-          // `decideFailureAffordance`.
-          const stopOutcome = decideRunEntryOutcome({
-            fatalHostError: true,
-            sawAssistantProgress,
-            sawUserEcho,
-          });
-          if (
-            stopOutcome === 'rejected' &&
-            origin === 'release' &&
-            sendGenerationRef.current !== myGeneration
-          ) {
-            // 'rejected' here means neither echo nor progress was ever seen,
-            // so the bubble has no authoritative counterpart coming.
-            retirePendingAttempt();
-            return 'skipped';
-          }
-          if (stopOutcome === 'committed') {
-            // Same clean exit as the success case below — a turn the Host
-            // admitted and then ended is a turn that FINISHED, not one that
-            // failed, so it must not hand the user a Retry or replay its
-            // payload into a composer they have moved on from.
-            setRetryable(null);
-            return 'committed';
-          }
-          return finalizeOutcome(stopOutcome);
+          // The exit itself is shared with the handshake's cancel points.
+          return settleStoppedAttempt();
         }
         case 'progress': {
           // Success — clear any stale failure UI so a ghost Retry can't
@@ -2618,6 +2712,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       );
     } finally {
       window.clearInterval(ticker);
+      if (sendCancellationRef.current === cancellation) sendCancellationRef.current = null;
       endTurnSend(sendOwner);
       if (sendOwnerRef.current === sendOwner) sendOwnerRef.current = null;
       inFlightRef.current = false;
@@ -2709,7 +2804,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     (sessionId: string) => {
       // Steps 4 and 8 for the watch. Idempotent by session, so a late clear for
       // a session the user has already left cannot blank the current one.
-      pendingReplyRef.current = null;
+      if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
       clearPendingReply(sessionId);
       // Step 7 (+ step 8 for the draft marker, which it drops either way).
       revokeRestoredDraftIfUntouched(sessionId);
@@ -2752,26 +2847,37 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // telling the truth. `chatSessions.ts` (red-line) already writes that card
   // from the same event; nothing here duplicates it.
   //
+  // Decision 046 (T145 item 3): keyed on the STORE slot, which is what the turn
+  // head renders, and only then on this instance's ref. The two used to be
+  // read the other way round, so a watch armed by an earlier composer instance
+  // (a remount), or a slot left behind when the ref moved on to another
+  // session's send, was never cleared by any terminal event and the head kept
+  // counting. The ref still owns the one thing the slot does not carry — the
+  // payload D1 restores — so a failure only restores what THIS instance armed.
+  //
   // Mount-once: every identifier closed over is stable.
   useEffect(() => {
     const unsubscribe = subscribeRuntimeEvent((event) => {
-      const watch = pendingReplyRef.current;
-      if (!watch) return;
+      const watchedSessionId =
+        useTurnSendStatusStore.getState().pendingReply?.sessionId ??
+        pendingReplyRef.current?.sessionId;
+      if (!watchedSessionId) return;
       // Step 1: scope first, always.
-      if (isSessionFailedForSend(event, watch.sessionId)) {
+      if (isSessionFailedForSend(event, watchedSessionId)) {
         // Step 2: freeze the payload before step 4 drops the watch.
-        const committed = watch.committed;
-        resolvePendingReplyLanded(watch.sessionId);
-        restoreDraftIfComposerEmpty(watch.sessionId, committed);
+        const watch = pendingReplyRef.current;
+        const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;
+        resolvePendingReplyLanded(watchedSessionId);
+        if (committed) restoreDraftIfComposerEmpty(watchedSessionId, committed);
         return;
       }
-      if (isSessionCompletedForSend(event, watch.sessionId)) {
+      if (isSessionCompletedForSend(event, watchedSessionId)) {
         // A clean completion with zero new assistant blocks. The turn ended
         // fine; the found-material is dropped in silence and the composer is
         // never touched.
-        resolvePendingReplyLanded(watch.sessionId);
+        resolvePendingReplyLanded(watchedSessionId);
       }
-      if (isSessionStoppedForSend(event, watch.sessionId)) {
+      if (isSessionStoppedForSend(event, watchedSessionId)) {
         // The user stopped the turn — this composer's Stop, another window's,
         // or a host-side abort; the projector reports all three the same way.
         // No draft restore: D1's restore is for a turn the HOST killed, and
@@ -2780,8 +2886,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // taught the WAIT about (assistantProgress.ts) but this chain, added
         // eight days later, did not port — without it a stopped-with-no-blocks
         // turn kept the watch armed and the head read "Working" forever while
-        // every later Stop answered `stopped: false`.
-        resolvePendingReplyLanded(watch.sessionId);
+        // every later Stop answered `stopped: false`. Any `stopCause` counts
+        // (decision 046: Main's `no_active_turn` / `forced` settles too).
+        resolvePendingReplyLanded(watchedSessionId);
       }
     });
     return unsubscribe;
@@ -2893,28 +3000,100 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     hasPendingPermissionHere: pendingPermissionHere,
   });
 
+  // Cancel THIS session's in-flight send, never a different chat's. Both
+  // halves: the generation, which the wait reads between polls, and the cancel
+  // signal, which wakes whatever handshake IPC the attempt is parked on
+  // (decision 046 rule 2). Refs only, so the callback is stable.
+  const cancelInFlightSend = useCallback((sessionId: string) => {
+    if (inFlightSessionIdRef.current !== sessionId) return;
+    sendGenerationRef.current += 1;
+    sendCancellationRef.current?.cancel();
+  }, []);
+
+  // Opens the stop latch. With a token, only while that press still owns it.
+  const releaseStopLatch = useCallback((token?: number) => {
+    if (token !== undefined && token !== stopTokenRef.current) return;
+    stoppingRef.current = false;
+    stopTargetRef.current = null;
+    setStoppingSessionId(null);
+  }, []);
+
+  // The pending-reply watch of a turn the user has just ended. Dropped at once
+  // rather than on the terminal event: the head should stop counting when the
+  // user says stop, and a Stop's text is already in the timeline, so there is
+  // no payload left to restore. Unlike `resolvePendingReplyLanded`, it never
+  // touches a restored draft.
+  const dropPendingReplyWatch = useCallback(
+    (sessionId: string) => {
+      if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;
+      clearPendingReply(sessionId);
+    },
+    [clearPendingReply]
+  );
+
   const handleStop = () => {
     const stopTarget = activeSessionId;
-    if (!stopTarget || stoppingRef.current) return;
-    // Cancel only this session's handshake, never a different chat's send.
-    if (inFlightSessionIdRef.current === stopTarget) sendGenerationRef.current += 1;
+    if (!stopTarget) return;
+    // Decision 046 rule 2: never swallowed. A press while an earlier Stop is
+    // still unsettled (the button reads "force stop" then) sends Stop again;
+    // Main's watchdog settles the turn either way. The handshake and the
+    // pending watch are released on the spot, not when the Host answers.
+    cancelInFlightSend(stopTarget);
+    dropPendingReplyWatch(stopTarget);
+    stopTokenRef.current += 1;
+    const token = stopTokenRef.current;
     stoppingRef.current = true;
-    setStopping(true);
+    stopTargetRef.current = stopTarget;
+    setStoppingSessionId(stopTarget);
     // Stop cancels this turn, not its queued follow-ups: the queue is NOT
     // paused here, so it releases again once the session settles. A
     // `'send-rejected'` pause is deliberately left alone — it protects every
     // entry from a Host that is still refusing, and only Retry/Resume or one
     // explicit "Send now" (`prioritizeEntry`'s single-use token) may pass it.
-    // Keep release gated through the IPC acknowledgement AND the runtime's
-    // terminal event.
+    // The latch keeps new sends and the queue back until the first of: the IPC
+    // settling, the session's terminal event (see the effect below), or the
+    // ceiling — so a stop IPC that never answers can no longer hold it forever.
+    const ceiling = window.setTimeout(() => releaseStopLatch(token), STOP_LATCH_CEILING_MS);
     void stopChatSession(stopTarget).finally(() => {
-      stoppingRef.current = false;
-      setStopping(false);
+      window.clearTimeout(ceiling);
+      releaseStopLatch(token);
     });
   };
 
+  // Decision 046 rule 2: the stop latch also opens on the stopped session's
+  // terminal event. Any `session.stopped` counts, whatever its `stopCause` —
+  // Main's `no_active_turn` / `forced` settles are terminal too.
+  useEffect(
+    () =>
+      subscribeRuntimeEvent((event) => {
+        const target = stopTargetRef.current;
+        if (!target) return;
+        if (
+          isSessionStoppedForSend(event, target) ||
+          isSessionCompletedForSend(event, target) ||
+          isSessionFailedForSend(event, target)
+        ) {
+          releaseStopLatch();
+        }
+      }),
+    [releaseStopLatch]
+  );
+
+  // Decision 046 rule 3: ending a conversation (sidebar) releases everything
+  // this composer holds for it — the handshake, the stop latch, the pending
+  // watch. `endSessionRuntime` clears the store halves itself.
+  useEffect(
+    () =>
+      onSessionEnded((sessionId) => {
+        cancelInFlightSend(sessionId);
+        if (stopTargetRef.current === sessionId) releaseStopLatch();
+        dropPendingReplyWatch(sessionId);
+      }),
+    [cancelInFlightSend, releaseStopLatch, dropPendingReplyWatch]
+  );
+
   const handleQueueSendNow = (entryId: string) => {
-    if (!activeSessionId || !canSendQueuedNow || stoppingRef.current) return;
+    if (!activeSessionId || !canSendQueuedNow) return;
     const queue = useMessageQueueStore.getState();
     // HEAD ONLY, re-checked against the store rather than trusted from the
     // click: `QueueStripEntryModel.canSendNow` already hides the button on
@@ -3370,6 +3549,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // keystroke here will be enqueued (`decideSendAction` reads the global
     // latch). Say so, instead of offering a Send that silently becomes one.
     otherSendInFlight,
+    // Decision 046: this session's own Stop is still settling — Stop turns
+    // into force stop, like it does for a `stopping` status.
+    stopRequested: activeSessionId !== null && stoppingSessionId === activeSessionId,
   });
 
   const actionButtons = (
@@ -3387,11 +3569,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           );
         }
         if (spec.kind === 'stop') {
+          // Decision 046 rule 2: never disabled by a pending Stop — a stop that
+          // has not settled is offered again as force stop, and pressing it
+          // re-sends Stop.
           return (
             <ComposerRoundButton
               key="stop"
               kind="stop"
-              disabled={disabled || spec.disabled || stopping}
+              title={spec.force ? t(FORCE_STOP_TITLE) : undefined}
+              disabled={disabled || spec.disabled}
               onClick={handleStop}
             />
           );
@@ -3548,6 +3734,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           onRemove={handleQueueEntryRemove}
           onSendNow={handleQueueSendNow}
           sendNowDisabled={!canSendQueuedNow}
+          sendNowDisabledReason={
+            sendNowBlocker ? t(QUEUED_SEND_NOW_BLOCKER_COPY[sendNowBlocker]) : undefined
+          }
         />
       )}
       <div className={composerCardClass(mode, { hasProtrusion })} ref={composerCardRef}>

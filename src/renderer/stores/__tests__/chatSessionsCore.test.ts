@@ -1430,6 +1430,119 @@ describe('applyRuntimeEvent — session.stopped (stop freeze)', () => {
   });
 });
 
+/**
+ * Decision 046 (T145 × T144) — the two stop causes Main now synthesizes.
+ *
+ * `no_active_turn`: a Stop / Ctrl+Enter found no turn running. It only settles
+ * a session a reader still believed was running, and it can trail a
+ * completion that won the race. `forced`: Main's watchdog (or a close mid-turn)
+ * tore the turn down — a real stop.
+ */
+describe('applyRuntimeEvent — decision 046 stop causes', () => {
+  const noActiveTurn: RuntimeEvent = {
+    type: 'session.stopped',
+    seq: 2,
+    sessionId: SESSION_ID,
+    timestamp: 2,
+    payload: { stopCause: 'no_active_turn' },
+  };
+  const reply = () =>
+    makeMessage({ id: 'asst-1', blocks: [{ id: 'b1', type: 'text', text: 'done' }] });
+
+  it('no_active_turn settles a session the renderer still thought was running, and stamps nothing', () => {
+    for (const status of ['running', 'stopping', 'starting'] as const) {
+      const state = baseState({
+        sessions: [makeSession({ status })],
+        messages: { [SESSION_ID]: [makeMessage({ id: 'user-1', role: 'user' }), reply()] },
+        pendingPermissions: [
+          { sessionId: SESSION_ID, permissionId: 'perm-d', messageId: 'asst-1' },
+        ],
+      });
+      const patch = applyRuntimeEvent(state, noActiveTurn);
+      expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+      // Nothing was interrupted: no user-stop mark on the last reply...
+      expect(patch.messages).toBeUndefined();
+      // ...and a parked card (a background delegate's) is not swept away.
+      expect(patch.pendingPermissions).toBeUndefined();
+    }
+  });
+
+  it('a no_active_turn trailing a completion (Stop raced it) is a no-op', () => {
+    const running = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'user-1', role: 'user' }), reply()] },
+    });
+    const completed: ChatSessionsState = {
+      ...running,
+      ...applyRuntimeEvent(running, {
+        type: 'session.completed',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+      }),
+    };
+    expect(completed.sessions.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+
+    expect(applyRuntimeEvent(completed, noActiveTurn)).toEqual({});
+    // The completed reply is not re-labelled as a user stop.
+    expect(completed.messages[SESSION_ID]?.[1]?.stopCause).toBeUndefined();
+  });
+
+  it('a no_active_turn trailing an interjected completion keeps the delegate card', () => {
+    const running = baseState({
+      sessions: [makeSession({ status: 'running' })],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'user-1', role: 'user' }), reply()] },
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'perm-d', messageId: 'asst-1' }],
+    });
+    const completed: ChatSessionsState = {
+      ...running,
+      ...applyRuntimeEvent(running, {
+        type: 'session.completed',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { stopCause: 'interjected' },
+      }),
+    };
+    expect(completed.pendingPermissions).toHaveLength(1);
+    expect(applyRuntimeEvent(completed, noActiveTurn)).toEqual({});
+  });
+
+  it('a no_active_turn after a failure keeps the failure card, settled', () => {
+    const failed = baseState({ sessions: [makeSession({ status: 'failed' })] });
+    const patch = applyRuntimeEvent(failed, noActiveTurn);
+    const session = patch.sessions?.find((item) => item.id === SESSION_ID);
+    expect(session?.status).toBe('failed');
+    expect(session?.failureSettled).toBe(true);
+    // Already settled: nothing to do.
+    expect(
+      applyRuntimeEvent(
+        baseState({ sessions: [makeSession({ status: 'failed', failureSettled: true })] }),
+        noActiveTurn
+      )
+    ).toEqual({});
+  });
+
+  it('forced is a real stop: idle, the run stamped as user-stopped, never a failure', () => {
+    for (const status of ['stopping', 'running'] as const) {
+      const state = baseState({
+        sessions: [makeSession({ status })],
+        messages: { [SESSION_ID]: [makeMessage({ id: 'user-1', role: 'user' }), reply()] },
+      });
+      const patch = applyRuntimeEvent(state, {
+        type: 'session.stopped',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { stopCause: 'forced' },
+      });
+      expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe('idle');
+      expect(patch.messages?.[SESSION_ID]?.[1]?.stopCause).toBe('user_stop');
+      expect(patch.lastError).toBeUndefined();
+    }
+  });
+});
+
 describe('applyRuntimeEvent — run stop causes (Ctrl+Enter vs Stop)', () => {
   function runningWithCard(): ChatSessionsState {
     return baseState({

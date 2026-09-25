@@ -627,6 +627,33 @@ function settleFailedStatus(
 }
 
 /**
+ * Decision 046 — Main's `session.stopped{stopCause:'no_active_turn'}`.
+ *
+ * A Stop (or Ctrl+Enter) reached a worker with no turn running, so nothing was
+ * cut off. The event only settles a session some reader still believed was
+ * running, and it can trail a completion that won the race against the Stop.
+ * So it does exactly one thing — make the session read as at rest — and leaves
+ * everything else alone: no user-stop stamp on the last reply, no clearing of
+ * parked cards (a background delegate's question survives an interjected
+ * completion on purpose), and a failure keeps its card, settled like the idle
+ * that closes it. Already at rest: an empty patch, so the race is a no-op.
+ */
+function settleNoActiveTurn(
+  state: ChatSessionsState,
+  sessionId: string
+): Pick<ChatSessionsState, 'sessions'> | Record<string, never> {
+  const session = state.sessions.find((item) => item.id === sessionId);
+  if (!session) return {};
+  if (session.status === 'failed') {
+    return session.failureSettled
+      ? {}
+      : { sessions: settleFailedStatus(state.sessions, sessionId) };
+  }
+  if (session.status === 'idle' || session.status === 'disconnected') return {};
+  return { sessions: upsertSessionStatus(state.sessions, sessionId, 'idle') };
+}
+
+/**
  * D1 — the status every "may the next turn start" gate reads.
  *
  * Identical to `session.status` except for a failure the runtime has since
@@ -1300,6 +1327,12 @@ function applyRuntimeEventCore(
     }
 
     case 'session.stopped': {
+      // Decision 046: terminal whatever its `stopCause`. `forced` (Main's
+      // watchdog, or a close mid-turn) did cut a turn off, so it reads like any
+      // other Stop; `no_active_turn` did not — see `settleNoActiveTurn`.
+      if (event.payload?.stopCause === 'no_active_turn') {
+        return settleNoActiveTurn(state, sessionId);
+      }
       return {
         sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
         ...withoutSessionPermissions(state, sessionId),

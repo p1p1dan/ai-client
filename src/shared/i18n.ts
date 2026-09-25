@@ -2519,6 +2519,15 @@ export const zhTranslations: Record<string, string> = {
     '当前没有正在运行的回合 —— 消息已作为普通排队等待发送',
   'Could not send the interject signal — the message is still queued: {{error}}':
     '插话信号发送失败 —— 消息仍在排队中：{{error}}',
+  // Decision 046 (T145): Stop stays pressable while a stop is under way, and a
+  // disabled queued "Send now" says why instead of looking broken.
+  'Force stop — still stopping. Press again to resend Stop; the turn is ended within about 10 seconds.':
+    '强制停止 —— 仍在停止中。再按一次会重新发送停止；本回合最迟约 10 秒内结束。',
+  'Sending is unavailable in this conversation right now': '这个对话现在无法发送',
+  'Another conversation is still sending — this message goes out after it':
+    '另一个对话的消息还在发送中 —— 这条会在它之后发出',
+  'This conversation cannot take a new message yet — it is sent automatically once it can':
+    '这个对话暂时还不能接收新消息 —— 就绪后会自动发送',
 
   // D47 S5 §1.4: the three-state user profile chip (WindowTitleBar /
   // UserProfileCard, `deriveUserProfilePresentation`) — 'attention'

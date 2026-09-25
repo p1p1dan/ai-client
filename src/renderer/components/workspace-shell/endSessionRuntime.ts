@@ -16,12 +16,34 @@
  * Kept in its own `.ts` module so vitest can cover it: the repo's test
  * environment is `node` and collects `.ts` only.
  */
+import { announceSessionEnded } from '@/components/chat/sessionEndSignal';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
+import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
 
 function withoutKey<T>(map: Record<string, T> | undefined, key: string): Record<string, T> {
   if (!map || !(key in map)) return map ?? {};
   const { [key]: _dropped, ...rest } = map;
   return rest;
+}
+
+/**
+ * How long ending waits for Main to acknowledge the detach before resetting the
+ * renderer anyway. Main's own stop watchdog settles a stuck turn in 8–10 s.
+ */
+export const END_SESSION_ACK_CEILING_MS = 10_000;
+
+/** `true` once `work` resolves, `false` if the ceiling elapses first; rejections propagate. */
+async function settlesWithin(work: Promise<unknown>, ceilingMs: number): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const ceiling = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), ceilingMs);
+  });
+  try {
+    return await Promise.race([work.then(() => true as const), ceiling]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -58,12 +80,28 @@ function withoutKey<T>(map: Record<string, T> | undefined, key: string): Record<
  *
  * Returns whether the detach IPC was accepted. The local state is reset either
  * way: a Host that never had the session has nothing to detach, and leaving the
- * renderer pretending otherwise is the worse of the two failures.
+ * renderer pretending otherwise is the worse of the two failures. The same goes
+ * for a detach that never answers: after `END_SESSION_ACK_CEILING_MS` the reset
+ * runs anyway and this reports `false` (decision 046 — ending, like Stop, has
+ * to finish in bounded time).
+ *
+ * Decision 046 rule 3: `disconnected` alone used to be ALL of the reset, so a
+ * conversation ended while the renderer still thought a turn was in flight kept
+ * its composer latched (send / stop), its turn head running and its optimistic
+ * user bubble on screen, and every new message went into the queue.
+ * `resetEndedTurnState` below releases each of those for this session only.
+ * The queue is left as it is: `disconnected` now releases like `idle`
+ * (`isReleasableStatus`), so a queued message goes out through the same resume
+ * a direct send takes — the "your next message starts it again" the end dialog
+ * promises.
  */
 export async function endSessionRuntime(sessionId: string): Promise<boolean> {
   let detached = true;
   try {
-    await window.electronAPI.chat.closeSession({ sessionId });
+    detached = await settlesWithin(
+      window.electronAPI.chat.closeSession({ sessionId }),
+      END_SESSION_ACK_CEILING_MS
+    );
   } catch {
     detached = false;
   }
@@ -77,6 +115,25 @@ export async function endSessionRuntime(sessionId: string): Promise<boolean> {
       session.id === sessionId ? { ...session, status: 'disconnected' as const } : session
     ),
   }));
+  resetEndedTurnState(sessionId);
 
   return detached;
+}
+
+/**
+ * The renderer's own "a turn is in flight here" state for one ended session:
+ * the composer's latches (via `announceSessionEnded` — they are component
+ * refs), the turn head's two slots, and any user bubble still waiting for an
+ * echo that will not come. Other sessions are untouched. The send baseline is
+ * kept: it only tells a later send's turn from this one, it runs nothing.
+ */
+function resetEndedTurnState(sessionId: string): void {
+  announceSessionEnded(sessionId);
+  useTurnSendStatusStore.setState((state) => ({
+    status: state.status?.sessionId === sessionId ? null : state.status,
+    pendingReply: state.pendingReply?.sessionId === sessionId ? null : state.pendingReply,
+  }));
+  usePendingUserMessagesStore.setState((state) => ({
+    bySession: withoutKey(state.bySession, sessionId),
+  }));
 }
