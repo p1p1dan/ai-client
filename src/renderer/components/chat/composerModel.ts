@@ -85,6 +85,7 @@ export interface ComposerMenuItem {
   tags?: string[];
   reasoning?: boolean;
   thinkingLevelMap?: ChatModel['thinkingLevelMap'];
+  input?: ChatModel['input'];
 }
 
 export interface ComposerMenuSection {
@@ -202,6 +203,7 @@ export function composerModelMenuModel(input: {
       ...(option.tags ? { tags: [...option.tags] } : {}),
       ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
       ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
+      ...(option.input ? { input: [...option.input] } : {}),
     })),
   ];
 

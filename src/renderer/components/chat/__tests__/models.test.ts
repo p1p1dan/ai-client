@@ -1,5 +1,6 @@
 import type { AgentModelOption } from '@shared/types/agentCatalog';
 import { describe, expect, it } from 'vitest';
+import { composerModelMenuModel } from '../composerModel';
 import {
   AUTOMATIC_MODEL_ID,
   AUTOMATIC_MODEL_LABEL,
@@ -45,6 +46,27 @@ describe('T25 Pi model grouping', () => {
         },
       ]).direct.map((item) => item.id)
     ).toEqual([AUTOMATIC_MODEL_ID, 'missing/model']);
+  });
+});
+
+describe('T3 declared input kinds', () => {
+  it('modelOptionsFor carries input verbatim and leaves it absent when undeclared', () => {
+    const options = modelOptionsFor([
+      { id: 'p/vision', label: 'Vision', input: ['text', 'image'] },
+      { id: 'p/plain', label: 'Plain' },
+    ]);
+    expect(options.find((option) => option.id === 'p/vision')?.input).toEqual(['text', 'image']);
+    expect(options.find((option) => option.id === 'p/plain')).not.toHaveProperty('input');
+
+    // …and the merged menu's rows keep it too (the last renderer-side hop).
+    const menu = composerModelMenuModel({
+      options,
+      selectedModel: 'p/vision',
+      selectedEffort: null,
+    });
+    const rows = menu.sections.find((section) => section.id === 'model')?.items ?? [];
+    expect(rows.find((row) => row.id === 'p/vision')?.input).toEqual(['text', 'image']);
+    expect(rows.find((row) => row.id === 'p/plain')).not.toHaveProperty('input');
   });
 });
 

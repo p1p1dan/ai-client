@@ -396,9 +396,21 @@ export function piModelOption(
   providerId: string,
   model: Pick<
     PiManagedModelDefinition,
-    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
+    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow' | 'input'
   >
 ): AgentModelOption {
+  // T3: only the two kinds the runtime understands, deduplicated. An empty or
+  // unrecognisable list is NOT passed on as `[]`: the runtime reads that the
+  // same as an absent field (text-only), and so must every consumer here.
+  const input = Array.isArray(model.input)
+    ? [
+        ...new Set(
+          model.input.filter(
+            (kind): kind is 'text' | 'image' => kind === 'text' || kind === 'image'
+          )
+        ),
+      ]
+    : [];
   return {
     id: `${providerId}/${model.id}`,
     label: model.name?.trim() || model.id,
@@ -413,5 +425,6 @@ export function piModelOption(
     model.contextWindow > 0
       ? { contextWindow: model.contextWindow }
       : {}),
+    ...(input.length > 0 ? { input } : {}),
   };
 }

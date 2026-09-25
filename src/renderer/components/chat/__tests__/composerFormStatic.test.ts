@@ -304,6 +304,8 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
       'noticeBlock',
       'queueNoticeBlock',
       'attachmentChipsBlock',
+      // T3: the "model will not see this image" warning sits under the chips.
+      'imageInputHintBlock',
       'mentionChipsBlock',
       "composerBarClass('empty')",
     ]);
@@ -341,6 +343,8 @@ describe('F6: the session composer card is two rows, the empty card is unchanged
       'noticeBlock',
       'queueNoticeBlock',
       'attachmentChipsBlock',
+      // T3: same slot as in the empty card, directly under the image chips.
+      'imageInputHintBlock',
       'mentionChipsBlock',
       'renderStatusLine',
     ]);

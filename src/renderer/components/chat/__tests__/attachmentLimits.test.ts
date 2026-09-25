@@ -5,8 +5,10 @@ import {
   type AttachmentLimits,
   admitAttachment,
   DEFAULT_ATTACHMENT_LIMITS,
+  imageInputUnsupportedHint,
   largeAttachmentHint,
   MAX_IMAGE_EDGE_PX,
+  modelLacksImageInput,
   planImageAttachment,
   SUPPORTED_IMAGE_MEDIA_TYPES,
 } from '../attachmentLimits';
@@ -310,6 +312,45 @@ describe('attachment copy in Chinese (T067 D26)', () => {
     );
     expect(refuse(admitAttachment([], { name: 'e.txt', byteLength: 0, kind: 'text' }))).toBe(
       '"e.txt" is empty — skipped.'
+    );
+  });
+});
+
+describe('modelLacksImageInput (T3)', () => {
+  const catalog = [
+    { id: 'p/vision', input: ['text', 'image'] as Array<'text' | 'image'> },
+    { id: 'p/text', input: ['text'] as Array<'text' | 'image'> },
+    // Undeclared: the runtime reads this as text-only.
+    { id: 'p/plain' },
+  ];
+  const image = { kind: 'image' as const };
+  const text = { kind: 'text' as const };
+
+  it.each([
+    ['text-only model, image draft', [image], 'p/text', true],
+    ['undeclared model, image draft', [text, image], 'p/plain', true],
+    ['image-capable model', [image], 'p/vision', false],
+    ['no image draft', [text], 'p/text', false],
+    ['no drafts at all', [], 'p/plain', false],
+    // Automatic: the runtime picks a model this side cannot name.
+    ['Automatic', [image], undefined, false],
+    // Not in the catalog (yet): nothing declared to read, so no claim.
+    ['model missing from the catalog', [image], 'gone/model', false],
+  ] as const)('%s → %s', (_label, drafts, model, expected) => {
+    expect(modelLacksImageInput({ drafts, model, catalog })).toBe(expected);
+  });
+
+  it('reads an empty catalog as "cannot tell"', () => {
+    expect(modelLacksImageInput({ drafts: [image], model: 'p/text', catalog: [] })).toBe(false);
+  });
+
+  it('words the hint in both languages and names the only editable place', () => {
+    const english = imageInputUnsupportedHint();
+    expect(english).toContain('will not see this image');
+    expect(english).toContain('Per-model metadata');
+    const chinese = imageInputUnsupportedHint((key, params) => translate('zh', key, params));
+    expect(chinese).toBe(
+      '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · Pi · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。'
     );
   });
 });

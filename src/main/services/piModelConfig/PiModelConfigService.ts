@@ -148,7 +148,7 @@ type CatalogModelEntry = {
   providerId: string;
   model: Pick<
     PiManagedModelDefinition,
-    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow'
+    'id' | 'name' | 'tags' | 'reasoning' | 'thinkingLevelMap' | 'contextWindow' | 'input'
   >;
 };
 
@@ -212,6 +212,10 @@ function collectModelOptions(parsed: unknown): CatalogModelEntry[] {
           ...(typeof raw.contextWindow === 'number' && Number.isFinite(raw.contextWindow)
             ? { contextWindow: raw.contextWindow }
             : {}),
+          // T3: the declared input kinds reach the picker. `models.json` is the
+          // runtime's own format, so an image-capable user or managed model
+          // says so here; `piModelOption` filters the values.
+          ...(Array.isArray(raw.input) ? { input: raw.input as Array<'text' | 'image'> } : {}),
         },
       });
     }

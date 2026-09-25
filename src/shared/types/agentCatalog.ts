@@ -40,6 +40,14 @@ export interface AgentModelOption {
    * gone: those two are members of `SessionEffortLevel` since U08-2.
    */
   thinkingLevelMap?: Partial<Record<SessionEffortLevel, string | null>>;
+  /**
+   * T3: the input kinds the model configuration DECLARES. Absent means the
+   * configuration said nothing, and the runtime then treats the model as
+   * text-only (`model-adapter/catalog.ts` `parseInputs`), silently replacing
+   * any image with "(image omitted: model does not support images)". Carried
+   * so the composer can say so before the user sends a picture.
+   */
+  input?: ('text' | 'image')[];
 }
 
 /**

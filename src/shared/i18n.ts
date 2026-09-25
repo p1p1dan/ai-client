@@ -3310,6 +3310,12 @@ export const zhTranslations: Record<string, string> = {
     '当前工作区以外的文件无法在这里预览。',
   'Open with system viewer': '用系统程序打开',
   'Could not open the file with the system viewer.': '无法用系统程序打开这个文件。',
+
+  // --- 模型未声明图片输入（T3）---------------------------------------------------
+  // 只有「自己添加的 AI 服务」能在设置里改输入类型（ProviderSetupDialog 的
+  // 各模型元数据）；管理员下发的模型没有编辑入口，所以不许诺。
+  'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Pi · AI services → Edit → Per-model metadata.':
+    '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · Pi · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。',
 };
 
 export function normalizeLocale(input?: string): Locale {

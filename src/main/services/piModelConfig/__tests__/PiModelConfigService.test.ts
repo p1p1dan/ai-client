@@ -6,6 +6,7 @@ import {
   PI_USER_AGENT_HEADER,
   type PiManagedModelsConfig,
   type PiModelApi,
+  piModelOption,
 } from '@shared/piModelConfig';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { toPiModelsJson, validatePiManagedModelsConfig } from '../configValidation';
@@ -658,6 +659,51 @@ describe('PiModelConfigService', () => {
       ['glm/glm-5-flash', undefined],
       ['glm/glm-5-lite', undefined],
     ]);
+  });
+
+  // T3: the composer warns before sending an image to a model that will not
+  // see it, so the declared input kinds must survive to the menu. Absent,
+  // empty and unrecognisable all stay absent: the runtime reads each of them
+  // as text-only (`model-adapter/catalog.ts` parseInputs), and so must we.
+  it('carries declared input kinds through the local catalog', () => {
+    writeFileSync(
+      join(dir, 'models.json'),
+      JSON.stringify({
+        providers: {
+          glm: {
+            baseUrl: 'https://glm.example/v1',
+            models: [
+              { id: 'glm-5v', input: ['text', 'image'] },
+              { id: 'glm-5', input: ['text'] },
+              { id: 'glm-5-air' },
+              { id: 'glm-5-empty', input: [] },
+              { id: 'glm-5-junk', input: ['video', 7] },
+              { id: 'glm-5-dup', input: ['image', 'image', 'text'] },
+              { id: 'glm-5-scalar', input: 'image' },
+            ],
+          },
+        },
+      })
+    );
+    const local = service(async () => ({ ok: false, status: 500, text: async () => '' }));
+    expect(local.readCatalog('local').models.map((model) => [model.id, model.input])).toEqual([
+      ['glm/glm-5v', ['text', 'image']],
+      ['glm/glm-5', ['text']],
+      ['glm/glm-5-air', undefined],
+      ['glm/glm-5-empty', undefined],
+      ['glm/glm-5-junk', undefined],
+      ['glm/glm-5-dup', ['image', 'text']],
+      ['glm/glm-5-scalar', undefined],
+    ]);
+  });
+
+  it('piModelOption passes input on for the bundled and managed routes too', () => {
+    expect(piModelOption('p', { id: 'vision', input: ['text', 'image'] })).toEqual({
+      id: 'p/vision',
+      label: 'vision',
+      input: ['text', 'image'],
+    });
+    expect(piModelOption('p', { id: 'plain' })).toEqual({ id: 'p/plain', label: 'plain' });
   });
 });
 
@@ -1454,6 +1500,48 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
     });
     expect(catalog.models).toEqual(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')));
     expect(catalog.auth).toEqual(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')));
+  });
+
+  it('T3: declared image input reaches the picker from managed and user-owned models', async () => {
+    const visionUser = {
+      ...userProvider,
+      modelMeta: { 'mistral-large': { input: ['text', 'image'] as Array<'text' | 'image'> } },
+    };
+    const managedConfig = {
+      ...REMOTE_CONFIG,
+      providers: {
+        dan: {
+          ...REMOTE_CONFIG.providers.dan,
+          models: [
+            { ...REMOTE_CONFIG.providers.dan.models[0], input: ['text', 'image'] },
+            { id: 'deepseek-text' },
+          ],
+        },
+      },
+    };
+    const built = service({
+      userProviders: [visionUser],
+      fetchFn: async () => ({
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify(managedConfig),
+      }),
+    });
+    await built.sync({
+      endpointUrl: 'https://onboard.example/api/v1/models-config',
+      apiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    const runtime = built.buildNativeModelCatalog({
+      inheritedApiKey: 'login-key',
+      inheritedBaseUrl: 'https://cch.example/v1',
+    });
+    const menu = built.readCatalog(undefined, runtime);
+    expect(menu.models.map((model) => [model.id, model.input])).toEqual([
+      ['dan/deepseek-v4', ['text', 'image']],
+      ['dan/deepseek-text', undefined],
+      ['my-mistral/mistral-large', ['text', 'image']],
+    ]);
   });
 
   it('carries the user service and its key without either touching disk', () => {

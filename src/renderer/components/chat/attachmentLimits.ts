@@ -14,6 +14,7 @@
  * §12 verification first: __tests__/attachmentLimits.test.ts.
  */
 import { englishTranslate, type Translate } from '@shared/i18n';
+import type { AgentModelOption } from '@shared/types/agentCatalog';
 import type { AttachmentKind } from './attachments';
 import { formatAttachmentSize } from './attachments';
 
@@ -196,4 +197,42 @@ export function largeAttachmentHint(
     });
   }
   return null;
+}
+
+/**
+ * T3 — whether the composer should warn that the selected model will not see
+ * the image(s) about to be sent.
+ *
+ * The runtime treats a model whose configuration does not declare `image`
+ * input as text-only and swaps each picture for "(image omitted: model does
+ * not support images)" — silently, after the send. The warning says so
+ * beforehand. It never blocks the send.
+ *
+ * Only speaks when it KNOWS: `Automatic` (no wire model) lets the runtime pick
+ * a model this side cannot name, and a model the catalog does not (yet) list
+ * has no declaration to read. Both stay quiet rather than guess.
+ */
+export function modelLacksImageInput(input: {
+  drafts: ReadonlyArray<{ kind: AttachmentKind }>;
+  /** The model the next send carries (`toWireModel`); `undefined` = Automatic. */
+  model: string | undefined;
+  catalog: ReadonlyArray<Pick<AgentModelOption, 'id' | 'input'>>;
+}): boolean {
+  if (!input.drafts.some((draft) => draft.kind === 'image')) return false;
+  if (!input.model) return false;
+  const option = input.catalog.find((candidate) => candidate.id === input.model);
+  if (!option) return false;
+  return !(option.input ?? []).includes('image');
+}
+
+/**
+ * The warning's sentence. It names the one place a user can declare image
+ * input — the per-model metadata of an AI service they added themselves
+ * (`ProviderSetupDialog`, commit cfd19433); administrator-managed models have
+ * no such editor, hence "you added yourself".
+ */
+export function imageInputUnsupportedHint(t: Translate = englishTranslate): string {
+  return t(
+    'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Pi · AI services → Edit → Per-model metadata.'
+  );
 }

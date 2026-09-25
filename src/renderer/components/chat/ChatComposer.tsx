@@ -61,7 +61,11 @@ import {
   resolveAbandonProgress,
   resolvePendingHostError,
 } from './assistantProgress';
-import { largeAttachmentHint } from './attachmentLimits';
+import {
+  imageInputUnsupportedHint,
+  largeAttachmentHint,
+  modelLacksImageInput,
+} from './attachmentLimits';
 import {
   type AttachmentDraft,
   shouldRenderThumbnail,
@@ -104,8 +108,9 @@ import {
   shouldShowStatusLine,
 } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
-import { resolveResumeModel } from './models';
+import { resolveResumeModel, toWireModel } from './models';
 import { PiModelSyncNotice } from './PiModelSyncNotice';
+import { catalogModels } from './piModelCatalog';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
@@ -148,6 +153,7 @@ import {
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
 import { useHostStatus } from './useHostStatus';
+import { usePiModelCatalog } from './usePiModelCatalog';
 import { useQueueRelease } from './useQueueRelease';
 import { useSessionEffort } from './useSessionEffort';
 import { useSessionModel } from './useSessionModel';
@@ -720,6 +726,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // live send path and ModelSelect's own display never diverge from what a
   // resume just pinned onto the Host registry entry.
   const { status: hostStatus } = useHostStatus();
+  // T3: the same renderer-wide catalog cache the model trigger reads; used
+  // only to read the selected model's declared input kinds below.
+  const { catalog: modelCatalog } = usePiModelCatalog(hostStatus.state);
   // T-18 paste attachments. Reads/encoding stay in the hook; every threshold
   // and format decision is a pure function under __tests__.
   // T-19 decision 2.1: paste unlocks whenever the textarea does. A
@@ -3043,6 +3052,29 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     </Alert>
   ) : null;
 
+  // T3: the model the next send carries (same resolution as `runSend`, or the
+  // global template before the chat exists) cannot see images, and the runtime
+  // would drop each one for a placeholder AFTER the send. Say so while the
+  // image is still a chip. Informational only: nothing here gates the send.
+  const nextSendModel = activeSessionId
+    ? resolveResumeModel(getSessionModel, activeSessionId, agentDefaultModel(chatAgentDefaults))
+    : toWireModel(agentDefaultModel(chatAgentDefaults));
+  const imageInputHintBlock = modelLacksImageInput({
+    drafts: attachments.drafts,
+    model: nextSendModel,
+    catalog: catalogModels(modelCatalog),
+  }) ? (
+    <Alert
+      variant="warning"
+      role="status"
+      className="mt-1 px-2 py-1 text-meta"
+      data-testid="composer-image-input-hint"
+    >
+      <TriangleAlert />
+      <AlertTitle className="min-w-0 font-normal">{imageInputUnsupportedHint(t)}</AlertTitle>
+    </Alert>
+  ) : null;
+
   // T-19 decision 1/7: a rejected `enqueue()` (queue full / over the attachment
   // byte budget) reuses the same Alert language as the attachment notice
   // above — the draft itself is left untouched by the caller (handleSend).
@@ -3110,7 +3142,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // T-18 "invisible attachment" bug again) — they stack as the card's first
   // row, above the single control row, instead of disappearing.
   const hasComposerExtras = Boolean(
-    noticeBlock || queueNoticeBlock || attachmentChipsBlock || mentionChipsBlock
+    noticeBlock ||
+      queueNoticeBlock ||
+      attachmentChipsBlock ||
+      imageInputHintBlock ||
+      mentionChipsBlock
   );
 
   const textareaEl = (
@@ -3676,6 +3712,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 {noticeBlock}
                 {queueNoticeBlock}
                 {attachmentChipsBlock}
+                {imageInputHintBlock}
                 {mentionChipsBlock}
                 {renderStatusLine(sessionStatusLineWrapperClass())}
               </div>
@@ -3702,6 +3739,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             {noticeBlock}
             {queueNoticeBlock}
             {attachmentChipsBlock}
+            {imageInputHintBlock}
             {mentionChipsBlock}
             {/* U09-2 REPLACES T-30b2 §5.2's "⊕ → model → status → actions".
                   That order grouped "the two controls that start a message" at

@@ -50,6 +50,8 @@ export interface ChatModel {
   tags?: string[];
   reasoning?: boolean;
   thinkingLevelMap?: AgentModelOption['thinkingLevelMap'];
+  /** T3: declared input kinds, verbatim from the catalog; absent = text-only. */
+  input?: AgentModelOption['input'];
   /**
    * `true` for a row the live catalog actually listed. Absent on `Automatic`
    * (which is not a model) and on a prepended leftover (which is the whole
@@ -133,6 +135,7 @@ export function modelOptionsFor(catalog: readonly AgentModelOption[]): ChatModel
       ...(option.tags ? { tags: [...option.tags] } : {}),
       ...(option.reasoning !== undefined ? { reasoning: option.reasoning } : {}),
       ...(option.thinkingLevelMap ? { thinkingLevelMap: { ...option.thinkingLevelMap } } : {}),
+      ...(option.input ? { input: [...option.input] } : {}),
     })),
   ];
 }
