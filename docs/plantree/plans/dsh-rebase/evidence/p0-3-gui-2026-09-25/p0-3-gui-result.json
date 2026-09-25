@@ -1,0 +1,378 @@
+{
+  "stream": {
+    "samples": [10, 20, 25, 30, 40, 50, 55, 65, 70, 75, 85, 85],
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790347383437-77aorgy",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 2
+    }
+  },
+  "tool": {
+    "running": {
+      "callId": "toolu_4e69af52-8222-4d5f-b2d2-e410634ad6c8",
+      "settled": false,
+      "ok": null
+    },
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790347383437-77aorgy",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 5
+    },
+    "settled": {
+      "callId": "toolu_4e69af52-8222-4d5f-b2d2-e410634ad6c8",
+      "settled": true,
+      "ok": true
+    },
+    "expanded": {
+      "summaries": 1,
+      "clicked": ["已工作 5 秒"]
+    }
+  },
+  "allow": {
+    "card": {
+      "text": "权限\n高风险\n\nwrite — 写入工作区文件\n\n内容\n\nwritten after approval\n\nA\n/var/tmp/aiclient-p0-3/outside/allowed.txt\n\n项目：/var/tmp/aiclient-p0-3/workspace\n\n直接允许\n直接拒绝",
+      "buttons": ["直接允许", "直接拒绝"]
+    },
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790347383437-77aorgy",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 9
+    },
+    "written": true
+  },
+  "deny": {
+    "card": {
+      "text": "权限\n高风险\n\nwrite — 写入工作区文件\n\n内容\n\nwritten after approval\n\nA\n/var/tmp/aiclient-p0-3/outside/denied.txt\n\n项目：/var/tmp/aiclient-p0-3/workspace\n\n直接允许\n直接拒绝",
+      "buttons": ["直接允许", "直接拒绝"]
+    },
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790347383437-77aorgy",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 13
+    },
+    "written": false
+  },
+  "store": {
+    "sessionId": "session-live-1790347383437-77aorgy",
+    "activeSessionId": "session-live-1790347383437-77aorgy",
+    "status": "idle",
+    "title": "P0-STREAM: 请用流式方式回复一段文字",
+    "messageCount": 13,
+    "blockTypeCounts": {
+      "text": 8,
+      "tool_call": 5,
+      "tool_result": 5,
+      "permission_request": 2
+    },
+    "messages": [
+      {
+        "id": "dsh-user-8",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-8-text",
+            "type": "text",
+            "textLen": 24,
+            "textHead": "P0-STREAM: 请用流式方式回复一段文字。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t1-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t1-s1-b0",
+            "type": "text",
+            "textLen": 85,
+            "textHead": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-20",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-20-text",
+            "type": "text",
+            "textLen": 20,
+            "textHead": "P0-SLOWTOOL: 跑一个慢命令。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t2-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_4e69af52-8222-4d5f-b2d2-e410634ad6c8",
+            "type": "tool_call",
+            "toolName": "bash",
+            "toolInputHead": "{\"command\":\"echo slow tool started; sleep 5; echo slow tool done\",\"description\":\"Run a slow command\"}"
+          },
+          {
+            "id": "toolu_4e69af52-8222-4d5f-b2d2-e410634ad6c8-result",
+            "type": "tool_result",
+            "toolOk": true,
+            "toolOutputHead": "\"slow tool started\\nslow tool done\\n\""
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t2-s2",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t2-s2-b0",
+            "type": "text",
+            "textLen": 26,
+            "textHead": "The slow command finished."
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-33",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-33-text",
+            "type": "text",
+            "textLen": 71,
+            "textHead": "P0-APPROVAL: 在工作区外写一个文件 path=/var/tmp/aiclient-p0-3/outside/allowed.txt"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t3-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_4a246719-8222-4714-bdcf-ccbce7abf431",
+            "type": "tool_call",
+            "toolName": "write",
+            "toolInputHead": "{\"file_path\":\"/var/tmp/aiclient-p0-3/outside/allowed.txt\",\"content\":\"written after approval\\n\",\"path\":\"/var/tmp/aiclient-p0-3/outside/allowed.txt\"}"
+          },
+          {
+            "id": "toolu_4a246719-8222-4714-bdcf-ccbce7abf431-result",
+            "type": "tool_result",
+            "toolOk": false,
+            "textLen": 246,
+            "textHead": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the n"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t3-s2",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_db21b264-15a1-4eff-b3bf-58ddfbd071f0",
+            "type": "tool_call",
+            "toolName": "write",
+            "toolInputHead": "{\"file_path\":\"/var/tmp/aiclient-p0-3/outside/allowed.txt\",\"content\":\"written after approval\\n\",\"sandbox_permissions\":\"danger-full-access\",\"justification\":\"The P0 probe needs one file outside the workspace.\",\"path\":\"/var/tmp/aiclient-p0-3/ou"
+          },
+          {
+            "id": "toolu_db21b264-15a1-4eff-b3bf-58ddfbd071f0",
+            "type": "permission_request",
+            "toolName": "write",
+            "toolInputHead": "{\"path\":\"/var/tmp/aiclient-p0-3/outside/allowed.txt\",\"content\":\"written after approval\\n\",\"contentLabel\":\"Content\",\"workspace\":\"/var/tmp/aiclient-p0-3/workspace\"}",
+            "resolved": true,
+            "permissionId": "toolu_db21b264-15a1-4eff-b3bf-58ddfbd071f0",
+            "permissionDecision": "allow",
+            "allowed": true
+          },
+          {
+            "id": "toolu_db21b264-15a1-4eff-b3bf-58ddfbd071f0-result",
+            "type": "tool_result",
+            "toolOk": true,
+            "toolOutputHead": "\"<path>/var/tmp/aiclient-p0-3/outside/allowed.txt</path>\\n<type>file</type>\\n<content>\\nCreated file\\n</content>\""
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t3-s3",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t3-s3-b0",
+            "type": "text",
+            "textLen": 38,
+            "textHead": "Write outside the workspace attempted."
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-53",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-53-text",
+            "type": "text",
+            "textLen": 71,
+            "textHead": "P0-APPROVAL: 再在工作区外写一个文件 path=/var/tmp/aiclient-p0-3/outside/denied.txt"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t4-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_aa64d457-e7d5-4864-ae2c-6fdecdc33f16",
+            "type": "tool_call",
+            "toolName": "write",
+            "toolInputHead": "{\"file_path\":\"/var/tmp/aiclient-p0-3/outside/denied.txt\",\"content\":\"written after approval\\n\",\"path\":\"/var/tmp/aiclient-p0-3/outside/denied.txt\"}"
+          },
+          {
+            "id": "toolu_aa64d457-e7d5-4864-ae2c-6fdecdc33f16-result",
+            "type": "tool_result",
+            "toolOk": false,
+            "textLen": 246,
+            "textHead": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the n"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t4-s2",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_a72ae525-15d1-4f7c-ba76-275a6bbb1f21",
+            "type": "tool_call",
+            "toolName": "write",
+            "toolInputHead": "{\"file_path\":\"/var/tmp/aiclient-p0-3/outside/denied.txt\",\"content\":\"written after approval\\n\",\"sandbox_permissions\":\"danger-full-access\",\"justification\":\"The P0 probe needs one file outside the workspace.\",\"path\":\"/var/tmp/aiclient-p0-3/out"
+          },
+          {
+            "id": "toolu_a72ae525-15d1-4f7c-ba76-275a6bbb1f21",
+            "type": "permission_request",
+            "toolName": "write",
+            "toolInputHead": "{\"path\":\"/var/tmp/aiclient-p0-3/outside/denied.txt\",\"content\":\"written after approval\\n\",\"contentLabel\":\"Content\",\"workspace\":\"/var/tmp/aiclient-p0-3/workspace\"}",
+            "resolved": true,
+            "permissionId": "toolu_a72ae525-15d1-4f7c-ba76-275a6bbb1f21",
+            "permissionDecision": "deny",
+            "allowed": false
+          },
+          {
+            "id": "toolu_a72ae525-15d1-4f7c-ba76-275a6bbb1f21-result",
+            "type": "tool_result",
+            "toolOk": false,
+            "textLen": 141,
+            "textHead": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t4-s3",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790347383437-77aorgy-t4-s3-b0",
+            "type": "text",
+            "textLen": 38,
+            "textHead": "Write outside the workspace attempted."
+          }
+        ]
+      }
+    ],
+    "pendingQuestions": [],
+    "pendingPermissions": [],
+    "sessions": [
+      {
+        "id": "session-live-1790347383437-77aorgy",
+        "title": "P0-STREAM: 请用流式方式回复一段文字",
+        "status": "idle"
+      }
+    ]
+  },
+  "problems": [
+    {
+      "kind": "console.error",
+      "text": "10:43:14.634 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:14.634 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:14.724 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:14.724 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:15.060 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:15.060 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:17.509 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:17.510 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:17.597 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:17.597 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:19.733 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:19.733 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:19.854 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:19.854 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:24.853 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:24.853 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:24.932 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:24.932 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:27.489 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "10:43:27.489 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}
