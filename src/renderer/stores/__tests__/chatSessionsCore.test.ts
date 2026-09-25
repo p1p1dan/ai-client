@@ -1894,6 +1894,61 @@ describe('applyRuntimeEvent — T101 streaming tool rows', () => {
     expect(applyRuntimeEvent(settled, update({ path: 'a.html' })).messages).toBeDefined();
   });
 
+  it('T146 — execStartedAt rides tool.updated independently of input', () => {
+    // T146: `bash` publishes an `onUpdate` carrying only `execStartedAt`,
+    // no `input` at all — the old gate ("no input, nothing to do") must not
+    // drop it, and a same-input re-send that also carries a NEW
+    // `execStartedAt` must not be swallowed by the "input unchanged" no-op.
+    const bashState = baseState({
+      messages: {
+        [SESSION_ID]: [
+          makeMessage({
+            blocks: [
+              {
+                id: 'call-1',
+                type: 'tool_call',
+                toolCallId: 'call-1',
+                toolName: 'bash',
+                toolInput: { command: 'sleep 300' },
+              },
+            ],
+          }),
+        ],
+      },
+    });
+    const execOnly: RuntimeEvent = {
+      type: 'tool.updated',
+      seq: 4,
+      sessionId: SESSION_ID,
+      timestamp: 4,
+      payload: { messageId: 'msg-1', toolCallId: 'call-1', execStartedAt: 12_345 },
+    };
+    const patch1 = applyRuntimeEvent(bashState, execOnly);
+    const blocksAfterFirst = patch1.messages?.[SESSION_ID]?.find((m) => m.id === 'msg-1')?.blocks;
+    expect(blocksAfterFirst?.[0]?.toolExecStartedAt).toBe(12_345);
+    // input is untouched: the event carried none.
+    expect(blocksAfterFirst?.[0]?.toolInput).toEqual({ command: 'sleep 300' });
+
+    const state2 = { ...bashState, ...patch1 } as ChatSessionsState;
+
+    // The identical event a second time is a true no-op.
+    expect(applyRuntimeEvent(state2, execOnly).messages).toBeUndefined();
+
+    // A same-input re-send that ALSO carries a new execStartedAt still applies.
+    const patch2 = applyRuntimeEvent(state2, {
+      ...execOnly,
+      payload: {
+        messageId: 'msg-1',
+        toolCallId: 'call-1',
+        input: { command: 'sleep 300' },
+        execStartedAt: 99_999,
+      },
+    });
+    expect(
+      patch2.messages?.[SESSION_ID]?.find((m) => m.id === 'msg-1')?.blocks?.[0]?.toolExecStartedAt
+    ).toBe(99_999);
+  });
+
   it('a second tool.started for the same call does not open a second row', () => {
     // `tool_execution_start` used to be the only producer of `tool.started`;
     // now the streaming pass gets there first, and a duplicate would append a

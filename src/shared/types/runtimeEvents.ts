@@ -975,6 +975,18 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
      * arrives once, settled, on `tool.completed`.
      */
     status?: string;
+    /**
+     * T146 — epoch ms the `bash` tool actually handed the command to
+     * `runtimeExec.run`, published as an `onUpdate` right before that call
+     * (see `plugins/tools/index.ts`). `tool.started` fires while arguments
+     * are still streaming (T101), so its own elapsed already includes arg
+     * streaming, the approval wait and the path re-check; this is the
+     * runtime's own timeout origin, so a running row can show "elapsed /
+     * limit" without the earlier, longer wait making it look past the limit.
+     * Absent for every other tool and for a `tool.updated` that only carries
+     * revised `input`.
+     */
+    execStartedAt?: number;
   };
 }
 

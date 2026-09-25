@@ -514,7 +514,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
           },
           objectOptions
         ),
-        execute: async (id, args, signal) => {
+        execute: async (id, args, signal, update) => {
           const analysis = await this.checkShellPaths(args.command);
           const cwd = await this.target('bash', id, '.', signal, args.command, analysis);
           const current = await this.checkShellPaths(args.command);
@@ -528,6 +528,13 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
               'shell_unconfigured',
               'host must configure the shell executable'
             );
+          // T146 — the row's live clock (and the timeout tail next to it) must
+          // count from here, not from `tool.started`: that fires while
+          // arguments are still streaming, so its own elapsed already
+          // includes arg streaming, the approval wait and the path re-check
+          // above. This is the instant `timeoutMs` below actually starts
+          // being enforced.
+          update?.({ content: [], details: { execStartedAt: Date.now() } });
           const output = await this.ctx.runtimeExec.run({
             command: this.config.shellPath,
             args: ['--noprofile', '--norc', '-c', args.command],

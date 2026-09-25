@@ -169,6 +169,15 @@ describe('pairToolBlocks', () => {
     const runs = pairToolBlocks(blocks);
     expect(runs.map((run) => run.toolCallId)).toEqual(['b', 'a']);
   });
+
+  it('T146 — carries toolExecStartedAt through as execStartedAtMs, absent when the block has none', () => {
+    const withStamp: ChatBlock = { ...call('c1', 'Bash'), toolExecStartedAt: 50_000 };
+    const [run] = pairToolBlocks([withStamp]);
+    expect(run.execStartedAtMs).toBe(50_000);
+
+    const [bare] = pairToolBlocks([call('c2', 'Bash')]);
+    expect(bare.execStartedAtMs).toBeUndefined();
+  });
 });
 
 describe('normalizeToolOutput', () => {
@@ -833,27 +842,41 @@ describe('deriveToolRowView — running input preview and live clock', () => {
   });
 
   it('reads the timeout the input asked for, with the runtime 120s default', () => {
+    // T146 — the limit only ever shows once `execStartedAtMs` is known (see
+    // the origin-switch tests below), so every bash case here sets it; that
+    // is not what this test is about, which is `bashTimeoutMsFromInput`'s own
+    // reading of `timeoutSeconds` / `timeoutMs`.
     const seconds = deriveToolRowView(
-      makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running')
+      makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running', {
+        execStartedAtMs: 1_000,
+      })
     );
     expect(seconds.runningTimeoutMs).toBe(1_800_000);
 
     const ms = deriveToolRowView(
-      makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running')
+      makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running', {
+        execStartedAtMs: 1_000,
+      })
     );
     expect(ms.runningTimeoutMs).toBe(300_000);
 
-    const neither = deriveToolRowView(makeRun('b7', 'bash', { command: 'ls' }, 'running'));
+    const neither = deriveToolRowView(
+      makeRun('b7', 'bash', { command: 'ls' }, 'running', { execStartedAtMs: 1_000 })
+    );
     expect(neither.runningTimeoutMs).toBe(120_000);
 
     // timeoutSeconds wins over timeoutMs — the interface a model reaches for.
     const both = deriveToolRowView(
-      makeRun('b8', 'bash', { command: 'ls', timeoutSeconds: 60, timeoutMs: 300_000 }, 'running')
+      makeRun('b8', 'bash', { command: 'ls', timeoutSeconds: 60, timeoutMs: 300_000 }, 'running', {
+        execStartedAtMs: 1_000,
+      })
     );
     expect(both.runningTimeoutMs).toBe(60_000);
 
-    // Non-bash tools name no deadline this side can read.
-    const read = deriveToolRowView(makeRun('b9', 'read', { path: '/repo/a.ts' }, 'running'));
+    // Non-bash tools name no deadline this side can read, execStartedAtMs or not.
+    const read = deriveToolRowView(
+      makeRun('b9', 'read', { path: '/repo/a.ts' }, 'running', { execStartedAtMs: 1_000 })
+    );
     expect(read.runningTimeoutMs).toBeUndefined();
   });
 
@@ -863,6 +886,64 @@ describe('deriveToolRowView — running input preview and live clock', () => {
     });
     expect(view.runningStartedAtMs).toBeUndefined();
     expect(view.runningTimeoutMs).toBeUndefined();
+  });
+
+  // T146 — the exec-start origin. `tool.started` fires while arguments are
+  // still streaming, so its elapsed already includes arg streaming, the
+  // approval wait and the path re-check; `execStartedAtMs` is the instant
+  // `bash` actually handed the command to `runtimeExec.run`, and is what the
+  // "elapsed / limit" readout must count from once it is known.
+  describe('the execStartedAtMs origin switch', () => {
+    it('prefers execStartedAtMs over the tool.started stamp, and shows the limit', () => {
+      const run = makeRun('c-exec-1', 'bash', { command: 'sleep 30' }, 'running', {
+        execStartedAtMs: 50_000,
+      });
+      const view = deriveToolRowView(run, { toolStartedAtMs: () => 10_000 });
+      expect(view.runningStartedAtMs).toBe(50_000);
+      expect(view.runningTimeoutMs).toBe(120_000);
+    });
+
+    it('before exec starts (no execStartedAtMs yet), shows elapsed with no limit', () => {
+      // The field report's illusion: a row still waiting on approval or a
+      // path re-check showed "elapsed / 2m" against the `tool.started`
+      // origin, which made an ordinary approval wait read as already past
+      // the timeout. Withholding the limit here is the fix — the elapsed
+      // itself stays honest (how long the row has been on screen).
+      const run = makeRun('c-exec-2', 'bash', { command: 'sleep 30' }, 'running');
+      const view = deriveToolRowView(run, { toolStartedAtMs: () => 10_000 });
+      expect(view.runningStartedAtMs).toBe(10_000);
+      expect(view.runningTimeoutMs).toBeUndefined();
+    });
+
+    it('fallback: a non-bash tool never carries execStartedAtMs and is unaffected', () => {
+      const run = makeRun('c-exec-3', 'read', { path: '/repo/a.ts' }, 'running', {
+        execStartedAtMs: 50_000, // a non-bash run should never actually carry this, but
+      }); // even if one did, only bash's own timeout logic reads it as a limit.
+      const view = deriveToolRowView(run, { toolStartedAtMs: () => 10_000 });
+      expect(view.runningStartedAtMs).toBe(50_000);
+      // bashTimeoutMsFromInput only recognizes bash-family tool names.
+      expect(view.runningTimeoutMs).toBeUndefined();
+    });
+
+    it('fallback: a call replayed from history (no execStartedAtMs) keeps the old origin and no limit until it settles', () => {
+      // Old sessions, and any bash call that has not yet gotten its
+      // `tool.updated`, must never show a limit against an origin that is
+      // not the one the runtime actually enforces against — that is exactly
+      // the "elapsed already past the limit" bug this fixes.
+      const run = makeRun('c-exec-4', 'bash', { command: 'sleep 30' }, 'running');
+      const view = deriveToolRowView(run, { toolStartedAtMs: () => 200_000 });
+      expect(view.runningStartedAtMs).toBe(200_000);
+      expect(view.runningTimeoutMs).toBeUndefined();
+    });
+
+    it('a settled bash row never resurfaces execStartedAtMs on its clock fields', () => {
+      const run = makeRun('c-exec-5', 'bash', { command: 'ls' }, 'ok', {
+        execStartedAtMs: 50_000,
+      });
+      const view = deriveToolRowView(run, { toolStartedAtMs: () => 10_000 });
+      expect(view.runningStartedAtMs).toBeUndefined();
+      expect(view.runningTimeoutMs).toBeUndefined();
+    });
   });
 });
 
@@ -879,7 +960,14 @@ describe('deriveToolGroupRows — running rows keep their clock', () => {
       [
         thinkEntry(thinkingBlock('th1', 'Planning the build')),
         runEntry(makeRun('c1', 'read', { path: '/repo/a.ts' })),
-        runEntry(makeRun('c2', 'bash', { command: 'pnpm build', timeoutSeconds: 1800 }, 'running')),
+        // T146 — `execStartedAtMs` is what unlocks `runningTimeoutMs` now;
+        // set to the same instant `toolStartedAtMs` names below so the
+        // `runningStartedAtMs` assertion is unaffected by which origin wins.
+        runEntry(
+          makeRun('c2', 'bash', { command: 'pnpm build', timeoutSeconds: 1800 }, 'running', {
+            execStartedAtMs: 5_000,
+          })
+        ),
       ],
       // The exact option set `ToolGroupItem` passes.
       {

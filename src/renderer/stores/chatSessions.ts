@@ -238,6 +238,14 @@ export interface ChatBlock {
   toolCallId?: string;
   toolName?: string;
   toolInput?: unknown;
+  /**
+   * T146 — epoch ms `bash` handed the command to `runtimeExec.run`, from the
+   * `tool.updated` the runtime publishes right before exec (see
+   * `plugins/tools/index.ts`). Only ever set live, by that event; absent for
+   * every non-bash call and for a `tool_call` replayed from history, which
+   * carries no such stamp.
+   */
+  toolExecStartedAt?: number;
   toolOk?: boolean;
   toolOutput?: unknown;
   permissionId?: string;
@@ -1392,7 +1400,14 @@ function applyRuntimeEventCore(
     }
 
     case 'tool.updated': {
-      if (event.payload.input === undefined) return {};
+      // T146 — `execStartedAt` is its own field, orthogonal to `input`: a
+      // no-op input re-send (args already settled) must not swallow the
+      // exec-start stamp that rides along with it, and an `execStartedAt`-only
+      // event (no `input` at all) must not be dropped by the old "no input,
+      // nothing to do" gate below.
+      const hasInput = event.payload.input !== undefined;
+      const hasExecStartedAt = event.payload.execStartedAt !== undefined;
+      if (!hasInput && !hasExecStartedAt) return {};
       const bucket = state.messages[sessionId] ?? [];
       const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) return {};
@@ -1401,9 +1416,17 @@ function applyRuntimeEventCore(
       );
       if (blockIndex < 0) return {};
       const current = existing.blocks[blockIndex];
-      if (!current || sameToolInput(current.toolInput, event.payload.input)) return {};
+      if (!current) return {};
+      const inputChanged = hasInput && !sameToolInput(current.toolInput, event.payload.input);
+      const execStartedAtChanged =
+        hasExecStartedAt && current.toolExecStartedAt !== event.payload.execStartedAt;
+      if (!inputChanged && !execStartedAtChanged) return {};
       const blocks = [...existing.blocks];
-      blocks[blockIndex] = { ...current, toolInput: event.payload.input };
+      blocks[blockIndex] = {
+        ...current,
+        ...(inputChanged ? { toolInput: event.payload.input } : {}),
+        ...(execStartedAtChanged ? { toolExecStartedAt: event.payload.execStartedAt } : {}),
+      };
       return {
         messages: withBucket(state, sessionId, upsertMessage(bucket, { ...existing, blocks })),
       };

@@ -500,6 +500,55 @@ describe('T017 · projection seams', () => {
     });
   });
 
+  it('carries execStartedAt through as its own field (T146)', () => {
+    // T146 — `bash` publishes an `onUpdate` with `details: { execStartedAt }`
+    // right before it hands the command to `runtimeExec.run`; the renderer
+    // needs that instant as its own field on `tool.updated`, not folded into
+    // `status` (which only ever reads `content`).
+    const { events, projection } = projector();
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'bash',
+      args: { command: 'sleep 300' },
+    });
+    projection.observe({
+      type: 'tool_execution_update',
+      toolCallId: 'call-1',
+      toolName: 'bash',
+      args: { command: 'sleep 300' },
+      partialResult: { content: [], details: { execStartedAt: 12_345 } },
+    });
+    expect(events.find((event) => event.type === 'tool.updated')?.payload).toMatchObject({
+      input: { command: 'sleep 300' },
+      execStartedAt: 12_345,
+    });
+  });
+
+  it('omits execStartedAt when the update carries no such detail', () => {
+    // Every non-bash tool's `onUpdate`, if it sends one at all, has no
+    // `execStartedAt` in its details — this must stay absent, not `undefined`
+    // written in as a key, so the renderer's own gate (`payload.execStartedAt
+    // !== undefined`) reads it as "not present" the same way either way.
+    const { events, projection } = projector();
+    projection.observe({
+      type: 'tool_execution_start',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: {},
+    });
+    projection.observe({
+      type: 'tool_execution_update',
+      toolCallId: 'call-1',
+      toolName: 'read',
+      args: {},
+      partialResult: { content: [{ type: 'text', text: 'reading' }] },
+    });
+    const updated = events.find((event) => event.type === 'tool.updated');
+    expect(updated?.payload.execStartedAt).toBeUndefined();
+    expect('execStartedAt' in (updated?.payload ?? {})).toBe(false);
+  });
+
   it('announces a provider retry as a running status, and takes the banner down', () => {
     // rpc-projector-02, projector half. Status stays `running` — the turn IS
     // alive — and the store clears the banner on the next status with no retry.
