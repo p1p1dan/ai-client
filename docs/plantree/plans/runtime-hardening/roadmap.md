@@ -361,12 +361,12 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T122 | 子代理工具死循环防护 | P0 | v1.0.2 现场（glm-5.2） | `46789042`：单条回复内同一子代理工具同参第 3 次或总数超 16 即流式掐断、零执行、不自动再请求；跨回复第二次空调用拒绝、连续两条空转收尾；工具返回不再误导；重开会话恢复子代理登记表；取证 `aiclient.loopGuard`；开关 `AICLIENT_RUNTIME_LOOP_GUARD=0`。决策 042。真机：开发机点验 D 组 + Windows 用 glm-5.2 复现 |
 | ✅ T123 | 代码注释英文化（只改注释） | P3 | 代码审查 #15 与项目规范 | `645c65a0`（纯注释文件）；功能文件里的注释随各自提交改 |
 | ✅ T124 | `updaterChannel.test.ts`「派生通道仍复现报错」在 electron-updater 6.7.3 下失败 | P2 | 2026-09-24 全量测试 | 测试写错，`486855f9` 的根因成立（[Q033](open-questions.md) 已结案）：测试用根目录的 `semver` 构造版本号，而 `GitHubProvider` 用 electron-updater 自带的嵌套副本（hoisted 布局下两个实例），`instanceof` 不成立导致 provider 读不到预发布段、走了「取 feed 第一条」分支。改为用 provider 自己的 `semver` 解析，反例稳定复现报错；打包产物同一实例，不受影响。`pnpm vitest run src/main/services/updater/` 7/7 通过 |
-| ⬜ T125 | 被掐断或中止的回复用量记为 0，应用内看不到失控消耗 | P2 | 2026-09-24 事故分析 | aborted / 被掐断消息的 usage 在会话文件里全为 0（openai 兼容接口只在流结束时下发用量）；需要估算或补记，至少在界面上标注「本次消耗未知」 |
+| ✅ T125 | 被掐断或中止的回复用量记为 0，应用内看不到失控消耗 | P2 | 2026-09-24 事故分析 | aborted / 被掐断消息的 usage 在会话文件里全为 0（openai 兼容接口只在流结束时下发用量）；需要估算或补记，至少在界面上标注「本次消耗未知」。**已落地** `7b976703`（用户 2026-09-25 选方案 B）：不估算、不写新条目、不改 message.usage；`PiUsagePayload.unreported`（aborted / error + 输出未上报 + 流已开始），运行面板与输入框用量弹层显示「本次消耗未知」 |
 | ⬜ T126 | 会话树里 `aiclient.permissions` / `aiclient.subagent` 条目仍是节点 | P2 | 用户待办 T6（Windows 会话分支全是 custom）；2026-09-24 插话修复时发现 | 复用本批 `piSessionTree.ts` 新增的隐藏名单（`HIDDEN_CUSTOM_TYPES`），并补测试；Windows 上用旧会话确认分支列表不再出现一串 custom |
 | ⬜ T127 | 全量测试出现过一次无法复现的偶发失败 | P3 | 2026-09-24 收口 | 那一轮日志只保留了末尾 40 行未能定位；此后全量两轮、时序敏感新测试连跑 3 遍均未复现。下次全量务必保留完整输出 |
 | ✅ T128 | 开发机点验判负与清单外问题修复（6 项） | P1 | [点验证据](evidence/interject-branch-devbox-2026-09-24/README.md)；用户 2026-09-24 拍板打包前修 | ① D1：死循环掐断后中文失败卡不出现（store 读数 `tool_call_repetition` 但状态被随后的 idle 覆盖）；② C3：流式期间点开思考块，展开后首次正文增长仍触发贴底跟随，标题被滚出视野；③ 运行中 `/compact` 被主进程拒绝而界面零提示；④ 被插话结束的回合重开后「已工作」从 20 秒变 1 秒；⑤ 被拒绝 / 未执行的子代理工具调用仍显示完成时动词；⑥ 切分支失败报错被截成「Error invoki…」。修复后 GUI 复验 **已落地** `403b7575`；GUI 复验 8 项全 ✅（[recheck-t128](evidence/interject-branch-devbox-2026-09-24/recheck-t128/README.md)）。 |
 | ⬜ T129 | 排队消息逐条发出间隔偏长（插话后隔 4.1 秒发排队-1，再隔 10 秒发排队-2，每条回复本身约 20ms） | P2 | 2026-09-24 开发机点验 A4 | 更早就有；先查队列释放为何要等数秒 |
-| ⬜ T130 | 被 Stop 中止的 bash 在 store 里记成成功（`toolOk=true`） | P2 | 2026-09-24 开发机点验 | 更早就有。根因与修法见 [bash 计划书](../../../plans/2026-09-24-bash-streaming-and-background-plan.md) §2.8 / §3.3（B1 + B2），可单独先做 |
+| ✅ T130 | 被 Stop 中止的 bash 在 store 里记成成功（`toolOk=true`） | P2 | 2026-09-24 开发机点验 | 更早就有。根因与修法见 [bash 计划书](../../../plans/2026-09-24-bash-streaming-and-background-plan.md) §2.8 / §3.3（B1 + B2），可单独先做。**已落地** `77b86d6e`：bash 标 `stopped`、`afterToolCall` 改 `isError`，回放同步，行显示「已停止」；运行面板失败计数排除三类 outcome |
 | ⬜ T131 | 开发机点验环境：GNOME login 密钥环锁定时默认 profile 启动卡死且无任何提示；`dev.env` 的 `AICLIENT_MANAGED_CREDENTIALS=1` 与点验手册（写 0）不一致 | P3 | 2026-09-24 开发机点验 | 点验改用隔离 profile + `--password-store=basic` 绕过，做法见点验证据；手册需回写，应用侧是否应在密钥环不可用时给提示另议 |
 | ⬜ T132 | 回合运行中执行 `/archive` 会直接归档并结束正在跑的回合，不像侧栏那样先弹确认 | P2 | 2026-09-24 T128 修复时排查内置命令发现 | 只记录未改；归档失败原先静默清空输入框已随 T128 改为提示 |
 | ⬜ T133 | 回合中途抛异常的失败路径（agent-loop 的 catch、NativeSessionIndexAdapter 的 catch）事件里没有 `errorCode`，失败卡只能显示兜底标题「这一轮停下了」 | P3 | 2026-09-24 T128 修复时排查失败路径发现 | 补 `errorCode` 时需同步改 `modelMissingWiring` 的 MMW-15（按字面检查那一行） |
@@ -378,6 +378,9 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T139 | read 读不了图片（现场：粘贴图片后模型 read xx.png 失败） | P0 | 用户待办 D1 | `7fe97881`：read 支持 PNG / JPEG / GIF / WebP，单张上限同粘贴附件，单次运行总量计入附件额度，边长 > 8000px 拒读；trace / 子代理记录 / projector 三处不再携带或截坏 base64 |
 | ✅ T140 | 点开任意图片 / PDF 预览整屏报错「Failed to construct 'URL': Invalid URL」 | P0 | 用户待办 D1，2026-09-24 用户 Windows 复现 | `9fabb28b`：local-file 是 standard scheme，Chromium 下 `new URL('local-file://')` 空主机抛错，所有平台所有路径都崩，Node 里的单测测不出；改为字符串拼接 `local-file://localhost/…`，真实 Electron 探针 24 种路径往返正确。另加局部错误边界、复制错误信息、错误进主进程日志、「用系统程序打开」。Windows 真机复验待做 |
 | ✅ T141 | 模型未声明图片输入时粘贴的图片被静默丢弃 | P2 | T139 调查发现 | `df995820`：模型选项贯通 `input` 字段，输入框提示「模型看不到这张图」，不阻断发送 |
+| ⬜ T142 | 子代理面板里被 Stop 的 bash 仍显示为红色失败行 | P3 | T130 落地时发现 | `subagent.activity` 的 `tool.completed` 只带 `ok` 与通用 `errorText`（`subagent/records.ts:629-639`），需把 outcome 标记带上这条通道 |
+
+**2026-09-25 收口（T124 / T139～T141 / T125 / T130）**：三套 tsc 通过；全量 Vitest 单 worker **506 文件 / 7674 例全部通过，264 s**（对比 09-24 的 493 / 7461、1 例既有失败即 T124），完整输出按 T127 的要求保留在本机 `/tmp/closeout/vitest-full.txt`。版本 `1.0.3-test.2` 手动打包供 Windows 复验（T140 预览、T139 读图、T130、T125），批次 M 的 Windows 实测清单一并在该包上执行。
 
 ## Deferred
 
