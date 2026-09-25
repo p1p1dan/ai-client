@@ -118,7 +118,8 @@
  *                       messages, not from the sequence number: the latest user message
  *                       carrying a scenario marker (P0-GOAL-COMPLETE, P0-GOAL-BLOCKED,
  *                       P0-GOAL-PAUSE, P0-GOAL-ROUNDLIMIT, P0-JOBS, P0-OFFICE, P0-ENV,
- *                       P0-APPROVAL, and for P0-3 P0-STREAM / P0-TOOL / P0-SLOWTOOL) or a
+ *                       P0-APPROVAL, for P0-3 P0-STREAM / P0-TOOL / P0-SLOWTOOL, and for P0-4
+ *                       P0-FS / P0-RECALL with a JSON parameter object after the marker) or a
  *                       DSH `<goal_round>` continuation prompt is the trigger; the number of
  *                       tool calls since the trigger is the step. Goal rounds read their
  *                       round number from the prompt's `Round: N/M` line, update_goal copies
@@ -290,7 +291,7 @@ function logRequest(entry) {
 // ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
 
 const P0_MARKER =
-  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|TOOL)/;
+  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|TOOL|FS|RECALL)/;
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -324,6 +325,55 @@ function goalRefFrom(calls) {
 
 const tool = (name, input) => ({ kind: 'tool_use', status: 200, name, input });
 const say = (text) => ({ kind: 'text', status: 200, text });
+
+// dsh-rebase P0-4: the prompt carries a JSON object after the marker, e.g.
+// `P0-FS {"tag":"on","dir":"D:\\enc\\ws-on","marker":"...","token":"...","shell":"pwsh"}`.
+function p04Params(triggerText) {
+  try {
+    return JSON.parse(triggerText.slice(triggerText.indexOf('{')));
+  } catch {
+    return { tag: 'bad-params', dir: '.', marker: 'missing', token: 'missing', shell: 'bash' };
+  }
+}
+const p04Join = (dir, name) => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`;
+const pwshQuote = (text) => `'${text.replace(/'/g, "''")}'`;
+const bashQuote = (text) => `'${text.replace(/'/g, "'\\''")}'`;
+
+/** The P0-4 shell steps for either `pwsh` (Windows) or `bash` (Linux dry run). */
+function p04ShellSteps(p, f) {
+  const shellWritten = f(`shell-written-${p.token}.txt`);
+  const line = `${p.marker} SHELL-${p.token}`;
+  if (p.shell === 'pwsh') {
+    return [
+      tool('pwsh', {
+        command: `Get-Content -Raw -LiteralPath ${pwshQuote(f('marker.txt'))}`,
+        description: 'Read the marker file',
+      }),
+      tool('pwsh', {
+        command: `Set-Content -LiteralPath ${pwshQuote(shellWritten)} -Value ${pwshQuote(line)} -Encoding ASCII`,
+        description: 'Write a file from the shell',
+      }),
+      tool('pwsh', {
+        command: `1..4000 | ForEach-Object { "spill-line $_ ${p.token}" }`,
+        description: 'Print a large output',
+      }),
+    ];
+  }
+  return [
+    tool('bash', {
+      command: `cat ${bashQuote(f('marker.txt'))}`,
+      description: 'Read the marker file',
+    }),
+    tool('bash', {
+      command: `printf '%s\\n' ${bashQuote(line)} > ${bashQuote(shellWritten)}`,
+      description: 'Write a file from the shell',
+    }),
+    tool('bash', {
+      command: `for i in $(seq 1 4000); do echo "spill-line $i ${p.token}"; done`,
+      description: 'Print a large output',
+    }),
+  ];
+}
 
 /**
  * One script per scenario: (round, step, calls) -> decision. Round 0 is the
@@ -522,6 +572,40 @@ const DSH_P0_2_SCRIPTS = {
     }
     return say('Env canaries printed.');
   },
+  // dsh-rebase P0-4: file tools and the shell against an encrypted workspace.
+  FS(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const f = (name) => p04Join(p.dir, name);
+    const written = f(`dsh-written-${p.token}.txt`);
+    const steps = [
+      tool('read', { file_path: f('marker.txt') }),
+      tool('read', { file_path: f('edit-target.txt') }),
+      tool('edit', {
+        file_path: f('edit-target.txt'),
+        old_string: p.marker,
+        new_string: `${p.marker} EDITED-${p.token}`,
+      }),
+      tool('read', { file_path: f('edit-target.txt') }),
+      tool('write', { file_path: written, content: `${p.marker} WRITTEN-${p.token}\n` }),
+      tool('read', { file_path: written }),
+      tool('grep', { pattern: p.marker, path: p.dir }),
+      tool('glob', { pattern: '*.txt', path: p.dir }),
+      ...p04ShellSteps(p, f),
+      tool('read', { file_path: f(`shell-written-${p.token}.txt`) }),
+    ];
+    const decision = step < steps.length ? steps[step] : say(`P0-FS ${p.tag} finished.`);
+    return { ...decision, tag: p.tag };
+  },
+  // dsh-rebase P0-4: after a resume, does the model request still carry the
+  // marker the earlier turn read from the encrypted file?
+  RECALL(_round, _step, _calls, triggerText, history) {
+    const p = p04Params(triggerText);
+    const present = history.includes(p.marker);
+    return {
+      ...say(`P0-RECALL ${present ? 'present' : 'missing'}`),
+      tag: present ? 'present' : 'missing',
+    };
+  },
 };
 
 /** dsh-p0-2: decide from the request's own messages. */
@@ -563,8 +647,35 @@ function decideDshP02(parsed) {
   }
   const script = DSH_P0_2_SCRIPTS[scenario];
   if (!script) return { ...say(`fake gateway: no script for ${scenario}`), label: 'no-script' };
-  const decision = script(round, calls.length, calls, triggerText);
-  return { ...decision, label: `${scenario} r${round} s${calls.length}` };
+  const history = messages
+    .slice(0, trigger)
+    .map((message) =>
+      Array.isArray(message?.content)
+        ? message.content
+            .map((block) =>
+              block?.type === 'tool_result' ? toolResultText(block) : (block?.text ?? '')
+            )
+            .join('\n')
+        : String(message?.content ?? '')
+    )
+    .join('\n');
+  const decision = script(round, calls.length, calls, triggerText, history);
+  const tag = decision.tag ? `:${decision.tag}` : '';
+  return {
+    ...decision,
+    label: `${scenario}${tag} r${round} s${calls.length}`,
+    // P0-4 reads every tool result back out of the log, as the model saw it.
+    ...(scenario === 'FS'
+      ? {
+          calls: calls.map((c) => ({
+            name: c.name,
+            input: c.input,
+            isError: c.isError,
+            result: c.result === undefined ? undefined : c.result.slice(0, 1500),
+          })),
+        }
+      : {}),
+  };
 }
 
 /** Decide what this request's response should look like, given the active plan. */
@@ -1114,6 +1225,7 @@ function main() {
               auth: req.headers['x-api-key'] ?? req.headers.authorization ?? null,
               path: req.url,
               tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
+              calls: decision.calls,
             }
           : {}),
       });

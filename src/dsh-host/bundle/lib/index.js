@@ -7,6 +7,7 @@
  *
  *   create-session { sessionId?, cwd? }      -> session-created { sessionId, ms }
  *   close-session  { sessionId }             -> session-closed { ms }
+ *   resume-session { sessionId }             -> session-resumed { ms }         (persisted session)
  *   prompt         { sessionId, text }       -> prompted { messageId }        (human followup)
  *   command        { sessionId, line }       -> command-result { result }     (slash command)
  *   goal           { sessionId }             -> goal { goal }                 (ctx.goals view)
@@ -15,6 +16,8 @@
  *   install-bundle { spec, registry? }       -> installed { result }          (plugin-manager)
  *   dispatch-counts {}                       -> dispatch-counts { counts }
  *   stats          {}                        -> stats { memory, liveAgents }
+ *   natives        {}                        -> natives { sharedObjects }     (loaded native libraries)
+ *   terminal       { argv, cwd, timeoutMs }  -> terminal { output, outcome } (ctx.subprocess PTY)
  *
  * It also answers every `approval/request` with 'allowed-once' (logged), and,
  * when AICLIENT_PROBE_EVENT_LOG names a file, appends one JSONL line per
@@ -145,6 +148,20 @@ export function apply(ctx) {
       await handle.dispose();
       return { type: 'session-closed', ms: performance.now() - started };
     },
+    async 'resume-session'(message) {
+      const started = performance.now();
+      const { provider, model } = ctx.agentDefaultModel.currentSelection();
+      const handle = await ctx.agents.resume({
+        resumeSessionId: message.sessionId,
+        agentOptions: { provider, model },
+      });
+      handles.set(message.sessionId, handle);
+      return {
+        type: 'session-resumed',
+        sessionId: message.sessionId,
+        ms: performance.now() - started,
+      };
+    },
     async prompt(message) {
       const userMessage = createUserMessage({
         content: [{ type: 'text', text: message.text }],
@@ -196,6 +213,48 @@ export function apply(ctx) {
         type: 'stats',
         memory: process.memoryUsage(),
         liveAgents: ctx.agents.list().length,
+      };
+    },
+    async natives() {
+      const shared = process.report.getReport().sharedObjects ?? [];
+      return {
+        type: 'natives',
+        sharedObjects: shared.filter((file) => /\.node$|koffi|conpty|pty/i.test(file)),
+      };
+    },
+    async terminal(message) {
+      const subprocess = ctx.get('subprocess');
+      if (typeof subprocess?.spawnTerminal !== 'function') {
+        throw new Error('ctx.subprocess.spawnTerminal is not available');
+      }
+      const handle = await subprocess.spawnTerminal({
+        argv: message.argv,
+        cwd: message.cwd,
+        env: {},
+        rows: 30,
+        cols: 200,
+        terminalType: 'xterm-256color',
+        graceMs: 2000,
+      });
+      const chunks = [];
+      handle.output.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+      let timer;
+      const outcome = await Promise.race([
+        handle.done.then(
+          (done) => ({ settled: true, ...done }),
+          (error) => ({ settled: true, error: String(error) })
+        ),
+        new Promise((done) => {
+          timer = setTimeout(() => done({ settled: false }), message.timeoutMs ?? 20_000);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (!outcome.settled) await handle.terminate().catch(() => {});
+      return {
+        type: 'terminal',
+        pid: handle.pid,
+        outcome,
+        output: Buffer.concat(chunks).toString('utf8').slice(-8000),
       };
     },
   };
