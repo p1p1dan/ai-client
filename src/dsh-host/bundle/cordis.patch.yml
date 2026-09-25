@@ -98,6 +98,13 @@
 - insert:
     # IPC probe: sessions, prompts, commands, goal reads, plugin installs, an
     # approval answerer and event capture over the Node IPC channel the parent
-    # opened. Stand-in for the future aiclient-bridge row.
+    # opened. P0 measurement scaffolding; off when the bridge serves the channel.
     - id: aiclient-probe
       name: '@aiclient/dsh-app'
+      disabled: !!js "process.env.AICLIENT_DSH_BRIDGE === '1'"
+
+    # P0-3: ai-client's worker RPC on the same channel (Main's WorkerSlot is the
+    # parent). Dev-only; enabled by the Main-side AICLIENT_DEV_ENGINE=dsh switch.
+    - id: aiclient-bridge
+      name: '@aiclient/dsh-app/bridge'
+      disabled: !!js "process.env.AICLIENT_DSH_BRIDGE !== '1'"

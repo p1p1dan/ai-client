@@ -7,6 +7,7 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./bridge": "./lib/bridge.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

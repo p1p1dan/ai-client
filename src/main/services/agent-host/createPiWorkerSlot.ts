@@ -3,6 +3,7 @@ import {
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
 } from '@shared/types/workerRpc';
+import { forkDevDshHost, isDevDshEngineSelected } from './devDshEngine';
 import { forkPiWorkerProcess } from './PiWorkerProcess';
 import { WorkerSlot, type WorkerSlotOptions } from './WorkerSlot';
 import type { WorkerTransport } from './WorkerTransport';
@@ -68,7 +69,10 @@ export async function createPiWorkerSlot(
   const generation = options.generation ?? 1;
   const transport = options.createTransport
     ? options.createTransport({ generation, cwd: options.cwd })
-    : forkPiWorkerProcess({ generation, cwd: options.cwd }).transport;
+    : // DEV-ONLY (dsh-rebase P0-3): AICLIENT_DEV_ENGINE=dsh in an unpackaged app.
+      isDevDshEngineSelected()
+      ? forkDevDshHost({ generation }).transport
+      : forkPiWorkerProcess({ generation, cwd: options.cwd }).transport;
   const slot = new WorkerSlot({
     slotKey: options.slotKey,
     cwd: options.cwd,

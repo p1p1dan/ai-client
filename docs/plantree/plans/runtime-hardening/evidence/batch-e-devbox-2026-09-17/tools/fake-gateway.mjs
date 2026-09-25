@@ -118,7 +118,7 @@
  *                       messages, not from the sequence number: the latest user message
  *                       carrying a scenario marker (P0-GOAL-COMPLETE, P0-GOAL-BLOCKED,
  *                       P0-GOAL-PAUSE, P0-GOAL-ROUNDLIMIT, P0-JOBS, P0-OFFICE, P0-ENV,
- *                       P0-APPROVAL) or a
+ *                       P0-APPROVAL, and for P0-3 P0-STREAM / P0-TOOL / P0-SLOWTOOL) or a
  *                       DSH `<goal_round>` continuation prompt is the trigger; the number of
  *                       tool calls since the trigger is the step. Goal rounds read their
  *                       round number from the prompt's `Round: N/M` line, update_goal copies
@@ -290,7 +290,7 @@ function logRequest(entry) {
 // ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
 
 const P0_MARKER =
-  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL)/;
+  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|TOOL)/;
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -449,6 +449,36 @@ const DSH_P0_2_SCRIPTS = {
     if (step === 1) return tool('job_list', {});
     if (step === 2) return tool('job_output', { job_id: jobId, wait: true, timeout_ms: 15000 });
     return say('Background job collected.');
+  },
+  // dsh-rebase P0-3: GUI bridge cases.
+  STREAM() {
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text:
+        'DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，' +
+        '用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。',
+      chunks: 20,
+      chunkMs: 150,
+    };
+  },
+  TOOL(_round, step) {
+    if (step === 0) {
+      return tool('bash', {
+        command: 'echo "bridge tool row ok"; pwd; ls -a',
+        description: 'List the workspace',
+      });
+    }
+    return say('Tool row finished: the workspace listing is above.');
+  },
+  SLOWTOOL(_round, step) {
+    if (step === 0) {
+      return tool('bash', {
+        command: 'echo slow tool started; sleep 5; echo slow tool done',
+        description: 'Run a slow command',
+      });
+    }
+    return say('The slow command finished.');
   },
   APPROVAL(_round, step, _calls, triggerText) {
     // The prompt names a path outside the session workspace: `path=<abs path>`.
@@ -943,6 +973,35 @@ function buildLongThinkingFrames(model, { chunks, chunkMs }) {
  * that kept firing timers into a dead response would keep the process alive
  * long after the point-check moved on.
  */
+/** dsh-rebase P0-3 — one text block dictated in `chunks` deltas `chunkMs` apart. */
+function buildPacedTextFrames(model, text, chunks, chunkMs) {
+  const pieces = splitInto(text, chunks);
+  return [
+    messageStartFrame(model),
+    [
+      0,
+      'content_block_start',
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    ],
+    ...pieces.map((piece, i) => [
+      i === 0 ? 0 : chunkMs,
+      'content_block_delta',
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: piece } },
+    ]),
+    [chunkMs, 'content_block_stop', { type: 'content_block_stop', index: 0 }],
+    [
+      0,
+      'message_delta',
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'end_turn', stop_sequence: null },
+        usage: { output_tokens: 120 },
+      },
+    ],
+    [0, 'message_stop', { type: 'message_stop' }],
+  ];
+}
+
 function sendPaced(res, frames) {
   res.writeHead(200, {
     'content-type': 'text/event-stream',
@@ -1068,6 +1127,11 @@ function main() {
         sendToolUseTurn(res, model, { name: decision.name, input: decision.input });
       } else if (decision.kind === 'hang') {
         sendHang(res, decision.holdMs);
+      } else if (decision.kind === 'paced-text') {
+        sendPaced(
+          res,
+          buildPacedTextFrames(model, decision.text, decision.chunks, decision.chunkMs)
+        );
       } else if (decision.kind === 'paced') {
         const frames =
           decision.flavour === 'slow-write'

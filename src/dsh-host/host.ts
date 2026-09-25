@@ -15,6 +15,13 @@
  *                   { type: 'stopped', ms } after disposal.
  *   parent -> host: { type: 'shutdown' }. Session requests go to the
  *                   aiclient-probe row of @aiclient/dsh-app.
+ *
+ * Bridge mode (P0-3, AICLIENT_DSH_BRIDGE=1): the parent is Main's WorkerSlot and
+ * the channel carries our worker RPC, served by the aiclient-bridge row. Every
+ * IPC message is buffered from the first line of this file until that row
+ * claims the buffer, because Node IPC drops messages that arrive with no
+ * listener and Main sends worker.bootstrap right after spawning. Nothing but
+ * worker RPC goes back over IPC in this mode; ready / stopped go to stderr.
  */
 
 import { writeFileSync } from 'node:fs';
@@ -48,6 +55,22 @@ const REQUIRED_DISABLED = [
 ];
 
 const marks: Record<string, number> = { entry: performance.now() };
+
+/** Shared with the aiclient-bridge row through a global symbol. */
+interface BridgeInbox {
+  queue: unknown[];
+  deliver?: (message: unknown) => void;
+  stop?: (reason: string) => Promise<void>;
+}
+const bridgeMode = process.env.AICLIENT_DSH_BRIDGE === '1';
+const bridgeInbox: BridgeInbox | undefined = bridgeMode ? { queue: [] } : undefined;
+if (bridgeInbox) {
+  (globalThis as Record<symbol, unknown>)[Symbol.for('aiclient.dsh.bridge')] = bridgeInbox;
+  process.on('message', (message: unknown) => {
+    if (bridgeInbox.deliver) bridgeInbox.deliver(message);
+    else bridgeInbox.queue.push(message);
+  });
+}
 
 function fail(message: string): never {
   process.stderr.write(`[dsh-host] ${message}\n`);
@@ -150,7 +173,9 @@ async function stopOnce(reason: string): Promise<void> {
   process.stderr.write(`[dsh-host] stopped (${reason}) in ${ms.toFixed(0)}ms\n`);
   const send = process.send?.bind(process);
   if (process.connected && send !== undefined) {
-    await new Promise<void>((done) => send({ type: 'stopped', ms, reason }, () => done()));
+    if (!bridgeMode) {
+      await new Promise<void>((done) => send({ type: 'stopped', ms, reason }, () => done()));
+    }
     process.disconnect?.();
   }
   // Exit naturally when nothing lingers; otherwise name what does and force it.
@@ -162,6 +187,7 @@ async function stopOnce(reason: string): Promise<void> {
   }, 3000).unref();
 }
 
+if (bridgeInbox) bridgeInbox.stop = stop;
 process.on('SIGTERM', () => void stop('SIGTERM'));
 process.on('SIGINT', () => void stop('SIGINT'));
 process.on('message', (message: unknown) => {
@@ -218,5 +244,7 @@ const ready = {
   marks,
   memory: process.memoryUsage(),
 };
-if (process.connected) process.send?.(ready);
+if (process.connected && !bridgeMode) process.send?.(ready);
+else if (bridgeMode)
+  process.stderr.write(`[dsh-host] ready ${JSON.stringify({ ...ready, memory: undefined })}\n`);
 else process.stdout.write(`${JSON.stringify(ready)}\n`);

@@ -1,5 +1,5 @@
 {
-  // Type-check gate for the P0-1 DSH host probe (dsh-rebase plan).
+  // Type-check gate for the DSH host probes (dsh-rebase plan P0).
   //
   // Separate config for the same reason as `src/runtime/tsconfig.json`: this
   // directory is its own npm package with its own `node_modules`
@@ -7,21 +7,25 @@
   // `src/dsh-host/**` and never needs `npm ci` in here. Run from the repo root:
   //   pnpm exec tsc --noEmit -p src/dsh-host/tsconfig.json
   //
+  // P0-3: `bridge/` imports the worker RPC server and shared types from
+  // `src/agent-host` and `src/shared`, so resolution mirrors
+  // `src/agent-host/tsconfig.json` (bundler resolution, `.ts` extensions).
   // Node strips types at runtime (erasable syntax only), so no emit.
   "compilerOptions": {
     "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "strict": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "isolatedModules": true,
     "noEmit": true,
     "lib": ["ESNext"],
     "types": ["node"]
   },
-  "include": ["*.ts"],
+  "include": ["*.ts", "lib/*.ts", "bridge/*.ts"],
   "exclude": ["node_modules", "bundle"]
 }
