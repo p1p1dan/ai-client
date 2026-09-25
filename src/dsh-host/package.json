@@ -1,0 +1,26 @@
+{
+  "name": "@aiclient/dsh-host",
+  "version": "0.0.0-p0.1",
+  "private": true,
+  "type": "module",
+  "description": "P0-1 probe (dsh-rebase plan): a DeepSeek Harness host = dsh-base + @aiclient/dsh-app, booted with dsh-app-boot on plain Node. Throwaway; not part of the app build.",
+  "scripts": {
+    "host": "node --expose-internals host.ts",
+    "measure": "node measure.ts"
+  },
+  "dependencies": {
+    "@aiclient/dsh-app": "file:./bundle",
+    "@deepseek-ai/cordis": "4.0.4",
+    "@deepseek-ai/cordis-plugin-group": "1.0.4",
+    "@deepseek-ai/cordis-plugin-include": "1.0.9",
+    "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+    "@deepseek-ai/dsh-app-boot": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-base": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-home-paths": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-launch-environment": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-system-prompt": "0.1.7-rc.2"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@aiclient/dsh-app",
+  "version": "0.0.0-p0.1",
+  "private": true,
+  "description": "ai-client worker-engine profile bundle over dsh-base (P0-1 probe): host-only rows, telemetry and DeepSeek account off, plus an IPC probe plugin",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4"
+  }
+}

@@ -24,5 +24,12 @@
     }
   },
   "include": ["src/**/*", "electron.vite.config.ts"],
-  "exclude": ["src/agent-host/**", "src/runtime/**", "node_modules", "out", "dist"]
+  "exclude": [
+    "src/agent-host/**",
+    "src/runtime/**",
+    "src/dsh-host/**",
+    "node_modules",
+    "out",
+    "dist"
+  ]
 }

@@ -1,0 +1,33 @@
+# @aiclient/dsh-app — ai-client's worker-engine bundle, stacked over dsh-base
+# (profile bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app']).
+#
+# P0-1 probe of the dsh-rebase plan. Host-only composition: no Web client, no
+# HTTP endpoint. `host/webserver` and `host/frontend-static` are rows of
+# dsh-web-app, which this profile never stacks, so they are absent rather than
+# disabled; host.ts asserts that absence on the composed entry list.
+
+# Never export session logs. The launcher also sets DSH_TELEMETRY_DISABLED,
+# which makes readProfilePatches append the same disable patch.
+- id: session-telemetry-otel
+  disabled: true
+
+# DeepSeek Platform sign-in (system-browser login); ai-client keeps its own
+# login and quota.
+- id: deepseek-account
+  disabled: true
+
+# The account-backed LLM route has nothing to route through once the account
+# provider above is off.
+- id: llm-deepseek-account
+  disabled: true
+
+# A worker engine takes configuration changes through a restart, not file
+# watchers (same choice as dsh-sdk-app).
+- id: hmr
+  disabled: true
+
+- insert:
+    # IPC probe: session create/close and stats over the Node IPC channel the
+    # parent opened. Stand-in for the future aiclient-bridge row.
+    - id: aiclient-probe
+      name: '@aiclient/dsh-app'

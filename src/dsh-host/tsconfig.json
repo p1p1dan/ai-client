@@ -1,0 +1,27 @@
+{
+  // Type-check gate for the P0-1 DSH host probe (dsh-rebase plan).
+  //
+  // Separate config for the same reason as `src/runtime/tsconfig.json`: this
+  // directory is its own npm package with its own `node_modules`
+  // (@deepseek-ai/* pinned in `package.json`), so the root gate excludes
+  // `src/dsh-host/**` and never needs `npm ci` in here. Run from the repo root:
+  //   pnpm exec tsc --noEmit -p src/dsh-host/tsconfig.json
+  //
+  // Node strips types at runtime (erasable syntax only), so no emit.
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "erasableSyntaxOnly": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "lib": ["ESNext"],
+    "types": ["node"]
+  },
+  "include": ["*.ts"],
+  "exclude": ["node_modules", "bundle"]
+}
