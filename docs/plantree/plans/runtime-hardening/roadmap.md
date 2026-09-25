@@ -360,7 +360,7 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T121 | 全站字号上调一档 | P2 | 用户诉求；代码审查 #13 | `a86cefa4` + 文档同步 `4be46769`；老用户已保存的对话字号有意不迁移（用户拍板） |
 | ✅ T122 | 子代理工具死循环防护 | P0 | v1.0.2 现场（glm-5.2） | `46789042`：单条回复内同一子代理工具同参第 3 次或总数超 16 即流式掐断、零执行、不自动再请求；跨回复第二次空调用拒绝、连续两条空转收尾；工具返回不再误导；重开会话恢复子代理登记表；取证 `aiclient.loopGuard`；开关 `AICLIENT_RUNTIME_LOOP_GUARD=0`。决策 042。真机：开发机点验 D 组 + Windows 用 glm-5.2 复现 |
 | ✅ T123 | 代码注释英文化（只改注释） | P3 | 代码审查 #15 与项目规范 | `645c65a0`（纯注释文件）；功能文件里的注释随各自提交改 |
-| ⬜ T124 | `updaterChannel.test.ts`「派生通道仍复现报错」在 electron-updater 6.7.3 下失败 | P2 | 2026-09-24 全量测试 | main 上即存在，与本批无关；可能意味着 `486855f9` 的根因推断需复核，见 [Q033](open-questions.md)。发版门禁若跑全量会被卡 |
+| ✅ T124 | `updaterChannel.test.ts`「派生通道仍复现报错」在 electron-updater 6.7.3 下失败 | P2 | 2026-09-24 全量测试 | 测试写错，`486855f9` 的根因成立（[Q033](open-questions.md) 已结案）：测试用根目录的 `semver` 构造版本号，而 `GitHubProvider` 用 electron-updater 自带的嵌套副本（hoisted 布局下两个实例），`instanceof` 不成立导致 provider 读不到预发布段、走了「取 feed 第一条」分支。改为用 provider 自己的 `semver` 解析，反例稳定复现报错；打包产物同一实例，不受影响。`pnpm vitest run src/main/services/updater/` 7/7 通过 |
 | ⬜ T125 | 被掐断或中止的回复用量记为 0，应用内看不到失控消耗 | P2 | 2026-09-24 事故分析 | aborted / 被掐断消息的 usage 在会话文件里全为 0（openai 兼容接口只在流结束时下发用量）；需要估算或补记，至少在界面上标注「本次消耗未知」 |
 | ⬜ T126 | 会话树里 `aiclient.permissions` / `aiclient.subagent` 条目仍是节点 | P2 | 用户待办 T6（Windows 会话分支全是 custom）；2026-09-24 插话修复时发现 | 复用本批 `piSessionTree.ts` 新增的隐藏名单（`HIDDEN_CUSTOM_TYPES`），并补测试；Windows 上用旧会话确认分支列表不再出现一串 custom |
 | ⬜ T127 | 全量测试出现过一次无法复现的偶发失败 | P3 | 2026-09-24 收口 | 那一轮日志只保留了末尾 40 行未能定位；此后全量两轮、时序敏感新测试连跑 3 遍均未复现。下次全量务必保留完整输出 |
