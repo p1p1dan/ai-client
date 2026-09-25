@@ -38,6 +38,19 @@
  * The two `1.0.0-test.20` cases differ only in that flag, so the pair IS the
  * proof: `true` reproduces the reported error, `false` resolves v1.0.1. Nothing
  * here reads electron-updater's private fields.
+ *
+ * ## `currentVersion` must come from electron-updater's OWN `semver`
+ *
+ * In the app, `AppUpdater` parses the version with the `semver` that
+ * electron-updater itself resolves, and the provider reads it back through that
+ * same module. The hoisted install may give electron-updater a nested copy of
+ * `semver` (it does on the dev box: `node_modules/electron-updater/node_modules/
+ * semver`), and a `SemVer` built by the root copy is not `instanceof` the
+ * nested class. The provider's `semver.prerelease()` then returns null,
+ * `currentChannel` falls back to null, and the `currentChannel === null` branch
+ * takes the first feed entry — so `allowPrerelease: true` "resolves" v1.0.1 and
+ * the negative case goes green-to-red depending only on install layout. Parsing
+ * with the provider's own `semver` reproduces what `AppUpdater` hands it.
  */
 
 import { createRequire } from 'node:module';
@@ -99,14 +112,18 @@ const LATEST_YML = [
   '',
 ].join('\n');
 
+/** The `semver` module electron-updater resolves, not whichever copy the root hoists. */
+const providerSemver = createRequire(providerPath)('semver') as {
+  parse(version: string): unknown;
+};
+
 function makeProvider(currentVersion: string, allowPrerelease: boolean): TestProvider {
   const { GitHubProvider } = require(providerPath) as { GitHubProvider: ProviderConstructor };
-  const semver = require('semver') as { parse(version: string): unknown };
 
   const provider = new GitHubProvider(
     { provider: 'github', owner: 'o', repo: 'r', releaseType: 'draft' },
     {
-      currentVersion: semver.parse(currentVersion),
+      currentVersion: providerSemver.parse(currentVersion),
       allowPrerelease,
       channel: null,
       fullChangelog: false,
