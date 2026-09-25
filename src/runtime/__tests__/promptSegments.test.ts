@@ -17,6 +17,12 @@ import {
   IDENTITY_PROMPT,
 } from '../plugins/prompt/baseSegments.ts';
 import {
+  environmentSegment,
+  environmentText,
+  localDate,
+  type PromptEnvironment,
+} from '../plugins/prompt/environment.ts';
+import {
   composeSystemPrompt,
   deferredSlots,
   PROMPT_SLOTS,
@@ -43,6 +49,24 @@ describe('prompt slot table', () => {
     // A phase label alone ("P1") names an owner but not a reason, which is
     // the shell A3 rules out. The bar is a sentence.
     expect((slot.deferred?.reason ?? '').length).toBeGreaterThan(60);
+  });
+
+  it('places environment first in the session band, right after the static slots', () => {
+    // The static band must stay a byte-identical prefix across machines, so a
+    // slot carrying the cwd cannot sit inside it; first in the session band
+    // because nothing in it changes mid-session.
+    expect(PROMPT_SLOTS.map((slot) => slot.id)).toEqual([
+      'identity',
+      'collaboration',
+      'tool-protocol',
+      'tool-guidance',
+      'environment',
+      'skills',
+      'project-instructions',
+      'mode',
+      'permission-gear',
+    ]);
+    expect(PROMPT_SLOTS.find((slot) => slot.id === 'environment')?.stability).toBe('session');
   });
 
   it('leaves no slot both deferred and filled by P2-1', () => {
@@ -179,5 +203,73 @@ describe('tool guidance', () => {
     expect(guidance?.text).toContain('When edit is available');
     expect(guidance?.text).toContain('whichever of read, write and edit are available');
     expect(guidance?.text).not.toMatch(/Prefer the available read\/write\/edit tools/);
+  });
+});
+
+describe('environment segment', () => {
+  // Field bug: on Windows with workspace `F:\tmp` the prompt never named the
+  // working directory, and the model searched `C:\` for an `@file`.
+  const windows: PromptEnvironment = {
+    root: 'F:\\tmp',
+    platform: 'win32',
+    shellPath: 'C:\\Program Files\\Git\\bin\\bash.exe',
+    date: '2026-09-25',
+  };
+  const linux: PromptEnvironment = {
+    root: '/home/me/project',
+    platform: 'linux',
+    shellPath: '/bin/bash',
+    date: '2026-09-25',
+  };
+
+  it('renders the Windows facts, Git Bash path advice included', () => {
+    expect(environmentText(windows)).toBe(
+      'Environment: the working directory is F:\\tmp. Relative paths in tool calls resolve against it, and each bash command starts there. In a user message, @path (for example @docs/notes.md) refers to that file relative to the working directory. Platform: Windows. The bash tool runs C:\\Program Files\\Git\\bin\\bash.exe (Git Bash), not cmd or PowerShell: use POSIX shell syntax, and write Windows paths with forward slashes (F:/tmp) or quote them. Current date: 2026-09-25 (taken when this session started).'
+    );
+  });
+
+  it('renders the Linux facts', () => {
+    expect(environmentText(linux)).toBe(
+      'Environment: the working directory is /home/me/project. Relative paths in tool calls resolve against it, and each bash command starts there. In a user message, @path (for example @docs/notes.md) refers to that file relative to the working directory. Platform: Linux. The bash tool runs /bin/bash. Current date: 2026-09-25 (taken when this session started).'
+    );
+    expect(environmentText({ ...linux, platform: 'darwin' })).toContain('Platform: macOS.');
+  });
+
+  it('names no shell when there is no bash tool, or the caller has none', () => {
+    // No `shellPath` means `plugins/tools/index.ts` registered no `bash`
+    // (windows-04); `bash: false` is a delegate whose definition lacks it.
+    const { shellPath: _unused, ...withoutShell } = windows;
+    for (const text of [environmentText(withoutShell), environmentText(windows, { bash: false })]) {
+      expect(text).toContain('the working directory is F:\\tmp.');
+      expect(text).toContain('Platform: Windows.');
+      expect(text).not.toMatch(/bash/i);
+    }
+  });
+
+  it('fills the environment slot without moving the static prefix', () => {
+    const statics = [...baseSegments(), ...toolSegments()];
+    const staticOnly = composeSystemPrompt(statics);
+    const composed = composeSystemPrompt([
+      { slot: 'project-instructions', text: 'PROJECT' },
+      environmentSegment(linux),
+      { slot: 'skills', text: 'SKILLS' },
+      ...statics,
+    ]);
+    expect(composed.segments.map((segment) => segment.slot)).toEqual([
+      'identity',
+      'collaboration',
+      'tool-protocol',
+      'tool-guidance',
+      'environment',
+      'skills',
+      'project-instructions',
+    ]);
+    expect(composed.staticPrefixBytes).toBe(staticOnly.bytes);
+    expect(composed.text.startsWith(`${staticOnly.text}\n\n${environmentText(linux)}`)).toBe(true);
+  });
+
+  it('formats the local calendar date without a time', () => {
+    expect(localDate(new Date(2026, 0, 5, 23, 59, 59))).toBe('2026-01-05');
+    expect(localDate(new Date(2026, 11, 31, 0, 0, 0))).toBe('2026-12-31');
   });
 });

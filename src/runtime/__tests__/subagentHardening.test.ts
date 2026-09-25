@@ -276,6 +276,28 @@ describe('subagent-data-14 · guidance names only the tools the delegate has', (
   it('says nothing at all to a delegate with none of these tools', () => {
     expect(subagentGuidance({ toolNames: ['bash'] })).toEqual([]);
   });
+
+  it('states the environment after the tool blocks and before the project rules', () => {
+    // Same order as the parent's slot table: static guidance, session facts,
+    // then the instruction chain. Shell facts only for a delegate with bash.
+    const environment = {
+      root: '/w',
+      platform: 'linux' as const,
+      shellPath: '/bin/bash',
+      date: '2026-09-25',
+    };
+    const withBash = subagentGuidance({
+      toolNames: ['read', 'bash'],
+      environment,
+      projectInstructions: 'PROJECT_RULE',
+    });
+    expect(withBash.at(-2)).toContain('Environment: the working directory is /w.');
+    expect(withBash.at(-2)).toContain('The bash tool runs /bin/bash.');
+    expect(withBash.at(-1)).toBe('PROJECT_RULE');
+    const readOnly = subagentGuidance({ toolNames: ['read'], environment });
+    expect(readOnly.at(-1)).toContain('Environment: the working directory is /w.');
+    expect(readOnly.at(-1)).not.toMatch(/bash/i);
+  });
 });
 
 /**

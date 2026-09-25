@@ -20,6 +20,7 @@ import {
   type SubagentDefinition,
   subagentCanMutate,
 } from '../../../shared/subagentDefinition.ts';
+import { environmentText, type PromptEnvironment } from '../prompt/environment.ts';
 
 export interface SubagentPromptInput {
   definition: SubagentDefinition;
@@ -57,21 +58,21 @@ export function composeSubagentSystemPrompt(input: SubagentPromptInput): string 
  * `outputMode` or `headLimit` to a `grep` that has neither is worse than saying
  * nothing, because the delegate will spend a turn discovering the lie.
  *
- * Two of the reference's five blocks have no counterpart here and are absent
- * rather than faked:
+ * The shell dialect is stated by the parent's `environment` block
+ * (`prompt/environment.ts`), which names the shell the bash tool is configured
+ * with; it is only included when this delegate has `bash`.
  *
- * - **Shell dialect.** Our exec exit does not record a dialect the way the
- *   reference's `commandShell` does, so there is no fact to state.
- * - **Scratch directory.** This runtime has no session scratch root; the base
- *   prompt dropped that wording for the parent for the same reason
- *   (`prompt/baseSegments.ts`). A delegate told to write into `$PI_SCRATCH_DIR`
- *   would be told to write into a variable nothing sets.
- *
- * Both are recorded in `topics/p5-2-0-baseline.md` as differences rather than
- * gaps: there is nothing to port until the runtime grows the concept.
+ * The reference's scratch-directory block has no counterpart and is absent
+ * rather than faked: this runtime has no session scratch root; the base prompt
+ * dropped that wording for the parent for the same reason
+ * (`prompt/baseSegments.ts`). A delegate told to write into `$PI_SCRATCH_DIR`
+ * would be told to write into a variable nothing sets. Recorded in
+ * `topics/p5-2-0-baseline.md` as a difference rather than a gap.
  */
 export function subagentGuidance(input: {
   toolNames: readonly string[];
+  /** Where the session runs; rendered with shell facts only if the delegate has `bash`. */
+  environment?: PromptEnvironment;
   /** The project's own instruction chain, when the session loaded one. */
   projectInstructions?: string;
 }): string[] {
@@ -134,6 +135,10 @@ export function subagentGuidance(input: {
     );
   }
 
+  // After the per-tool blocks and before the project's rules, the same order
+  // the parent's slot table uses: static guidance, then session facts.
+  if (input.environment)
+    blocks.push(environmentText(input.environment, { bash: tools.has('bash') }));
   if (input.projectInstructions?.trim()) blocks.push(input.projectInstructions.trim());
   return blocks;
 }

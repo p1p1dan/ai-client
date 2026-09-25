@@ -14,7 +14,7 @@
  *   and that the run does not end while a delegate is still working.
  */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
@@ -335,6 +335,48 @@ describe('SA03 / SA06 / SA09 · delegation end to end', () => {
     expect(byName.get(SUBAGENT_WAIT_TOOL_NAME)?.executionMode).toBe('sequential');
     expect(byName.get(SUBAGENT_STOP_TOOL_NAME)?.executionMode).toBe('sequential');
   });
+
+  it('tells each delegate the working directory, with shell facts only if it has bash', async () => {
+    // Field bug: the parent's prompt never named the workspace, and neither
+    // did a delegate's. Both get the same environment facts from bootstrap;
+    // `explorer` declares Bash, `code-reviewer` does not.
+    const prompts: string[] = [];
+    const faux = scriptedProvider({
+      parent: [
+        () =>
+          fauxAssistantMessage(
+            [
+              fauxToolCall('Task', { agent: 'explorer', task: 'look' }),
+              fauxToolCall('Task', { agent: 'code-reviewer', task: 'review' }),
+            ],
+            { stopReason: 'toolUse' }
+          ),
+        () => fauxAssistantMessage('Integrated the reports.'),
+      ],
+      delegate: [
+        (context) => {
+          prompts.push(context.systemPrompt ?? '');
+          return fauxAssistantMessage('REPORT');
+        },
+      ],
+    });
+    runtime = await createRuntime({
+      env: {},
+      providers: [faux.provider],
+      tools: { cwd: workspace, shellPath: '/bin/bash' },
+      permissions: { approve: neverAsked, gear: 'auto' },
+      subagents: { home: join(workspace, 'home') },
+      loop: { singleTurn: false },
+    });
+    expect((await runtime.run({ prompt: 'go' })).success).toBe(true);
+    const root = await realpath(workspace);
+    const explorer = prompts.find((text) => text.includes('You are the "explorer" subagent'));
+    const reviewer = prompts.find((text) => text.includes('You are the "code-reviewer" subagent'));
+    for (const text of [explorer, reviewer])
+      expect(text).toContain(`Environment: the working directory is ${root}.`);
+    expect(explorer).toContain('The bash tool runs /bin/bash.');
+    expect(reviewer).not.toContain('The bash tool runs');
+  }, 15_000);
 
   it('advertises the four builtins in the Task description', async () => {
     const handle = await build({ parent: [() => fauxAssistantMessage('ok')], delegate: [] });

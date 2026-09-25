@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import { DEFERRED_SERVICES, PROMPT_SERVICE } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
+import { baseSegments } from '../plugins/prompt/baseSegments.ts';
 import { instructionSource } from '../plugins/prompt/instructionSource.ts';
-import { deferredSlots } from '../plugins/prompt/segments.ts';
+import { composeSystemPrompt, deferredSlots } from '../plugins/prompt/segments.ts';
+import { toolSegments } from '../plugins/tools/prompt.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
 let dir: string;
@@ -211,6 +213,73 @@ describe('P2 prompt service and HostIo instruction wiring', () => {
     expect(Buffer.from(next.text).subarray(0, next.staticPrefixBytes)).toEqual(
       Buffer.from(first.text).subarray(0, first.staticPrefixBytes)
     );
+  });
+
+  it('tells the model the tools workspace, platform, shell and session date', async () => {
+    // Field bug: a Windows session in `F:\tmp` was never told its working
+    // directory, so an `@file` in the user's message sent the model searching
+    // `C:\`. The root must be the tools' own (canonical) workspace — the one a
+    // relative `read` actually opens — and the date is frozen at bootstrap so
+    // the `session` slot does not change when a session crosses midnight.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 8, 25, 23, 59, 0));
+      await writeFile(join(root, 'AGENTS.md'), 'ROOT_RULE');
+      const { handle, faux } = await runtime({ tools: { cwd: root, shellPath: '/bin/bash' } });
+      const workspace = await realpath(root);
+      const first = await handle.prompt.compose();
+      expect(first.segments.map((segment) => segment.slot)).toEqual([
+        'identity',
+        'collaboration',
+        'tool-protocol',
+        'tool-guidance',
+        'environment',
+        'project-instructions',
+        'mode',
+        'permission-gear',
+      ]);
+      const platform = { win32: 'Windows', darwin: 'macOS', linux: 'Linux' }[
+        process.platform as string
+      ];
+      expect(first.text).toContain(
+        `Environment: the working directory is ${workspace}. Relative paths in tool calls resolve against it, and each bash command starts there.`
+      );
+      expect(first.text).toContain('@path (for example @docs/notes.md) refers to that file');
+      expect(first.text).toContain(`Platform: ${platform ?? process.platform}.`);
+      expect(first.text).toContain('The bash tool runs /bin/bash');
+      expect(first.text).toContain('Current date: 2026-09-25 (taken when this session started).');
+      // Still ahead of the instruction chain, and the static band untouched.
+      expect(first.text.indexOf('Environment:')).toBeLessThan(first.text.indexOf('ROOT_RULE'));
+      const statics = composeSystemPrompt([...baseSegments(), ...toolSegments()]);
+      expect(first.staticPrefixBytes).toBe(statics.bytes);
+      expect(first.text.startsWith(statics.text)).toBe(true);
+
+      // Past midnight: same session, same bytes.
+      vi.setSystemTime(new Date(2026, 8, 26, 0, 1, 0));
+      const next = await handle.prompt.compose();
+      expect(next.text).toBe(first.text);
+
+      // And it is what the request actually carries.
+      const prompts: string[] = [];
+      faux.setResponses([
+        (context) => {
+          prompts.push(context.systemPrompt ?? '');
+          return fauxAssistantMessage('done');
+        },
+      ]);
+      expect((await handle.run({ prompt: 'read @notes.md' })).success).toBe(true);
+      expect(prompts[0]).toBe(first.text);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('names no shell when the session has no bash tool', async () => {
+    const { handle } = await runtime();
+    const composed = await handle.prompt.compose();
+    expect(composed.text).toContain(`the working directory is ${await realpath(root)}.`);
+    expect(composed.text).not.toContain('The bash tool runs');
+    expect(composed.text).not.toContain('each bash command');
   });
 
   it.each([

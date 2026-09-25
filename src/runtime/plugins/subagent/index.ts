@@ -57,6 +57,7 @@ import {
   PROVIDER_TRANSIENT_MAX_RETRIES,
 } from '../agent-loop/providerRetry.ts';
 import type { DelegateCallScope } from '../permissions/index.ts';
+import type { PromptEnvironment } from '../prompt/environment.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
 import { stoppedToolOutcome } from '../tools/outcome.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
@@ -269,6 +270,12 @@ export interface SubagentConfig {
    * says now, the same as the parent's own prompt does.
    */
   projectInstructions?: () => Promise<string | undefined>;
+  /**
+   * The parent's `environment` slot facts (working directory, platform, shell,
+   * date), so a delegate is told where it runs the same way the parent is.
+   * Set by `bootstrap.ts` only; a delegate with no `bash` gets no shell facts.
+   */
+  environment?: PromptEnvironment;
   /**
    * Static fallback thinking level, used only when a run never bound one.
    *
@@ -1297,6 +1304,7 @@ export class SubagentPlugin extends Service implements SubagentService {
         toolNames: available,
         guidance: subagentGuidance({
           toolNames: available,
+          ...(this.config.environment ? { environment: this.config.environment } : {}),
           ...(projectInstructions ? { projectInstructions } : {}),
         }),
       }),

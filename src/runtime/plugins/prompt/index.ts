@@ -5,6 +5,7 @@ import { resolveSettingSources, type SettingSourceOptions } from '../../settingS
 import { modeSegment, permissionGearSegment } from '../permissions/prompt.ts';
 import { toolSegments } from '../tools/prompt.ts';
 import { baseSegments } from './baseSegments.ts';
+import { environmentSegment, type PromptEnvironment } from './environment.ts';
 import { instructionSource } from './instructionSource.ts';
 import { InstructionTracker } from './instructionTracker.ts';
 import {
@@ -37,16 +38,27 @@ export interface PromptConfig extends SettingSourceOptions {
   skipUserTier?: InstructionChainOptions['skipUserTier'];
 }
 
+/** What `bootstrap.ts` hands the plugin: the caller's options plus facts it derives. */
+export interface PromptPluginConfig extends PromptConfig {
+  /**
+   * Facts for the `environment` slot. Not on {@link PromptConfig}: its root is
+   * the tools workspace itself, and a caller-supplied copy could name a
+   * directory other than the one relative tool paths resolve against. Absent
+   * in the tool-less lane, which has no workspace.
+   */
+  environment?: PromptEnvironment;
+}
+
 export class PromptPlugin extends Service implements RuntimePromptService {
   static inject = [HOST_IO_SERVICE];
-  private readonly config: PromptConfig;
+  private readonly config: PromptPluginConfig;
   /**
    * decision 007 — session state, so it lives on the plugin rather than being
    * rebuilt per `compose()`. Absent when there is no workspace to walk into.
    */
   private readonly tracker?: InstructionTracker;
 
-  constructor(ctx: Context, config: PromptConfig = {}) {
+  constructor(ctx: Context, config: PromptPluginConfig = {}) {
     super(ctx, PROMPT_SERVICE);
     this.config = config;
     if (config.root) {
@@ -77,6 +89,7 @@ export class PromptPlugin extends Service implements RuntimePromptService {
   async compose() {
     const segments = [...baseSegments()];
     if (this.ctx.get('runtimeTools')) segments.push(...toolSegments());
+    if (this.config.environment) segments.push(environmentSegment(this.config.environment));
     // P5-1. Read through `ctx.get` like the other optional contributors: a
     // graph built without tools has no `skill` tool either, and a catalog
     // advertised without it would name capabilities the model cannot reach.

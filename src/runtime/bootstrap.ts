@@ -61,7 +61,12 @@ import {
   type RuntimePermissionsService,
 } from './plugins/permissions/index.ts';
 import { loadPermissionPolicy } from './plugins/permissions/policy.ts';
-import { type PromptConfig, PromptPlugin } from './plugins/prompt/index.ts';
+import { localDate, type PromptEnvironment } from './plugins/prompt/environment.ts';
+import {
+  type PromptConfig,
+  PromptPlugin,
+  type PromptPluginConfig,
+} from './plugins/prompt/index.ts';
 import { instructionSource } from './plugins/prompt/instructionSource.ts';
 import { projectInstructionsText } from './plugins/prompt/projectInstructions.ts';
 import { SessionPlugin } from './plugins/session/index.ts';
@@ -135,8 +140,12 @@ const SUBAGENT_SCAN_BYTES = 64 * 1024;
  *    A and B: skills and prompt templates, subagents and the `Task*` tools, MCP
  *    tools, the model catalog rebind, bash static analysis, permission surface
  *    mapping, compaction's internal-message exclusion, layered instructions.
+ *  - `runtime_p6_hardening_v2` — the `environment` prompt segment (working
+ *    directory, platform, shell, date) for the main loop and subagents. First
+ *    bump since hardening batches C–M, which changed behaviour (image reads,
+ *    the stopped-bash outcome, the delegation loop guard) without raising it.
  */
-export const RUNTIME_CONFIG_VERSION = 'runtime_p6_hardening_v1';
+export const RUNTIME_CONFIG_VERSION = 'runtime_p6_hardening_v2';
 
 export interface RuntimeBootstrapOptions {
   env?: NodeJS.ProcessEnv;
@@ -165,7 +174,7 @@ export interface RuntimeBootstrapOptions {
    * machine. Present with an empty catalog still registers nothing — a `Task`
    * tool with no delegates can only ever answer "unknown subagent".
    */
-  subagents?: Omit<SubagentConfig, 'catalog'> & SubagentCatalogConfig;
+  subagents?: Omit<SubagentConfig, 'catalog' | 'environment'> & SubagentCatalogConfig;
   session?: SessionConfig;
   agentDir?: string;
   traceDir?: string | null;
@@ -426,12 +435,27 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     await eventsFiber.await();
     const contextFiber = await ctx.plugin(ContextPlugin, options.context ?? {});
     await contextFiber.await();
+    // The `environment` slot's facts. Field bug: on Windows the model was never
+    // told the workspace was `F:\tmp` and went looking for an `@file` under
+    // `C:\`. Built from `workspace` because that is the exact root the tools
+    // resolve a relative path against, and `shellPath` because it is what
+    // decides whether `bash` is registered at all. Resolved here, once, like
+    // `home` below: the delegates state the same facts, and a date read per
+    // compose would change the prompt at midnight and break the `session` band.
+    const environment: PromptEnvironment | undefined = workspace
+      ? {
+          root: workspace,
+          platform: process.platform,
+          ...(options.tools?.shellPath ? { shellPath: options.tools.shellPath } : {}),
+          date: localDate(new Date()),
+        }
+      : undefined;
     // decision 008 — one prompt config, used both by the parent's own prompt and
     // by the per-delegation chain below. It used to be spelled out twice, and
     // the two copies now carry three switches each; a third copy would be a
     // third chance for them to disagree about what a delegate is allowed to
     // read.
-    const promptConfig: PromptConfig = {
+    const promptConfig: PromptPluginConfig = {
       ...options.prompt,
       root: options.prompt?.root ?? workspace ?? options.tools?.cwd,
       // T059 — resolved HERE rather than in the prompt plugin because this
@@ -460,6 +484,7 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
           : []),
         ...(options.prompt?.globals ?? []),
       ],
+      environment,
     };
     const promptFiber = await ctx.plugin(PromptPlugin, promptConfig);
     await promptFiber.await();
@@ -575,6 +600,9 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               instructionSource(ctx.runtimeHostIo, options.prompt?.maxBytes),
               promptConfig
             )),
+        // The parent's own environment facts, not a caller's: a delegate works
+        // through the same tools registry, so the same root and shell are true.
+        ...(environment ? { environment } : {}),
       });
       await subagentFiber.await();
     }

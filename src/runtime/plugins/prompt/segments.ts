@@ -38,8 +38,8 @@ import { RuntimeConfigError } from '../../contracts.ts';
  * How often a slot's text can change, which is what fixes its position.
  *
  * - `static`  — identical for every run of a given build. Safe as a cache prefix.
- * - `session` — fixed once a session is configured (its cwd, its skills, the
- *   instruction files it loaded).
+ * - `session` — fixed once a session is configured (its cwd and the date it
+ *   started, its skills, the instruction files it loaded).
  * - `turn`    — may differ between two turns of one session, because the user
  *   can change it mid-session (ARD D14's mode and permission gear both can).
  */
@@ -81,6 +81,12 @@ export const PROMPT_SLOTS: readonly PromptSlotDefinition[] = [
   { id: 'collaboration', stability: 'static' },
   { id: 'tool-protocol', stability: 'static' },
   { id: 'tool-guidance', stability: 'static' },
+  // Working directory, platform, shell and date (`environment.ts`). First in
+  // the session band: any earlier and its per-machine text would cut the
+  // static prefix, which must stay byte-identical across machines. Resolved
+  // once per graph (the date too), it never changes mid-session, so it cannot
+  // invalidate the skills catalog or the per-compose instruction chain after it.
+  { id: 'environment', stability: 'session' },
   // Filled by P5-1 (`plugins/skills/prompt.ts`). The catalog lists names the
   // model loads through the `skill` tool, which is registered by the same
   // plugin — so the slot and the way to reach what it advertises landed

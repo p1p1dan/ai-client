@@ -182,6 +182,16 @@ if (config.toolExecution === "sequential" || hasSequentialToolCall) { /* 串行 
 native 后端的权限审批是本仓自己的结构化中文权限卡；legacy 后端是 pi 插件自己的英文 `ui.select` 弹窗。
 两者**不是同一张卡**。SA10「审批来源正确」取证时只认一种会读成「没弹审批」，验收脚本要分后端写。
 
+### 3.7 子代理提示词里的会话事实（`subagentGuidance`）
+
+参考的五块引导里有两块本仓当时没有对应，按「缺席而不伪造」处理，记为差异而非缺口：
+
+- **Shell 方言**：参考靠 `commandShell` 记录方言，本仓 exec 出口没有这个事实可陈述。
+  ✅ **已解决（2026-09-25）**：新增 `environment` 提示词段（`plugins/prompt/environment.ts`），
+  由 bootstrap 一次性给出工作目录、平台、bash 实际使用的 shell 与日期，主循环与子代理共用；
+  子代理只有声明了 `bash` 才带 shell 部分。
+- **Scratch 目录**：本仓没有会话级 scratch 根，写 `$PI_SCRATCH_DIR` 等于让子代理写进一个没人设置的变量。仍保持缺席。
+
 ---
 
 ## 4. D12 不升级的记录
