@@ -1,7 +1,7 @@
 # @aiclient/dsh-app — ai-client's worker-engine bundle, stacked over dsh-base
 # (profile bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app']).
 #
-# P0-1 probe of the dsh-rebase plan. Host-only composition: no Web client, no
+# P0 probe of the dsh-rebase plan. Host-only composition: no Web client, no
 # HTTP endpoint. `host/webserver` and `host/frontend-static` are rows of
 # dsh-web-app, which this profile never stacks, so they are absent rather than
 # disabled; host.ts asserts that absence on the composed entry list.
@@ -26,8 +26,78 @@
 - id: hmr
   disabled: true
 
+# ---- P0-2: no DeepSeek official endpoint anywhere in this composition -------
+
+# The native deepseek-official route and its request extensions.
+- id: llm-deepseek
+  disabled: true
+
+- id: deepseek-llm-api-extensions
+  disabled: true
+
+# Attaches the installed-plugin list to official DeepSeek requests.
+- id: plugin-package-inventory-deepseek
+  disabled: true
+
+# Uploads the canonical session log, incrementally, inside official DeepSeek
+# requests (`dsh_session_log` field). Off for privacy, not only for routing.
+- id: session-log-deepseek
+  disabled: true
+
+# First-prompt titles are an extra model request per session.
+- id: session-title-llm
+  disabled: true
+
+# web_search is the official DeepSeek search endpoint and web_fetch reaches the
+# public internet; neither belongs in the probe. P1 routes search through the
+# ai-client gateway instead.
+- id: tool-web
+  disabled: true
+
+- id: web
+  disabled: true
+
+- id: web-search-deepseek
+  disabled: true
+
+- id: web-fetch-http
+  disabled: true
+
+# Every model request goes through llm-pi-ai to the ai-client gateway route.
+# The probe points it at a local fake gateway; unset, it points at the discard
+# port, never at a real provider.
+- id: llm-pi-ai
+  config:
+    providers:
+      aiclient-gateway:
+        displayName: ai-client gateway (P0 probe)
+        api: anthropic-messages
+        baseURL: !!js "process.env.AICLIENT_DSH_GATEWAY_URL ?? 'http://127.0.0.1:9'"
+        apiKeyEnv: AICLIENT_DSH_GATEWAY_KEY
+        models:
+          - id: fake-1
+            name: P0 fake model
+            contextWindow: 200000
+            maxTokens: 8192
+            reasoningEfforts: false
+        retryPolicy:
+          mode: normal
+          maxRetries: 0
+
+- id: agent-default-model
+  config:
+    provider: aiclient-gateway
+    model: fake-1
+
+# Plugin installs ask npm's own registry only; no mirror fallback.
+- id: plugin-manager
+  config:
+    registry: https://registry.npmjs.org/
+    fallbackRegistries: []
+
 - insert:
-    # IPC probe: session create/close and stats over the Node IPC channel the
-    # parent opened. Stand-in for the future aiclient-bridge row.
+    # IPC probe: sessions, prompts, commands, goal reads, plugin installs, an
+    # approval answerer and event capture over the Node IPC channel the parent
+    # opened. Stand-in for the future aiclient-bridge row.
     - id: aiclient-probe
       name: '@aiclient/dsh-app'

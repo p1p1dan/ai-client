@@ -113,11 +113,26 @@
  *                           input={"command":"pwd && ls -la"}.
  *                         5th+ requests: plain text "archive probe finished"
  *                           (stop_reason: end_turn).
+ *   dsh-p0-2           (added by dsh-rebase P0-2) CONTENT-KEYED plan for the DSH host probe
+ *                       (src/dsh-host/goal-probe.ts). Each request is decided from its own
+ *                       messages, not from the sequence number: the latest user message
+ *                       carrying a scenario marker (P0-GOAL-COMPLETE, P0-GOAL-BLOCKED,
+ *                       P0-GOAL-PAUSE, P0-GOAL-ROUNDLIMIT, P0-JOBS, P0-OFFICE, P0-ENV,
+ *                       P0-APPROVAL) or a
+ *                       DSH `<goal_round>` continuation prompt is the trigger; the number of
+ *                       tool calls since the trigger is the step. Goal rounds read their
+ *                       round number from the prompt's `Round: N/M` line, update_goal copies
+ *                       the id/revision from the latest get_goal result, and a
+ *                       `<goal_complete>` / `<goal_blocked>` wrap-up is answered with text.
+ *                       Scripts are listed in `DSH_P0_2_SCRIPTS` below.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
- * with: ISO timestamp, sequence number, HTTP status returned, the role of the last message in
- * the request body, a <=200 char snippet of that message's content, and whether the body
- * contained a tool_result content block.
+ * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
+ * last message in the request body, a <=200 char snippet of that message's content, and whether
+ * the body contained a tool_result content block. The dsh-p0-2 plan also logs its decision
+ * (scenario, round, step, tool) and the auth header it received.
+ *
+ * `--port 0` listens on an ephemeral port; the startup line prints the actual one.
  *
  * Examples:
  *   node fake-gateway.mjs --port 18080 --plan text
@@ -139,7 +154,7 @@ import http from 'node:http';
 import path from 'node:path';
 import process from 'node:process';
 
-const LOG_PATH = '/tmp/t032/fake-gateway.log';
+let LOG_PATH = '/tmp/t032/fake-gateway.log';
 const VALID_PLANS = [
   'text',
   'long-turn',
@@ -151,6 +166,7 @@ const VALID_PLANS = [
   'slow-write',
   'long-thinking',
   'slow-fail',
+  'dsh-p0-2',
 ];
 
 /** Per-plan pacing defaults, applied only when the caller did not say. */
@@ -186,9 +202,10 @@ function parseArgs(argv) {
     else if (a === '--hold') args.hold = Number(argv[++i]);
     else if (a === '--write-path') args.writePath = argv[++i];
     else if (a === '--write-lines') args.writeLines = Number(argv[++i]);
+    else if (a === '--log') args.log = argv[++i];
     else throw new Error(`Unknown arg: ${a}`);
   }
-  if (!args.port || Number.isNaN(args.port)) throw new Error('--port <n> is required');
+  if (args.port === null || Number.isNaN(args.port)) throw new Error('--port <n> is required');
   if (!args.plan) throw new Error('--plan <name> is required');
   if (!VALID_PLANS.includes(args.plan)) {
     throw new Error(`--plan must be one of: ${VALID_PLANS.join(', ')} (got "${args.plan}")`);
@@ -268,6 +285,256 @@ function logRequest(entry) {
   ensureLogDir();
   const line = JSON.stringify({ time: new Date().toISOString(), ...entry });
   fs.appendFileSync(LOG_PATH, `${line}\n`);
+}
+
+// ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
+
+const P0_MARKER =
+  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL)/;
+
+/** Text of a message's own text blocks (tool results excluded). */
+function ownText(message) {
+  if (!message) return '';
+  if (typeof message.content === 'string') return message.content;
+  if (!Array.isArray(message.content)) return '';
+  return message.content
+    .filter((block) => block?.type === 'text')
+    .map((block) => block.text ?? '')
+    .join('\n');
+}
+
+function toolResultText(block) {
+  const c = block.content;
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.map((x) => x?.text ?? '').join('\n');
+  return '';
+}
+
+/** The latest get_goal result, parsed to the ref update_goal needs. */
+function goalRefFrom(calls) {
+  const read = [...calls].reverse().find((c) => c.name === 'get_goal' && c.result !== undefined);
+  if (!read) return { goal_id: 'missing-get-goal', revision: 1 };
+  try {
+    const parsed = JSON.parse(read.result.slice(read.result.indexOf('{')));
+    return { goal_id: parsed.goal.id, revision: parsed.goal.revision };
+  } catch {
+    return { goal_id: 'unparsable-get-goal', revision: 1 };
+  }
+}
+
+const tool = (name, input) => ({ kind: 'tool_use', status: 200, name, input });
+const say = (text) => ({ kind: 'text', status: 200, text });
+
+/**
+ * One script per scenario: (round, step, calls) -> decision. Round 0 is the
+ * human turn; goal rounds are 1-based as the round driver numbers them.
+ */
+const DSH_P0_2_SCRIPTS = {
+  'GOAL-COMPLETE'(round, step, calls) {
+    if (round === 0) {
+      if (step === 0) {
+        return tool('create_goal', {
+          objective: 'P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it',
+          max_goal_rounds: 4,
+        });
+      }
+      return say('Goal created; automatic rounds will do the work.');
+    }
+    if (round === 1) {
+      if (step === 0) {
+        return tool('todo_write', {
+          todos: [
+            { content: 'Write progress.txt', status: 'in_progress' },
+            { content: 'Verify progress.txt', status: 'pending' },
+          ],
+        });
+      }
+      if (step === 1) {
+        return tool('bash', {
+          command: 'echo round-1 > progress.txt && cat progress.txt',
+          description: 'Write progress file',
+        });
+      }
+      return say('Round 1: wrote progress.txt; verification remains for the next round.');
+    }
+    if (round === 2) {
+      if (step === 0) {
+        return tool('bash', { command: 'cat progress.txt', description: 'Verify progress file' });
+      }
+      if (step === 1) {
+        return tool('todo_write', {
+          todos: [
+            { content: 'Write progress.txt', status: 'completed' },
+            { content: 'Verify progress.txt', status: 'completed' },
+          ],
+        });
+      }
+      if (step === 2) return tool('get_goal', {});
+      if (step === 3) return tool('update_goal', { ...goalRefFrom(calls), action: 'complete' });
+      return say('Objective achieved: progress.txt verified.');
+    }
+    return say(`unexpected round ${round}`);
+  },
+  'GOAL-BLOCKED'(round, step, calls) {
+    if (round === 0) {
+      if (step === 0) {
+        return tool('create_goal', {
+          objective: 'P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it',
+          max_goal_rounds: 6,
+        });
+      }
+      return say('Goal created.');
+    }
+    if (step === 0) {
+      return tool('bash', {
+        command: 'cat /nonexistent/p0-config.json',
+        description: 'Read the config',
+      });
+    }
+    if (step === 1) return tool('get_goal', {});
+    if (step === 2) {
+      return tool('update_goal', {
+        ...goalRefFrom(calls),
+        action: 'blocked',
+        blocked_reason: `Config /nonexistent/p0-config.json is still missing (round ${round}).`,
+      });
+    }
+    const update = calls.find((c) => c.name === 'update_goal');
+    return say(
+      update?.isError
+        ? `Round ${round}: still blocked, the blocker was not accepted yet.`
+        : 'Blocked: the config file does not exist.'
+    );
+  },
+  'GOAL-PAUSE'(round, step, calls) {
+    if (round === 1) {
+      if (step === 0) {
+        return tool('bash', {
+          command: 'sleep 8; echo slow-check-done',
+          description: 'Slow check',
+        });
+      }
+      return say('Slow check finished.');
+    }
+    if (round >= 2) {
+      if (step === 0) return tool('get_goal', {});
+      if (step === 1) return tool('update_goal', { ...goalRefFrom(calls), action: 'complete' });
+      return say('Resumed and finished.');
+    }
+    return say('P0-GOAL-PAUSE has no human-turn script.');
+  },
+  'GOAL-ROUNDLIMIT'(round, step) {
+    if (round === 0) {
+      if (step === 0) {
+        return tool('create_goal', {
+          objective: 'P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing',
+          max_goal_rounds: 2,
+        });
+      }
+      return say('Goal created.');
+    }
+    return say(`Still polishing (round ${round}); work remains.`);
+  },
+  JOBS(_round, step, calls) {
+    if (step === 0) {
+      return tool('bash', {
+        command: 'for i in 1 2 3; do echo tick-$i; sleep 1; done',
+        description: 'Background ticker',
+        run_in_background: true,
+      });
+    }
+    // DSH answers "started background job <id> ...".
+    const started = calls[0]?.result ?? '';
+    const jobId = (started.match(/background job ([\w.:-]+)/) ?? [])[1] ?? 'unknown-job';
+    if (step === 1) return tool('job_list', {});
+    if (step === 2) return tool('job_output', { job_id: jobId, wait: true, timeout_ms: 15000 });
+    return say('Background job collected.');
+  },
+  APPROVAL(_round, step, _calls, triggerText) {
+    // The prompt names a path outside the session workspace: `path=<abs path>`.
+    const target = (triggerText.match(/path=(\S+)/) ?? [])[1] ?? 'outside-approval.txt';
+    // First a plain write (the file sandbox denies it), then the same write
+    // asking for escalation, which DSH routes through `approval/request`.
+    if (step === 0) {
+      return tool('write', { file_path: target, content: 'written after approval\n' });
+    }
+    if (step === 1) {
+      return tool('write', {
+        file_path: target,
+        content: 'written after approval\n',
+        sandbox_permissions: 'danger-full-access',
+        justification: 'The P0 probe needs one file outside the workspace.',
+      });
+    }
+    return say('Write outside the workspace attempted.');
+  },
+  OFFICE(_round, step) {
+    if (step === 0) {
+      return tool('word_create', {
+        path: 'p0-report.docx',
+        title: 'P0-2 report',
+        paragraphs: ['Written by dsh-office-tools through the fake gateway.'],
+        bullets: ['goal', 'todo', 'jobs'],
+      });
+    }
+    if (step === 1) return tool('word_read', { path: 'p0-report.docx' });
+    return say('Office document created and read back.');
+  },
+  ENV(_round, step) {
+    if (step === 0) {
+      return tool('bash', {
+        // Values of the canaries only; every other variable is listed by name.
+        command:
+          // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
+          'echo "ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLIENT_DSH_GATEWAY_KEY:+present}"; echo "names: $(env | cut -d= -f1 | sort | tr "\\n" " ")"',
+        description: 'Print env canaries',
+      });
+    }
+    return say('Env canaries printed.');
+  },
+};
+
+/** dsh-p0-2: decide from the request's own messages. */
+function decideDshP02(parsed) {
+  const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
+  const lastText = ownText(messages[messages.length - 1]);
+  if (/<goal_(complete|blocked)>/.test(lastText)) {
+    return { ...say('Wrapping up the goal for the user.'), label: 'wrap-up' };
+  }
+  let trigger = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role !== 'user') continue;
+    const text = ownText(messages[i]);
+    if (/<goal_round>/.test(text) || P0_MARKER.test(text)) {
+      trigger = i;
+      break;
+    }
+  }
+  if (trigger < 0) return { ...say('fake gateway: no P0 scenario marker'), label: 'no-marker' };
+  const triggerText = ownText(messages[trigger]);
+  const scenario = triggerText.match(P0_MARKER)?.[1];
+  const roundMatch = triggerText.match(/<goal_round>[\s\S]*?Round: (\d+)\//);
+  const round = roundMatch ? Number(roundMatch[1]) : 0;
+  const calls = [];
+  for (const message of messages.slice(trigger + 1)) {
+    if (!Array.isArray(message?.content)) continue;
+    for (const block of message.content) {
+      if (message.role === 'assistant' && block?.type === 'tool_use') {
+        calls.push({ id: block.id, name: block.name, input: block.input });
+      }
+      if (message.role === 'user' && block?.type === 'tool_result') {
+        const call = calls.find((c) => c.id === block.tool_use_id);
+        if (call) {
+          call.result = toolResultText(block);
+          call.isError = block.is_error === true;
+        }
+      }
+    }
+  }
+  const script = DSH_P0_2_SCRIPTS[scenario];
+  if (!script) return { ...say(`fake gateway: no script for ${scenario}`), label: 'no-script' };
+  const decision = script(round, calls.length, calls, triggerText);
+  return { ...decision, label: `${scenario} r${round} s${calls.length}` };
 }
 
 /** Decide what this request's response should look like, given the active plan. */
@@ -726,6 +993,7 @@ function sendError(res, status, message) {
 
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.log) LOG_PATH = args.log;
   const state = loadState(args.state, args.reset);
   saveState(args.state, state); // materialize the state file even on first run / --reset
 
@@ -768,7 +1036,10 @@ function main() {
       const toolResultPresent = hasToolResult(messages);
       const summary = summarizeMessage(lastMessage);
 
-      const decision = decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
+      const decision =
+        args.plan === 'dsh-p0-2'
+          ? decideDshP02(parsed)
+          : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
 
       logRequest({
         seq,
@@ -777,6 +1048,15 @@ function main() {
         contentSummary: summary,
         hasToolResult: toolResultPresent,
         plan: args.plan,
+        ...(args.plan === 'dsh-p0-2'
+          ? {
+              decision: decision.label,
+              tool: decision.kind === 'tool_use' ? decision.name : undefined,
+              auth: req.headers['x-api-key'] ?? req.headers.authorization ?? null,
+              path: req.url,
+              tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
+            }
+          : {}),
       });
       saveState(args.state, state);
 
@@ -806,7 +1086,7 @@ function main() {
   server.listen(args.port, '127.0.0.1', () => {
     // eslint-disable-next-line no-console
     console.log(
-      `[fake-gateway] listening on http://127.0.0.1:${args.port} plan=${args.plan} sleep=${args.sleep} state=${args.state} model=${args.modelId} pid=${process.pid}`
+      `[fake-gateway] listening on http://127.0.0.1:${server.address().port} plan=${args.plan} sleep=${args.sleep} state=${args.state} model=${args.modelId} pid=${process.pid}`
     );
   });
 

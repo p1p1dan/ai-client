@@ -39,6 +39,12 @@ const REQUIRED_DISABLED = [
   'deepseek-account',
   'llm-deepseek-account',
   'hmr',
+  // No row may reach the DeepSeek official endpoint.
+  'llm-deepseek',
+  'deepseek-llm-api-extensions',
+  'plugin-package-inventory-deepseek',
+  'session-log-deepseek',
+  'web-search-deepseek',
 ];
 
 const marks: Record<string, number> = { entry: performance.now() };
@@ -84,6 +90,17 @@ const profileContext = {
   home,
   overlays: [],
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
+  // Plugin installs run pnpm's CLI on this same Node binary, as a packaged app
+  // would with its bundled pnpm (AICLIENT_DSH_PNPM_CLI = path to pnpm.cjs).
+  ...(process.env.AICLIENT_DSH_PNPM_CLI
+    ? {
+        packageManager: {
+          command: process.execPath,
+          args: [process.env.AICLIENT_DSH_PNPM_CLI],
+          env: {},
+        },
+      }
+    : {}),
 };
 const patches = appBoot.readProfilePatches(BIN, profileContext, profile);
 
