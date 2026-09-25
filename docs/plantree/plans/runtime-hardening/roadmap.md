@@ -366,7 +366,7 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ⬜ T127 | 全量测试出现过一次无法复现的偶发失败 | P3 | 2026-09-24 收口 | 那一轮日志只保留了末尾 40 行未能定位；此后全量两轮、时序敏感新测试连跑 3 遍均未复现。下次全量务必保留完整输出 |
 | ✅ T128 | 开发机点验判负与清单外问题修复（6 项） | P1 | [点验证据](evidence/interject-branch-devbox-2026-09-24/README.md)；用户 2026-09-24 拍板打包前修 | ① D1：死循环掐断后中文失败卡不出现（store 读数 `tool_call_repetition` 但状态被随后的 idle 覆盖）；② C3：流式期间点开思考块，展开后首次正文增长仍触发贴底跟随，标题被滚出视野；③ 运行中 `/compact` 被主进程拒绝而界面零提示；④ 被插话结束的回合重开后「已工作」从 20 秒变 1 秒；⑤ 被拒绝 / 未执行的子代理工具调用仍显示完成时动词；⑥ 切分支失败报错被截成「Error invoki…」。修复后 GUI 复验 **已落地** `403b7575`；GUI 复验 8 项全 ✅（[recheck-t128](evidence/interject-branch-devbox-2026-09-24/recheck-t128/README.md)）。 |
 | ⬜ T129 | 排队消息逐条发出间隔偏长（插话后隔 4.1 秒发排队-1，再隔 10 秒发排队-2，每条回复本身约 20ms） | P2 | 2026-09-24 开发机点验 A4 | 更早就有；先查队列释放为何要等数秒 |
-| ⬜ T130 | 被 Stop 中止的 bash 在 store 里记成成功（`toolOk=true`） | P2 | 2026-09-24 开发机点验 | 更早就有 |
+| ⬜ T130 | 被 Stop 中止的 bash 在 store 里记成成功（`toolOk=true`） | P2 | 2026-09-24 开发机点验 | 更早就有。根因与修法见 [bash 计划书](../../../plans/2026-09-24-bash-streaming-and-background-plan.md) §2.8 / §3.3（B1 + B2），可单独先做 |
 | ⬜ T131 | 开发机点验环境：GNOME login 密钥环锁定时默认 profile 启动卡死且无任何提示；`dev.env` 的 `AICLIENT_MANAGED_CREDENTIALS=1` 与点验手册（写 0）不一致 | P3 | 2026-09-24 开发机点验 | 点验改用隔离 profile + `--password-store=basic` 绕过，做法见点验证据；手册需回写，应用侧是否应在密钥环不可用时给提示另议 |
 | ⬜ T132 | 回合运行中执行 `/archive` 会直接归档并结束正在跑的回合，不像侧栏那样先弹确认 | P2 | 2026-09-24 T128 修复时排查内置命令发现 | 只记录未改；归档失败原先静默清空输入框已随 T128 改为提示 |
 | ⬜ T133 | 回合中途抛异常的失败路径（agent-loop 的 catch、NativeSessionIndexAdapter 的 catch）事件里没有 `errorCode`，失败卡只能显示兜底标题「这一轮停下了」 | P3 | 2026-09-24 T128 修复时排查失败路径发现 | 补 `errorCode` 时需同步改 `modelMissingWiring` 的 MMW-15（按字面检查那一行） |
@@ -374,7 +374,10 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ⬜ T135 | 失败卡「继续」把上一条提示词作为新消息再发一次，模型会收到两条相同的 user 消息；在确定性输出下会原样复现同一次失败 | P2 | 2026-09-24 T128 GUI 复验 X3 | 已拍板改为「重试上一轮」（[决策 045](decisions/045-failure-card-continue-retries-last-turn.md)） |
 | ⬜ T136 | 点 Stop 后 trace 记了一次 `provider_retry`，但网关没有收到任何重试请求 | P3 | 2026-09-24 T128 GUI 复验 X8 | 只在 trace 中出现，先查是否为误记 |
 | ⬜ T137 | 单条过程段也折叠，与多条统一 | P2 | 用户待办 T11，2026-09-24 拍板 | [决策 044](decisions/044-single-step-process-also-folds.md)：推翻 T112 的单条直出，恢复「1 个步骤」词条；未应答授权强制展开对单项组仍生效 |
-| ⬜ T138 | goal 模式 + 对齐 DeepSeek Harness 最新版的差距调研 | P2 | 用户 2026-09-24：「参考 Claude / Codex 的 goal 模式……需要全面向它看齐」 | 先出调研档（DSH 最新版对比 08-18 基线、goal 模式三方做法、我方差距与优先级），用户定范围后再立实施任务 |
+| ⬜ T138 | goal 模式 + 对齐 DeepSeek Harness 最新版的差距调研 | P2 | 用户 2026-09-24：「参考 Claude / Codex 的 goal 模式……需要全面向它看齐」 | 用户当日把范围扩大为「整个产品基于 DSH 二开」。调研档 [2026-09-24-dsh-rebase-feasibility-study](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md) 推荐 B 路线（DSH 宿主当 worker 引擎），goal 模式并入其 P0 / P1；§9 六个拍板点待定 |
+| ✅ T139 | read 读不了图片（现场：粘贴图片后模型 read xx.png 失败） | P0 | 用户待办 D1 | `7fe97881`：read 支持 PNG / JPEG / GIF / WebP，单张上限同粘贴附件，单次运行总量计入附件额度，边长 > 8000px 拒读；trace / 子代理记录 / projector 三处不再携带或截坏 base64 |
+| ✅ T140 | 点开任意图片 / PDF 预览整屏报错「Failed to construct 'URL': Invalid URL」 | P0 | 用户待办 D1，2026-09-24 用户 Windows 复现 | `9fabb28b`：local-file 是 standard scheme，Chromium 下 `new URL('local-file://')` 空主机抛错，所有平台所有路径都崩，Node 里的单测测不出；改为字符串拼接 `local-file://localhost/…`，真实 Electron 探针 24 种路径往返正确。另加局部错误边界、复制错误信息、错误进主进程日志、「用系统程序打开」。Windows 真机复验待做 |
+| ✅ T141 | 模型未声明图片输入时粘贴的图片被静默丢弃 | P2 | T139 调查发现 | `df995820`：模型选项贯通 `input` 字段，输入框提示「模型看不到这张图」，不阻断发送 |
 
 ## Deferred
 
