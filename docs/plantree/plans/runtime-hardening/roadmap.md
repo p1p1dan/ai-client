@@ -380,6 +380,9 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T141 | 模型未声明图片输入时粘贴的图片被静默丢弃 | P2 | T139 调查发现 | `df995820`：模型选项贯通 `input` 字段，输入框提示「模型看不到这张图」，不阻断发送 |
 | ⬜ T142 | 子代理面板里被 Stop 的 bash 仍显示为红色失败行 | P3 | T130 落地时发现 | `subagent.activity` 的 `tool.completed` 只带 `ok` 与通用 `errorText`（`subagent/records.ts:629-639`），需把 outcome 标记带上这条通道 |
 | ✅ T143 | 系统提示词没告诉模型工作目录：Windows 上 `@xxx.md` 引用 `F:\tmp` 下的文件，模型先去 C 盘根目录找 | P1 | 用户 2026-09-25 现场反馈 | 根因：换成自有 runtime 后丢了 pi 提示词末尾的 `Current working directory`，8 个槽位都不带 cwd / 平台 / shell。修法：新增 session 段 `environment`（工作目录、相对路径与 `@path` 的含义、平台、bash 实际的 shell、会话开始日期），主循环与子代理都带；静态前缀字节不变；`RUNTIME_CONFIG_VERSION` 升到 `runtime_p6_hardening_v2`。分支 `fix/prompt-working-directory`，代码 `b2067012`；收口三套 tsc exit 0，全量 Vitest 506 文件 / 7684 条全部通过（2026-09-25） |
+| ⬜ T144 | 「继续」后停不下来（Worker / Main 侧）：Stop / 插话 / 结束对话只发不回、没有对账；run 在注册 abort 监听前的 await 上不可停；`startSend` 未接纳先回 accepted | P0 | 用户 2026-09-25 Windows `1.0.3-test.2` 现场 | 按[决策 046](decisions/046-stop-always-settles.md)：Main 对账与看门狗、`closeSession` 先派发终态、abort 监听前移、接纳真实化；[根因排查](evidence/stuck-after-continue-2026-09-25.md) H1 / H3a / H3c |
+| ⬜ T145 | 「继续」后停不下来（渲染层）：`stopping` 下 Stop 按钮消失、Esc 失效；发送握手的 IPC 等待不可取消；结束对话后队列死锁；禁用的「立即发送」点击穿透成「取回编辑」 | P0 | 同 T144 | 按[决策 046](decisions/046-stop-always-settles.md)；[根因排查](evidence/stuck-after-continue-2026-09-25.md) H2 / H3b |
+| ⬜ T146 | 工具行时钟把参数流式与审批等待也算进去，显示成「3m55s/2m」像已超时 | P2 | 同 T144 | bash 在执行前发 `execStartedAt`，时钟与上限都从执行开始算，审批等待另显示；[根因排查](evidence/stuck-after-continue-2026-09-25.md)「显示问题」 |
 
 **2026-09-25 收口（T124 / T139～T141 / T125 / T130）**：三套 tsc 通过；全量 Vitest 单 worker **506 文件 / 7674 例全部通过，264 s**（对比 09-24 的 493 / 7461、1 例既有失败即 T124），完整输出按 T127 的要求保留在本机 `/tmp/closeout/vitest-full.txt`。版本 `1.0.3-test.2` 手动打包供 Windows 复验（T140 预览、T139 读图、T130、T125），批次 M 的 Windows 实测清单一并在该包上执行。
 
