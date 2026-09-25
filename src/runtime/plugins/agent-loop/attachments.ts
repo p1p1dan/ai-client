@@ -60,7 +60,7 @@ export const ATTACHMENT_TURN_STORED_BYTES = Math.floor(SESSION_MAX_BYTES / 4);
  * Decoding a 5 MiB image to measure it would allocate the very thing the cap
  * exists to refuse.
  */
-function base64Bytes(data: string): number {
+export function base64Bytes(data: string): number {
   const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
   return Math.max(0, Math.floor((data.length * 3) / 4) - padding);
 }

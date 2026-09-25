@@ -216,6 +216,24 @@ describe('subagent-data-05 · a delegate message is clamped before it is written
     expect(clamped.details.nested.deeper.length).toBeLessThanOrEqual(MAX_RECORDED_TEXT_CHARS);
   });
 
+  it('writes an image block as a placeholder instead of cutting its base64 (T2)', () => {
+    // The string clamp used to cut image data at 8000 characters: a corrupt
+    // image in the parent's session, still 8 KB of it per image.
+    const data = Buffer.alloc(30_000, 0x5a).toString('base64');
+    const clamped = clampRecordedMessage({
+      role: 'toolResult',
+      content: [
+        { type: 'text', text: 'Read image file [image/png] 29 KB' },
+        { type: 'image', data, mimeType: 'image/png' },
+      ],
+    }) as { content: unknown[] };
+    expect(clamped.content).toEqual([
+      { type: 'text', text: 'Read image file [image/png] 29 KB' },
+      { type: 'text', text: '[image omitted: image/png, 30000 bytes]' },
+    ]);
+    expect(JSON.stringify(clamped)).not.toContain(data.slice(0, 64));
+  });
+
   it('leaves non-string values alone, so a transcript stays readable', () => {
     const clamped = clampRecordedMessage({
       role: 'assistant',
@@ -592,6 +610,34 @@ describe('T020 · wired', () => {
     // And the model is told why its delegate is missing from the menu, instead
     // of just "unknown subagent", which reads as a typo.
     expect(results.join('\n')).toContain('failed to load');
+  });
+
+  it('T2 · an image a delegate reads reaches the parent session as a placeholder', async () => {
+    const pixel = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      'base64'
+    );
+    await writeFile(join(workspace, 'pixel.png'), pixel);
+    const handle = await build({
+      parent: delegateOnce('explorer'),
+      delegate: [
+        () =>
+          fauxAssistantMessage([fauxToolCall('read', { path: join(workspace, 'pixel.png') })], {
+            stopReason: 'toolUse',
+          }),
+        () => fauxAssistantMessage('EXPLORER-REPORT: one pixel'),
+      ],
+    });
+    await handle.run({ prompt: 'go' });
+    await handle.session?.flush();
+    const messages = (handle.session?.snapshot().entries ?? [])
+      .filter((entry) => entry.type === 'custom' && entry.customType === SUBAGENT_ENTRY)
+      .map((entry) => (entry as unknown as { data: { kind: string; message?: unknown } }).data)
+      .filter((data) => data.kind === 'message');
+    const recorded = JSON.stringify(messages);
+    expect(recorded).toContain('Read image file [image/png]');
+    expect(recorded).toContain('[image omitted: image/png, 68 bytes]');
+    expect(recorded).not.toContain(pixel.toString('base64'));
   });
 
   it('subagent-data-16 · a running delegate reports the turns it has spent', async () => {

@@ -1,4 +1,13 @@
-import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  truncate,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fauxAssistantMessage, fauxProvider } from '@earendil-works/pi-ai/providers/faux';
@@ -10,6 +19,10 @@ import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from 
 import type { RuntimeHostIoService, RuntimeReadOptions, RuntimeReadResult } from '../contracts.ts';
 import { standaloneHost } from '../host/config.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TURN_STORED_BYTES,
+} from '../plugins/agent-loop/attachments.ts';
 import { modeSegment, permissionGearSegment } from '../plugins/permissions/prompt.ts';
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
 import { TOOL_OUTPUT_BYTES } from '../plugins/tools/index.ts';
@@ -656,11 +669,18 @@ describe('native tools', () => {
     expect(reviewFromToolResult(edited)?.patch).toContain('const a = 2;');
   });
   it('reports a non-UTF-8 file with a code instead of a platform TypeError (tools-12)', async () => {
+    // Rewritten for the image branch: `read` now accepts a real PNG, so this
+    // fixture is what it always was, a file whose PNG signature is broken.
+    // Magic bytes decide, so the name does not make it an image, and the
+    // refusal names what read does accept.
     await writeFile(join(dir, 'logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x0a]));
     const r = await runtime({ permissions: { gear: 'auto' } });
-    await expect(call(r, 'read', { path: 'logo.png' })).rejects.toMatchObject({
-      code: 'io_not_utf8',
-    });
+    const refused = await call(r, 'read', { path: 'logo.png' }).then(
+      () => undefined,
+      (error: unknown) => error
+    );
+    expect(refused).toMatchObject({ code: 'io_not_utf8' });
+    expect((refused as Error).message).toContain('PNG, JPEG, GIF or WebP');
     await expect(
       call(r, 'edit', { path: 'logo.png', edits: [{ oldText: 'a', newText: 'b' }] })
     ).rejects.toMatchObject({ code: 'io_not_utf8' });
@@ -731,6 +751,153 @@ describe('native tools', () => {
       },
     });
     expect(content(await call(r, 'grep', { pattern: 'hidden' }))).not.toContain('hidden');
+  });
+});
+
+/**
+ * T1 — `read` returns PNG / JPEG / GIF / WebP files as images.
+ *
+ * Policy: what the user can paste, the agent can read. One image is capped at
+ * the pasted-attachment limit and checked against `stat` before the body is
+ * read; the images one run reads share the per-message attachment budget.
+ */
+describe('read images (T1)', () => {
+  /** Real, decodable 1x1 images, the smallest well-known encodings. */
+  const PIXELS = {
+    png: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    jpg: '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=',
+    gif: 'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    webp: 'UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==',
+  } as const;
+  /** A PNG signature and IHDR chunk, zero-padded to `size` bytes. */
+  function paddedPng(size: number): Buffer {
+    const bytes = Buffer.alloc(size);
+    Buffer.from(PIXELS.png, 'base64').copy(bytes, 0, 0, 33);
+    return bytes;
+  }
+  /** Every HostIo read of `path`, by window size. */
+  function spyReads(r: RuntimeHandle, path: string): number[] {
+    const windows: number[] = [];
+    const io = r.ctx.runtimeHostIo;
+    const readFile = io.readFile.bind(io);
+    io.readFile = async (target, options) => {
+      if (target === path) windows.push(options.maxBytes);
+      return readFile(target, options);
+    };
+    return windows;
+  }
+  const refusal = (promise: Promise<unknown>) =>
+    promise.then(
+      () => undefined,
+      (error: unknown) => error as Error & { code?: string }
+    );
+
+  it.each([
+    ['png', 'image/png'],
+    ['jpg', 'image/jpeg'],
+    ['gif', 'image/gif'],
+    ['webp', 'image/webp'],
+  ] as const)('returns a 1x1 .%s as a %s image block', async (ext, mimeType) => {
+    const bytes = Buffer.from(PIXELS[ext], 'base64');
+    await writeFile(join(dir, `pixel.${ext}`), bytes);
+    const r = await runtime();
+    // offset/limit mean lines; an image ignores them rather than failing.
+    const output = await call(r, 'read', { path: `pixel.${ext}`, offset: 3, limit: 1 });
+    expect(output.content).toEqual([
+      { type: 'text', text: `Read image file [${mimeType}] ${bytes.length} B 1x1` },
+      { type: 'image', data: bytes.toString('base64'), mimeType },
+    ]);
+    expect(output.details).toEqual({
+      path: join(dir, `pixel.${ext}`),
+      bytes: bytes.length,
+      mimeType,
+      image: true,
+    });
+  });
+  it('recognises a PNG with no extension by its bytes, after the text read fails', async () => {
+    const bytes = Buffer.from(PIXELS.png, 'base64');
+    await writeFile(join(dir, 'pixel'), bytes);
+    const r = await runtime();
+    const windows = spyReads(r, join(dir, 'pixel'));
+    const output = await call(r, 'read', { path: 'pixel' });
+    expect(output.content[1]).toEqual({
+      type: 'image',
+      data: bytes.toString('base64'),
+      mimeType: 'image/png',
+    });
+    // Text first (it is not UTF-8), then a bounded header sniff, then the body.
+    expect(windows).toHaveLength(3);
+    expect(windows[1]).toBeLessThanOrEqual(4096);
+  });
+  it('reads a .png holding text as text, and a text read pays for no extra IO', async () => {
+    await writeFile(join(dir, 'notes.png'), 'not a picture\n');
+    await writeFile(join(dir, 'notes.txt'), 'plain notes\n');
+    const r = await runtime();
+    const named = await call(r, 'read', { path: 'notes.png' });
+    expect(content(named)).toBe('not a picture\n');
+    expect(named.content.every((block) => block.type === 'text')).toBe(true);
+    expect(named.details).not.toHaveProperty('image');
+    const windows = spyReads(r, join(dir, 'notes.txt'));
+    expect(content(await call(r, 'read', { path: 'notes.txt' }))).toBe('plain notes\n');
+    expect(windows).toHaveLength(1);
+  });
+  it('refuses a non-image binary and names what read supports', async () => {
+    await writeFile(join(dir, 'blob.bin'), Buffer.from([0x00, 0xff, 0xfe, 0x01, 0x80, 0x0a]));
+    const r = await runtime();
+    const error = await refusal(call(r, 'read', { path: 'blob.bin' }));
+    expect(error).toMatchObject({ code: 'io_not_utf8' });
+    expect(error?.message).toContain('UTF-8 text nor a PNG, JPEG, GIF or WebP image');
+  });
+  it('refuses an image over the per-image cap from stat, without reading the body', async () => {
+    const size = ATTACHMENT_MAX_BYTES + 1;
+    // Sparse past the header: the size is real, the disk cost is not.
+    for (const name of ['big.png', 'big']) {
+      await writeFile(join(dir, name), paddedPng(64));
+      await truncate(join(dir, name), size);
+    }
+    const r = await runtime();
+    for (const name of ['big.png', 'big']) {
+      const windows = spyReads(r, join(dir, name));
+      const error = await refusal(call(r, 'read', { path: name }));
+      expect(error).toMatchObject({ code: 'io_limit' });
+      expect(error?.message).toContain(`${size} bytes`);
+      expect(error?.message).toContain(`${ATTACHMENT_MAX_BYTES} bytes`);
+      // A header sniff (and, with no extension, the first text chunk) only.
+      expect(windows.length).toBeGreaterThan(0);
+      expect(Math.max(...windows)).toBeLessThanOrEqual(32 * 1024);
+    }
+  });
+  it('refuses an image wider than a pasted image may be', async () => {
+    // The provider rejects a side over 8000 px, and a tool result stays in
+    // every later request, so it would fail the rest of the session.
+    const wide = paddedPng(64);
+    wide.writeUInt32BE(8001, 16);
+    await writeFile(join(dir, 'wide.png'), wide);
+    const r = await runtime();
+    const error = await refusal(call(r, 'read', { path: 'wide.png' }));
+    expect(error).toMatchObject({ code: 'io_limit' });
+    expect(error?.message).toContain('8001x1');
+  });
+  it('stops a run from reading more images than one message may attach', async () => {
+    // 3 MiB raw is exactly 4 MiB of base64, so two fill the 8 MiB budget.
+    const raw = 3 * 1024 * 1024;
+    expect(2 * 4 * (raw / 3)).toBe(ATTACHMENT_TURN_STORED_BYTES);
+    for (const name of ['a.png', 'b.png', 'c.png'])
+      await writeFile(join(dir, name), paddedPng(raw));
+    const r = await runtime();
+    expect(content(await call(r, 'read', { path: 'a.png' }))).toContain('Read image file');
+    expect(content(await call(r, 'read', { path: 'b.png' }))).toContain('Read image file');
+    const windows = spyReads(r, join(dir, 'c.png'));
+    const error = await refusal(call(r, 'read', { path: 'c.png' }));
+    expect(error).toMatchObject({ code: 'io_limit' });
+    expect(error?.message).toContain('per-run image budget');
+    expect(Math.max(...windows)).toBeLessThanOrEqual(4096);
+    // Text is not image budget: the run can still read source files.
+    await writeFile(join(dir, 'still.txt'), 'readable\n');
+    expect(content(await call(r, 'read', { path: 'still.txt' }))).toBe('readable\n');
+    // The next run starts a fresh budget; the agent loop is what begins one.
+    await r.run({ prompt: 'next message', systemPrompt: 'probe' });
+    expect(content(await call(r, 'read', { path: 'c.png' }))).toContain('Read image file');
   });
 });
 

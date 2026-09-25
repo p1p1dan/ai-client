@@ -32,6 +32,7 @@ import type {
   SubagentRunStatus as WireSubagentStatus,
 } from '../../../shared/types/runtimeEvents.ts';
 import type { SubagentHistorySummary } from '../../../shared/types/sessionHistory.ts';
+import { base64Bytes } from '../agent-loop/attachments.ts';
 import { addUsage, type SubagentRunResult, type SubagentRunStatus } from './run.ts';
 
 /** `customType` of every delegation record. One type, discriminated by `kind`. */
@@ -516,6 +517,10 @@ const MAX_RECORDED_DEPTH = 8;
  * prevented is about bytes, and a whitelist that missed a new block type would
  * fail open in exactly the case that matters.
  *
+ * An image block becomes a text placeholder naming its type and size. Cutting
+ * its base64 at the string limit would write a corrupt image into the parent's
+ * session, and a whole one is up to megabytes of a budget the parent shares.
+ *
  * The delegate's REPORT is not affected: it is carried whole on the `settled`
  * record, which is deliberately the copy a reader is promised.
  */
@@ -531,6 +536,14 @@ function clampDeep(value: unknown, depth: number): unknown {
   }
   if (value && typeof value === 'object') {
     if (depth >= MAX_RECORDED_DEPTH) return {};
+    const image = value as { type?: unknown; data?: unknown; mimeType?: unknown };
+    if (image.type === 'image' && typeof image.data === 'string')
+      return {
+        type: 'text',
+        text: `[image omitted: ${
+          typeof image.mimeType === 'string' ? clampSubagentText(image.mimeType, 64) : 'image'
+        }, ${base64Bytes(image.data)} bytes]`,
+      };
     const out: Record<string, unknown> = {};
     for (const [key, item] of Object.entries(value)) out[key] = clampDeep(item, depth + 1);
     return out;

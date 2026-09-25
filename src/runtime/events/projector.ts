@@ -119,7 +119,14 @@ export function output(result: unknown): string {
     const content = result.content;
     if (typeof content === 'string') return content;
     const rendered = text(content);
-    return rendered || JSON.stringify(content);
+    if (rendered) return rendered;
+    // An image-only result is named, not stringified: JSON of it is the
+    // base64 payload, which is no transcript line and megabytes on the wire.
+    const images = Array.isArray(content)
+      ? content.filter((block: { type?: unknown }) => block?.type === 'image').length
+      : 0;
+    if (images > 0) return images === 1 ? '(image)' : `(${images} images)`;
+    return JSON.stringify(content);
   }
   return result === undefined ? '' : JSON.stringify(result);
 }

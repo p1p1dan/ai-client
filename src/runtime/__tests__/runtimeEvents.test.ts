@@ -267,7 +267,60 @@ it('reads a tool result out of its content blocks instead of stringifying them',
   expect(output({ content: 'already text' })).toBe('already text');
   expect(output('bare string')).toBe('bare string');
   expect(output(undefined)).toBe('');
-  expect(output({ content: [{ type: 'image', data: 'x' }] })).toBe('[{"type":"image","data":"x"}]');
+  // Rewritten for T2: an image-only result used to fall back to JSON, which is
+  // its base64 payload. It is named instead; other unreadable shapes still
+  // fall back to JSON.
+  expect(output({ content: [{ type: 'image', data: 'x' }] })).toBe('(image)');
+  expect(
+    output({
+      content: [
+        { type: 'text', text: '' },
+        { type: 'image', data: 'x' },
+        { type: 'image', data: 'y' },
+      ],
+    })
+  ).toBe('(2 images)');
+  expect(output({ content: [{ type: 'audio', data: 'x' }] })).toBe('[{"type":"audio","data":"x"}]');
+});
+
+it('never puts image base64 into tool.completed (T2)', async () => {
+  const { RuntimeEventProjector } = await import('../events/projector.ts');
+  const events: RuntimeEventDraft[] = [];
+  const projection = new RuntimeEventProjector(
+    { sessionId: 'logical', emit: (event) => events.push(event) },
+    'run'
+  );
+  const data = Buffer.alloc(3000, 0x5a).toString('base64');
+  const results = {
+    // `read` on an image: a text block first, then the image.
+    read: {
+      content: [
+        { type: 'text', text: 'Read image file [image/png] 3 KB 1x1' },
+        { type: 'image', data, mimeType: 'image/png' },
+      ],
+      details: { path: '/w/a.png', bytes: 3000, mimeType: 'image/png', image: true },
+    },
+    // A tool whose only block is the image, which used to reach JSON.
+    shot: { content: [{ type: 'image', data, mimeType: 'image/png' }], details: {} },
+  };
+  projection.start();
+  for (const [id, result] of Object.entries(results)) {
+    projection.observe({ type: 'tool_execution_start', toolCallId: id, toolName: id, args: {} });
+    projection.observe({
+      type: 'tool_execution_end',
+      toolCallId: id,
+      toolName: id,
+      result,
+      isError: false,
+    });
+  }
+  const completed = events.filter((event) => event.type === 'tool.completed');
+  expect(completed.map((event) => event.payload.output)).toEqual([
+    'Read image file [image/png] 3 KB 1x1',
+    '(image)',
+  ]);
+  expect(JSON.stringify(completed)).not.toContain(data.slice(0, 64));
+  projection.finish({ success: true, stopReason: 'stop' });
 });
 
 /**

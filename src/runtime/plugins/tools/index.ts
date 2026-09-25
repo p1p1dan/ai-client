@@ -20,7 +20,14 @@ import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
 import { type IgnoreLayer, isIgnored, parseGitignore } from './gitignore.ts';
 import { canonicalPath } from './paths.ts';
-import { decodeFileText, readLines, utf8FileDecoder } from './read-lines.ts';
+import {
+  hasImageExtension,
+  type ImageReadBudget,
+  readBinaryAsImage,
+  readImage,
+  unsupportedFile,
+} from './read-image.ts';
+import { decodeFileText, type ReadLinesResult, readLines, utf8FileDecoder } from './read-lines.ts';
 
 export const TOOLS_SERVICE = 'runtimeTools';
 export const TOOL_OUTPUT_BYTES = 50 * 1024;
@@ -101,6 +108,8 @@ export interface RuntimeToolsService {
     tool: AgentTool<T, unknown>,
     access?: 'read' | 'write' | 'shell'
   ): void;
+  /** Start a fresh per-run image budget for `read`; the agent loop calls it per run. */
+  beginRun(): void;
 }
 declare module 'cordis' {
   interface Context {
@@ -115,6 +124,18 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
   private readonly locks = new Map<string, Promise<void>>();
   private readonly config: ToolsConfig;
   private readonly bash: BashAnalyzer;
+  /**
+   * Image bytes `read` has returned in the current run, against
+   * `ATTACHMENT_TURN_STORED_BYTES` (see `read-image.ts`).
+   *
+   * Kept here and reset by the agent loop's `beginRun`, not keyed on the call's
+   * signal: pi mints a new signal per `prompt()`/`continue()`, and one run makes
+   * several of those (delegation resume, stream recovery), each of which would
+   * otherwise hand the model a fresh budget. Delegates share this plugin, so
+   * their reads count against the run that is current, which errs towards
+   * refusing. Without an agent loop (direct callers) it is one lifetime budget.
+   */
+  private imageBudget: ImageReadBudget = { used: 0 };
   constructor(ctx: Context, config: ToolsConfig) {
     super(ctx, TOOLS_SERVICE);
     this.config = config;
@@ -124,6 +145,11 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       this.registry.clear();
       await this.bash.dispose();
     });
+  }
+  beginRun(): void {
+    // A new object rather than a reset, so a call still in flight from the
+    // previous run charges the budget it started under.
+    this.imageBudget = { used: 0 };
   }
   list(): readonly AgentTool<TSchema, unknown>[] {
     return [...this.registry.values()].filter(
@@ -307,7 +333,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       name: 'read',
       label: 'Read',
       description:
-        'Read a UTF-8 file. offset is a one-based line number; limit is the number of lines. Output is capped at 50 KiB. Use nextOffset to continue.',
+        'Read a UTF-8 text file or a PNG, JPEG, GIF or WebP image. For text, offset is a one-based line number and limit is the number of lines; output is capped at 50 KiB; use nextOffset to continue. An image (up to 5 MiB) is returned as an image and offset/limit are ignored. Other binary files are refused.',
       parameters: Type.Object(
         {
           path,
@@ -318,17 +344,43 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       ),
       execute: async (id, args, signal) => {
         const target = await this.target('read', id, args.path, signal);
-        if ((await io.stat(target)).kind !== 'file')
+        const info = await io.stat(target);
+        if (info.kind !== 'file')
           throw new RuntimeHostError('invalid_tool_arguments', 'read requires a regular file');
+        // Captured now: a run that begins while this call is in flight must not
+        // be charged for it.
+        const budget = this.imageBudget;
+        // The extension only decides which side is tried first; the bytes
+        // decide what the file is. A text read with any other name pays for no
+        // extra IO unless its bytes turn out not to be UTF-8.
+        const imageFirst = hasImageExtension(target);
+        if (imageFirst) {
+          const image = await readImage(io, target, info.size, budget, signal);
+          if (image) {
+            await this.noteInstructionScope([target]);
+            return image;
+          }
+        }
         const offset = args.offset ?? 1;
-        const { text, ...data } = await readLines(
-          io,
-          target,
-          offset,
-          args.limit ?? 2000,
-          TOOL_OUTPUT_BYTES - READ_STATUS_BYTES,
-          signal
-        );
+        let lines: ReadLinesResult;
+        try {
+          lines = await readLines(
+            io,
+            target,
+            offset,
+            args.limit ?? 2000,
+            TOOL_OUTPUT_BYTES - READ_STATUS_BYTES,
+            signal
+          );
+        } catch (error) {
+          if (errorCode(error) !== 'io_not_utf8') throw error;
+          // Already sniffed above when the name said image.
+          if (imageFirst) throw unsupportedFile(target);
+          const image = await readBinaryAsImage(io, target, info.size, budget, signal);
+          await this.noteInstructionScope([target]);
+          return image;
+        }
+        const { text, ...data } = lines;
         await this.noteInstructionScope([target]);
         // Each truncation reason gets its own wording: "one line is too long"
         // sends the model hunting for that line, which is wrong advice when the

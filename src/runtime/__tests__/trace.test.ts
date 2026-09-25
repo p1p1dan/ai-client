@@ -12,12 +12,18 @@
  */
 
 import { fork } from 'node:child_process';
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { hostname, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  fauxAssistantMessage,
+  fauxProvider,
+  fauxToolCall,
+} from '@earendil-works/pi-ai/providers/faux';
 import { Context } from 'cordis';
 import { expect, it } from 'vitest';
+import { createRuntime } from '../bootstrap.ts';
 import type {
   RuntimeFileInfo,
   RuntimeHostIoService,
@@ -25,7 +31,9 @@ import type {
   RuntimeReadResult,
   RuntimeWriteOptions,
 } from '../contracts.ts';
+import { traceSafeToolResult } from '../plugins/agent-loop/index.ts';
 import { TracePlugin, type TracePluginConfig } from '../trace.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 const DIR = '/traces';
 /**
@@ -421,3 +429,67 @@ function raceTrace(
     );
   });
 }
+
+/**
+ * T2 — a tool result's image goes into the trace as its type and size only.
+ *
+ * `tool_execution_end` recorded `event.result` whole, so every image a run read
+ * (`read`, an MCP screenshot) put megabytes of base64 into the step array and
+ * then into `runs.jsonl`, where nothing ever reads it.
+ */
+it('projects a tool result image to its MIME type and byte count (T2)', () => {
+  const data = Buffer.alloc(3000, 0x5a).toString('base64');
+  const result = {
+    content: [
+      { type: 'text', text: 'Read image file [image/png] 3 KB' },
+      { type: 'image', data, mimeType: 'image/png' },
+    ],
+    details: { path: '/w/a.png', bytes: 3000, mimeType: 'image/png', image: true },
+  };
+  expect(traceSafeToolResult(result)).toEqual({
+    content: [
+      { type: 'text', text: 'Read image file [image/png] 3 KB' },
+      { type: 'image', mimeType: 'image/png', bytes: 3000 },
+    ],
+    details: { path: '/w/a.png', bytes: 3000, mimeType: 'image/png', image: true },
+  });
+  // A copy: the live result still carries the image the model is given.
+  expect(result.content[1]).toHaveProperty('data', data);
+  // Text is not this projection's business; a tool already bounded it.
+  const long = { content: [{ type: 'text', text: 'x'.repeat(40_000) }] };
+  expect(traceSafeToolResult(long)).toEqual(long);
+  expect(traceSafeToolResult('plain')).toBe('plain');
+});
+
+it('keeps image base64 out of a real run trace (T2)', async () => {
+  const cwd = await mkdtemp(join(tmpdir(), 'runtime-trace-image-'));
+  const pixel = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64'
+  );
+  await writeFile(join(cwd, 'pixel.png'), pixel);
+  const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+  faux.setResponses([
+    fauxAssistantMessage([fauxToolCall('read', { path: 'pixel.png' })], { stopReason: 'toolUse' }),
+    fauxAssistantMessage('seen'),
+  ]);
+  const runtime = await createRuntime({
+    providers: [faux.provider],
+    env: {},
+    tools: { cwd },
+    permissions: { approve: neverAsked },
+  });
+  try {
+    const result = await runtime.run({ prompt: 'look', systemPrompt: 'probe' });
+    expect(result.success).toBe(true);
+    const steps = runtime.trace.runs[0].steps;
+    const end = steps.find(
+      (step) => (step.detail as { event?: string })?.event === 'tool_execution_end'
+    )?.detail as { result: { content: unknown[] } } | undefined;
+    expect(end?.result.content[1]).toEqual({ type: 'image', mimeType: 'image/png', bytes: 68 });
+    expect(JSON.stringify(runtime.trace.runs)).not.toContain(pixel.toString('base64'));
+  } finally {
+    await runtime.dispose();
+    await rm(cwd, { recursive: true, force: true });
+  }
+});

@@ -1,9 +1,12 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { AgentToolResult } from '@earendil-works/pi-agent-core';
+import { fauxProvider } from '@earendil-works/pi-ai/providers/faux';
 import { Context } from 'cordis';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createRuntime } from '../bootstrap.ts';
 import type {
   RuntimeExecRequest,
   RuntimeExecResult,
@@ -14,6 +17,7 @@ import { standaloneHost } from '../host/config.ts';
 import { ExecPlugin } from '../host/exec.ts';
 import { HostIoPlugin } from '../host/io.ts';
 import { readLines } from '../plugins/tools/read-lines.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 /**
  * T047 — the TSD read fallback, pinned with doubles.
@@ -336,5 +340,92 @@ describe('TSD fallback contract (doubles)', () => {
     expect((error as Error).message).toContain(base.carrier);
     expect((error as Error).message).toContain(process.execPath);
     expect((error as Error).message).toContain(path);
+  });
+});
+
+/**
+ * T1 — the read tool's image branch over the fallback. Every HostIo read of a
+ * container is one helper process, so the counts are the cost: an encrypted
+ * image with an image name is one run, a text read never pays for a sniff.
+ */
+describe('read tool over the TSD fallback (T1)', () => {
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+    'base64'
+  );
+  async function withReadTool(
+    plain: Record<string, Buffer>,
+    body: (
+      read: (path: string) => Promise<AgentToolResult<unknown>>,
+      runs: string[]
+    ) => Promise<void>
+  ) {
+    const runs: string[] = [];
+    const faux = fauxProvider({ provider: 'test', models: [{ id: 'test', name: 'Test' }] });
+    const runtime = await createRuntime({
+      providers: [faux.provider],
+      env: {},
+      host: {
+        ...base,
+        tsdReadFallback: 'configured-node',
+        exec: {
+          mode: 'host-adapter',
+          adapter: {
+            id: 'tsd-read-tool-double-v1',
+            dispose: async () => {},
+            // Serves the requested window of the named file's plaintext.
+            run: async (request) => {
+              const [, path = '', offset = '0', window = '0'] = request.args;
+              const bytes = plain[basename(path)];
+              if (!bytes) throw new Error(`unexpected exec: ${request.args.join(' ')}`);
+              runs.push(basename(path));
+              const start = Number(offset);
+              return completed(frame(bytes.subarray(start, start + Number(window))));
+            },
+          },
+        },
+      },
+      tools: { cwd: dir },
+      permissions: { approve: neverAsked },
+    });
+    try {
+      const tool = runtime.ctx.runtimeTools.list().find((candidate) => candidate.name === 'read');
+      if (!tool) throw new Error('missing read');
+      await body((path) => tool.execute('tsd-read', { path }), runs);
+    } finally {
+      await runtime.dispose();
+    }
+  }
+
+  it('reads an encrypted .png as an image in one helper run', async () => {
+    await container('shot.png');
+    await withReadTool({ 'shot.png': PNG }, async (read, runs) => {
+      const output = await read('shot.png');
+      expect(output.content[1]).toEqual({
+        type: 'image',
+        data: PNG.toString('base64'),
+        mimeType: 'image/png',
+      });
+      expect(runs).toEqual(['shot.png']);
+    });
+  });
+
+  it('reads encrypted text in one helper run, with no header sniff', async () => {
+    await container('notes.txt');
+    await withReadTool({ 'notes.txt': Buffer.from('sealed notes\n') }, async (read, runs) => {
+      const output = await read('notes.txt');
+      expect(output.content).toEqual([{ type: 'text', text: 'sealed notes\n' }]);
+      expect(runs).toEqual(['notes.txt']);
+    });
+  });
+
+  it('finds an encrypted image with no extension after the text read fails', async () => {
+    await container('shot');
+    await withReadTool({ shot: PNG }, async (read, runs) => {
+      const output = await read('shot');
+      expect(output.details).toMatchObject({ mimeType: 'image/png', image: true });
+      // Text chunk, header sniff, body: the price of a name that says nothing.
+      expect(runs).toEqual(['shot', 'shot', 'shot']);
+    });
   });
 });

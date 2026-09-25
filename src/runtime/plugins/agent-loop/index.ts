@@ -42,7 +42,7 @@ import { onDemandInstructionsText } from '../prompt/projectInstructions.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
-import { preparePrompt } from './attachments.ts';
+import { base64Bytes, preparePrompt } from './attachments.ts';
 import {
   delegationCallSignature,
   describeRepetition,
@@ -109,6 +109,35 @@ export function traceSafeToolArgs(args: unknown, depth = 0): unknown {
   const safe: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args as Record<string, unknown>))
     safe[key] = traceSafeToolArgs(value, depth + 1);
+  return safe;
+}
+
+/** Image blocks sit at `content[i]`; this leaves room for one nested inside `details`. */
+const MAX_TRACE_RESULT_DEPTH = 8;
+
+/**
+ * A tool result as the trace records it: every image block keeps its MIME type
+ * and byte count and drops `data`. The base64 is up to megabytes per image
+ * (`read`, MCP screenshots) and says nothing a reader of the trace needs; the
+ * session file already holds the one copy that is replayed.
+ */
+export function traceSafeToolResult(result: unknown, depth = 0): unknown {
+  // Past the depth bound the value is kept as it was: this projection removes
+  // image payloads, it does not bound the result (a tool already did that).
+  if (result === null || typeof result !== 'object' || depth >= MAX_TRACE_RESULT_DEPTH)
+    return result;
+  if (Array.isArray(result)) return result.map((item) => traceSafeToolResult(item, depth + 1));
+  // Plain objects only: anything else keeps whatever JSON makes of it.
+  const prototype = Object.getPrototypeOf(result);
+  if (prototype !== Object.prototype && prototype !== null) return result;
+  const block = result as { type?: unknown; data?: unknown; mimeType?: unknown };
+  if (block.type === 'image' && typeof block.data === 'string') {
+    const { data, ...rest } = block;
+    return { ...rest, bytes: base64Bytes(data) };
+  }
+  const safe: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(result as Record<string, unknown>))
+    safe[key] = traceSafeToolResult(value, depth + 1);
   return safe;
 }
 
@@ -528,6 +557,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // no compaction service behaves exactly as it did before P2-3.
     const context = this.ctx.get(CONTEXT_SERVICE);
     context?.beginRun(snapshot);
+    // The image budget `read` spends is per run, like attachments are per send.
+    this.ctx.get('runtimeTools')?.beginRun();
     /**
      * Every outcome of a `prepareTurn`, written the same way wherever it ran.
      *
@@ -900,7 +931,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
           event: event.type,
           tool_call_id: event.toolCallId,
           tool: event.toolName,
-          result: event.result,
+          result: traceSafeToolResult(event.result),
           is_error: event.isError,
         });
       request.onEvent?.(event);
