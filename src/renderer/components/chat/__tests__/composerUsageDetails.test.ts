@@ -5,7 +5,11 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { expect, it, vi } from 'vitest';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
-import { ComposerUsageChip, currentTurnToolSummary } from '../ComposerUsageChip';
+import {
+  ComposerUsageChip,
+  ComposerUsageDetails,
+  currentTurnToolSummary,
+} from '../ComposerUsageChip';
 
 vi.mock('@/i18n', () => ({
   useI18n: () => ({
@@ -101,4 +105,40 @@ it('counts only current-turn tools instead of reporting estimated tool tokens', 
       },
     ])
   ).toBe('read × 2');
+});
+it('T125: says the cost is unknown instead of printing a cut request as free', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  const container = document.createElement('div');
+  document.body.append(container);
+  const root = createRoot(container);
+  const unreported: PiUsagePayload = {
+    ...usage,
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    totalTokens: 0,
+    unreported: true,
+  };
+  try {
+    await act(async () =>
+      root.render(createElement(ComposerUsageDetails, { usage: unreported, tools: '' }))
+    );
+    const text = container.textContent ?? '';
+    expect(container.querySelector('[data-usage-unreported]')).not.toBeNull();
+    expect(text).toContain('Usage for this request is unknown');
+    // The zero rows are gone, not merely joined by the note.
+    expect(text).not.toContain('Input tokens');
+    expect(text).not.toContain('Cache hit rate');
+    // The occupancy and the session total are still measurements.
+    expect(text).toContain('479.0k tokens remaining');
+    expect(text).toContain('Conversation total since load');
+
+    await act(async () => root.render(createElement(ComposerUsageDetails, { usage, tools: '' })));
+    expect(container.querySelector('[data-usage-unreported]')).toBeNull();
+    expect(container.textContent).toContain('Input tokens');
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    vi.unstubAllGlobals();
+  }
 });

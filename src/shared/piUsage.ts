@@ -110,6 +110,16 @@ export type PiUsagePayload = PiTurnUsage & {
    * on numbers that have since been billed.
    */
   pending?: true;
+  /**
+   * T125 (2026-09-25, option B) — the provider never reported what this turn
+   * cost. See {@link isUnreportedTurnUsage} for the rule.
+   *
+   * The token/cost fields beside it are still exactly what pi left on the
+   * message (zeros, or Anthropic's real prompt side plus its `output: 1`
+   * placeholder); nothing is estimated. Settled-bill surfaces print "unknown"
+   * instead of them. Only ever `true`, same shape and reason as `pending`.
+   */
+  unreported?: true;
 };
 
 /** The two arcs of an occupancy ring, plus the figures printed beside them. */
@@ -235,6 +245,75 @@ function readContextUsage(value: unknown): PiContextUsage | null {
 }
 
 /**
+ * T125 (2026-09-25, option B) — true when a model call was cut short after its
+ * stream had started and the provider never reported the completion side.
+ *
+ * ## Why the zeros exist
+ *
+ * OpenAI-compatible and Responses streams report usage only in their LAST
+ * frame, and pi-ai's adapters start every message from an all-zero `usage`
+ * (`openai-completions.js`, the initial `output` literal). A Stop, a send-now,
+ * a session closed mid-run, the decision-042 loop-guard cut or a broken stream
+ * ends the call before that frame, and the adapter's catch leaves the zeros
+ * standing. Anthropic keeps the real prompt side from `message_start`, but its
+ * `output_tokens: 1` is the placeholder {@link buildPiInterimUsagePayload}
+ * already refuses.
+ *
+ * ## The rule — all three must hold
+ *
+ * 1. `stopReason` is `'aborted'` or `'error'`. Every other stop reason arrived
+ *    with the provider's final frame, so its usage is a measurement.
+ * 2. `usage.output <= 1`: `0` is the adapters' starting value, `1` Anthropic's
+ *    placeholder. A completion count above that (Google streams cumulative
+ *    counts; a usage chunk can land just before a failure) was reported and
+ *    stays a measurement. A missing `output` reads as `0`.
+ * 3. The stream had started ({@link streamStarted}). A call that failed before
+ *    its first frame — refused connection, an HTTP error status,
+ *    `providerRetry`'s setup failure — was not billed, so its zeros are true
+ *    and stay unflagged, exactly as before T125.
+ *
+ * `message` is `unknown` for the same version-boundary reason as the builder.
+ */
+export function isUnreportedTurnUsage(message: unknown): boolean {
+  const source = record(message);
+  if (!source) return false;
+  if (source.stopReason !== 'aborted' && source.stopReason !== 'error') return false;
+  const output = finiteNumber(record(source.usage)?.output) ?? 0;
+  if (output > 1) return false;
+  return streamStarted(source);
+}
+
+/**
+ * Whether a cut call's stream had started — the proxy for "the provider billed
+ * the prompt". Either signal suffices:
+ *
+ * - `responseId`: every streaming adapter sets it from the FIRST frame
+ *   (Anthropic `message_start`, Responses `response.created`, the first
+ *   chat-completions chunk), before any content. It is what catches a call cut
+ *   while the model was still reasoning invisibly.
+ * - A content block with something in it: non-empty text or thinking, a
+ *   redacted thinking block, or any other block type (a tool call). An empty
+ *   text block is not evidence that anything streamed.
+ *
+ * Blind spot, accepted: a provider that sends neither an id nor content before
+ * the cut reads as "never started" and keeps today's zeros.
+ */
+function streamStarted(message: Record<string, unknown>): boolean {
+  if (typeof message.responseId === 'string' && message.responseId.length > 0) return true;
+  if (!Array.isArray(message.content)) return false;
+  return message.content.some((value) => {
+    const block = record(value);
+    if (!block) return false;
+    if (block.type === 'text') return typeof block.text === 'string' && block.text.length > 0;
+    if (block.type === 'thinking')
+      return (
+        (typeof block.thinking === 'string' && block.thinking.length > 0) || block.redacted === true
+      );
+    return typeof block.type === 'string';
+  });
+}
+
+/**
  * Build the payload from an SDK assistant message's `usage` and, optionally,
  * the session's context usage.
  *
@@ -244,12 +323,17 @@ function readContextUsage(value: unknown): PiContextUsage | null {
  *
  * Both arguments are `unknown`: they cross a dependency version boundary, same
  * policy as `readLoadedExtensionInventory`.
+ *
+ * `marks.unreported` is the caller's {@link isUnreportedTurnUsage} verdict on
+ * the message this usage came from; the numbers are passed through unchanged
+ * either way.
  */
 export function buildPiUsagePayload(
   usage: unknown,
   contextUsage?: unknown,
   sessionUsage?: PiSessionUsage | null,
-  delegatedUsage?: PiTurnUsage | null
+  delegatedUsage?: PiTurnUsage | null,
+  marks: { unreported?: boolean } = {}
 ): PiUsagePayload | null {
   const source = record(usage);
   if (!source) return null;
@@ -272,6 +356,8 @@ export function buildPiUsagePayload(
     ...(sessionUsage ? { session: sessionUsage } : {}),
     // decision 005: the delegated slice of `session`, never of the turn above.
     ...(delegatedUsage ? { delegated: delegatedUsage } : {}),
+    // T125: omitted rather than `false`, so a merge cannot leave it behind.
+    ...(marks.unreported ? { unreported: true as const } : {}),
   };
 }
 
@@ -305,6 +391,7 @@ export function readPiUsagePayload(payload: unknown): PiUsagePayload | null {
     ...(context ? { context } : {}),
     ...(session ? { session } : {}),
     ...(delegated ? { delegated } : {}),
+    ...(source.unreported === true ? { unreported: true as const } : {}),
   };
 }
 

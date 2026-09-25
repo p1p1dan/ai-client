@@ -404,6 +404,52 @@ describe('deriveRunPanelView — occupancy and usage (U06-b)', () => {
   });
 });
 
+describe('deriveRunPanelView — a cut request with no reported cost (T125)', () => {
+  const session = {
+    turns: 2,
+    toolResults: 0,
+    input: 24_000,
+    output: 960,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 24_960,
+    costUsd: 0.1,
+  };
+  const unreported = usagePayload({
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    costUsd: 0,
+    session,
+    unreported: true,
+  });
+
+  it('prints no last-turn rows and no cache rate, and says why', () => {
+    const view = deriveRunPanelView(input({ usage: unreported }));
+    expect(view.usageUnreported).toBe(true);
+    expect(view.usage).toBeNull();
+    expect(view.cacheHitRate).toBeNull();
+  });
+
+  it('keeps the session totals and the occupancy exactly as reported', () => {
+    const view = deriveRunPanelView(input({ usage: unreported }));
+    expect(view.sessionUsage).toEqual(session);
+    expect(view.occupancy).not.toBeNull();
+  });
+
+  it('is still something to report, not an empty panel', () => {
+    expect(deriveRunPanelView(input({ usage: unreported })).empty).toBe(false);
+  });
+
+  it('is off for a reported bill and for another session', () => {
+    expect(deriveRunPanelView(input({ usage: usagePayload() })).usageUnreported).toBe(false);
+    const elsewhere = deriveRunPanelView(input({ sessionId: null, usage: unreported }));
+    expect(elsewhere.usageUnreported).toBe(false);
+  });
+});
+
 describe('deriveRunTools — live tool status (T38-c)', () => {
   const messages = [message('assistant', [toolCall('t1', 'read')])];
 

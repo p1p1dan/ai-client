@@ -162,8 +162,17 @@ export interface RunPanelView {
    * `occupancy` is `null` but a window size IS known. `null` = say nothing.
    */
   contextWindowOnly: number | null;
-  /** Token/cost totals of the last settled turn, or `null`. */
+  /**
+   * Token/cost totals of the last settled turn, or `null`. Also `null` when
+   * `usageUnreported` is set: those numbers are not a bill.
+   */
   usage: PiTurnUsage | null;
+  /**
+   * T125 — the last turn was cut after its stream started and the provider
+   * never reported its cost (`PiUsagePayload.unreported`). The view says
+   * "unknown" where the rows would be; the session totals are untouched.
+   */
+  usageUnreported: boolean;
   /**
    * A1: `cacheRead / (input + cacheRead)` for that same turn, already rounded
    * to a whole percent. `null` means the rate is unknown (no prompt tokens, or
@@ -306,16 +315,19 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
   const knownWindow = usage?.context?.contextWindow ?? input.configuredContextWindow;
   const contextWindowOnly =
     occupancy === null && input.sessionId && knownWindow && knownWindow > 0 ? knownWindow : null;
-  const turnUsage: PiTurnUsage | null = usage
-    ? {
-        input: usage.input,
-        output: usage.output,
-        cacheRead: usage.cacheRead,
-        cacheWrite: usage.cacheWrite,
-        totalTokens: usage.totalTokens,
-        costUsd: usage.costUsd,
-      }
-    : null;
+  // T125: a cut turn's zeros are what pi started from, not what was billed.
+  const usageUnreported = usage?.unreported === true;
+  const turnUsage: PiTurnUsage | null =
+    usage && !usageUnreported
+      ? {
+          input: usage.input,
+          output: usage.output,
+          cacheRead: usage.cacheRead,
+          cacheWrite: usage.cacheWrite,
+          totalTokens: usage.totalTokens,
+          costUsd: usage.costUsd,
+        }
+      : null;
 
   return {
     status,
@@ -332,6 +344,7 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
     occupancy,
     contextWindowOnly,
     usage: turnUsage,
+    usageUnreported,
     cacheHitRate: deriveCacheHitRate(turnUsage),
     sessionUsage: usage?.session ?? null,
     delegatedShare: deriveDelegatedShare(usage?.session, usage?.delegated),
@@ -344,6 +357,7 @@ export function deriveRunPanelView(input: RunPanelInput): RunPanelView {
         elapsedLabel === null &&
         tools.calls === 0 &&
         turnUsage === null &&
+        !usageUnreported &&
         status === 'idle'),
   };
 }

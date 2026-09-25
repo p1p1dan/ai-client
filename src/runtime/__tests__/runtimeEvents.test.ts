@@ -738,6 +738,134 @@ describe('T017 · projection seams', () => {
   });
 });
 
+/**
+ * T125 (option B, 2026-09-25). OpenAI-compatible and Responses streams report
+ * usage only in their last frame; a Stop, send-now, loop-guard cut or stream
+ * failure ends the call before it, and pi-ai leaves its all-zero starting
+ * `usage` on the message. The Run panel then printed "Input 0 / Output 0".
+ *
+ * These events are hand-built on purpose: the faux PROVIDER copies the whole
+ * planned usage into an aborted message, so a faux run cannot reproduce the
+ * zeros. `fauxAssistantMessage` alone carries pi-ai's zero usage.
+ */
+describe('T125 · a cut request whose cost was never reported', () => {
+  const MEASURED = {
+    input: 120,
+    output: 30,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 150,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.01 },
+  };
+  function projector(): { events: RuntimeEventDraft[]; projection: RuntimeEventProjector } {
+    const events: RuntimeEventDraft[] = [];
+    const projection = new RuntimeEventProjector(
+      { sessionId: 'logical', emit: (event) => events.push(event) },
+      'run',
+      [],
+      1000
+    );
+    return { events, projection };
+  }
+  function settled(events: RuntimeEventDraft[]) {
+    return events
+      .filter((event) => event.type === 'usage.updated')
+      .filter((event) => !event.payload.pending);
+  }
+  /** Stream a message the way pi does, then end the turn with it. */
+  function streamTurn(projection: RuntimeEventProjector, message: AgentMessage): void {
+    projection.observe({ type: 'message_start', message });
+    projection.observe({
+      type: 'message_update',
+      message,
+      assistantMessageEvent: { type: 'start', partial: message } as never,
+    });
+    projection.observe({ type: 'message_end', message });
+    projection.observe({ type: 'turn_end', message, toolResults: [] });
+  }
+
+  it('marks the settled payload when Stop cuts a streaming reply, keeping context and session', () => {
+    const { events, projection } = projector();
+    streamTurn(projection, { ...fauxAssistantMessage('done'), usage: MEASURED } as AgentMessage);
+    const measured = settled(events).at(-1)?.payload;
+    expect(measured).not.toHaveProperty('unreported');
+
+    events.length = 0;
+    const cut = fauxAssistantMessage('half an ans', { stopReason: 'aborted' });
+    const before = structuredClone(cut.usage);
+    streamTurn(projection, cut);
+    const payloads = settled(events);
+    expect(payloads).toHaveLength(1);
+    const cutPayload = payloads[0]?.payload;
+    expect(cutPayload).toMatchObject({ input: 0, output: 0, unreported: true });
+    // The MODEL-18 occupancy guard still holds, and nothing is added to the
+    // session totals for a bill nobody reported.
+    expect(cutPayload?.context).toEqual(measured?.context);
+    expect(cutPayload?.session).toEqual(measured?.session);
+    // `message.usage` is never rewritten.
+    expect(cut.usage).toEqual(before);
+  });
+
+  it("marks Anthropic's placeholder output and passes its real prompt side through", () => {
+    const { events, projection } = projector();
+    const cut = {
+      ...fauxAssistantMessage([{ type: 'thinking', thinking: 'planning' }], {
+        stopReason: 'aborted',
+        responseId: 'msg_01',
+      }),
+      usage: { ...MEASURED, input: 431, output: 1, totalTokens: 432 },
+    } as AgentMessage;
+    streamTurn(projection, cut);
+    expect(settled(events).at(-1)?.payload).toMatchObject({
+      input: 431,
+      output: 1,
+      unreported: true,
+    });
+  });
+
+  it('marks a provider failure after the first frame even with nothing visible streamed', () => {
+    const { events, projection } = projector();
+    const cut = fauxAssistantMessage([], { stopReason: 'error', responseId: 'chatcmpl-9' });
+    projection.observe({ type: 'turn_end', message: cut, toolResults: [] });
+    const payload = settled(events).at(-1)?.payload;
+    expect(payload).toMatchObject({ unreported: true });
+    // First turn of the run: still no occupancy to claim.
+    expect(payload).not.toHaveProperty('context');
+  });
+
+  it('leaves a failure before the stream started exactly as before', () => {
+    const { events, projection } = projector();
+    projection.observe({
+      type: 'turn_end',
+      message: fauxAssistantMessage([], { stopReason: 'error', errorMessage: '503' }),
+      toolResults: [],
+    });
+    const payload = settled(events).at(-1)?.payload;
+    expect(payload).toBeDefined();
+    expect(payload).not.toHaveProperty('unreported');
+  });
+
+  it('keeps saying "unknown" when a delegate settles after the Stop', () => {
+    const { events, projection } = projector();
+    streamTurn(projection, { ...fauxAssistantMessage('done'), usage: MEASURED } as AgentMessage);
+    streamTurn(projection, fauxAssistantMessage('cut', { stopReason: 'aborted' }));
+    events.length = 0;
+    projection.delegated({ ...MEASURED, input: 3, output: 2, totalTokens: 5 });
+    const folded = settled(events).at(-1)?.payload;
+    // Re-states the cut turn, not the older bill as if it were the last one.
+    expect(folded).toMatchObject({ totalTokens: 0, unreported: true });
+    expect(folded?.delegated).toMatchObject({ totalTokens: 5 });
+  });
+
+  it('drops the mark on the next reported bill', () => {
+    const { events, projection } = projector();
+    streamTurn(projection, fauxAssistantMessage('cut', { stopReason: 'aborted' }));
+    events.length = 0;
+    streamTurn(projection, { ...fauxAssistantMessage('done'), usage: MEASURED } as AgentMessage);
+    expect(settled(events).at(-1)?.payload).not.toHaveProperty('unreported');
+  });
+});
+
 it('puts a provider retry on the wire the banner reads, and clears it when the retry streams', async () => {
   // rpc-projector-02, whole path: the retry ladder used to write to the trace
   // file and nothing else, so a 429 burst was indistinguishable from a slow

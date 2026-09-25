@@ -71,14 +71,22 @@ export function ComposerUsageDetails({ usage, tools }: { usage: PiUsagePayload; 
       </div>
       <div className="border-t border-border pt-2">
         <p className="mb-2 text-meta font-medium">{t('Latest settled model request')}</p>
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-meta">
-          {rows.map(([label, value]) => (
-            <div key={label} className="flex min-w-0 justify-between gap-2">
-              <dt className="text-muted-foreground">{label}</dt>
-              <dd className="shrink-0 tabular-nums">{value}</dd>
-            </div>
-          ))}
-        </dl>
+        {/* T125: a request cut after it started streaming has no reported
+            cost; its zeros would read as "free". */}
+        {usage.unreported ? (
+          <p className="text-meta text-muted-foreground" data-usage-unreported>
+            {t('Usage for this request is unknown')}
+          </p>
+        ) : (
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-meta">
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex min-w-0 justify-between gap-2">
+                <dt className="text-muted-foreground">{label}</dt>
+                <dd className="shrink-0 tabular-nums">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
       </div>
       {usage.session && (
         <div className="flex justify-between gap-2 border-t border-border pt-2 text-meta">

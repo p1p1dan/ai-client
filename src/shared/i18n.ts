@@ -2358,6 +2358,8 @@ export const zhTranslations: Record<string, string> = {
   'Context window': '上下文窗口',
   'Input (last turn)': '输入（上一回合）',
   'Output (last turn)': '输出（上一回合）',
+  // T125: a request cut mid-stream whose cost the provider never reported.
+  'Usage for this request is unknown': '本次消耗未知',
   'Cache read': '缓存读取',
   'Cache write': '缓存写入',
   // A1: `cacheRead / (input + cacheRead)`, cache writes excluded from the base.

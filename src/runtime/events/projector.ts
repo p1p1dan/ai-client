@@ -8,6 +8,7 @@ import { applyTurnUsage, initTurnRollup, viewTurnRollup } from '../../shared/piT
 import {
   buildPiInterimUsagePayload,
   buildPiUsagePayload,
+  isUnreportedTurnUsage,
   type PiTurnUsage,
 } from '../../shared/piUsage.ts';
 import { reviewFromToolResult } from '../../shared/sessionFileChange.ts';
@@ -205,6 +206,8 @@ export class RuntimeEventProjector {
   private delegatedUsage: PiTurnUsage | undefined;
   /** The last turn payload emitted, so a delegate settling can re-state it. */
   private lastTurnUsage: unknown;
+  /** T125 — whether `lastTurnUsage` is an unreported bill, re-stated with its mark. */
+  private lastTurnUnreported = false;
   /**
    * The context-occupancy figure from the last `turn_end`, kept so a delegate
    * settling can re-state it instead of re-stating `undefined`.
@@ -695,7 +698,16 @@ export class RuntimeEventProjector {
          * cached figures stay put for `delegated()` to re-state.
          */
         const placeholder = ['aborted', 'error'].includes(event.message.stopReason);
-        if (!placeholder) this.lastTurnUsage = event.message.usage;
+        /**
+         * T125 (option B): a placeholder whose stream HAD started was billed,
+         * but the provider never said for how much. It is re-stated as-is with
+         * the mark, so a delegate settling after the Stop keeps saying
+         * "unknown" instead of reviving an older turn's bill as the last one.
+         * A placeholder that never started keeps the MODEL-18 behaviour.
+         */
+        const unreported = isUnreportedTurnUsage(event.message);
+        if (!placeholder || unreported) this.lastTurnUsage = event.message.usage;
+        this.lastTurnUnreported = unreported;
         const turn = buildPiUsagePayload(event.message.usage);
         if (turn)
           this.rollup = applyTurnUsage(this.rollup, { sessionId, usage: turn, source: 'turn' });
@@ -722,7 +734,8 @@ export class RuntimeEventProjector {
           // figure it lacks.
           this.lastContextUsage,
           viewTurnRollup(this.rollup),
-          this.delegatedUsage
+          this.delegatedUsage,
+          { unreported }
         );
         if (payload) this.emit({ type: 'usage.updated', sessionId, payload });
         break;
@@ -837,7 +850,8 @@ export class RuntimeEventProjector {
       this.lastTurnUsage,
       this.lastContextUsage,
       viewTurnRollup(this.rollup),
-      this.delegatedUsage
+      this.delegatedUsage,
+      { unreported: this.lastTurnUnreported }
     );
     if (payload) this.emit({ type: 'usage.updated', sessionId: this.sink.sessionId, payload });
   }

@@ -897,6 +897,21 @@ describe('reduceSessionRuntimeFacts — settled usage (U06-b)', () => {
     expect(next.s1.usage?.output).toBe(480);
   });
 
+  // T125: unlike the pending tick, a cut request's payload IS the last turn —
+  // it has to replace the older bill so the panel can say "unknown" about it —
+  // and the next reported bill replaces it wholesale, mark included.
+  it('folds an unreported bill with its mark, and lets the next reported one clear it', () => {
+    let state = reduceSessionRuntimeFacts(initialSessionRuntimeFacts, settled());
+    state = reduceSessionRuntimeFacts(
+      state,
+      settled({ input: 0, output: 0, totalTokens: 0, costUsd: 0, unreported: true })
+    );
+    expect(state.s1.usage).toMatchObject({ output: 0, unreported: true });
+    state = reduceSessionRuntimeFacts(state, settled());
+    expect(state.s1.usage).not.toHaveProperty('unreported');
+    expect(state.s1.usage?.output).toBe(480);
+  });
+
   it('survives a terminal session.status', () => {
     // The bill of the turn that just ended is exactly what the panel should
     // still be showing once the turn is over.

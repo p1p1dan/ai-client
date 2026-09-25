@@ -4,6 +4,7 @@ import {
   buildPiUsagePayload,
   deriveCacheHitRate,
   isPendingUsagePayload,
+  isUnreportedTurnUsage,
   type PiTurnUsage,
   readPiUsagePayload,
 } from '../piUsage';
@@ -342,5 +343,104 @@ describe('2026-09-19 · the first-byte tick', () => {
     // `readPiUsagePayload` requires both halves to be numbers; the forced zero
     // is what keeps the prompt side readable at all.
     expect(read).toMatchObject({ input: 431, output: 0, cacheWrite: 10_656 });
+  });
+});
+
+describe('T125 · a cut request whose cost the provider never reported', () => {
+  /** pi-ai's starting usage, which an OpenAI-style catch leaves standing. */
+  const ZERO_USAGE = {
+    input: 0,
+    output: 0,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 0,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+  };
+  /** Anthropic after `message_start`: a real prompt side, the `output: 1` placeholder. */
+  const ANTHROPIC_FIRST_FRAME = {
+    input: 431,
+    output: 1,
+    cacheRead: 0,
+    cacheWrite: 0,
+    totalTokens: 432,
+    cost: { input: 0.0013, output: 0.000015, cacheRead: 0, cacheWrite: 0, total: 0.0013 },
+  };
+  const text = (value: string) => ({ type: 'text', text: value });
+  const message = (overrides: Record<string, unknown>) => ({
+    role: 'assistant',
+    content: [text('partial answer')],
+    usage: ZERO_USAGE,
+    stopReason: 'aborted',
+    ...overrides,
+  });
+
+  it.each([
+    ['Stop mid-text, zero usage', message({}), true],
+    [
+      'stream failure mid-thinking',
+      message({ stopReason: 'error', content: [{ type: 'thinking', thinking: 'hmm' }] }),
+      true,
+    ],
+    [
+      'loop-guard cut: tool calls only',
+      message({
+        stopReason: 'error',
+        content: [{ type: 'toolCall', id: 't', name: 'Task', arguments: {} }],
+      }),
+      true,
+    ],
+    [
+      'redacted thinking only',
+      message({ content: [{ type: 'thinking', thinking: '', redacted: true }] }),
+      true,
+    ],
+    [
+      'cut while reasoning invisibly: no content, first frame seen',
+      message({ content: [], responseId: 'chatcmpl-1' }),
+      true,
+    ],
+    ["Anthropic's placeholder output", message({ usage: ANTHROPIC_FIRST_FRAME }), true],
+    ['usage block without an output field', message({ usage: { input: 0 } }), true],
+    [
+      'failed before the first frame: no content, no id',
+      message({ stopReason: 'error', content: [] }),
+      false,
+    ],
+    ['only an empty text block, no id', message({ content: [text('')] }), false],
+    [
+      'output was reported before the cut',
+      message({ usage: { ...ZERO_USAGE, output: 57, totalTokens: 57 } }),
+      false,
+    ],
+    ['a finished reply with zero usage', message({ stopReason: 'stop' }), false],
+    ['a tool-use reply', message({ stopReason: 'toolUse' }), false],
+    ['a length-capped reply', message({ stopReason: 'length' }), false],
+    ['not a message', 'aborted', false],
+  ])('%s → %s', (_label, input, expected) => {
+    expect(isUnreportedTurnUsage(input)).toBe(expected);
+  });
+
+  it('marks the payload without touching the numbers pi left on the message', () => {
+    const payload = buildPiUsagePayload(ANTHROPIC_FIRST_FRAME, undefined, null, null, {
+      unreported: true,
+    });
+    expect(payload).toMatchObject({ input: 431, output: 1, costUsd: 0.0013, unreported: true });
+  });
+
+  it('omits the key entirely on a reported bill, so a merge cannot leave it behind', () => {
+    expect(buildPiUsagePayload(SDK_USAGE)).not.toHaveProperty('unreported');
+    expect(
+      buildPiUsagePayload(SDK_USAGE, undefined, null, null, { unreported: false })
+    ).not.toHaveProperty('unreported');
+  });
+
+  it('round-trips through readPiUsagePayload, and reads only a literal `true`', () => {
+    const built = buildPiUsagePayload(ZERO_USAGE, SDK_CONTEXT, null, null, { unreported: true });
+    expect(readPiUsagePayload(built)).toMatchObject({ output: 0, unreported: true });
+    expect(readPiUsagePayload({ input: 0, output: 0, unreported: 'yes' })).not.toHaveProperty(
+      'unreported'
+    );
+    // Not a pending tick: settled-bill surfaces must still fold it.
+    expect(isPendingUsagePayload(built)).toBe(false);
   });
 });

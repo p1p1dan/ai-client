@@ -348,6 +348,16 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             )}
           </div>
         )}
+        {/* T125: the last request was cut after it started streaming and the
+            provider never reported its cost. Its zeros are not a bill, so the
+            rows above give way to one line saying so. */}
+        {view.usageUnreported && (
+          <div className="mt-1 flex flex-col border-t pt-1">
+            <p className="flex h-7 items-center px-1 text-meta text-muted-foreground">
+              {t('Usage for this request is unknown')}
+            </p>
+          </div>
+        )}
         {/* A2: the conversation total, in its own bordered group and with every
             label saying "session". Never merged with the block above into one
             "Total" — a reader who took a session figure for a turn figure would
