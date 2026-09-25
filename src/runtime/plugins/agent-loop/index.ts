@@ -42,6 +42,7 @@ import { onDemandInstructionsText } from '../prompt/projectInstructions.ts';
 import type { ComposedPrompt } from '../prompt/segments.ts';
 import { PERMISSIONS_ENTRY } from '../session/legacy.ts';
 import { interruptedToolResults } from '../session/recovery.ts';
+import { stoppedToolOutcome } from '../tools/outcome.ts';
 import { base64Bytes, preparePrompt } from './attachments.ts';
 import {
   delegationCallSignature,
@@ -842,6 +843,9 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
               terminate: true,
             }
           : undefined,
+      // T130 — a command the user's Stop cut short resolves with
+      // `details.stopped`, which pi would otherwise record as a success.
+      afterToolCall: async (context) => stoppedToolOutcome(context),
       // The turn boundary is where compaction is safe: the batch of tool
       // results that belongs to the turn just finished is already in the
       // context, so a model that asked for a new window mid-batch does not

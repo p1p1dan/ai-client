@@ -25,6 +25,7 @@ import {
 } from '@shared/piUsage';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { toolDisplayName } from '@/components/chat/piToolNames';
+import { toolRunOutcome } from '@/components/chat/toolCard';
 import type { ChatMessage } from '@/stores/chatSessions';
 
 /**
@@ -80,7 +81,10 @@ export interface RunToolFacts {
   activeToolStatus: string | null;
   /** Tool calls in the last assistant turn. */
   calls: number;
-  /** Of those, the ones that came back `ok: false`. */
+  /**
+   * Of those, the ones that came back `ok: false` — minus the refused, never
+   * started and stopped ones (`toolRunOutcome`), which did not fail.
+   */
   failed: number;
 }
 
@@ -226,7 +230,10 @@ export function deriveRunTools(
   for (const block of lastAssistant.blocks) {
     if (block.type !== 'tool_result' || !block.toolCallId) continue;
     settled.add(block.toolCallId);
-    if (block.toolOk === false) failed += 1;
+    // A call that was refused, never started or stopped (N5 / T130) settles
+    // `ok: false` without the tool having failed — the timeline row is not red
+    // for it, so the panel does not count it either.
+    if (block.toolOk === false && !toolRunOutcome({ result: block.toolOutput })) failed += 1;
   }
 
   let calls = 0;

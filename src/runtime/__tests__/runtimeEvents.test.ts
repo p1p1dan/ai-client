@@ -1064,6 +1064,59 @@ describe('T101 · streaming tool rows', () => {
     expect(completed[1]?.payload.output).toBe('Nothing is left.');
   });
 
+  /**
+   * T130: a bash Stop cut short arrives as `isError: true` (the loop's
+   * `afterToolCall`) with the tool's own `details.stopped`. The row needs both:
+   * `ok: false` so nothing calls it completed, and the flag so it reads
+   * "Stopped" in its ordinary tone instead of a red failure.
+   */
+  it('[BASH-STOP-5] projects a stopped bash as ok:false with details.stopped', () => {
+    const { events, projection } = projector();
+    const text = 'a\n[exit=null; aborted]';
+    projection.observe({
+      type: 'tool_execution_end',
+      toolCallId: 'b1',
+      toolName: 'bash',
+      args: {},
+      result: {
+        content: [{ type: 'text', text }],
+        details: {
+          exitCode: null,
+          signal: 'SIGTERM',
+          termination: 'aborted',
+          stdoutBytes: 1,
+          stderrBytes: 0,
+          truncated: false,
+          stopped: true,
+        },
+      },
+      isError: true,
+    } as AgentEvent);
+    // TaskStop's `details.stopped` is a list of delegations, not the flag.
+    projection.observe({
+      type: 'tool_execution_end',
+      toolCallId: 's1',
+      toolName: 'TaskStop',
+      args: {},
+      result: {
+        content: [{ type: 'text', text: 'Stopped 1.' }],
+        details: { stopped: [{ delegationId: 'd1', status: 'stopped' }], delivered: [] },
+      },
+      isError: false,
+    } as AgentEvent);
+    const completed = events.filter((event) => event.type === 'tool.completed');
+    expect(completed[0]?.payload).toMatchObject({
+      toolCallId: 'b1',
+      ok: false,
+      error: text,
+      output: { content: [{ type: 'text', text }], details: { stopped: true } },
+    });
+    // Only the flag crosses the wire, not the exec's scalars.
+    expect((completed[0]?.payload.output as { details: object }).details).toEqual({
+      stopped: true,
+    });
+    expect(completed[1]?.payload).toMatchObject({ ok: true, output: 'Stopped 1.' });
+  });
   it('leaves a row that really ran alone', () => {
     // The other side of the case above: a settled call must NOT also be
     // reported as cancelled when its turn ends.

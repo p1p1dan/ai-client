@@ -349,7 +349,8 @@ export interface ToolStartedEvent extends RuntimeEventBase {
 
 /**
  * N5 (devbox 2026-09-24): the flags a `tool.completed` output carries, in its
- * `details`, for a call that did NOT do its work. Such an output is the
+ * `details`, for a call that did NOT do its work (or, T130, did not finish
+ * it). Such an output is the
  * `{ content, details }` shape (the same one a file-change `review` rides in),
  * so the renderer store passes it through untouched.
  *
@@ -369,6 +370,14 @@ export interface ToolOutcomeDetails {
    * provider error) after the model wrote the call and before it ran.
    */
   notStarted?: true;
+  /**
+   * T130: the call DID run and was cut short by Stop — a `bash` command whose
+   * exec ended `aborted` / `disposed`. Settled `ok: false`, but not a failure
+   * of the tool: the row reads "… · Stopped" in its ordinary tone and keeps
+   * whatever output the command produced. Copied from the tool result's own
+   * `details.stopped`.
+   */
+  stopped?: true;
 }
 
 export interface ToolCompletedEvent extends RuntimeEventBase {

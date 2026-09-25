@@ -68,6 +68,11 @@ export type HistoryBlock =
        * still running.
        */
       notStarted?: true;
+      /**
+       * T130: the call ran and was cut short by Stop — copied from the
+       * result's own `details.stopped` (a `bash` whose exec ended aborted).
+       */
+      stopped?: true;
     };
 
 /**

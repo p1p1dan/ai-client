@@ -58,6 +58,7 @@ import {
 } from '../agent-loop/providerRetry.ts';
 import type { DelegateCallScope } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
+import { stoppedToolOutcome } from '../tools/outcome.ts';
 import { applySubagentActivation, resolveSubagentPin, type SubagentCatalog } from './catalog.ts';
 import {
   composeSubagentSystemPrompt,
@@ -1307,6 +1308,9 @@ export class SubagentPlugin extends Service implements SubagentService {
       cacheRetention: this.config.cacheRetention ?? DEFAULT_SUBAGENT_CACHE_RETENTION,
       providerTimeoutMs: this.config.providerTimeoutMs ?? DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
       tools,
+      // T130 — the same outcome rule as the parent loop's `afterToolCall`: a
+      // command cut short by TaskStop or Stop is not recorded as a success.
+      resolveToolOutcome: stoppedToolOutcome,
       onEvent: (envelope) => this.publish(envelope),
       // decision 029 clause 8 — a delegate's backoff reaches the same banner
       // the parent's does, tagged so the renderer can say WHICH delegate is

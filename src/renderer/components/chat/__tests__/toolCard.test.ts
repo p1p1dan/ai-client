@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { englishTranslate } from '@shared/i18n';
+import { englishTranslate, translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { EMPTY_TOOL_EXPAND_MEMORY, resolveToolRowOpen } from '@/stores/toolExpansion';
@@ -20,11 +20,13 @@ import {
   pairToolBlocks,
   runningElapsedMs,
   shortPath,
+  TOOL_RUN_OUTCOME_LABEL,
   TOOL_VERBS,
   type ToolGroupEntry,
   type ToolRun,
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
+  toolRunOutcome,
   toolRunWasRefused,
   toolVerb,
   UNKNOWN_TOOL_VERB,
@@ -1436,6 +1438,54 @@ describe('refused calls are not described in the past tense', () => {
       }
     }
     expect(UNKNOWN_TOOL_VERB.refused).toBe('Run');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T130 — a bash command Stop cut short reads "Ran … · Stopped"
+// ---------------------------------------------------------------------------
+
+describe('a bash command Stop cut short', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const text = 'a\n[exit=null; aborted]';
+  /** Blocks as the store holds them after the projector's `tool.completed`. */
+  const stopped = (): ToolRun => {
+    const [run] = pairToolBlocks([
+      {
+        id: 'b1',
+        type: 'tool_call',
+        toolCallId: 'b1',
+        toolName: 'bash',
+        toolInput: { command: 'sleep 30' },
+      },
+      {
+        id: 'b1-result',
+        type: 'tool_result',
+        toolCallId: 'b1',
+        toolOk: false,
+        toolOutput: { content: [{ type: 'text', text }], details: { stopped: true } },
+        text,
+      },
+    ]);
+    if (!run) throw new Error('no run');
+    return run;
+  };
+
+  it('[BASH-STOP-8] keeps the done-form verb, says 已停止, is not red, and keeps its output', () => {
+    const run = stopped();
+    expect(run.status, 'the store still says ok:false').toBe('failed');
+    expect(toolRunOutcome(run)).toBe('stopped');
+    const view = deriveToolRowView(run);
+    expect(view.outcome).toBe('stopped');
+    // The command did run, so not the refused (never-ran) form.
+    expect(view.verb).toBe(toolVerb('bash', 'done'));
+    expect(zh(view.verb)).toBe('终端');
+    expect(zh(TOOL_RUN_OUTCOME_LABEL.stopped)).toBe('已停止');
+    expect(view.failed, 'a Stop is not a tool failure').toBe(false);
+    expect(view.body).toBe('output');
+    expect(view.output).toBe(text);
+    expect(view.expandable).toBe(true);
   });
 });
 

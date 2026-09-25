@@ -143,6 +143,27 @@ describe('deriveRunTools', () => {
       failed: 0,
     });
   });
+
+  it('[BASH-STOP-8] does not count a stopped, refused or never-started call as failed', () => {
+    // `ok: false` with an outcome flag — the timeline row is not red for these.
+    const withOutcome = (toolCallId: string, flag: string): ChatBlock => ({
+      ...toolResult(toolCallId, false),
+      toolOutput: { content: [{ type: 'text', text: '…' }], details: { [flag]: true } },
+    });
+    const messages = [
+      message('assistant', [
+        toolCall('s1', 'bash'),
+        withOutcome('s1', 'stopped'),
+        toolCall('r1', 'TaskWait'),
+        withOutcome('r1', 'refused'),
+        toolCall('n1', 'TaskList'),
+        withOutcome('n1', 'notStarted'),
+        toolCall('f1', 'read'),
+        toolResult('f1', false),
+      ]),
+    ];
+    expect(deriveRunTools(messages)).toMatchObject({ calls: 4, failed: 1 });
+  });
 });
 
 describe('deriveRunPanelView — the clock (acceptance ③)', () => {

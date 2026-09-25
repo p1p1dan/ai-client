@@ -512,5 +512,62 @@ describe('run-stop records in history replay', () => {
       ]);
       expect(results('a3')).toEqual([]);
     });
+
+    it('[BASH-STOP-6] carries a stopped bash’s flag and partial output, and not TaskStop’s list', () => {
+      const text = 'a\n[exit=null; aborted]';
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'run it', 1),
+          assistant(
+            'a1',
+            'u1',
+            [
+              { type: 'toolCall', id: 'b1', name: 'bash', arguments: { command: 'sleep 30' } },
+              { type: 'toolCall', id: 's1', name: 'TaskStop', arguments: {} },
+            ],
+            'toolUse',
+            2
+          ),
+          {
+            type: 'message',
+            id: 'r1',
+            parentId: 'a1',
+            timestamp: at(3),
+            message: {
+              role: 'toolResult',
+              toolCallId: 'b1',
+              toolName: 'bash',
+              content: [{ type: 'text', text }],
+              details: { exitCode: null, termination: 'aborted', stopped: true },
+              isError: true,
+            },
+          },
+          {
+            type: 'message',
+            id: 'r2',
+            parentId: 'r1',
+            timestamp: at(4),
+            message: {
+              role: 'toolResult',
+              toolCallId: 's1',
+              toolName: 'TaskStop',
+              content: [{ type: 'text', text: 'Stopped 1.' }],
+              details: { stopped: [{ delegationId: 'd1', status: 'stopped' }], delivered: [] },
+              isError: false,
+            },
+          },
+        ])
+      );
+      const results = history[1]?.blocks.filter((block) => block.type === 'tool_result') ?? [];
+      expect(results[0]).toMatchObject({
+        toolCallId: 'b1',
+        ok: false,
+        stopped: true,
+        output: text,
+        error: text,
+      });
+      expect(results[1]).toMatchObject({ toolCallId: 's1', ok: true });
+      expect(results[1]).not.toHaveProperty('stopped');
+    });
   });
 });

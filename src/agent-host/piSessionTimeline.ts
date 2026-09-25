@@ -420,7 +420,11 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           }
         }
       }
-      const details = recordOf(message.details) as { patch?: unknown; refused?: unknown } | null;
+      const details = recordOf(message.details) as {
+        patch?: unknown;
+        refused?: unknown;
+        stopped?: unknown;
+      } | null;
       const review = message.isError !== true ? reviewFromToolResult(message) : undefined;
       const resultBlock: HistoryBlock = {
         type: 'tool_result',
@@ -433,8 +437,11 @@ export function projectPiSessionHistory(manager: PiHistorySessionManager): Histo
           ? { patch: details.patch }
           : {}),
         ...(message.isError === true ? { error: output || 'Tool call failed' } : {}),
-        // N5: the same flag the live projector forwards (`toolOutcomeDetails`).
+        // N5 / T130: the same flags the live projector forwards
+        // (`toolOutcomeDetails`). Strictly `true`: TaskStop's own
+        // `details.stopped` is the list of delegations it stopped.
         ...(details?.refused === true ? { refused: true as const } : {}),
+        ...(details?.stopped === true ? { stopped: true as const } : {}),
       };
       if (target && messages[target.messageIndex]) {
         const owner = messages[target.messageIndex];

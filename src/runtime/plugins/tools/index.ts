@@ -571,6 +571,13 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
               // and reaping it is a separate concern that used to be allowed to
               // fail the whole call.
               ...(output.cleanupError ? { cleanupError: output.cleanupError } : {}),
+              // T130 — cut short by Stop (or the runtime going away). The text
+              // and the status tail stay as they are, so the model still sees
+              // the partial output; `stoppedToolOutcome` turns this into
+              // `isError` and the projector carries it to the row.
+              ...(output.termination === 'aborted' || output.termination === 'disposed'
+                ? { stopped: true }
+                : {}),
             },
             `\n[exit=${output.exitCode}; ${output.termination}${output.truncated ? '; output truncated' : ''}]`
           );

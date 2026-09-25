@@ -9,7 +9,7 @@
  * cases exist to prevent.
  */
 
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
@@ -20,7 +20,10 @@ import {
 } from '@earendil-works/pi-ai/providers/faux';
 import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../bootstrap.ts';
+import { standaloneHost } from '../host/config.ts';
+import { resolveWorkerShell } from '../host/shell.ts';
 import { traceSafeToolArgs } from '../plugins/agent-loop/index.ts';
+import { neverAsked } from './fixtures/approval.ts';
 
 async function withRuntime<T>(
   reply: ReturnType<typeof fauxAssistantMessage>,
@@ -418,6 +421,95 @@ describe('agent loop', () => {
         runtime.trace.runs[0].steps.map((step) => (step.detail as { event?: string })?.event)
       ).toEqual(['run_start', 'provider_attempt_start', 'provider_attempt_end', undefined]);
     });
+  });
+});
+
+/**
+ * T130 — Stop during a running bash used to settle the call `isError: false`:
+ * the exec resolves `aborted` rather than throwing, and pi calls every
+ * non-throwing result a success. The live event and the session file are the
+ * two places the timeline reads the outcome from, so both are asserted.
+ *
+ * Reverse check: without the loop's `afterToolCall` hook this case fails.
+ */
+describe('T130 · a bash command Stop cut short', () => {
+  it('[BASH-STOP-3] settles as an error, in the live event and in the session file', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'agent-loop-bash-stop-'));
+    const sessionFile = join(workspace, 'session.jsonl');
+    const faux = fauxProvider({
+      provider: 'faux',
+      models: [{ id: 'faux-bash-stop', name: 'Bash stop probe' }],
+    });
+    faux.setResponses([
+      fauxAssistantMessage(
+        [fauxToolCall('bash', { command: 'printf a; : > started; sleep 5' }, { id: 'b1' })],
+        { stopReason: 'toolUse' }
+      ),
+      fauxAssistantMessage('spare reply'),
+    ]);
+    const runtime = await createRuntime({
+      providers: [faux.provider],
+      env: {},
+      host: standaloneHost({ PATH: process.env.PATH }),
+      tools: {
+        cwd: workspace,
+        shellPath: resolveWorkerShell(process.env as Record<string, string>),
+      },
+      permissions: { approve: neverAsked, gear: 'auto' },
+      session: { cwd: workspace, mode: 'create', file: sessionFile },
+      loop: { singleTurn: false },
+    });
+    try {
+      const controller = new AbortController();
+      const ends: Extract<AgentEvent, { type: 'tool_execution_end' }>[] = [];
+      const run = runtime.run({
+        prompt: 'run it',
+        signal: controller.signal,
+        onEvent: (event) => {
+          if (event.type === 'tool_execution_end') ends.push(event);
+        },
+      });
+      // Stop once the command's output is out (real child, appendix B1).
+      const deadline = Date.now() + 10_000;
+      for (;;) {
+        try {
+          await access(join(workspace, 'started'));
+          break;
+        } catch {
+          if (Date.now() > deadline) throw new Error('the command never started');
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        }
+      }
+      controller.abort();
+      const result = await run;
+      expect(result.success).toBe(false);
+
+      expect(ends).toHaveLength(1);
+      expect(ends[0]).toMatchObject({ toolCallId: 'b1', isError: true });
+      // The flag survives: flipping `isError` in the hook, not throwing, is
+      // what keeps `details` intact for the projector.
+      expect(ends[0]?.result.details).toMatchObject({ termination: 'aborted', stopped: true });
+
+      await runtime.session?.flush();
+      const rows = (await readFile(sessionFile, 'utf8'))
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { type?: string; message?: Record<string, unknown> });
+      const toolResult = rows.find(
+        (row) =>
+          row.type === 'message' &&
+          row.message?.role === 'toolResult' &&
+          row.message.toolCallId === 'b1'
+      )?.message as
+        | { isError?: boolean; details?: unknown; content?: { type: string; text?: string }[] }
+        | undefined;
+      expect(toolResult).toMatchObject({ isError: true, details: { stopped: true } });
+      // The partial output the model will see on the next turn is still there.
+      expect(toolResult?.content?.[0]?.text?.startsWith('a')).toBe(true);
+    } finally {
+      await runtime.dispose();
+      await rm(workspace, { recursive: true, force: true });
+    }
   });
 });
 

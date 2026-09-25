@@ -110,7 +110,13 @@ export function toolOutcomeDetails(result: unknown): ToolOutcomeDetails | undefi
       ? (result as { details?: unknown }).details
       : undefined;
   if (!details || typeof details !== 'object') return undefined;
-  return (details as { refused?: unknown }).refused === true ? { refused: true } : undefined;
+  const flags = details as { refused?: unknown; stopped?: unknown };
+  // Strictly `true`: TaskStop's own `details.stopped` is a list, not this flag.
+  const outcome: ToolOutcomeDetails = {
+    ...(flags.refused === true ? { refused: true as const } : {}),
+    ...(flags.stopped === true ? { stopped: true as const } : {}),
+  };
+  return outcome.refused || outcome.stopped ? outcome : undefined;
 }
 
 export function output(result: unknown): string {

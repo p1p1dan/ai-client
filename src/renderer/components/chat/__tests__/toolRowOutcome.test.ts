@@ -118,3 +118,34 @@ it('[N5-DOM-3] a call that really ran keeps its done-state words and no outcome 
   const row = rowText('已停止子 Agent');
   expect(row.querySelector('[data-slot="tool-row-outcome"]')).toBeNull();
 });
+
+it('[BASH-STOP-8] a bash Stop cut short reads 「终端 … · 已停止」, not red, and opens onto its partial output', async () => {
+  const text = 'a\n[exit=null; aborted]';
+  const blocks: ChatBlock[] = [
+    call('b1', 'bash', { command: 'sleep 30' }),
+    {
+      id: 'b1-result',
+      type: 'tool_result',
+      toolCallId: 'b1',
+      toolOk: false,
+      toolOutput: { content: [{ type: 'text', text }], details: { stopped: true } },
+      text,
+    },
+  ];
+  const rows = deriveToolGroupRows(
+    pairToolBlocks(blocks).map((run) => ({ kind: 'run' as const, run })),
+    { t: zh }
+  );
+  await act(async () => root.render(createElement(ToolGroup, { rows, sessionId: 's' })));
+  const row = container.querySelector<HTMLElement>('.group\\/row');
+  expect(row?.textContent).toContain('终端');
+  expect(row?.textContent).toContain('sleep 30');
+  expect(row?.querySelector('[data-slot="tool-row-outcome"]')?.textContent).toContain('· 已停止');
+  expect(row?.outerHTML, 'a Stop is not painted as a failure').not.toContain('destructive');
+  // The body is there: the command's partial output is one click away.
+  expect(container.textContent, 'collapsed by default').not.toContain('[exit=null; aborted]');
+  const trigger = container.querySelector<HTMLElement>('[data-slot="collapsible-trigger"]');
+  expect(trigger).not.toBeNull();
+  await act(async () => trigger?.click());
+  expect(container.textContent).toContain('[exit=null; aborted]');
+});

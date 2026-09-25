@@ -853,7 +853,7 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         // `tool.completed` output carries them (`ToolOutcomeDetails`), so a
         // replayed row is judged by the same structured field as a live one.
         toolOutput:
-          block.patch || block.review || block.refused || block.notStarted
+          block.patch || block.review || block.refused || block.notStarted || block.stopped
             ? {
                 content: [{ type: 'text', text: block.output ?? '' }],
                 details: {
@@ -861,6 +861,7 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
                   ...(block.review ? { review: block.review } : {}),
                   ...(block.refused ? { refused: true } : {}),
                   ...(block.notStarted ? { notStarted: true } : {}),
+                  ...(block.stopped ? { stopped: true } : {}),
                 },
               }
             : block.output,

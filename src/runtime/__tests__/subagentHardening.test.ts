@@ -14,7 +14,7 @@
  *   the session file, and a delegated cost reaching `usage.updated`.
  */
 
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
@@ -27,8 +27,11 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
+import { standaloneHost } from '../host/config.ts';
+import { resolveWorkerShell } from '../host/shell.ts';
 import {
   MAX_ACTIVITY_EVENTS_PER_DELEGATION,
+  SUBAGENT_STOP_TOOL_NAME,
   SUBAGENT_TOOL_NAME,
   SUBAGENT_WAIT_TOOL_NAME,
 } from '../plugins/subagent/index.ts';
@@ -326,13 +329,21 @@ describe('T020 · wired', () => {
 
   async function build(
     script: { parent: ScriptStep[]; delegate: ScriptStep[] },
-    subagents: { transcriptBudgetBytes?: number } = {}
+    subagents: { transcriptBudgetBytes?: number } = {},
+    /** Register `bash` with the real shell (and a PATH for it to use). */
+    options: { shell?: boolean } = {}
   ): Promise<RuntimeHandle> {
     const handle = scriptedProvider(script);
     runtime = await createRuntime({
       env: {},
       providers: [handle.provider],
-      tools: { cwd: workspace },
+      ...(options.shell ? { host: standaloneHost({ PATH: process.env.PATH }) } : {}),
+      tools: {
+        cwd: workspace,
+        ...(options.shell
+          ? { shellPath: resolveWorkerShell(process.env as Record<string, string>) }
+          : {}),
+      },
       permissions: { approve: neverAsked, gear: 'auto' },
       session: { cwd: workspace, mode: 'create', file: join(workspace, 'session.jsonl') },
       subagents: {
@@ -690,4 +701,95 @@ describe('T020 · wired', () => {
     expect(last.session.totalTokens).toBeGreaterThanOrEqual(last.delegated.totalTokens);
     expect(last.session.toolResults).toBe(1);
   });
+
+  /**
+   * T130 — the delegate half. `SubagentRun` has its own `afterToolCall`, and
+   * its `resolveToolOutcome` hook had no producer until the plugin passed
+   * `stoppedToolOutcome` in; without it a delegate's bash that TaskStop cut
+   * short settled as a success in the delegate's transcript.
+   */
+  it('[BASH-STOP-4] a delegate’s bash stopped by TaskStop settles as an error', async () => {
+    const marker = join(workspace, 'started');
+    const handle = await build(
+      {
+        parent: [
+          () =>
+            fauxAssistantMessage(
+              [fauxToolCall(SUBAGENT_TOOL_NAME, { agent: 'explorer', task: 'run it' })],
+              {
+                stopReason: 'toolUse',
+              }
+            ),
+          // Stop the delegate once its command's output is out (real child,
+          // appendix B1).
+          async () => {
+            const deadline = Date.now() + 10_000;
+            for (;;) {
+              try {
+                await access(marker);
+                break;
+              } catch {
+                if (Date.now() > deadline) throw new Error('the delegate’s command never started');
+                await new Promise((resolve) => setTimeout(resolve, 20));
+              }
+            }
+            return fauxAssistantMessage([fauxToolCall(SUBAGENT_STOP_TOOL_NAME, {})], {
+              stopReason: 'toolUse',
+            });
+          },
+          () => fauxAssistantMessage('stopped it'),
+        ],
+        delegate: [
+          () =>
+            fauxAssistantMessage(
+              [fauxToolCall('bash', { command: 'printf a; : > started; sleep 5' }, { id: 'db1' })],
+              { stopReason: 'toolUse' }
+            ),
+          () => fauxAssistantMessage('EXPLORER-REPORT: spare'),
+        ],
+      },
+      {},
+      { shell: true }
+    );
+    const delegateEnds: { toolCallId: string; isError: boolean; details: unknown }[] = [];
+    handle.ctx.runtimeSubagents.onEvent((envelope) => {
+      if (envelope.event.type !== 'tool_execution_end') return;
+      delegateEnds.push({
+        toolCallId: envelope.event.toolCallId,
+        isError: envelope.event.isError,
+        details: (envelope.event.result as { details?: unknown }).details,
+      });
+    });
+    let parentStopResult: unknown;
+    await handle.run({
+      prompt: 'go',
+      onEvent: (event) => {
+        if (event.type === 'tool_execution_end' && event.toolName === SUBAGENT_STOP_TOOL_NAME)
+          parentStopResult = event;
+      },
+    });
+
+    expect(delegateEnds).toEqual([
+      expect.objectContaining({
+        toolCallId: 'db1',
+        isError: true,
+        details: expect.objectContaining({ termination: 'aborted', stopped: true }),
+      }),
+    ]);
+    // TaskStop's own `details.stopped` is the list of delegations it stopped,
+    // not the T130 flag — that call succeeded and must stay a success.
+    expect(parentStopResult).toMatchObject({
+      isError: false,
+      result: { details: { stopped: [expect.objectContaining({ status: 'stopped' })] } },
+    });
+    // The delegate's transcript in the session file says the same.
+    await handle.session?.flush();
+    const recorded = (handle.session?.snapshot().entries ?? [])
+      .filter((entry) => entry.type === 'custom' && entry.customType === SUBAGENT_ENTRY)
+      .map((entry) => (entry as unknown as { data: { kind: string; message?: unknown } }).data)
+      .filter((data) => data.kind === 'message')
+      .map((data) => data.message as { role?: string; toolCallId?: string })
+      .find((message) => message.role === 'toolResult' && message.toolCallId === 'db1');
+    expect(recorded).toMatchObject({ isError: true, details: { stopped: true } });
+  }, 30_000);
 });

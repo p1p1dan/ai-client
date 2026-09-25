@@ -790,6 +790,50 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     const runs = pairToolBlocks(patch.messages?.[SESSION_ID]?.[0]?.blocks ?? []);
     expect(runs.map((run) => toolRunOutcome(run))).toEqual(['refused', 'notStarted', null]);
   });
+
+  /**
+   * T130: a replayed stopped bash lands in the same `{ content, details }`
+   * shape the live `tool.completed` output has, so a reopened session reads
+   * "… · Stopped" exactly as the live row did.
+   */
+  it('[BASH-STOP-7] maps a stopped result into details.stopped, keeping its partial output', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const text = 'a\n[exit=null; aborted]';
+    const message: HistoryMessage = {
+      id: 'h:uuid-stopped',
+      role: 'assistant',
+      blocks: [
+        {
+          id: 'b1:call',
+          type: 'tool_call',
+          toolCallId: 'b1',
+          name: 'bash',
+          input: { command: 'sleep 30' },
+        },
+        {
+          id: 'b1:result',
+          type: 'tool_result',
+          toolCallId: 'b1',
+          ok: false,
+          output: text,
+          error: text,
+          stopped: true,
+        },
+      ],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [message] }));
+    const blocks = patch.messages?.[SESSION_ID]?.[0]?.blocks ?? [];
+    const result = blocks.find((block) => block.type === 'tool_result');
+    expect(result?.toolOk).toBe(false);
+    expect(result?.toolOutput).toEqual({
+      content: [{ type: 'text', text }],
+      details: { stopped: true },
+    });
+    const [run] = pairToolBlocks(blocks);
+    expect(toolRunOutcome(run as NonNullable<typeof run>)).toBe('stopped');
+    expect(run?.output).toBe(text);
+  });
 });
 
 /**

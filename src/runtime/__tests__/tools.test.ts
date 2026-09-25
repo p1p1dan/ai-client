@@ -1,4 +1,5 @@
 import {
+  access,
   chmod,
   mkdir,
   mkdtemp,
@@ -18,6 +19,7 @@ import { migratePermissionTier } from '../../shared/types/runtimePermission.ts';
 import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from '../bootstrap.ts';
 import type { RuntimeHostIoService, RuntimeReadOptions, RuntimeReadResult } from '../contracts.ts';
 import { standaloneHost } from '../host/config.ts';
+import type { ExecPlugin } from '../host/exec.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import {
   ATTACHMENT_MAX_BYTES,
@@ -26,6 +28,7 @@ import {
 import { modeSegment, permissionGearSegment } from '../plugins/permissions/prompt.ts';
 import { composeSystemPrompt } from '../plugins/prompt/segments.ts';
 import { TOOL_OUTPUT_BYTES } from '../plugins/tools/index.ts';
+import { stoppedToolOutcome } from '../plugins/tools/outcome.ts';
 import { readLines } from '../plugins/tools/read-lines.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
@@ -751,6 +754,94 @@ describe('native tools', () => {
       },
     });
     expect(content(await call(r, 'grep', { pattern: 'hidden' }))).not.toContain('hidden');
+  });
+});
+
+/**
+ * T130 — a bash command Stop cut short used to settle as a success: the exec
+ * resolves `termination: 'aborted'` (it does not throw), and pi records every
+ * non-throwing result `isError: false`. The tool now says so in
+ * `details.stopped`; `stoppedToolOutcome` is the hook that turns it into the
+ * error flag (wired and reverse-checked in `agentLoop.test.ts`).
+ *
+ * Real child processes throughout (engineering appendix B1): the command
+ * writes a marker once its output is out, and the test aborts only after it
+ * sees that marker.
+ */
+describe('T130 · a bash command Stop cut short', () => {
+  const STARTED = 'printf a; : > started; sleep 5';
+  async function waitForMarker(): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      try {
+        await access(join(dir, 'started'));
+        return;
+      } catch {
+        if (Date.now() > deadline) throw new Error('the command never started');
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+    }
+  }
+
+  it('[BASH-STOP-1] flags an aborted command as stopped and keeps its partial output', async () => {
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const controller = new AbortController();
+    const running = call(r, 'bash', { command: STARTED }, controller.signal);
+    await waitForMarker();
+    controller.abort();
+    const result = await running;
+    expect(result.details).toMatchObject({ termination: 'aborted', stopped: true });
+    // Text and status tail unchanged: the model still sees what the command
+    // printed before it was stopped.
+    const text = content(result);
+    expect(text.startsWith('a')).toBe(true);
+    expect(text).toContain('; aborted]');
+  });
+
+  it('[BASH-STOP-1] flags a command the runtime tore down (disposed) as stopped too', async () => {
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    const running = call(r, 'bash', { command: STARTED });
+    await waitForMarker();
+    await (r.ctx.runtimeExec as ExecPlugin).shutdown();
+    const result = await running;
+    expect(result.details).toMatchObject({ termination: 'disposed', stopped: true });
+    expect(content(result).startsWith('a')).toBe(true);
+  });
+
+  it('[BASH-STOP-2] leaves a command that exited or timed out unflagged', async () => {
+    const r = await runtime({ permissions: { gear: 'auto' } });
+    // A non-zero exit is still the command's own outcome, not a stop.
+    const exited = await call(r, 'bash', { command: 'printf done; exit 3' });
+    expect(exited.details).toMatchObject({ termination: 'exit', exitCode: 3 });
+    expect(exited.details).not.toHaveProperty('stopped');
+    const timedOut = await call(r, 'bash', { command: 'sleep 5', timeoutMs: 50 });
+    expect(timedOut.details).toMatchObject({ termination: 'timeout' });
+    expect(timedOut.details).not.toHaveProperty('stopped');
+    for (const result of [exited, timedOut])
+      expect(stoppedToolOutcome({ result, isError: false })).toBeUndefined();
+  });
+
+  it('[BASH-STOP-2] the outcome hook flips only a literal `details.stopped: true`', () => {
+    const result = (details: unknown) => ({ content: [], details });
+    expect(stoppedToolOutcome({ result: result({ stopped: true }), isError: false })).toEqual({
+      isError: true,
+    });
+    // TaskStop reports the delegations it stopped under the same key, and
+    // that call succeeded.
+    expect(
+      stoppedToolOutcome({
+        result: result({ stopped: [{ delegationId: 'd1', status: 'stopped' }], delivered: [] }),
+        isError: false,
+      })
+    ).toBeUndefined();
+    expect(
+      stoppedToolOutcome({ result: result({ stopped: 'yes' }), isError: false })
+    ).toBeUndefined();
+    expect(stoppedToolOutcome({ result: result(undefined), isError: false })).toBeUndefined();
+    // Already an error: nothing to override.
+    expect(
+      stoppedToolOutcome({ result: result({ stopped: true }), isError: true })
+    ).toBeUndefined();
   });
 });
 

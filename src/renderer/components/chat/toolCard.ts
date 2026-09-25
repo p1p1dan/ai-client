@@ -445,8 +445,10 @@ export interface ToolRowView {
    * N5 (devbox 2026-09-24): the call never did its work — the runtime refused
    * it, or the run ended before it started. Such a row reads as the operation
    * that was asked for (the `refused` verb form) plus this word, never as a
-   * completed one; see `toolRunOutcome` for how it is decided. Absent on every
-   * call that actually ran, whatever came back.
+   * completed one; see `toolRunOutcome` for how it is decided. T130 adds
+   * `stopped`: the call ran and Stop cut it short, so it keeps the done-form
+   * verb and its partial output. Absent on every call that ran to its end,
+   * whatever came back.
    */
   outcome?: ToolRunOutcome;
   /**
@@ -570,10 +572,12 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const failed = run.status === 'failed' && !outcome;
   // A refused call never ran, so it must not be described in the past tense —
   // the collapsed row is the only thing most readers see (§6.4, G-9). The same
-  // holds for a call the runtime refused or never started (N5).
+  // holds for a call the runtime refused or never started (N5). A stopped one
+  // did run (T130), so it keeps the done form: "Ran sleep 30 · Stopped".
+  const neverRan = outcome === 'refused' || outcome === 'notStarted';
   const verb = toolVerb(
     run.toolName,
-    toolRunWasRefused(run) || outcome ? 'refused' : running ? 'running' : 'done'
+    toolRunWasRefused(run) || neverRan ? 'refused' : running ? 'running' : 'done'
   );
   const argDetail = formatToolArgDetail(run, options);
   const link = deriveFileLink(run) ?? undefined;
@@ -1044,18 +1048,22 @@ export function toolRunWasRefused(run: Pick<ToolRun, 'permission'>): boolean {
  *   subagent plugin's repeated idle `TaskWait` / `TaskStop` / `TaskList`).
  * - `notStarted` — the run ended after the model wrote the call and before the
  *   runtime executed it (Stop, a loop-guard cut, a provider error).
+ * - `stopped` (T130) — the call DID run and Stop cut it short (a `bash` whose
+ *   command was aborted). Unlike the two above it keeps the done-form verb —
+ *   the command really ran — and its partial output.
  *
  * Read ONLY off the structured `details` the result carries
- * (`ToolOutcomeDetails`: the projector copies `refused` from the tool's own
- * result and stamps `notStarted` on the calls it settles; the history
- * projection does the same on replay). Never off the text: "Refused:" and "The
- * run ended before this call started." are prose for the model and for logs,
- * and a row that matched them would change meaning with a reworded sentence.
+ * (`ToolOutcomeDetails`: the projector copies `refused` / `stopped` from the
+ * tool's own result and stamps `notStarted` on the calls it settles; the
+ * history projection does the same on replay). Never off the text: "Refused:"
+ * and "The run ended before this call started." are prose for the model and
+ * for logs, and a row that matched them would change meaning with a reworded
+ * sentence.
  *
  * A call refused by its AUTHORIZATION is `toolRunWasRefused`'s case, not this
  * one: it carries a decision word of its own.
  */
-export type ToolRunOutcome = 'refused' | 'notStarted';
+export type ToolRunOutcome = 'refused' | 'notStarted' | 'stopped';
 
 export function toolRunOutcome(run: Pick<ToolRun, 'result'>): ToolRunOutcome | null {
   const result = run.result;
@@ -1065,16 +1073,18 @@ export function toolRunOutcome(run: Pick<ToolRun, 'result'>): ToolRunOutcome | n
   const flags = details as ToolOutcomeDetails;
   if (flags.notStarted === true) return 'notStarted';
   if (flags.refused === true) return 'refused';
+  if (flags.stopped === true) return 'stopped';
   return null;
 }
 
 /**
- * The word a never-ran row ends with, as a catalog KEY (translated at the
+ * The word an outcome row ends with, as a catalog KEY (translated at the
  * render site, like `verb`).
  */
 export const TOOL_RUN_OUTCOME_LABEL: Readonly<Record<ToolRunOutcome, string>> = {
   refused: 'Refused',
   notStarted: 'Not run',
+  stopped: 'Stopped',
 };
 
 /**
