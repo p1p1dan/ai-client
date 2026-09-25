@@ -339,6 +339,27 @@ describe('worker RPC boundary guards', () => {
     expect(isWorkerInterjectResult({ interjected: false, turnActive: 'no' })).toBe(false);
   });
 
+  it('[T135] admits a retry only without a prompt of its own', () => {
+    const retry = {
+      logicalSessionId: 'logical-1',
+      requestId: 'turn-2',
+      attemptId: 'attempt-2',
+      text: '',
+      mode: 'retry',
+    };
+    expect(isWorkerSendPayload(retry)).toBe(true);
+    expect(isWorkerSendPayload({ ...retry, model: 'glm/glm-5', effort: 'high' })).toBe(true);
+    // A retry that also carries text or attachments has two meanings; refused.
+    expect(isWorkerSendPayload({ ...retry, text: 'resend me' })).toBe(false);
+    expect(
+      isWorkerSendPayload({
+        ...retry,
+        attachments: [{ kind: 'image', mediaType: 'image/png', data: 'base64' }],
+      })
+    ).toBe(false);
+    expect(isWorkerSendPayload({ ...retry, mode: 'resend' })).toBe(false);
+  });
+
   it('validates sessionless utility requests and terminal events', () => {
     expect(
       isWorkerUtilityStartPayload({

@@ -136,6 +136,7 @@ import {
   shouldRevokeRestoredDraft,
 } from './queueRelease';
 import { ReadingColumn } from './ReadingColumn';
+import { isRetryUnavailableError, retryRunningRequestId } from './retryLastTurn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
 import { parseSendDispatchErrorCode } from './sendDispatchError';
@@ -1459,9 +1460,20 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // origin explicitly — no default — so a future fourth call site cannot
     // silently inherit the wrong rejected-outcome ownership semantics (see
     // `shouldArmRetryable` in queueRelease.ts).
-    options: { clearComposerValue?: boolean; origin: RunSendOrigin }
+    options: {
+      clearComposerValue?: boolean;
+      origin: RunSendOrigin;
+      /**
+       * T135 / decision 045 — re-run the session's last turn instead of sending
+       * `trimmed` (which must be empty): `chat.retryLastTurn`, no optimistic
+       * bubble, no user echo. The failure card stays until the retry's run
+       * reports `running`. `fallbackText` is only ever put back into an empty
+       * composer, unsent, when the worker has nothing to re-run.
+       */
+      retryLastTurn?: { fallbackText: string };
+    }
   ): Promise<RunEntryOutcome> => {
-    const { origin } = options;
+    const { origin, retryLastTurn } = options;
     // U05-b: the old third term here was an explicit `!cwd` bail, because a
     // null cwd used to mean "nothing real to spawn in" — the demo placeholder
     // or a target with no path, either of which would have persisted a fake
@@ -1584,10 +1596,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // `'failed'` would satisfy this send's own wait below (`status === 'failed'`)
     // before the new run reported anything, and the old card would hang under
     // the new message for the whole handshake.
-    useChatSessionsStore.setState((state) => ({
-      lastError: null,
-      sessions: acknowledgeFailedStatus(state.sessions, sessionId),
-    }));
+    //
+    // T135: not for a retry. Its card is the thing being retried, and it stays
+    // up — Continue disabled while this send is in flight — until the retry's
+    // run reports `running` (which moves the status off `failed`), or comes
+    // back refused with the failure still on screen. The wait below reads the
+    // retry's own failure off the wire instead of the stale status.
+    if (!retryLastTurn) {
+      useChatSessionsStore.setState((state) => ({
+        lastError: null,
+        sessions: acknowledgeFailedStatus(state.sessions, sessionId),
+      }));
+    }
 
     // T-28: all guards have passed and the send is committed — this is what
     // flips the middle column to the docked session state the same frame,
@@ -1668,6 +1688,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       context: FailureAffordanceContext = {}
     ): RunEntryOutcome => {
       if (outcome === 'rejected') retirePendingAttempt();
+      // T135: a retry carries no payload to restore or re-send — arming the
+      // round Retry here would re-introduce the very resend it replaces. Its
+      // way back is the failure card, which a refused retry leaves standing.
+      if (retryLastTurn) return outcome;
       const affordance = decideFailureAffordance(outcome, origin, context);
       if (affordance === 'resend') {
         setRetryable(committed);
@@ -1749,18 +1773,22 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       baselineMessageId
     );
     const attemptId = `${sessionId}:${sendOwner}`;
-    pendingAttemptId = attemptId;
-    usePendingUserMessagesStore.getState().publish({
-      attemptId,
-      sessionId,
-      text: committed.text,
-      attachments: drafts.map((draft) => ({
-        kind: draft.kind,
-        mediaType: draft.mediaType,
-        ...(draft.name ? { name: draft.name } : {}),
-      })),
-      startedAt: Date.now(),
-    });
+    // T135: a retry adds no user message, so there is no bubble to show ahead
+    // of an echo — and no echo would ever come to retire one.
+    if (!retryLastTurn) {
+      pendingAttemptId = attemptId;
+      usePendingUserMessagesStore.getState().publish({
+        attemptId,
+        sessionId,
+        text: committed.text,
+        attachments: drafts.map((draft) => ({
+          kind: draft.kind,
+          mediaType: draft.mediaType,
+          ...(draft.name ? { name: draft.name } : {}),
+        })),
+        startedAt: Date.now(),
+      });
+    }
     sendOwnerRef.current = sendOwner;
     phaseStartedAtRef.current = Date.now();
     const ticker = window.setInterval(() => {
@@ -1830,6 +1858,28 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // straggler from an EARLIER request still winding down) — a single slot
     // let the second one silently evict the first with no re-evaluation.
     let pendingHostErrors: readonly RuntimeEvent[] = [];
+    // T135: a retry has no user echo; its run's `running` status is the
+    // admission evidence instead. The status and the IPC reply that names our
+    // request travel on different channels, so ids seen first are kept here
+    // and checked once `setCurrentRequestId` learns ours.
+    const retryRunningIds = new Set<string>();
+    // The worker found no cut-short turn to re-run (`retry_unavailable`).
+    let retryUnavailable = false;
+    const acceptRetry = () => {
+      if (sawUserEcho) return;
+      // Stands in for the echo everywhere below — the terminal gating, the
+      // outcome classifiers and the busy-retry guard all read it as "the Host
+      // admitted this attempt".
+      sawUserEcho = true;
+      // The card goes with this `running` status; its sentence must not
+      // resurface in the composer's error box once the session is not failed.
+      useChatSessionsStore.setState({ lastError: null });
+      // The failure also put its prompt back into the composer (D1). The retry
+      // is now re-running that very prompt, so a restored draft the user has
+      // not touched goes — sending it as well would be the duplicate this path
+      // removes. Anything the user typed or edited stays.
+      revokeRestoredDraftIfUntouched(sessionId);
+    };
 
     const applyHostError = (event: RuntimeEvent) => {
       const message =
@@ -1854,6 +1904,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       if (requestId != null) {
         const match = resolvePendingHostError(pendingHostErrors, { sessionId, requestId });
         if (match) applyHostError(match);
+        if (retryLastTurn && retryRunningIds.has(requestId)) acceptRetry();
       }
       pendingHostErrors = [];
     };
@@ -1874,6 +1925,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // instead of the inline field-poke this used to be.
         if (isUserEchoForSend(event, sessionId, attemptId)) {
           sawUserEcho = true;
+        }
+        if (retryLastTurn) {
+          const running = retryRunningRequestId(event, sessionId);
+          if (running) {
+            retryRunningIds.add(running);
+            if (running === currentRequestId) acceptRetry();
+          }
         }
         if (classifyAssistantProgress(event, assistantMessageIds) === 'assistant') {
           sawAssistantProgress = true;
@@ -2080,20 +2138,36 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       setCurrentRequestId(null);
       const sendResult = await cancellation
         .race(
-          window.electronAPI.chat.send({
-            sessionId,
-            attemptId,
-            text: trimmed,
-            // Same B11 rule as the create payload above. On the Codex axis this key
-            // is what D40's `turn/start` override rides on, and an override is
-            // STICKY there [measured, 06-probes P1] — so sending a model the user did
-            // not pick would silently re-default the whole thread, not just a turn.
-            ...(model ? { model } : {}),
-            ...(effort ? { effort } : {}),
-            ...(wireAttachments ? { attachments: wireAttachments } : {}),
-          })
+          retryLastTurn
+            ? // T135 / decision 045: the worker re-runs the failed turn from its
+              // own session file; nothing of the prompt is sent.
+              window.electronAPI.chat.retryLastTurn({
+                sessionId,
+                attemptId,
+                ...(model ? { model } : {}),
+                ...(effort ? { effort } : {}),
+              })
+            : window.electronAPI.chat.send({
+                sessionId,
+                attemptId,
+                text: trimmed,
+                // Same B11 rule as the create payload above. On the Codex axis this key
+                // is what D40's `turn/start` override rides on, and an override is
+                // STICKY there [measured, 06-probes P1] — so sending a model the user did
+                // not pick would silently re-default the whole thread, not just a turn.
+                ...(model ? { model } : {}),
+                ...(effort ? { effort } : {}),
+                ...(wireAttachments ? { attachments: wireAttachments } : {}),
+              })
         )
         .catch((error: unknown) => {
+          // T135: nothing to re-run. Not a failure of this attempt — nothing
+          // started — so it is recorded apart from `fatalHostError` and handled
+          // once the recovery branches below have had their say.
+          if (retryLastTurn && isRetryUnavailableError(error)) {
+            retryUnavailable = true;
+            return null;
+          }
           // The WorkerManager can refuse a send outright — an idle-evicted
           // slot answers `session_not_found`, a slot still tearing down the
           // previous turn answers `session_busy`. Both arrive as an IPC
@@ -2175,7 +2249,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // below stays scoped the same way.
           const state = useChatSessionsStore.getState();
           const session = state.sessions.find((item) => item.id === sessionId);
-          if (session?.status === 'failed') return true;
+          // T135: a retry starts FROM `failed` (its card stays up until the
+          // run reports `running`), so the store's status cannot say whether
+          // the retry failed; its own `session.failed` arrives on the wire as
+          // `fatalHostError` above.
+          if (!retryLastTurn && session?.status === 'failed') return true;
           if (session?.status === 'waiting_permission' || session?.status === 'waiting_question') {
             return true;
           }
@@ -2525,6 +2603,39 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           }
           waitResult = await sendAndWait();
         }
+      }
+
+      // T135 — the worker had no cut-short turn to re-run: the last turn on the
+      // branch completed, or was never recorded (a failure before the prompt
+      // reached the session, a history compacted since, a reload onto another
+      // leaf). Nothing started and nothing was sent. Re-sending the prompt on
+      // our own would risk exactly the duplicate this path exists to remove —
+      // the transcript's last prompt may even belong to an EARLIER turn — so it
+      // goes back into an empty composer, unsent, and the user decides.
+      if (retryUnavailable) {
+        const fallback = retryLastTurn?.fallbackText.trim() ?? '';
+        const composerEmpty =
+          valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
+        const prefilled = fallback.length > 0 && composerEmpty;
+        if (prefilled) updateValue(fallback);
+        // The card has said all it can: its Continue would only be refused
+        // again, and the composer now holds the way forward.
+        useChatSessionsStore.setState((state) => ({
+          lastError: null,
+          sessions: acknowledgeFailedStatus(state.sessions, sessionId),
+        }));
+        toastManager.add({
+          type: 'info',
+          title: t('There is no interrupted turn to retry'),
+          description: prefilled
+            ? t(
+                'The last turn left nothing to re-run — it may never have been recorded, or the history was compacted. Its prompt is back in the input box: check it, then send.'
+              )
+            : t(
+                'The last turn left nothing to re-run — it may never have been recorded, or the history was compacted. Send your message again from the input box.'
+              ),
+        });
+        return 'skipped';
       }
 
       // R3: no `useChatSessionsStore.getState().lastError` read here — see
@@ -2896,20 +3007,22 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
 
   // 2026-09-21 — the failed card's Continue button, arriving as an intent.
   //
-  // The card is rendered by the timeline and the only code that can re-send a
+  // The card is rendered by the timeline and the only code that can start a
   // turn lives here, so the button publishes {sessionId, messageId} and this
-  // effect resolves and sends it. See `stores/continueIntent.ts` for why the
-  // intent carries an id rather than text.
+  // effect acts on it. See `stores/continueIntent.ts` for why the intent
+  // carries an id rather than text.
   //
-  // Sent through `runSend` with origin `'retry'`, NOT through `handleRetry`:
-  // that path is backed by the component-local `retryable` snapshot, which is
-  // armed by `finalizeOutcome` and absent on a restored or session-level
-  // failure — the very case the button exists for. `'retry'` is the right
-  // origin label because this IS a re-send of the user's own last message, and
-  // `shouldArmRetryable` treats it exactly like the round Retry button.
+  // T135 / decision 045: Continue RETRIES the failed turn — `runSend` in its
+  // `retryLastTurn` mode, which sends no text and adds no user message. It
+  // used to re-send the prompt as a new message, which gave the model the same
+  // instruction twice and, with deterministic output, the same failure. The
+  // prompt's text rides along only as the fallback for a worker that finds
+  // nothing to re-run. Origin `'retry'`, not `handleRetry`: that path is backed
+  // by the component-local `retryable` snapshot, which is absent on a restored
+  // or session-level failure — the very case the button exists for.
   //
   // Scoped to the ACTIVE session: an intent left behind by a failure in a
-  // session the user has since switched away from must not send into this one.
+  // session the user has since switched away from must not act on this one.
   const continueIntent = useContinueIntentStore((state) => state.pending);
   const clearContinue = useContinueIntentStore((state) => state.clearContinue);
   useEffect(() => {
@@ -2929,18 +3042,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }
     const bucket = useChatSessionsStore.getState().messages[continueIntent.sessionId] ?? [];
     const message = bucket.find((item) => item.id === continueIntent.messageId);
-    if (!message) return;
-    const text = message.blocks
-      .map((block) => (block.type === 'text' ? (block.text ?? '') : ''))
-      .join('');
-    if (text.trim().length === 0) return;
-    // Drafts stay as they are: `runSend` reads the composer's live attachments
-    // only on the direct-send path. A Continue is a resend of the PROMPT, and
-    // the original attachments' bytes are not recoverable from the transcript
-    // (`ChatMessageAttachment` is metadata). Text-only, and silently so — the
-    // alternative would be a Continue that sends without the image the user
-    // remembers attaching.
-    void runSend(text, [], { origin: 'retry' });
+    const fallbackText =
+      message?.blocks.map((block) => (block.type === 'text' ? (block.text ?? '') : '')).join('') ??
+      '';
+    // Nothing is sent from here, attachments included: the retried turn keeps
+    // the user message (and its images) already in the session file.
+    void runSend('', [], { origin: 'retry', retryLastTurn: { fallbackText } });
     // `runSend` / `sessionId` are stable for this component's life; the effect
     // is keyed on the intent alone so it fires once per click. `t` (decision
     // 040's carry-on wording) only changes with the locale, and the intent is

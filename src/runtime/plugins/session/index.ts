@@ -64,6 +64,10 @@ export class SessionPlugin extends Service implements RuntimeSessionService {
       ?.configure(result.snapshot.permissions ?? DEFAULT_RUNTIME_PERMISSION);
     return result;
   }
+  /** T135 — no permission reconfigure, unlike `navigate`: see the store. */
+  prepareRetry() {
+    return this.store.prepareRetry();
+  }
   fork(file: string, entryId: string) {
     return this.store.fork(file, entryId);
   }

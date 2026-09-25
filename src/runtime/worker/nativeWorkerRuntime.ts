@@ -48,10 +48,11 @@ import {
   STAGED_FORK_MARKER_SUFFIX,
   WORKER_COMMAND_INVENTORY_MAX,
   WORKER_COMPACT_BUDGET_MS,
+  WORKER_RETRY_UNAVAILABLE,
   type WorkerSlashCommandInfo,
 } from '../../shared/types/workerRpc.ts';
 import { createRuntime, DISPOSE_RUN_GRACE_MS, type RuntimeHandle } from '../bootstrap.ts';
-import type { RuntimeHostConfig, RuntimeRunRequest } from '../contracts.ts';
+import type { RuntimeHostConfig, RuntimeRunRequest, RuntimeSessionService } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
@@ -404,15 +405,40 @@ export class NativeWorkerRuntime {
     await this.bootstrap();
     const handle = this.requireHandle();
     const controller = new AbortController();
+    const retry = input.mode === 'retry';
+    // Parsed first: a malformed ref must refuse before a retry moves the leaf.
+    const model = input.model ? parseModelRef(input.model) : undefined;
+    // T135 / decision 045 — a retry is admitted only when the branch ends on a
+    // turn that was cut short. The leaf moves back over the failed reply here,
+    // before `start` marks the session running (a moving leaf needs it idle).
+    // Refusing is not a run refusal: nothing was started and the session is
+    // exactly as it was, so no terminal is emitted — the renderer never drew
+    // this attempt as running, and the code tells it what happened. A failure
+    // to move the leaf IS a refusal of this request (decision 046 rule 5).
+    if (retry) {
+      let point: Awaited<ReturnType<RuntimeSessionService['prepareRetry']>>;
+      try {
+        point = await this.requireSession().prepareRetry();
+      } catch (error) {
+        throw this.refuseRun(input.requestId, error);
+      }
+      if (!point) {
+        throw new NativeWorkerRuntimeError(
+          WORKER_RETRY_UNAVAILABLE,
+          'There is no cut-short turn to retry: the last turn on this branch completed or was never recorded'
+        );
+      }
+    }
     // P5-1 — `/name` and `/skill:name` become the text they stand for before
     // the turn starts. The expansion IS the user message, in the session and in
     // the timeline, which is what the legacy backend does too: pi's
     // `session.prompt()` stores `expandedText`, not what was typed. Keeping the
     // two backends different here would make the same transcript read
     // differently depending on which one wrote it.
-    const prompt = await this.expand(input.text);
+    const prompt = retry ? '' : await this.expand(input.text);
     const request: RuntimeRunRequest = {
       prompt,
+      ...(retry ? { retry: true } : {}),
       runId: input.requestId,
       // Round-tripped so the composer can retire its optimistic bubble when
       // the authoritative user echo lands; without it the prompt shows twice.
@@ -420,7 +446,7 @@ export class NativeWorkerRuntime {
       logicalSessionId: this.logicalSessionId,
       signal: controller.signal,
       ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-      ...(input.model ? { model: parseModelRef(input.model) } : {}),
+      ...(model ? { model } : {}),
       // The composer's effort chip is the turn's thinking level. Dropping it
       // here is invisible: the loop falls back to its own default and the run
       // reports `thinking_level: off` no matter what the user picked. The

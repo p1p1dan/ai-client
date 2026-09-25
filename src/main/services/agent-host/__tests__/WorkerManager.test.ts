@@ -22,7 +22,7 @@ import {
   STOP_WATCHDOG_MS,
   WorkerManager,
 } from '../WorkerManager';
-import type { WorkerSlotLifecycleEvent } from '../WorkerSlot';
+import { WorkerSlotError, type WorkerSlotLifecycleEvent } from '../WorkerSlot';
 
 function importPayload(): WorkerImportConversationPayload {
   return {
@@ -3413,5 +3413,195 @@ describe('WorkerManager Stop always settles (decision 046)', () => {
     await expect(
       h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'hi again', ownerWebContentsId: 7 })
     ).resolves.toMatch(/^send-/);
+  });
+});
+
+describe('WorkerManager retry of the last turn (T135 / decision 045)', () => {
+  const TERMINALS = ['session.completed', 'session.failed', 'session.stopped'];
+
+  function sequence(events: Array<Record<string, unknown>>): string[] {
+    return events
+      .filter((event) => TERMINALS.includes(String(event.type)) || event.type === 'session.status')
+      .map((event) => {
+        const payload = (event.payload ?? {}) as { status?: string; stopCause?: string };
+        return event.type === 'session.status'
+          ? `status:${payload.status}`
+          : `${String(event.type)}${payload.stopCause ? `(${payload.stopCause})` : ''}`;
+      });
+  }
+
+  function answerSend(
+    record: FakeSlotRecord,
+    answer: (payload: Record<string, unknown>) => Promise<unknown>
+  ) {
+    const original = record.request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    record.request.mockImplementationOnce(async (type: string, payload: unknown) =>
+      type === 'worker.send' ? answer(payload as Record<string, unknown>) : original(type, payload)
+    );
+  }
+
+  it('[T135-wm-01] asks the worker for a retry, with no prompt, and latches it like a send', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    const turnId = await h.manager.retryLastTurn({
+      sessionId: 's1',
+      attemptId: 'a1',
+      model: 'glm/glm-5',
+      effort: 'high',
+      ownerWebContentsId: 7,
+    });
+
+    expect(turnId).toMatch(/^send-/);
+    const sent = h.records[0].request.mock.calls.find(([type]) => type === 'worker.send');
+    expect(sent?.[1]).toEqual({
+      logicalSessionId: 's1',
+      requestId: turnId,
+      attemptId: 'a1',
+      text: '',
+      model: 'glm/glm-5',
+      effort: 'high',
+      mode: 'retry',
+    });
+    // One turn at a time, whichever door it came through.
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'next', ownerWebContentsId: 7 })
+    ).rejects.toMatchObject({ code: 'session_busy' });
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ active: true });
+  });
+
+  it('[T135-wm-02] nothing to re-run is `retry_unavailable`, with no latch and no event', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    answerSend(h.records[0], async () => {
+      throw new WorkerSlotError(
+        'WORKER_RPC_REMOTE_ERROR',
+        'WORKER_RETRY_UNAVAILABLE: There is no cut-short turn to retry',
+        {
+          code: 'WORKER_RETRY_UNAVAILABLE',
+          message: 'There is no cut-short turn to retry',
+          retryable: false,
+        }
+      );
+    });
+    h.events.length = 0;
+
+    await expect(
+      h.manager.retryLastTurn({ sessionId: 's1', attemptId: 'a1', ownerWebContentsId: 7 })
+    ).rejects.toMatchObject({
+      name: 'WorkerManagerError',
+      code: 'retry_unavailable',
+      message: 'There is no cut-short turn to retry',
+    });
+    expect(h.events).toEqual([]);
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ active: false });
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'hi', ownerWebContentsId: 7 })
+    ).resolves.toMatch(/^send-/);
+  });
+
+  it('[T135-wm-03] a retry the worker refused up front settles and does not pin the latch', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    const record = h.records[0];
+    answerSend(record, async (payload) => {
+      const requestId = String(payload.requestId);
+      record.emit({
+        type: 'session.failed',
+        sessionId: 's1',
+        requestId,
+        payload: { error: 'runtime_busy: a run is already active in this runtime' },
+      });
+      record.emit({
+        type: 'session.status',
+        sessionId: 's1',
+        requestId,
+        payload: { status: 'idle' },
+      });
+      throw new WorkerSlotError('WORKER_RPC_REMOTE_ERROR', 'WORKER_SESSION_BUSY: runtime_busy', {
+        code: 'WORKER_SESSION_BUSY',
+        message: 'runtime_busy',
+        retryable: true,
+      });
+    });
+    h.events.length = 0;
+
+    await expect(
+      h.manager.retryLastTurn({ sessionId: 's1', attemptId: 'a1', ownerWebContentsId: 7 })
+    ).rejects.toThrow(/runtime_busy/);
+    expect(sequence(h.events)).toEqual(['session.failed', 'status:idle']);
+    expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ active: false });
+  });
+
+  it('[T135-wm-04] Stop on a retried turn is armed and settled exactly as for a send', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = createHarness();
+      await create(h.manager, 's1', 7);
+      const turnId = await h.manager.retryLastTurn({
+        sessionId: 's1',
+        attemptId: 'a1',
+        ownerWebContentsId: 7,
+      });
+      h.records[0].emit({
+        type: 'session.status',
+        sessionId: 's1',
+        requestId: turnId,
+        payload: { status: 'running' },
+      });
+      h.events.length = 0;
+
+      await h.manager.stop('s1');
+      expect(h.records[0].request).toHaveBeenCalledWith('worker.stop', {
+        logicalSessionId: 's1',
+        reason: 'user',
+      });
+      h.records[0].emit({
+        type: 'session.status',
+        sessionId: 's1',
+        payload: { status: 'stopping' },
+      });
+      h.records[0].emit({ type: 'session.stopped', sessionId: 's1', payload: {} });
+      h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'idle' } });
+
+      // The turn's own terminal disarmed the watchdog: no forced restart.
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS * 2);
+      expect(sequence(h.events)).toEqual(['status:stopping', 'session.stopped', 'status:idle']);
+      expect(h.createSlot).toHaveBeenCalledTimes(1);
+      // And the latch went with it.
+      await expect(
+        h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'next', ownerWebContentsId: 7 })
+      ).resolves.toMatch(/^send-/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('[T135-wm-05] a Stop that finds the retry already gone settles on its request id', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 7);
+    const turnId = await h.manager.retryLastTurn({
+      sessionId: 's1',
+      attemptId: 'a1',
+      ownerWebContentsId: 7,
+    });
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) =>
+      type === 'worker.stop' ? { stopped: false } : original(type, payload)
+    );
+    h.events.length = 0;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await h.manager.stop('s1');
+    } finally {
+      warn.mockRestore();
+    }
+    expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
+    expect(h.events.every((event) => event.requestId === turnId)).toBe(true);
   });
 });

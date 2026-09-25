@@ -371,7 +371,7 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ⬜ T132 | 回合运行中执行 `/archive` 会直接归档并结束正在跑的回合，不像侧栏那样先弹确认 | P2 | 2026-09-24 T128 修复时排查内置命令发现 | 只记录未改；归档失败原先静默清空输入框已随 T128 改为提示 |
 | ⬜ T133 | 回合中途抛异常的失败路径（agent-loop 的 catch、NativeSessionIndexAdapter 的 catch）事件里没有 `errorCode`，失败卡只能显示兜底标题「这一轮停下了」 | P3 | 2026-09-24 T128 修复时排查失败路径发现 | 补 `errorCode` 时需同步改 `modelMissingWiring` 的 MMW-15（按字面检查那一行） |
 | ⬜ T134 | 失败与掐断后的显示细节：未执行的「编辑」行点开为空（时间线 `showDiff={false}`）；被掐断的回合实时显示「已工作 1 秒」（重开后才对）；侧栏失败徽标是英文 `failed`；`/compact` 成功后界面无任何反馈 | P3 | 2026-09-24 T128 GUI 复验 X1 / X2 / X4 / X6 | 均不阻塞本批 |
-| ⬜ T135 | 失败卡「继续」把上一条提示词作为新消息再发一次，模型会收到两条相同的 user 消息；在确定性输出下会原样复现同一次失败 | P2 | 2026-09-24 T128 GUI 复验 X3 | 已拍板改为「重试上一轮」（[决策 045](decisions/045-failure-card-continue-retries-last-turn.md)） |
+| ✅ T135 | 失败卡「继续」把上一条提示词作为新消息再发一次，模型会收到两条相同的 user 消息；在确定性输出下会原样复现同一次失败 | P2 | 2026-09-24 T128 GUI 复验 X3 | 已拍板改为「重试上一轮」（[决策 045](decisions/045-failure-card-continue-retries-last-turn.md)）。**已落地（2026-09-25，见 T135 提交）**：新 IPC `chat:retryLastTurn` 复用 send 的回合通路（闩锁、看门狗同决策 046）；leaf 移回失败回复的父节点，失败回复留在放弃的分支上，已完成的工具轮次保留，`agent.continue()` 续跑；找不到可重试的一轮时不自动重发，把提示放回输入框并提示；按钮在失败收尾前禁用 |
 | ⬜ T136 | 点 Stop 后 trace 记了一次 `provider_retry`，但网关没有收到任何重试请求 | P3 | 2026-09-24 T128 GUI 复验 X8 | 只在 trace 中出现，先查是否为误记 |
 | ⬜ T137 | 单条过程段也折叠，与多条统一 | P2 | 用户待办 T11，2026-09-24 拍板 | [决策 044](decisions/044-single-step-process-also-folds.md)：推翻 T112 的单条直出，恢复「1 个步骤」词条；未应答授权强制展开对单项组仍生效 |
 | ➡️ T138 | goal 模式 + 对齐 DeepSeek Harness 最新版的差距调研 | P2 | 用户 2026-09-24：「参考 Claude / Codex 的 goal 模式……需要全面向它看齐」 | 用户当日把范围扩大为「整个产品基于 DSH 二开」。调研档 [2026-09-24-dsh-rebase-feasibility-study](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md) 推荐 B 路线（DSH 宿主当 worker 引擎），goal 模式并入其 P0 / P1。**2026-09-25 调研结案、用户批准 B 路线**，goal 模式移交 [DSH 二开迁移](../dsh-rebase/roadmap.md) 的 P0-2 / P1（[决策 001](../dsh-rebase/decisions/001-route-b-and-scope.md)），本计划不再跟踪 |
@@ -383,6 +383,8 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T144 | 「继续」后停不下来（Worker / Main 侧）：Stop / 插话 / 结束对话只发不回、没有对账；run 在注册 abort 监听前的 await 上不可停；`startSend` 未接纳先回 accepted | P0 | 用户 2026-09-25 Windows `1.0.3-test.2` 现场 | 按[决策 046](decisions/046-stop-always-settles.md)：Main 对账与看门狗、`closeSession` 先派发终态、abort 监听前移、接纳真实化；[根因排查](evidence/stuck-after-continue-2026-09-25.md) H1 / H3a / H3c。**已落地 `02d24bf6`**：看门狗 10 秒 |
 | ✅ T145 | 「继续」后停不下来（渲染层）：`stopping` 下 Stop 按钮消失、Esc 失效；发送握手的 IPC 等待不可取消；结束对话后队列死锁；禁用的「立即发送」点击穿透成「取回编辑」 | P0 | 同 T144 | 按[决策 046](decisions/046-stop-always-settles.md)；[根因排查](evidence/stuck-after-continue-2026-09-25.md) H2 / H3b。**已落地（见 T145 提交）**：`stopping` 下 Stop / Esc 可用（强制停止）、握手可取消、`disconnected` 视为可放行、队列行按钮不再穿透（含上移 / 下移）；待定：结束对话时已在队列里的消息会经 resume 立即重新拉起会话，若要改为需人工再按一次，结束时把队列暂停。收口（T144～T146，含回归修复 `5f92cd4e` / `63503b91`）：三套 tsc exit 0，全量 Vitest 509 文件 / 7751 条全部通过（2026-09-25） |
 | ✅ T146 | 工具行时钟把参数流式与审批等待也算进去，显示成「3m55s/2m」像已超时 | P2 | 同 T144 | bash 在执行前发 `execStartedAt`，时钟与上限都从执行开始算，审批等待另显示；[根因排查](evidence/stuck-after-continue-2026-09-25.md)「显示问题」。**已落地 `ed48bbc1`**：执行前只显示已用时长、不显示上限 |
+| ⬜ T147 | 「继续」重试后，实时时间线里失败回复的部分文字仍然可见（重新载入后按当前分支显示就不在了） | P3 | T135 落地遗留 | 重试接纳时把失败回复从实时时间线折叠或移走，与重新载入后的显示一致 |
+| ⬜ T148 | worker 重启额度用尽后不会有收尾的 idle，失败卡「继续」永久禁用 | P3 | T135 落地遗留 | 用户仍可直接发新消息；需要时给禁用态换一句提示或在额度耗尽事件上放开 |
 
 **2026-09-25 收口（T124 / T139～T141 / T125 / T130）**：三套 tsc 通过；全量 Vitest 单 worker **506 文件 / 7674 例全部通过，264 s**（对比 09-24 的 493 / 7461、1 例既有失败即 T124），完整输出按 T127 的要求保留在本机 `/tmp/closeout/vitest-full.txt`。版本 `1.0.3-test.2` 手动打包供 Windows 复验（T140 预览、T139 读图、T130、T125），批次 M 的 Windows 实测清单一并在该包上执行。
 

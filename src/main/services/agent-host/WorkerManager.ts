@@ -49,6 +49,7 @@ import {
   STAGED_FORK_MARKER_SUFFIX,
   sanitizeWorkerCommandRows,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
+  WORKER_RETRY_UNAVAILABLE,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerCapabilityInventory,
@@ -392,6 +393,15 @@ let commandSequence = 0;
 function nextRequestId(prefix: string): string {
   commandSequence += 1;
   return `${prefix}-${Date.now()}-${commandSequence}`;
+}
+
+/** The worker's own error, as `WorkerSlot` carries a rejected RPC (`remoteError`). */
+function remoteError(error: unknown): { code: string; message: string } | undefined {
+  const remote = (error as { remoteError?: { code?: unknown; message?: unknown } } | null)
+    ?.remoteError;
+  return typeof remote?.code === 'string' && typeof remote.message === 'string'
+    ? { code: remote.code, message: remote.message }
+    : undefined;
 }
 
 function positiveInteger(value: number, label: string): number {
@@ -1967,6 +1977,41 @@ export class WorkerManager {
     effort?: SessionEffortLevel;
     ownerWebContentsId?: number;
   }): Promise<string> {
+    return this.startTurn(input);
+  }
+
+  /**
+   * T135 / decision 045 — the failure card's Continue: re-run the last turn
+   * from the context before its failure, with no new user message.
+   *
+   * The same admission path as `send`, on purpose: the latch, the busy gate,
+   * the Stop watchdog and the crash path cannot tell a retried turn from any
+   * other, so Stop and "end conversation" behave exactly as they do for a
+   * send (decision 046). A worker with nothing to re-run rejects with
+   * `retry_unavailable` and leaves no latch behind.
+   */
+  async retryLastTurn(input: {
+    sessionId: string;
+    attemptId: string;
+    model?: string;
+    effort?: SessionEffortLevel;
+    ownerWebContentsId?: number;
+  }): Promise<string> {
+    return this.startTurn({ ...input, text: '' }, 'retry');
+  }
+
+  private async startTurn(
+    input: {
+      sessionId: string;
+      attemptId: string;
+      text: string;
+      attachments?: SessionAttachment[];
+      model?: string;
+      effort?: SessionEffortLevel;
+      ownerWebContentsId?: number;
+    },
+    mode?: 'retry'
+  ): Promise<string> {
     const entry = this.requireReadySession(input.sessionId);
     if (!input.attemptId.trim()) {
       throw new WorkerManagerError('invalid_send_attempt', 'Pi send attemptId must be non-empty');
@@ -1990,6 +2035,7 @@ export class WorkerManager {
       ...(input.attachments ? { attachments: input.attachments } : {}),
       ...(input.model ? { model: input.model } : {}),
       ...(input.effort ? { effort: input.effort } : {}),
+      ...(mode ? { mode } : {}),
     };
     entry.activeRequestId = requestId;
     entry.reportedStatus = undefined;
@@ -2010,6 +2056,13 @@ export class WorkerManager {
       if (entry.activeRequestId === requestId) {
         entry.activeRequestId = null;
         entry.lastIdleAt = this.now();
+      }
+      // Renamed into this layer's vocabulary so the renderer can match it the
+      // way it matches `session_busy`: the worker's code only survives the RPC
+      // as `remoteError`, and the IPC crossing keeps nothing but the message.
+      const remote = remoteError(error);
+      if (remote?.code === WORKER_RETRY_UNAVAILABLE) {
+        throw new WorkerManagerError('retry_unavailable', remote.message);
       }
       throw error;
     }

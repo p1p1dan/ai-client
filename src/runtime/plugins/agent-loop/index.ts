@@ -465,7 +465,11 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // Before the trace and before `startRun`: the text the model is given is the
     // text that belongs in the trace, and the metadata has to reach the
     // projector in time to ride the user echo.
-    const prepared = preparePrompt(request.prompt, request.attachments);
+    // T135: a retry sends no new prompt, so there is nothing to prepare.
+    const retry = request.retry === true;
+    const prepared = retry
+      ? preparePrompt('', undefined)
+      : preparePrompt(request.prompt, request.attachments);
     const trace = this.ctx.runtimeTrace.begin({
       runId: request.runId,
       input: prepared.text,
@@ -493,6 +497,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         : {}),
       thinking_level: thinkingLevel,
       single_turn: this.config.singleTurn,
+      ...(retry ? { retry_last_turn: true } : {}),
       catalog_source: adapter.source,
       mode: this.ctx.get('runtimePermissions')?.mode ?? null,
       permission_gear: this.ctx.get('runtimePermissions')?.gear ?? null,
@@ -1045,7 +1050,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             model: resolved.model,
             models: resolved.models,
             thinkingLevel,
-            retention: 'completed_turn',
+            // T135: a retry resumes a turn that was cut short, so its user
+            // message must survive a compaction here — it is the instruction
+            // the re-asked request answers, and no new prompt follows it.
+            retention: retry ? 'active_turn' : 'completed_turn',
             additionalTokens: incomingTokens,
             signal: request.signal,
           });
@@ -1083,8 +1091,24 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // ended before another turn boundary came round. Draining here puts it in
       // this run's first request, right after the user's own message.
       flushDiscoveredInstructions();
-      prompted = true;
-      await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
+      if (retry) {
+        // T135 / decision 045: re-ask from the context the failed request was
+        // sent with. The session already dropped the failed reply from it; a
+        // context that still ends on a reply has nothing to re-ask, and
+        // `continue()` would refuse it anyway, less legibly.
+        const last = agent.state.messages.at(-1);
+        if (!last || last.role === 'assistant')
+          throw new RuntimeHostError(
+            'retry_unavailable',
+            'the conversation does not end on a turn that was cut short'
+          );
+        trace.note('note', { event: 'retry_last_turn', resumes_from: last.role });
+        prompted = true;
+        await agent.continue();
+      } else {
+        prompted = true;
+        await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
+      }
       await agent.waitForIdle();
       await drainStreamRetries();
       // P5-2-2 — the parent going idle is not the end of the logical run while
