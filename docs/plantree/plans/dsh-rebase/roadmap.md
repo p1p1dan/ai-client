@@ -8,7 +8,7 @@
 
 | ID | 状态 | 内容 | 退出判据 |
 |---|---|---|---|
-| P0-1 | ⬜ | 宿主骨架与资源探针：独立子包（仿 `src/runtime/` 的独立 npm 子包形态）写 `@aiclient/dsh-app` bundle，叠在 `dsh-base` 上，关掉 `host/webserver`、`frontend-static`、`session-telemetry-otel`、`deepseek-account`，用 `dsh-app-boot` 启动；由 WorkerSlot 以随包 node 拉起。测单宿主空载常驻内存、每多一个会话的增量、冷 / 热启动时间，同机对比我方现有 worker | 宿主能起能停；三组数字落证据，供 [Q001](open-questions.md) 裁决 |
+| P0-1 | ✅ | 宿主骨架与资源探针（2026-09-25 落地：代码 `49d0fbd6`，分支 `feat/dsh-p0-probe`；证据 [p0-1-host-probe-2026-09-25.md](evidence/p0-1-host-probe-2026-09-25.md)；数据支持共享宿主，Q001 在 P0-5 裁决。更正：`webserver` / `frontend-static` 只在 `dsh-web-app` 里，`dsh-base` 本来没有；实际关掉的是遥测、`deepseek-account`、`llm-deepseek-account`、`hmr`）：独立子包（仿 `src/runtime/` 的独立 npm 子包形态）写 `@aiclient/dsh-app` bundle，叠在 `dsh-base` 上，关掉 `host/webserver`、`frontend-static`、`session-telemetry-otel`、`deepseek-account`，用 `dsh-app-boot` 启动；由 WorkerSlot 以随包 node 拉起。测单宿主空载常驻内存、每多一个会话的增量、冷 / 热启动时间，同机对比我方现有 worker | 宿主能起能停；三组数字落证据，供 [Q001](open-questions.md) 裁决 |
 | P0-2 | ⬜ | 原样挂 goal 四件套（`dsh-goal`、`dsh-tool-goal`、`dsh-goal-round-driver`、`dsh-command-goal`）与 `dsh-tool-todo`、`dsh-tool-jobs`，再从社区目录挑一个纯宿主、无 `dsh.client` 的插件；模型经 `llm-pi-ai` 路由到我方网关 | goal 能自动续跑，并能走到完成、阻塞、暂停三种终态；社区插件能装能跑 |
 | P0-3 | ⬜ | 最小 bridge：DSH 会话事件 → 现有 RuntimeEvent，走现有 worker RPC；文本、工具行、一张审批卡能来回走通；DSH 引擎只在开发开关后可见 | 开发机 GUI 里文本、工具行、审批卡往返无误 |
 | P0-4 | ⬜ | 加密机上机包：DSH 宿主经 `node.exe` 执行 read / write / edit / grep / glob，bash 与 pwsh 各测，会话写入后回读；`sandbox-windows-acl` 开、关各一次；另装官方 DSH Desktop 0.1.7 作对照组。产出上机检查单与一键脚本，由用户上机执行 | 读写全部明文；沙箱结论回填 [Q002](open-questions.md) |

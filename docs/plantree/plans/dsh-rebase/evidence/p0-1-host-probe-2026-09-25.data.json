@@ -1,0 +1,1067 @@
+{
+  "probe": "P0-1 dsh host (dsh-rebase plan)",
+  "date": "2026-09-25",
+  "driver": "src/dsh-host/measure.ts",
+  "versions": {
+    "nodeBin": "<repo>/out-node-runtime/node",
+    "node": "v24.18.0",
+    "driverNode": "v24.18.0",
+    "kernel": "7.0.0-31-generic",
+    "cpus": 2,
+    "memTotalMb": 3351,
+    "dshPackageCount": 157,
+    "dshVersionsDistinct": ["0.1.7-rc.2"],
+    "vendor": {
+      "@deepseek-ai/cordis": "4.0.4",
+      "@deepseek-ai/cordis-plugin-group": "1.0.4",
+      "@deepseek-ai/cordis-plugin-include": "1.0.9",
+      "@deepseek-ai/cordis-plugin-loader": "1.0.5",
+      "@deepseek-ai/cordis-plugin-timer": "1.1.6",
+      "@deepseek-ai/cosmokit": "1.8.5",
+      "@deepseek-ai/node-addon-system": "0.1.2",
+      "@deepseek-ai/node-addon-system-darwin-arm64": "0.1.2",
+      "@deepseek-ai/node-addon-system-darwin-x64": "0.1.2",
+      "@deepseek-ai/node-addon-system-linux-arm64": "0.1.2",
+      "@deepseek-ai/node-addon-system-linux-x64": "0.1.2",
+      "@deepseek-ai/schemastery": "3.18.4"
+    },
+    "worker": "<repo>/out-agent-host/worker.js"
+  },
+  "settings": {
+    "settleIdleMs": 8000,
+    "idleSamples": 10,
+    "settleSessionMs": 4000,
+    "sessionSamples": 5,
+    "sessionLadder": [1, 2, 4]
+  },
+  "run": {
+    "startedAt": "2026-09-25T12:43:54.598Z",
+    "finishedAt": "2026-09-25T12:51:15.043Z",
+    "dshColdSummary": {
+      "runs": 3,
+      "failed": 0,
+      "readyMsMedian": 731,
+      "readyMsAll": [731, 733, 725],
+      "idleRssMbMedian": 174.2,
+      "idleRssMbAll": [174.2, 170.5, 176],
+      "firstSessionCreateMsMedian": 10,
+      "rssAt1MbMedian": 177.1,
+      "rssAt2MbMedian": 178.7,
+      "rssAt4MbMedian": 179,
+      "stopMsMedian": 45
+    },
+    "dshWarmSummary": {
+      "runs": 5,
+      "failed": 0,
+      "readyMsMedian": 758,
+      "readyMsAll": [760, 746, 729, 758, 829],
+      "idleRssMbMedian": 177.6,
+      "idleRssMbAll": [175.2, 177.6, 177.2, 179, 180.1],
+      "firstSessionCreateMsMedian": 14,
+      "rssAt1MbMedian": 180.5,
+      "rssAt2MbMedian": 181.6,
+      "rssAt4MbMedian": 181.8,
+      "stopMsMedian": 45
+    },
+    "workerSummary": {
+      "runs": 5,
+      "failed": 0,
+      "readyMsMedian": 207,
+      "readyMsAll": [209, 221, 202, 207, 198],
+      "idleRssMbMedian": 93.8,
+      "idleRssMbAll": [93.5, 93.8, 93.7, 94, 93.8],
+      "stopMsMedian": 16
+    },
+    "sessionDeltasMb": {
+      "perRun": [
+        {
+          "label": "dsh-cold-1",
+          "rss": [2.9, 4.5, 4.8],
+          "pss": [2.9, 4.5, 4.7],
+          "heap": [41.2, 42.3, 44.6]
+        },
+        {
+          "label": "dsh-cold-2",
+          "rss": [2.9, 4.5, 4.7],
+          "pss": [2.9, 4.5, 4.8],
+          "heap": [47.7, 48.7, 51]
+        },
+        {
+          "label": "dsh-cold-3",
+          "rss": [2.8, 4.4, 4.6],
+          "pss": [2.8, 4.4, 4.7],
+          "heap": [40.9, 42, 44.3]
+        },
+        {
+          "label": "dsh-warm-1",
+          "rss": [3, 4.6, 4.8],
+          "pss": [3, 4.6, 4.8],
+          "heap": [41.6, 42.7, 45.1]
+        },
+        {
+          "label": "dsh-warm-2",
+          "rss": [2.9, 3, 3.9],
+          "pss": [3, 3, 4],
+          "heap": [41.6, 42.8, 45.2]
+        },
+        {
+          "label": "dsh-warm-3",
+          "rss": [2.8, 4.4, 4.6],
+          "pss": [2.8, 4.4, 4.6],
+          "heap": [42, 43.2, 45.7]
+        },
+        {
+          "label": "dsh-warm-4",
+          "rss": [3, 4.5, 4.7],
+          "pss": [3, 4.5, 4.7],
+          "heap": [41.9, 43.2, 45.7]
+        },
+        {
+          "label": "dsh-warm-5",
+          "rss": [3, 4.6, 4.8],
+          "pss": [3, 4.6, 4.8],
+          "heap": [42.5, 43.8, 46.4]
+        }
+      ],
+      "medianRss": [2.9, 4.5, 4.7],
+      "medianPss": [2.95, 4.5, 4.7]
+    },
+    "composition": {
+      "rows": 94,
+      "disabledLiteral": [
+        "tool-plugin-manager",
+        "hmr",
+        "deepseek-account",
+        "session-telemetry-otel",
+        "skill-badge",
+        "tool-ralph",
+        "llm-deepseek-account"
+      ],
+      "disabledByExpression": [
+        "plugin-manager",
+        "config-editor",
+        "settings",
+        "bash-sandbox",
+        "pwsh-sandbox",
+        "tool-bash",
+        "tool-pwsh"
+      ]
+    },
+    "dshRuns": [
+      {
+        "label": "dsh-cold-1",
+        "readyMs": 731,
+        "hostMarksMs": {
+          "entry": 66,
+          "modulesLoaded": 96,
+          "profileResolved": 130,
+          "bootResolved": 726
+        },
+        "idle": {
+          "rssMb": 174.2,
+          "pssMb": 146.3,
+          "swapMb": 0,
+          "rssSamplesMb": [174.2, 174.2, 174.2, 174.2, 174.2, 174.2, 174.2, 174.2, 174.2, 174.2]
+        },
+        "createMs": [10, 3, 11, 4],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 177.1,
+            "pssMb": 149.2,
+            "swapMb": 0,
+            "heapUsedMb": 41.2,
+            "externalMb": 9.3
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 178.7,
+            "pssMb": 150.8,
+            "swapMb": 0,
+            "heapUsedMb": 42.3,
+            "externalMb": 9.3
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 179,
+            "pssMb": 151,
+            "swapMb": 0,
+            "heapUsedMb": 44.6,
+            "externalMb": 9.4
+          }
+        ],
+        "stopMs": 45,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-cold-2",
+        "readyMs": 733,
+        "hostMarksMs": {
+          "entry": 66,
+          "modulesLoaded": 95,
+          "profileResolved": 135,
+          "bootResolved": 729
+        },
+        "idle": {
+          "rssMb": 170.5,
+          "pssMb": 142.4,
+          "swapMb": 0,
+          "rssSamplesMb": [170.5, 170.5, 170.5, 170.5, 170.5, 170.5, 170.5, 170.5, 170.5, 170.5]
+        },
+        "createMs": [10, 6, 5, 3],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 173.4,
+            "pssMb": 145.3,
+            "swapMb": 0,
+            "heapUsedMb": 47.7,
+            "externalMb": 9.4
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 175,
+            "pssMb": 146.9,
+            "swapMb": 0,
+            "heapUsedMb": 48.7,
+            "externalMb": 9.4
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 175.2,
+            "pssMb": 147.2,
+            "swapMb": 0,
+            "heapUsedMb": 51,
+            "externalMb": 9.5
+          }
+        ],
+        "stopMs": 50,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-cold-3",
+        "readyMs": 725,
+        "hostMarksMs": {
+          "entry": 62,
+          "modulesLoaded": 97,
+          "profileResolved": 134,
+          "bootResolved": 721
+        },
+        "idle": {
+          "rssMb": 176,
+          "pssMb": 147.9,
+          "swapMb": 0,
+          "rssSamplesMb": [176, 176, 176, 176, 176, 176, 176, 176, 176, 176]
+        },
+        "createMs": [11, 3, 3, 3],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 178.8,
+            "pssMb": 150.7,
+            "swapMb": 0,
+            "heapUsedMb": 40.9,
+            "externalMb": 9.3
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 180.4,
+            "pssMb": 152.3,
+            "swapMb": 0,
+            "heapUsedMb": 42,
+            "externalMb": 9.3
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 180.6,
+            "pssMb": 152.6,
+            "swapMb": 0,
+            "heapUsedMb": 44.3,
+            "externalMb": 9.4
+          }
+        ],
+        "stopMs": 43,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-warm-1",
+        "readyMs": 760,
+        "hostMarksMs": {
+          "entry": 81,
+          "modulesLoaded": 109,
+          "profileResolved": 150,
+          "bootResolved": 754
+        },
+        "idle": {
+          "rssMb": 175.2,
+          "pssMb": 147.1,
+          "swapMb": 0,
+          "rssSamplesMb": [175.2, 175.2, 175.2, 175.2, 175.2, 175.2, 175.2, 175.2, 175.2, 175.2]
+        },
+        "createMs": [12, 4, 4, 3],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 178.2,
+            "pssMb": 150.1,
+            "swapMb": 0,
+            "heapUsedMb": 41.6,
+            "externalMb": 9.3
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 179.8,
+            "pssMb": 151.7,
+            "swapMb": 0,
+            "heapUsedMb": 42.7,
+            "externalMb": 9.3
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 180,
+            "pssMb": 151.9,
+            "swapMb": 0,
+            "heapUsedMb": 45.1,
+            "externalMb": 9.4
+          }
+        ],
+        "stopMs": 44,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-warm-2",
+        "readyMs": 746,
+        "hostMarksMs": {
+          "entry": 67,
+          "modulesLoaded": 97,
+          "profileResolved": 133,
+          "bootResolved": 740
+        },
+        "idle": {
+          "rssMb": 177.6,
+          "pssMb": 149.5,
+          "swapMb": 0,
+          "rssSamplesMb": [177.6, 177.6, 177.6, 177.6, 177.6, 177.6, 177.6, 177.6, 177.6, 177.6]
+        },
+        "createMs": [14, 4, 4, 4],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 180.5,
+            "pssMb": 152.5,
+            "swapMb": 0,
+            "heapUsedMb": 41.6,
+            "externalMb": 9.3
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 180.6,
+            "pssMb": 152.5,
+            "swapMb": 0,
+            "heapUsedMb": 42.8,
+            "externalMb": 9.4
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 181.5,
+            "pssMb": 153.5,
+            "swapMb": 0,
+            "heapUsedMb": 45.2,
+            "externalMb": 9.4
+          }
+        ],
+        "stopMs": 46,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-warm-3",
+        "readyMs": 729,
+        "hostMarksMs": {
+          "entry": 61,
+          "modulesLoaded": 92,
+          "profileResolved": 126,
+          "bootResolved": 725
+        },
+        "idle": {
+          "rssMb": 177.2,
+          "pssMb": 149.2,
+          "swapMb": 0,
+          "rssSamplesMb": [177.2, 177.2, 177.2, 177.2, 177.2, 177.2, 177.2, 177.2, 177.2, 177.2]
+        },
+        "createMs": [12, 5, 5, 4],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 180,
+            "pssMb": 152,
+            "swapMb": 0,
+            "heapUsedMb": 42,
+            "externalMb": 9.4
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 181.6,
+            "pssMb": 153.6,
+            "swapMb": 0,
+            "heapUsedMb": 43.2,
+            "externalMb": 9.4
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 181.8,
+            "pssMb": 153.8,
+            "swapMb": 0,
+            "heapUsedMb": 45.7,
+            "externalMb": 9.4
+          }
+        ],
+        "stopMs": 52,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-warm-4",
+        "readyMs": 758,
+        "hostMarksMs": {
+          "entry": 65,
+          "modulesLoaded": 98,
+          "profileResolved": 134,
+          "bootResolved": 750
+        },
+        "idle": {
+          "rssMb": 179,
+          "pssMb": 150.9,
+          "swapMb": 0,
+          "rssSamplesMb": [179, 179, 179, 179, 179, 179, 179, 179, 179, 179]
+        },
+        "createMs": [23, 6, 5, 5],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 182,
+            "pssMb": 153.9,
+            "swapMb": 0,
+            "heapUsedMb": 41.9,
+            "externalMb": 9.4
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 183.5,
+            "pssMb": 155.4,
+            "swapMb": 0,
+            "heapUsedMb": 43.2,
+            "externalMb": 9.4
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 183.7,
+            "pssMb": 155.6,
+            "swapMb": 0,
+            "heapUsedMb": 45.7,
+            "externalMb": 9.5
+          }
+        ],
+        "stopMs": 45,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "dsh-warm-5",
+        "readyMs": 829,
+        "hostMarksMs": {
+          "entry": 69,
+          "modulesLoaded": 99,
+          "profileResolved": 136,
+          "bootResolved": 824
+        },
+        "idle": {
+          "rssMb": 180.1,
+          "pssMb": 152,
+          "swapMb": 0,
+          "rssSamplesMb": [180.1, 180.1, 180.1, 180.1, 180.1, 180.1, 180.1, 180.1, 180.1, 180.1]
+        },
+        "createMs": [16, 5, 5, 5],
+        "atSessions": [
+          {
+            "n": 1,
+            "liveAgents": 1,
+            "rssMb": 183.1,
+            "pssMb": 155,
+            "swapMb": 0,
+            "heapUsedMb": 42.5,
+            "externalMb": 9.4
+          },
+          {
+            "n": 2,
+            "liveAgents": 2,
+            "rssMb": 184.7,
+            "pssMb": 156.6,
+            "swapMb": 0,
+            "heapUsedMb": 43.8,
+            "externalMb": 9.4
+          },
+          {
+            "n": 4,
+            "liveAgents": 4,
+            "rssMb": 184.9,
+            "pssMb": 156.8,
+            "swapMb": 0,
+            "heapUsedMb": 46.4,
+            "externalMb": 9.5
+          }
+        ],
+        "stopMs": 45,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "leftover": 0,
+        "census": {
+          "active": 86,
+          "disabled": 9,
+          "inactive": []
+        },
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      }
+    ],
+    "workerRuns": [
+      {
+        "label": "worker-1",
+        "readyMs": 209,
+        "idle": {
+          "rssMb": 93.5,
+          "pssMb": 70.7,
+          "swapMb": 0,
+          "rssSamplesMb": [93.5, 93.5, 93.5, 93.5, 93.5, 93.5, 93.5, 93.5, 93.5, 93.5]
+        },
+        "stopMs": 19,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "worker-2",
+        "readyMs": 221,
+        "idle": {
+          "rssMb": 93.8,
+          "pssMb": 70.8,
+          "swapMb": 0,
+          "rssSamplesMb": [93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8]
+        },
+        "stopMs": 24,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "worker-3",
+        "readyMs": 202,
+        "idle": {
+          "rssMb": 93.7,
+          "pssMb": 70.7,
+          "swapMb": 0,
+          "rssSamplesMb": [93.7, 93.7, 93.7, 93.7, 93.7, 93.7, 93.7, 93.7, 93.7, 93.7]
+        },
+        "stopMs": 14,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "worker-4",
+        "readyMs": 207,
+        "idle": {
+          "rssMb": 94,
+          "pssMb": 71,
+          "swapMb": 0,
+          "rssSamplesMb": [94, 94, 94, 94, 94, 94, 94, 94, 94, 94]
+        },
+        "stopMs": 16,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      },
+      {
+        "label": "worker-5",
+        "readyMs": 198,
+        "idle": {
+          "rssMb": 93.8,
+          "pssMb": 70.9,
+          "swapMb": 0,
+          "rssSamplesMb": [93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8, 93.8]
+        },
+        "stopMs": 15,
+        "exit": {
+          "code": 0,
+          "signal": null
+        },
+        "childProcesses": 0,
+        "hooks": {
+          "spawns": [],
+          "workerThreads": [],
+          "netBlocked": [],
+          "netLoopback": [],
+          "dnsLookups": []
+        }
+      }
+    ],
+    "psIdleSample": {
+      "dsh": "PID    PPID     ELAPSED   RSS CMD\n  85010   85002       00:17 178392 <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.ts",
+      "worker": "PID    PPID     ELAPSED   RSS CMD\n  85302   85002       00:17 95780 <repo>/out-node-runtime/node --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/out-agent-host/worker.js"
+    }
+  },
+  "parallel": {
+    "startedAt": "2026-09-25T12:36:38.289Z",
+    "runs": [
+      {
+        "engine": "dsh",
+        "n": 4,
+        "perProcessReadyWithSessionMs": [2040, 1855, 1599, 1972],
+        "allReadyWithSessionMs": 2040,
+        "perProcessRssMb": [188, 183.1, 181.7, 181.8],
+        "totalRssMb": 734.6,
+        "totalPssMb": 533.1,
+        "totalSwapMb": 0,
+        "exits": [
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          }
+        ]
+      },
+      {
+        "engine": "worker",
+        "n": 4,
+        "perProcessReadyWithSessionMs": [431, 433, 216, 367],
+        "allReadyWithSessionMs": 433,
+        "perProcessRssMb": [97.2, 97.2, 95.4, 97],
+        "totalRssMb": 386.8,
+        "totalPssMb": 229.4,
+        "totalSwapMb": 0,
+        "exits": [
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          },
+          {
+            "code": 0,
+            "signal": null
+          }
+        ]
+      }
+    ]
+  },
+  "diskcold": {
+    "startedAt": "2026-09-25T12:40:14.143Z",
+    "driverNode": "v22.23.2",
+    "runs": [
+      {
+        "engine": "dsh",
+        "i": 1,
+        "evict": {
+          "files": 21686,
+          "cachedBeforeMb": 1266.9,
+          "cachedAfterMb": 1141.5
+        },
+        "readyMs": 948,
+        "marks": {
+          "entry": 91,
+          "modulesLoaded": 131,
+          "profileResolved": 210,
+          "bootResolved": 893
+        }
+      },
+      {
+        "engine": "worker",
+        "i": 1,
+        "evict": {
+          "files": 12484,
+          "cachedBeforeMb": 1254,
+          "cachedAfterMb": 1098
+        },
+        "readyMs": 288
+      },
+      {
+        "engine": "dsh",
+        "i": 2,
+        "evict": {
+          "files": 21686,
+          "cachedBeforeMb": 1199.2,
+          "cachedAfterMb": 1093.3
+        },
+        "readyMs": 938,
+        "marks": {
+          "entry": 97,
+          "modulesLoaded": 141,
+          "profileResolved": 208,
+          "bootResolved": 882
+        }
+      },
+      {
+        "engine": "worker",
+        "i": 2,
+        "evict": {
+          "files": 12484,
+          "cachedBeforeMb": 1205.7,
+          "cachedAfterMb": 1098.3
+        },
+        "readyMs": 342
+      },
+      {
+        "engine": "dsh",
+        "i": 3,
+        "evict": {
+          "files": 21686,
+          "cachedBeforeMb": 1199.6,
+          "cachedAfterMb": 1093.6
+        },
+        "readyMs": 970,
+        "marks": {
+          "entry": 93,
+          "modulesLoaded": 138,
+          "profileResolved": 211,
+          "bootResolved": 918
+        }
+      },
+      {
+        "engine": "worker",
+        "i": 3,
+        "evict": {
+          "files": 12484,
+          "cachedBeforeMb": 1209,
+          "cachedAfterMb": 1101.6
+        },
+        "readyMs": 286
+      }
+    ]
+  },
+  "trace": {
+    "startedAt": "2026-09-25T12:52:10.351Z",
+    "dsh": {
+      "execs": [
+        "<repo>/out-node-runtime/node :: <repo>/out-node-runtime/node --expose-internals --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/src/dsh-host/host.t"
+      ],
+      "hooks": {
+        "spawns": [],
+        "workerThreads": [],
+        "netBlocked": [],
+        "netLoopback": [],
+        "dnsLookups": []
+      },
+      "nativeAddons": [
+        "<repo>/src/dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "<repo>/src/dsh-host/node_modules/node-addon-require-builtin-linux-x64-gnu/prebuilt/linux-x64-gnu-napi-v9.node",
+        "<scratch>/trace-dsh/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node"
+      ],
+      "foreignReads": ["/home/ai/code/ai-client/out-node-runtime/node"],
+      "writesByBucket": {
+        "sandbox-other": ["<scratch>/trace-dsh/hooks.jsonl"],
+        "DSH_HOME": {
+          "count": 39,
+          "sample": [
+            "$DSH_HOME/profiles/aiclient/cordis.patch.yml",
+            "$DSH_HOME/profiles/aiclient/cordis.yml",
+            "$DSH_HOME/profiles/aiclient/package.json",
+            "$DSH_HOME/profiles/aiclient/pnpm-workspace.yaml",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8/session.lock",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8/session.v4.jsonl.zstd.7320cf6aa7d6.tmp",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764/session.lock",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764/session.v4.jsonl.zstd.1b9a91502460.tmp",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c/session.lock",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c/session.v4.jsonl.zstd.58d5cc3c3200.tmp",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d/session.lock",
+            "$DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d/session.v4.jsonl.zstd.1012b54e56a2.tmp",
+            "$DSH_HOME/storages/session_projcache/sessions/.1c359059-696e-48f9-9802-1de04e0a8178.tmp",
+            "$DSH_HOME/storages/session_projcache/sessions/.4e8069f3-46cf-4092-b687-033867798553.tmp",
+            "$DSH_HOME/storages/session_projcache/sessions/.62d38382-fd7f-4aa6-b62d-52f07cd5e98d.tmp",
+            "$DSH_HOME/storages/session_projcache/sessions/.e287e10a-5e03-423c-8b3e-aac076f8e0a4.tmp",
+            "link $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8/session.v4.jsonl.zstd",
+            "link $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764/session.v4.jsonl.zstd",
+            "link $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c/session.v4.jsonl.zstd",
+            "link $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d/session.v4.jsonl.zstd",
+            "mkdir $DSH_HOME/profiles",
+            "mkdir $DSH_HOME/profiles/aiclient",
+            "mkdir $DSH_HOME/sessions",
+            "mkdir $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--",
+            "mkdir $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8",
+            "mkdir $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764",
+            "mkdir $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c",
+            "mkdir $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d",
+            "mkdir $DSH_HOME/storages",
+            "mkdir $DSH_HOME/storages/session_projcache",
+            "mkdir $DSH_HOME/storages/session_projcache/sessions",
+            "rename $DSH_HOME/storages/session_projcache/sessions/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8.json",
+            "rename $DSH_HOME/storages/session_projcache/sessions/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764.json",
+            "rename $DSH_HOME/storages/session_projcache/sessions/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c.json",
+            "rename $DSH_HOME/storages/session_projcache/sessions/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d.json",
+            "unlink $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-0ed2ccca-30e8-4242-8994-39b0f7e783a8/session.v4.jsonl.zstd.7320cf6aa7d6.tmp",
+            "unlink $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-43c06703-c37e-4b90-8f36-822540eb8764/session.v4.jsonl.zstd.1b9a91502460.tmp",
+            "unlink $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-476e0c52-0cef-4575-aa75-6ef7dd50502c/session.v4.jsonl.zstd.58d5cc3c3200.tmp",
+            "unlink $DSH_HOME/sessions/--<scratch>-trace-dsh-workspace--/aiclient-probe-9245aa3e-ee7f-46fa-8d63-e6c24f122b8d/session.v4.jsonl.zstd.1012b54e56a2.tmp"
+          ]
+        },
+        "TMPDIR": [
+          "$TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/.linux-x64-gnu-napi-v9.node.85413.f70fc2dc75112.tmp",
+          "link $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+          "mkdir $TMPDIR/dsh-spill-TENOeh",
+          "mkdir $TMPDIR/node-addon-native-custom-loader-1000",
+          "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache",
+          "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu",
+          "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6",
+          "mkdir $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu",
+          "unlink $TMPDIR/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/.linux-x64-gnu-napi-v9.node.85413.f70fc2dc75112.tmp"
+        ]
+      }
+    },
+    "worker": {
+      "execs": [
+        "<repo>/out-node-runtime/node :: <repo>/out-node-runtime/node --import <repo>/src/dsh-host/lib/probe-hooks.mjs <repo>/out-agent-host/worker.js"
+      ],
+      "hooks": {
+        "spawns": [],
+        "workerThreads": [],
+        "netBlocked": [],
+        "netLoopback": [],
+        "dnsLookups": []
+      },
+      "nativeAddons": [],
+      "foreignReads": [],
+      "writesByBucket": {
+        "sandbox-other": [
+          "<scratch>/trace-worker/agent/sessions/p0-probe-trace-worker.jsonl",
+          "<scratch>/trace-worker/agent/sessions/p0-probe-trace-worker.jsonl.writer.lock",
+          "<scratch>/trace-worker/hooks.jsonl",
+          "mkdir <scratch>/trace-worker/agent/sessions",
+          "mkdir <scratch>/trace-worker/trace",
+          "unlink <scratch>/trace-worker/agent/sessions/p0-probe-trace-worker.jsonl.writer.lock"
+        ]
+      }
+    }
+  },
+  "variants": {
+    "noExposeInternals": {
+      "startedAt": "2026-09-25T12:24:57.451Z",
+      "readyMs": 750,
+      "execArgv": ["--import", "<repo>/src/dsh-host/lib/probe-hooks.mjs"],
+      "census": {
+        "active": 86,
+        "disabled": 9,
+        "inactive": []
+      },
+      "createMs": 12
+    },
+    "noExposeInternalsNoNativeCache": {
+      "startedAt": "2026-09-25T12:42:58.780Z",
+      "env": "NARB_DISABLE_NATIVE_CACHE=1",
+      "readyMs": 741,
+      "census": {
+        "active": 86,
+        "disabled": 9,
+        "inactive": []
+      },
+      "createMs": 10,
+      "tmpdirAfter": ["dsh-spill-*"]
+    }
+  }
+}
