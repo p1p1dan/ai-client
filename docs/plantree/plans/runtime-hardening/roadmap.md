@@ -379,7 +379,7 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | ✅ T140 | 点开任意图片 / PDF 预览整屏报错「Failed to construct 'URL': Invalid URL」 | P0 | 用户待办 D1，2026-09-24 用户 Windows 复现 | `9fabb28b`：local-file 是 standard scheme，Chromium 下 `new URL('local-file://')` 空主机抛错，所有平台所有路径都崩，Node 里的单测测不出；改为字符串拼接 `local-file://localhost/…`，真实 Electron 探针 24 种路径往返正确。另加局部错误边界、复制错误信息、错误进主进程日志、「用系统程序打开」。Windows 真机复验待做 |
 | ✅ T141 | 模型未声明图片输入时粘贴的图片被静默丢弃 | P2 | T139 调查发现 | `df995820`：模型选项贯通 `input` 字段，输入框提示「模型看不到这张图」，不阻断发送 |
 | ⬜ T142 | 子代理面板里被 Stop 的 bash 仍显示为红色失败行 | P3 | T130 落地时发现 | `subagent.activity` 的 `tool.completed` 只带 `ok` 与通用 `errorText`（`subagent/records.ts:629-639`），需把 outcome 标记带上这条通道 |
-| ✅ T143 | 系统提示词没告诉模型工作目录：Windows 上 `@xxx.md` 引用 `F:\tmp` 下的文件，模型先去 C 盘根目录找 | P1 | 用户 2026-09-25 现场反馈 | 根因：换成自有 runtime 后丢了 pi 提示词末尾的 `Current working directory`，8 个槽位都不带 cwd / 平台 / shell。修法：新增 session 段 `environment`（工作目录、相对路径与 `@path` 的含义、平台、bash 实际的 shell、会话开始日期），主循环与子代理都带；静态前缀字节不变；`RUNTIME_CONFIG_VERSION` 升到 `runtime_p6_hardening_v2`。分支 `fix/prompt-working-directory` |
+| ✅ T143 | 系统提示词没告诉模型工作目录：Windows 上 `@xxx.md` 引用 `F:\tmp` 下的文件，模型先去 C 盘根目录找 | P1 | 用户 2026-09-25 现场反馈 | 根因：换成自有 runtime 后丢了 pi 提示词末尾的 `Current working directory`，8 个槽位都不带 cwd / 平台 / shell。修法：新增 session 段 `environment`（工作目录、相对路径与 `@path` 的含义、平台、bash 实际的 shell、会话开始日期），主循环与子代理都带；静态前缀字节不变；`RUNTIME_CONFIG_VERSION` 升到 `runtime_p6_hardening_v2`。分支 `fix/prompt-working-directory`，代码 `b2067012`；收口三套 tsc exit 0，全量 Vitest 506 文件 / 7684 条全部通过（2026-09-25） |
 
 **2026-09-25 收口（T124 / T139～T141 / T125 / T130）**：三套 tsc 通过；全量 Vitest 单 worker **506 文件 / 7674 例全部通过，264 s**（对比 09-24 的 493 / 7461、1 例既有失败即 T124），完整输出按 T127 的要求保留在本机 `/tmp/closeout/vitest-full.txt`。版本 `1.0.3-test.2` 手动打包供 Windows 复验（T140 预览、T139 读图、T130、T125），批次 M 的 Windows 实测清单一并在该包上执行。
 
