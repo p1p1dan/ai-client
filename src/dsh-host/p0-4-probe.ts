@@ -590,6 +590,31 @@ function evaluateFs(tag: string, dir: string, shell: string, run: FsRun) {
   }
 }
 
+/**
+ * Windows: did the ACL sandbox actually touch the workspace root? A confined
+ * spawn grants the root a standing ACE for its capability SID `S-1-4-x-y` plus
+ * a Low mandatory label (`(NW)`); both survive the session. The SID string is
+ * locale-independent, so only it decides; the label is reported alongside.
+ */
+function aclCheck(tag: 'on' | 'off', dir: string) {
+  if (!isWin) return;
+  const { group, mode } = FS_MODES[tag];
+  const icacls = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe');
+  const out = spawnSync(icacls, [dir], { encoding: 'utf8', timeout: 15_000, windowsHide: true });
+  const text = String(out.stdout ?? '');
+  const capability = text.match(/S-1-4-\d+-\d+(-\d+)?/)?.[0];
+  const label = /\(NW\)/.test(text);
+  const observed = `能力 SID ACE ${capability ?? '无'}；完整性标签 ${label ? '有' : '无'}`;
+  check(
+    `F-${tag}-acl`,
+    group,
+    `${mode}：工作区根目录上的 ACL 沙箱授权（icacls）`,
+    out.status !== 0 ? 'error' : tag === 'on' ? (capability ? 'pass' : 'fail') : 'info',
+    out.status !== 0 ? `icacls exit ${out.status}：${clip(out.stderr || out.error)}` : observed,
+    { icacls: text.slice(0, 2000) }
+  );
+}
+
 // ---- checks: session log, write lock, resume ---------------------------------
 
 function sessionFiles(sessionId: string) {
@@ -943,7 +968,13 @@ function hookSpawns() {
     try {
       const record = JSON.parse(line) as { kind?: string; file?: string; args?: string[] };
       if (record.kind !== 'spawn' && record.kind !== 'spawn-sync') continue;
-      const key = `${record.file} ${(record.args ?? []).slice(1, 3).join(' ')}`.slice(0, 200);
+      // Runner-wrapped commands: name the program after the last `--` (which
+      // shell the pwsh tool used) and whether the ACL sandbox runner wrapped it.
+      const args = record.args ?? [];
+      const last = args.lastIndexOf('--');
+      const target = last >= 0 && args[last + 1] ? ` -> ${args[last + 1]}` : '';
+      const acl = args.some((arg) => /sandbox-windows-acl/.test(String(arg))) ? ' [acl]' : '';
+      const key = `${record.file} ${args.slice(1, 3).join(' ')}${target}${acl}`.slice(0, 300);
       files.set(key, (files.get(key) ?? 0) + 1);
     } catch {
       // Ignore a torn line.
@@ -1019,6 +1050,7 @@ async function main() {
     try {
       runs[tag] = await fsSession(hostA, tag, dir, shell);
       evaluateFs(tag, dir, shell, runs[tag]);
+      aclCheck(tag, dir);
     } catch (error) {
       check(
         `F-${tag}`,
