@@ -1,0 +1,235 @@
+name: DSH P0-4 Windows
+
+# dsh-rebase P0-4 (decision 002): run the P0-4 kit and its one-click script
+# run-p0-4.ps1 on a plain windows-2022 runner. The "encrypted" directory is an
+# ordinary one, so every plaintext/ciphertext verdict is plaintext by
+# construction; the point is whether the DSH host, its tools, sandbox, lock,
+# PTY, spill and plugin install work on normal Windows. No -ControlGroup.
+# Model turns only reach the kit's own fake gateway on 127.0.0.1.
+on:
+  push:
+    branches:
+      - ci/dsh-p0-windows
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-p0-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Same recipe as on the dev box: npm ci for win32-x64 with scripts ignored,
+  # prune, verify every native binary is PE32+ x86-64, zip.
+  build-kit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24.18.0'
+
+      - name: Build win32-x64 kit
+        run: node src/dsh-host/p0-4/build-kit.mjs --platform win32 --out "$RUNNER_TEMP/kit"
+
+      - name: Upload kit
+        uses: actions/upload-artifact@v5
+        with:
+          name: p0-4-kit-win32-x64
+          path: |
+            ${{ runner.temp }}/kit/aiclient-p0-4-kit-win32-x64.zip
+            ${{ runner.temp }}/kit/aiclient-p0-4-kit-win32-x64.zip.sha256
+            ${{ runner.temp }}/kit/aiclient-p0-4-kit/kit-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  # admin: the runner's own elevated account, script run by Windows PowerShell
+  # 5.1 directly. standard: a fresh local account in Users only, script run by
+  # a scheduled task under that account, closer to an office machine.
+  windows:
+    needs: build-kit
+    runs-on: windows-2022
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        account: [admin, standard]
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      KIT_ROOT: C:\p04
+      KIT_DIR: C:\p04\aiclient-p0-4-kit
+      APP_DIR: C:\p04app
+      ENC_DIR: C:\p04enc
+      OUT_DIR: C:\p04\out
+    steps:
+      # Only scripts/: fetch-node-runtime.mjs and the pinned sha256 of the
+      # node.exe the packaged app bundles.
+      - name: Checkout scripts
+        uses: actions/checkout@v5
+        with:
+          sparse-checkout: scripts
+
+      - name: Download kit
+        uses: actions/download-artifact@v5
+        with:
+          name: p0-4-kit-win32-x64
+          path: C:\p04dl
+
+      - name: Verify and extract kit
+        run: |
+          $zip = 'C:\p04dl\aiclient-p0-4-kit-win32-x64.zip'
+          $want = ((Get-Content -Raw 'C:\p04dl\aiclient-p0-4-kit-win32-x64.zip.sha256') -split '\s+')[0]
+          $have = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          "kit zip sha256 $have (expected $want)"
+          if ($have -ne $want) { throw 'kit zip checksum mismatch' }
+          New-Item -ItemType Directory -Force $env:KIT_ROOT, $env:OUT_DIR, $env:ENC_DIR | Out-Null
+          & "$env:SystemRoot\System32\tar.exe" -xf $zip -C $env:KIT_ROOT
+          if ($LASTEXITCODE -ne 0) { throw "tar exited $LASTEXITCODE" }
+          Copy-Item 'C:\p04dl\aiclient-p0-4-kit-win32-x64.zip.sha256' $env:OUT_DIR
+          Get-ChildItem $env:KIT_DIR | Format-Table -AutoSize | Out-String | Write-Host
+
+      # The script borrows resources\node-runtime\node.exe of an installed app;
+      # lay out the same directory with the pinned runtime the app ships.
+      - name: Stage bundled node.exe (-AppDir)
+        run: |
+          node scripts/fetch-node-runtime.mjs --platform win32-x64
+          if ($LASTEXITCODE -ne 0) { throw "fetch-node-runtime exited $LASTEXITCODE" }
+          $dir = Join-Path $env:APP_DIR 'resources\node-runtime'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item 'out-node-runtime\node.exe' $dir
+          & (Join-Path $dir 'node.exe') -v
+
+      - name: Record environment
+        run: |
+          $os = Get-CimInstance Win32_OperatingSystem
+          $gitBash = 'C:\Program Files\Git\bin\bash.exe'
+          $pwsh7 = 'C:\Program Files\PowerShell\7\pwsh.exe'
+          $lines = @(
+            "account=${{ matrix.account }}",
+            "image=$env:ImageOS $env:ImageVersion",
+            "os=$($os.Caption) $($os.Version) build $($os.BuildNumber)",
+            "windowsPowerShell=$(powershell.exe -NoProfile -Command '$PSVersionTable.PSVersion.ToString()')",
+            "pwsh7=$(if (Test-Path $pwsh7) { & $pwsh7 -NoProfile -Command '$PSVersionTable.PSVersion.ToString()' } else { 'absent' })",
+            "gitBash=$(if (Test-Path $gitBash) { (& $gitBash --version | Select-Object -First 1) } else { 'absent' })",
+            "systemNode=$((Get-Command node -ErrorAction SilentlyContinue).Source) $(node -v)",
+            "kitNode=$(& (Join-Path $env:APP_DIR 'resources\node-runtime\node.exe') -v)",
+            "runnerUser=$env:USERNAME temp=$env:TEMP localAppData=$env:LOCALAPPDATA",
+            "commit=$env:GITHUB_SHA run=$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID attempt=$env:GITHUB_RUN_ATTEMPT"
+          )
+          $lines | Tee-Object -FilePath (Join-Path $env:OUT_DIR 'env.txt')
+          whoami /all | Out-File -Encoding utf8 (Join-Path $env:OUT_DIR 'whoami-runner.txt')
+          whoami /groups | Select-String 'Mandatory Label'
+
+      # Windows PowerShell 5.1 is the script's target; parse it there first so a
+      # syntax error reads as one, not as a half-run.
+      - name: Parse run-p0-4.ps1 in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$env:KIT_DIR\run-p0-4.ps1", [ref]$null, [ref]$errors) | Out-Null
+          $errors | ForEach-Object { "$($_.Extent.StartLineNumber):$($_.Extent.StartColumnNumber) $($_.Message)" }
+          if ($errors.Count -gt 0) { exit 1 }
+          'parse ok'
+
+      - name: Run run-p0-4.ps1 (runner admin, Windows PowerShell 5.1)
+        if: matrix.account == 'admin'
+        shell: cmd
+        run: |
+          chcp 65001 >NUL
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File %KIT_DIR%\run-p0-4.ps1 -EncDir %ENC_DIR% -AppDir %APP_DIR% > %OUT_DIR%\console.log 2>&1
+          set RC=%ERRORLEVEL%
+          type %OUT_DIR%\console.log
+          echo run-p0-4.ps1 exit %RC%
+          exit /b %RC%
+
+      - name: Run run-p0-4.ps1 (local standard user, scheduled task)
+        if: matrix.account == 'standard'
+        run: |
+          $user = 'p04std'
+          $password = 'Aa1!' + [guid]::NewGuid().ToString('N')
+          net user $user $password /add /y | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "net user exited $LASTEXITCODE" }
+          net user $user | Select-String 'Local Group Memberships' | Out-Host
+          $sid = (New-Object System.Security.Principal.NTAccount($user)).Translate([System.Security.Principal.SecurityIdentifier]).Value
+          # A password-logon task needs the batch logon right, which Users lack
+          # on Server SKUs. It adds the BATCH SID to the token; nothing else.
+          $inf = 'C:\p04dl\rights.inf'
+          secedit /export /cfg $inf /areas USER_RIGHTS | Out-Null
+          $text = Get-Content -Raw -Encoding Unicode $inf
+          if ($text -match '(?m)^SeBatchLogonRight\s*=') {
+            $text = $text -replace '(?m)^(SeBatchLogonRight\s*=[^\r\n]*)', "`$1,*$sid"
+          } else {
+            $text = $text -replace '\[Privilege Rights\]', "[Privilege Rights]`r`nSeBatchLogonRight = *$sid"
+          }
+          Set-Content -Encoding Unicode -NoNewline $inf $text
+          secedit /configure /db C:\p04dl\rights.sdb /cfg $inf /areas USER_RIGHTS | Out-Host
+          # secedit may exit 1 for unrelated warnings; check the right itself.
+          secedit /export /cfg C:\p04dl\rights-after.inf /areas USER_RIGHTS | Out-Null
+          $batch = Get-Content -Encoding Unicode C:\p04dl\rights-after.inf | Where-Object { $_ -like 'SeBatchLogonRight*' }
+          "after: $batch"
+          if ("$batch" -notlike "*$sid*") { throw 'batch logon right was not granted' }
+          foreach ($dir in @($env:KIT_DIR, $env:ENC_DIR, $env:OUT_DIR)) {
+            icacls $dir /grant "${user}:(OI)(CI)M" /Q | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "icacls $dir exited $LASTEXITCODE" }
+          }
+          icacls $env:APP_DIR /grant "${user}:(OI)(CI)RX" /Q | Out-Null
+          $wrapper = @"
+          @echo off
+          chcp 65001 >NUL
+          whoami /all > $env:OUT_DIR\whoami-standard.txt
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir $env:ENC_DIR -AppDir $env:APP_DIR > $env:OUT_DIR\console.log 2>&1
+          echo %ERRORLEVEL% > $env:OUT_DIR\exit-standard.txt
+          "@
+          Set-Content -Encoding Ascii 'C:\p04\run-standard.cmd' $wrapper
+          $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c C:\p04\run-standard.cmd'
+          $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+          Register-ScheduledTask -TaskName 'p04-standard' -Action $action -Settings $settings -User $user -Password $password -RunLevel Limited | Out-Null
+          Start-ScheduledTask -TaskName 'p04-standard'
+          $done = Join-Path $env:OUT_DIR 'exit-standard.txt'
+          $deadline = (Get-Date).AddMinutes(30)
+          while (-not (Test-Path $done) -and (Get-Date) -lt $deadline) {
+            Start-Sleep -Seconds 10
+            $info = Get-ScheduledTaskInfo -TaskName 'p04-standard'
+            $state = "$((Get-ScheduledTask -TaskName 'p04-standard').State)"
+            if ($state -eq 'Ready' -and -not (Test-Path $done)) {
+              Start-Sleep -Seconds 5
+              if (-not (Test-Path $done)) { "task ended without the exit marker (state $state, last result 0x{0:x})" -f $info.LastTaskResult; break }
+            }
+          }
+          Get-ScheduledTaskInfo -TaskName 'p04-standard' | Format-List | Out-String | Write-Host
+          $console = Join-Path $env:OUT_DIR 'console.log'
+          if (Test-Path $console) { Get-Content -Encoding UTF8 $console }
+          if (-not (Test-Path $done)) { throw 'standard-user run did not finish' }
+          "run-p0-4.ps1 exit $((Get-Content $done).Trim())"
+
+      # The script exits 0 whenever it gets as far as writing a report; gate on
+      # the checks themselves.
+      - name: Gate on report
+        run: |
+          $dirs = @(Get-ChildItem $env:KIT_DIR -Directory -Filter 'report-*' | Sort-Object Name)
+          if ($dirs.Count -eq 0) { throw 'no report-* directory' }
+          $file = Join-Path $dirs[-1].FullName 'p0-4-report.json'
+          if (-not (Test-Path $file)) { throw "no $file" }
+          $report = Get-Content -Raw -Encoding UTF8 $file | ConvertFrom-Json
+          $report.checks | ForEach-Object { '{0,-5} {1,-26} {2}' -f $_.status, $_.id, ($_.observed -replace '\s+', ' ').Substring(0, [Math]::Min(150, ($_.observed -replace '\s+', ' ').Length)) }
+          $bad = @($report.checks | Where-Object { $_.status -in @('fail', 'error') })
+          "counts: $($report.summary.counts | ConvertTo-Json -Compress)"
+          if ($bad.Count -gt 0) { throw "$($bad.Count) check(s) failed or errored: $(($bad | ForEach-Object id) -join ', ')" }
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: p0-4-windows-${{ matrix.account }}
+          path: |
+            C:\p04\out
+            C:\p04\aiclient-p0-4-kit\report-*
+          if-no-files-found: warn
+          retention-days: 30
