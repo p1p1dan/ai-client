@@ -83,7 +83,13 @@ for (const name of ['spawnSync', 'execSync', 'execFileSync']) {
   childProcess[name] = function probeSyncSpawn(command, ...rest) {
     const args = Array.isArray(rest[0]) ? rest[0] : undefined;
     record('spawn-sync', { via: name, file: command, args });
-    return original.call(this, command, ...rest);
+    // P0-6: a sync spawn blocks the host's event loop for its whole duration.
+    const started = performance.now();
+    try {
+      return original.call(this, command, ...rest);
+    } finally {
+      record('spawn-sync-ms', { via: name, file: command, ms: performance.now() - started });
+    }
   };
 }
 

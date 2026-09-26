@@ -119,7 +119,9 @@
  *                       carrying a scenario marker (P0-GOAL-COMPLETE, P0-GOAL-BLOCKED,
  *                       P0-GOAL-PAUSE, P0-GOAL-ROUNDLIMIT, P0-JOBS, P0-OFFICE, P0-ENV,
  *                       P0-APPROVAL, for P0-3 P0-STREAM / P0-TOOL / P0-SLOWTOOL, and for P0-4
- *                       P0-FS / P0-RECALL with a JSON parameter object after the marker) or a
+ *                       P0-FS / P0-RECALL with a JSON parameter object after the marker, and for
+ *                       P0-6 P0-CRASH / P0-PACED / P0-SLEEPTOOL / P0-LOAD / P0-HIST, also with a
+ *                       JSON parameter object) or a
  *                       DSH `<goal_round>` continuation prompt is the trigger; the number of
  *                       tool calls since the trigger is the step. Goal rounds read their
  *                       round number from the prompt's `Round: N/M` line, update_goal copies
@@ -291,7 +293,7 @@ function logRequest(entry) {
 // ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
 
 const P0_MARKER =
-  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|TOOL|FS|RECALL)/;
+  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -332,8 +334,40 @@ function p04Params(triggerText) {
   try {
     return JSON.parse(triggerText.slice(triggerText.indexOf('{')));
   } catch {
+    // P0-6 prompts carry prose after the object; take the balanced object alone.
+    try {
+      const object = firstJsonObject(triggerText);
+      if (object) return JSON.parse(object);
+    } catch {
+      // Fall through to the placeholder parameters.
+    }
     return { tag: 'bad-params', dir: '.', marker: 'missing', token: 'missing', shell: 'bash' };
   }
+}
+
+/** The first balanced `{...}` in `text` (string-aware), or null. */
+function firstJsonObject(text) {
+  const start = text.indexOf('{');
+  if (start < 0) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const c = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (c === '\\') escaped = true;
+      else if (c === '"') inString = false;
+      continue;
+    }
+    if (c === '"') inString = true;
+    else if (c === '{') depth += 1;
+    else if (c === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
 }
 const p04Join = (dir, name) => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`;
 const pwshQuote = (text) => `'${text.replace(/'/g, "''")}'`;
@@ -600,13 +634,123 @@ const DSH_P0_2_SCRIPTS = {
   // marker the earlier turn read from the encrypted file?
   RECALL(_round, _step, _calls, triggerText, history) {
     const p = p04Params(triggerText);
+    // P0-6: `markers` checks several strings at once and names each outcome.
+    if (Array.isArray(p.markers)) {
+      const present = p.markers.filter((m) => history.includes(m));
+      const missing = p.markers.filter((m) => !history.includes(m));
+      const tag = `present=${present.join(',') || '-'} missing=${missing.join(',') || '-'}`;
+      return { ...say(`P0-RECALL ${tag}`), tag };
+    }
     const present = history.includes(p.marker);
     return {
       ...say(`P0-RECALL ${present ? 'present' : 'missing'}`),
       tag: present ? 'present' : 'missing',
     };
   },
+  // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
+  CRASH(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    if (step === 0) {
+      return {
+        ...tool('bash', {
+          command: `echo "crash-probe ${p.token}"; ls -a`,
+          description: 'Echo the probe token',
+        }),
+        tag: p.token,
+      };
+    }
+    return { ...say(`P0-CRASH ${p.token} finished; the listing is above.`), tag: p.token };
+  },
+  // P0-6: a long paced answer, so the host can be killed while it streams.
+  PACED(_round, _step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const chunks = p.chunks ?? 40;
+    const pieces = [];
+    for (let i = 1; i <= chunks; i += 1) {
+      pieces.push(i === 1 ? `STREAMED-${p.token} ` : `〔${i}〕流式正文片段。`);
+    }
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: pieces.join(''),
+      chunks,
+      chunkMs: p.chunkMs ?? 150,
+      tag: p.token,
+    };
+  },
+  // P0-6: a bash call still running when the host is killed.
+  SLEEPTOOL(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    if (step === 0) {
+      return {
+        ...tool('bash', {
+          command: `echo "sleep-tool ${p.token} started"; sleep ${p.seconds ?? 30}; echo "sleep-tool done"`,
+          description: 'Run a long command',
+        }),
+        tag: p.token,
+      };
+    }
+    return { ...say(`P0-SLEEPTOOL ${p.token} finished.`), tag: p.token };
+  },
+  // P0-6: concurrency load. Every text delta carries its send time (see
+  // `stampedFrames`); steps 0-2 end in a bash / read / bash call, step 3 is
+  // a longer closing answer.
+  LOAD(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const chunks = p.chunks ?? 40;
+    const chunkMs = p.chunkMs ?? 30;
+    const tools = [
+      tool('bash', {
+        command: 'ls -la; wc -c *.txt; cat module-*.ts',
+        description: 'List the workspace and print the sources',
+      }),
+      tool('read', { file_path: p.file }),
+      tool('bash', {
+        command: "seq 1 20000 | awk '{s+=$1} END {print s}'; grep -c line data.txt",
+        description: 'Sum and count',
+      }),
+    ];
+    const toolUse = step < tools.length ? tools[step] : undefined;
+    return {
+      kind: 'stamped',
+      status: 200,
+      chunks: toolUse ? chunks : chunks * 2,
+      chunkMs,
+      ...(toolUse ? { toolName: toolUse.name, toolInput: toolUse.input } : {}),
+      tag: `s${p.session}`,
+    };
+  },
+  // P0-6: history builder. One read (every tenth turn a bash) of a workspace
+  // file, then about 1 KB of prose. `native: true` drives our own worker.
+  HIST(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    if (step === 0) {
+      if (p.i % 10 === 0) {
+        return tool('bash', {
+          command: `head -c 3000 ${bashQuote(p.file)}; echo; echo "[turn ${p.i}]"`,
+          description: 'Peek at a source file',
+        });
+      }
+      // Our native runtime's read tool names its argument `path`.
+      return tool('read', p.native ? { path: p.file } : { file_path: p.file });
+    }
+    return say(histProse(p.i, p.token));
+  },
 };
+
+/** P0-6: about 1 KB of deterministic mixed-language prose for one HIST turn. */
+function histProse(i, token) {
+  const lines = [
+    `第 ${i} 轮小结（${token}）：这个文件主要定义了一组数据结构和几个纯函数，`,
+    '入口函数先校验参数，再按配置决定走缓存还是直接计算；错误路径统一抛出带错误码的异常。',
+    'The module keeps its state in a single map keyed by session id, and every mutation goes',
+    'through one serialized queue, so concurrent callers observe a consistent order of updates.',
+    '需要注意的地方：超时参数为 0 时表示关闭，而不是立即超时；日志里的路径已经做过脱敏处理。',
+    'Next steps: add a regression test for the empty-input case, and document the retry budget',
+    `and the back-off schedule in the README before the next release (turn ${i}).`,
+  ];
+  return lines.join('\n');
+}
 
 /** dsh-p0-2: decide from the request's own messages. */
 function decideDshP02(parsed) {
@@ -675,7 +819,105 @@ function decideDshP02(parsed) {
           })),
         }
       : {}),
+    // P0-6 reads what a resumed session sends the model: the shape of the
+    // history before the trigger, and its tail as text.
+    ...(scenario === 'RECALL'
+      ? {
+          probe: {
+            messagesBeforeTrigger: trigger,
+            requestBytes: JSON.stringify(parsed).length,
+            roleTail: messages
+              .slice(Math.max(0, trigger - 8), trigger)
+              .map((m) =>
+                [
+                  m?.role,
+                  ...(Array.isArray(m?.content)
+                    ? m.content.map((b) =>
+                        b?.type === 'tool_result'
+                          ? `tool_result${b.is_error ? '!' : ''}:${toolResultText(b).slice(0, 80)}`
+                          : b?.type === 'tool_use'
+                            ? `tool_use:${b.name}`
+                            : `${b?.type}:${String(b?.text ?? '').slice(0, 80)}`
+                      )
+                    : [String(m?.content ?? '').slice(0, 80)]),
+                ].join(' | ')
+              ),
+          },
+        }
+      : {}),
   };
+}
+
+/**
+ * P0-6 — a paced text block whose every delta carries its own send time
+ * (`‹t<microseconds of CLOCK_MONOTONIC>›`, the clock process.hrtime reads in
+ * every process on the machine), optionally followed by one tool_use block.
+ * Frame data may be a function; `sendPaced` evaluates it at write time.
+ */
+function stampedFrames(model, { chunks, chunkMs, toolName, toolInput }) {
+  const prose = '流式输出按接近真实的速率逐块送达，The host relays each piece to the bridge. ';
+  const piece = (i) =>
+    prose.slice((i * 5) % (prose.length - 5), ((i * 5) % (prose.length - 5)) + 5);
+  const frames = [
+    messageStartFrame(model),
+    [
+      0,
+      'content_block_start',
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+    ],
+  ];
+  for (let i = 0; i < chunks; i += 1) {
+    frames.push([
+      i === 0 ? 0 : chunkMs,
+      'content_block_delta',
+      () => ({
+        type: 'content_block_delta',
+        index: 0,
+        delta: {
+          type: 'text_delta',
+          text: `${piece(i)}‹t${process.hrtime.bigint() / 1000n}›`,
+        },
+      }),
+    ]);
+  }
+  frames.push([chunkMs, 'content_block_stop', { type: 'content_block_stop', index: 0 }]);
+  if (toolName) {
+    const toolId = `toolu_${crypto.randomUUID()}`;
+    frames.push([
+      0,
+      'content_block_start',
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: toolId, name: toolName, input: {} },
+      },
+    ]);
+    for (const partial_json of chunkString(JSON.stringify(toolInput), 3)) {
+      frames.push([
+        chunkMs,
+        'content_block_delta',
+        {
+          type: 'content_block_delta',
+          index: 1,
+          delta: { type: 'input_json_delta', partial_json },
+        },
+      ]);
+    }
+    frames.push([0, 'content_block_stop', { type: 'content_block_stop', index: 1 }]);
+  }
+  frames.push(
+    [
+      0,
+      'message_delta',
+      {
+        type: 'message_delta',
+        delta: { stop_reason: toolName ? 'tool_use' : 'end_turn', stop_sequence: null },
+        usage: { output_tokens: chunks * 2 },
+      },
+    ],
+    [0, 'message_stop', { type: 'message_stop' }]
+  );
+  return frames;
 }
 
 /** Decide what this request's response should look like, given the active plan. */
@@ -1133,7 +1375,8 @@ function sendPaced(res, frames) {
     const [delayMs, event, data] = frames[index++];
     setTimeout(() => {
       if (aborted) return;
-      res.write(sseFrame(event, data));
+      // P0-6 stamped frames compute their payload at write time.
+      res.write(sseFrame(event, typeof data === 'function' ? data() : data));
       step();
     }, delayMs);
   };
@@ -1221,11 +1464,19 @@ function main() {
         ...(args.plan === 'dsh-p0-2'
           ? {
               decision: decision.label,
-              tool: decision.kind === 'tool_use' ? decision.name : undefined,
+              tool:
+                decision.kind === 'tool_use'
+                  ? decision.name
+                  : decision.kind === 'stamped'
+                    ? decision.toolName
+                    : undefined,
               auth: req.headers['x-api-key'] ?? req.headers.authorization ?? null,
               path: req.url,
               tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
               calls: decision.calls,
+              // P0-6: request size and what a resumed session sent.
+              bodyChars: body.length,
+              probe: decision.probe,
             }
           : {}),
       });
@@ -1244,6 +1495,8 @@ function main() {
           res,
           buildPacedTextFrames(model, decision.text, decision.chunks, decision.chunkMs)
         );
+      } else if (decision.kind === 'stamped') {
+        sendPaced(res, stampedFrames(model, decision));
       } else if (decision.kind === 'paced') {
         const frames =
           decision.flavour === 'slow-write'

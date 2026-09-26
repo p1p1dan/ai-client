@@ -8,6 +8,7 @@
   "exports": {
     ".": "./lib/index.js",
     "./bridge": "./lib/bridge.js",
+    "./shared-bridge": "./lib/shared-bridge.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
