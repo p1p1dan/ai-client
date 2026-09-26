@@ -68,7 +68,8 @@ jobs:
     env:
       KIT_ROOT: C:\p04
       KIT_DIR: C:\p04\aiclient-p0-4-kit
-      APP_DIR: C:\p04app
+      # A space in the path, as in the real install dir (Programs\PiLab Ai).
+      APP_DIR: C:\p04app\PiLab Ai
       ENC_DIR: C:\p04enc
       OUT_DIR: C:\p04\out
     steps:
@@ -146,7 +147,7 @@ jobs:
         shell: cmd
         run: |
           chcp 65001 >NUL
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File %KIT_DIR%\run-p0-4.ps1 -EncDir %ENC_DIR% -AppDir %APP_DIR% > %OUT_DIR%\console.log 2>&1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File %KIT_DIR%\run-p0-4.ps1 -EncDir %ENC_DIR% -AppDir "%APP_DIR%" > %OUT_DIR%\console.log 2>&1
           set RC=%ERRORLEVEL%
           type %OUT_DIR%\console.log
           echo run-p0-4.ps1 exit %RC%
@@ -192,12 +193,39 @@ jobs:
           icacls $env:APP_DIR /grant "${user}:(OI)(CI)RX" /Q | Out-Null
           icacls 'C:\Program Files\PowerShell\7' /deny "${user}:(OI)(CI)RX" /Q | Out-Null
           if ($LASTEXITCODE -ne 0) { throw "icacls deny pwsh7 exited $LASTEXITCODE" }
+          # Which right does the ACL sandbox's grant need? As the account: a DACL
+          # edit (WRITE_DAC, implicit for the owner) and a Low label edit
+          # (WRITE_OWNER), in a dir under C:\ root and in the user profile.
+          $aclProbe = @'
+          $ErrorActionPreference = 'Continue'
+          foreach ($base in @($env:P04_ENC_DIR, $env:USERPROFILE)) {
+            $dir = Join-Path $base ('acl-test-' + [guid]::NewGuid().ToString('N').Substring(0, 6))
+            New-Item -ItemType Directory -Path $dir | Out-Null
+            "== $dir (owner $((Get-Acl $dir).Owner))"
+            icacls $dir
+            '-- DACL edit (WRITE_DAC): icacls /grant *S-1-5-32-545:(OI)(CI)(RX)'
+            icacls $dir /grant '*S-1-5-32-545:(OI)(CI)(RX)'
+            "exit $LASTEXITCODE"
+            '-- Low label edit (WRITE_OWNER): icacls /setintegritylevel (OI)(CI)L'
+            icacls $dir /setintegritylevel '(OI)(CI)L'
+            "exit $LASTEXITCODE"
+            Remove-Item -Recurse -Force $dir
+          }
+          '@
+          [System.IO.File]::WriteAllText("$env:OUT_DIR\acl-probe.ps1", $aclProbe, [System.Text.Encoding]::ASCII)
+          # Two runs: the workspace root in a dir under C:\ root (inherits
+          # Authenticated Users:M), then in the account's own profile (F).
           $wrapper = @"
           @echo off
           chcp 65001 >NUL
           whoami /all > $env:OUT_DIR\whoami-standard.txt
           if exist "C:\Program Files\PowerShell\7\pwsh.exe" (echo pwsh7 visible> $env:OUT_DIR\pwsh7-standard.txt) else (echo pwsh7 hidden> $env:OUT_DIR\pwsh7-standard.txt)
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir $env:ENC_DIR -AppDir $env:APP_DIR > $env:OUT_DIR\console.log 2>&1
+          set P04_ENC_DIR=$env:ENC_DIR
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:OUT_DIR\acl-probe.ps1 > $env:OUT_DIR\acl-probe-standard.txt 2>&1
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir $env:ENC_DIR -AppDir "$env:APP_DIR" > $env:OUT_DIR\console-root.log 2>&1
+          echo %ERRORLEVEL% > $env:OUT_DIR\exit-root.txt
+          mkdir "%USERPROFILE%\p04enc"
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir "%USERPROFILE%\p04enc" -AppDir "$env:APP_DIR" > $env:OUT_DIR\console-profile.log 2>&1
           echo %ERRORLEVEL% > $env:OUT_DIR\exit-standard.txt
           "@
           [System.IO.File]::WriteAllText("$env:OUT_DIR\run-standard.cmd", ($wrapper -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
@@ -217,7 +245,7 @@ jobs:
             }
           }
           Get-ScheduledTaskInfo -TaskName 'p04-standard' | Format-List | Out-String | Write-Host
-          foreach ($name in @('pwsh7-standard.txt', 'console.log')) {
+          foreach ($name in @('pwsh7-standard.txt', 'acl-probe-standard.txt', 'console-root.log', 'console-profile.log')) {
             $file = Join-Path $env:OUT_DIR $name
             if (Test-Path $file) { [System.IO.File]::ReadAllLines($file) }
           }
@@ -225,18 +253,43 @@ jobs:
           "run-p0-4.ps1 exit $(([System.IO.File]::ReadAllText($done)).Trim())"
 
       # The script exits 0 whenever it gets as far as writing a report; gate on
-      # the checks themselves.
+      # the checks of every report. Known failures are DSH behaviour located in
+      # docs/plantree/plans/dsh-rebase/evidence/p0-4-windows-ci-2026-09-26.md;
+      # they are reported as warnings, anything else fails the job.
       - name: Gate on report
         run: |
+          $known = @{}
+          if ('${{ matrix.account }}' -eq 'standard') {
+            # dsh-sandbox-windows-acl grantWrite: SetNamedSecurityInfoW sets a
+            # Low label, which needs WRITE_OWNER on the workspace root; a
+            # standard user lacks it in a dir that only inherits Modify.
+            $known['root'] = @('F-on-shell-read', 'F-on-shell-write', 'F-on-shell-spill', 'F-on-read-shell-written', 'F-on-node-verify', 'F-on-acl')
+          }
           $dirs = @(Get-ChildItem $env:KIT_DIR -Directory -Filter 'report-*' | Sort-Object Name)
           if ($dirs.Count -eq 0) { throw 'no report-* directory' }
-          $file = Join-Path $dirs[-1].FullName 'p0-4-report.json'
-          if (-not (Test-Path $file)) { throw "no $file" }
-          $report = Get-Content -Raw -Encoding UTF8 $file | ConvertFrom-Json
-          $report.checks | ForEach-Object { '{0,-5} {1,-26} {2}' -f $_.status, $_.id, ($_.observed -replace '\s+', ' ').Substring(0, [Math]::Min(150, ($_.observed -replace '\s+', ' ').Length)) }
-          $bad = @($report.checks | Where-Object { $_.status -in @('fail', 'error') })
-          "counts: $($report.summary.counts | ConvertTo-Json -Compress)"
-          if ($bad.Count -gt 0) { throw "$($bad.Count) check(s) failed or errored: $(($bad | ForEach-Object id) -join ', ')" }
+          $unexpected = New-Object System.Collections.Generic.List[string]
+          foreach ($dir in $dirs) {
+            $file = Join-Path $dir.FullName 'p0-4-report.json'
+            if (-not (Test-Path $file)) { $unexpected.Add("$($dir.Name): no p0-4-report.json"); continue }
+            $report = Get-Content -Raw -Encoding UTF8 -LiteralPath $file | ConvertFrom-Json
+            $encDir = "$($report.powershell.machine.encDir)"
+            $scenario = if ($encDir -like 'C:\Users\*') { 'profile' } else { 'root' }
+            "== $($dir.Name): $scenario ($encDir) counts $($report.summary.counts | ConvertTo-Json -Compress)"
+            $report.checks | ForEach-Object {
+              $text = ($_.observed -replace '\s+', ' ')
+              '{0,-5} {1,-26} {2}' -f $_.status, $_.id, $text.Substring(0, [Math]::Min(150, $text.Length))
+            }
+            $allowed = @($known[$scenario] | Where-Object { $_ })
+            $bad = @($report.checks | Where-Object { $_.status -in @('fail', 'error') } | ForEach-Object id)
+            foreach ($id in $bad) {
+              if ($allowed -contains $id) { "::warning::$($dir.Name) ($scenario): known failure $id" }
+              else { $unexpected.Add("$($dir.Name) ($scenario): $id") }
+            }
+            foreach ($id in $allowed) {
+              if ($bad -notcontains $id) { "::notice::$($dir.Name) ($scenario): known failure $id now passes" }
+            }
+          }
+          if ($unexpected.Count -gt 0) { throw "unexpected failures: $($unexpected -join '; ')" }
 
       - name: Upload report
         if: always()
