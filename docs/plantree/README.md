@@ -20,7 +20,7 @@
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
 | Runtime 加固与收口 | In Progress | 批次 M（Ctrl+Enter 插话分支收口，T118～T136）六个提交已落地未推送，待开发机点验与 Windows `1.0.3-test.1` 实测后快进 main；此前各批次状态见看板与 roadmap | [T001～T136](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
-| DSH 二开迁移（B 路线） | Planning | 2026-09-25 用户批准 B 路线与调研 §9 六点（[决策 001](plans/dsh-rebase/decisions/001-route-b-and-scope.md)）；P0 探针待开工 | [P0～P2](plans/dsh-rebase/roadmap.md) | — |
+| DSH 二开迁移（B 路线） | Planning | P0 探针（分支 `feat/dsh-p0-probe`）：P0-1～P0-3 已完成；2026-09-26 加密机移到 P2 前、定共享宿主（[决策 002](plans/dsh-rebase/decisions/002-defer-encrypted-machine-and-shared-host.md)），P0-4 普通 Windows CI 实测与 P0-6 共享宿主补验进行中 | [P0～P2](plans/dsh-rebase/roadmap.md) | — |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。

@@ -1,6 +1,6 @@
 # P0-4 加密机上机检查单（DSH 宿主 + 官方 DSH Desktop 对照组）
 
-Role: detail shard。上位：[roadmap P0-4](../roadmap.md)。结论回填 [Q002](../open-questions.md#q002-dsh-沙箱能否作为兜底层叠加)。工具包怎么做出来的、Linux 上预演了什么：[证据](../evidence/p0-4-kit-2026-09-25.md)。
+Role: detail shard。上位：[roadmap P2 前置项](../roadmap.md)（2026-09-26 起加密机移出 P0，见[决策 002](../decisions/002-defer-encrypted-machine-and-shared-host.md)；同一工具包在普通 Windows 上的 CI 实测是 P0-4）。结论回填 [Q002](../open-questions.md#q002-dsh-沙箱能否作为兜底层叠加)。工具包怎么做出来的、Linux 上预演了什么：[证据](../evidence/p0-4-kit-2026-09-25.md)。
 
 全程约 30 分钟：主检查 5～10 分钟，对照组约 15 分钟。**不需要管理员权限。不连任何真实模型服务**：模型回合全部打到脚本自己起的本地假网关（`127.0.0.1`）。
 
