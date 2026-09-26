@@ -183,7 +183,8 @@ jobs:
           secedit /export /cfg C:\p04dl\rights-after.inf /areas USER_RIGHTS | Out-Null
           $batch = [System.IO.File]::ReadAllLines('C:\p04dl\rights-after.inf') | Where-Object { $_ -like 'SeBatchLogonRight*' }
           "after: $batch"
-          if ("$batch" -notlike "*$sid*") { throw 'batch logon right was not granted' }
+          # The export names a resolvable account (p04std) instead of *SID.
+          if ("$batch" -notlike "*$sid*" -and "$batch" -notmatch "(=|,)\s*$user(,|$)") { throw 'batch logon right was not granted' }
           foreach ($dir in @($env:KIT_DIR, $env:ENC_DIR, $env:OUT_DIR)) {
             icacls $dir /grant "${user}:(OI)(CI)M" /Q | Out-Null
             if ($LASTEXITCODE -ne 0) { throw "icacls $dir exited $LASTEXITCODE" }
@@ -199,8 +200,8 @@ jobs:
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir $env:ENC_DIR -AppDir $env:APP_DIR > $env:OUT_DIR\console.log 2>&1
           echo %ERRORLEVEL% > $env:OUT_DIR\exit-standard.txt
           "@
-          [System.IO.File]::WriteAllText('C:\p04\run-standard.cmd', ($wrapper -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
-          $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c C:\p04\run-standard.cmd'
+          [System.IO.File]::WriteAllText("$env:OUT_DIR\run-standard.cmd", ($wrapper -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
+          $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c $env:OUT_DIR\run-standard.cmd"
           $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
           Register-ScheduledTask -TaskName 'p04-standard' -Action $action -Settings $settings -User $user -Password $password -RunLevel Limited | Out-Null
           Start-ScheduledTask -TaskName 'p04-standard'
