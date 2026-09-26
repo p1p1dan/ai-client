@@ -1,0 +1,54 @@
+[p0-4 0s] PASS  N0-node-read node.exe 直接读加密标记文件: plaintext: P04-ENC-MARKER-d44e9339 plaintext line\r\n
+[p0-4 0.1s] fake gateway on 52403
+[p0-4 1.4s] B2-narb-off ready in 1270 ms
+[p0-4 1.4s] PASS  B2-narb-off 宿主启动：NARB_DISABLE_NATIVE_CACHE=1（原地加载）: ready 1270 ms；原地加载 \\?\C:\p04\aiclient-p0-4-kit\host\node_modules\node-addon-require-builtin-win32-x64-msvc\prebuilt\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 2.8s] B3-narb-enc-dir ready in 1285 ms
+[p0-4 2.8s] PASS  B3-narb-enc-dir 宿主启动：缓存目录放在加密区: ready 1285 ms；从缓存副本加载 \\?\C:\Users\p04std\p04enc\p0-4-20260926-172357\narb-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 4.2s] B1-narb-default ready in 1287 ms
+[p0-4 4.2s] PASS  B1-narb-default 宿主启动：默认缓存（%LOCALAPPDATA%）: ready 1287 ms；从缓存副本加载 \\?\C:\Users\p04std\AppData\Local\node-addon-native-custom-loader\native-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 4.2s] shell tool: pwsh; 22 tools
+[p0-4 7s] PASS  F-on-read 沙箱开：DSH read 读加密文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 plaintext line\n\n(End of file - 
+[p0-4 7s] PASS  F-on-read-edit-target 沙箱开：DSH read 读待改的加密文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 edit target\n\n(End of file 
+[p0-4 7s] PASS  F-on-edit 沙箱开：DSH edit 改加密文件: 成功：The file C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\edit-target.txt has been updated successfully.
+[p0-4 7s] PASS  F-on-read-after-edit 沙箱开：edit 后 DSH read 回读: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 EDITED-ON54f350 edit targe
+[p0-4 7s] PASS  F-on-write 沙箱开：DSH write 新建文件: 成功：<path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\dsh-written-ON54f350.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[p0-4 7s] PASS  F-on-read-after-write 沙箱开：write 后 DSH read 回读: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\dsh-written-ON54f350.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 WRITTEN-ON54f350\n
+[p0-4 7s] PASS  F-on-grep 沙箱开：DSH grep 按标记串搜到加密文件: plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-d44e9339 plaintext line\n\ndsh-written-ON54f350.txt\nLine 1: P04-ENC-MARKER-d44e9339 WRITTEN-ON54f350\n\nedit-targ
+[p0-4 7s] PASS  F-on-glob 沙箱开：DSH glob 列出文件: plaintext: marker.txt\nedit-target.txt\ndsh-written-ON54f350.txt
+[p0-4 7s] PASS  F-on-shell-read 沙箱开：DSH pwsh 工具读加密文件: plaintext: P04-ENC-MARKER-d44e9339 plaintext line\r\n\r\n
+[p0-4 7s] PASS  F-on-shell-write 沙箱开：DSH pwsh 工具写文件: 成功：(no output)
+[p0-4 7s] PASS  F-on-shell-spill 沙箱开：DSH pwsh 大输出: plaintext: 539 ON54f350\r\nspill-line 1540 ON54f350\r\nspill-line 1541 ON54f350\r\nspill-line 1542 ON54f350\r\nspill-line 1543 ON54f350\r\nspill-line 1544 ON54f350\r\nspill-line 1545 
+[p0-4 7s] PASS  F-on-read-shell-written 沙箱开：DSH read 回读 pwsh 写的文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-on\\shell-written-ON54f350.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 SHELL-ON54f350\n
+[p0-4 7s] PASS  F-on-node-verify 沙箱开：node.exe 直接回读工具产物: edit-target.txt=plaintext，dsh-written-ON54f350.txt=plaintext，shell-written-ON54f350.txt=plaintext
+[p0-4 7s] PASS  F-on-acl 沙箱开：工作区根目录上的 ACL 沙箱授权（icacls）: 能力 SID ACE S-1-4-347211518-600125371；完整性标签 有
+[p0-4 9.2s] PASS  F-off-read 沙箱关：DSH read 读加密文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 plaintext line\n\n(End of file -
+[p0-4 9.2s] PASS  F-off-read-edit-target 沙箱关：DSH read 读待改的加密文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 edit target\n\n(End of file
+[p0-4 9.2s] PASS  F-off-edit 沙箱关：DSH edit 改加密文件: 成功：The file C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\edit-target.txt has been updated successfully.
+[p0-4 9.2s] PASS  F-off-read-after-edit 沙箱关：edit 后 DSH read 回读: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 EDITED-OFFbc0628 edit tar
+[p0-4 9.2s] PASS  F-off-write 沙箱关：DSH write 新建文件: 成功：<path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\dsh-written-OFFbc0628.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[p0-4 9.2s] PASS  F-off-read-after-write 沙箱关：write 后 DSH read 回读: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\dsh-written-OFFbc0628.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 WRITTEN-OFFbc06
+[p0-4 9.2s] PASS  F-off-grep 沙箱关：DSH grep 按标记串搜到加密文件: plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-d44e9339 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-d44e9339 EDITED-OFFbc0628 edit target\n\ndsh-wr
+[p0-4 9.2s] PASS  F-off-glob 沙箱关：DSH glob 列出文件: plaintext: marker.txt\nedit-target.txt\ndsh-written-OFFbc0628.txt
+[p0-4 9.2s] PASS  F-off-shell-read 沙箱关：DSH pwsh 工具读加密文件: plaintext: P04-ENC-MARKER-d44e9339 plaintext line\r\n\r\n
+[p0-4 9.2s] PASS  F-off-shell-write 沙箱关：DSH pwsh 工具写文件: 成功：(no output)
+[p0-4 9.2s] PASS  F-off-shell-spill 沙箱关：DSH pwsh 大输出: plaintext: FFbc0628\r\nspill-line 1631 OFFbc0628\r\nspill-line 1632 OFFbc0628\r\nspill-line 1633 OFFbc0628\r\nspill-line 1634 OFFbc0628\r\nspill-line 1635 OFFbc0628\r\nspill-line 1636
+[p0-4 9.2s] PASS  F-off-read-shell-written 沙箱关：DSH read 回读 pwsh 写的文件: plaintext: <path>C:\\Users\\p04std\\p04enc\\p0-4-20260926-172357\\ws-off\\shell-written-OFFbc0628.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-d44e9339 SHELL-OFFbc06
+[p0-4 9.2s] PASS  F-off-node-verify 沙箱关：node.exe 直接回读工具产物: edit-target.txt=plaintext，dsh-written-OFFbc0628.txt=plaintext，shell-written-OFFbc0628.txt=plaintext
+[p0-4 9.2s] INFO  F-off-permission 沙箱关：切到 danger-full-access: {\"kind\":\"success\",\"text\":\"preset danger-full-access\"}
+[p0-4 9.2s] INFO  F-off-acl 沙箱关：工作区根目录上的 ACL 沙箱授权（icacls）: 能力 SID ACE 无；完整性标签 无
+[p0-4 10.6s] PASS  P-pty-spawn node-pty / conpty 起终端进程: exit 0；已加载 conpty.node
+[p0-4 10.6s] PASS  P-pty-read 终端里的 PowerShell 读加密文件: plaintext: \u001b[2J\u001b[m\u001b[HP04-ENC-MARKER-d44e9339 plaintext line\r\n\u001b]0;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\u0007\u001b[?25h\r\n
+[p0-4 10.6s] PASS  SP-spill-root %TEMP% 下 spill 根目录可用，大输出落盘后 node.exe 读回明文: 新 spill 根 1 个，含本次大输出的文件 2 个
+[p0-4 11.9s] lock-b ready in 1283 ms
+[p0-4 11.9s] PASS  L-lock-held 写锁：会话被 A 持有时 B 打不开: Error: lock-b resume-session: {\"type\":\"probe-error\",\"requestId\":\"r14\",\"message\":\"SessionAlreadyOwnedError: session \\\"aiclient-probe-7c1576cc-af8c-4c8e-a833-583d76745eac\\\" is already owned by an active write handle\\n    at SessionWriteLease.acquire (file:///C:/p04/aiclient-p0-4-kit/host/node_modules/
+[p0-4 11.9s] PASS  L-lock-released 写锁：A 关闭后 B 能恢复同一会话: ok 35 ms
+[p0-4 12.2s] PASS  L-recall 恢复后的会话历史里仍有明文标记串: RECALL:present r0 s0
+[p0-4 15.3s] PASS  S-log-plaintext 会话日志落盘后由 node.exe 解码，含明文标记串: \sessions\--C-Users-p04std-p04enc-p0-4-20260926-172357-ws-on--\aiclient-probe-7c1576cc-af8c-4c8e-a833-583d76745eac\session.v4.jsonl.zstd=plaintext
+[p0-4 18.1s] PASS  G-pnpm-install pnpm 装社区插件，装好的文件 node.exe 读回明文: plaintext
+[p0-4 18.2s] INFO  K-natives 宿主 A 加载过的原生模块: win32-x64-msvc-napi-v9.node, koffi.node, conpty.node
+[p0-4 21.3s] PASS  D-bash-read bash 直接读加密文件: plaintext: P04-ENC-MARKER-d44e9339 plaintext line\r\n
+[p0-4 21.4s] PASS  D-bash-write bash 写文件，node.exe 读回: exit 0；node 读回 plaintext: P04-ENC-MARKER-d44e9339 BASH-1be030\n
+[p0-4 21.6s] PASS  D-powershell-read powershell 直接读加密文件: plaintext: P04-ENC-MARKER-d44e9339 plaintext line\r\n\r\n
+[p0-4 21.8s] PASS  D-powershell-write powershell 写文件，node.exe 读回: exit 0；node 读回 plaintext: P04-ENC-MARKER-d44e9339 POWERSHELL-f13569\r\n
+[p0-4 21.8s] SKIP  D-pwsh7-read pwsh7 直接读加密文件: 本机没有这个程序
+[p0-4 21.8s] done: {"pass":43,"info":3,"skip":1}; report C:\p04\aiclient-p0-4-kit\report-20260926-172357\node-report.json

@@ -1,0 +1,94 @@
+﻿P0-4 加密机上机结果  2026-09-26T17:23:55.274Z
+
+机器：Microsoft Windows Server 2022 Datacenter 10.0.20348；PowerShell 5.1.20348.5622；node.exe v24.18.0（C:\p04app\PiLab Ai\resources\node-runtime\node.exe）
+应用目录：C:\p04app\PiLab Ai；加密目录：C:\p04enc
+前提：不成立！PowerShell 写的标记文件在盘上不是 TSD 容器（目录没被策略覆盖，或 PowerShell 也在白名单里）。下面所有「明文」结论都不能签收。
+PowerShell 自己读标记文件看到：plaintext
+合计：通过 37，失败 6，跳过 1，记录 3，出错 0
+
+== 前提
+[通过] N0-node-read  node.exe 直接读加密标记文件 —— plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n
+
+== 宿主启动与 NARB 原生缓存
+[通过] B2-narb-off  宿主启动：NARB_DISABLE_NATIVE_CACHE=1（原地加载） —— ready 1822 ms；原地加载 \\?\C:\p04\aiclient-p0-4-kit\host\node_modules\node-addon-require-builtin-win32-x64-msvc\prebuilt\win32-x64-msvc-napi-v9.
+[通过] B3-narb-enc-dir  宿主启动：缓存目录放在加密区 —— ready 1423 ms；从缓存副本加载 \\?\C:\p04enc\p0-4-20260926-172333\narb-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64
+[通过] B1-narb-default  宿主启动：默认缓存（%LOCALAPPDATA%） —— ready 1431 ms；从缓存副本加载 \\?\C:\Users\p04std\AppData\Local\node-addon-native-custom-loader\native-cache\node-addon-require-builtin-win32-x64-ms
+
+== DSH 工具，沙箱开（workspace-write）
+[通过] F-on-read  沙箱开：DSH read 读加密文件 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plaint
+[通过] F-on-read-edit-target  沙箱开：DSH read 读待改的加密文件 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 e
+[通过] F-on-edit  沙箱开：DSH edit 改加密文件 —— 成功：The file C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt has been updated successfully.
+[通过] F-on-read-after-edit  沙箱开：edit 后 DSH read 回读 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 E
+[通过] F-on-write  沙箱开：DSH write 新建文件 —— 成功：<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[通过] F-on-read-after-write  沙箱开：write 后 DSH read 回读 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3
+[通过] F-on-grep  沙箱开：DSH grep 按标记串搜到加密文件 —— plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460
+[通过] F-on-glob  沙箱开：DSH glob 列出文件 —— plaintext: marker.txt\nedit-target.txt\ndsh-written-ONee8559.txt
+[失败] F-on-shell-read  沙箱开：DSH pwsh 工具读加密文件 —— other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[失败] F-on-shell-write  沙箱开：DSH pwsh 工具写文件 —— 工具报错：Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[失败] F-on-shell-spill  沙箱开：DSH pwsh 大输出 —— other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[失败] F-on-read-shell-written  沙箱开：DSH read 回读 pwsh 写的文件 —— other: Error: cannot read \"C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt\": not found
+[失败] F-on-node-verify  沙箱开：node.exe 直接回读工具产物 —— edit-target.txt=plaintext，dsh-written-ONee8559.txt=plaintext，shell-written-ONee8559.txt=missing
+[失败] F-on-acl  沙箱开：工作区根目录上的 ACL 沙箱授权（icacls） —— 能力 SID ACE 无；完整性标签 无
+
+== DSH 工具，沙箱关（danger-full-access）
+[通过] F-off-read  沙箱关：DSH read 读加密文件 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plain
+[通过] F-off-read-edit-target  沙箱关：DSH read 读待改的加密文件 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 
+[通过] F-off-edit  沙箱关：DSH edit 改加密文件 —— 成功：The file C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt has been updated successfully.
+[通过] F-off-read-after-edit  沙箱关：edit 后 DSH read 回读 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 
+[通过] F-off-write  沙箱关：DSH write 新建文件 —— 成功：<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[通过] F-off-read-after-write  沙箱关：write 后 DSH read 回读 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER
+[通过] F-off-grep  沙箱关：DSH grep 按标记串搜到加密文件 —— plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460
+[通过] F-off-glob  沙箱关：DSH glob 列出文件 —— plaintext: marker.txt\nedit-target.txt\ndsh-written-OFFa1ef67.txt
+[通过] F-off-shell-read  沙箱关：DSH pwsh 工具读加密文件 —— plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n\r\n
+[通过] F-off-shell-write  沙箱关：DSH pwsh 工具写文件 —— 成功：(no output)
+[通过] F-off-shell-spill  沙箱关：DSH pwsh 大输出 —— plaintext: FFa1ef67\r\nspill-line 1631 OFFa1ef67\r\nspill-line 1632 OFFa1ef67\r\nspill-line 1633 OFFa1ef67\r\nspill-line 1634 OFFa1ef67\r\ns
+[通过] F-off-read-shell-written  沙箱关：DSH read 回读 pwsh 写的文件 —— plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARK
+[通过] F-off-node-verify  沙箱关：node.exe 直接回读工具产物 —— edit-target.txt=plaintext，dsh-written-OFFa1ef67.txt=plaintext，shell-written-OFFa1ef67.txt=plaintext
+[记录] F-off-permission  沙箱关：切到 danger-full-access —— {\"kind\":\"success\",\"text\":\"preset danger-full-access\"}
+[记录] F-off-acl  沙箱关：工作区根目录上的 ACL 沙箱授权（icacls） —— 能力 SID ACE 无；完整性标签 无
+
+== 会话写入、写锁、恢复
+[通过] L-lock-held  写锁：会话被 A 持有时 B 打不开 —— Error: lock-b resume-session: {\"type\":\"probe-error\",\"requestId\":\"r14\",\"message\":\"SessionAlreadyOwnedError: session \\\"aiclient-p
+[通过] L-lock-released  写锁：A 关闭后 B 能恢复同一会话 —— ok 35 ms
+[通过] L-recall  恢复后的会话历史里仍有明文标记串 —— RECALL:present r0 s0
+[通过] S-log-plaintext  会话日志落盘后由 node.exe 解码，含明文标记串 —— \sessions\--C-p04enc-p0-4-20260926-172333-ws-on--\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\session.v4.jsonl.zstd=plaintext
+
+== node-pty / conpty
+[通过] P-pty-spawn  node-pty / conpty 起终端进程 —— exit 0；已加载 conpty.node
+[通过] P-pty-read  终端里的 PowerShell 读加密文件 —— plaintext: \u001b[2J\u001b[m\u001b[HP04-ENC-MARKER-3d030460 plaintext line\r\n\u001b]0;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\power
+
+== %TEMP% spill
+[通过] SP-spill-root  %TEMP% 下 spill 根目录可用，大输出落盘后 node.exe 读回明文 —— 新 spill 根 1 个，含本次大输出的文件 1 个
+
+== pnpm 装插件
+[通过] G-pnpm-install  pnpm 装社区插件，装好的文件 node.exe 读回明文 —— plaintext
+
+== node.exe 直接起的 shell
+[通过] D-bash-read  bash 直接读加密文件 —— plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n
+[通过] D-bash-write  bash 写文件，node.exe 读回 —— exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 BASH-7266ab\n
+[通过] D-powershell-read  powershell 直接读加密文件 —— plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n\r\n
+[通过] D-powershell-write  powershell 写文件，node.exe 读回 —— exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 POWERSHELL-a1fbf4\r\n
+[跳过] D-pwsh7-read  pwsh7 直接读加密文件 —— 本机没有这个程序
+
+== 原生模块
+[记录] K-natives  宿主 A 加载过的原生模块 —— win32-x64-msvc-napi-v9.node, koffi.node, conpty.node
+
+== 盘上形态（PowerShell 读文件头 16 字节）
+非 TSD（MZ..............）  B3-narb-enc-dir: NARB 缓存副本  \\?\C:\p04enc\p0-4-20260926-172333\narb-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node
+非 TSD（MZ..............）  B1-narb-default: NARB 缓存副本  \\?\C:\Users\p04std\AppData\Local\node-addon-native-custom-loader\native-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node
+非 TSD（P04-ENC-MARKER-3）  F-on: edit-target.txt  C:\p04enc\p0-4-20260926-172333\ws-on\edit-target.txt
+非 TSD（P04-ENC-MARKER-3）  F-on: dsh-written-ONee8559.txt  C:\p04enc\p0-4-20260926-172333\ws-on\dsh-written-ONee8559.txt
+已不存在  F-on: shell-written-ONee8559.txt  C:\p04enc\p0-4-20260926-172333\ws-on\shell-written-ONee8559.txt
+非 TSD（P04-ENC-MARKER-3）  F-on: marker.txt（前提）  C:\p04enc\p0-4-20260926-172333\ws-on\marker.txt
+非 TSD（P04-ENC-MARKER-3）  F-off: edit-target.txt  C:\p04enc\p0-4-20260926-172333\ws-off\edit-target.txt
+非 TSD（P04-ENC-MARKER-3）  F-off: dsh-written-OFFa1ef67.txt  C:\p04enc\p0-4-20260926-172333\ws-off\dsh-written-OFFa1ef67.txt
+非 TSD（P04-ENC-MARKER-3）  F-off: shell-written-OFFa1ef67.txt  C:\p04enc\p0-4-20260926-172333\ws-off\shell-written-OFFa1ef67.txt
+非 TSD（P04-ENC-MARKER-3）  F-off: marker.txt（前提）  C:\p04enc\p0-4-20260926-172333\ws-off\marker.txt
+非 TSD（FFa1ef67..spill-）  SP: spill 文件  C:\Users\p04std\AppData\Local\Temp\dsh-spill-TvdVVl\session-6478e94a83e0\fbf3eca9b30c-pwsh.txt
+非 TSD（(./..X.....%.`G.）  S: 会话日志  C:\p04enc\p0-4-20260926-172333\dsh-home\sessions\--C-p04enc-p0-4-20260926-172333-ws-on--\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\session.v4.jsonl.zstd
+非 TSD（{.  "name": "dsh）  G: 已装插件的 package.json  C:\p04enc\p0-4-20260926-172333\dsh-home\profiles\aiclient\node_modules\dsh-office-tools\package.json
+非 TSD（P04-ENC-MARKER-3）  D-bash: bash 写的文件  C:\p04enc\p0-4-20260926-172333\sub-bash-7266ab.txt
+非 TSD（P04-ENC-MARKER-3）  D-powershell: powershell 写的文件  C:\p04enc\p0-4-20260926-172333\sub-powershell-a1fbf4.txt
+
+清理：工作目录与临时目录已删除。
+请把整个 report-* 目录发回（p0-4-report.json、p0-4-summary.txt、p0-4-probe.log）。

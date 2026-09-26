@@ -29,11 +29,13 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
+  unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -141,8 +143,30 @@ run(
   host
 );
 
-// ---- prune -----------------------------------------------------------------
+// ---- materialize linked packages ---------------------------------------------
+// The lockfile records the file: bundle as `link: true`. npm 10 copies it under
+// --install-links; npm 11 (bundled with Node 24) keeps it a symlink. Replace any
+// top-level link into the staged host tree with a real copy, whichever npm ran.
 const modules = join(host, 'node_modules');
+for (const entry of readdirSync(modules)) {
+  const names = entry.startsWith('@')
+    ? readdirSync(join(modules, entry)).map((name) => join(entry, name))
+    : [entry];
+  for (const name of names) {
+    const path = join(modules, name);
+    if (!lstatSync(path).isSymbolicLink()) continue;
+    const target = realpathSync(path);
+    if (!target.startsWith(`${realpathSync(host)}${sep}`)) continue;
+    unlinkSync(path);
+    cpSync(target, path, {
+      recursive: true,
+      filter: (source) => !relative(target, source).split(sep).includes('node_modules'),
+    });
+    log(`materialized linked package ${name} from ${relative(host, target)}`);
+  }
+}
+
+// ---- prune -----------------------------------------------------------------
 const target = platform === 'win32' ? 'win32-x64' : 'linux-x64';
 const prune = [join(modules, '.bin')];
 for (const dir of readdirSync(join(modules, 'node-pty', 'prebuilds'))) {
