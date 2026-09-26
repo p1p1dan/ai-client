@@ -152,6 +152,10 @@ jobs:
           echo run-p0-4.ps1 exit %RC%
           exit /b %RC%
 
+      # Office-machine stand-in: a fresh local account in Users only, and no
+      # PowerShell 7 (the DSH pwsh tool prefers %ProgramFiles%\PowerShell\7 and
+      # falls back to Windows PowerShell 5.1, which is what most office machines
+      # have). pwsh 7 is hidden from that account with a deny ACE, not removed.
       - name: Run run-p0-4.ps1 (local standard user, scheduled task)
         if: matrix.account == 'standard'
         run: |
@@ -163,19 +167,21 @@ jobs:
           $sid = (New-Object System.Security.Principal.NTAccount($user)).Translate([System.Security.Principal.SecurityIdentifier]).Value
           # A password-logon task needs the batch logon right, which Users lack
           # on Server SKUs. It adds the BATCH SID to the token; nothing else.
+          # Files go through .NET: Set-Content's -Encoding is a dynamic
+          # parameter that failed to bind here.
           $inf = 'C:\p04dl\rights.inf'
           secedit /export /cfg $inf /areas USER_RIGHTS | Out-Null
-          $text = Get-Content -Raw -Encoding Unicode $inf
+          $text = [System.IO.File]::ReadAllText($inf)
           if ($text -match '(?m)^SeBatchLogonRight\s*=') {
             $text = $text -replace '(?m)^(SeBatchLogonRight\s*=[^\r\n]*)', "`$1,*$sid"
           } else {
             $text = $text -replace '\[Privilege Rights\]', "[Privilege Rights]`r`nSeBatchLogonRight = *$sid"
           }
-          Set-Content -Encoding Unicode -NoNewline $inf $text
+          [System.IO.File]::WriteAllText($inf, $text, [System.Text.Encoding]::Unicode)
           secedit /configure /db C:\p04dl\rights.sdb /cfg $inf /areas USER_RIGHTS | Out-Host
           # secedit may exit 1 for unrelated warnings; check the right itself.
           secedit /export /cfg C:\p04dl\rights-after.inf /areas USER_RIGHTS | Out-Null
-          $batch = Get-Content -Encoding Unicode C:\p04dl\rights-after.inf | Where-Object { $_ -like 'SeBatchLogonRight*' }
+          $batch = [System.IO.File]::ReadAllLines('C:\p04dl\rights-after.inf') | Where-Object { $_ -like 'SeBatchLogonRight*' }
           "after: $batch"
           if ("$batch" -notlike "*$sid*") { throw 'batch logon right was not granted' }
           foreach ($dir in @($env:KIT_DIR, $env:ENC_DIR, $env:OUT_DIR)) {
@@ -183,14 +189,17 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "icacls $dir exited $LASTEXITCODE" }
           }
           icacls $env:APP_DIR /grant "${user}:(OI)(CI)RX" /Q | Out-Null
+          icacls 'C:\Program Files\PowerShell\7' /deny "${user}:(OI)(CI)RX" /Q | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "icacls deny pwsh7 exited $LASTEXITCODE" }
           $wrapper = @"
           @echo off
           chcp 65001 >NUL
           whoami /all > $env:OUT_DIR\whoami-standard.txt
+          if exist "C:\Program Files\PowerShell\7\pwsh.exe" (echo pwsh7 visible> $env:OUT_DIR\pwsh7-standard.txt) else (echo pwsh7 hidden> $env:OUT_DIR\pwsh7-standard.txt)
           powershell.exe -NoProfile -ExecutionPolicy Bypass -File $env:KIT_DIR\run-p0-4.ps1 -EncDir $env:ENC_DIR -AppDir $env:APP_DIR > $env:OUT_DIR\console.log 2>&1
           echo %ERRORLEVEL% > $env:OUT_DIR\exit-standard.txt
           "@
-          Set-Content -Encoding Ascii 'C:\p04\run-standard.cmd' $wrapper
+          [System.IO.File]::WriteAllText('C:\p04\run-standard.cmd', ($wrapper -replace "`r?`n", "`r`n"), [System.Text.Encoding]::ASCII)
           $action = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c C:\p04\run-standard.cmd'
           $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Minutes 30) -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
           Register-ScheduledTask -TaskName 'p04-standard' -Action $action -Settings $settings -User $user -Password $password -RunLevel Limited | Out-Null
@@ -207,10 +216,12 @@ jobs:
             }
           }
           Get-ScheduledTaskInfo -TaskName 'p04-standard' | Format-List | Out-String | Write-Host
-          $console = Join-Path $env:OUT_DIR 'console.log'
-          if (Test-Path $console) { Get-Content -Encoding UTF8 $console }
+          foreach ($name in @('pwsh7-standard.txt', 'console.log')) {
+            $file = Join-Path $env:OUT_DIR $name
+            if (Test-Path $file) { [System.IO.File]::ReadAllLines($file) }
+          }
           if (-not (Test-Path $done)) { throw 'standard-user run did not finish' }
-          "run-p0-4.ps1 exit $((Get-Content $done).Trim())"
+          "run-p0-4.ps1 exit $(([System.IO.File]::ReadAllText($done)).Trim())"
 
       # The script exits 0 whenever it gets as far as writing a report; gate on
       # the checks themselves.
