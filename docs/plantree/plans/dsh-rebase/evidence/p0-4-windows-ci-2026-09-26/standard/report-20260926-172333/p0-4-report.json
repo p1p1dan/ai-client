@@ -1,0 +1,1234 @@
+{
+  "probe": "dsh-rebase P0-4",
+  "startedAt": "2026-09-26T17:23:33.522Z",
+  "platform": "win32-x64",
+  "node": "v24.18.0",
+  "execPath": "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe",
+  "work": "C:\\p04enc\\p0-4-20260926-172333",
+  "marker": "P04-ENC-MARKER-3d030460",
+  "checks": [
+    {
+      "id": "N0-node-read",
+      "group": "premise",
+      "title": "node.exe 直接读加密标记文件",
+      "status": "pass",
+      "observed": "plaintext: P04-ENC-MARKER-3d030460 plaintext line\\r\\n"
+    },
+    {
+      "id": "B2-narb-off",
+      "group": "boot",
+      "title": "宿主启动：NARB_DISABLE_NATIVE_CACHE=1（原地加载）",
+      "status": "pass",
+      "observed": "ready 1822 ms；原地加载 \\\\?\\C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\node-addon-require-builtin-win32-x64-msvc\\prebuilt\\win32-x64-msvc-napi-v9.node；未激活行 0",
+      "detail": {
+        "census": {
+          "active": 77,
+          "disabled": 19,
+          "inactive": []
+        },
+        "natives": [
+          "\\\\?\\C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\node-addon-require-builtin-win32-x64-msvc\\prebuilt\\win32-x64-msvc-napi-v9.node"
+        ],
+        "execArgv": [
+          "--expose-internals",
+          "--import",
+          "file:///C:/p04/aiclient-p0-4-kit/host/lib/probe-hooks.mjs"
+        ],
+        "dshRuntimeVersion": "0.1.7-rc.2"
+      }
+    },
+    {
+      "id": "B3-narb-enc-dir",
+      "group": "boot",
+      "title": "宿主启动：缓存目录放在加密区",
+      "status": "pass",
+      "observed": "ready 1423 ms；从缓存副本加载 \\\\?\\C:\\p04enc\\p0-4-20260926-172333\\narb-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node；未激活行 0",
+      "detail": {
+        "census": {
+          "active": 77,
+          "disabled": 19,
+          "inactive": []
+        },
+        "natives": [
+          "\\\\?\\C:\\p04enc\\p0-4-20260926-172333\\narb-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node"
+        ],
+        "execArgv": [
+          "--expose-internals",
+          "--import",
+          "file:///C:/p04/aiclient-p0-4-kit/host/lib/probe-hooks.mjs"
+        ],
+        "dshRuntimeVersion": "0.1.7-rc.2"
+      }
+    },
+    {
+      "id": "B1-narb-default",
+      "group": "boot",
+      "title": "宿主启动：默认缓存（%LOCALAPPDATA%）",
+      "status": "pass",
+      "observed": "ready 1431 ms；从缓存副本加载 \\\\?\\C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node；未激活行 0",
+      "detail": {
+        "census": {
+          "active": 77,
+          "disabled": 19,
+          "inactive": []
+        },
+        "natives": [
+          "\\\\?\\C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node"
+        ],
+        "execArgv": [
+          "--expose-internals",
+          "--import",
+          "file:///C:/p04/aiclient-p0-4-kit/host/lib/probe-hooks.mjs"
+        ],
+        "dshRuntimeVersion": "0.1.7-rc.2"
+      }
+    },
+    {
+      "id": "F-on-read",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH read 读加密文件",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\marker.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 plaintext line\\n\\n(End of file - total 1 lines",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-on-read-edit-target",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH read 读待改的加密文件",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\edit-target.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 edit target\\n\\n(End of file - total 1 lin",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-on-edit",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH edit 改加密文件",
+      "status": "pass",
+      "observed": "成功：The file C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\edit-target.txt has been updated successfully.",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt",
+          "old_string": "P04-ENC-MARKER-3d030460",
+          "new_string": "P04-ENC-MARKER-3d030460 EDITED-ONee8559"
+        }
+      }
+    },
+    {
+      "id": "F-on-read-after-edit",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：edit 后 DSH read 回读",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\edit-target.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\\n\\n(End of fi",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-on-write",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH write 新建文件",
+      "status": "pass",
+      "observed": "成功：<path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\dsh-written-ONee8559.txt</path>\\n<type>file</type>\\n<content>\\nCreated file\\n</content>",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt",
+          "content": "P04-ENC-MARKER-3d030460 WRITTEN-ONee8559\n"
+        }
+      }
+    },
+    {
+      "id": "F-on-read-after-write",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：write 后 DSH read 回读",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\dsh-written-ONee8559.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 WRITTEN-ONee8559\\n\\n(End of file",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-on-grep",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH grep 按标记串搜到加密文件",
+      "status": "pass",
+      "observed": "plaintext: Found 3 matches\\n\\nmarker.txt\\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\\n\\nedit-target.txt\\nLine 1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\\n\\ndsh-wri",
+      "detail": {
+        "input": {
+          "pattern": "P04-ENC-MARKER-3d030460",
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on"
+        },
+        "isError": false,
+        "result": "Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\n\ndsh-written-ONee8559.txt\nLine 1: P04-ENC-MARKER-3d030460 WRITTEN-ONee8559"
+      }
+    },
+    {
+      "id": "F-on-glob",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH glob 列出文件",
+      "status": "pass",
+      "observed": "plaintext: marker.txt\\nedit-target.txt\\ndsh-written-ONee8559.txt",
+      "detail": {
+        "input": {
+          "pattern": "*.txt",
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on"
+        },
+        "isError": false,
+        "result": "marker.txt\nedit-target.txt\ndsh-written-ONee8559.txt"
+      }
+    },
+    {
+      "id": "F-on-shell-read",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH pwsh 工具读加密文件",
+      "status": "fail",
+      "observed": "other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on)",
+      "detail": {
+        "input": {
+          "command": "Get-Content -Raw -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt'",
+          "description": "Read the marker file"
+        },
+        "isError": true
+      }
+    },
+    {
+      "id": "F-on-shell-write",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH pwsh 工具写文件",
+      "status": "fail",
+      "observed": "工具报错：Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on)",
+      "detail": {
+        "input": {
+          "command": "Set-Content -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt' -Value 'P04-ENC-MARKER-3d030460 SHELL-ONee8559' -Encoding ASCII",
+          "description": "Write a file from the shell"
+        }
+      }
+    },
+    {
+      "id": "F-on-shell-spill",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH pwsh 大输出",
+      "status": "fail",
+      "observed": "other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on)",
+      "detail": {
+        "input": {
+          "command": "1..4000 | ForEach-Object { \"spill-line $_ ONee8559\" }",
+          "description": "Print a large output"
+        },
+        "isError": true,
+        "result": "Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)"
+      }
+    },
+    {
+      "id": "F-on-read-shell-written",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：DSH read 回读 pwsh 写的文件",
+      "status": "fail",
+      "observed": "other: Error: cannot read \\\"C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-on\\\\shell-written-ONee8559.txt\\\": not found",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt"
+        },
+        "isError": true
+      }
+    },
+    {
+      "id": "F-on-node-verify",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：node.exe 直接回读工具产物",
+      "status": "fail",
+      "observed": "edit-target.txt=plaintext，dsh-written-ONee8559.txt=plaintext，shell-written-ONee8559.txt=missing"
+    },
+    {
+      "id": "F-on-acl",
+      "group": "fs-sandbox-on",
+      "title": "沙箱开：工作区根目录上的 ACL 沙箱授权（icacls）",
+      "status": "fail",
+      "observed": "能力 SID ACE 无；完整性标签 无",
+      "detail": {
+        "icacls": "C:\\p04enc\\p0-4-20260926-172333\\ws-on runnervmocx8p\\p04std:(I)(OI)(CI)(M)\n                                     NT AUTHORITY\\Authenticated Users:(I)(M)\n                                     NT AUTHORITY\\Authenticated Users:(I)(OI)(CI)(IO)(M)\n                                     NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)\n                                     BUILTIN\\Administrators:(I)(OI)(CI)(F)\n                                     BUILTIN\\Users:(I)(OI)(CI)(RX)\n\nSuccessfully processed 1 files; Failed processing 0 files\r\n"
+      }
+    },
+    {
+      "id": "F-off-read",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH read 读加密文件",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\marker.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 plaintext line\\n\\n(End of file - total 1 line",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-read-edit-target",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH read 读待改的加密文件",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\edit-target.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 edit target\\n\\n(End of file - total 1 li",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-edit",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH edit 改加密文件",
+      "status": "pass",
+      "observed": "成功：The file C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\edit-target.txt has been updated successfully.",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt",
+          "old_string": "P04-ENC-MARKER-3d030460",
+          "new_string": "P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67"
+        }
+      }
+    },
+    {
+      "id": "F-off-read-after-edit",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：edit 后 DSH read 回读",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\edit-target.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\\n\\n(End of ",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-write",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH write 新建文件",
+      "status": "pass",
+      "observed": "成功：<path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\dsh-written-OFFa1ef67.txt</path>\\n<type>file</type>\\n<content>\\nCreated file\\n</content>",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt",
+          "content": "P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67\n"
+        }
+      }
+    },
+    {
+      "id": "F-off-read-after-write",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：write 后 DSH read 回读",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\dsh-written-OFFa1ef67.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67\\n\\n(End of f",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-grep",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH grep 按标记串搜到加密文件",
+      "status": "pass",
+      "observed": "plaintext: Found 3 matches\\n\\nmarker.txt\\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\\n\\nedit-target.txt\\nLine 1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\\n\\ndsh-wr",
+      "detail": {
+        "input": {
+          "pattern": "P04-ENC-MARKER-3d030460",
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off"
+        },
+        "isError": false,
+        "result": "Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\n\ndsh-written-OFFa1ef67.txt\nLine 1: P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67"
+      }
+    },
+    {
+      "id": "F-off-glob",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH glob 列出文件",
+      "status": "pass",
+      "observed": "plaintext: marker.txt\\nedit-target.txt\\ndsh-written-OFFa1ef67.txt",
+      "detail": {
+        "input": {
+          "pattern": "*.txt",
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off"
+        },
+        "isError": false,
+        "result": "marker.txt\nedit-target.txt\ndsh-written-OFFa1ef67.txt"
+      }
+    },
+    {
+      "id": "F-off-shell-read",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH pwsh 工具读加密文件",
+      "status": "pass",
+      "observed": "plaintext: P04-ENC-MARKER-3d030460 plaintext line\\r\\n\\r\\n",
+      "detail": {
+        "input": {
+          "command": "Get-Content -Raw -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt'",
+          "description": "Read the marker file"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-shell-write",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH pwsh 工具写文件",
+      "status": "pass",
+      "observed": "成功：(no output)",
+      "detail": {
+        "input": {
+          "command": "Set-Content -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt' -Value 'P04-ENC-MARKER-3d030460 SHELL-OFFa1ef67' -Encoding ASCII",
+          "description": "Write a file from the shell"
+        }
+      }
+    },
+    {
+      "id": "F-off-shell-spill",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH pwsh 大输出",
+      "status": "pass",
+      "observed": "plaintext: FFa1ef67\\r\\nspill-line 1631 OFFa1ef67\\r\\nspill-line 1632 OFFa1ef67\\r\\nspill-line 1633 OFFa1ef67\\r\\nspill-line 1634 OFFa1ef67\\r\\nspill-line 1635 OFFa1ef67\\r\\nspill-line 1636",
+      "detail": {
+        "input": {
+          "command": "1..4000 | ForEach-Object { \"spill-line $_ OFFa1ef67\" }",
+          "description": "Print a large output"
+        },
+        "isError": false,
+        "result": "FFa1ef67\r\nspill-line 1631 OFFa1ef67\r\nspill-line 1632 OFFa1ef67\r\nspill-line 1633 OFFa1ef67\r\nspill-line 1634 OFFa1ef67\r\nspill-line 1635 OFFa1ef67\r\nspill-line 1636 OFFa1ef67\r\nspill-line 1637 OFFa1ef67\r\nspill-line 1638 OFFa1ef67\r\nspill-line 1639 OFFa1ef67\r\nspill-line 1640 OFFa1ef67\r\nspill-line 1641 OFFa1ef67\r\nspill-line 1642 OFFa1ef67\r\nspill-line 1643 OFFa1ef67\r\nspill-line 1644 OFFa1ef67\r\nspill-line 1645 OFFa1ef67\r\nspill-line 1646 OFFa1ef67\r\nspill-line 1647 OFFa1ef67\r\nspill-line 1648 OFFa1ef67\r\nspill-line 1649 OFFa1ef67\r\nspill-line 1650 OFFa1ef67\r\nspill-line 1651 OFFa1ef67\r\nspill-line 1652 OFFa1ef67\r\nspill-line 1653 OFFa1ef67\r\nspill-line 1654 OFFa1ef67\r\nspill-line 1655 OFFa1ef67\r\nspill-line 1656 OFFa1ef67\r\nspill-line 1657 OFFa1ef67\r\nspill-line 1658 OFFa1ef67\r\nspill-line 1659 OFFa1ef67\r\nspill-line 1660 OFFa1ef67\r\nspill-line 1661 OFFa1ef67\r\nspill-line 1662 OFFa1ef67\r\nspill-line 1663 OFFa1ef67\r\nspill-line 1664 OFFa1ef67\r\nspill-line 1665 OFFa1ef67\r\nspill-line 1666 OFFa1ef67\r\nspill-line 1667 OFFa1ef67\r\nspill-line 1668 OFFa1ef67\r\nspill-line 1669 OFFa1ef67\r\nspill-line 1670 OFFa1ef67\r\nspill-line 1671 OFFa1ef67\r\nspill-line 1672 OFFa1ef67\r\nspill-line 1673 OFFa1ef67\r\nspill-line 1674 OFFa1ef67\r\nspill-line 1675 OFFa1ef67\r\nspill-line 1676 OFFa1ef67\r\nspill-line 1677 OFFa1ef67\r\nspill-line 1678 OFFa1ef67\r\nspill-line 1679 OFFa1ef67\r\nspill-line 1680 OFFa1ef67\r\nspill-line 1681 OFFa1ef67\r\nspill-line 1682 OFFa1ef67\r\nspill-line 1683 OFFa1ef67\r\nspill-line 1684 OFFa1ef67\r\nspill-line 1685 OFFa1ef67\r\nspill"
+      }
+    },
+    {
+      "id": "F-off-read-shell-written",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：DSH read 回读 pwsh 写的文件",
+      "status": "pass",
+      "observed": "plaintext: <path>C:\\\\p04enc\\\\p0-4-20260926-172333\\\\ws-off\\\\shell-written-OFFa1ef67.txt</path>\\n<type>file</type>\\n<content>\\n1: P04-ENC-MARKER-3d030460 SHELL-OFFa1ef67\\n\\n(End of f",
+      "detail": {
+        "input": {
+          "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt"
+        },
+        "isError": false
+      }
+    },
+    {
+      "id": "F-off-node-verify",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：node.exe 直接回读工具产物",
+      "status": "pass",
+      "observed": "edit-target.txt=plaintext，dsh-written-OFFa1ef67.txt=plaintext，shell-written-OFFa1ef67.txt=plaintext"
+    },
+    {
+      "id": "F-off-permission",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：切到 danger-full-access",
+      "status": "info",
+      "observed": "{\\\"kind\\\":\\\"success\\\",\\\"text\\\":\\\"preset danger-full-access\\\"}"
+    },
+    {
+      "id": "F-off-acl",
+      "group": "fs-sandbox-off",
+      "title": "沙箱关：工作区根目录上的 ACL 沙箱授权（icacls）",
+      "status": "info",
+      "observed": "能力 SID ACE 无；完整性标签 无",
+      "detail": {
+        "icacls": "C:\\p04enc\\p0-4-20260926-172333\\ws-off runnervmocx8p\\p04std:(I)(OI)(CI)(M)\n                                      NT AUTHORITY\\Authenticated Users:(I)(M)\n                                      NT AUTHORITY\\Authenticated Users:(I)(OI)(CI)(IO)(M)\n                                      NT AUTHORITY\\SYSTEM:(I)(OI)(CI)(F)\n                                      BUILTIN\\Administrators:(I)(OI)(CI)(F)\n                                      BUILTIN\\Users:(I)(OI)(CI)(RX)\n\nSuccessfully processed 1 files; Failed processing 0 files\r\n"
+      }
+    },
+    {
+      "id": "P-pty-spawn",
+      "group": "pty",
+      "title": "node-pty / conpty 起终端进程",
+      "status": "pass",
+      "observed": "exit 0；已加载 conpty.node",
+      "detail": {
+        "outcome": {
+          "settled": true,
+          "exitCode": 0,
+          "signal": null
+        },
+        "natives": [
+          "\\\\?\\C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\node-pty\\prebuilds\\win32-x64\\conpty.node"
+        ]
+      }
+    },
+    {
+      "id": "P-pty-read",
+      "group": "pty",
+      "title": "终端里的 PowerShell 读加密文件",
+      "status": "pass",
+      "observed": "plaintext: \\u001b[2J\\u001b[m\\u001b[HP04-ENC-MARKER-3d030460 plaintext line\\r\\n\\u001b]0;C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\\u0007\\u001b[?25h\\r\\n"
+    },
+    {
+      "id": "SP-spill-root",
+      "group": "spill",
+      "title": "%TEMP% 下 spill 根目录可用，大输出落盘后 node.exe 读回明文",
+      "status": "pass",
+      "observed": "新 spill 根 1 个，含本次大输出的文件 1 个",
+      "detail": {
+        "roots": ["C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl"],
+        "spilled": [
+          {
+            "file": "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl\\session-6478e94a83e0\\fbf3eca9b30c-pwsh.txt",
+            "seen": "plaintext",
+            "bytes": 64136
+          }
+        ]
+      }
+    },
+    {
+      "id": "L-lock-held",
+      "group": "session",
+      "title": "写锁：会话被 A 持有时 B 打不开",
+      "status": "pass",
+      "observed": "Error: lock-b resume-session: {\\\"type\\\":\\\"probe-error\\\",\\\"requestId\\\":\\\"r14\\\",\\\"message\\\":\\\"SessionAlreadyOwnedError: session \\\\\\\"aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\\\\\\" is already owned by an active write handle\\\\n    at SessionWriteLease.acquire (file:///C:/p04/aiclient-p0-4-kit/host/node_modules/"
+    },
+    {
+      "id": "L-lock-released",
+      "group": "session",
+      "title": "写锁：A 关闭后 B 能恢复同一会话",
+      "status": "pass",
+      "observed": "ok 35 ms"
+    },
+    {
+      "id": "L-recall",
+      "group": "session",
+      "title": "恢复后的会话历史里仍有明文标记串",
+      "status": "pass",
+      "observed": "RECALL:present r0 s0"
+    },
+    {
+      "id": "S-log-plaintext",
+      "group": "session",
+      "title": "会话日志落盘后由 node.exe 解码，含明文标记串",
+      "status": "pass",
+      "observed": "\\sessions\\--C-p04enc-p0-4-20260926-172333-ws-on--\\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\session.v4.jsonl.zstd=plaintext",
+      "detail": [
+        {
+          "file": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\sessions\\--C-p04enc-p0-4-20260926-172333-ws-on--\\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\session.v4.jsonl.zstd",
+          "seen": "plaintext",
+          "bytes": 30583
+        }
+      ]
+    },
+    {
+      "id": "G-pnpm-install",
+      "group": "plugin",
+      "title": "pnpm 装社区插件，装好的文件 node.exe 读回明文",
+      "status": "pass",
+      "observed": "plaintext",
+      "detail": {
+        "result": {
+          "stage": "enable",
+          "target": "dsh-office-tools",
+          "enabled": true,
+          "changed": true,
+          "application": "restart-required",
+          "registries": ["https://registry.npmjs.org/"],
+          "packageResult": {
+            "exitCode": 0,
+            "output": "Progress: resolved 1, reused 0, downloaded 0, added 0\n\n   ╭─────────────────────────────────────────╮\n   │                                         │\n   │   Update available! 11.7.0 → 12.6.0.    │\n   │   Changelog: https://pnpm.io/v/12.6.0   │\n   │    To update, run: pnpm add -g pnpm     │\n   │                                         │\n   ╰─────────────────────────────────────────╯\n\n\ndependencies:\n…",
+            "truncated": false,
+            "logPath": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\profiles\\aiclient\\.plugin-manager\\logs\\operation-PzdTeZ\\pnpm.log"
+          },
+          "bundle": "dsh-office-tools",
+          "warnings": []
+        },
+        "manifests": [
+          "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\profiles\\aiclient\\node_modules\\dsh-office-tools\\package.json"
+        ],
+        "newLocalAppData": ["pnpm", "pnpm-cache", "pnpm-state"]
+      }
+    },
+    {
+      "id": "K-natives",
+      "group": "native",
+      "title": "宿主 A 加载过的原生模块",
+      "status": "info",
+      "observed": "win32-x64-msvc-napi-v9.node, koffi.node, conpty.node",
+      "detail": [
+        "\\\\?\\C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node",
+        "\\\\?\\C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\@koromix\\koffi-win32-x64\\win32_x64\\koffi.node",
+        "\\\\?\\C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\node-pty\\prebuilds\\win32-x64\\conpty.node"
+      ]
+    },
+    {
+      "id": "D-bash-read",
+      "group": "subprocess",
+      "title": "bash 直接读加密文件",
+      "status": "pass",
+      "observed": "plaintext: P04-ENC-MARKER-3d030460 plaintext line\\r\\n"
+    },
+    {
+      "id": "D-bash-write",
+      "group": "subprocess",
+      "title": "bash 写文件，node.exe 读回",
+      "status": "pass",
+      "observed": "exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 BASH-7266ab\\n",
+      "detail": {
+        "stderr": "",
+        "exe": "C:\\Program Files\\Git\\bin\\bash.exe"
+      }
+    },
+    {
+      "id": "D-powershell-read",
+      "group": "subprocess",
+      "title": "powershell 直接读加密文件",
+      "status": "pass",
+      "observed": "plaintext: P04-ENC-MARKER-3d030460 plaintext line\\r\\n\\r\\n"
+    },
+    {
+      "id": "D-powershell-write",
+      "group": "subprocess",
+      "title": "powershell 写文件，node.exe 读回",
+      "status": "pass",
+      "observed": "exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 POWERSHELL-a1fbf4\\r\\n",
+      "detail": {
+        "stderr": "",
+        "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+      }
+    },
+    {
+      "id": "D-pwsh7-read",
+      "group": "subprocess",
+      "title": "pwsh7 直接读加密文件",
+      "status": "skip",
+      "observed": "本机没有这个程序"
+    }
+  ],
+  "inspect": [
+    {
+      "path": "\\\\?\\C:\\p04enc\\p0-4-20260926-172333\\narb-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node",
+      "role": "B3-narb-enc-dir: NARB 缓存副本"
+    },
+    {
+      "path": "\\\\?\\C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node",
+      "role": "B1-narb-default: NARB 缓存副本"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt",
+      "role": "F-on: edit-target.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt",
+      "role": "F-on: dsh-written-ONee8559.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt",
+      "role": "F-on: shell-written-ONee8559.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt",
+      "role": "F-on: marker.txt（前提）"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt",
+      "role": "F-off: edit-target.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt",
+      "role": "F-off: dsh-written-OFFa1ef67.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt",
+      "role": "F-off: shell-written-OFFa1ef67.txt"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt",
+      "role": "F-off: marker.txt（前提）"
+    },
+    {
+      "path": "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl\\session-6478e94a83e0\\fbf3eca9b30c-pwsh.txt",
+      "role": "SP: spill 文件"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\sessions\\--C-p04enc-p0-4-20260926-172333-ws-on--\\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\session.v4.jsonl.zstd",
+      "role": "S: 会话日志"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\profiles\\aiclient\\node_modules\\dsh-office-tools\\package.json",
+      "role": "G: 已装插件的 package.json"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\sub-bash-7266ab.txt",
+      "role": "D-bash: bash 写的文件"
+    },
+    {
+      "path": "C:\\p04enc\\p0-4-20260926-172333\\sub-powershell-a1fbf4.txt",
+      "role": "D-powershell: powershell 写的文件"
+    }
+  ],
+  "cleanup": [
+    "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-acl-locks",
+    "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-fWNNKS",
+    "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl",
+    "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-subprocess-dwwXJz",
+    "C:\\Users\\p04std\\AppData\\Local\\Temp\\node-compile-cache",
+    "C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader",
+    "C:\\Users\\p04std\\AppData\\Local\\pnpm",
+    "C:\\Users\\p04std\\AppData\\Local\\pnpm-cache",
+    "C:\\Users\\p04std\\AppData\\Local\\pnpm-state"
+  ],
+  "env": {
+    "tmpdir": "C:\\Users\\p04std\\AppData\\Local\\Temp",
+    "localAppData": "C:\\Users\\p04std\\AppData\\Local",
+    "narbDefaultRoot": "C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache",
+    "narbDefaultPreExisting": false,
+    "gitBash": "C:\\Program Files\\Git\\bin\\bash.exe",
+    "powershell": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+    "gateway": "C:\\p04\\aiclient-p0-4-kit\\gateway\\fake-gateway.mjs"
+  },
+  "hostB2": {
+    "graceful": true,
+    "exited": true,
+    "stderrTail": "[dsh-host] stopped (ipc) in 31ms\n"
+  },
+  "hostB3": {
+    "graceful": true,
+    "exited": true,
+    "stderrTail": "[dsh-host] stopped (ipc) in 30ms\n"
+  },
+  "tools": [
+    "create_goal",
+    "edit",
+    "exit_plan_mode",
+    "get_goal",
+    "glob",
+    "grep",
+    "interrupt_agent",
+    "job_kill",
+    "job_list",
+    "job_output",
+    "list_agents",
+    "pwsh",
+    "read",
+    "read_image",
+    "send_message",
+    "skill",
+    "subagent",
+    "subagent_fork",
+    "todo_write",
+    "update_goal",
+    "workflow",
+    "write"
+  ],
+  "finishedAt": "2026-09-26T17:23:55.274Z",
+  "elapsedS": 21.8,
+  "fsRuns": {
+    "on": {
+      "sessionId": "aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897",
+      "token": "ONee8559",
+      "calls": [
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt",
+            "old_string": "P04-ENC-MARKER-3d030460",
+            "new_string": "P04-ENC-MARKER-3d030460 EDITED-ONee8559"
+          },
+          "isError": false,
+          "result": "The file C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt",
+            "content": "P04-ENC-MARKER-3d030460 WRITTEN-ONee8559\n"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 WRITTEN-ONee8559\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "P04-ENC-MARKER-3d030460",
+            "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on"
+          },
+          "isError": false,
+          "result": "Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\n\ndsh-written-ONee8559.txt\nLine 1: P04-ENC-MARKER-3d030460 WRITTEN-ONee8559"
+        },
+        {
+          "name": "glob",
+          "input": {
+            "pattern": "*.txt",
+            "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on"
+          },
+          "isError": false,
+          "result": "marker.txt\nedit-target.txt\ndsh-written-ONee8559.txt"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "Get-Content -Raw -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt'",
+            "description": "Read the marker file"
+          },
+          "isError": true,
+          "result": "Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "Set-Content -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt' -Value 'P04-ENC-MARKER-3d030460 SHELL-ONee8559' -Encoding ASCII",
+            "description": "Write a file from the shell"
+          },
+          "isError": true,
+          "result": "Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "1..4000 | ForEach-Object { \"spill-line $_ ONee8559\" }",
+            "description": "Print a large output"
+          },
+          "isError": true,
+          "result": "Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt"
+          },
+          "isError": true,
+          "result": "Error: cannot read \"C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt\": not found"
+        }
+      ],
+      "finished": true,
+      "idle": {
+        "requestId": "r7",
+        "type": "idle",
+        "idle": true,
+        "status": "idle"
+      }
+    },
+    "off": {
+      "sessionId": "aiclient-probe-5f082100-822d-40c1-a6f6-260492313ba4",
+      "token": "OFFa1ef67",
+      "calls": [
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt",
+            "old_string": "P04-ENC-MARKER-3d030460",
+            "new_string": "P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67"
+          },
+          "isError": false,
+          "result": "The file C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt",
+            "content": "P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67\n"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "input": {
+            "pattern": "P04-ENC-MARKER-3d030460",
+            "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off"
+          },
+          "isError": false,
+          "result": "Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\n\ndsh-written-OFFa1ef67.txt\nLine 1: P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67"
+        },
+        {
+          "name": "glob",
+          "input": {
+            "pattern": "*.txt",
+            "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off"
+          },
+          "isError": false,
+          "result": "marker.txt\nedit-target.txt\ndsh-written-OFFa1ef67.txt"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "Get-Content -Raw -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt'",
+            "description": "Read the marker file"
+          },
+          "isError": false,
+          "result": "P04-ENC-MARKER-3d030460 plaintext line\r\n\r\n"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "Set-Content -LiteralPath 'C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt' -Value 'P04-ENC-MARKER-3d030460 SHELL-OFFa1ef67' -Encoding ASCII",
+            "description": "Write a file from the shell"
+          },
+          "isError": false,
+          "result": "(no output)"
+        },
+        {
+          "name": "pwsh",
+          "input": {
+            "command": "1..4000 | ForEach-Object { \"spill-line $_ OFFa1ef67\" }",
+            "description": "Print a large output"
+          },
+          "isError": false,
+          "result": "FFa1ef67\r\nspill-line 1631 OFFa1ef67\r\nspill-line 1632 OFFa1ef67\r\nspill-line 1633 OFFa1ef67\r\nspill-line 1634 OFFa1ef67\r\nspill-line 1635 OFFa1ef67\r\nspill-line 1636 OFFa1ef67\r\nspill-line 1637 OFFa1ef67\r\nspill-line 1638 OFFa1ef67\r\nspill-line 1639 OFFa1ef67\r\nspill-line 1640 OFFa1ef67\r\nspill-line 1641 OFFa1ef67\r\nspill-line 1642 OFFa1ef67\r\nspill-line 1643 OFFa1ef67\r\nspill-line 1644 OFFa1ef67\r\nspill-line 1645 OFFa1ef67\r\nspill-line 1646 OFFa1ef67\r\nspill-line 1647 OFFa1ef67\r\nspill-line 1648 OFFa1ef67\r\nspill-line 1649 OFFa1ef67\r\nspill-line 1650 OFFa1ef67\r\nspill-line 1651 OFFa1ef67\r\nspill-line 1652 OFFa1ef67\r\nspill-line 1653 OFFa1ef67\r\nspill-line 1654 OFFa1ef67\r\nspill-line 1655 OFFa1ef67\r\nspill-line 1656 OFFa1ef67\r\nspill-line 1657 OFFa1ef67\r\nspill-line 1658 OFFa1ef67\r\nspill-line 1659 OFFa1ef67\r\nspill-line 1660 OFFa1ef67\r\nspill-line 1661 OFFa1ef67\r\nspill-line 1662 OFFa1ef67\r\nspill-line 1663 OFFa1ef67\r\nspill-line 1664 OFFa1ef67\r\nspill-line 1665 OFFa1ef67\r\nspill-line 1666 OFFa1ef67\r\nspill-line 1667 OFFa1ef67\r\nspill-line 1668 OFFa1ef67\r\nspill-line 1669 OFFa1ef67\r\nspill-line 1670 OFFa1ef67\r\nspill-line 1671 OFFa1ef67\r\nspill-line 1672 OFFa1ef67\r\nspill-line 1673 OFFa1ef67\r\nspill-line 1674 OFFa1ef67\r\nspill-line 1675 OFFa1ef67\r\nspill-line 1676 OFFa1ef67\r\nspill-line 1677 OFFa1ef67\r\nspill-line 1678 OFFa1ef67\r\nspill-line 1679 OFFa1ef67\r\nspill-line 1680 OFFa1ef67\r\nspill-line 1681 OFFa1ef67\r\nspill-line 1682 OFFa1ef67\r\nspill-line 1683 OFFa1ef67\r\nspill-line 1684 OFFa1ef67\r\nspill-line 1685 OFFa1ef67\r\nspill"
+        },
+        {
+          "name": "read",
+          "input": {
+            "file_path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt"
+          },
+          "isError": false,
+          "result": "<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 SHELL-OFFa1ef67\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "finished": true,
+      "permission": {
+        "kind": "success",
+        "text": "preset danger-full-access"
+      },
+      "idle": {
+        "requestId": "r11",
+        "type": "idle",
+        "idle": true,
+        "status": "idle"
+      }
+    }
+  },
+  "hostB": {
+    "graceful": true,
+    "exited": true,
+    "stderrTail": "[dsh-host] stopped (ipc) in 33ms\n[dsh-host] lingering after dispose: [\"PipeWrap\",\"PipeWrap\",\"Timeout\"]\n"
+  },
+  "hostA": {
+    "graceful": true,
+    "exited": true,
+    "stderrTail": "[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because Windows ConPTY remains outside Job containment; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] stopped (ipc) in 31ms\n[dsh-host] lingering after dispose: [\"PipeWrap\",\"PipeWrap\",\"MessagePort\",\"PipeWrap\",\"Timeout\",\"Timeout\"]\n"
+  },
+  "hostAStderrUnsafeSpill": false,
+  "spawns": {
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\@deepseek-ai\\dsh-subprocess-local\\lib\\runner.js -- -> C:\\p04enc\\p0-4-20260926-172333\\ws-on": 2,
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\@deepseek-ai\\dsh-subprocess-local\\lib\\runner.js -- -> C:\\p04enc\\p0-4-20260926-172333\\ws-off": 2,
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\@deepseek-ai\\dsh-subprocess-local\\lib\\runner.js -- -> C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe": 3,
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\pnpm\\bin\\pnpm.mjs config": 1,
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\pnpm\\bin\\pnpm.mjs view": 1,
+    "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe C:\\p04\\aiclient-p0-4-kit\\host\\node_modules\\pnpm\\bin\\pnpm.mjs add": 1
+  },
+  "powershell": {
+    "machine": {
+      "os": "Microsoft Windows Server 2022 Datacenter 10.0.20348",
+      "psVersion": "5.1.20348.5622",
+      "appDir": "C:\\p04app\\PiLab Ai",
+      "nodeExe": "C:\\p04app\\PiLab Ai\\resources\\node-runtime\\node.exe",
+      "nodeVersion": "v24.18.0",
+      "kitDir": "C:\\p04\\aiclient-p0-4-kit",
+      "encDir": "C:\\p04enc",
+      "work": "C:\\p04enc\\p0-4-20260926-172333",
+      "temp": "C:\\Users\\p04std\\AppData\\Local\\Temp",
+      "localAppData": "C:\\Users\\p04std\\AppData\\Local",
+      "probeExit": 0,
+      "mode": "kit",
+      "dshProcesses": []
+    },
+    "premise": {
+      "allTsd": false,
+      "psRead": "plaintext",
+      "marker": "P04-ENC-MARKER-3d030460",
+      "files": [
+        {
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\marker.txt",
+          "role": "premise: marker.txt",
+          "exists": true,
+          "isTsd": false,
+          "bytes": 40,
+          "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+          "ascii": "P04-ENC-MARKER-3"
+        },
+        {
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt",
+          "role": "premise: ws-on\\marker.txt",
+          "exists": true,
+          "isTsd": false,
+          "bytes": 40,
+          "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+          "ascii": "P04-ENC-MARKER-3"
+        },
+        {
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt",
+          "role": "premise: ws-on\\edit-target.txt",
+          "exists": true,
+          "isTsd": false,
+          "bytes": 37,
+          "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+          "ascii": "P04-ENC-MARKER-3"
+        },
+        {
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt",
+          "role": "premise: ws-off\\marker.txt",
+          "exists": true,
+          "isTsd": false,
+          "bytes": 40,
+          "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+          "ascii": "P04-ENC-MARKER-3"
+        },
+        {
+          "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt",
+          "role": "premise: ws-off\\edit-target.txt",
+          "exists": true,
+          "isTsd": false,
+          "bytes": 37,
+          "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+          "ascii": "P04-ENC-MARKER-3"
+        }
+      ]
+    },
+    "heads": [
+      {
+        "path": "\\\\?\\C:\\p04enc\\p0-4-20260926-172333\\narb-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node",
+        "role": "B3-narb-enc-dir: NARB 缓存副本",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 343552,
+        "hex": "4d 5a 90 00 03 00 00 00 04 00 00 00 ff ff 00 00",
+        "ascii": "MZ.............."
+      },
+      {
+        "path": "\\\\?\\C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader\\native-cache\\node-addon-require-builtin-win32-x64-msvc\\0.1.6\\win32-x64-msvc\\win32-x64-msvc-napi-v9.node",
+        "role": "B1-narb-default: NARB 缓存副本",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 343552,
+        "hex": "4d 5a 90 00 03 00 00 00 04 00 00 00 ff ff 00 00",
+        "ascii": "MZ.............."
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt",
+        "role": "F-on: edit-target.txt",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 53,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt",
+        "role": "F-on: dsh-written-ONee8559.txt",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 41,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt",
+        "role": "F-on: shell-written-ONee8559.txt",
+        "exists": false,
+        "isTsd": false,
+        "bytes": 0,
+        "hex": "",
+        "ascii": ""
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt",
+        "role": "F-on: marker.txt（前提）",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 40,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt",
+        "role": "F-off: edit-target.txt",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 54,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt",
+        "role": "F-off: dsh-written-OFFa1ef67.txt",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 42,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt",
+        "role": "F-off: shell-written-OFFa1ef67.txt",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 41,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt",
+        "role": "F-off: marker.txt（前提）",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 40,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl\\session-6478e94a83e0\\fbf3eca9b30c-pwsh.txt",
+        "role": "SP: spill 文件",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 64136,
+        "hex": "46 46 61 31 65 66 36 37 0d 0a 73 70 69 6c 6c 2d",
+        "ascii": "FFa1ef67..spill-"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\sessions\\--C-p04enc-p0-4-20260926-172333-ws-on--\\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\session.v4.jsonl.zstd",
+        "role": "S: 会话日志",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 30583,
+        "hex": "28 b5 2f fd 04 58 1d 05 00 f2 cb 25 1f 60 47 ab",
+        "ascii": "(./..X.....%.`G."
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\dsh-home\\profiles\\aiclient\\node_modules\\dsh-office-tools\\package.json",
+        "role": "G: 已装插件的 package.json",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 4812,
+        "hex": "7b 0a 20 20 22 6e 61 6d 65 22 3a 20 22 64 73 68",
+        "ascii": "{.  \"name\": \"dsh"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\sub-bash-7266ab.txt",
+        "role": "D-bash: bash 写的文件",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 36,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      },
+      {
+        "path": "C:\\p04enc\\p0-4-20260926-172333\\sub-powershell-a1fbf4.txt",
+        "role": "D-powershell: powershell 写的文件",
+        "exists": true,
+        "isTsd": false,
+        "bytes": 43,
+        "hex": "50 30 34 2d 45 4e 43 2d 4d 41 52 4b 45 52 2d 33",
+        "ascii": "P04-ENC-MARKER-3"
+      }
+    ],
+    "cleanup": {
+      "kept": false,
+      "removed": [
+        "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-acl-locks",
+        "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-fWNNKS",
+        "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-spill-TvdVVl",
+        "C:\\Users\\p04std\\AppData\\Local\\Temp\\dsh-subprocess-dwwXJz",
+        "C:\\Users\\p04std\\AppData\\Local\\Temp\\node-compile-cache",
+        "C:\\Users\\p04std\\AppData\\Local\\node-addon-native-custom-loader",
+        "C:\\Users\\p04std\\AppData\\Local\\pnpm",
+        "C:\\Users\\p04std\\AppData\\Local\\pnpm-cache",
+        "C:\\Users\\p04std\\AppData\\Local\\pnpm-state",
+        "C:\\p04enc\\p0-4-20260926-172333"
+      ],
+      "failed": []
+    },
+    "kit": {
+      "builtAt": "2026-09-26T17:22:16.429Z",
+      "platform": "win32-x64",
+      "source": {
+        "host.ts": "f22d94b3051624680202e3f5ee515b4f9904a06bf3c2df32040597cd91e6af30",
+        "p0-4-probe.ts": "fda004cd31a625ecdccdf3012f476af415308d35e5708538b86573b8fdc26407",
+        "p0-4-report.ts": "5bad810a8f651c1af1f4c8204cc3327771d5053da4e69e215ec0f0aa066e7408",
+        "package-lock.json": "a020fea7e0cc0905222eabe4f80953d50834dab24909dd4768e5d78a4ece4b0e"
+      }
+    }
+  },
+  "summary": {
+    "counts": {
+      "pass": 37,
+      "fail": 6,
+      "info": 3,
+      "skip": 1
+    },
+    "premiseOk": false
+  }
+}

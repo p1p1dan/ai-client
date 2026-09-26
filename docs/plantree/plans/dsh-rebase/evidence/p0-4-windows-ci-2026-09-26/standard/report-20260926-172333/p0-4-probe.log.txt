@@ -1,0 +1,54 @@
+[p0-4 0s] PASS  N0-node-read node.exe 直接读加密标记文件: plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n
+[p0-4 0.1s] fake gateway on 52385
+[p0-4 1.9s] B2-narb-off ready in 1822 ms
+[p0-4 2s] PASS  B2-narb-off 宿主启动：NARB_DISABLE_NATIVE_CACHE=1（原地加载）: ready 1822 ms；原地加载 \\?\C:\p04\aiclient-p0-4-kit\host\node_modules\node-addon-require-builtin-win32-x64-msvc\prebuilt\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 3.5s] B3-narb-enc-dir ready in 1423 ms
+[p0-4 3.6s] PASS  B3-narb-enc-dir 宿主启动：缓存目录放在加密区: ready 1423 ms；从缓存副本加载 \\?\C:\p04enc\p0-4-20260926-172333\narb-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 5s] B1-narb-default ready in 1431 ms
+[p0-4 5.1s] PASS  B1-narb-default 宿主启动：默认缓存（%LOCALAPPDATA%）: ready 1431 ms；从缓存副本加载 \\?\C:\Users\p04std\AppData\Local\node-addon-native-custom-loader\native-cache\node-addon-require-builtin-win32-x64-msvc\0.1.6\win32-x64-msvc\win32-x64-msvc-napi-v9.node；未激活行 0
+[p0-4 5.1s] shell tool: pwsh; 22 tools
+[p0-4 6.4s] PASS  F-on-read 沙箱开：DSH read 读加密文件: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plaintext line\n\n(End of file - total 1 lines
+[p0-4 6.4s] PASS  F-on-read-edit-target 沙箱开：DSH read 读待改的加密文件: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 edit target\n\n(End of file - total 1 lin
+[p0-4 6.4s] PASS  F-on-edit 沙箱开：DSH edit 改加密文件: 成功：The file C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt has been updated successfully.
+[p0-4 6.4s] PASS  F-on-read-after-edit 沙箱开：edit 后 DSH read 回读: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\n\n(End of fi
+[p0-4 6.4s] PASS  F-on-write 沙箱开：DSH write 新建文件: 成功：<path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[p0-4 6.4s] PASS  F-on-read-after-write 沙箱开：write 后 DSH read 回读: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-on\\dsh-written-ONee8559.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 WRITTEN-ONee8559\n\n(End of file
+[p0-4 6.4s] PASS  F-on-grep 沙箱开：DSH grep 按标记串搜到加密文件: plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-ONee8559 edit target\n\ndsh-wri
+[p0-4 6.4s] PASS  F-on-glob 沙箱开：DSH glob 列出文件: plaintext: marker.txt\nedit-target.txt\ndsh-written-ONee8559.txt
+[p0-4 6.4s] FAIL  F-on-shell-read 沙箱开：DSH pwsh 工具读加密文件: other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[p0-4 6.4s] FAIL  F-on-shell-write 沙箱开：DSH pwsh 工具写文件: 工具报错：Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[p0-4 6.4s] FAIL  F-on-shell-spill 沙箱开：DSH pwsh 大输出: other: Error: SetNamedSecurityInfoW failed (Win32 5): grantWrite(C:\\p04enc\\p0-4-20260926-172333\\ws-on)
+[p0-4 6.4s] FAIL  F-on-read-shell-written 沙箱开：DSH read 回读 pwsh 写的文件: other: Error: cannot read \"C:\\p04enc\\p0-4-20260926-172333\\ws-on\\shell-written-ONee8559.txt\": not found
+[p0-4 6.4s] FAIL  F-on-node-verify 沙箱开：node.exe 直接回读工具产物: edit-target.txt=plaintext，dsh-written-ONee8559.txt=plaintext，shell-written-ONee8559.txt=missing
+[p0-4 6.4s] FAIL  F-on-acl 沙箱开：工作区根目录上的 ACL 沙箱授权（icacls）: 能力 SID ACE 无；完整性标签 无
+[p0-4 9s] PASS  F-off-read 沙箱关：DSH read 读加密文件: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\marker.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 plaintext line\n\n(End of file - total 1 line
+[p0-4 9s] PASS  F-off-read-edit-target 沙箱关：DSH read 读待改的加密文件: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 edit target\n\n(End of file - total 1 li
+[p0-4 9s] PASS  F-off-edit 沙箱关：DSH edit 改加密文件: 成功：The file C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt has been updated successfully.
+[p0-4 9s] PASS  F-off-read-after-edit 沙箱关：edit 后 DSH read 回读: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\edit-target.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\n\n(End of 
+[p0-4 9s] PASS  F-off-write 沙箱关：DSH write 新建文件: 成功：<path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>
+[p0-4 9s] PASS  F-off-read-after-write 沙箱关：write 后 DSH read 回读: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\dsh-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 WRITTEN-OFFa1ef67\n\n(End of f
+[p0-4 9s] PASS  F-off-grep 沙箱关：DSH grep 按标记串搜到加密文件: plaintext: Found 3 matches\n\nmarker.txt\nLine 1: P04-ENC-MARKER-3d030460 plaintext line\n\nedit-target.txt\nLine 1: P04-ENC-MARKER-3d030460 EDITED-OFFa1ef67 edit target\n\ndsh-wr
+[p0-4 9s] PASS  F-off-glob 沙箱关：DSH glob 列出文件: plaintext: marker.txt\nedit-target.txt\ndsh-written-OFFa1ef67.txt
+[p0-4 9s] PASS  F-off-shell-read 沙箱关：DSH pwsh 工具读加密文件: plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n\r\n
+[p0-4 9s] PASS  F-off-shell-write 沙箱关：DSH pwsh 工具写文件: 成功：(no output)
+[p0-4 9s] PASS  F-off-shell-spill 沙箱关：DSH pwsh 大输出: plaintext: FFa1ef67\r\nspill-line 1631 OFFa1ef67\r\nspill-line 1632 OFFa1ef67\r\nspill-line 1633 OFFa1ef67\r\nspill-line 1634 OFFa1ef67\r\nspill-line 1635 OFFa1ef67\r\nspill-line 1636
+[p0-4 9s] PASS  F-off-read-shell-written 沙箱关：DSH read 回读 pwsh 写的文件: plaintext: <path>C:\\p04enc\\p0-4-20260926-172333\\ws-off\\shell-written-OFFa1ef67.txt</path>\n<type>file</type>\n<content>\n1: P04-ENC-MARKER-3d030460 SHELL-OFFa1ef67\n\n(End of f
+[p0-4 9s] PASS  F-off-node-verify 沙箱关：node.exe 直接回读工具产物: edit-target.txt=plaintext，dsh-written-OFFa1ef67.txt=plaintext，shell-written-OFFa1ef67.txt=plaintext
+[p0-4 9s] INFO  F-off-permission 沙箱关：切到 danger-full-access: {\"kind\":\"success\",\"text\":\"preset danger-full-access\"}
+[p0-4 9s] INFO  F-off-acl 沙箱关：工作区根目录上的 ACL 沙箱授权（icacls）: 能力 SID ACE 无；完整性标签 无
+[p0-4 10.4s] PASS  P-pty-spawn node-pty / conpty 起终端进程: exit 0；已加载 conpty.node
+[p0-4 10.4s] PASS  P-pty-read 终端里的 PowerShell 读加密文件: plaintext: \u001b[2J\u001b[m\u001b[HP04-ENC-MARKER-3d030460 plaintext line\r\n\u001b]0;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe\u0007\u001b[?25h\r\n
+[p0-4 10.4s] PASS  SP-spill-root %TEMP% 下 spill 根目录可用，大输出落盘后 node.exe 读回明文: 新 spill 根 1 个，含本次大输出的文件 1 个
+[p0-4 11.7s] lock-b ready in 1303 ms
+[p0-4 11.8s] PASS  L-lock-held 写锁：会话被 A 持有时 B 打不开: Error: lock-b resume-session: {\"type\":\"probe-error\",\"requestId\":\"r14\",\"message\":\"SessionAlreadyOwnedError: session \\\"aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\\\" is already owned by an active write handle\\n    at SessionWriteLease.acquire (file:///C:/p04/aiclient-p0-4-kit/host/node_modules/
+[p0-4 11.8s] PASS  L-lock-released 写锁：A 关闭后 B 能恢复同一会话: ok 35 ms
+[p0-4 12.1s] PASS  L-recall 恢复后的会话历史里仍有明文标记串: RECALL:present r0 s0
+[p0-4 15.1s] PASS  S-log-plaintext 会话日志落盘后由 node.exe 解码，含明文标记串: \sessions\--C-p04enc-p0-4-20260926-172333-ws-on--\aiclient-probe-75437685-99ee-4f6e-bd9c-c5c2763e3897\session.v4.jsonl.zstd=plaintext
+[p0-4 18s] PASS  G-pnpm-install pnpm 装社区插件，装好的文件 node.exe 读回明文: plaintext
+[p0-4 18.1s] INFO  K-natives 宿主 A 加载过的原生模块: win32-x64-msvc-napi-v9.node, koffi.node, conpty.node
+[p0-4 21.3s] PASS  D-bash-read bash 直接读加密文件: plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n
+[p0-4 21.3s] PASS  D-bash-write bash 写文件，node.exe 读回: exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 BASH-7266ab\n
+[p0-4 21.5s] PASS  D-powershell-read powershell 直接读加密文件: plaintext: P04-ENC-MARKER-3d030460 plaintext line\r\n\r\n
+[p0-4 21.8s] PASS  D-powershell-write powershell 写文件，node.exe 读回: exit 0；node 读回 plaintext: P04-ENC-MARKER-3d030460 POWERSHELL-a1fbf4\r\n
+[p0-4 21.8s] SKIP  D-pwsh7-read pwsh7 直接读加密文件: 本机没有这个程序
+[p0-4 21.8s] done: {"pass":37,"fail":6,"info":3,"skip":1}; report C:\p04\aiclient-p0-4-kit\report-20260926-172333\node-report.json

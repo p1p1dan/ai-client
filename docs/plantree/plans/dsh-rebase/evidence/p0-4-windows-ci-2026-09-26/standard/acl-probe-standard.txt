@@ -1,0 +1,31 @@
+== C:\p04enc\acl-test-2041ec (owner runnervmocx8p\p04std)
+C:\p04enc\acl-test-2041ec runnervmocx8p\p04std:(I)(OI)(CI)(M)
+                          NT AUTHORITY\Authenticated Users:(I)(M)
+                          NT AUTHORITY\Authenticated Users:(I)(OI)(CI)(IO)(M)
+                          NT AUTHORITY\SYSTEM:(I)(OI)(CI)(F)
+                          BUILTIN\Administrators:(I)(OI)(CI)(F)
+                          BUILTIN\Users:(I)(OI)(CI)(RX)
+
+Successfully processed 1 files; Failed processing 0 files
+-- DACL edit (WRITE_DAC): icacls /grant *S-1-5-32-545:(OI)(CI)(RX)
+processed file: C:\p04enc\acl-test-2041ec
+Successfully processed 1 files; Failed processing 0 files
+exit 0
+-- Low label edit (WRITE_OWNER): icacls /setintegritylevel (OI)(CI)L
+C:\p04enc\acl-test-2041ec: Access is denied.
+Successfully processed 0 files; Failed processing 1 files
+exit 5
+== C:\Users\p04std\acl-test-575bdd (owner runnervmocx8p\p04std)
+C:\Users\p04std\acl-test-575bdd NT AUTHORITY\SYSTEM:(OI)(CI)(F)
+                                BUILTIN\Administrators:(OI)(CI)(F)
+                                runnervmocx8p\p04std:(OI)(CI)(F)
+
+Successfully processed 1 files; Failed processing 0 files
+-- DACL edit (WRITE_DAC): icacls /grant *S-1-5-32-545:(OI)(CI)(RX)
+processed file: C:\Users\p04std\acl-test-575bdd
+Successfully processed 1 files; Failed processing 0 files
+exit 0
+-- Low label edit (WRITE_OWNER): icacls /setintegritylevel (OI)(CI)L
+processed file: C:\Users\p04std\acl-test-575bdd
+Successfully processed 1 files; Failed processing 0 files
+exit 0
