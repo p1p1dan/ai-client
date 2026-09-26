@@ -33,6 +33,9 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '24.18.0'
+          # The root packageManager field would turn on a pnpm cache; this job
+          # only runs npm inside src/dsh-host.
+          package-manager-cache: false
 
       - name: Build win32-x64 kit
         run: node src/dsh-host/p0-4/build-kit.mjs --platform win32 --out "$RUNNER_TEMP/kit"
