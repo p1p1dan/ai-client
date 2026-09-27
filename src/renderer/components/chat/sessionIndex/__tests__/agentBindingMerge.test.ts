@@ -1,4 +1,4 @@
-import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
+import { DSH_AGENT, PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import type { SessionCreatedEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { describe, expect, it } from 'vitest';
@@ -62,6 +62,11 @@ describe('mergeSessionIndex materializes the agent binding', () => {
     expect(sessions[0].agent).toBe(PI_AGENT);
   });
 
+  it('[P1-1] passes the DSH slug through untouched', () => {
+    const { sessions } = mergeSessionIndex([], [entry('s1', { agent: DSH_AGENT })], { workspaces });
+    expect(sessions[0].agent).toBe(DSH_AGENT);
+  });
+
   it('hides a row whose slug this build cannot read, without touching a live row', () => {
     // Written by a NEWER build (the user downgraded). Guessing a runtime for it
     // would run the session against the wrong agent; the entry stays on disk,
@@ -118,8 +123,9 @@ describe('mergeSessionIndex materializes the agent binding', () => {
     expect(sessions[0].agent).toBeUndefined();
     // Same object, not a copy — the safety net does not rewrite live rows.
     expect(sessions[0]).toBe(live);
-    // …and the one reader every consumer is required to use still answers.
-    expect(sessionAgent(sessions[0])).toBe(PI_AGENT);
+    // …and the one reader every consumer is required to use still answers:
+    // an unsent chat of this build is a DSH chat (dsh-rebase P1-1).
+    expect(sessionAgent(sessions[0])).toBe(DSH_AGENT);
   });
 });
 
@@ -164,6 +170,17 @@ describe('the runtime echo reaches the live row', () => {
   it('takes the Pi agent the runtime reported', () => {
     const patch = applyRuntimeEvent(state([session('s1')]), created({ agent: PI_AGENT }));
     expect(patch.sessions?.[0].agent).toBe(PI_AGENT);
+  });
+
+  it('[P1-1] rebinds a never-run pi row to the DSH engine that created it', () => {
+    const patch = applyRuntimeEvent(
+      state([session('s1', { agent: PI_AGENT })]),
+      created({
+        agent: DSH_AGENT,
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+      })
+    );
+    expect(patch.sessions?.[0].agent).toBe(DSH_AGENT);
   });
 
   it('keeps the existing binding when an older Host sends none', () => {

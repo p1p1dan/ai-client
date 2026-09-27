@@ -1,10 +1,11 @@
 /**
  * T065 回炉 — what to SHOW when Main refuses to open a Pi terminal.
  *
- * Main refuses for four reasons that are written as English sentences and used
+ * Main refuses for five reasons that are written as English sentences and used
  * as dictionary keys, because Main has no translator and the renderer does
  * (`PI_TUI_SESSION_BUSY_REASON`, `PI_TUI_NATIVE_SESSION_REASON`,
- * `PI_TUI_SESSION_MISMATCH_REASON`, `PI_TUI_TURN_RUNNING_REASON`). The
+ * `PI_TUI_DSH_SESSION_REASON`, `PI_TUI_SESSION_MISMATCH_REASON`,
+ * `PI_TUI_TURN_RUNNING_REASON`). The
  * pre-flight path already displays them; the open path threw them away, so the
  * D4 re-verify clicked 「Start Pi TUI」 in a second window twice and got no
  * terminal and no message of any kind.

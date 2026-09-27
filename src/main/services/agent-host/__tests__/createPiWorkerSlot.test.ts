@@ -1,7 +1,24 @@
 import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcRequest } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
 import { createPiWorkerSlot } from '../createPiWorkerSlot';
+import { forkDshHost } from '../DshHostProcess';
+import { forkPiWorkerProcess } from '../PiWorkerProcess';
 import type { WorkerTransport, WorkerTransportExit } from '../WorkerTransport';
+
+/**
+ * dsh-rebase P1-1: the default transport is the DSH host, in every build. The
+ * native worker must not even be reachable from here — a call fails the test.
+ * `electron` is stubbed so either `isPackaged` can be set; the choice must not
+ * depend on it.
+ */
+const electronApp = vi.hoisted(() => ({ isPackaged: false }));
+vi.mock('electron', () => ({ app: electronApp }));
+vi.mock('../DshHostProcess', () => ({ forkDshHost: vi.fn() }));
+vi.mock('../PiWorkerProcess', () => ({
+  forkPiWorkerProcess: vi.fn(() => {
+    throw new Error('chat sessions must never start the native worker');
+  }),
+}));
 
 class LoopbackTransport implements WorkerTransport {
   readonly pid = 4321;
@@ -54,7 +71,46 @@ class LoopbackTransport implements WorkerTransport {
   }
 }
 
+const BOOTSTRAP_ACK = {
+  bootstrapped: true,
+  logicalSessionId: 'logical-1',
+  piSessionId: 'aiclient-logical-1',
+  cwd: '/repo',
+  agentDir: '/dsh-home',
+  sessionFile: '/dsh-home/aiclient-sessions/aiclient-logical-1.dsh.json',
+  leaf: { activeEntryId: null, fileTailEntryId: null },
+  projectTrusted: true,
+  permissionGate: 'bundled',
+};
+
 describe('createPiWorkerSlot', () => {
+  it.each([
+    false,
+    true,
+  ])('[P1-1] spawns the DSH host, never the native worker (isPackaged=%s)', async (packaged) => {
+    electronApp.isPackaged = packaged;
+    const transport = new LoopbackTransport();
+    vi.mocked(forkDshHost).mockClear();
+    vi.mocked(forkDshHost).mockReturnValue({
+      process: {} as never,
+      transport,
+    });
+    const creating = createPiWorkerSlot({
+      slotKey: 'workspace:/repo',
+      logicalSessionId: 'logical-1',
+      cwd: '/repo',
+      generation: 3,
+    });
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
+    expect(forkDshHost).toHaveBeenCalledTimes(1);
+    expect(forkDshHost).toHaveBeenCalledWith({ generation: 3, cwd: '/repo' });
+    expect(forkPiWorkerProcess).not.toHaveBeenCalled();
+    transport.respond(transport.requests[0], BOOTSTRAP_ACK);
+    await expect(creating).resolves.toMatchObject({
+      bootstrap: { sessionFile: BOOTSTRAP_ACK.sessionFile },
+    });
+  });
+
   it('exposes process ownership before bootstrap acknowledgement', async () => {
     const transport = new LoopbackTransport();
     const onSlotCreated = vi.fn();

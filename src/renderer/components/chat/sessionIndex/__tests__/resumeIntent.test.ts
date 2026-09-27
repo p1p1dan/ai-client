@@ -1,4 +1,4 @@
-import { PI_AGENT } from '@shared/types/agentWire';
+import { DSH_AGENT, PI_AGENT } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
@@ -84,20 +84,52 @@ describe('shouldResumeSession (T-03)', () => {
     });
   });
 
-  it('resumes an explicitly Pi-bound persisted identity', () => {
+  it('resumes an explicitly DSH-bound persisted identity', () => {
+    const stub = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
     const result = shouldResumeSession(
-      session({ runtimeIdentity: '/sessions/pi.jsonl', agent: PI_AGENT }),
+      session({ runtimeIdentity: stub, agent: DSH_AGENT }),
       workspace()
     );
 
     expect(result).toEqual({
       shouldResume: true,
-      args: {
-        sessionId: 's1',
-        runtimeIdentity: '/sessions/pi.jsonl',
-        workspacePath: '/repo',
-      },
+      args: { sessionId: 's1', runtimeIdentity: stub, workspacePath: '/repo' },
     });
+  });
+
+  /**
+   * dsh-rebase decision 005, and why the renderer does not decide it: a legacy
+   * `pi` identity may name a transcript that was never written, which Main
+   * repairs into a DSH session (rule 4), or a real one, which Main refuses with
+   * `legacy_session_readonly` before touching anything. Only Main can stat the
+   * file, so the resume goes out and the refusal becomes the history card.
+   */
+  it('[P1-1] leaves a legacy pi session to Main, which alone can tell never-written from real', () => {
+    expect(
+      shouldResumeSession(
+        session({ runtimeIdentity: '/sessions/pi.jsonl', agent: PI_AGENT }),
+        workspace()
+      )
+    ).toEqual({
+      shouldResume: true,
+      args: { sessionId: 's1', runtimeIdentity: '/sessions/pi.jsonl', workspacePath: '/repo' },
+    });
+  });
+
+  it('[P1-1] has nothing to resume for a pi row that never ran', () => {
+    // Its first send creates a DSH session.
+    expect(shouldResumeSession(session({ agent: PI_AGENT }), workspace())).toEqual({
+      shouldResume: false,
+      reason: 'no-runtime-identity',
+    });
+  });
+
+  it('[P1-1] refuses a binding this build does not know', () => {
+    const result = shouldResumeSession(
+      session({ runtimeIdentity: 'rt', agent: 'codex' as unknown as typeof PI_AGENT }),
+      workspace()
+    );
+    expect(result).toEqual({ shouldResume: false, reason: 'unsupported-agent:codex' });
   });
 
   it('resumes when the live session already has a runtimeIdentity and is idle', () => {

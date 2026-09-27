@@ -803,6 +803,9 @@ export const zhTranslations: Record<string, string> = {
     '该会话已在另一个窗口的终端中打开，请先关闭那个终端，或在那个窗口里继续。',
   'This chat was saved in an older native format. Open it in the app once to upgrade it, then the Pi terminal can open it.':
     '这个对话保存的是旧版原生格式。先在应用里打开一次完成升级，Pi 终端才能打开它。',
+  // dsh-rebase P1-1 (R6): a DSH chat's identity is not a pi session file.
+  'This chat runs on the DSH engine, which the Pi terminal cannot open.':
+    '这个对话运行在 DSH 引擎上，Pi 终端打不开它。',
   // T065 回炉 — the other two refusals Main can send. They used to be thrown
   // away by the open path (no terminal, no message), so nothing ever displayed
   // them; now that they reach a toast they need Chinese like the two above.
@@ -2969,6 +2972,13 @@ export const zhTranslations: Record<string, string> = {
   // concurrency-02: another process holds the writer lock. The pid and the age
   // are what let a user judge whether that writer can still be real.
   'Session is locked by another writer': '会话被另一个写入者锁定',
+  // dsh-rebase decision 005: a chat the previous engine wrote is viewable but
+  // cannot be continued until it is migrated.
+  'Read-only until migration': '迁移前只能查看',
+  'This chat was created with the previous chat engine. Until it is migrated it can be viewed here, but not continued.':
+    '这个对话由之前的聊天引擎创建。迁移完成之前，这里只能查看，不能继续对话。',
+  'Start a new chat to carry on; this one stays as it is.':
+    '要继续工作请新建一个对话；这个对话会原样保留。',
   'Sign up': '注册',
   'Sign-in required': '需要重新登录',
   'Signed in': '登录完成',

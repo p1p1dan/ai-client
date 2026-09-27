@@ -178,6 +178,57 @@ describe('materializeForkedChatSession', () => {
     });
   });
 
+  /**
+   * dsh-rebase P1-1: a fork is a DSH session now, and a row keeps the engine
+   * it names — a legacy pi row materializes as pi (read-only), never as DSH.
+   */
+  it('[P1-1] materializes a DSH fork bound to DSH, and a legacy row bound to pi', () => {
+    useChatSessionsStore.setState({ workspaces: [makeWorkspace({ path: '/repo' })] });
+    expect(
+      materializeForkedChatSession({
+        sessionId: 'forked-dsh',
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-forked-dsh.dsh.json',
+        agent: 'dsh',
+        workspacePath: '/repo',
+        title: 'Source (fork)',
+        updatedAt: 42,
+        archived: false,
+      })
+    ).toBe(true);
+    expect(
+      materializeIndexedPiChatSession(
+        {
+          sessionId: 'imported',
+          runtimeIdentity: '/sessions/imported.jsonl',
+          agent: 'pi',
+          workspacePath: '/repo',
+          title: 'Imported',
+          updatedAt: 42,
+          archived: false,
+        },
+        { hostBound: false }
+      )
+    ).toBe(true);
+    const sessions = useChatSessionsStore.getState().sessions;
+    expect(sessions.find((item) => item.id === 'forked-dsh')?.agent).toBe('dsh');
+    expect(sessions.find((item) => item.id === 'imported')?.agent).toBe('pi');
+  });
+
+  it('[P1-1] refuses a row whose engine this build does not know', () => {
+    useChatSessionsStore.setState({ workspaces: [makeWorkspace({ path: '/repo' })] });
+    expect(
+      materializeForkedChatSession({
+        sessionId: 'forked',
+        runtimeIdentity: 'codex-thread',
+        agent: 'codex',
+        workspacePath: '/repo',
+        title: 'Fork',
+        updatedAt: 1,
+        archived: false,
+      })
+    ).toBe(false);
+  });
+
   it('refuses a fork whose indexed workspace is not mounted in this window', () => {
     expect(
       materializeForkedChatSession({

@@ -1,5 +1,5 @@
 /**
- * P0-3 minimal bridge: one DSH session behind our worker RPC.
+ * One DSH session behind our worker RPC (P0-3 bridge, hardened for P1-1).
  *
  * `DshSessionRuntime` implements the same `PiWorkerRuntime` contract as
  * `NativeWorkerRuntime`, so the unmodified `PiWorkerRpcServer` can drive it and
@@ -12,14 +12,29 @@
  *   `approval/request` waterfall   -> permission.requested, answered by
  *                                     worker.permission.respond
  *
- * Only what P0-3 needs is mapped: text, tool rows, approvals, stop. History,
- * tree, fork, rewind, compact and the rest answer empty or refuse; the gaps are
- * listed in the P0-3 evidence document.
+ * Mapped: text, tool rows, approvals, stop, and the session identity (create,
+ * resume, crash restart). History and tree answer a legal empty page, and
+ * fork, rewind, compact, retry and attachments refuse; P1-4 fills those in
+ * (dsh-rebase decision 010).
+ *
+ * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
+ * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
+ * session `aiclient-<logical id>`. A new session is flushed to disk BEFORE the
+ * stub is written, so a committed identity always names a log that exists.
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { randomUUID } from 'node:crypto';
+import {
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeSync,
+} from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
   PiWorkerRuntime,
@@ -31,32 +46,39 @@ import type {
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../../shared/types/runtimeEvents.ts';
-import type {
-  WorkerAcceptForkResult,
-  WorkerBootstrapResult,
-  WorkerCommandsResult,
-  WorkerCompactResult,
-  WorkerDiscardForkResult,
-  WorkerForkResult,
-  WorkerHistoryPayload,
-  WorkerHistoryResult,
-  WorkerInterjectResult,
-  WorkerReloadResult,
-  WorkerRewindResult,
-  WorkerSendPayload,
-  WorkerSendResult,
-  WorkerStopPayload,
-  WorkerStopResult,
-  WorkerTreeResult,
+import {
+  WORKER_RETRY_UNAVAILABLE,
+  type WorkerAcceptForkResult,
+  type WorkerBootstrapResult,
+  type WorkerCommandsResult,
+  type WorkerCompactResult,
+  type WorkerDiscardForkResult,
+  type WorkerForkResult,
+  type WorkerHistoryPayload,
+  type WorkerHistoryResult,
+  type WorkerInterjectResult,
+  type WorkerReloadResult,
+  type WorkerRewindResult,
+  type WorkerSendPayload,
+  type WorkerSendResult,
+  type WorkerStopPayload,
+  type WorkerStopResult,
+  type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
 
 // ---- the slice of the DSH host this bridge uses ----------------------------
 
 type Dispose = () => void;
 
+/** The slice of a DSH `Session` read here; the object itself goes back to `ctx.sessions`. */
+interface DshSession {
+  readonly header?: { readonly cwd?: string };
+}
+
 interface DshAgent {
   readonly id: string;
   readonly status: unknown;
+  readonly session: DshSession;
   followup(message: unknown): void;
   cancel(cause: { kind: 'user' }): void;
 }
@@ -123,6 +145,20 @@ export interface DshBridgeContext {
     }): Promise<DshAgentHandle>;
   };
   agentDefaultModel: { currentSelection(): { provider: string; model: string } };
+  /** `ctx.sessions` (dsh-session): `flush` is the one official durability barrier. */
+  sessions: { flush(session: DshSession): Promise<boolean> };
+}
+
+/** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
+export interface DshBridgeDeps {
+  /** `createUserMessage` from `@deepseek-ai/dsh-llm`: the id its durable echo carries. */
+  createUserMessage(input: {
+    content: Array<{ type: 'text'; text: string }>;
+    source: { kind: 'user' };
+  }): { id: string };
+  /** `$DSH_HOME`; defaults to the host's environment. */
+  home?: string;
+  now?: () => number;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -134,23 +170,146 @@ type BridgeDraft = RuntimeEventDraft extends infer E
     : never
   : never;
 
-/** The file Main keeps as this session's durable identity (`sessionFile`). */
-interface SessionStub {
+/** The file Main keeps as this session's durable identity (`sessionFile`, decision 006). */
+export interface SessionStub {
   engine: 'dsh';
   version: 1;
   dshSessionId: string;
   logicalSessionId: string;
   cwd: string;
+  /** Epoch milliseconds. */
+  createdAt: number;
+}
+
+/** Directory under `$DSH_HOME` holding the identity stubs, and their suffix. */
+export const DSH_STUB_DIR = 'aiclient-sessions';
+export const DSH_STUB_SUFFIX = '.dsh.json';
+
+/** Error codes this bridge answers with; Main and the renderer match on them. */
+export const DSH_SESSION_MISSING = 'dsh_session_missing';
+export const SESSION_LOCKED = 'session_locked';
+export const SESSION_CWD_MISMATCH = 'session_cwd_mismatch';
+export const SESSION_INVALID = 'session_invalid';
+
+/** The page size Main asks for when it reads a resumed session (`readHistory(entry, 0, 80)`). */
+export const INITIAL_HISTORY_LIMIT = 80;
+
+/** Ours, not DSH's in-process counter, so a lost stub can be found again (decision 006). */
+export function dshSessionIdFor(logicalSessionId: string): string {
+  return `aiclient-${logicalSessionId}`;
+}
+
+export function stubPathFor(home: string, dshSessionId: string): string {
+  return join(home, DSH_STUB_DIR, `${dshSessionId}${DSH_STUB_SUFFIX}`);
 }
 
 const EMPTY_LEAF = { activeEntryId: null, fileTailEntryId: null };
 const DECISIONS: PermissionDecisionId[] = ['allow', 'deny'];
+/** The id becomes a file name, so nothing that could leave the stub directory. */
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function unsupported(operation: string): never {
   throw new PiWorkerSessionError(
     'WORKER_DSH_UNSUPPORTED',
-    `${operation} is not bridged to the DSH engine yet (P0-3 minimal bridge)`
+    `${operation} is not bridged to the DSH engine yet`
   );
+}
+
+/**
+ * DSH persistence errors carry no `code`; they are told apart by `name`, and a
+ * loader may wrap them (`cause`, `AggregateError`).
+ */
+function hasNamedError(error: unknown, name: string, depth = 0): boolean {
+  if (typeof error !== 'object' || error === null || depth > 4) return false;
+  const record = error as { name?: unknown; cause?: unknown; errors?: unknown };
+  if (record.name === name) return true;
+  if (hasNamedError(record.cause, name, depth + 1)) return true;
+  return Array.isArray(record.errors)
+    ? record.errors.some((inner) => hasNamedError(inner, name, depth + 1))
+    : false;
+}
+
+/** decision 010: DSH's refusals in our vocabulary. The kernel lock has no forced takeover. */
+function mapOpenError(error: unknown, dshSessionId: string): unknown {
+  if (hasNamedError(error, 'SessionPersistenceNotFoundError')) {
+    return new PiWorkerSessionError(
+      DSH_SESSION_MISSING,
+      `DSH session ${dshSessionId} is not on disk`
+    );
+  }
+  if (hasNamedError(error, 'SessionAlreadyOwnedError')) {
+    return new PiWorkerSessionError(
+      SESSION_LOCKED,
+      `DSH session ${dshSessionId} is held by another process`,
+      true
+    );
+  }
+  return error;
+}
+
+function sameCwd(a: string, b: string): boolean {
+  const left = resolve(a);
+  const right = resolve(b);
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+function isSessionStub(value: unknown): value is SessionStub {
+  const stub = value as Partial<SessionStub> | null;
+  return (
+    typeof stub === 'object' &&
+    stub !== null &&
+    stub.engine === 'dsh' &&
+    stub.version === 1 &&
+    typeof stub.dshSessionId === 'string' &&
+    SAFE_ID.test(stub.dshSessionId) &&
+    typeof stub.logicalSessionId === 'string' &&
+    typeof stub.cwd === 'string' &&
+    stub.cwd.length > 0
+  );
+}
+
+function readStub(file: string): SessionStub {
+  let raw: string;
+  try {
+    raw = readFileSync(file, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
+      throw new PiWorkerSessionError(
+        DSH_SESSION_MISSING,
+        `DSH session identity is missing: ${file}`
+      );
+    }
+    throw error;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    parsed = undefined;
+  }
+  if (!isSessionStub(parsed)) {
+    throw new PiWorkerSessionError(SESSION_INVALID, `Not a DSH session identity: ${file}`);
+  }
+  return parsed;
+}
+
+/** Temp file + fsync + rename: a reader sees the old stub or the whole new one, never half. */
+function writeStubAtomically(file: string, stub: SessionStub): void {
+  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
+  const temp = `${file}.${randomUUID()}.tmp`;
+  try {
+    const fd = openSync(temp, 'wx', 0o600);
+    try {
+      writeSync(fd, `${JSON.stringify(stub, null, 2)}\n`);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    renameSync(temp, file);
+  } catch (error) {
+    rmSync(temp, { force: true });
+    throw error;
+  }
 }
 
 function textOf(content: unknown): string {
@@ -243,9 +402,12 @@ interface StepMessage {
 export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly ctx: DshBridgeContext;
   private readonly options: PiWorkerRuntimeOptions;
+  private readonly deps: DshBridgeDeps;
   private readonly logicalSessionId: string;
   private readonly cwd: string;
   private readonly home: string;
+  private readonly now: () => number;
+  private listening = false;
   private handle: DshAgentHandle | null = null;
   private result: WorkerBootstrapResult | null = null;
   private booting: Promise<WorkerBootstrapResult> | null = null;
@@ -260,12 +422,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly disposers: Dispose[] = [];
   private disposed = false;
 
-  constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions) {
+  constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
     this.ctx = ctx;
     this.options = options;
+    this.deps = deps;
     this.logicalSessionId = options.logicalSessionId;
     this.cwd = options.cwd;
-    this.home = process.env.DSH_HOME ?? '';
+    this.home = deps.home ?? process.env.DSH_HOME ?? '';
+    this.now = deps.now ?? Date.now;
   }
 
   // ---- lifecycle -------------------------------------------------------------
@@ -282,36 +446,22 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   }
 
   private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
+    if (!this.home) throw new Error('DSH_HOME is not set for the DSH bridge');
     const selection = this.ctx.agentDefaultModel.currentSelection();
     this.route = `${selection.provider}/${selection.model}`;
     this.listen();
-    let stubFile = this.options.sessionFile;
-    if (stubFile) {
-      const stub = JSON.parse(readFileSync(stubFile, 'utf8')) as SessionStub;
-      if (stub.engine !== 'dsh') throw unsupported('Opening a native session on the DSH engine');
-      this.dshSessionId = stub.dshSessionId;
-      this.handle = await this.ctx.agents.resume({
-        resumeSessionId: stub.dshSessionId,
-        agentOptions: selection,
-      });
-    } else {
-      this.dshSessionId = `aiclient-${this.logicalSessionId}`;
-      this.handle = await this.ctx.agents.create({
-        sessionId: this.dshSessionId,
-        meta: { cwd: this.cwd },
-        agentOptions: selection,
-      });
-      const dir = join(this.home, 'aiclient-sessions');
-      mkdirSync(dir, { recursive: true });
-      stubFile = join(dir, `${this.dshSessionId}.dsh.json`);
-      const stub: SessionStub = {
-        engine: 'dsh',
-        version: 1,
-        dshSessionId: this.dshSessionId,
-        logicalSessionId: this.logicalSessionId,
-        cwd: this.cwd,
-      };
-      writeFileSync(stubFile, `${JSON.stringify(stub, null, 2)}\n`);
+    const requested = this.options.sessionFile;
+    let stubFile: string;
+    try {
+      stubFile = requested ?? (await this.createSession(selection));
+      if (requested) await this.resumeSession(requested, selection);
+    } catch (error) {
+      // Nothing half-open survives a failed bootstrap: the session's write lock
+      // goes with the handle.
+      const handle = this.handle;
+      this.handle = null;
+      await handle?.dispose().catch(() => undefined);
+      throw error;
     }
     this.result = {
       bootstrapped: true,
@@ -321,12 +471,101 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       agentDir: this.home,
       sessionFile: stubFile,
       leaf: EMPTY_LEAF,
+      // Main requires the first page of a reopened session (resume, crash
+      // restart). Empty and legal until P1-4 projects the log; the renderer
+      // keeps what it already shows when a page is empty.
+      ...(requested
+        ? { initialHistory: this.emptyHistory(stubFile, 0, INITIAL_HISTORY_LIMIT) }
+        : {}),
       ...(this.options.model ? { model: this.options.model } : {}),
       projectTrusted: this.options.projectTrusted,
       permissionGate: 'bundled',
       capabilities: {},
     };
     return this.result;
+  }
+
+  /**
+   * decision 007: create, flush the header to disk, then write the stub. Main
+   * commits the identity as soon as the stub exists, so the log must already
+   * be there — or a host that dies before the first turn leaves an identity
+   * that can never be opened.
+   */
+  private async createSession(selection: { provider: string; model: string }): Promise<string> {
+    this.dshSessionId = dshSessionIdFor(this.logicalSessionId);
+    if (!SAFE_ID.test(this.dshSessionId)) {
+      throw new PiWorkerSessionError(
+        'WORKER_INVALID_PAYLOAD',
+        `Logical session id cannot name a DSH session: ${this.logicalSessionId}`
+      );
+    }
+    const stubFile = stubPathFor(this.home, this.dshSessionId);
+    try {
+      this.handle = await this.ctx.agents.create({
+        sessionId: this.dshSessionId,
+        meta: { cwd: this.cwd },
+        agentOptions: selection,
+      });
+      await this.ctx.sessions.flush(this.handle.agent.session);
+    } catch (error) {
+      if (!hasNamedError(error, 'SessionAlreadyExistsError')) throw error;
+      // An earlier create of this same logical session reached the disk but
+      // never became Main's identity (its stub, its index commit or its reply
+      // was lost). The id is deterministic, so failing here would fail every
+      // retry forever; the log is this chat's own, so reopen it instead.
+      await this.openDshSession(this.dshSessionId, selection);
+      const cwd = this.handle?.agent.session.header?.cwd;
+      if (cwd !== undefined && !sameCwd(cwd, this.cwd)) {
+        throw new PiWorkerSessionError(
+          SESSION_CWD_MISMATCH,
+          `DSH session ${this.dshSessionId} belongs to ${cwd}, not ${this.cwd}`
+        );
+      }
+    }
+    writeStubAtomically(stubFile, {
+      engine: 'dsh',
+      version: 1,
+      dshSessionId: this.dshSessionId,
+      logicalSessionId: this.logicalSessionId,
+      cwd: this.cwd,
+      createdAt: this.now(),
+    });
+    return stubFile;
+  }
+
+  /** Resume and crash restart: the stub names the DSH session and its fixed cwd. */
+  private async resumeSession(
+    stubFile: string,
+    selection: { provider: string; model: string }
+  ): Promise<void> {
+    const stub = readStub(stubFile);
+    // DSH keeps the cwd in the session header and every tool reads it from
+    // there, so a different workspace cannot be honoured — only refused.
+    if (!sameCwd(stub.cwd, this.cwd)) {
+      throw new PiWorkerSessionError(
+        SESSION_CWD_MISMATCH,
+        `DSH session ${stub.dshSessionId} belongs to ${stub.cwd}, not ${this.cwd}`
+      );
+    }
+    if (this.options.forceTakeover) {
+      this.options.log?.('[dsh-bridge] forceTakeover ignored: DSH write locks are kernel locks');
+    }
+    this.dshSessionId = stub.dshSessionId;
+    await this.openDshSession(stub.dshSessionId, selection);
+  }
+
+  private async openDshSession(
+    dshSessionId: string,
+    selection: { provider: string; model: string }
+  ): Promise<void> {
+    try {
+      this.handle = await this.ctx.agents.resume({
+        resumeSessionId: dshSessionId,
+        agentOptions: selection,
+      });
+    } catch (error) {
+      throw mapOpenError(error, dshSessionId);
+    }
   }
 
   async dispose(): Promise<void> {
@@ -341,6 +580,18 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   // ---- turns -----------------------------------------------------------------
 
   async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {
+    // decision 010: refuse what is not bridged yet instead of sending something
+    // else — a retry used to go out as an empty new message, and images were
+    // silently dropped.
+    if (input.mode === 'retry') {
+      throw new PiWorkerSessionError(
+        WORKER_RETRY_UNAVAILABLE,
+        'Retrying the last turn is not bridged to the DSH engine yet'
+      );
+    }
+    if (input.attachments && input.attachments.length > 0) {
+      unsupported('Sending attachments');
+    }
     if (this.turn && !this.turn.synthetic) {
       throw new PiWorkerSessionError(
         'WORKER_SESSION_BUSY',
@@ -350,10 +601,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     await this.bootstrap();
     const agent = this.requireAgent();
-    const message = createUserMessage({
+    const message = this.deps.createUserMessage({
       content: [{ type: 'text', text: input.text }],
       source: { kind: 'user' },
-    }) as { id: string };
+    });
     this.turn = {
       requestId: input.requestId,
       attemptId: input.attemptId,
@@ -399,17 +650,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
     const boot = await this.bootstrap();
+    return this.emptyHistory(boot.sessionFile ?? '', input.offset ?? 0, input.limit ?? 100);
+  }
+
+  /** A legal empty page for this session; P1-4 replaces it with the projected log. */
+  private emptyHistory(sessionFile: string, offset: number, limit: number): WorkerHistoryResult {
     return {
       logicalSessionId: this.logicalSessionId,
-      sessionFile: boot.sessionFile ?? '',
+      sessionFile,
       workspacePath: this.cwd,
-      page: {
-        messages: [],
-        offset: input.offset ?? 0,
-        limit: input.limit ?? 100,
-        totalCount: 0,
-        hasMore: false,
-      },
+      page: { messages: [], offset, limit, totalCount: 0, hasMore: false },
     };
   }
 
@@ -468,6 +718,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   }
 
   private listen(): void {
+    // Once per runtime: a bootstrap retried after a failure must not double every event.
+    if (this.listening) return;
+    this.listening = true;
     this.disposers.push(
       this.ctx.on('session/event', (session, event) => {
         if (session?.id !== this.dshSessionId || this.disposed) return;

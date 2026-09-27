@@ -10,7 +10,12 @@ import {
 import { stat } from 'node:fs/promises';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
-import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
+import {
+  type AgentWireName,
+  DSH_AGENT,
+  PI_AGENT,
+  resolveAgentWireName,
+} from '@shared/types/agentWire';
 import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
@@ -24,7 +29,10 @@ import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService'
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
-import { readSessionReplayPage } from '../services/chat/SessionReplayReader';
+import {
+  readSessionReplayPage,
+  SESSION_REPLAY_UNAVAILABLE,
+} from '../services/chat/SessionReplayReader';
 
 /** The window that sent this IPC call, when it still exists. */
 const windowCleanupAttached = new Set<number>();
@@ -113,21 +121,41 @@ function ensureEventBridge(): void {
   workerManager.onEvent((event) => sessionIndexService.handleRuntimeEvent(event));
 }
 
+function agentMismatch(sessionId: string): Error {
+  return new Error(
+    `pi_session_agent_mismatch: Session ${sessionId} is not indexed as a chat engine this build runs`
+  );
+}
+
 /**
- * Refuse a session the index already binds to another agent.
+ * decision 005 — a session the retired native engine wrote. It stays readable
+ * (the main-process replay still decodes it), but nothing resumes, continues or
+ * branches it until P1-9 migrates it; there is no native fallback.
+ */
+function legacyReadonly(sessionId: string): Error {
+  return new Error(
+    `legacy_session_readonly: Session ${sessionId} was written by the previous chat engine and is read-only until it is migrated`
+  );
+}
+
+/**
+ * Refuse to create a session over a row this build may not run.
+ *
+ * An unknown binding is somebody else's session. A `pi` row that names a
+ * transcript is a legacy session and stays read-only (decision 005); a `pi` row
+ * with no identity never ran, so it simply becomes a DSH session.
  *
  * Hands back the row it read (D15), so a caller can tell "this row existed
  * before I touched it" from "I am the one who just wrote it" without a second
  * read — the difference between a shell this handler owns and somebody else's
  * persisted session.
  */
-async function assertPiCompatibleIndexRow(
-  sessionId: string
-): Promise<SessionIndexEntry | undefined> {
+async function assertCreatableIndexRow(sessionId: string): Promise<SessionIndexEntry | undefined> {
   const row = await sessionIndexService.get(sessionId);
-  if (row && resolveAgentWireName(row.agent) !== PI_AGENT) {
-    throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
-  }
+  if (!row) return row;
+  const agent = resolveAgentWireName(row.agent);
+  if (agent === null) throw agentMismatch(sessionId);
+  if (agent === PI_AGENT && row.runtimeIdentity) throw legacyReadonly(sessionId);
   return row;
 }
 
@@ -189,6 +217,8 @@ async function reloadSessionFromDisk(
 ): Promise<boolean> {
   const row = await sessionIndexService.get(sessionId);
   if (!row?.runtimeIdentity) return false;
+  // Only a Pi TUI writes behind a worker's back, and it refuses DSH identities
+  // (P1-1), so a DSH session never needs this.
   if (resolveAgentWireName(row.agent) !== PI_AGENT) return false;
   const { reloaded } = await workerManager.reloadSession({
     sessionId,
@@ -254,17 +284,27 @@ function withWorkerErrorCode(error: unknown): unknown {
   return error instanceof WorkerManagerError ? new Error(`${error.code}: ${error.message}`) : error;
 }
 
-async function requireIndexedPiSession(
-  sessionId: string
-): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
+/** A row with a durable identity and a binding this build understands, live or legacy. */
+async function requireIndexedSession(sessionId: string): Promise<{
+  row: SessionIndexEntry & { runtimeIdentity: string };
+  agent: AgentWireName;
+}> {
   const row = await sessionIndexService.get(sessionId);
   if (!row?.runtimeIdentity) {
-    throw new Error(`pi_session_not_found: No indexed Pi session file for ${sessionId}`);
+    throw new Error(`pi_session_not_found: No indexed session file for ${sessionId}`);
   }
-  if (resolveAgentWireName(row.agent) !== PI_AGENT) {
-    throw new Error(`pi_session_agent_mismatch: Session ${sessionId} is not indexed as Pi`);
-  }
-  return row as SessionIndexEntry & { runtimeIdentity: string };
+  const agent = resolveAgentWireName(row.agent);
+  if (agent === null) throw agentMismatch(sessionId);
+  return { row: row as SessionIndexEntry & { runtimeIdentity: string }, agent };
+}
+
+/** An indexed session a worker may act on: the live engine only (decision 005). */
+async function requireLiveSession(
+  sessionId: string
+): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
+  const { row, agent } = await requireIndexedSession(sessionId);
+  if (agent !== DSH_AGENT) throw legacyReadonly(sessionId);
+  return row;
 }
 
 export function registerChatHandlers(): void {
@@ -299,7 +339,7 @@ export function registerChatHandlers(): void {
       // (SessionManager.create's own kind==='agent' check is the sibling
       // enforcement point for the PTY-agent path).
       assertAgentSpawnAllowed();
-      const indexedBefore = await assertPiCompatibleIndexRow(payload.sessionId);
+      const indexedBefore = await assertCreatableIndexRow(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // U05-c: Main decides the posture from the path it allocated itself —
       // the renderer never gets to declare a session trusted or untrusted.
@@ -316,7 +356,7 @@ export function registerChatHandlers(): void {
         workspacePath: payload.workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
-        agent: PI_AGENT,
+        agent: DSH_AGENT,
         unbound,
       });
       try {
@@ -416,10 +456,10 @@ export function registerChatHandlers(): void {
       }
     ): Promise<boolean> => {
       try {
-        await assertPiCompatibleIndexRow(payload.sessionId);
+        await assertCreatableIndexRow(payload.sessionId);
         await sessionIndexService.recordCreated({
           ...payload,
-          agent: PI_AGENT,
+          agent: DSH_AGENT,
           // Normally false here: this runs when the chat row is created, before
           // any scratch directory exists. Derived anyway so the two entry
           // points never disagree about what a path means.
@@ -455,20 +495,10 @@ export function registerChatHandlers(): void {
         forceTakeover?: boolean;
       }
     ): Promise<{ requestId: string }> => {
-      const row = await sessionIndexService.get(payload.sessionId);
-      if (!row?.runtimeIdentity) {
-        throw new Error(
-          `pi_session_not_found: No indexed Pi session file for ${payload.sessionId}`
-        );
-      }
-      if (resolveAgentWireName(row.agent) !== PI_AGENT) {
-        throw new Error(
-          `pi_session_agent_mismatch: Session ${payload.sessionId} is not indexed as a Pi session`
-        );
-      }
+      const { row, agent } = await requireIndexedSession(payload.sessionId);
       if (row.runtimeIdentity !== payload.runtimeIdentity) {
         throw new Error(
-          'pi_session_identity_mismatch: Indexed Pi session file does not match the resume request'
+          'pi_session_identity_mismatch: Indexed session file does not match the resume request'
         );
       }
       if (row.workspacePath !== payload.workspacePath) {
@@ -476,6 +506,12 @@ export function registerChatHandlers(): void {
           'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
         );
       }
+      // decision 005: a legacy row that names a real transcript is read-only.
+      // Refused before anything below recreates a directory or claims a slot.
+      // One whose transcript was never written lost nothing, so the repair
+      // further down turns it into a DSH session instead.
+      const unwrittenLegacy = agent === PI_AGENT && (await isUnwrittenPiSession(row));
+      if (agent === PI_AGENT && !unwrittenLegacy) throw legacyReadonly(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // U05-a: an unbound chat's directory was wiped when the app last quit,
       // so recreate it (empty) at the exact path the index still names before
@@ -501,17 +537,31 @@ export function registerChatHandlers(): void {
         // this app creates and the user can delete underneath a live row.
         await adoptTempWorkspace(workspacePath);
       }
-      if (await isUnwrittenPiSession(row)) {
+      if (unwrittenLegacy) {
         // Repair, not resume: there is no file to reopen and nothing was ever
-        // persisted, so drop the phantom identity and give the chat a real Pi
+        // persisted, so drop the phantom identity and give the chat a real
         // session. Without this the row stays unopenable for good — resume can
         // only ever fail on it, and the UI tells the user to abandon a chat
         // that never lost anything.
+        //
+        // Only for legacy rows: a DSH identity is written after the DSH log is
+        // on disk (decision 007), so a DSH stub that is missing is lost data
+        // and must fail as such (`dsh_session_missing`).
         assertAgentSpawnAllowed();
         await sessionIndexService.clearUnwrittenRuntimeIdentity(
           payload.sessionId,
           row.runtimeIdentity
         );
+        // Rebind the row to DSH before the spawn, as a create does. Left to the
+        // `session.created` event, a crash between the identity commit and
+        // that event would leave a `pi` row naming a DSH stub: read-only for good.
+        await sessionIndexService.recordCreated({
+          sessionId: payload.sessionId,
+          workspacePath,
+          ...(payload.model ? { model: payload.model } : {}),
+          agent: DSH_AGENT,
+          unbound,
+        });
         // concurrency-02: no `forceTakeover` here. This branch creates a brand
         // new session file, which no other writer can be holding.
         const repaired = await workerManager.createSession({
@@ -789,7 +839,7 @@ export function registerChatHandlers(): void {
   /**
    * R02-b — the composer's command menu.
    *
-   * No `requireIndexedPiSession` and no `claimSessionForSender`, unlike every
+   * No `requireLiveSession` and no `claimSessionForSender`, unlike every
    * neighbour here. This is a read that happens while the user types, including
    * on the start screen where no session exists yet, and it does not act on a
    * session — so gating it on one would turn the ordinary case into an error
@@ -812,7 +862,7 @@ export function registerChatHandlers(): void {
       e,
       payload: { sessionId: string; instructions?: string }
     ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
-      await requireIndexedPiSession(payload.sessionId);
+      await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // session-01 — compaction appends to the JSONL just as a turn does, so it
       // needs the same handover. Without it a compaction written on top of what
@@ -832,7 +882,7 @@ export function registerChatHandlers(): void {
       e,
       payload: { sessionId: string; requestSequence: number }
     ): Promise<Awaited<ReturnType<typeof workerManager.getSessionTree>>> => {
-      const row = await requireIndexedPiSession(payload.sessionId);
+      const row = await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       const result = await workerManager.getSessionTree({
         sessionId: payload.sessionId,
@@ -854,7 +904,7 @@ export function registerChatHandlers(): void {
       e,
       payload: { sessionId: string; entryId: string; confirmed: boolean }
     ): Promise<Awaited<ReturnType<typeof workerManager.rewindSession>>> => {
-      await requireIndexedPiSession(payload.sessionId);
+      await requireLiveSession(payload.sessionId);
       if (payload.confirmed !== true) {
         throw new Error('rewind_confirmation_required: Rewind requires explicit confirmation');
       }
@@ -877,7 +927,7 @@ export function registerChatHandlers(): void {
       e,
       payload: { sessionId: string; entryId: string }
     ): Promise<Awaited<ReturnType<typeof workerManager.forkSession>>> => {
-      const row = await requireIndexedPiSession(payload.sessionId);
+      const row = await requireLiveSession(payload.sessionId);
       return workerManager.forkSession({
         sourceSessionId: payload.sessionId,
         entryId: payload.entryId,
@@ -909,7 +959,15 @@ export function registerChatHandlers(): void {
       _e,
       payload: { sessionId: string; offset?: number; limit?: number }
     ): Promise<{ requestId: string }> => {
-      const row = await requireIndexedPiSession(payload.sessionId);
+      const { row, agent } = await requireIndexedSession(payload.sessionId);
+      // P1-1: this reader decodes the legacy format only. A DSH log has no
+      // main-process reader until P1-4, so the renderer falls back to resume,
+      // which is exactly what it does for any other replay refusal.
+      if (agent === DSH_AGENT) {
+        throw new Error(
+          `${SESSION_REPLAY_UNAVAILABLE}: Session ${payload.sessionId} runs on DSH, which has no main-process replay yet`
+        );
+      }
       // A live worker owns the writer lock and holds the authoritative branch
       // in memory, so its file may legitimately lag. Refuse rather than answer
       // from a stale read; `worker_active` tells the renderer to ask the
@@ -943,7 +1001,7 @@ export function registerChatHandlers(): void {
         payload: {
           runtimeIdentity: row.runtimeIdentity,
           workspacePath: row.workspacePath,
-          agent: PI_AGENT,
+          agent,
           // `branch`, not `initial`: `initial` and `refresh` are the resume
           // modes, and the store rejects both unless a matching
           // `session.resumed` snapshot was taken first — which a preview must

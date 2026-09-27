@@ -9,7 +9,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { PI_AGENT } from '@shared/types/agentWire';
+import { DSH_AGENT, PI_AGENT } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -439,27 +439,100 @@ describe('SessionIndexService', () => {
       expect(list[0]).toMatchObject({ agent: 'codex', model: 'claude-x' });
     });
 
-    it('commits a validated Pi resume without retargeting the durable identity', async () => {
+    it('commits a validated resume without retargeting the durable identity', async () => {
       const { SessionIndexService } = await import('../SessionIndexService');
       const service = new SessionIndexService();
 
-      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: 'pi' });
-      await service.bindRuntimeIdentity('s1', '/sessions/pi-1.jsonl');
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: DSH_AGENT });
+      await service.bindRuntimeIdentity('s1', '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json');
       await service.commitResumed({
         sessionId: 's1',
         workspacePath: '/ws/a',
-        runtimeIdentity: '/sessions/pi-1.jsonl',
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+        agent: DSH_AGENT,
       });
 
       expect((await service.list())[0]).toMatchObject({
-        agent: 'pi',
-        runtimeIdentity: '/sessions/pi-1.jsonl',
+        agent: 'dsh',
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
       });
       await expect(
         service.commitResumed({
           sessionId: 's1',
           workspacePath: '/ws/a',
           runtimeIdentity: '/sessions/other.jsonl',
+          agent: DSH_AGENT,
+        })
+      ).rejects.toThrow(/identity mismatch/);
+    });
+
+    /**
+     * dsh-rebase P1-1. `commitResumed` used to stamp a literal `pi` on every
+     * resume, which would rebind each resumed DSH session to the retired
+     * engine — read-only from then on. It writes the engine it is given, and
+     * touches no other row.
+     */
+    it('[P1-1] writes the agent it is given and leaves every other row alone', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 'legacy', workspacePath: '/ws/a', agent: PI_AGENT });
+      await service.bindRuntimeIdentity('legacy', '/sessions/legacy.jsonl');
+      await service.recordCreated({ sessionId: 'live', workspacePath: '/ws/a', agent: DSH_AGENT });
+      await service.bindRuntimeIdentity(
+        'live',
+        '/dsh-home/aiclient-sessions/aiclient-live.dsh.json'
+      );
+
+      await service.commitResumed({
+        sessionId: 'live',
+        workspacePath: '/ws/a',
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-live.dsh.json',
+        agent: DSH_AGENT,
+        piLeaf: { activeEntryId: null, fileTailEntryId: null },
+      });
+
+      const rows = readIndexFile();
+      expect(rows.find((row) => row.sessionId === 'live')).toMatchObject({
+        agent: 'dsh',
+        piLeaf: { activeEntryId: null, fileTailEntryId: null },
+      });
+      expect(rows.find((row) => row.sessionId === 'legacy')).toMatchObject({
+        agent: 'pi',
+        runtimeIdentity: '/sessions/legacy.jsonl',
+      });
+    });
+
+    /**
+     * dsh-rebase P1-1. A crash restart awaits `commitPiLeaf` before the
+     * session is `ready` again, so refusing a DSH row here parked every
+     * restarted DSH session in `error`. Unknown bindings are still refused.
+     */
+    it('[P1-1] commits a leaf for a DSH row and still refuses an unknown binding', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      const stub = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: DSH_AGENT });
+      await service.bindRuntimeIdentity('s1', stub);
+
+      await expect(
+        service.commitPiLeaf({
+          sessionId: 's1',
+          runtimeIdentity: stub,
+          piLeaf: { activeEntryId: null, fileTailEntryId: null },
+        })
+      ).resolves.toBeUndefined();
+      expect(readIndexFile()[0]).toMatchObject({
+        agent: 'dsh',
+        piLeaf: { activeEntryId: null, fileTailEntryId: null },
+      });
+
+      await service.recordCreated({ sessionId: 's2', workspacePath: '/ws/a', agent: 'codex' });
+      await service.bindRuntimeIdentity('s2', 'codex-thread');
+      await expect(
+        service.commitPiLeaf({
+          sessionId: 's2',
+          runtimeIdentity: 'codex-thread',
+          piLeaf: { activeEntryId: null, fileTailEntryId: null },
         })
       ).rejects.toThrow(/identity mismatch/);
     });

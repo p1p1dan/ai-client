@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { FileHandle } from 'node:fs/promises';
 import { copyFile, mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { type AgentWireName, isAgentWireName } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { PiLeafCheckpoint } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry, SessionIndexHealth } from '@shared/types/sessionIndex';
@@ -287,14 +288,19 @@ export class SessionIndexService {
   }
 
   /**
-   * Awaited resume commit. The exact Pi file has already been opened and
+   * Awaited resume commit. The exact session file has already been opened and
    * validated by its WorkerSlot; this method refuses to manufacture or retarget
    * an index row and rolls back memory if the atomic flush fails.
+   *
+   * `agent` is whatever engine reopened it. It used to be a hard-coded `pi`,
+   * which would have rebound every resumed DSH session to the retired engine
+   * (dsh-rebase P1-1).
    */
   async commitResumed(input: {
     sessionId: string;
     workspacePath: string;
     runtimeIdentity: string;
+    agent: AgentWireName;
     model?: string;
     piLeaf?: PiLeafCheckpoint;
   }): Promise<void> {
@@ -313,7 +319,7 @@ export class SessionIndexService {
         ...existing,
         workspacePath: input.workspacePath,
         runtimeIdentity: input.runtimeIdentity,
-        agent: 'pi',
+        agent: input.agent,
         model: input.model ?? existing.model,
         piLeaf: input.piLeaf ?? existing.piLeaf,
         updatedAt: now(),
@@ -328,7 +334,13 @@ export class SessionIndexService {
     });
   }
 
-  /** Atomically move the active Pi branch checkpoint for an exact indexed session. */
+  /**
+   * Atomically move the active branch checkpoint for an exact indexed session.
+   *
+   * Accepts any known engine: a crash restart awaits this for DSH sessions too
+   * (dsh-rebase P1-1), and refusing them would park every restarted session in
+   * `error`. Unknown bindings are still refused.
+   */
   async commitPiLeaf(input: {
     sessionId: string;
     runtimeIdentity: string;
@@ -340,9 +352,9 @@ export class SessionIndexService {
       if (
         !existing ||
         existing.runtimeIdentity !== input.runtimeIdentity ||
-        existing.agent !== 'pi'
+        !isAgentWireName(existing.agent)
       ) {
-        throw new Error(`Session index Pi identity mismatch for leaf commit: ${input.sessionId}`);
+        throw new Error(`Session index identity mismatch for leaf commit: ${input.sessionId}`);
       }
       this.entries.set(input.sessionId, {
         ...existing,

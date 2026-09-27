@@ -292,6 +292,18 @@ export class PiTuiWindowSessionGuard {
 export const PI_TUI_NATIVE_SESSION_REASON =
   'This chat was saved in an older native format. Open it in the app once to upgrade it, then the Pi terminal can open it.';
 
+/**
+ * dsh-rebase P1-1 (R6): a DSH chat's identity is a `.dsh.json` stub, not a pi
+ * session. The head check below reads only the stub's first line, which is a
+ * bare `{`, and would wave it through — and `pi --session` may then write its
+ * own header into the stub. Refused by name, before any read.
+ */
+export const PI_TUI_DSH_SESSION_REASON =
+  'This chat runs on the DSH engine, which the Pi terminal cannot open.';
+
+/** The suffix of a DSH session identity stub (dsh-rebase decision 006). */
+export const DSH_SESSION_STUB_SUFFIX = '.dsh.json';
+
 export async function inspectPiTuiSessionSupport(
   sessionFile: string | undefined | null,
   readHead: (file: string) => Promise<string> = readSessionHead
@@ -299,6 +311,9 @@ export async function inspectPiTuiSessionSupport(
   const file = sessionFile?.trim();
   // No file means "start a fresh pi session", which never touches our format.
   if (!file) return { supported: true };
+  if (file.toLowerCase().endsWith(DSH_SESSION_STUB_SUFFIX)) {
+    return { supported: false, reason: PI_TUI_DSH_SESSION_REASON };
+  }
   let head: string;
   try {
     head = await readHead(file);

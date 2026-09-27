@@ -392,7 +392,8 @@ export function registerPiTuiHandlers(): void {
       // TUI-1: refuse a session the CLI cannot parse before taking ownership of
       // it. Reaching the spawn would hand the user the CLI's own
       // "not a valid pi session" error and leave the guard holding a file no
-      // terminal ever opened.
+      // terminal ever opened. That includes every DSH identity stub (P1-1 R6),
+      // which the pre-flight below refuses the same way.
       const support = await inspectPiTuiSessionSupport(request.sessionFile);
       if (!support.supported) throw new Error(support.reason);
       // concurrency-07: asked before the transfer, because the transfer is

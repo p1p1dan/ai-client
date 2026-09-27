@@ -6,7 +6,7 @@
  * "chat must not import workspace-shell" boundary.
  */
 
-import { PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
+import { resolveAgentWireName } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { pathsEqual } from '@/App/storage';
 import {
@@ -157,7 +157,10 @@ export function createUnboundChatSession(title = 'New chat'): string {
   return sessionId;
 }
 
-/** Materialize a committed indexed Pi session and select it. */
+/**
+ * Materialize a committed indexed session and select it, bound to the engine
+ * its row names: a DSH fork runs, a legacy `pi` row stays read-only (P1-1).
+ */
 export function materializeIndexedPiChatSession(
   entry: SessionIndexEntry,
   options?: {
@@ -166,7 +169,8 @@ export function materializeIndexedPiChatSession(
     hostBound?: boolean;
   }
 ): boolean {
-  if (!entry.runtimeIdentity || resolveAgentWireName(entry.agent) !== PI_AGENT) return false;
+  const agent = resolveAgentWireName(entry.agent);
+  if (!entry.runtimeIdentity || agent === null) return false;
   let state = useChatSessionsStore.getState();
   let workspace = state.workspaces.find((item) => pathsEqual(item.path, entry.workspacePath));
   if (!workspace && options?.createWorkspaceIfMissing) {
@@ -205,7 +209,7 @@ export function materializeIndexedPiChatSession(
     status: 'idle',
     updatedAt: entry.updatedAt,
     runtimeIdentity: entry.runtimeIdentity,
-    agent: PI_AGENT,
+    agent,
     ...(unbound ? { unbound } : {}),
   };
   markSessionsLive([entry.sessionId]);

@@ -26,7 +26,8 @@ export type HistoryErrorCode =
   | 'unknown'
   | 'model_missing'
   | 'session_locked'
-  | 'session_too_large';
+  | 'session_too_large'
+  | 'legacy_session_readonly';
 
 /**
  * ah-lib-03 — what a failed resume can carry, and which card each one gets.
@@ -61,8 +62,15 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // Main's own index lookup (`src/main/ipc/chat.ts`), for a row whose session
   // file was never recorded.
   pi_session_not_found: 'jsonl_not_found',
-  // The only `WORKER_*` code left with a producer (`PiWorkerProcess.ts`).
+  // The only `WORKER_*` code left with a producer (`PiWorkerProcess.ts`,
+  // `DshHostProcess.ts`).
   WORKER_WORKSPACE_MISSING: 'workspace_missing',
+  // dsh-rebase P1-1. The DSH bridge found neither its identity stub nor the
+  // session log it names: the same dead-session card as a missing JSONL.
+  dsh_session_missing: 'jsonl_not_found',
+  // dsh-rebase decision 005: Main refuses to resume a chat the previous engine
+  // wrote. Spelled the same on both sides, like `session_locked`.
+  legacy_session_readonly: 'legacy_session_readonly',
 };
 
 /**
@@ -278,6 +286,17 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
       'This chat’s record is larger than this build will load in one piece, so it was not opened. The file itself is intact and untouched on disk.',
     retryable: false,
     continuationHint: 'Start a new chat to carry on; the original record stays where it is.',
+  },
+  // dsh-rebase decision 005. Nothing is missing or damaged: chats now run on
+  // DSH, and one the previous engine wrote stays viewable until P1-9 migrates
+  // it. A warning rather than an error, and nothing a retry could change.
+  legacy_session_readonly: {
+    severity: 'warning',
+    title: 'Read-only until migration',
+    guidance:
+      'This chat was created with the previous chat engine. Until it is migrated it can be viewed here, but not continued.',
+    retryable: false,
+    continuationHint: 'Start a new chat to carry on; this one stays as it is.',
   },
   // H/21 P0. Not retryable: the model directory will not have grown between
   // one press and the next, so a Retry button here could only fail again.

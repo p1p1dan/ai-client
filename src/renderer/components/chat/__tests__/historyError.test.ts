@@ -919,6 +919,57 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
   });
 });
 
+/**
+ * dsh-rebase P1-1. Two new refusals reach the resume card: Main's
+ * `legacy_session_readonly` for a chat the retired engine wrote (decision 005),
+ * and the DSH bridge's `dsh_session_missing` when neither the identity stub nor
+ * the log it names is on disk.
+ */
+describe('DSH resume refusals (P1-1)', () => {
+  const LEGACY =
+    "Error invoking remote method 'chat:resumeSession': Error: legacy_session_readonly: Session s1 was written by the previous chat engine and is read-only until it is migrated";
+
+  it('gives a legacy session its own read-only card: a warning, nothing to retry', () => {
+    const view = parseHistoryError(encodePiResumeError(new Error(LEGACY)).encoded);
+    expect(view?.code).toBe('legacy_session_readonly');
+    expect(view?.severity).toBe('warning');
+    expect(view?.retryable).toBe(false);
+    expect(view?.forceTakeover).toBeUndefined();
+    // Nothing is missing or damaged; the copy must not say either.
+    expect(view?.guidance).not.toContain('damaged');
+    expect(view?.guidance).not.toContain('No history was found');
+    expect(view?.continuationHint).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
+  });
+
+  it('ships the read-only card in the dictionary', () => {
+    const view = parseHistoryError(encodePiResumeError(new Error(LEGACY)).encoded);
+    for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
+      expect(key && zhTranslations[key], key).toBeDefined();
+    }
+    expect(zhTranslations['Read-only until migration']).toBe('迁移前只能查看');
+  });
+
+  it('files a missing DSH session under the dead-session card', () => {
+    const message =
+      'WorkerSlotError: dsh_session_missing: DSH session identity is missing: /dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+    const view = parseHistoryError(encodePiResumeError(new Error(message)).encoded);
+    expect(view?.code).toBe('jsonl_not_found');
+    expect(view?.retryable).toBe(false);
+    expect(view?.continuationHint).toBe(HISTORY_ERROR_DEAD_SESSION_HINT);
+  });
+
+  it('keeps the lock card for a DSH session held by another process', () => {
+    const view = parseHistoryError(
+      encodePiResumeError(
+        new Error('session_locked: DSH session aiclient-s1 is held by another process')
+      ).encoded
+    );
+    expect(view?.code).toBe('session_locked');
+    // DSH does not say who holds its kernel lock, so there is no holder line.
+    expect(view?.lock).toBeUndefined();
+  });
+});
+
 describe('workspace_missing (F2-c)', () => {
   it('says the app will not recreate a folder the user made, and offers a way out', () => {
     const view = parseHistoryError(

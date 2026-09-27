@@ -5,6 +5,7 @@ import {
   Check,
   ChevronRight,
   Copy,
+  Eye,
   FileQuestion,
   FileSearch,
   FileText,
@@ -1058,6 +1059,8 @@ const HISTORY_ERROR_ICON = {
   // H/21 P0: nothing on disk is missing or damaged — a model this app does not
   // have is a configuration gap, so it gets neither of the file icons.
   model_missing: PackageSearch,
+  // dsh-rebase decision 005: viewable, not continuable — nothing is wrong with it.
+  legacy_session_readonly: Eye,
   unknown: TriangleAlert,
 } as const;
 

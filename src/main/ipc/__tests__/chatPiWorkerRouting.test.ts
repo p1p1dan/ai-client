@@ -126,9 +126,11 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
 
 vi.mock('../../services/chat/SessionIndexService', () => ({
   sessionIndexService: {
+    // dsh-rebase P1-1: the default row is a live DSH session. Its identity is
+    // opaque to these handlers, so the short path stands in for the stub.
     get: vi.fn(async (sessionId: string) => ({
       sessionId,
-      agent: 'pi',
+      agent: 'dsh',
       workspacePath: '/repo',
       title: 'Source',
       updatedAt: 1,
@@ -241,7 +243,7 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(createSession).not.toHaveBeenCalled();
   });
 
-  it('creates a Pi slot after recording the Pi session row', async () => {
+  it('creates a DSH slot after recording the DSH session row', async () => {
     await expect(
       invoke('chat:createSession', {
         sessionId: 's1',
@@ -253,7 +255,7 @@ describe('Pi WorkerSlot chat routing', () => {
     ).resolves.toEqual({ requestId: 'create-1' });
 
     expect(recordCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 's1', agent: 'pi' })
+      expect.objectContaining({ sessionId: 's1', agent: 'dsh' })
     );
     expect(createSession).toHaveBeenCalledWith({
       sessionId: 's1',
@@ -410,7 +412,7 @@ describe('Pi WorkerSlot chat routing', () => {
       const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
       vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
         sessionId: 's1',
-        agent: 'pi',
+        agent: 'dsh',
         workspacePath: SCRATCH_DIR,
         title: 'Source',
         updatedAt: 1,
@@ -441,7 +443,7 @@ describe('Pi WorkerSlot chat routing', () => {
       const { adoptTempWorkspace } = await import('../../services/agent-host/TempWorkspaceService');
       vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
         sessionId: 's1',
-        agent: 'pi',
+        agent: 'dsh',
         workspacePath: MOVED_ROOT_DIR,
         unbound: true,
         title: 'Source',
@@ -777,8 +779,33 @@ describe('Pi WorkerSlot chat routing', () => {
   });
 
   describe('handing the session file back from the Pi TUI', () => {
+    /**
+     * The Pi TUI refuses DSH identities (P1-1 R6), so the only chat a terminal
+     * can have written behind a worker is a legacy `pi` one. `reads` is how
+     * many times the handler reads the row: a send reads it for the handover
+     * and again for the reload. Exactly that many, so none leaks into the next
+     * test (`clearAllMocks` keeps queued once-values).
+     */
+    async function legacyRow(reads: number): Promise<void> {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      const legacy = {
+        sessionId: 's1',
+        agent: 'pi',
+        workspacePath: '/repo',
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+        piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      };
+      for (let read = 0; read < reads; read += 1) {
+        vi.mocked(sessionIndexService.get).mockResolvedValueOnce(legacy);
+      }
+    }
+
     it('re-reads the file after killing a terminal, before the turn starts', async () => {
       terminalWasReleased = true;
+      await legacyRow(2);
 
       await expect(
         invoke('chat:send', { sessionId: 's1', attemptId: 'attempt-1', text: 'continue' })
@@ -811,6 +838,7 @@ describe('Pi WorkerSlot chat routing', () => {
     });
 
     it('resolves the file to reload from the index, not from the renderer', async () => {
+      await legacyRow(1);
       await expect(invoke('chat:reloadSession', { sessionId: 's1' })).resolves.toEqual({
         reloaded: true,
       });
@@ -821,9 +849,18 @@ describe('Pi WorkerSlot chat routing', () => {
       });
     });
 
-    // session-01 — compaction and rewind append to the same JSONL a send does.
+    it('[P1-1] never reloads a DSH session: no terminal can have written it', async () => {
+      await expect(invoke('chat:reloadSession', { sessionId: 's1' })).resolves.toEqual({
+        reloaded: false,
+      });
+      expect(reloadSession).not.toHaveBeenCalled();
+    });
+
+    // session-01 — compaction and rewind append to the same file a send does.
     // Neither asked for the handover, so either one could be the write that
     // lands on top of what a terminal appended and makes the file unopenable.
+    // Both run on DSH sessions only now (P1-1), which no terminal can hold, so
+    // the handover still runs first but there is nothing to re-read.
     it.each([
       ['chat:compactSession', { sessionId: 's1' }, compactSession],
       ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }, rewindSession],
@@ -833,14 +870,11 @@ describe('Pi WorkerSlot chat routing', () => {
       await invoke(channel, payload);
 
       expect(releaseSessionForHostPrompt).toHaveBeenCalledWith('/session.jsonl');
-      expect(reloadSession).toHaveBeenCalledWith({
-        sessionId: 's1',
-        sessionFile: '/session.jsonl',
-        ownerWebContentsId: 7,
-      });
-      expect(reloadSession.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(assertHostPromptAllowed).toHaveBeenCalledWith('/session.jsonl');
+      expect(releaseSessionForHostPrompt.mock.invocationCallOrder[0]).toBeLessThan(
         worker.mock.invocationCallOrder[0]
       );
+      expect(reloadSession).not.toHaveBeenCalled();
     });
 
     // cutover-04 — the gate was written as "the last check before a GUI write"
@@ -889,7 +923,7 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(closeSession).toHaveBeenCalledWith('s1');
   });
 
-  it('refuses a renderer workspace that disagrees with the indexed Pi row', async () => {
+  it('refuses a renderer workspace that disagrees with the indexed row', async () => {
     await expect(
       invoke('chat:resumeSession', {
         sessionId: 's1',
@@ -931,6 +965,14 @@ describe('Pi WorkerSlot chat routing', () => {
 
     expect(clearUnwrittenRuntimeIdentity).toHaveBeenCalledWith('s1', '/never-written.jsonl');
     expect(resumeSession).not.toHaveBeenCalled();
+    // P1-1: the repaired chat is a DSH session, and the row says so before the
+    // spawn — not after, where a crash would leave a `pi` row naming a DSH stub.
+    expect(recordCreated).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 's1', workspacePath: '/repo', agent: 'dsh' })
+    );
+    expect(recordCreated.mock.invocationCallOrder[0]).toBeLessThan(
+      createSession.mock.invocationCallOrder[0]
+    );
     expect(createSession).toHaveBeenCalledWith({
       sessionId: 's1',
       workspacePath: '/repo',
@@ -938,25 +980,25 @@ describe('Pi WorkerSlot chat routing', () => {
     });
   });
 
-  it('still resumes a row that ran a turn, even when its file is now gone', async () => {
+  it('still resumes a DSH row whose identity is gone, so the loss surfaces as such', async () => {
     const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
     vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
       sessionId: 's1',
-      agent: 'pi',
+      agent: 'dsh',
       workspacePath: '/repo',
-      title: 'Deleted transcript',
+      title: 'Deleted identity',
       updatedAt: 1,
       archived: false,
-      runtimeIdentity: '/deleted-by-user.jsonl',
-      // A committed leaf proves the file existed, so its absence is real data
-      // loss and must surface as such rather than as a silent empty session.
-      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      // No leaf and no file: for a pi row that meant "never written", but a DSH
+      // stub is only written once the log is on disk (decision 007), so a
+      // missing one is lost data — the bridge answers `dsh_session_missing`.
+      runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-gone.dsh.json',
     });
 
     await expect(
       invoke('chat:resumeSession', {
         sessionId: 's1',
-        runtimeIdentity: '/deleted-by-user.jsonl',
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-gone.dsh.json',
         workspacePath: '/repo',
       })
     ).resolves.toEqual({ requestId: 'resume-1' });
@@ -965,7 +1007,88 @@ describe('Pi WorkerSlot chat routing', () => {
     expect(createSession).not.toHaveBeenCalled();
   });
 
-  it('refuses a non-Pi index row before WorkerManager can interpret its opaque identity', async () => {
+  /**
+   * dsh-rebase decision 005 — a session the retired engine wrote is read-only
+   * until P1-9: Main refuses every way of continuing it, before it claims a
+   * slot, recreates a directory or spawns anything.
+   */
+  describe('legacy pi sessions are read-only (decision 005)', () => {
+    const legacyRow = {
+      sessionId: 's1',
+      agent: 'pi',
+      workspacePath: SCRATCH_DIR,
+      unbound: true,
+      title: 'Before the switch',
+      updatedAt: 1,
+      archived: false,
+      runtimeIdentity: '/sessions/legacy.jsonl',
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    };
+
+    async function legacyRowOnce(row: Record<string, unknown> = legacyRow): Promise<void> {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce(row as never);
+    }
+
+    it('refuses to resume one, with nothing adopted, claimed or spawned', async () => {
+      await legacyRowOnce();
+      await expect(
+        invoke('chat:resumeSession', {
+          sessionId: 's1',
+          runtimeIdentity: '/sessions/legacy.jsonl',
+          workspacePath: SCRATCH_DIR,
+        })
+      ).rejects.toThrow(/^legacy_session_readonly: /);
+      expect(adoptScratch).not.toHaveBeenCalled();
+      expect(resumeSession).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
+      expect(clearUnwrittenRuntimeIdentity).not.toHaveBeenCalled();
+    });
+
+    it('refuses to create or register over one, and writes nothing', async () => {
+      await legacyRowOnce();
+      await expect(
+        invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' })
+      ).rejects.toThrow(/legacy_session_readonly/);
+      await legacyRowOnce();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        await expect(
+          invoke('chat:registerSession', { sessionId: 's1', workspacePath: '/repo' })
+        ).resolves.toBe(false);
+      } finally {
+        warn.mockRestore();
+      }
+      expect(recordCreated).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
+      expect(removeUncommittedCreated).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['chat:compactSession', { sessionId: 's1' }, compactSession],
+      ['chat:getSessionTree', { sessionId: 's1', requestSequence: 1 }, getSessionTree],
+      ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }, rewindSession],
+      ['chat:forkSession', { sessionId: 's1', entryId: 'e1' }, forkSession],
+    ])('refuses %s on one', async (channel, payload, worker) => {
+      await legacyRowOnce();
+      await expect(invoke(channel, payload)).rejects.toThrow(/legacy_session_readonly/);
+      expect(worker).not.toHaveBeenCalled();
+    });
+
+    it('lets a pi row that never ran become a DSH session', async () => {
+      const { runtimeIdentity: _none, piLeaf: _leaf, ...empty } = legacyRow;
+      await legacyRowOnce({ ...empty, workspacePath: '/repo', unbound: undefined });
+      await expect(
+        invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' })
+      ).resolves.toEqual({ requestId: 'create-1' });
+      expect(recordCreated).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's1', agent: 'dsh' })
+      );
+      expect(createSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('refuses an unknown index binding before WorkerManager can interpret its opaque identity', async () => {
     const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
     vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
       sessionId: 'legacy',

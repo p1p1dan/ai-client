@@ -215,6 +215,31 @@ describe('chat:readSessionPage — read-only history (T102)', () => {
     expect(published[0]).toMatchObject({ payload: { mode: 'older' } });
   });
 
+  /**
+   * dsh-rebase P1-1: this reader decodes the legacy (pi) format only, which is
+   * exactly what keeps pre-switch sessions viewable (decision 005). A DSH log
+   * has no main-process reader until P1-4, so its preview refuses with the code
+   * the renderer already answers by falling back to resume.
+   */
+  it('[P1-1] refuses a DSH session with session_replay_unavailable and reads nothing', async () => {
+    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+      sessionId: 's1',
+      agent: 'dsh',
+      workspacePath: '/repo',
+      runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+      title: 'Today',
+      updatedAt: 1,
+      archived: false,
+    });
+
+    await expect(invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1' })).rejects.toThrow(
+      /^session_replay_unavailable: /
+    );
+    expect(readSessionReplayPage).not.toHaveBeenCalled();
+    expect(published).toEqual([]);
+  });
+
   it('lets a replay refusal through with its code', async () => {
     readSessionReplayPage.mockRejectedValueOnce(
       new Error('session_replay_unavailable: cannot decode /repo/.sessions/s1.jsonl')

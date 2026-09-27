@@ -3,7 +3,7 @@ import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import { dirname } from 'node:path';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
-import { PI_AGENT } from '@shared/types/agentWire';
+import { type AgentWireName, DSH_AGENT } from '@shared/types/agentWire';
 import type {
   WorkerImportConversationPayload,
   WorkerInspectImportedSessionPayload,
@@ -273,6 +273,8 @@ export interface WorkerManagerOptions {
     sessionId: string;
     workspacePath: string;
     runtimeIdentity: string;
+    /** The engine the reopened session runs on; the index row records it (P1-1). */
+    agent: AgentWireName;
     model?: string;
     piLeaf?: PiLeafCheckpoint;
   }) => Promise<void>;
@@ -944,7 +946,7 @@ export class WorkerManager {
             sessionId: existing.logicalSessionId,
             requestId,
             payload: {
-              agent: PI_AGENT,
+              agent: DSH_AGENT,
               ...(committed ? { runtimeIdentity: existing.sessionFile } : {}),
               ...this.gatePayload(existing),
             },
@@ -1076,7 +1078,7 @@ export class WorkerManager {
           sessionId: entry.logicalSessionId,
           requestId,
           payload: {
-            agent: PI_AGENT,
+            agent: DSH_AGENT,
             ...(materialized ? { runtimeIdentity: sessionFile } : {}),
             ...this.gatePayload(entry),
           },
@@ -1207,6 +1209,7 @@ export class WorkerManager {
           sessionId: input.sessionId,
           workspacePath: cwd,
           runtimeIdentity: sessionFile,
+          agent: DSH_AGENT,
           ...(input.model ? { model: input.model } : {}),
           ...(entry.leafCheckpoint ? { piLeaf: entry.leafCheckpoint } : {}),
         });
@@ -1333,6 +1336,7 @@ export class WorkerManager {
           sessionId: input.sessionId,
           workspacePath: cwd,
           runtimeIdentity: resumedFile,
+          agent: DSH_AGENT,
           ...(input.model ? { model: input.model } : {}),
           piLeaf: created.bootstrap.leaf,
         });
@@ -1884,7 +1888,7 @@ export class WorkerManager {
             sessionId,
             runtimeIdentity: sessionFile,
             piLeaf: created.bootstrap.leaf,
-            agent: PI_AGENT,
+            agent: DSH_AGENT,
             workspacePath: source.cwd,
             title: `${input.sourceTitle || 'Session'} (fork)`,
             ...(input.model ? { model: input.model } : {}),
@@ -1912,7 +1916,7 @@ export class WorkerManager {
             sessionId,
             requestId,
             payload: {
-              agent: PI_AGENT,
+              agent: DSH_AGENT,
               runtimeIdentity: sessionFile,
               ...this.gatePayload(target),
             },
@@ -2861,7 +2865,7 @@ export class WorkerManager {
       sessionId: entry.logicalSessionId,
       requestId,
       payload: {
-        agent: PI_AGENT,
+        agent: DSH_AGENT,
         runtimeIdentity: history.sessionFile,
         ...this.gatePayload(entry),
       },

@@ -4,9 +4,9 @@ import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { mergeSessionIndex, recentSessionIdsFromIndex } from '../sessionIndexMerge';
 
 // Both index writers (`chat:createSession` and `chat:registerSession`) stamp
-// `agent: 'pi'`, so every row this build persists carries the binding. A row
-// without one predates the field and is deliberately hidden — see the
-// dedicated describe block at the bottom of this file.
+// `agent: 'dsh'` since dsh-rebase P1-1, so every row this build persists
+// carries the binding. A row without one predates the field and is
+// deliberately hidden — see `agentBindingMerge.test.ts`.
 function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): SessionIndexEntry {
   return {
     sessionId,
@@ -14,7 +14,7 @@ function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): Sessio
     title: sessionId,
     updatedAt: 1000,
     archived: false,
-    agent: 'pi',
+    agent: 'dsh',
     ...opts,
   };
 }
@@ -58,6 +58,20 @@ describe('mergeSessionIndex (T-02)', () => {
     const entries = [entry('s1', { runtimeIdentity: 'persisted-rt' })];
     const { sessions } = mergeSessionIndex(live, entries, { workspaces });
     expect(sessions[0].runtimeIdentity).toBe('persisted-rt');
+  });
+
+  it('[P1-1] keeps a legacy pi row in the list next to DSH rows; only resuming it is refused', () => {
+    // decision 005: the pre-switch chat stays viewable. Read-only is decided
+    // where a resume would start (resumeIntent / Main), not by hiding the row.
+    const entries = [
+      entry('legacy', { agent: 'pi', runtimeIdentity: '/sessions/legacy.jsonl' }),
+      entry('live', { runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-live.dsh.json' }),
+    ];
+    const { sessions } = mergeSessionIndex([], entries, { workspaces });
+    expect(sessions.map((item) => [item.id, item.agent])).toEqual([
+      ['legacy', 'pi'],
+      ['live', 'dsh'],
+    ]);
   });
 
   it('archives entry filtered out of live list', () => {

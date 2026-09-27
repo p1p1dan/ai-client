@@ -4,6 +4,7 @@ import {
   buildPiTuiArgs,
   inspectPiTuiSessionSupport,
   normalizeSessionKey,
+  PI_TUI_DSH_SESSION_REASON,
   PI_TUI_NATIVE_SESSION_REASON,
   PI_TUI_SESSION_BUSY_REASON,
   PiTuiExclusiveGuard,
@@ -348,5 +349,29 @@ describe('inspectPiTuiSessionSupport', () => {
     await expect(
       inspectPiTuiSessionSupport('/s.jsonl', async () => `${legacy}\n${v4}\n`)
     ).resolves.toEqual({ supported: true });
+  });
+
+  /**
+   * dsh-rebase P1-1 (R6). A DSH chat's identity is a pretty-printed JSON stub
+   * whose first line is a bare `{` — the head check above cannot parse it and
+   * would let it through, and `pi --session` might then write its own header
+   * into the stub. Refused by name, without reading the file at all.
+   */
+  it('[P1-1] refuses every DSH identity stub, whatever its content, without reading it', async () => {
+    const stubHead = `${JSON.stringify({ engine: 'dsh', version: 1 }, null, 2)}\n`;
+    for (const file of [
+      '/home/u/.pilab/p/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+      'C:\\Users\\u\\.pilab\\p\\dsh-home\\aiclient-sessions\\AICLIENT-S1.DSH.JSON',
+    ]) {
+      let read = false;
+      await expect(
+        inspectPiTuiSessionSupport(file, async () => {
+          read = true;
+          return stubHead;
+        })
+      ).resolves.toEqual({ supported: false, reason: PI_TUI_DSH_SESSION_REASON });
+      expect(read).toBe(false);
+    }
+    expect(zhTranslations[PI_TUI_DSH_SESSION_REASON]).toBeTruthy();
   });
 });

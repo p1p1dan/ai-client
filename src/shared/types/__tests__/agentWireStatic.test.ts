@@ -873,8 +873,9 @@ describe('pinned wire facts', () => {
     // `session-index.json`, so renaming one orphans every row already on disk
     // and reordering changes nothing except the day someone assumes an index.
     // Appending is the only legal edit, and it belongs with the reader that
-    // can actually run the new agent.
-    expect(AGENT_WIRE_NAMES).toEqual(['pi']);
+    // can actually run the new agent. dsh-rebase P1-1 appended `dsh`
+    // (decision 006); `pi` stays for the rows the retired engine wrote.
+    expect(AGENT_WIRE_NAMES).toEqual(['pi', 'dsh']);
     expect(Object.keys(AGENT_DISPLAY_NAMES).sort()).toEqual([...AGENT_WIRE_NAMES].sort());
   });
 
@@ -998,7 +999,7 @@ describe('resolveAgentWireName validates persisted bindings', () => {
   });
 
   it('refuses explicit legacy and unknown slugs', () => {
-    // Unknown values stay on disk but are hidden from this Pi-only build.
+    // Unknown values stay on disk but are hidden from this build.
     expect(resolveAgentWireName('claude-code')).toBeNull();
     expect(resolveAgentWireName('codex')).toBeNull();
     expect(resolveAgentWireName('gemini')).toBeNull();
@@ -1007,8 +1008,12 @@ describe('resolveAgentWireName validates persisted bindings', () => {
     expect(isAgentWireName(undefined)).toBe(false);
   });
 
-  it('sessionAgent reads a Pi binding and defaults a missing binding to Pi', () => {
+  it('sessionAgent reads a binding and defaults a missing one to DSH (P1-1)', () => {
+    // A session with no binding is one this build created and has not run
+    // yet, and this build runs chats on DSH only (decision 004).
     expect(sessionAgent({ agent: 'pi' })).toBe('pi');
-    expect(sessionAgent({})).toBe('pi');
+    expect(sessionAgent({ agent: 'dsh' })).toBe('dsh');
+    expect(sessionAgent({})).toBe('dsh');
+    expect(sessionAgent({ agent: null })).toBe('dsh');
   });
 });

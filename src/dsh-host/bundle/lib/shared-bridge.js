@@ -37,12 +37,13 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { monitorEventLoopDelay, PerformanceObserver, performance } from 'node:perf_hooks';
 import v8 from 'node:v8';
+import { createUserMessage } from '@deepseek-ai/dsh-llm';
 
 /** Stable Cordis plugin name. */
 export const name = 'aiclient-shared-bridge';
 
-/** The services DshSessionRuntime reads. */
-export const inject = ['agents', 'agentDefaultModel'];
+/** The services DshSessionRuntime reads (`sessions`: see bridge.js). */
+export const inject = ['agents', 'agentDefaultModel', 'sessions'];
 
 const STAMP = /‹t(\d+)›/g;
 
@@ -176,7 +177,7 @@ export async function apply(ctx) {
       generation,
       // Same constant the native worker entry passes (decision 009).
       projectTrusted: true,
-      createRuntime: (options) => new DshSessionRuntime(ctx, options),
+      createRuntime: (options) => new DshSessionRuntime(ctx, options, { createUserMessage }),
       createImportWriter: () => {
         throw unsupported('Conversation import');
       },

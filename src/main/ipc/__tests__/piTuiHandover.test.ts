@@ -139,6 +139,7 @@ vi.mock('../../services/terminal/PiTuiPty', () => ({
 const { STRANDED_SESSION_BODY, STRANDED_SESSION_TITLE } = await import(
   '../../services/terminal/piTuiStrandedSessions'
 );
+const { PI_TUI_DSH_SESSION_REASON } = await import('../../services/terminal/piTuiSession');
 
 const {
   registerPiTuiHandlers,
@@ -283,6 +284,33 @@ describe('an unconfirmed kill keeps the chat contested', () => {
  * has no other way to notice a second writer arriving; this puts the same
  * question in front of the handover itself.
  */
+/**
+ * dsh-rebase P1-1 (R6): both entry points refuse a DSH identity — the open that
+ * would spawn `pi --session` on the stub, and the pre-flight the renderer asks
+ * before switching the chat surface to a terminal.
+ */
+describe('the Pi TUI refuses a DSH chat', () => {
+  const DSH_CHAT = '/tmp/ai-client-handover-test/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+
+  it('refuses the open, never spawns pi and never takes the file', async () => {
+    await expect(openTerminal(DSH_CHAT)).rejects.toThrow(/DSH engine/);
+    expect(open).not.toHaveBeenCalled();
+    expect(() => assertHostPromptAllowed(DSH_CHAT)).not.toThrow();
+    // No claim was booked either, so another window is not locked out of it.
+    expect(await sessionSupport(DSH_CHAT, 2)).toEqual({
+      supported: false,
+      reason: PI_TUI_DSH_SESSION_REASON,
+    });
+  });
+
+  it('says so in the pre-flight', async () => {
+    expect(await sessionSupport(DSH_CHAT)).toEqual({
+      supported: false,
+      reason: PI_TUI_DSH_SESSION_REASON,
+    });
+  });
+});
+
 describe('the Pi TUI cannot take a chat that is mid-turn', () => {
   it('ships a Chinese entry for the refusal it sends the renderer', () => {
     // T065 回炉: same reasoning as the other reason guards — the renderer looks

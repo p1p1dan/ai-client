@@ -3,8 +3,7 @@ import {
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
 } from '@shared/types/workerRpc';
-import { forkDevDshHost, isDevDshEngineSelected } from './devDshEngine';
-import { forkPiWorkerProcess } from './PiWorkerProcess';
+import { forkDshHost } from './DshHostProcess';
 import { WorkerSlot, type WorkerSlotOptions } from './WorkerSlot';
 import type { WorkerTransport } from './WorkerTransport';
 
@@ -58,10 +57,14 @@ export interface CreatedPiWorkerSlot {
 export const BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000;
 
 /**
- * Spawn and bootstrap one per-slot Pi utility process.
+ * Spawn and bootstrap one per-slot chat engine process: the DSH host.
+ *
+ * dsh-rebase P1-1 (decisions 004, 009): every chat session runs on DSH, in
+ * packaged and unpackaged builds alike, with no switch and no native fallback.
+ * The name stays until P1-12 renames the whole seam at once (decision 010).
  *
  * A bootstrap failure tears the slot down before the error escapes, so callers
- * never receive a running utility process without an authoritative AgentSession.
+ * never receive a running process without an authoritative session.
  */
 export async function createPiWorkerSlot(
   options: CreatePiWorkerSlotOptions
@@ -69,10 +72,7 @@ export async function createPiWorkerSlot(
   const generation = options.generation ?? 1;
   const transport = options.createTransport
     ? options.createTransport({ generation, cwd: options.cwd })
-    : // DEV-ONLY (dsh-rebase P0-3): AICLIENT_DEV_ENGINE=dsh in an unpackaged app.
-      isDevDshEngineSelected()
-      ? forkDevDshHost({ generation }).transport
-      : forkPiWorkerProcess({ generation, cwd: options.cwd }).transport;
+    : forkDshHost({ generation, cwd: options.cwd }).transport;
   const slot = new WorkerSlot({
     slotKey: options.slotKey,
     cwd: options.cwd,

@@ -1,4 +1,4 @@
-import { PI_AGENT } from '@shared/types/agentWire';
+import { isAgentWireName, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
@@ -102,8 +102,13 @@ export function shouldResumeSession(
   if (!session.unbound && !workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
-  if (session.agent && session.agent !== PI_AGENT) {
-    return { shouldResume: false, reason: `unsupported-agent:${session.agent}` };
+  // dsh-rebase P1-1: a legacy `pi` session is still sent to Main, which is the
+  // only side that can tell a transcript that was never written (repaired into
+  // a DSH session, decision 005 rule 4) from a real one (refused with
+  // `legacy_session_readonly`, which the history card then shows).
+  const agent = sessionAgent(session);
+  if (!isAgentWireName(agent)) {
+    return { shouldResume: false, reason: `unsupported-agent:${agent}` };
   }
   if (!workspacePath) {
     // Demo placeholder workspace (path '') — resuming against it would hand

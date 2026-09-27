@@ -477,7 +477,7 @@ describe('WorkerManager identity and capacity', () => {
     expect(forked.session).toMatchObject({
       runtimeIdentity: norm('/sessions/forked.jsonl'),
       title: 'Source (fork)',
-      agent: 'pi',
+      agent: 'dsh',
     });
     expect(h.records).toHaveLength(2);
     expect(h.manager.getSlotSnapshots()).toEqual(
@@ -661,7 +661,7 @@ describe('WorkerManager identity and capacity', () => {
         sessionId: 's1',
         requestId,
         payload: {
-          agent: 'pi',
+          agent: 'dsh',
           runtimeIdentity: norm('/sessions/s1.jsonl'),
           // D10: which permission system the worker actually bootstrapped on,
           // read off the bootstrap ack. The tier control needs it to stop
@@ -1041,6 +1041,7 @@ describe('WorkerManager Pi history and real resume', () => {
       sessionId: 's1',
       workspacePath: norm('/repo'),
       runtimeIdentity: norm('/sessions/legacy-v3.jsonl.native-v4.jsonl'),
+      agent: 'dsh',
       piLeaf: { activeEntryId: null, fileTailEntryId: null },
     });
     expect(h.manager.getSlotSnapshots()).toEqual([
@@ -1107,6 +1108,7 @@ describe('WorkerManager Pi history and real resume', () => {
       sessionId: 's1',
       workspacePath: norm('/repo'),
       runtimeIdentity: norm('/sessions/s1.jsonl'),
+      agent: 'dsh',
       piLeaf: { activeEntryId: null, fileTailEntryId: null },
     });
     expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
@@ -1298,7 +1300,7 @@ describe('WorkerManager unwritten Pi session files', () => {
         type: 'session.created',
         sessionId: 's1',
         requestId,
-        payload: { agent: 'pi', permissionGate: 'bundled' },
+        payload: { agent: 'dsh', permissionGate: 'bundled' },
       })
     );
     // The slot itself is fully usable — only the durable claim is withheld.
@@ -3603,5 +3605,231 @@ describe('WorkerManager retry of the last turn (T135 / decision 045)', () => {
     }
     expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
     expect(h.events.every((event) => event.requestId === turnId)).toBe(true);
+  });
+});
+
+/**
+ * dsh-rebase P1-1 — the four paths that start a chat engine (new, resume,
+ * fork target, crash restart) all go through `createSlot`, which
+ * `createPiWorkerSlot.test.ts` pins to the DSH host. Here: each path carries
+ * the DSH identity (a `.dsh.json` stub, returned on create and handed back on
+ * every reopen) and binds the session to `dsh` in its events and index writes.
+ */
+describe('WorkerManager P1-1: every spawn path runs on DSH', () => {
+  const stubFor = (sessionId: string) =>
+    norm(`/dsh-home/aiclient-sessions/aiclient-${sessionId}.dsh.json`);
+  /** What the bridge reports: a new session's stub, or exactly the stub it was handed. */
+  const dshBootstrap = (requested: string) => {
+    const created = /^\/sessions\/(.+)\.jsonl$/.exec(requested);
+    return { sessionFile: created ? stubFor(created[1]) : requested };
+  };
+  const EMPTY_LEAF = { activeEntryId: null, fileTailEntryId: null };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('[P1-1-new] spawns without an identity, then commits and announces the DSH stub', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+
+    const requestId = await create(h.manager, 's1');
+
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.createSlot.mock.calls[0][0]).not.toHaveProperty('sessionFile');
+    expect(h.bindRuntimeIdentity).toHaveBeenCalledWith('s1', stubFor('s1'));
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.created',
+        sessionId: 's1',
+        requestId,
+        payload: expect.objectContaining({ agent: 'dsh', runtimeIdentity: stubFor('s1') }),
+      })
+    );
+  });
+
+  it('[P1-1-resume] reopens the stub, commits it as DSH and announces DSH, cold and warm', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: stubFor('s1'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+
+    expect(h.createSlot.mock.calls[0][0]).toMatchObject({
+      logicalSessionId: 's1',
+      sessionFile: stubFor('s1'),
+      cwd: norm('/repo'),
+    });
+    expect(h.commitResumed).toHaveBeenLastCalledWith({
+      sessionId: 's1',
+      workspacePath: norm('/repo'),
+      runtimeIdentity: stubFor('s1'),
+      agent: 'dsh',
+      piLeaf: EMPTY_LEAF,
+    });
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.resumed',
+        payload: expect.objectContaining({ agent: 'dsh', runtimeIdentity: stubFor('s1') }),
+      })
+    );
+
+    // Warm: the slot is ready, so no spawn — but the same binding.
+    h.events.length = 0;
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: stubFor('s1'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.commitResumed).toHaveBeenCalledTimes(2);
+    expect(h.commitResumed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ runtimeIdentity: stubFor('s1'), agent: 'dsh' })
+    );
+    expect(h.events[0]).toMatchObject({ type: 'session.resumed', payload: { agent: 'dsh' } });
+  });
+
+  it('[P1-1-fork] opens the child stub in the target slot and indexes the fork as DSH', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 'source');
+    const child = stubFor('child');
+    const answer = h.records[0].request.getMockImplementation();
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type !== 'worker.fork') return answer?.(type, payload);
+      return {
+        logicalSessionId: 'source',
+        sourceSessionFile: stubFor('source'),
+        sessionFile: child,
+        piSessionId: 'aiclient-child',
+        workspacePath: norm('/repo'),
+        leaf: EMPTY_LEAF,
+        history: {
+          logicalSessionId: 'source',
+          sessionFile: child,
+          workspacePath: norm('/repo'),
+          page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+        },
+      };
+    });
+    h.events.length = 0;
+
+    const forked = await h.manager.forkSession({
+      sourceSessionId: 'source',
+      entryId: 'e1',
+      sourceTitle: 'Source',
+    });
+
+    expect(h.createSlot).toHaveBeenCalledTimes(2);
+    expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+      logicalSessionId: forked.session.sessionId,
+      sessionFile: child,
+      cwd: norm('/repo'),
+    });
+    expect(h.createForked).toHaveBeenCalledWith(
+      expect.objectContaining({ runtimeIdentity: child, agent: 'dsh' })
+    );
+    expect(forked.session.agent).toBe('dsh');
+    expect(h.events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.created',
+        sessionId: forked.session.sessionId,
+        payload: expect.objectContaining({ agent: 'dsh', runtimeIdentity: child }),
+      })
+    );
+  });
+
+  it('[P1-1-fork-refused] surfaces the bridge refusal and never spawns a target', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 'source');
+    const answer = h.records[0].request.getMockImplementation();
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type !== 'worker.fork') return answer?.(type, payload);
+      throw new WorkerSlotError(
+        'WORKER_RPC_REMOTE_ERROR',
+        'WORKER_DSH_UNSUPPORTED: fork is not bridged to the DSH engine yet',
+        {
+          code: 'WORKER_DSH_UNSUPPORTED',
+          message: 'fork is not bridged to the DSH engine yet',
+        }
+      );
+    });
+
+    await expect(
+      h.manager.forkSession({ sourceSessionId: 'source', entryId: 'e1', sourceTitle: 'Source' })
+    ).rejects.toThrow(/WORKER_DSH_UNSUPPORTED/);
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.createForked).not.toHaveBeenCalled();
+  });
+
+  it('[P1-1-restart] a crashed DSH worker is reopened from its stub and its leaf commit succeeds', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 's1');
+    h.events.length = 0;
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      h.records[0].crash('host exited');
+
+      await vi.waitFor(() =>
+        expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ state: 'ready', generation: 2 })
+      );
+      expect(h.createSlot).toHaveBeenCalledTimes(2);
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        logicalSessionId: 's1',
+        sessionFile: stubFor('s1'),
+        generation: 2,
+      });
+      expect(h.commitPiLeaf).toHaveBeenCalledWith({
+        sessionId: 's1',
+        runtimeIdentity: stubFor('s1'),
+        piLeaf: EMPTY_LEAF,
+      });
+      expect(h.events).toContainEqual(
+        expect.objectContaining({
+          type: 'session.resumed',
+          payload: expect.objectContaining({ agent: 'dsh', runtimeIdentity: stubFor('s1') }),
+        })
+      );
+      expect(h.events).toContainEqual(
+        expect.objectContaining({
+          type: 'session.history',
+          payload: expect.objectContaining({ mode: 'refresh', runtimeIdentity: stubFor('s1') }),
+        })
+      );
+    } finally {
+      error.mockRestore();
+    }
+  });
+
+  it('[P1-1-stop-watchdog] a stop the DSH host never settles restarts it from the same stub', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 's1', 7);
+    await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
+    h.records[0].emit({ type: 'session.status', sessionId: 's1', payload: { status: 'running' } });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      await h.manager.stop('s1');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+
+      await vi.waitFor(() => expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace'));
+      await vi.waitFor(() =>
+        expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ state: 'ready', generation: 2 })
+      );
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        logicalSessionId: 's1',
+        sessionFile: stubFor('s1'),
+        generation: 2,
+      });
+      expect(h.events).toContainEqual(
+        expect.objectContaining({ type: 'session.stopped', payload: { stopCause: 'forced' } })
+      );
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   });
 });

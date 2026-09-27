@@ -26,6 +26,8 @@
     "lib": ["ESNext"],
     "types": ["node"]
   },
-  "include": ["*.ts", "lib/*.ts", "bridge/*.ts"],
+  // P1-1: the bridge's unit tests run in the root Vitest and are checked here,
+  // next to the code they exercise.
+  "include": ["*.ts", "lib/*.ts", "bridge/*.ts", "bridge/__tests__/*.ts"],
   "exclude": ["node_modules", "bundle"]
 }

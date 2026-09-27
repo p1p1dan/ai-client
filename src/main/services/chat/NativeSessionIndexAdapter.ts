@@ -75,6 +75,7 @@ export class NativeSessionIndexAdapter {
             sessionId: this.sessionId,
             workspacePath: metadata.cwd,
             runtimeIdentity: metadata.file,
+            agent: 'pi',
             piLeaf: metadata.leaf,
           });
         } catch (error) {
@@ -152,6 +153,7 @@ export class NativeSessionIndexAdapter {
           workspacePath: metadata.cwd,
           model: metadata.model,
           runtimeIdentity: metadata.file,
+          agent: 'pi',
           piLeaf: metadata.leaf,
         });
         for (const event of this.pendingTerminal.splice(0)) this.publish(event);
