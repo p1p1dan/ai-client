@@ -24,10 +24,10 @@
 | ID | 状态 | 内容 | 退出判据 |
 |---|---|---|---|
 | P1-0 | ✅ | （2026-09-26 退出判据已满足：合并提交 `30a0c257`，零冲突；四套 tsc、相关单测 19 文件 / 314 例、无界面 bridge 回归全过；证据 [p1-0-sync-main-2026-09-26.md](evidence/p1-0-sync-main-2026-09-26.md)。v1.0.3 新增的插话、重试上一轮两项语义 DSH 桥接尚未实现，已记入 P1-4；Stop 看门狗强杀在共享宿主下会连带其他会话，已记入 P1-3）同步 main：把 v1.0.3 及之后的 main 提交合入本分支（分叉点 `b64f577f`），此后每次 main 发版都同步一次 | 合入后类型检查与相关测试通过 |
-| P1-1 | ⬜ | 引擎直替：WorkerSlot 直接拉起 DSH 宿主，去掉 `AICLIENT_DEV_ENGINE` 开关与「仅未打包」限制；新建 / 恢复 / fork / 崩溃重启 4 条路径全部走 DSH；会话索引与 `AGENT_WIRE_NAMES` 记为 DSH | 开发机上新建会话走 DSH；4 条路径有单测 |
+| P1-1 | ⬜ | （2026-09-26 方案 [p1-1-engine-cutover.md](topics/p1-1-engine-cutover.md)，决策 [005](decisions/005-legacy-pi-sessions-read-only-until-p1-9.md)～[010](decisions/010-p1-1-scope-boundary.md) 自主决定、待用户审批：旧 pi 会话只读到 P1-9、身份沿用桩文件、先落盘再写桩、私有 `DSH_HOME`、打包态缺宿主明确报错、带 bridge 最小补丁）引擎直替：WorkerSlot 直接拉起 DSH 宿主，去掉 `AICLIENT_DEV_ENGINE` 开关与「仅未打包」限制；新建 / 恢复 / fork / 崩溃重启 4 条路径全部走 DSH；会话索引与 `AGENT_WIRE_NAMES` 记为 DSH | 开发机上新建会话走 DSH；4 条路径有单测；「分叉」、重试、附件明确报不支持（决策 010） |
 | P1-2 | ⬜ | DSH 宿主转正：`src/dsh-host` 从探针转为产品子包，钉 `0.1.7-rc.2`、锁文件入库；打包进三平台安装包（沿用 P0-4 工具包的裁剪），定体积预算 | 三平台安装包里能起 DSH 宿主；体积记入证据 |
-| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个会话；宿主级崩溃处理（一次重启、并行恢复、宿主级重启预算）；心跳与按 pid 强杀；Stop 看门狗（T144，10 s 强杀重启）改为先按会话收尾、最后才动宿主；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
-| P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；v1.0.3 的 worker 语义：Ctrl+Enter 插话（`interject` 与 `turnActive`）、失败后重试上一轮（`mode: 'retry'` / `WORKER_RETRY_UNAVAILABLE`）；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
+| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个会话；宿主级崩溃处理（一次重启、并行恢复、宿主级重启预算）；心跳与按 pid 强杀；Stop 看门狗（T144，10 s 强杀重启）改为先按会话收尾、最后才动宿主；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境；DSH 日志清理策略（DSH 无删除 API，删除 / 归档会话与只有 header 的会话要有人清，2026-09-26 P1-1 调研补登） | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
+| P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；v1.0.3 的 worker 语义：Ctrl+Enter 插话（`interject` 与 `turnActive`）、失败后重试上一轮（`mode: 'retry'` / `WORKER_RETRY_UNAVAILABLE`）、图片附件；DSH 会话的主进程只读回放（决策 030，现有 `SessionReplayReader` 只懂 pi 格式）；fork 子会话 id 规则（决策 006）；后三项 2026-09-26 P1-1 调研补登；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
 | P1-5 | ⬜ | 模型目录与凭据：Main 生成 `llm-pi-ai` 路由（网关根地址），key 经凭据接口按请求注入、不落 `.env`；模型菜单与 DSH 路由同步 | 真实网关下目录里的模型都能用；key 不以明文落盘 |
 | P1-6 | ⬜ | 权限移植：把 `src/runtime/plugins/permissions/` 抽成纯库或移入宿主插件；挂 `user-approval` answerer 与 `tools/pre-execute`；四档、会话授权记忆、bash / pwsh 分析、拒绝清单；Windows 沙箱按 [Q005](open-questions.md) 定 | 现有权限回归用例在 DSH 下全过 |
 | P1-7 | ⬜ | 渲染层：goal 条、todo 卡、jobs 面板、子代理面板；Windows 上 `pwsh` 工具行与审批文案（吸收 runtime-hardening 的 D3 / D4 / D7 / D8 / T138） | 开发机 GUI 点验；Windows 实测 |
@@ -38,8 +38,9 @@
 | P1-12 | ⬜ | 退役自有 runtime：删 `src/runtime`、native worker 路径与 pi TUI 互通；更新 Pi-only 守卫与各类静态测试 | 全量测试通过；打包产物里没有旧 runtime |
 | P1-13 | ⬜ | 加密机上机与适配（合入前的否决关，[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md) / [004](decisions/004-branch-isolated-dsh-only.md)）：用[检查单](topics/p0-4-encrypted-machine-checklist.md)与上机包，读写全部明文；沙箱结论回填 [Q002](open-questions.md)；另装官方 DSH Desktop 作对照组。有机会可提前跑 | 读写全部明文；不过就回到决策点 |
 | P1-14 | ⬜ | 收口：Windows CI（管理员 + 标准用户两路）；开发机点验；出测试版并在 Windows 实测；回写 ARD；合入 main 并发版（推送与发版前确认） | 测试版实测通过，证据落 `evidence/` |
+| P1-15 | ⬜ | （2026-09-26 P1-1 调研补登）一次性补全换引擎：提交信息、分支名、代码评审现在走 native utility worker（`PiUtilityService.ts`），P1-12 删 runtime 之前要有替代；与 P1-5 的模型路由、凭据一起设计 | 三种补全在 DSH 分支构建里可用；不再拉 native worker |
 
-顺序：P1-0、P1-1 最先；P1-2、P1-3 随后；P1-4、P1-5 可并行；P1-6 在 P1-4 之后；P1-7～P1-11 在主链路通了之后并行；P1-12、P1-13 在合入前；P1-14 最后。P1-13 的上机包现成，有机会可以随时提前跑。
+顺序：P1-0、P1-1 最先；P1-2、P1-3 随后；P1-4、P1-5 可并行；P1-6 在 P1-4 之后；P1-7～P1-11 在主链路通了之后并行；P1-15 在 P1-5 之后、P1-12 之前；P1-12、P1-13 在合入前；P1-14 最后。P1-13 的上机包现成，有机会可以随时提前跑。
 
 ## Deferred
 

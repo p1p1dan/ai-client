@@ -22,9 +22,9 @@ Role: plan-entrypoint。建立日期：2026-09-25。状态：P0 已完成（2026
 
 - [roadmap.md](roadmap.md)：分期与任务，任务身份、状态、顺序的唯一权威。
 - [implementation-status.md](implementation-status.md)：进度看板（当前阶段、活动任务、最近落地与验证）和 P1 的工作方式。
-- [decisions/](decisions/)：[001 B 路线与六点拍板](decisions/001-route-b-and-scope.md)；[002 加密机移到 P2 前、共享宿主](decisions/002-defer-encrypted-machine-and-shared-host.md)；[003 进入 P1、钉版本、暂不加 Claude SDK](decisions/003-p0-closeout-enter-p1.md)；[004 分支内整体替换、不做双引擎](decisions/004-branch-isolated-dsh-only.md)。005 起，P1 中自主做的决定每条单独一份，标「自主决定，待用户审批」。
+- [decisions/](decisions/)：[001 B 路线与六点拍板](decisions/001-route-b-and-scope.md)；[002 加密机移到 P2 前、共享宿主](decisions/002-defer-encrypted-machine-and-shared-host.md)；[003 进入 P1、钉版本、暂不加 Claude SDK](decisions/003-p0-closeout-enter-p1.md)；[004 分支内整体替换、不做双引擎](decisions/004-branch-isolated-dsh-only.md)。005 起，P1 中自主做的决定每条单独一份，标「自主决定，待用户审批」：[005 旧 pi 会话只读到 P1-9](decisions/005-legacy-pi-sessions-read-only-until-p1-9.md)；[006 身份沿用桩文件](decisions/006-session-identity-stub-file.md)；[007 先落盘再写桩](decisions/007-flush-dsh-session-before-stub.md)；[008 私有 DSH_HOME](decisions/008-private-dsh-home.md)；[009 打包态缺宿主明确报错](decisions/009-packaged-host-missing-fails-loudly.md)；[010 P1-1 范围边界](decisions/010-p1-1-scope-boundary.md)。
 - [open-questions.md](open-questions.md)：P0 实测后才能定的问题。
-- [topics/](topics/)：上机检查单（[加密机](topics/p0-4-encrypted-machine-checklist.md)，P1-13 合入前使用）。
+- [topics/](topics/)：上机检查单（[加密机](topics/p0-4-encrypted-machine-checklist.md)，P1-13 合入前使用）；[P1-1 引擎直替方案](topics/p1-1-engine-cutover.md)（明细 [inventory](topics/p1-1-engine-cutover/inventory.md)）。
 - 调研与依据：[DSH 二开可行性调研](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)（生态、许可、功能落点、方案对比、goal 对照、差距表）。[Claude SDK 引擎调研](../../../plans/2026-09-26-claude-sdk-engine-study.md)（2026-09-26，对应 Q006）。
 
 ## 权威顺序

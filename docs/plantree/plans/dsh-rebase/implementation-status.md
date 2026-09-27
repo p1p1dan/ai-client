@@ -9,11 +9,11 @@ Role: implementation-status。更新日期：2026-09-26。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。P1-0 已完成（2026-09-26），下一步 P1-1 引擎直替。
+P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），进入实现。P1-2 打包方案调研中。
 
 ## Next Target
 
-P1-1：先做就绪检查（4 条拉起路径、会话索引、`AGENT_WIRE_NAMES`、打包态限制），定方案后再动代码。
+P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 bridge-smoke 扩展；之后做开发机 GUI 点验（退出判据「新建会话走 DSH」）。
 
 ## Last Landed
 
@@ -21,7 +21,9 @@ P1-1：先做就绪检查（4 条拉起路径、会话索引、`AGENT_WIRE_NAMES
 
 ## Active TODO
 
-1. P1-1 就绪检查与方案。
+1. P1-1 实现（opus 代理，按[方案](topics/p1-1-engine-cutover.md)与决策 005～010）。
+2. P1-2 打包方案调研（opus 代理，只读），出方案后落决策。
+3. 决策 005～010 等用户审批；审批前按决策施工，被驳回的再回改。
 
 ## Blocked By
 
