@@ -24,3 +24,13 @@ Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-
 - 待定：P1 默认开不开沙箱；是否预检 WRITE_OWNER；不满足时是提示用户、改用 danger-full-access 加我方审批，还是拒绝。与 [Q002](#q002-dsh-沙箱能否作为兜底层叠加)（加密机上能否叠加）一起在 P1 设计权限移植时定，加密机上的 F-on-acl 在 P2 前上机时补看。
 
 Q006（是否另加 Claude SDK 引擎）已于 2026-09-26 定为暂不加，见[决策 003](decisions/003-p0-closeout-enter-p1.md)；调研留在 [Claude SDK 引擎调研](../../../plans/2026-09-26-claude-sdk-engine-study.md)。
+
+## Q007 随包分发 libvips 一组的许可是否可接受（需用户或法务确认）
+
+- 来源：[P1-2 分片 04](topics/p1-2-host-packaging/04-licenses.md)。DSH 的 `read_image` 懒加载 sharp，sharp 带着 libvips 一组共享库：libvips、glib、fribidi 等是 LGPL-3.0-or-later，cairo 是 MPL-2.0，aom 是 BSD-2-Clause 加 AOM 专利许可。这些库以独立的 `.so` / `.dylib` / `.dll` 分发，可以替换。删掉 sharp 会让 DSH 的读图不可用。
+- 工程侧会做：保留所有许可文件和 libvips 的 README、`versions.json`；生成逐包许可清单；`THIRD_PARTY_NOTICES.md` 新增 DSH 段。
+- 待确认：
+  - 是否还需要书面的源码提供承诺；
+  - aom 专利许可能否接受；
+  - pnpm 的 `dist/pnpm.mjs` 里合进的第三方代码要不要额外声明。
+- 裁决时点：P1-14 合入发版之前。不阻塞 P1-2 施工。
