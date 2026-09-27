@@ -10,7 +10,7 @@
    - 已超过 24 h。
 2. 有内容的无主日志一律保留。
 3. 执行方式：
-   - 引用集合由 Main 从索引计算。
+   - 引用集合由 Main 从索引计算。2026-09-26 按 P1-4 补充：这个集合是「索引行的桩 → 桩里的 `dshSessionId` 和整条 lineage（[决策 027](027-rewind-and-fork-via-seeded-child-sessions.md)）→ 再加上这些会话的子代理子会话（header 里的 `parentSession`）」。
    - 由宿主在 ready、会话恢复完之后执行 `gc`，每次运行只做一次。
    - 逐个检查 `aiclient-*` 会话：先取写锁，确认没人占用，再删整个会话目录和对应的桩。
    - 绝不单独删锁文件。
