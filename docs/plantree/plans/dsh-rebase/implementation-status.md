@@ -17,6 +17,7 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Last Landed
 
+- 2026-09-27 P1-3c：`613d0568` 宿主级故障语义。复跑：根与 agent-host 两套 tsc 通过；单测 263 个文件、4579 例通过；真宿主集成 6/6、Stop 看门狗 5/5。
 - 2026-09-27 P1-9a / P1-9g 语料：`6ce354c5` pi 解码链搬进 `src/shared/legacyPiSession` 纯库，vendor `buildSessionContext`（MIT），30 份 v4 语料与金样本。复跑：四套 tsc 通过，shared、runtime、agent-host、chat 共 118 个文件、1996 例全过；提交后金样本 22 个文件、358 例复跑通过。
 - 2026-09-27 P1-3a：`1427a870` 共享宿主接线，所有聊天会话共用一个 DSH 宿主。复跑：三套 tsc 通过，单测 55 个文件、754 例通过，真宿主集成测试 4/4，bridge-smoke 27 项、打包冒烟 37 项全过。
 - 2026-09-27 P1-6a：`16c8ef16` 权限逻辑抽成 `src/shared/permissions` 纯库，runtime 改为薄封装。复跑：三套 tsc 通过，runtime 与纯库相关 72 个文件、1291 例全过。
@@ -29,10 +30,10 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 ## Active TODO
 
 1. P1-2 本机部分完成（`2788952f`，[证据](evidence/p1-2-host-packaging-2026-09-27.md)）；三平台 CI 实跑待用户确认推送。
-2. P1-3c 施工中（opus 代理）：WorkerManager 宿主级语义，包括批次恢复、两级预算、熔断、Stop 阶梯 B、`engine_restarted`，以及退出与 `invalidateAll` 连带关宿主。
+2. P1-3c 已落地（`613d0568`）。下一步 P1-3d：空闲关停、日志清理、更新前关宿主、容量 10 / 6、停掉残留 scope（决策 075）。
 3. P1-9a 与 P1-9g 语料已落地（`6ce354c5`）；P1-9b（纯转换器）可以开工，只依赖 9a。
 4. P1-4a 第一部分施工中（opus 代理）：纯投影模块、bridge 历史缓存、录制门禁骨架。P1-7 渲染层方案已定（决策 068～073 待审批，068 开工前先出原型）。至此 P1 各任务都已出方案。P1-8 / P1-11 方案已定（决策 065～067 待审批）；P1-11 等用户答复 Q003。
-5. 决策 005～073 与 Q007（许可）等用户审批。P1-10 / P1-16 方案已定（[方案](topics/p1-10-p1-16-extensions.md)）。
+5. 决策 005～075 与 Q007（许可）等用户审批。P1-10 / P1-16 方案已定（[方案](topics/p1-10-p1-16-extensions.md)）。
 
 ## Blocked By
 
