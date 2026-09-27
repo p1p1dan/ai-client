@@ -21,3 +21,8 @@
 
 - P1-1：bridge 写桩和读桩；`agentWire.ts`、WorkerManager 的 5 处 agent 写入、`commitResumed` / `commitPiLeaf`，以及相关静态守卫。
 - P1-4：fork 子会话的 id 规则在 P1-4 定。建议由 Main 预先铸好新逻辑 id，随 `worker.fork` 一起传过去。
+
+## 实施补记（2026-09-26，P1-1 `100ebcf1`）
+
+- 额外的错误映射：桩文件缺失报 `dsh_session_missing`；桩不是 JSON，或者 `engine` 不是 `dsh`，报 `session_invalid`，渲染层落到「会话已损坏」卡片。
+- 桩丢失的 DSH 行不做自动修复，直接报 `dsh_session_missing`。按逻辑 id 反查、重建桩的工具留给 P1-3 的日志清理与收尾。

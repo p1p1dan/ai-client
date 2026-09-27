@@ -9,7 +9,7 @@ Role: implementation-status。更新日期：2026-09-26。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），进入实现。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。
+P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），代码已落地（`100ebcf1`），开发机 GUI 点验进行中。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。
 
 ## Next Target
 
@@ -17,11 +17,12 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Last Landed
 
+- 2026-09-26 P1-1 代码：`100ebcf1` 聊天会话一律走 DSH 宿主，旧 pi 会话迁移前只读，新会话先落盘再写桩。证据见 [p1-1-engine-cutover-2026-09-26.md](evidence/p1-1-engine-cutover-2026-09-26.md)。
 - 2026-09-26 P1-0：合并提交 `30a0c257`，把 main v1.0.3（`d23d72aa`）同步进本分支，零冲突。证据见 [p1-0-sync-main-2026-09-26.md](evidence/p1-0-sync-main-2026-09-26.md)。
 
 ## Active TODO
 
-1. P1-1 实现（opus 代理，按[方案](topics/p1-1-engine-cutover.md)与决策 005～010）。
+1. P1-1 开发机 GUI 点验（opus 代理，临时 HOME + 假网关），通过后标 ✅。
 2. P1-2 施工，排在 P1-1 落地之后（两者都改 bridge 入口）。
 3. P1-1 落地后并行施工 P1-2 与 P1-3b；P1-3a 排在 P1-2 搬 bridge 之后。
 4. P1-5 模型目录与凭据（含 P1-15）方案调研。
@@ -34,4 +35,5 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Last Verified
 
+- 2026-09-26 P1-1（Linux 开发机，内容同 `100ebcf1`）：四套 tsc 全部退出 0；相关单测 65 个文件、1043 例，加上渲染层 165 个文件、3201 例，全部通过；bridge-smoke 18 项判定全部为真。全量 Vitest 与 GUI 未跑，GUI 点验进行中。
 - 2026-09-26 P1-0（Linux 开发机，`30a0c257`）：四套 tsc 全部退出 0；`src/main/services/agent-host/` 与 worker RPC 类型相关单测 19 个文件、314 例全过；`bridge-smoke.ts` 6 项判定全部为真。全量 Vitest 与 GUI 未跑。

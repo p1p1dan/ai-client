@@ -17,3 +17,8 @@
 ## 影响
 
 - P1-1：`dshSessionRuntime.ts` 的新建路径；`bundle/lib/bridge.js` 把 `sessions` 注入给 bridge；bridge-smoke 增加「新建后已落盘」「只有 header 的会话能恢复」两个场景。
+
+## 实施补记（2026-09-26，P1-1 `100ebcf1`）
+
+- 新建时遇到 `SessionAlreadyExistsError`，改为重开同 id 的日志，校验 header 里的 cwd 后补写桩。原因：DSH 会话 id 是确定的，先前某次新建只要半途失败（桩没写成、身份没提交、应答超时），这个逻辑会话以后每次重试都会失败。bridge-smoke 的 `recreateReopenedExistingLog` 验证过。
+- 实测结论：`flush` 之后只有 header 的会话能被 `agents.resume`（`headerOnlyResumed`），第 3 条的作废条件没有触发。
