@@ -156,7 +156,7 @@ describe('Pi worker source is loadable under Node strip-only type removal', () =
     // source: it is the file dev really does load under strip-only and really
     // does import a `.mjs`. T025 moved this root here from
     // `bundledFeaturePlugins.ts`, which was deleted because nothing called it.
-    const policyLoader = path.join(repoRoot, 'src/runtime/plugins/permissions/policy.ts');
+    const policyLoader = path.join(repoRoot, 'src/shared/permissions/policy.ts');
     expect(fs.existsSync(policyLoader)).toBe(true);
     expect(fs.readFileSync(policyLoader, 'utf8')).toContain("permissionPolicy.mjs'");
     const { extensionless: policyProblems } = walkGraphFrom(policyLoader);

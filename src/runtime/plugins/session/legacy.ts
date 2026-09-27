@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { basename, dirname, join, resolve } from 'node:path';
 import { buildSessionContext, type Entry, type JsonlV4Header } from '@earendil-works/pi-agent-core';
+import { PERMISSION_GRANTS_ENTRY } from '../../../shared/permissions/grants.ts';
 import {
   isRuntimePermissionSettings,
   type LegacyPermissionTier,
@@ -32,8 +33,11 @@ export const PERMISSIONS_ENTRY = 'aiclient.permissions';
  * card at a time. The record is versioned (`plugins/permissions/grants.ts`) and
  * last-one-wins, so clearing the grants is written down as an empty record
  * rather than by deleting anything from an append-only file.
+ *
+ * Defined by the shared permission library since dsh-rebase P1-6a; re-exported
+ * here for the session code and its tests.
  */
-export const PERMISSION_GRANTS_ENTRY = 'aiclient.permissionGrants';
+export { PERMISSION_GRANTS_ENTRY };
 /**
  * Custom entries this runtime writes for ITSELF.
  *

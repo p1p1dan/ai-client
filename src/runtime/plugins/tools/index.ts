@@ -1,9 +1,13 @@
 import { homedir } from 'node:os';
-import { basename, dirname, join, matchesGlob, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, matchesGlob, relative, sep } from 'node:path';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { type Context, Service } from 'cordis';
 import { type Static, type TSchema, Type } from 'typebox';
 import { Check } from 'typebox/value';
+import {
+  authorizeTarget,
+  checkShellPaths as checkAnalyzedShellPaths,
+} from '../../../shared/permissions/shellPaths.ts';
 import { decodeConsoleOutput } from '../../../shared/windowsCodePage.ts';
 import {
   EXEC_SERVICE,
@@ -13,13 +17,12 @@ import {
   type RuntimeReadResult,
 } from '../../contracts.ts';
 import { errorCode, RuntimeHostError } from '../../host/errors.ts';
-import { type BashAnalysis, BashAnalyzer, splitShellPath } from '../permissions/bash-analysis.ts';
+import { type BashAnalysis, BashAnalyzer } from '../permissions/bash-analysis.ts';
 import { containsPath, PERMISSIONS_SERVICE, pathPolicy } from '../permissions/index.ts';
 import { type AskUser, askTool } from './ask.ts';
 import { browserPreviewTool, type PreviewHost } from './browserPreview.ts';
 import { createFileChange, readBeforeChange } from './file-change.ts';
 import { type IgnoreLayer, isIgnored, parseGitignore } from './gitignore.ts';
-import { canonicalPath } from './paths.ts';
 import {
   hasImageExtension,
   type ImageReadBudget,
@@ -64,6 +67,9 @@ const OPTIONAL_FILE_ERRORS = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'E
 function isSkippableIoError(error: unknown): boolean {
   return OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '');
 }
+/** The shared permission library's errors, thrown as this runtime's own type. */
+const runtimeError = (code: string, message: string, options?: ErrorOptions) =>
+  new RuntimeHostError(code, message, options);
 /**
  * What a bulk reader must treat as "this one file cannot be scanned" rather
  * than "the search failed" (tsd-02).
@@ -188,6 +194,7 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       },
     });
   }
+  /** Resolve, approve and re-check one target (dsh-rebase P1-6a: see `authorizeTarget`). */
   private async target(
     tool: string,
     id: string,
@@ -198,33 +205,16 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
     /** Content the approval card shows verbatim; see `ToolPermissionRequest`. */
     preview?: { label: string; text: string }
   ): Promise<string> {
-    const io = this.ctx.runtimeHostIo;
-    const lexical = resolve(this.config.cwd, input);
-    if (pathPolicy(lexical) === 'deny')
-      throw new RuntimeHostError('tool_denied', `access denied: ${lexical}`);
-    const path = await canonicalPath(io, this.config.cwd, input);
-    await this.ctx.runtimePermissions.authorize(
+    return authorizeTarget(
       {
-        tool,
-        toolCallId: id,
-        path,
-        command,
-        paths: shell?.paths,
-        commands: shell?.commands,
-        unresolvedPaths: shell?.unresolvedPaths,
-        exploration: shell?.exploration,
-        ...(preview ? { preview } : {}),
+        fs: this.ctx.runtimeHostIo,
+        cwd: this.config.cwd,
+        createError: runtimeError,
+        authorize: (request, approvalSignal) =>
+          this.ctx.runtimePermissions.authorize(request, approvalSignal),
       },
-      signal
+      { tool, toolCallId: id, input, signal, command, shell, preview }
     );
-    signal?.throwIfAborted();
-    const current = await canonicalPath(io, this.config.cwd, input);
-    if (current !== path)
-      throw new RuntimeHostError(
-        'path_changed',
-        'path changed during approval; retry to authorize the new target'
-      );
-    return path;
   }
   /**
    * decision 007 — tell the prompt service which files this call actually
@@ -263,55 +253,14 @@ export class ToolsPlugin extends Service implements RuntimeToolsService {
       if (this.locks.get(path) === next) this.locks.delete(path);
     }
   }
+  /** Analyse a command and check every operand it reaches (dsh-rebase P1-6a: see `checkShellPaths`). */
   private async checkShellPaths(command: string): Promise<BashAnalysis> {
     const analysis = await this.bash.analyze(command, this.config.cwd, this.config.shellEnv ?? {});
-    const paths = new Set<string>();
-    let visits = 0;
-    const check = async (lexical: string) => {
-      if (++visits > 20_000)
-        throw new RuntimeHostError(
-          'shell_path_limit',
-          'shell path expansion exceeds 20000 entries'
-        );
-      if (pathPolicy(lexical) === 'deny')
-        throw new RuntimeHostError('tool_denied', `shell operand is denied: ${lexical}`);
-      const canonical = await canonicalPath(this.ctx.runtimeHostIo, this.config.cwd, lexical);
-      if (pathPolicy(canonical) === 'deny')
-        throw new RuntimeHostError('tool_denied', `shell operand is denied: ${canonical}`);
-      paths.add(lexical);
-      paths.add(canonical);
-    };
-    const expand = async (path: string): Promise<void> => {
-      // Split on either separator: a command writes `conf/*` even on Windows,
-      // where splitting on `sep` alone leaves the wildcard glued to its parent
-      // and every entry fails to match, so nothing gets checked.
-      const parts = splitShellPath(path);
-      const wildcard = parts.findIndex((part) => /[*?[]/.test(part));
-      if (wildcard < 0) return check(path);
-      const parent = parts.slice(0, wildcard).join(sep) || sep;
-      await check(parent);
-      // Even an unmatched pattern can target denied names after another command creates them.
-      if (pathPolicy(path) === 'deny')
-        throw new RuntimeHostError('tool_denied', `shell pattern is denied: ${path}`);
-      try {
-        for await (const entry of this.ctx.runtimeHostIo.readDirectory(parent)) {
-          if (++visits > 20_000)
-            throw new RuntimeHostError(
-              'shell_path_limit',
-              'shell path expansion exceeds 20000 entries'
-            );
-          if (entry.name.startsWith('.') && !parts[wildcard].startsWith('.')) continue;
-          if (!matchesGlob(entry.name, parts[wildcard])) continue;
-          await expand([parent, entry.name, ...parts.slice(wildcard + 1)].join(sep));
-        }
-      } catch (error) {
-        // Parent doesn't exist / isn't a directory / isn't readable: a real
-        // shell would just fail to expand the wildcard, not abort the command.
-        if (!isSkippableIoError(error)) throw error;
-      }
-    };
-    for (const path of analysis.paths) await expand(path);
-    return { ...analysis, paths: [...paths].sort() };
+    return checkAnalyzedShellPaths(analysis, {
+      fs: this.ctx.runtimeHostIo,
+      cwd: this.config.cwd,
+      createError: runtimeError,
+    });
   }
   private install(): void {
     const io = this.ctx.runtimeHostIo;
