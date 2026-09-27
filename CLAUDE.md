@@ -2,14 +2,12 @@
 
 ## 当前任务
 
-**Runtime 自主化演进已完成**：应用已从 pi-coding-agent 整包依赖切换到自有 Cordis 插件式 runtime（`src/runtime/`），当前处于加固与现场反馈修复阶段。`feat/runtime-evolution` 分支已于 2026-09-24 退役删除。
+**本分支 `feat/dsh-p0-probe`：DSH 二开（B 路线）P1「分支内整体替换为 DSH」**。聊天引擎已换成 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；不做双引擎，测试完毕合入 main 即切换（决策 004）。main 只做 1.0.x 缺陷修复，本分支不推送、不发版，推送前需用户确认。
 
-- **当前分支**：`feat/ctrl-enter-interject`（Ctrl+Enter 插话、分支栏、时间线修复与子代理工具死循环防护）收口中，开发机点验与 Windows 实测通过后快进 main。
-- **分支约定**：此后新工作从 main 按主题开分支，做完验证后合回 main。
-- **规划入口**：`docs/plantree/README.md`（活跃计划、roadmap、进度看板、决策、证据）。
-- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`
-- **参考**：[PI-Desktop 调研](docs/plans/2026-09-08-pi-desktop-study.md) · [DSH 调研](docs/plans/2026-08-18-deepseek-harness-study.md)
-- **代码入口**：`src/runtime/`（自有 runtime）与 `src/agent-host/`（worker 宿主与会话投影）
+- **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
+- **代码入口**：`src/dsh-host/`（宿主、bridge、工具脚本）、`src/main/services/agent-host/`（`DshHostSupervisor`、`WorkerManager`）、`src/shared/dshHistory/`（历史投影）、`src/shared/legacyPiSession/`（pi 解码与迁移转换）、`src/shared/permissions/`（权限纯库）。`src/runtime/` 是待退役的自有引擎（P1-12 删除）。
+- **本地验证**：四套 tsc（根、`src/agent-host`、`src/runtime`、`src/dsh-host`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
+- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写）。
 
 ## 工程规范（Agent 项目）
 
