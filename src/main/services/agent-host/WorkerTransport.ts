@@ -18,6 +18,8 @@ export interface WorkerTransportExit {
 
 export interface WorkerTransport {
   readonly pid: number | undefined;
+  /** The shared DSH host channel this transport is (DshChannelTransport only). */
+  readonly channelId?: string;
   postMessage(message: WorkerRpcRequest): void;
   onMessage(listener: (message: unknown) => void): () => void;
   onError(listener: (error: Error) => void): () => void;

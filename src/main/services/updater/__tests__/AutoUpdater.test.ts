@@ -25,9 +25,10 @@ vi.mock('electron-updater', async () => {
 });
 
 import electronUpdater from 'electron-updater';
-import { AutoUpdaterService } from '../AutoUpdater';
+import { AutoUpdaterService, STOP_ENGINE_BEFORE_INSTALL_MS } from '../AutoUpdater';
 
 let service: AutoUpdaterService;
+let stopEngine: ReturnType<typeof vi.fn<() => Promise<void>>>;
 let window: EventEmitter & {
   webContents: { send: ReturnType<typeof vi.fn> };
   isDestroyed: () => boolean;
@@ -41,7 +42,8 @@ beforeEach(() => {
     webContents: { send: vi.fn() },
     isDestroyed: () => false,
   });
-  service = new AutoUpdaterService();
+  stopEngine = vi.fn(async () => undefined);
+  service = new AutoUpdaterService({ stopBeforeInstall: stopEngine });
 });
 afterEach(() => {
   service.cleanup();
@@ -95,7 +97,7 @@ describe('update reminders', () => {
     expect(service.getStatus().status).toBe('downloaded');
     expect(mocks.check).not.toHaveBeenCalled();
     expect(mocks.install).not.toHaveBeenCalled();
-    service.quitAndInstall();
+    await service.quitAndInstall();
     expect(mocks.install).toHaveBeenCalledOnce();
   });
   it('exposes download failures and allows retry', async () => {
@@ -136,5 +138,83 @@ describe('update reminders', () => {
     expect(electronUpdater.autoUpdater.listenerCount('update-available')).toBe(0);
     await vi.advanceTimersByTimeAsync(5 * 60 * 60 * 1000);
     expect(mocks.check).toHaveBeenCalledOnce();
+  });
+});
+
+/** dsh-rebase P1-3d (decision 025 rule 4): the DSH host holds native addons of the install dir. */
+describe('install waits for the chat engine to stop', () => {
+  function downloaded(): void {
+    service.init(window as unknown as BrowserWindow, false);
+    electronUpdater.autoUpdater.emit('update-downloaded', {
+      version: '2.0.0',
+      files: [],
+      path: '',
+      sha512: '',
+      releaseDate: '',
+      downloadedFile: '/tmp/update',
+    });
+  }
+
+  it('does nothing before a download', async () => {
+    await service.quitAndInstall();
+    expect(stopEngine).not.toHaveBeenCalled();
+    expect(mocks.install).not.toHaveBeenCalled();
+    expect(service.isQuittingForUpdate()).toBe(false);
+  });
+
+  it('installs only once the engine has stopped, and only once when asked twice', async () => {
+    downloaded();
+    let stopped!: () => void;
+    stopEngine.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          stopped = resolve;
+        })
+    );
+    const first = service.quitAndInstall();
+    const second = service.quitAndInstall();
+    expect(service.isQuittingForUpdate()).toBe(true);
+    await vi.advanceTimersByTimeAsync(STOP_ENGINE_BEFORE_INSTALL_MS - 1);
+    expect(mocks.install).not.toHaveBeenCalled();
+    stopped();
+    await Promise.all([first, second]);
+    expect(stopEngine).toHaveBeenCalledOnce();
+    expect(mocks.install).toHaveBeenCalledOnce();
+  });
+
+  it('installs anyway after 5 s, or when the stop fails, and never rejects', async () => {
+    expect(STOP_ENGINE_BEFORE_INSTALL_MS).toBe(5_000);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    downloaded();
+    stopEngine.mockImplementation(() => new Promise<void>(() => {}));
+    const hanging = service.quitAndInstall();
+    await vi.advanceTimersByTimeAsync(STOP_ENGINE_BEFORE_INSTALL_MS);
+    await hanging;
+    expect(mocks.install).toHaveBeenCalledOnce();
+
+    const failing = new AutoUpdaterService({
+      stopBeforeInstall: async () => {
+        throw new Error('host would not stop');
+      },
+    });
+    failing.init(window as unknown as BrowserWindow, false);
+    electronUpdater.autoUpdater.emit('update-downloaded', {
+      version: '2.0.0',
+      files: [],
+      path: '',
+      sha512: '',
+      releaseDate: '',
+      downloadedFile: '/tmp/update',
+    });
+    mocks.install.mockImplementationOnce(() => {
+      throw new Error('installer missing');
+    });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await expect(failing.quitAndInstall()).resolves.toBeUndefined();
+    expect(mocks.install).toHaveBeenCalledTimes(2);
+    // A failed install leaves the app running and able to try again.
+    expect(failing.isQuittingForUpdate()).toBe(false);
+    failing.cleanup();
+    warn.mockRestore();
   });
 });

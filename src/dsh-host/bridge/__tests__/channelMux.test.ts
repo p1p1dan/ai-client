@@ -161,11 +161,108 @@ describe('DshChannelMux — opening channels (BR-01)', () => {
 
   it('consumes an unknown host control kind with one diagnostic, and a malformed envelope too', () => {
     const h = harness();
-    expect(h.mux.receive({ host: 'gc', claimed: [] })).toBe(true);
-    expect(h.mux.receive({ host: 'gc', claimed: [] })).toBe(true);
+    expect(h.mux.receive({ host: 'credential', id: 1 })).toBe(true);
+    expect(h.mux.receive({ host: 'credential', id: 2 })).toBe(true);
     expect(h.mux.receive({ ch: 'slot-1', rpc: {} })).toBe(true);
+    // A gc without an id cannot be answered: dropped with its own diagnostic.
+    expect(h.mux.receive({ host: 'gc', claimed: [] })).toBe(true);
     expect(h.sent).toEqual([]);
-    expect(h.log).toHaveBeenCalledTimes(2);
+    expect(h.log).toHaveBeenCalledTimes(3);
+    expect(h.log).toHaveBeenLastCalledWith('dropped a malformed gc request');
+  });
+});
+
+describe('DshChannelMux — gc (P1-3d, decision 024)', () => {
+  const outcome = {
+    ok: true,
+    deleted: ['aiclient-old'],
+    stubsDeleted: 1,
+    skipped: { claimed: 2 },
+    ms: 3,
+  };
+
+  it('hands a gc to the collector and answers gc-result with its id', async () => {
+    const h = harness();
+    const collect = vi.fn(async () => outcome);
+    const mux = new DshChannelMux({
+      send: (message) => h.sent.push(message),
+      createRuntime: () => {
+        throw new Error('unused');
+      },
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      collectSessions: collect,
+      log: h.log,
+    });
+    expect(mux.receive({ host: 'gc', id: 7, claimed: ['aiclient-s1'], graceMs: 1000 })).toBe(true);
+    await settle();
+    expect(collect).toHaveBeenCalledWith({ claimed: ['aiclient-s1'], graceMs: 1000 });
+    expect(h.sent).toEqual([{ host: 'gc-result', id: 7, ...outcome }]);
+  });
+
+  it('runs one pass at a time, in order', async () => {
+    const h = harness();
+    const order: string[] = [];
+    let release!: () => void;
+    const first = new Promise<void>((done) => {
+      release = done;
+    });
+    const collect = vi.fn(async (request: { graceMs: number }) => {
+      order.push(`start ${request.graceMs}`);
+      if (request.graceMs === 1) await first;
+      order.push(`end ${request.graceMs}`);
+      return outcome;
+    });
+    const mux = new DshChannelMux({
+      send: (message) => h.sent.push(message),
+      createRuntime: () => {
+        throw new Error('unused');
+      },
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      collectSessions: collect,
+      log: h.log,
+    });
+    mux.receive({ host: 'gc', id: 1, claimed: [], graceMs: 1 });
+    mux.receive({ host: 'gc', id: 2, claimed: [], graceMs: 2 });
+    await settle();
+    expect(order).toEqual(['start 1']);
+    release();
+    await settle();
+    expect(order).toEqual(['start 1', 'end 1', 'start 2', 'end 2']);
+    expect(h.sent.map((message) => (message as { id?: number }).id)).toEqual([1, 2]);
+  });
+
+  it('answers ok: false, never throws, when the collector fails or is missing', async () => {
+    const h = harness();
+    h.mux.receive({ host: 'gc', id: 1, claimed: [], graceMs: 0 });
+    await settle();
+    expect(h.sent).toEqual([
+      expect.objectContaining({
+        host: 'gc-result',
+        id: 1,
+        ok: false,
+        deleted: [],
+        stubsDeleted: 0,
+      }),
+    ]);
+    const failing = new DshChannelMux({
+      send: (message) => h.sent.push(message),
+      createRuntime: () => {
+        throw new Error('unused');
+      },
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      collectSessions: async () => {
+        throw new Error('list failed');
+      },
+      log: h.log,
+    });
+    failing.receive({ host: 'gc', id: 2, claimed: [], graceMs: 0 });
+    await settle();
+    expect(h.sent.at(-1)).toMatchObject({
+      host: 'gc-result',
+      id: 2,
+      ok: false,
+      error: 'list failed',
+    });
   });
 });
 

@@ -7,7 +7,8 @@
  *   session RPC    {ch, rpc}           both directions; `rpc` is a worker RPC
  *                                      message (workerRpc.ts), `ch` names the
  *                                      virtual slot it belongs to
- *   host control   {host: <kind>, ...} ping / pong, close / closed
+ *   host control   {host: <kind>, ...} ping / pong, close / closed,
+ *                                      gc / gc-result (P1-3d, decision 024)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -19,7 +20,6 @@
  * diagnostic by whichever side does not know them yet:
  *   configure / credential / credential-result   P1-5 (decisions 033, 034)
  *   readPage / page                              P1-4 (decision 030)
- *   gc                                           P1-3d (decision 024)
  *   seedSession                                  P1-9
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
@@ -73,11 +73,29 @@ export interface DshHostShutdown {
   type: 'shutdown';
 }
 
+/**
+ * Decision 024: delete the `aiclient-*` sessions nobody can reach and nothing
+ * was ever said in — not claimed (nor descended from a claimed session through
+ * `parentSession`), past `graceMs` since their header was created, and holding
+ * no event but the setup ones DSH writes when an agent is created. Each is
+ * write-locked first, then its whole directory and its identity stub go; a
+ * lock file is never removed on its own. Stubs whose session is gone, claimed
+ * by nobody and past `graceMs`, go too. Answered with `gc-result`.
+ */
+export interface DshHostGcRequest {
+  host: 'gc';
+  id: number;
+  /** DSH session ids the session index references, lineage included. */
+  claimed: string[];
+  graceMs: number;
+}
+
 export type DshMainToHostMessage =
   | DshChannelEnvelope<WorkerRpcRequest>
   | DshHostPing
   | DshHostCloseChannel
-  | DshHostShutdown;
+  | DshHostShutdown
+  | DshHostGcRequest;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -134,13 +152,59 @@ export interface DshHostChannelClosed {
   ch: DshChannelId;
 }
 
+/** Why `gc` left a session (or a stub) alone. */
+export type DshHostGcSkipReason =
+  /** Not an `aiclient-*` session: never ours to delete. */
+  | 'foreign'
+  /** Claimed by the index, or a descendant of a claimed session. */
+  | 'claimed'
+  /** Created less than `graceMs` ago. */
+  | 'recent'
+  /** Something was said in it (or it is too large to hold only setup events). */
+  | 'content'
+  /** A writer holds its lock. */
+  | 'locked'
+  /** Created in the host but not on disk yet. */
+  | 'unmaterialized'
+  /** Its directory is not where, or not what, a session directory should be. */
+  | 'unexpected'
+  /** An error while checking or deleting it. */
+  | 'failed';
+
+export const DSH_HOST_GC_SKIP_REASONS: readonly DshHostGcSkipReason[] = [
+  'foreign',
+  'claimed',
+  'recent',
+  'content',
+  'locked',
+  'unmaterialized',
+  'unexpected',
+  'failed',
+];
+
+/** Answer to `gc`, echoing its id. `ok: false` when it could not run at all. */
+export interface DshHostGcResult {
+  host: 'gc-result';
+  id: number;
+  ok: boolean;
+  /** Session ids whose directory was deleted. */
+  deleted: string[];
+  /** Identity stubs deleted: those of the deleted sessions and orphaned ones. */
+  stubsDeleted: number;
+  /** Sessions and stubs left alone, per reason. */
+  skipped: Partial<Record<DshHostGcSkipReason, number>>;
+  ms: number;
+  error?: string;
+}
+
 export type DshHostToMainMessage =
   | DshHostReady
   | DshHostFatal
   | DshHostStopped
   | DshChannelEnvelope<WorkerRpcMessage>
   | DshHostPong
-  | DshHostChannelClosed;
+  | DshHostChannelClosed
+  | DshHostGcResult;
 
 // ---- guards -------------------------------------------------------------------
 
@@ -232,4 +296,40 @@ export function isDshHostPong(value: unknown): value is DshHostPong {
 
 export function isDshHostChannelClosed(value: unknown): value is DshHostChannelClosed {
   return isRecord(value) && value.host === 'closed' && isDshChannelId(value.ch);
+}
+
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+export function isDshHostGcRequest(value: unknown): value is DshHostGcRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'gc' &&
+    isPositiveSafeInteger(value.id) &&
+    isStringList(value.claimed) &&
+    isNonNegativeFinite(value.graceMs)
+  );
+}
+
+export function isDshHostGcResult(value: unknown): value is DshHostGcResult {
+  if (
+    !isRecord(value) ||
+    value.host !== 'gc-result' ||
+    !isPositiveSafeInteger(value.id) ||
+    typeof value.ok !== 'boolean' ||
+    !isStringList(value.deleted) ||
+    !isNonNegativeFinite(value.stubsDeleted) ||
+    !isNonNegativeFinite(value.ms) ||
+    (value.error !== undefined && typeof value.error !== 'string') ||
+    !isRecord(value.skipped)
+  ) {
+    return false;
+  }
+  const skipped = value.skipped;
+  return Object.keys(skipped).every(
+    (reason) =>
+      (DSH_HOST_GC_SKIP_REASONS as readonly string[]).includes(reason) &&
+      isNonNegativeFinite(skipped[reason])
+  );
 }

@@ -8,6 +8,8 @@ import {
   isDshHostChannelClosed,
   isDshHostCloseChannel,
   isDshHostFatal,
+  isDshHostGcRequest,
+  isDshHostGcResult,
   isDshHostPing,
   isDshHostPong,
   isDshHostReady,
@@ -107,5 +109,40 @@ describe('dshHostProtocol control messages', () => {
     expect(dshHostControlKind({ host: 'credential', id: 1 })).toBe('credential');
     expect(dshHostControlKind({ type: 'ready', pid: 1 })).toBeUndefined();
     expect(dshHostControlKind('ping')).toBeUndefined();
+  });
+});
+
+describe('dshHostProtocol gc (P1-3d, decision 024)', () => {
+  it('accepts a gc request only with an id, a claimed id list and a grace', () => {
+    const request = { host: 'gc', id: 1, claimed: ['aiclient-s1'], graceMs: 86_400_000 };
+    expect(isDshHostGcRequest(request)).toBe(true);
+    expect(isDshHostGcRequest({ ...request, claimed: [] })).toBe(true);
+    expect(isDshHostGcRequest({ ...request, id: 0 })).toBe(false);
+    expect(isDshHostGcRequest({ ...request, claimed: ['aiclient-s1', 7] })).toBe(false);
+    expect(isDshHostGcRequest({ ...request, claimed: 'aiclient-s1' })).toBe(false);
+    expect(isDshHostGcRequest({ ...request, graceMs: -1 })).toBe(false);
+    expect(isDshHostGcRequest({ host: 'gc', claimed: [] })).toBe(false);
+  });
+
+  it('accepts a gc result with known skip reasons and counts only', () => {
+    const result = {
+      host: 'gc-result',
+      id: 3,
+      ok: true,
+      deleted: ['aiclient-a'],
+      stubsDeleted: 1,
+      skipped: { claimed: 4, content: 2, locked: 1 },
+      ms: 12,
+    };
+    expect(isDshHostGcResult(result)).toBe(true);
+    expect(isDshHostGcResult({ ...result, ok: false, deleted: [], error: 'no persistence' })).toBe(
+      true
+    );
+    expect(isDshHostGcResult({ ...result, skipped: { swept: 1 } })).toBe(false);
+    expect(isDshHostGcResult({ ...result, skipped: { claimed: -1 } })).toBe(false);
+    expect(isDshHostGcResult({ ...result, deleted: [1] })).toBe(false);
+    expect(isDshHostGcResult({ ...result, error: 42 })).toBe(false);
+    expect(isDshHostGcResult({ ...result, id: undefined })).toBe(false);
+    expect(dshHostControlKind(result)).toBe('gc-result');
   });
 });

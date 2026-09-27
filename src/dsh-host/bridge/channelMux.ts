@@ -18,6 +18,9 @@
  *                       own request chain, then `closed`. An unknown or closed
  *                       channel is answered `closed` at once; a disposal that
  *                       hangs is never answered (Main escalates).
+ *   {host:'gc', id, …}  collects orphaned empty sessions (decision 024,
+ *                       `sessionGc.ts`), one pass at a time, answered
+ *                       `gc-result` with the same id; never rejects.
  *
  * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
  * then `closed`, and nothing more for that channel after it. Messages that are
@@ -33,10 +36,13 @@ import {
   DSH_CHANNEL_UNKNOWN_CODE,
   type DshChannelId,
   type DshHostChannelStatus,
+  type DshHostGcRequest,
+  type DshHostGcResult,
   type DshHostToMainMessage,
   dshHostControlKind,
   isDshChannelEnvelope,
   isDshHostCloseChannel,
+  isDshHostGcRequest,
   isDshHostPing,
   opensDshChannel,
 } from '../../shared/types/dshHostProtocol.ts';
@@ -60,6 +66,11 @@ export interface DshChannelMuxOptions {
   createRuntime(options: PiWorkerRuntimeOptions): ChannelRuntime;
   /** Event-loop delay since the previous call, and resident memory, for a pong. */
   sample(): { eldMaxMs: number; rssMb: number };
+  /** Decision 024's orphan collection; without it a `gc` is answered `ok: false`. */
+  collectSessions?(request: {
+    claimed: readonly string[];
+    graceMs: number;
+  }): Promise<Omit<DshHostGcResult, 'host' | 'id'>>;
   log(...args: unknown[]): void;
 }
 
@@ -99,6 +110,8 @@ export class DshChannelMux {
   private readonly closedIds = new Set<DshChannelId>();
   private readonly warned = new Set<string>();
   private readonly options: DshChannelMuxOptions;
+  /** One collection pass at a time; a link that never rejects. */
+  private gcChain: Promise<void> = Promise.resolve();
 
   constructor(options: DshChannelMuxOptions) {
     this.options = options;
@@ -123,9 +136,16 @@ export class DshChannelMux {
       this.route(message.ch, message.rpc);
       return true;
     }
+    if (isDshHostGcRequest(message)) {
+      this.gc(message);
+      return true;
+    }
     const kind = dshHostControlKind(message);
     if (kind !== undefined) {
-      this.warnOnce(`control:${kind}`, `dropped host control message "${kind}"`);
+      this.warnOnce(
+        `control:${kind}`,
+        kind === 'gc' ? 'dropped a malformed gc request' : `dropped host control message "${kind}"`
+      );
       return true;
     }
     if (isRecord(message) && 'ch' in message) {
@@ -234,6 +254,38 @@ export class DshChannelMux {
       if (oldest !== undefined) this.closedIds.delete(oldest);
     }
     this.options.send({ host: 'closed', ch: channel.ch });
+  }
+
+  /**
+   * Queued behind any pass still running. The pass itself never throws out of
+   * here: an unhandled rejection would take the whole host down (installFailLoud).
+   */
+  private gc(request: DshHostGcRequest): void {
+    const run = async (): Promise<DshHostGcResult> => {
+      const started = performance.now();
+      const failed = (error: string): DshHostGcResult => ({
+        host: 'gc-result',
+        id: request.id,
+        ok: false,
+        deleted: [],
+        stubsDeleted: 0,
+        skipped: {},
+        ms: Math.round(performance.now() - started),
+        error,
+      });
+      const collect = this.options.collectSessions;
+      if (!collect) return failed('session collection is not available on this host');
+      try {
+        const outcome = await collect({ claimed: request.claimed, graceMs: request.graceMs });
+        return { ...outcome, host: 'gc-result', id: request.id };
+      } catch (error) {
+        return failed(error instanceof Error ? error.message : String(error));
+      }
+    };
+    this.gcChain = this.gcChain
+      .then(run)
+      .then((result) => this.options.send(result))
+      .catch((error: unknown) => this.options.log('gc answer failed', error));
   }
 
   /** A request for a channel this host does not serve: answered, never dropped silently. */

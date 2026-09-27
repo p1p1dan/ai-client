@@ -11,6 +11,40 @@ const { autoUpdater } = electronUpdater;
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const MIN_FOCUS_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
+/**
+ * How long an install waits for the chat engine to stop (dsh-rebase decision
+ * 025 rule 4). A graceful host stop takes 3.5 s at worst before SIGKILL; past
+ * this the install goes ahead and app quit's own cleanup is the second guard.
+ */
+export const STOP_ENGINE_BEFORE_INSTALL_MS = 5_000;
+
+/**
+ * Chat sessions first, then the shared DSH host they run on, as app quit does
+ * (`ipc/workerManager.ts`). The host stop is awaited on its own: the manager's
+ * lifecycle queue may be busy with a slow open, and the host must be gone
+ * either way.
+ */
+async function stopChatEngine(): Promise<void> {
+  const [{ workerManager }, { dshHostSupervisor }] = await Promise.all([
+    import('../agent-host/WorkerManager'),
+    import('../agent-host/DshHostSupervisor'),
+  ]);
+  void workerManager.disposeAll('app-shutdown').catch((error: unknown) => {
+    console.warn('[updater] chat sessions did not all close before the install:', error);
+  });
+  await dshHostSupervisor.shutdown('app-quit');
+}
+
+export interface AutoUpdaterServiceOptions {
+  /**
+   * Stops what holds files of the install directory open. The DSH host loads
+   * `koffi.node` and `conpty.node` in place, so NSIS cannot overwrite them
+   * while it runs (dsh-rebase decision 025 rule 4).
+   */
+  stopBeforeInstall?: () => Promise<void>;
+  stopBeforeInstallTimeoutMs?: number;
+}
+
 function updateInfo(info: UpdateInfo): NonNullable<UpdateStatus['info']> {
   return {
     version: info.version,
@@ -27,7 +61,16 @@ export class AutoUpdaterService {
   private lastCheckTime = 0;
   private checkPromise: Promise<void> | null = null;
   private downloadPromise: Promise<void> | null = null;
+  private installPromise: Promise<void> | null = null;
   private removeListeners: (() => void) | null = null;
+  private readonly stopBeforeInstall: () => Promise<void>;
+  private readonly stopBeforeInstallTimeoutMs: number;
+
+  constructor(options: AutoUpdaterServiceOptions = {}) {
+    this.stopBeforeInstall = options.stopBeforeInstall ?? stopChatEngine;
+    this.stopBeforeInstallTimeoutMs =
+      options.stopBeforeInstallTimeoutMs ?? STOP_ENGINE_BEFORE_INSTALL_MS;
+  }
 
   init(
     window: BrowserWindow,
@@ -188,10 +231,43 @@ export class AutoUpdaterService {
     return this.downloadPromise;
   }
 
-  quitAndInstall(): void {
-    if (this.isUpdateDownloaded()) {
-      this._isQuittingForUpdate = true;
+  /**
+   * Stops the chat engine, then quits and installs (decision 025 rule 4). Once
+   * per download; never rejects, since the IPC caller does not await it.
+   */
+  quitAndInstall(): Promise<void> {
+    if (!this.isUpdateDownloaded()) return Promise.resolve();
+    this.installPromise ??= this.stopThenInstall();
+    return this.installPromise;
+  }
+
+  private async stopThenInstall(): Promise<void> {
+    this._isQuittingForUpdate = true;
+    let timer: NodeJS.Timeout | null = null;
+    const stopped = await Promise.race([
+      this.stopBeforeInstall().then(
+        () => true,
+        (error: unknown) => {
+          console.warn('[updater] stopping the chat engine before the install failed:', error);
+          return true;
+        }
+      ),
+      new Promise<false>((resolve) => {
+        timer = setTimeout(() => resolve(false), this.stopBeforeInstallTimeoutMs);
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    if (!stopped) {
+      console.warn(
+        `[updater] the chat engine did not stop within ${this.stopBeforeInstallTimeoutMs}ms; installing anyway`
+      );
+    }
+    try {
       autoUpdater.quitAndInstall();
+    } catch (error) {
+      this.installPromise = null;
+      this._isQuittingForUpdate = false;
+      console.error('[updater] quitAndInstall failed:', error);
     }
   }
 

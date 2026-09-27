@@ -63,6 +63,11 @@ export class DshChannelTransport implements WorkerTransport {
     return this.hostPid;
   }
 
+  /** How the host's pong names this channel. */
+  get channelId(): DshChannelId {
+    return this.ch;
+  }
+
   get exited(): boolean {
     return this.exitInfo !== null;
   }

@@ -106,12 +106,14 @@ import {
   createPiWorkerSlot,
 } from './createPiWorkerSlot';
 import {
+  DSH_HOST_RESTART_BUDGET,
   type DshHostRestartReason,
   type DshHostSupervisor,
   DshHostSupervisorError,
   dshHostSupervisor,
   isPlannedHostRestart,
 } from './DshHostSupervisor';
+import { claimedDshSessionIds, DSH_SESSION_GC_GRACE_MS, readDshSessionStub } from './dshSessionGc';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import { type PromptCacheTtlSettings, promptCacheTtlSettings } from './promptCacheSettings';
@@ -286,11 +288,14 @@ interface ManagedSlot {
 /**
  * dsh-rebase P1-3c — the shared DSH host, as WorkerManager drives it. The
  * supervisor's own interface; a narrower type so tests can stand one in.
+ * `collectSessions` (P1-3d, decision 024) is optional: a host without it
+ * simply never collects.
  */
 export type WorkerManagerHost = Pick<
   DshHostSupervisor,
   'status' | 'ensureHost' | 'restart' | 'shutdown' | 'forceKillNow'
->;
+> &
+  Partial<Pick<DshHostSupervisor, 'collectSessions'>>;
 
 export interface WorkerManagerOptions {
   createSlot?: typeof createPiWorkerSlot;
@@ -380,6 +385,14 @@ export interface WorkerManagerOptions {
    * is a per-session restart.
    */
   host?: WorkerManagerHost;
+  /**
+   * dsh-rebase P1-3d (decision 024) — reads an identity stub the index names,
+   * for the reference set of the one orphan collection per run. Injected for
+   * the same reason as the stat above.
+   */
+  readDshStub?: (file: string) => Promise<unknown>;
+  /** How long after the host is first up the collection waits; see `scheduleOrphanCollection`. */
+  orphanCollectionDelayMs?: number;
 }
 
 export interface WorkerManagerSlotSnapshot {
@@ -405,6 +418,16 @@ const DEFAULT_RESTART_WINDOW_MS = 60_000;
 
 /** decision 020 rule 5: host faults in a row a session may be present at before it is left alone. */
 const HOST_FAULT_SUSPECT_STREAK = 2;
+
+/**
+ * dsh-rebase P1-3d (decision 024) — the orphan collection runs this long after
+ * the host is first up with nothing being recovered, so the first session's
+ * own history and first turn go before it.
+ */
+const DEFAULT_ORPHAN_COLLECTION_DELAY_MS = 5_000;
+
+/** Deleted ids named in the collection's log line; the count covers the rest. */
+const ORPHAN_IDS_LOGGED = 20;
 
 /**
  * dsh-rebase P1-3c — codes a session parks in `error` under (`entry.error`
@@ -499,22 +522,18 @@ function nonNegativeFinite(value: number, label: string): number {
 export const MAX_WORKER_CAPACITY = 10;
 
 /**
- * Product default: 10 normally, 6 on mid-range hosts, 3 on <=4 GiB hosts.
+ * Product default: 10, and 6 on hosts with at most 4 GiB (dsh-rebase decision
+ * 019).
  *
- * D12 raised these from 4 / 3 / 2. The user asked for "about 10 conversations
- * at once", and the old ceiling made that impossible rather than slow: past
- * capacity a new session does not queue, it fails with
- * `worker_capacity_reached`.
- *
- * The memory tiers are kept, and are the reason the top number is not applied
- * everywhere: a slot is a whole utilityProcess plus one model context, so on a
- * 4 GiB machine ten of them would not be ten working conversations, it would be
- * ten that swap. Degrading by host size is what makes the raised ceiling safe
- * to ship as the default rather than an opt-in.
+ * D12 raised the ceiling to 10 because the user asked for "about 10
+ * conversations at once": past capacity a new session does not queue, it fails
+ * with `worker_capacity_reached`. D12's tiers (10 / 6 / 3) priced a session as
+ * a whole process plus one model context. On the shared DSH host a session is
+ * a channel costing 3 to 46 MB of one process (P0-6), so only the smallest
+ * machines keep a lower number.
  */
 export function resolveDefaultWorkerCapacity(totalMemoryBytes = os.totalmem()): number {
-  if (totalMemoryBytes <= 4 * 1024 ** 3) return 3;
-  if (totalMemoryBytes <= 8 * 1024 ** 3) return 6;
+  if (totalMemoryBytes <= 4 * 1024 ** 3) return 6;
   return MAX_WORKER_CAPACITY;
 }
 
@@ -612,9 +631,19 @@ export class WorkerManager {
   private hostRecoveryScheduled = false;
   /** Set while Main itself restarts the host: the exits it causes read `engine_restarted`. */
   private plannedHostRestart: DshHostRestartReason | null = null;
+  private readonly readDshStub: (file: string) => Promise<unknown>;
+  private readonly orphanCollectionDelayMs: number;
+  private orphanCollectionTimer: NodeJS.Timeout | null = null;
+  /** Decision 024: at most one collection per run, started or not. */
+  private orphanCollectionStarted = false;
 
   constructor(options: WorkerManagerOptions = {}) {
     this.host = options.host ?? null;
+    this.readDshStub = options.readDshStub ?? readDshSessionStub;
+    this.orphanCollectionDelayMs = nonNegativeFinite(
+      options.orphanCollectionDelayMs ?? DEFAULT_ORPHAN_COLLECTION_DELAY_MS,
+      'Orphan collection delay'
+    );
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
     // The DEFAULT is a constant, not a settings read. Reading the real file
     // needs Electron's `app` paths, and a manager built without a host — every
@@ -772,6 +801,73 @@ export class WorkerManager {
           }
         }
       }
+    }
+  }
+
+  /**
+   * dsh-rebase P1-3d (decision 024) — the one DSH orphan collection of this
+   * run, armed once a host is up and nothing is being recovered: after a
+   * user's create or resume, or after a recovery batch. It runs a short delay
+   * later, off the lifecycle queue, and only if the host is still ready with
+   * no recovery pending; otherwise the next of those moments arms it again.
+   */
+  private scheduleOrphanCollection(): void {
+    if (this.orphanCollectionStarted || this.orphanCollectionTimer) return;
+    if (!this.host?.collectSessions) return;
+    this.orphanCollectionTimer = setTimeout(() => {
+      this.orphanCollectionTimer = null;
+      void this.runOrphanCollection();
+    }, this.orphanCollectionDelayMs);
+    this.orphanCollectionTimer.unref?.();
+  }
+
+  private cancelOrphanCollection(): void {
+    if (this.orphanCollectionTimer) clearTimeout(this.orphanCollectionTimer);
+    this.orphanCollectionTimer = null;
+  }
+
+  /** Never rejects: housekeeping, like the staged-fork sweep. */
+  private async runOrphanCollection(): Promise<void> {
+    const host = this.host;
+    if (this.orphanCollectionStarted || !host?.collectSessions || this.state === 'stopped') return;
+    if (
+      host.status().state !== 'ready' ||
+      this.pendingHostRecovery.size > 0 ||
+      this.hostRecoveryScheduled
+    ) {
+      return;
+    }
+    this.orphanCollectionStarted = true;
+    try {
+      // A failed index read ends the pass: nothing is orphaned without the index.
+      const rows = await this.listIndexedSessions();
+      const claimed = await claimedDshSessionIds(rows, this.readDshStub);
+      const result = await host.collectSessions({ claimed, graceMs: DSH_SESSION_GC_GRACE_MS });
+      const skipped = Object.entries(result.skipped)
+        .map(([reason, count]) => `${reason} ${count}`)
+        .join(', ');
+      const summary =
+        `deleted ${result.deleted.length} session(s) and ${result.stubsDeleted} stub(s), ` +
+        `left ${skipped || 'none'} (${claimed.length} claimed, ${result.ms} ms)`;
+      if (!result.ok) {
+        console.warn(`[worker-manager] DSH session collection did not run: ${result.error}`);
+      } else if (
+        result.deleted.length > 0 ||
+        result.stubsDeleted > 0 ||
+        (result.skipped.failed ?? 0) > 0
+      ) {
+        // Deleting user data is always on record (warn survives the logging switch).
+        const named = result.deleted.slice(0, ORPHAN_IDS_LOGGED).join(' ');
+        console.warn(
+          `[worker-manager] DSH session collection: ${summary}${named ? `; deleted ${named}` : ''}`
+        );
+      } else {
+        console.info(`[worker-manager] DSH session collection: ${summary}`);
+      }
+    } catch (error) {
+      console.warn(
+        `[worker-manager] DSH session collection failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
@@ -1161,6 +1257,7 @@ export class WorkerManager {
           requestId,
           payload: { status: 'idle' },
         });
+        this.scheduleOrphanCollection();
       } catch (error) {
         entry.error = error instanceof Error ? error.message : String(error);
         await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
@@ -1430,6 +1527,7 @@ export class WorkerManager {
           this.resumeFlights.get(input.sessionId)?.ownerWebContentsId ?? input.ownerWebContentsId
         );
         this.publishHistoryTriplet(entry, requestId, history, 'initial');
+        this.scheduleOrphanCollection();
       } catch (error) {
         entry.error = error instanceof Error ? error.message : String(error);
         await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
@@ -2584,6 +2682,7 @@ export class WorkerManager {
         clearInterval(this.idleTimer);
         this.idleTimer = null;
       }
+      if (reason === 'app-shutdown') this.cancelOrphanCollection();
       const activeImport = this.activeImport;
       const activeImportSlot = this.activeImportSlot;
       // main-host-02: every teardown below is independent of the others'
@@ -2643,6 +2742,7 @@ export class WorkerManager {
       clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
+    this.cancelOrphanCollection();
     const entries = [...this.entriesBySession.values()];
     const slots = [...this.ownedSlots];
     this.activeImport?.forceKillNow();
@@ -3048,8 +3148,9 @@ export class WorkerManager {
   }
 
   private selectEvictionCandidate(): ManagedSlot | null {
+    const busy = this.busyChannels();
     const candidates = [...this.entriesBySession.values()].filter((entry) =>
-      this.isSafeToEvict(entry)
+      this.isSafeToEvict(entry, busy)
     );
     // An entry parked in `error` has no live worker left to lose, so retire it
     // before evicting a healthy idle session.
@@ -3066,37 +3167,56 @@ export class WorkerManager {
    * but it still occupied a pool slot against `capacity` that no eviction could
    * reclaim — enough of them and every new session failed with
    * `worker_capacity_reached`.
+   *
+   * dsh-rebase P1-3d (decision 025): a session the shared host last reported
+   * busy — a goal round, or a background job still running after its turn —
+   * is not idle, and closing its channel would end that work.
    */
-  private isSafeToEvict(entry: ManagedSlot): boolean {
+  private isSafeToEvict(entry: ManagedSlot, busy: ReadonlySet<string>): boolean {
+    const channel = entry.slot?.channelId;
     return (
       (entry.state === 'ready' || entry.state === 'error') &&
       entry.ownerWebContentsId === null &&
       entry.activeRequestId === null &&
-      entry.mutationInFlight === null
+      entry.mutationInFlight === null &&
+      !(channel !== undefined && busy.has(channel))
     );
+  }
+
+  /** Channels the shared host's last pong reported busy. */
+  private busyChannels(): Set<string> {
+    const channels = this.host?.status().lastPong?.channels ?? [];
+    return new Set(channels.filter((channel) => channel.busy).map((channel) => channel.ch));
   }
 
   private async reclaimIdleInternal(): Promise<void> {
     if (this.idleTimeoutMs === 0) return;
     const cutoff = this.now() - this.idleTimeoutMs;
+    const busy = this.busyChannels();
     const victims = [...this.entriesBySession.values()].filter(
-      (entry) => this.isSafeToEvict(entry) && entry.lastIdleAt <= cutoff
+      (entry) => this.isSafeToEvict(entry, busy) && entry.lastIdleAt <= cutoff
     );
-    await this.disposeEntries(victims, 'slot-replace');
+    const stuck = await this.disposeEntries(victims, 'slot-replace');
+    await this.releaseStuckChannels(stuck);
     this.updateManagerState();
   }
 
+  /** Resolves the slots whose channel would not close (`dispose-failed`); never rejects. */
   private async disposeEntries(
     entries: ManagedSlot[],
     reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace'
-  ): Promise<void> {
+  ): Promise<WorkerSlot[]> {
     const unique = [...new Set(entries)];
     for (const entry of unique) this.retireEntry(entry);
+    const stuck: WorkerSlot[] = [];
     const results = await Promise.allSettled(
       unique.map(async (entry) => {
         const slot = entry.slot;
         try {
           await slot?.dispose(reason);
+        } catch (error) {
+          if (slot?.state === 'dispose-failed') stuck.push(slot);
+          throw error;
         } finally {
           entry.drainingEvents = false;
         }
@@ -3107,6 +3227,7 @@ export class WorkerManager {
       if (result.status === 'rejected')
         this.log('[worker-manager] slot disposal failed', result.reason);
     }
+    return stuck;
   }
 
   private async retireAndDispose(
@@ -3117,10 +3238,76 @@ export class WorkerManager {
     const slot = entry.slot;
     try {
       await slot?.dispose(reason);
+    } catch (error) {
+      // P1-3d: a channel that would not close is released by a host restart
+      // when nothing else is running; the disposal then did what it was for.
+      if (
+        !slot ||
+        reason === 'app-shutdown' ||
+        slot.state !== 'dispose-failed' ||
+        (await this.releaseStuckChannels([slot])) === 0
+      ) {
+        throw error;
+      }
     } finally {
       entry.drainingEvents = false;
     }
     if (slot) this.ownedSlots.delete(slot);
+  }
+
+  /**
+   * dsh-rebase P1-3d (decision 074's leftover) — channels that would not close
+   * when their session was closed, evicted or reclaimed. Each keeps an agent
+   * in the host holding that session's lock until the host restarts. When
+   * nothing else is running on the host — no turn, Stop, fork or rewind in
+   * any session, no session the host reports busy, and the restart budget has
+   * room — Main restarts it now (Stop ladder B, decision 021): the idle
+   * sessions read `engine_restarted` and come back in one batch. Otherwise the
+   * lock waits for the next host restart: the user's "Restart engine" on the
+   * `session_locked` card, the idle stop, or a later crash. Resolves how many
+   * channels it released.
+   */
+  private async releaseStuckChannels(slots: WorkerSlot[]): Promise<number> {
+    const host = this.host;
+    const stuck = slots.filter((slot) => slot.state === 'dispose-failed');
+    if (!host || stuck.length === 0) return 0;
+    const status = host.status();
+    // A host already going away takes the locks with it.
+    if (status.state !== 'ready') return 0;
+    const stuckChannels = new Set(stuck.map((slot) => slot.channelId));
+    const working = [...this.entriesBySession.values()].some(
+      (entry) =>
+        entry.activeRequestId !== null ||
+        entry.stopWatchdog !== undefined ||
+        entry.mutationInFlight !== null ||
+        entry.state === 'creating' ||
+        entry.state === 'restarting'
+    );
+    const busy = [...this.busyChannels()].some((channel) => !stuckChannels.has(channel));
+    const budgetLeft = status.recentFaults < DSH_HOST_RESTART_BUDGET.restarts;
+    if (working || busy || !budgetLeft) {
+      console.warn(
+        `[worker-manager] ${stuck.length} DSH channel(s) did not close; their session locks stay ` +
+          `until the next engine restart (${working || busy ? 'other sessions are working' : 'restart budget spent'})`
+      );
+      return 0;
+    }
+    console.warn(
+      `[worker-manager] ${stuck.length} DSH channel(s) did not close; restarting the DSH host to release their session locks`
+    );
+    try {
+      await this.restartHost('stuck-session');
+    } catch (error) {
+      console.warn(
+        `[worker-manager] the DSH host restart for stuck channels failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return 0;
+    }
+    // Their channels went with the old host; this only retires the slot objects.
+    for (const slot of stuck) {
+      if (slot.forceKillNow()) this.ownedSlots.delete(slot);
+    }
+    return stuck.length;
   }
 
   /**
@@ -3481,6 +3668,7 @@ export class WorkerManager {
       await this.restartEntry(entry, { hostFault: true });
     }
     this.updateManagerState();
+    this.scheduleOrphanCollection();
   }
 
   /** `error` is terminal for the worker, never for the session: a user's open retires it. */

@@ -27,6 +27,12 @@
  *     starts and Stop ladder B restarts are counted over a sliding 5 min. Past
  *     three, an automatic request fails the supervisor (`DSH_HOST_UNAVAILABLE`);
  *     every user-initiated request may still start one host.
+ *   - Idle stop (decision 025 rule 1, P1-3d): a ready host with no channel and
+ *     no channel being opened for 10 min is stopped gracefully; the next
+ *     channel starts a new one.
+ *   - A host that died abnormally after it was ready may leave its tools
+ *     running in systemd scopes; they are stopped before the next host starts
+ *     (decision 075, `dshHostScopes.ts`).
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -37,6 +43,7 @@ import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:c
 import {
   type DshChannelId,
   type DshHostChannelStatus,
+  type DshHostGcResult,
   type DshHostPong,
   type DshMainToHostMessage,
   dshHostControlKind,
@@ -44,6 +51,7 @@ import {
   isDshChannelEnvelope,
   isDshHostChannelClosed,
   isDshHostFatal,
+  isDshHostGcResult,
   isDshHostPong,
   isDshHostReady,
   isDshHostStopped,
@@ -57,6 +65,7 @@ import {
   dshHostSpawnOptions,
   prepareDshHostDirectories,
 } from './DshHostProcess';
+import { stopDeadHostScopes } from './dshHostScopes';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 
 export const DSH_HOST_TIMINGS = {
@@ -80,6 +89,12 @@ export const DSH_HOST_TIMINGS = {
   eventLoopDelayWarnMs: 200,
   /** Minimum spacing between repeated warnings of one kind. */
   warnIntervalMs: 60_000,
+  /** Decision 025 rule 1: this long with no channel stops the host (about 180 MB). */
+  idleStopMs: 10 * 60_000,
+  /** The longest a new host waits for the dead one's scopes to stop (decision 075). */
+  scopeStopWaitMs: 6_000,
+  /** A `gc` pass (decision 024) not answered in this long is given up on. */
+  gcTimeoutMs: 120_000,
 } as const;
 
 /**
@@ -243,6 +258,23 @@ export interface DshHostSupervisorOptions {
   logLine?: (line: string) => void;
   /** This process; a child reporting this pid is never signalled. */
   selfPid?: number;
+  /** Stops the systemd scopes a dead host left (decision 075); `null` never does. */
+  stopOrphanScopes?: ((pid: number) => Promise<unknown>) | null;
+  /** Overrides `DSH_HOST_TIMINGS.idleStopMs`; 0 never stops an idle host. */
+  idleStopMs?: number;
+}
+
+/** What `collectSessions` asks the host to keep; see `DshHostGcRequest`. */
+export interface DshHostGcRequestInput {
+  claimed: readonly string[];
+  graceMs: number;
+}
+
+interface PendingGc {
+  readonly host: HostRecord;
+  readonly resolve: (result: DshHostGcResult) => void;
+  readonly reject: (error: Error) => void;
+  readonly timer: NodeJS.Timeout;
 }
 
 interface HostRecord {
@@ -313,6 +345,8 @@ export class DshHostSupervisor {
   private readonly now: () => number;
   private readonly logLine: (line: string) => void;
   private readonly selfPid: number;
+  private readonly stopOrphanScopes: ((pid: number) => Promise<unknown>) | null;
+  private readonly idleStopMs: number;
 
   private state: DshHostSupervisorState = 'idle';
   private host: HostRecord | null = null;
@@ -331,6 +365,13 @@ export class DshHostSupervisor {
   private budgetedExits: number[] = [];
   private powerMonitor: DshPowerMonitor | null = null;
   private readonly lastWarnAt = new Map<string, number>();
+  /** `openChannel` calls in flight: a host about to get a channel is not idle. */
+  private pendingOpens = 0;
+  private idleTimer: NodeJS.Timeout | null = null;
+  /** The dead host's scopes being stopped; the next start waits for it (decision 075). */
+  private scopeCleanup: Promise<void> | null = null;
+  private gcSequence = 0;
+  private readonly pendingGc = new Map<number, PendingGc>();
 
   private readonly channelLink: DshChannelLink = {
     send: (ch, rpc, onError) => {
@@ -362,6 +403,11 @@ export class DshHostSupervisor {
     this.now = options.now ?? (() => performance.now());
     this.logLine = options.logLine ?? ((line) => console.info(line));
     this.selfPid = options.selfPid ?? process.pid;
+    this.stopOrphanScopes =
+      options.stopOrphanScopes === undefined
+        ? (pid) => stopDeadHostScopes(pid)
+        : options.stopOrphanScopes;
+    this.idleStopMs = options.idleStopMs ?? DSH_HOST_TIMINGS.idleStopMs;
   }
 
   status(): DshHostSupervisorStatus {
@@ -421,18 +467,68 @@ export class DshHostSupervisor {
 
   /** A fresh channel on a ready host. Ids are never reused, across hosts included. */
   async openChannel(options: DshHostEnsureOptions = {}): Promise<DshChannelTransport> {
-    const info = await this.ensureHost(options);
+    // A host about to get a channel is not idle, however long its start takes.
+    this.pendingOpens += 1;
+    this.disarmIdleStop();
+    try {
+      const info = await this.ensureHost(options);
+      const host = this.host;
+      if (this.state !== 'ready' || !host || host.generation !== info.generation) {
+        throw new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          'the DSH host went away while a channel was being opened'
+        );
+      }
+      const ch = formatDshChannelId(host.generation, ++this.channelSequence);
+      const channel = new DshChannelTransport(ch, host.pid, this.channelLink);
+      this.channels.set(ch, channel);
+      return channel;
+    } finally {
+      this.pendingOpens -= 1;
+      this.armIdleStop();
+    }
+  }
+
+  /**
+   * Decision 024: one orphan collection pass on the ready host. Resolves with
+   * its `gc-result`; rejects when no host is ready, when the host goes away
+   * first, or after `gcTimeoutMs` without an answer.
+   */
+  collectSessions(request: DshHostGcRequestInput): Promise<DshHostGcResult> {
     const host = this.host;
-    if (this.state !== 'ready' || !host || host.generation !== info.generation) {
-      throw new DshHostSupervisorError(
-        'DSH_HOST_UNAVAILABLE',
-        'the DSH host went away while a channel was being opened'
+    if (this.state !== 'ready' || !host || host.exitInfo || !host.connected) {
+      return Promise.reject(
+        new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          'no ready DSH host to collect sessions on'
+        )
       );
     }
-    const ch = formatDshChannelId(host.generation, ++this.channelSequence);
-    const channel = new DshChannelTransport(ch, host.pid, this.channelLink);
-    this.channels.set(ch, channel);
-    return channel;
+    const id = ++this.gcSequence;
+    return new Promise<DshHostGcResult>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingGc.delete(id);
+        reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            `gc ${id} was not answered within ${DSH_HOST_TIMINGS.gcTimeoutMs}ms`
+          )
+        );
+      }, DSH_HOST_TIMINGS.gcTimeoutMs);
+      timer.unref?.();
+      this.pendingGc.set(id, { host, resolve, reject, timer });
+      const sent = this.sendControl(host, {
+        host: 'gc',
+        id,
+        claimed: [...request.claimed],
+        graceMs: request.graceMs,
+      });
+      if (!sent) {
+        this.settleGc(id)?.reject(
+          new DshHostSupervisorError('DSH_HOST_UNAVAILABLE', 'the gc request could not be sent')
+        );
+      }
+    });
   }
 
   /**
@@ -505,13 +601,33 @@ export class DshHostSupervisor {
     }
     this.failure = null;
     this.setState('starting');
-    const task = this.launch();
+    const cleanup = this.scopeCleanup;
+    this.scopeCleanup = null;
+    const task = cleanup ? this.launchAfter(cleanup) : this.launch();
     this.startTask = task;
     const clear = () => {
       if (this.startTask === task) this.startTask = null;
     };
     task.then(clear, clear);
     return task;
+  }
+
+  /** Decision 075: the dead host's tools stop before the next host starts, within a bound. */
+  private async launchAfter(cleanup: Promise<void>): Promise<DshHostInfo> {
+    let timer: NodeJS.Timeout | null = null;
+    await Promise.race([
+      cleanup,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, DSH_HOST_TIMINGS.scopeStopWaitMs);
+        timer.unref?.();
+      }),
+    ]);
+    if (timer) clearTimeout(timer);
+    // A stop or a force kill may have taken over while the scopes were stopped.
+    if (this.state !== 'starting') {
+      throw this.terminal ? this.disposedError() : this.stoppedError();
+    }
+    return this.launch();
   }
 
   private async launch(): Promise<DshHostInfo> {
@@ -623,6 +739,7 @@ export class DshHostSupervisor {
     this.setState('ready');
     this.startHeartbeat(host);
     host.resolveReady(this.infoOf(host));
+    this.armIdleStop();
   }
 
   /** Settles a failed start once the process is confirmed gone (or presumed unkillable). */
@@ -672,6 +789,12 @@ export class DshHostSupervisor {
     }
     if (isDshHostChannelClosed(message)) {
       this.onChannelClosed(host, message.ch);
+      return;
+    }
+    if (isDshHostGcResult(message)) {
+      const pending = this.pendingGc.get(message.id);
+      if (pending?.host === host) this.settleGc(message.id)?.resolve(message);
+      else this.warnRateLimited('stale-gc', `[dsh-host] dropped gc-result ${message.id}`);
       return;
     }
     const record =
@@ -749,6 +872,7 @@ export class DshHostSupervisor {
       if (oldest !== undefined) this.recentlyClosed.delete(oldest);
     }
     channel.dispatchExit({ code: 0, signal: null, cause: 'channel-closed' });
+    this.armIdleStop();
   }
 
   // ---- process events -----------------------------------------------------------
@@ -774,6 +898,18 @@ export class DshHostSupervisor {
       at: this.now(),
     };
     if (BUDGETED_EXIT_REASONS.has(reason)) this.budgetedExits.push(this.lastExit.at);
+    // Set before anything below can ask for the next host (decision 075). A
+    // clean exit (code 0) went through DSH's own teardown, which ends its
+    // scopes; a host that never got ready never ran a tool.
+    if (
+      this.stopOrphanScopes &&
+      host.readyAt !== undefined &&
+      host.pid !== undefined &&
+      (signal !== null || code !== 0)
+    ) {
+      this.scopeCleanup = this.stopScopesOf(this.stopOrphanScopes, host.pid);
+    }
+    this.rejectGc(host);
     host.resolveExited();
     const channels = this.host === host ? this.takeChannels() : [];
     if (!host.readySettled) {
@@ -1036,8 +1172,81 @@ export class DshHostSupervisor {
   private dispose(): void {
     this.setState('disposed');
     if (this.host) this.stopHeartbeat(this.host);
+    this.disarmIdleStop();
     this.powerMonitor?.removeListener('resume', this.onSystemResume);
     this.powerMonitor = null;
+  }
+
+  // ---- idle stop (decision 025 rule 1) ---------------------------------------------
+
+  private armIdleStop(): void {
+    if (this.idleTimer || this.idleStopMs <= 0 || !this.isIdle()) return;
+    this.idleTimer = setTimeout(() => this.onIdle(), this.idleStopMs);
+    this.idleTimer.unref?.();
+  }
+
+  private disarmIdleStop(): void {
+    if (this.idleTimer) clearTimeout(this.idleTimer);
+    this.idleTimer = null;
+  }
+
+  private isIdle(): boolean {
+    return (
+      !this.terminal &&
+      this.state === 'ready' &&
+      this.host !== null &&
+      this.channels.size === 0 &&
+      this.pendingOpens === 0
+    );
+  }
+
+  private onIdle(): void {
+    this.idleTimer = null;
+    const host = this.host;
+    if (!host || !this.isIdle()) return;
+    console.info(
+      `[dsh-host:g${host.generation}] no session for ${Math.round(this.idleStopMs / 1000)}s; ` +
+        `stopping pid ${String(host.pid)} until one is opened`
+    );
+    void this.shutdown('idle');
+  }
+
+  // ---- dead host scopes (decision 075) ------------------------------------------------
+
+  /** Started right away, from the exit handler; the result never rejects. */
+  private stopScopesOf(stop: (pid: number) => Promise<unknown>, pid: number): Promise<void> {
+    let pending: Promise<unknown>;
+    try {
+      pending = Promise.resolve(stop(pid));
+    } catch (error) {
+      pending = Promise.reject(error);
+    }
+    return pending.then(
+      () => undefined,
+      (error: unknown) => {
+        console.warn(`[dsh-host] stopping the scopes of pid ${pid} failed: ${errorMessage(error)}`);
+      }
+    );
+  }
+
+  // ---- gc (decision 024) ----------------------------------------------------------------
+
+  /** Takes a pending pass out of the table, its timer with it. */
+  private settleGc(id: number): PendingGc | undefined {
+    const pending = this.pendingGc.get(id);
+    if (!pending) return undefined;
+    this.pendingGc.delete(id);
+    clearTimeout(pending.timer);
+    return pending;
+  }
+
+  private rejectGc(host: HostRecord): void {
+    for (const [id, pending] of [...this.pendingGc]) {
+      if (pending.host !== host) continue;
+      this.settleGc(id)?.reject(
+        new DshHostSupervisorError('DSH_HOST_UNAVAILABLE', `the DSH host exited during gc ${id}`)
+      );
+    }
   }
 
   // ---- stderr ---------------------------------------------------------------------
@@ -1137,6 +1346,7 @@ export class DshHostSupervisor {
   private setState(next: DshHostSupervisorState): void {
     if (this.state === 'disposed') return;
     this.state = next;
+    if (next !== 'ready') this.disarmIdleStop();
   }
 
   private fail(error: DshHostSupervisorError): void {

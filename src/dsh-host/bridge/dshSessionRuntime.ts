@@ -152,6 +152,13 @@ export interface DshBridgeContext {
   sessions: { flush(session: DshSession): Promise<boolean> };
   /** `ctx.sessionQuery` (dsh-session-query): the lock-free exact read the history cache folds. */
   sessionQuery: DshSessionQuery;
+  /** A service the row does not inject, when it is there (`ctx.jobs`, for `busy`). */
+  get?(name: 'jobs'): DshJobsView | undefined;
+}
+
+/** The slice of `ctx.jobs` (dsh-jobs) `busy` reads. */
+export interface DshJobsView {
+  list(caller?: string): Array<{ readonly owner?: string; readonly status: string }>;
 }
 
 /** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
@@ -199,9 +206,12 @@ export const SESSION_INVALID = 'session_invalid';
 /** The page size Main asks for when it reads a resumed session (`readHistory(entry, 0, 80)`). */
 export const INITIAL_HISTORY_LIMIT = 80;
 
+/** Every DSH session this bridge creates is named with it; nothing else is ever collected (decision 024). */
+export const DSH_SESSION_ID_PREFIX = 'aiclient-';
+
 /** Ours, not DSH's in-process counter, so a lost stub can be found again (decision 006). */
 export function dshSessionIdFor(logicalSessionId: string): string {
-  return `aiclient-${logicalSessionId}`;
+  return `${DSH_SESSION_ID_PREFIX}${logicalSessionId}`;
 }
 
 export function stubPathFor(home: string, dshSessionId: string): string {
@@ -223,7 +233,7 @@ function unsupported(operation: string): never {
  * DSH persistence errors carry no `code`; they are told apart by `name`, and a
  * loader may wrap them (`cause`, `AggregateError`).
  */
-function hasNamedError(error: unknown, name: string, depth = 0): boolean {
+export function hasNamedError(error: unknown, name: string, depth = 0): boolean {
   if (typeof error !== 'object' || error === null || depth > 4) return false;
   const record = error as { name?: unknown; cause?: unknown; errors?: unknown };
   if (record.name === name) return true;
@@ -428,11 +438,35 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   /**
    * The agent is not idle: a turn this bridge started, one it did not (a goal
-   * round, a job notice), or other agent work. Reported to Main in each pong.
+   * round, a job notice), other agent work, or a background job of this
+   * session still running after its turn ended. Reported to Main in each pong;
+   * Main never reclaims a busy session (decision 025).
    */
   get busy(): boolean {
     if (this.disposed) return false;
-    return this.turn !== null || (this.handle !== null && this.handle.agent.status !== 'idle');
+    if (this.turn !== null || (this.handle !== null && this.handle.agent.status !== 'idle')) {
+      return true;
+    }
+    return this.hasLiveJobs();
+  }
+
+  /** Jobs this session owns that have not settled; the agent reads idle meanwhile. */
+  private hasLiveJobs(): boolean {
+    if (!this.dshSessionId || !this.ctx.get) return false;
+    try {
+      return (
+        this.ctx
+          .get('jobs')
+          ?.list(this.dshSessionId)
+          .some(
+            (job) =>
+              job.owner === this.dshSessionId &&
+              (job.status === 'running' || job.status === 'stopping')
+          ) === true
+      );
+    } catch {
+      return false;
+    }
   }
 
   // ---- lifecycle -------------------------------------------------------------

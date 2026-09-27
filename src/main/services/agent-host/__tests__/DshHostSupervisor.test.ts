@@ -862,3 +862,200 @@ describe('DshHostSupervisor restart budget (decision 020)', () => {
     await expect(user).resolves.toMatchObject({ generation: B.restarts + 2 });
   });
 });
+
+describe('DshHostSupervisor idle stop (P1-3d, decision 025)', () => {
+  const IDLE = 10 * 60_000;
+
+  /** Moves fake time while the host answers every ping, as a healthy idle host does. */
+  async function advanceAnswering(child: FakeChild, ms: number): Promise<void> {
+    let left = ms;
+    while (left > 0) {
+      const step = Math.min(left, T.heartbeatIntervalMs);
+      await vi.advanceTimersByTimeAsync(step);
+      child.post(pong(child.pings().length || 1));
+      left -= step;
+    }
+  }
+
+  it('[SH-11] a host with no channel for the idle time is stopped gracefully; the next open starts one', async () => {
+    expect(T.idleStopMs).toBe(IDLE);
+    const h = createFakeHostHarness({ idleStopMs: IDLE });
+    const child = await startReadyHost(h);
+    const channel = await h.supervisor.openChannel();
+    // An open channel keeps the host up however long it sits.
+    await advanceAnswering(child, 2 * IDLE);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    channel.kill();
+    child.post({ host: 'closed', ch: channel.ch });
+    await advanceAnswering(child, IDLE - 1);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(child.controls()).toContainEqual({ type: 'shutdown' });
+    expect(h.supervisor.status().state).toBe('stopping');
+    child.post({ type: 'stopped' });
+    child.die(0);
+    await flushMicrotasks();
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'idle',
+      recentFaults: 0,
+      lastExit: { reason: 'idle', code: 0 },
+    });
+    const next = h.supervisor.openChannel();
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    h.child().ready();
+    expect((await next).ch).toBe('c2-2');
+  });
+
+  it('[SH-11] a new channel cancels the countdown, and an open still starting counts as a channel', async () => {
+    const h = createFakeHostHarness({ idleStopMs: IDLE });
+    const child = await startReadyHost(h);
+    // Ready with no channel: the countdown runs.
+    await advanceAnswering(child, IDLE - 1_000);
+    const channel = await h.supervisor.openChannel();
+    await advanceAnswering(child, 2_000);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    child.post({ host: 'closed', ch: channel.ch });
+    // It starts over from the last close.
+    await advanceAnswering(child, IDLE - 1);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(child.controls()).toContainEqual({ type: 'shutdown' });
+  });
+
+  it('[SH-11] a 0 idle time never stops the host; app quit cancels the countdown', async () => {
+    const h = createFakeHostHarness({ idleStopMs: 0 });
+    const child = await startReadyHost(h);
+    await advanceAnswering(child, 3 * IDLE);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+
+    const other = createFakeHostHarness({ idleStopMs: IDLE });
+    const host = await startReadyHost(other);
+    other.supervisor.forceKillNow();
+    host.die(null, 'SIGKILL');
+    await vi.advanceTimersByTimeAsync(2 * IDLE);
+    expect(host.controls()).not.toContainEqual({ type: 'shutdown' });
+    expect(other.supervisor.status().state).toBe('disposed');
+  });
+});
+
+describe('DshHostSupervisor scopes of a dead host (P1-3d, decision 075)', () => {
+  it('stops the dead pid’s scopes before the next host starts, and only after an abnormal exit of a ready host', async () => {
+    let release!: () => void;
+    const stopOrphanScopes = vi.fn(
+      (_pid: number) =>
+        new Promise<number>((resolve) => {
+          release = () => resolve(1);
+        })
+    );
+    const h = createFakeHostHarness({ stopOrphanScopes });
+    const child = await startReadyHost(h);
+    child.die(null, 'SIGKILL');
+    expect(stopOrphanScopes).toHaveBeenCalledWith(FAKE_PID);
+    const next = h.supervisor.ensureHost();
+    await flushMicrotasks();
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    expect(h.supervisor.status().state).toBe('starting');
+    release();
+    await flushMicrotasks();
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    h.child().ready();
+    await expect(next).resolves.toMatchObject({ generation: 2 });
+
+    // A clean exit went through DSH's own teardown: nothing to stop.
+    h.supervisor.shutdown('idle');
+    h.child().post({ type: 'stopped' });
+    h.child().die(0);
+    await flushMicrotasks();
+    expect(stopOrphanScopes).toHaveBeenCalledTimes(1);
+  });
+
+  it('never stops scopes for a host that never got ready, and waits no longer than its bound', async () => {
+    const stopOrphanScopes = vi.fn((_pid: number) => new Promise<number>(() => {}));
+    const h = createFakeHostHarness({ stopOrphanScopes });
+    const booting = h.supervisor.ensureHost();
+    h.child().die(1);
+    await expect(booting).rejects.toMatchObject({ code: 'DSH_HOST_START_FAILED' });
+    expect(stopOrphanScopes).not.toHaveBeenCalled();
+
+    const child = await startReadyHost(h);
+    child.die(1);
+    expect(stopOrphanScopes).toHaveBeenCalledTimes(1);
+    const next = h.supervisor.ensureHost();
+    await vi.advanceTimersByTimeAsync(T.scopeStopWaitMs - 1);
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(h.spawn).toHaveBeenCalledTimes(3);
+    h.child().ready();
+    await expect(next).resolves.toMatchObject({ generation: 3 });
+  });
+
+  it('a stop or force kill during the wait wins: no host is spawned', async () => {
+    let release!: () => void;
+    const h = createFakeHostHarness({
+      stopOrphanScopes: () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    });
+    const child = await startReadyHost(h);
+    child.die(null, 'SIGKILL');
+    const next = h.supervisor.ensureHost();
+    const outcome = settlement(next);
+    h.supervisor.forceKillNow();
+    release();
+    await flushMicrotasks();
+    expect(outcome.value()).toMatchObject({ code: 'DSH_HOST_DISPOSED' });
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('DshHostSupervisor gc (P1-3d, decision 024)', () => {
+  const result = (id: number) => ({
+    host: 'gc-result',
+    id,
+    ok: true,
+    deleted: ['aiclient-old'],
+    stubsDeleted: 1,
+    skipped: { claimed: 2 },
+    ms: 4,
+  });
+
+  it('sends one gc with the claimed ids and resolves with the matching answer', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const pass = h.supervisor.collectSessions({ claimed: ['aiclient-a'], graceMs: 86_400_000 });
+    expect(child.controls()).toContainEqual({
+      host: 'gc',
+      id: 1,
+      claimed: ['aiclient-a'],
+      graceMs: 86_400_000,
+    });
+    // Another id is not this pass's answer.
+    child.post(result(9));
+    child.post(result(1));
+    await expect(pass).resolves.toEqual(result(1));
+  });
+
+  it('rejects without a ready host, when the host exits, and after its timeout', async () => {
+    const h = createFakeHostHarness();
+    await expect(h.supervisor.collectSessions({ claimed: [], graceMs: 0 })).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+    });
+    const child = await startReadyHost(h);
+    const dying = h.supervisor.collectSessions({ claimed: [], graceMs: 0 });
+    child.die(null, 'SIGKILL');
+    await expect(dying).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    const next = h.supervisor.ensureHost();
+    h.child().ready();
+    await next;
+    const slow = settlement(h.supervisor.collectSessions({ claimed: [], graceMs: 0 }));
+    // The heartbeat keeps the host alive meanwhile.
+    for (let at = 0; at < T.gcTimeoutMs; at += T.heartbeatIntervalMs) {
+      h.child().post(pong(h.child().pings().length));
+      await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+    }
+    await flushMicrotasks();
+    expect(slow.value()).toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+  });
+});

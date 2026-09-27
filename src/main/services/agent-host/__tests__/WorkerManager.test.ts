@@ -62,6 +62,8 @@ interface FakeSlotRecord {
   slotKey: string;
   /** The slot object the manager holds; `state` moves like WorkerSlot's. */
   slot: { state: string };
+  /** Its channel on the shared host, as the host's pong names it (P1-3d). */
+  channelId: string;
   request: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   forceKillNow: ReturnType<typeof vi.fn>;
@@ -93,6 +95,9 @@ interface FakeHost {
   restart: ReturnType<typeof vi.fn>;
   shutdown: ReturnType<typeof vi.fn>;
   forceKillNow: ReturnType<typeof vi.fn>;
+  /** Channels the last pong called busy (P1-3d). */
+  busy: Set<string>;
+  collectSessions?: ReturnType<typeof vi.fn>;
 }
 
 const BUDGETED_HOST_EXITS = new Set([
@@ -162,6 +167,10 @@ function createHarness(
     log?: (...args: unknown[]) => void;
     /** dsh-rebase P1-3c — give every slot one shared fake DSH host (`FakeHost`). */
     host?: boolean;
+    /** dsh-rebase P1-3d — the host's orphan collection (decision 024), when it has one. */
+    collectSessions?: ReturnType<typeof vi.fn>;
+    orphanCollectionDelayMs?: number;
+    readDshStub?: (file: string) => Promise<unknown>;
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
@@ -174,11 +183,19 @@ function createHarness(
       generation: 1,
       starts: 0,
       faults: [],
+      busy: new Set(),
+      ...(input.collectSessions ? { collectSessions: input.collectSessions } : {}),
       status: vi.fn(() => ({
         state: fake.state,
         generation: fake.generation,
         channels: 0,
         recentFaults: fake.faults.length,
+        lastPong: {
+          at: 0,
+          eldMaxMs: 0,
+          rssMb: 180,
+          channels: [...fake.busy].map((ch) => ({ ch, busy: true })),
+        },
         ...(fake.lastExit ? { lastExit: { ...fake.lastExit } } : {}),
       })),
       ensureHost: vi.fn(async (options: { userInitiated?: boolean } = {}) => {
@@ -415,12 +432,14 @@ function createHarness(
       throw new Error(`unexpected request ${type}`);
     });
     const slotState = { state: 'running' };
+    const channelId = `c1-${records.length + 1}`;
     const record: FakeSlotRecord = {
       sessionId,
       sessionFile,
       generation,
       slotKey: String(options.slotKey),
       slot: slotState,
+      channelId,
       request,
       dispose: vi.fn(async () => {
         slotState.state = 'disposed';
@@ -456,6 +475,7 @@ function createHarness(
     return {
       slot: Object.assign(slotState, {
         generation,
+        channelId,
         pid: 4000 + records.length,
         pendingRequestCount: 0,
         remapSlotKey: vi.fn(),
@@ -525,6 +545,10 @@ function createHarness(
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     ...(input.log ? { log: input.log } : {}),
     ...(host ? { host: host as unknown as WorkerManagerHost } : {}),
+    ...(input.orphanCollectionDelayMs !== undefined
+      ? { orphanCollectionDelayMs: input.orphanCollectionDelayMs }
+      : {}),
+    ...(input.readDshStub ? { readDshStub: input.readDshStub } : {}),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
     idleSweepIntervalMs: 0,
@@ -742,13 +766,15 @@ describe('WorkerManager identity and capacity', () => {
   });
 
   it('derives a resource-aware default and accepts only bounded startup overrides', () => {
-    // D12 (U24) raised these from 2 / 3 / 4. Past capacity a new session does
-    // not queue — it fails with `worker_capacity_reached` — so the old ceiling
-    // made "about ten conversations at once" impossible rather than slow.
-    // The memory tiers stay: a slot is a whole utilityProcess plus one model
-    // context, so ten of them on a 4 GiB host would swap, not work.
-    expect(resolveDefaultWorkerCapacity(3 * 1024 ** 3)).toBe(3);
-    expect(resolveDefaultWorkerCapacity(6 * 1024 ** 3)).toBe(6);
+    // D12 (U24) raised the ceiling to 10: past capacity a new session does not
+    // queue — it fails with `worker_capacity_reached` — so the old ceiling made
+    // "about ten conversations at once" impossible rather than slow.
+    // [WMH-10] dsh-rebase decision 019: on the shared DSH host a session is a
+    // channel of one process, so only <=4 GiB hosts keep a lower number, 6.
+    expect(resolveDefaultWorkerCapacity(3 * 1024 ** 3)).toBe(6);
+    expect(resolveDefaultWorkerCapacity(4 * 1024 ** 3)).toBe(6);
+    expect(resolveDefaultWorkerCapacity(4 * 1024 ** 3 + 1)).toBe(10);
+    expect(resolveDefaultWorkerCapacity(6 * 1024 ** 3)).toBe(10);
     expect(resolveDefaultWorkerCapacity(16 * 1024 ** 3)).toBe(10);
     expect(resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '1' }, 16 * 1024 ** 3)).toBe(1);
     expect(resolveWorkerCapacity({ AICLIENT_PI_WORKER_CAPACITY: '10' }, 4 * 1024 ** 3)).toBe(10);
@@ -4480,4 +4506,233 @@ describe('WorkerManager on one shared DSH host (P1-3c)', () => {
     expect(snapshot(h, 's2')).toMatchObject({ state: 'ready', generation: 1 });
     expect(h.host?.starts).toBe(0);
   });
+});
+
+/**
+ * dsh-rebase P1-3d — the shared host's housekeeping as WorkerManager drives
+ * it: sessions the host reports busy are never reclaimed (decision 025), one
+ * orphan collection per run (decision 024, GC-03), and a channel that will
+ * not close on close / eviction releases its lock by a host restart when
+ * nothing else is running (decision 074's leftover).
+ */
+describe('WorkerManager on one shared DSH host: housekeeping (P1-3d)', () => {
+  let processKill: ReturnType<typeof installKillTripwire>;
+  let warn: ReturnType<typeof vi.spyOn>;
+  let attempt = 0;
+
+  beforeEach(() => {
+    processKill = installKillTripwire();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'info').mockImplementation(() => undefined);
+    warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    expect(processKill).not.toHaveBeenCalled();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  /** Statuses (with their reason) and resumes one session was told. */
+  function said(h: ReturnType<typeof createHarness>, sessionId: string): string[] {
+    return h.events
+      .filter((event) => event.sessionId === sessionId)
+      .filter((event) => event.type === 'session.status' || event.type === 'session.resumed')
+      .map((event) => {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        return event.type === 'session.status'
+          ? `status:${String(payload.status)}${payload.disconnectReason ? `/${String(payload.disconnectReason)}` : ''}`
+          : String(event.type);
+      });
+  }
+
+  async function running(h: ReturnType<typeof createHarness>, sessionId: string) {
+    attempt += 1;
+    await h.manager.send({ sessionId, attemptId: `attempt-${attempt}`, text: 'go' });
+    const record = h.records.filter((candidate) => candidate.sessionId === sessionId).at(-1);
+    record?.emit({ type: 'session.status', sessionId, payload: { status: 'running' } });
+  }
+
+  /** The slot of `record` answers neither its dispose nor its close. */
+  function wedge(record: FakeSlotRecord): void {
+    record.dispose.mockImplementation(async () => {
+      record.slot.state = 'dispose-failed';
+      throw new WorkerSlotError('WORKER_EXIT_TIMEOUT', 'Worker slot did not exit within 3000ms');
+    });
+  }
+
+  it('[P1-3d-busy] a session the host reports busy (a background job) is never evicted', async () => {
+    const h = createHarness({ host: true, capacity: 2 });
+    await create(h.manager, 'job');
+    await create(h.manager, 'quiet');
+    // `job` was used first, so plain recency would pick it.
+    h.host?.busy.add(h.records[0].channelId);
+    await create(h.manager, 'third');
+    expect(said(h, 'quiet')).toContain('status:disconnected/capacity_reclaimed');
+    expect(said(h, 'job')).not.toContain('status:disconnected/capacity_reclaimed');
+    expect(
+      h.manager
+        .getSlotSnapshots()
+        .map((slot) => slot.logicalSessionId)
+        .sort()
+    ).toEqual(['job', 'third']);
+    h.host?.busy.add(h.records[2].channelId);
+    await expect(create(h.manager, 'fourth')).rejects.toMatchObject({
+      code: 'worker_capacity_reached',
+    });
+  });
+
+  it('[GC-03] collects once per run, a delay after the first open, with what the index claims', async () => {
+    vi.useFakeTimers();
+    const collectSessions = vi.fn(async () => ({
+      host: 'gc-result',
+      id: 1,
+      ok: true,
+      deleted: ['aiclient-orphan'],
+      stubsDeleted: 1,
+      skipped: { claimed: 2, content: 1 },
+      ms: 3,
+    }));
+    const h = createHarness({
+      host: true,
+      collectSessions,
+      orphanCollectionDelayMs: 5_000,
+      listIndexedSessions: async () =>
+        [
+          { sessionId: 's1', runtimeIdentity: '/dsh/aiclient-sessions/aiclient-s1.dsh.json' },
+          { sessionId: 'old', runtimeIdentity: '/pi/sessions/old.jsonl' },
+        ] as SessionIndexEntry[],
+      readDshStub: async () => ({ dshSessionId: 'aiclient-s1', lineage: ['aiclient-s1-seed'] }),
+    });
+    await create(h.manager, 's1');
+    await vi.advanceTimersByTimeAsync(4_999);
+    expect(collectSessions).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(collectSessions).toHaveBeenCalledTimes(1);
+    const [request] = collectSessions.mock.calls[0] as unknown as [
+      { claimed: string[]; graceMs: number },
+    ];
+    expect(request.graceMs).toBe(24 * 60 * 60_000);
+    expect(request.claimed.sort()).toEqual(['aiclient-old', 'aiclient-s1', 'aiclient-s1-seed']);
+    await vi.advanceTimersByTimeAsync(0);
+    // Deleting user data is always on record.
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('deleted 1 session(s) and 1 stub(s), left claimed 2, content 1')
+    );
+    await create(h.manager, 's2');
+    h.hostCrash();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(collectSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('[GC-03] waits while the host is not ready; the next open arms it again', async () => {
+    vi.useFakeTimers();
+    const collectSessions = vi.fn(async () => ({
+      host: 'gc-result',
+      id: 1,
+      ok: true,
+      deleted: [],
+      stubsDeleted: 0,
+      skipped: {},
+      ms: 1,
+    }));
+    const h = createHarness({ host: true, collectSessions, orphanCollectionDelayMs: 1_000 });
+    await create(h.manager, 's1');
+    if (h.host) h.host.state = 'restarting';
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(collectSessions).not.toHaveBeenCalled();
+    if (h.host) h.host.state = 'ready';
+    await create(h.manager, 's2');
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(collectSessions).toHaveBeenCalledTimes(1);
+  });
+
+  it('[GC-03] a failed index read sends nothing, and the run does not try again', async () => {
+    vi.useFakeTimers();
+    const collectSessions = vi.fn();
+    const h = createHarness({
+      host: true,
+      collectSessions,
+      orphanCollectionDelayMs: 0,
+      listIndexedSessions: async () => {
+        throw new Error('index unreadable');
+      },
+    });
+    await create(h.manager, 's1');
+    await vi.advanceTimersByTimeAsync(10);
+    await create(h.manager, 's2');
+    await vi.advanceTimersByTimeAsync(10);
+    expect(collectSessions).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('index unreadable'));
+  });
+
+  it('[P1-3d-stuck] a close whose channel never closes restarts the host when nothing else runs', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 'stuck');
+    await create(h.manager, 'idle', 7);
+    wedge(h.records[0]);
+    h.events.length = 0;
+    await h.manager.closeSession('stuck');
+    expect(h.host?.restart).toHaveBeenCalledTimes(1);
+    expect(h.host?.restart).toHaveBeenCalledWith('stuck-session', {});
+    expect(h.records[0].forceKillNow).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() =>
+      expect(said(h, 'idle')).toEqual([
+        'status:disconnected/engine_restarted',
+        'session.resumed',
+        'status:idle',
+      ])
+    );
+    expect(h.manager.getSlotSnapshots().map((slot) => [slot.logicalSessionId, slot.state])).toEqual(
+      [['idle', 'ready']]
+    );
+    expect(h.manager.getStatus().state).toBe('ready');
+  });
+
+  it('[P1-3d-stuck] with a turn elsewhere, a busy session or no budget, the lock waits for the next restart', async () => {
+    for (const blocker of ['turn', 'busy', 'budget'] as const) {
+      const h = createHarness({ host: true });
+      await create(h.manager, 'stuck');
+      await create(h.manager, 'other');
+      if (blocker === 'turn') await running(h, 'other');
+      if (blocker === 'busy') h.host?.busy.add(h.records[1].channelId);
+      if (blocker === 'budget' && h.host) {
+        h.host.faults = Array.from({ length: DSH_HOST_RESTART_BUDGET.restarts }, () => Date.now());
+      }
+      wedge(h.records[0]);
+      await expect(h.manager.closeSession('stuck'), blocker).rejects.toMatchObject({
+        code: 'WORKER_EXIT_TIMEOUT',
+      });
+      expect(h.host?.restart, blocker).not.toHaveBeenCalled();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('stay until the next engine restart')
+      );
+      expect(snapshot(h, 'other'), blocker).toMatchObject({ state: 'ready', generation: 1 });
+    }
+  });
+
+  it('[P1-3d-stuck] an eviction whose channel never closes restarts the host, then the new session opens', async () => {
+    const h = createHarness({ host: true, capacity: 2 });
+    await create(h.manager, 'stuck');
+    await create(h.manager, 'fg', 7);
+    wedge(h.records[0]);
+    await create(h.manager, 'new', 8);
+    expect(h.host?.restart).toHaveBeenCalledWith('stuck-session', {});
+    expect(said(h, 'stuck')).toContain('status:disconnected/capacity_reclaimed');
+    await vi.waitFor(() =>
+      expect(
+        h.manager
+          .getSlotSnapshots()
+          .map((slot) => [slot.logicalSessionId, slot.state])
+          .sort()
+      ).toEqual([
+        ['fg', 'ready'],
+        ['new', 'ready'],
+      ])
+    );
+  });
+
+  function snapshot(h: ReturnType<typeof createHarness>, sessionId: string) {
+    return h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === sessionId);
+  }
 });

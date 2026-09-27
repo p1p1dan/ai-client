@@ -109,6 +109,12 @@ const HUNG_DETECTION_BOUND_MS =
 /** Stop's T144 promise: the UI settles at the 10 s watchdog; 2 s more absorb this box. */
 const STOP_WATCHDOG_BOUND_MS = 12_000;
 
+/**
+ * Decision 075: a SIGKILLed host's tools stop with its scopes, before the next
+ * host starts. The supervisor waits for that at most `scopeStopWaitMs`.
+ */
+const SCOPE_STOP_BOUND_MS = DSH_HOST_TIMINGS.scopeStopWaitMs;
+
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
 async function until(check: () => boolean, timeoutMs: number): Promise<boolean> {
@@ -121,6 +127,20 @@ async function until(check: () => boolean, timeoutMs: number): Promise<boolean> 
 }
 
 const alive = (child: ChildProcess) => child.exitCode === null && child.signalCode === null;
+
+/** Decision 025 rule 1, shortened for the third phase. */
+const IDLE_STOP_MS = 3_000;
+
+/** `<DSH_HOME>/sessions/<project>/<session id>` of every session on disk, by id. */
+function sessionDirs(home: string): Map<string, string> {
+  const dirs = new Map<string, string>();
+  const root = join(home, 'sessions');
+  if (!existsSync(root)) return dirs;
+  for (const project of readdirSync(root)) {
+    for (const id of readdirSync(join(root, project))) dirs.set(id, join(root, project, id));
+  }
+  return dirs;
+}
 const isHost = (child: ChildProcess) => child.spawnargs.some((arg) => arg.endsWith('host.ts'));
 
 /** Processes whose command line carries `needle` (Linux). */
@@ -432,16 +452,19 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         lastExit: { reason: 'crashed', signal: 'SIGKILL', generation: 1 },
       });
       if (scoped) {
-        // Found here (P1-3c): a systemd scope is not tied to the host that
-        // opened it, so a SIGKILLed host leaves its tool running until the tool
-        // ends by itself (20 s here). Only the fallback containment takes it
-        // down with the host, which is what P1-3a measured. Left to P1-3e /
-        // P1-8 (who stops a dead host's scopes); pinned here so a change shows.
-        const leftovers = processesWith(`sleep-tool ${sleeper}`);
-        console.log(
-          `[p1-3] systemd scope: ${leftovers.length} tool process(es) of the killed host still running`
+        // P1-3c found a systemd scope outlives the host that opened it (the
+        // tool ran on for its full 20 s). Decision 075 (P1-3d): the supervisor
+        // stops the dead pid's scopes before it starts the next host, so the
+        // tool is gone by the time the sessions are back.
+        const gone = await until(
+          () => processesWith(`sleep-tool ${sleeper}`).length === 0,
+          SCOPE_STOP_BOUND_MS
         );
-        for (const line of leftovers) expect(cgroupOf(line)).toContain(scope);
+        console.log(
+          `[p1-3] systemd scope: the killed host's tool ${gone ? 'gone' : 'STILL RUNNING'} ` +
+            `${Date.now() - firstKillAt} ms after the kill`
+        );
+        expect(gone).toBe(true);
       } else {
         expect(await until(() => processesWith(`sleep-tool ${sleeper}`).length === 0, 2_000)).toBe(
           true
@@ -527,6 +550,80 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       });
       const other = await turn(manager, 's2', 'P0-STREAM: stream a paragraph back to me.', 2);
       expect(other).toMatchObject({ settled: true, completed: true });
+    }, 180_000);
+
+    // P1-3d (decision 024). The run's own pass (24 h grace, this manager has
+    // no index) went by after the first open; this one asks for a zero grace.
+    it('collects an orphaned empty session, and only that', async () => {
+      expect(hostLines.some((line) => line.includes('DSH session collection: deleted 0'))).toBe(
+        true
+      );
+      const home = join(shared.stateRoot, 'dsh-home');
+      const stubs: Record<string, string> = {};
+      for (const [index, id] of ['g-empty', 'g-claimed', 'g-content'].entries()) {
+        await manager.createSession({
+          sessionId: id,
+          workspacePath: workspace,
+          ownerWebContentsId: 20 + index,
+        });
+        if (id === 'g-content') {
+          const done = await turn(manager, id, 'P0-STREAM: stream a paragraph back to me.', 22);
+          expect(done).toMatchObject({ settled: true, completed: true });
+        }
+        stubs[id] = String(
+          manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === id)?.sessionFile
+        );
+        await manager.closeSession(id);
+      }
+      // An empty session still open: its lock is held.
+      await manager.createSession({
+        sessionId: 'g-live',
+        workspacePath: workspace,
+        ownerWebContentsId: 23,
+      });
+      const before = sessionDirs(home);
+      for (const id of ['g-empty', 'g-claimed', 'g-content'])
+        expect(before.has(`aiclient-${id}`), id).toBe(true);
+
+      const result = await dshHostSupervisor.collectSessions({
+        claimed: ['aiclient-g-claimed'],
+        graceMs: 0,
+      });
+      console.log(`[p1-3] gc: ${JSON.stringify(result)}`);
+      expect(result).toMatchObject({ ok: true, deleted: ['aiclient-g-empty'], stubsDeleted: 1 });
+      // s1..s4 and g-content hold turns; g-live is empty but open.
+      expect(result.skipped).toMatchObject({ claimed: 1, locked: 1, content: 5 });
+      const after = sessionDirs(home);
+      expect(after.has('aiclient-g-empty')).toBe(false);
+      expect(existsSync(stubs['g-empty'])).toBe(false);
+      // The project directory stays for the sessions beside it.
+      expect(existsSync(dirname(before.get('aiclient-g-empty') ?? ''))).toBe(true);
+      for (const id of ['g-claimed', 'g-content', 'g-live', 's1', 's4']) {
+        expect(after.has(`aiclient-${id}`), id).toBe(true);
+      }
+      expect(existsSync(stubs['g-claimed'])).toBe(true);
+
+      // The deleted one reads as missing; the one with content reopens with its turn.
+      await expect(
+        manager.resumeSession({
+          sessionId: 'g-empty',
+          sessionFile: stubs['g-empty'],
+          workspacePath: workspace,
+          ownerWebContentsId: 20,
+        })
+      ).rejects.toThrow(/dsh_session_missing/);
+      const from = events.length;
+      await manager.resumeSession({
+        sessionId: 'g-content',
+        sessionFile: stubs['g-content'],
+        workspacePath: workspace,
+        ownerWebContentsId: 22,
+      });
+      const history = forSession('g-content', from).find((e) => e.type === 'session.history');
+      expect((history?.payload?.messages as unknown[] | undefined)?.length).toBeGreaterThan(0);
+      await manager.closeSession('g-content');
+      await manager.closeSession('g-live');
+      expect(dshHostSupervisor.status()).toMatchObject({ state: 'ready', channels: 3 });
     }, 180_000);
   });
 
@@ -709,5 +806,113 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       for (const result of results)
         expect(result).toMatchObject({ settled: true, completed: true });
     }, 240_000);
+  });
+  /** Phase three (P1-3d): a channel that will not close on close, then the idle stop. */
+  describe('a third supervisor: a close that never lands, and the idle stop', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const channelOf = new Map<string, string>();
+    let wedged: string | undefined;
+
+    beforeAll(async () => {
+      supervisor = new DshHostSupervisor({ idleStopMs: IDLE_STOP_MS });
+      manager = newManager(supervisor, true);
+      // Remembers each session's channel; drops what the wedged one is sent to close.
+      shared.dropToHost = (message) => {
+        const record = message as {
+          ch?: string;
+          host?: string;
+          rpc?: { type?: string; payload?: { logicalSessionId?: string } };
+        };
+        const id = record.rpc?.payload?.logicalSessionId;
+        if (record.rpc?.type === 'worker.bootstrap' && record.ch && id)
+          channelOf.set(id, record.ch);
+        if (wedged === undefined || record.ch !== wedged) return false;
+        return record.rpc?.type === 'worker.dispose' || record.host === 'close';
+      };
+      for (const [index, id] of ['k1', 'k2'].entries()) {
+        await manager.createSession({
+          sessionId: id,
+          workspacePath: workspace,
+          ownerWebContentsId: 30 + index,
+        });
+      }
+      const done = await turn(manager, 'k2', 'P0-STREAM: stream a paragraph back to me.', 31);
+      expect(done).toMatchObject({ settled: true, completed: true });
+      expect(liveHosts()).toHaveLength(1);
+    }, 180_000);
+
+    afterAll(async () => {
+      shared.dropToHost = null;
+      await manager?.disposeAll('app-shutdown');
+      expect(supervisor.status()).toMatchObject({ state: 'disposed' });
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('closing a session whose channel never closes restarts the host once; the other comes back', async () => {
+      wedged = channelOf.get('k1');
+      expect(wedged).toBeDefined();
+      const hostBefore = supervisor.status();
+      const [oldHost] = liveHosts();
+      const from = events.length;
+      const started = Date.now();
+      await manager.closeSession('k1');
+      const closedMs = Date.now() - started;
+      const tookMs = await recovered(['k2'], from, 60_000);
+      console.log(
+        `[p1-3] stuck close: closeSession returned after ${closedMs} ms (host restarted), ` +
+          `k2 idle ${tookMs} ms later: ${told('k2', from).join(' ')}`
+      );
+      expect(tookMs).toBeGreaterThanOrEqual(0);
+      expect(oldHost.exitCode !== null || oldHost.signalCode !== null).toBe(true);
+      expect(liveHosts()).toHaveLength(1);
+      expect(supervisor.status()).toMatchObject({
+        state: 'ready',
+        generation: hostBefore.generation + 1,
+        channels: 1,
+        lastExit: { reason: 'stuck-session' },
+      });
+      expect(told('k2', from)[0]).toBe('status:disconnected/engine_restarted');
+      expect(manager.getSlotSnapshots().map((slot) => [slot.logicalSessionId, slot.state])).toEqual(
+        [['k2', 'ready']]
+      );
+      wedged = undefined;
+      const after = await turn(manager, 'k2', 'P0-STREAM: stream a paragraph back to me.', 31);
+      expect(after).toMatchObject({ settled: true, completed: true });
+    }, 120_000);
+
+    it('stops the host gracefully once no session is left, and the next session starts a new one', async () => {
+      const hostBefore = supervisor.status();
+      const [host] = liveHosts();
+      await manager.closeSession('k2');
+      expect(supervisor.status().channels).toBe(0);
+      const started = Date.now();
+      expect(
+        await until(() => supervisor.status().lastExit?.reason === 'idle', IDLE_STOP_MS + 15_000)
+      ).toBe(true);
+      const stoppedMs = Date.now() - started;
+      console.log(`[p1-3] idle stop: host stopped ${stoppedMs} ms after the last close`);
+      expect(stoppedMs).toBeGreaterThanOrEqual(IDLE_STOP_MS - 500);
+      expect(host.signalCode).toBeNull();
+      expect(host.exitCode).toBe(0);
+      expect(supervisor.status()).toMatchObject({
+        state: 'idle',
+        recentFaults: hostBefore.recentFaults,
+        lastExit: { reason: 'idle', code: 0, signal: null },
+      });
+      expect(liveHosts()).toHaveLength(0);
+      await manager.createSession({
+        sessionId: 'k3',
+        workspacePath: workspace,
+        ownerWebContentsId: 32,
+      });
+      const done = await turn(manager, 'k3', 'P0-STREAM: stream a paragraph back to me.', 32);
+      expect(done).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.status()).toMatchObject({
+        state: 'ready',
+        generation: hostBefore.generation + 1,
+      });
+      expect(liveHosts()).toHaveLength(1);
+    }, 120_000);
   });
 });

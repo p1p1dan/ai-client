@@ -577,3 +577,43 @@ describe('DshSessionRuntime behind PiWorkerRpcServer', () => {
     });
   });
 });
+
+describe('DshSessionRuntime — busy (P1-3d, decision 025)', () => {
+  it('stays busy while a background job of its own session runs after the turn', async () => {
+    const dsh = fakeDsh();
+    const jobs: Array<{ owner?: string; status: string }> = [];
+    const list = vi.fn((caller?: string) => {
+      expect(caller).toBe(DSH_ID);
+      return jobs;
+    });
+    (dsh.ctx as { get?: unknown }).get = (name: string) => (name === 'jobs' ? { list } : undefined);
+    const session = runtime(dsh.ctx);
+    // Nothing bootstrapped yet: no session to own a job.
+    expect(session.busy).toBe(false);
+    expect(list).not.toHaveBeenCalled();
+    await session.bootstrap();
+    expect(session.busy).toBe(false);
+    // An unowned job, or one of another session, is not this session's work.
+    jobs.push({ status: 'running' }, { owner: 'aiclient-other', status: 'running' });
+    expect(session.busy).toBe(false);
+    jobs.push({ owner: DSH_ID, status: 'completed' });
+    expect(session.busy).toBe(false);
+    jobs.push({ owner: DSH_ID, status: 'stopping' });
+    expect(session.busy).toBe(true);
+    await session.dispose();
+    expect(session.busy).toBe(false);
+  });
+
+  it('reads not busy when the host has no jobs service, or it throws', async () => {
+    const dsh = fakeDsh();
+    const session = runtime(dsh.ctx);
+    await session.bootstrap();
+    expect(session.busy).toBe(false);
+    (dsh.ctx as { get?: unknown }).get = () => ({
+      list: () => {
+        throw new Error('jobs disposed');
+      },
+    });
+    expect(session.busy).toBe(false);
+  });
+});

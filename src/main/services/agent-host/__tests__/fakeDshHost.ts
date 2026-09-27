@@ -102,6 +102,13 @@ export function createFakeHostHarness(
     resolveLaunch?: () => DshHostLaunch;
     /** Scripts each child as it is spawned (its index counts from 0), before the supervisor attaches. */
     onSpawn?: (child: FakeChild, index: number) => void;
+    /** The idle stop (decision 025); off unless a test asks for it. */
+    idleStopMs?: number;
+    /**
+     * Decision 075's scope stop, which delays the next start; off unless a test
+     * passes one (never systemctl here).
+     */
+    stopOrphanScopes?: (pid: number) => Promise<unknown>;
   } = {}
 ): FakeHostHarness {
   const children: FakeChild[] = [];
@@ -125,6 +132,8 @@ export function createFakeHostHarness(
     now: () => Date.now(),
     logLine,
     selfPid: options.selfPid ?? SELF_PID,
+    stopOrphanScopes: options.stopOrphanScopes ?? null,
+    idleStopMs: options.idleStopMs ?? 0,
   });
   return {
     supervisor,

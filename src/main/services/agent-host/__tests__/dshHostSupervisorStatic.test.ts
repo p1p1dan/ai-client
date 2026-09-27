@@ -55,6 +55,18 @@ describe('shared DSH host signalling (SG-01)', () => {
     expect(manager).toContain(".shutdown('app-quit')");
   });
 
+  // P1-3d (decision 075): a dead host's tools are ended by systemd, by exact
+  // unit name, never signalled from here.
+  it('the dead-host scope cleanup only ever runs systemctl, without a shell', () => {
+    const scopes = code('dshHostScopes.ts');
+    expect(scopes).not.toContain('process.kill');
+    expect(scopes).not.toMatch(/\.kill\(|kill\(\s*-|detached|shell:|\bspawn\(|\bexec\(/);
+    expect(scopes.match(/execFile\(/g)).toEqual(['execFile(']);
+    expect(scopes).toContain("'systemctl',");
+    expect(scopes).toContain("'--user', 'kill', '--kill-whom=all', '--signal=SIGKILL', ...units");
+    expect(scopes).toContain("'--user', 'stop', ...dshScopePatterns(pid)");
+  });
+
   it('a chat slot reaches the DSH host only through a supervisor channel (P1-3a)', () => {
     const slot = code('createPiWorkerSlot.ts');
     expect(slot).toContain('dshHostSupervisor.openChannel(');

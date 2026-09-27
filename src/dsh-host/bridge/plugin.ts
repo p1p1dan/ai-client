@@ -18,7 +18,8 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
 import { DshChannelMux } from './channelMux.ts';
-import { type DshBridgeContext, DshSessionRuntime } from './dshSessionRuntime.ts';
+import { type DshBridgeContext, type DshJobsView, DshSessionRuntime } from './dshSessionRuntime.ts';
+import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 
 /** Stable Cordis plugin name. */
 export const name = 'aiclient-bridge';
@@ -51,6 +52,9 @@ const ELD_RESOLUTION_MS = 50;
 interface BridgeRowContext extends DshBridgeContext {
   logger(name: string): { warn(...args: unknown[]): void };
   effect(body: () => () => void, label?: string): void;
+  /** Services the row reads without injecting them: absent ones are `undefined`. */
+  get(name: 'jobs'): DshJobsView | undefined;
+  get(name: 'sessionPersistence'): GcPersistence | undefined;
 }
 
 function tenths(value: number): number {
@@ -84,6 +88,19 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
         eldMaxMs: tenths(Math.max(0, worstMs - ELD_RESOLUTION_MS)),
         rssMb: tenths(process.memoryUsage.rss() / 1048576),
       };
+    },
+    // Decision 024. Looked up per pass, not injected: the row's start does not
+    // wait on it, and a host without it answers the pass `ok: false`.
+    collectSessions: (request) => {
+      const persistence = ctx.get('sessionPersistence');
+      const home = process.env.DSH_HOME;
+      if (!persistence || !home) {
+        return Promise.reject(new Error('no session persistence or DSH_HOME in this host'));
+      }
+      return collectOrphanSessions(
+        { persistence, home, log: (...args) => console.error('[aiclient-bridge]', ...args) },
+        request
+      );
     },
     log: (...args) => console.error('[aiclient-bridge]', ...args),
   });

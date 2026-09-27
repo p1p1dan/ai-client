@@ -202,6 +202,11 @@ export class WorkerSlot {
     return this.transport.pid;
   }
 
+  /** The shared DSH host channel of the current transport, if it is one. */
+  get channelId(): string | undefined {
+    return this.transport.channelId;
+  }
+
   get pendingRequestCount(): number {
     return this.pendingRequests.size;
   }
