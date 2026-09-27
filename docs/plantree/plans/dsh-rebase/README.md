@@ -1,6 +1,6 @@
 # DSH 二开迁移（B 路线）
 
-Role: plan-entrypoint。建立日期：2026-09-25。状态：Planning，P0 探针进行中（P0-1～P0-3 已完成）。
+Role: plan-entrypoint。建立日期：2026-09-25。状态：P0 已完成（2026-09-26），P1 双引擎任务草案待过目。
 
 用户 2026-09-24 定方向：整个产品向 DeepSeek Harness（DSH）看齐、兼容其生态，同时保留登录、额度等自有功能。2026-09-25 批准调研推荐的 **B 路线**：DSH 宿主做 worker 引擎，外壳与渲染层保留，先做 P0 探针（[决策 001](decisions/001-route-b-and-scope.md)）。2026-09-26 把加密机移出 P0 门槛，挪到 P2 前；P0 只看 Linux 与普通 Windows；进程拓扑定为共享宿主（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md)）。
 
@@ -21,7 +21,7 @@ Role: plan-entrypoint。建立日期：2026-09-25。状态：Planning，P0 探�
 ## 文件地图
 
 - [roadmap.md](roadmap.md)：分期与任务，任务身份、状态、顺序的唯一权威。
-- [decisions/](decisions/)：[001 B 路线与六点拍板](decisions/001-route-b-and-scope.md)；[002 加密机移到 P2 前、共享宿主](decisions/002-defer-encrypted-machine-and-shared-host.md)。
+- [decisions/](decisions/)：[001 B 路线与六点拍板](decisions/001-route-b-and-scope.md)；[002 加密机移到 P2 前、共享宿主](decisions/002-defer-encrypted-machine-and-shared-host.md)；[003 进入 P1、钉版本、暂不加 Claude SDK](decisions/003-p0-closeout-enter-p1.md)。
 - [open-questions.md](open-questions.md)：P0 实测后才能定的问题。
 - [topics/](topics/)：上机检查单（[加密机](topics/p0-4-encrypted-machine-checklist.md)，P2 前使用）。
 - 调研与依据：[DSH 二开可行性调研](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)（生态、许可、功能落点、方案对比、goal 对照、差距表）。[Claude SDK 引擎调研](../../../plans/2026-09-26-claude-sdk-engine-study.md)（2026-09-26，对应 Q006）。

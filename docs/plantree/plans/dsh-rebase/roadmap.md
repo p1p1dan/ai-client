@@ -2,7 +2,7 @@
 
 任务身份、状态、顺序的唯一权威。编号本计划内有效，前缀即阶段。分期依据见[调研 §5](../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)。
 
-## P0 探针（进行中，平台门槛为 Linux + 普通 Windows）
+## P0 探针（已完成 2026-09-26，平台门槛为 Linux + 普通 Windows）
 
 原型性质：放在独立主题分支与独立子包里，不进默认构建、不改 1.0.x 行为；目的只是回答「能不能走」。2026-09-26 起加密机移出 P0 门槛，挪到 P2 前（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md)）。
 
@@ -13,13 +13,32 @@
 | P0-3 | ✅ | （2026-09-25 退出判据已满足，代码 `a6f0795f`；证据 [p0-3-bridge-2026-09-25.md](evidence/p0-3-bridge-2026-09-25.md)，截图在 [p0-3-gui-2026-09-25/](evidence/p0-3-gui-2026-09-25/)。接缝选 (a)：开发开关 `AICLIENT_DEV_ENGINE=dsh` 打开且应用未打包时，`createPiWorkerSlot` 改为用随包 node 拉起 DSH 宿主，宿主里的 `aiclient-bridge` 行用原样的 `PiWorkerRpcServer` 加 `DshSessionRuntime` 讲 worker RPC；渲染层没改，`src/agent-host` / `src/shared` / `src/runtime` 也没改。GUI 里流式正文、bash 工具行从运行中到完成、审批卡允许和拒绝都走通了，另有无界面 `bridge-smoke.ts` 作回归。映射表和缺口写在证据里：历史 / 用量 / 权限档位 / goal·todo 事件留给 P1；逐次审批要挂 `tools/pre-execute`）最小 bridge：DSH 会话事件 → 现有 RuntimeEvent，走现有 worker RPC；文本、工具行、一张审批卡能来回走通；DSH 引擎只在开发开关后可见 | 开发机 GUI 里文本、工具行、审批卡往返无误 |
 | P0-4 | ✅ | （2026-09-26 退出判据已满足：分支 `ci/dsh-p0-windows` HEAD `9b408b76`，运行 [36259247120](https://github.com/p1p1dan/ai-client/actions/runs/36259247120) 全绿；证据 [p0-4-windows-ci-2026-09-26.md](evidence/p0-4-windows-ci-2026-09-26.md)。`run-p0-4.ps1` 在 PowerShell 5.1 上一次跑通，未改；修了工具包构建在 npm 11 下的符号链接问题。跑了管理员、标准用户 + 用户目录、标准用户 + `C:\` 根下目录三轮，前两轮全过。第三轮：ACL 沙箱要求工作区有 WRITE_OWNER，只有 Modify 权限时沙箱下的 pwsh 全部失败，属 DSH 按设计拒绝，转 [Q005](open-questions.md)。另：DSH 在 Windows 上只有 `pwsh` 工具、没有 `bash` 工具；中文路径、Win10 / 11 客户端、杀软未覆盖）普通 Windows 实测（2026-09-26 按[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md) 改范围，原「加密机上机」挪到 P2 前）：在 GitHub Actions `windows-2022` runner 上跑现成的 P0-4 工具包与 `run-p0-4.ps1`（加密目录换成普通目录，不跑 `-ControlGroup`）。覆盖 read / write / edit / grep / glob、bash 与 pwsh、会话写入后回读与再次打开、`sandbox-windows-acl` 开关各一次、原检查单 ①～⑤ 里除「明文 / 密文」判断以外的部分：原生 DLL 加载（`NARB_DISABLE_NATIVE_CACHE` 开关各一次）、koffi 写锁、`conpty.node` 加载、spill 根目录权限、pnpm 装插件。工具包构建与 Linux 预演见 [evidence/p0-4-kit-2026-09-25.md](evidence/p0-4-kit-2026-09-25.md)。注意 runner 以管理员身份运行，与普通办公机的权限不同，证据里要注明 | CI 上一键脚本全部项通过，或每个失败项都有定位结论；报告与运行链接落 `evidence/` |
 | P0-6 | ✅ | （2026-09-26 退出判据已满足：代码 `2f9a44a7`，证据 [p0-6-shared-host-2026-09-26.md](evidence/p0-6-shared-host-2026-09-26.md)。① 引擎层成立：按 pid SIGKILL 共 39 次，日志逐事件哈希一致，锁随进程退出释放，工具子进程无孤儿，从 kill 到 5 个会话全部可用 888 ms；回合中途被杀的这一轮是「丢失 + 补写 `turn/end interrupted`」，已流到界面的正文不落盘。但现有 bridge 恢复时不给 `initialHistory`，Main 的 `restartEntry` 会让会话停在 error，要在 P1 补。② 1～8 个会话并发，delta 端到端 p99 ≤ 5.7 ms；真正的争用是 4 个 2000 条消息的长会话同时拼请求，事件循环卡 0.2～0.3 s。③ 历史内存与 native worker 同量级，2000 条约 +46 MB RSS；4 个长会话共享宿主峰值 341 MB，native 外推约 600 MB）共享宿主补验（决策 002 第 3 条，Linux 开发机）：① 宿主被杀后自动重启，用 `agents.resume` 恢复会话，恢复后能继续回合；② 多会话同时跑回合时的事件循环延迟；③ 带历史（例如几百条消息）的会话的内存 | 三项数据落证据；① 不成立时回到决策 002 重议 |
-| P0-5 | 🔧 | （2026-09-26 结论草稿已出，待用户确认：[p0-5-closeout-2026-09-26.md](evidence/p0-5-closeout-2026-09-26.md)。建议进入 P1；Q004 给出建议待确认；P1 第一项建议为「按会话选引擎」接缝，与 [Q006](open-questions.md) 共用）P0 收口：汇总 P0-1～P0-4 与 P0-6 的证据，裁决 Q004，给出进不进 P1 的结论，必要时回到[决策 001](decisions/001-route-b-and-scope.md) / [002](decisions/002-defer-encrypted-machine-and-shared-host.md) | 结论与证据落 `evidence/`，用户确认后进 P1 |
+| P0-5 | ✅ | （2026-09-26 用户确认，[决策 003](decisions/003-p0-closeout-enter-p1.md)：进入 P1；Q004 钉 `0.1.7-rc.2`；Q006 暂不加 Claude SDK 引擎。收口：[p0-5-closeout-2026-09-26.md](evidence/p0-5-closeout-2026-09-26.md)。）P0 收口：汇总 P0-1～P0-4 与 P0-6 的证据，裁决 Q004，给出进不进 P1 的结论，必要时回到[决策 001](decisions/001-route-b-and-scope.md) / [002](decisions/002-defer-encrypted-machine-and-shared-host.md) | 结论与证据落 `evidence/`，用户确认后进 P1 |
 
 顺序：P0-1 → P0-2 → P0-3 已完成；P0-4 与 P0-6 可以并行，两项都完成后做 P0-5（编号不重排，P0-6 排在 P0-5 之前）。
 
+## P1 双引擎（草案待用户过目，约 6～8 人周）
+
+目标：DSH 成为应用里可选的第二引擎。设置里切换，新会话按设置选引擎，之后跟随会话；自有 runtime 仍是默认。P1 的交付是一个带「DSH 引擎（实验）」开关的测试版。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)，从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。
+
+| ID | 状态 | 内容 | 退出判据 |
+|---|---|---|---|
+| P1-1 | ⬜ | 按会话选引擎的接缝：`ManagedSlot` 与会话索引行记引擎，`AGENT_WIRE_NAMES` 加 DSH，新建 / 恢复 / fork / 崩溃重启 4 条拉起路径按会话引擎走，写死 `PI_AGENT` 的 5 处改掉；设置项「引擎」，新建会话时读取 | 切换设置后新会话走 DSH、旧会话仍走原引擎；4 条路径有单测 |
+| P1-2 | ⬜ | DSH 宿主转正：`src/dsh-host` 从探针转为产品子包，钉 `0.1.7-rc.2`、锁文件入库；打包进三平台安装包（沿用 P0-4 工具包的裁剪），定体积预算；「仅未打包可用」改为由设置开关控制 | 三平台安装包里能起 DSH 宿主；体积记入证据 |
+| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个 slot；宿主级崩溃处理（一次重启、并行 bootstrap、宿主级重启预算）；心跳与按 pid 强杀；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
+| P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
+| P1-5 | ⬜ | 模型目录与凭据接缝：Main 生成 `llm-pi-ai` 路由（网关根地址），key 经凭据接口按请求注入、不落 `.env`；模型菜单与 DSH 路由同步 | 真实网关下目录里的模型都能用；key 不以明文落盘 |
+| P1-6 | ⬜ | 权限移植：`src/runtime/plugins/permissions/` 抽成纯库；DSH 插件挂 `user-approval` answerer 与 `tools/pre-execute`；四档、会话授权记忆、bash / pwsh 分析、拒绝清单；Windows 沙箱按 [Q005](open-questions.md) 定 | 现有权限回归用例在 DSH 引擎下全过 |
+| P1-7 | ⬜ | 渲染层：goal 条、todo 卡、jobs 面板、子代理面板；Windows 上 `pwsh` 工具行与审批文案（吸收 runtime-hardening 的 D3 / D4 / D7 / D8 / T138） | 开发机 GUI 点验；Windows 实测 |
+| P1-8 | ⬜ | 宿主插件：防空转、500 轮上限；长会话并发争用做成回归场景 | 回归场景进 CI |
+| P1-9 | ⬜ | 旧会话按需转换：pi 格式会话在 DSH 引擎下打开时转换，只复制、不改原文件 | 转换前后内容对照；原文件哈希不变 |
+| P1-10 | ⬜ | 插件白名单与预装：内部白名单 + 官方包，预装后离线分发；pnpm 不在用户机上联网装包（P0-2） | 白名单插件离线可装可用 |
+| P1-11 | ⬜ | 收口：Windows CI（管理员 + 标准用户两路）跑 DSH 引擎冒烟；开发机点验；出带开关的测试版，Windows 实测一次 | 测试版实测通过，证据落 `evidence/` |
+
+顺序：P1-1 最先；P1-2、P1-3 随后；P1-4、P1-5 可并行；P1-6 在 P1-4 之后；P1-7～P1-10 在主链路通了之后并行；P1-11 最后。
+
 ## Next
 
-- **P1 双引擎（6～8 人周）**：bridge 与 RuntimeEvent 完全对等（录制事件流做回归门禁）；权限移植（决策 001 第 3 条）；模型目录与凭据接缝；旧会话按需转换（只复制不改原文件）；Windows 上 shell 工具是 `pwsh` 而非 `bash`，UI、审批文案、提示词里按 bash 写的假设要改；CI 验收必须带标准用户一路（P0-4 证据）；渲染层补 goal 条、todo 卡、jobs 面板、子代理面板（吸收 runtime-hardening 的 D3 / D4 / D7 / D8 / T138）；防空转与 500 轮上限做成宿主插件；共享宿主的崩溃处理（宿主级重启与预算、存活探测、bridge 恢复时投影历史、中断回合与 `TOOL_OUTCOME_UNKNOWN` 的显示，清单见 [P0-6 证据](evidence/p0-6-shared-host-2026-09-26.md)），长会话并发争用做成回归场景。
 - **P2 默认切换（3～4 人周 + 1 次上机）**：
   - **前置：加密机上机与适配**（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md)，原 P0-4 范围）：用现成的上机包与[检查单](topics/p0-4-encrypted-machine-checklist.md)，DSH 宿主经随包 `node.exe` 在加密目录里执行各工具，结果与明文标记比对；`sandbox-windows-acl` 开关各一次，结论回填 [Q002](open-questions.md)；另装官方 DSH Desktop 0.1.7 作对照组。有上机机会可以提前跑；不过就回到决策点。
   - 默认引擎改为 DSH；CC / Codex 导入改出 DSH 格式；定内嵌终端去留（[Q003](open-questions.md)）；原生 runtime 冻结并保留一个版本作回退；定 DSH 升级节奏；回写 ARD。
