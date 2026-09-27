@@ -16,3 +16,12 @@
 - 不选「复制一份到宿主，runtime 不动」：main 上的权限修复会悄悄漏掉。
 - 不选「宿主直接引用 `src/runtime`」：会把我方的 cordis 拖进宿主包。
 - 代价：同步 main 时，main 上改过的权限文件会冲突，要手工搬进纯库。这正好迫使修复不被漏掉。
+
+## 实施补记（2026-09-27，P1-6a `16c8ef16`）
+
+- 纯库引用了 `src/agent-host/permissionPolicy.mjs`（随包策略表，纯数据）。静态守卫只放行这一个文件，并要求它本身不 import 任何东西。P1-12 时把它挪进 `src/shared/permissions/`。
+- 纯库的 `loadPermissionPolicy` 直接接收已解析好的 `sources:{user,project,local}`；`PERMISSION_GRANTS_ENTRY` 改由纯库定义，`session/legacy.ts` 再导出。
+- `isShellTool` 同时认 bash 与 pwsh，gate、grants、cardEmitter 里所有判断 bash 的地方都已换成它。1.0.x 没有 pwsh，行为不变。
+- `permissions/shell-policy.ts` 已无人引用，留给 P1-12 删。
+- 验证：A 类 10 个文件 388 例一行未改全部通过；编排器复跑 runtime 与纯库相关 72 个文件 1291 例全过，三套 tsc 通过。
+
