@@ -1,15 +1,13 @@
 {
-  "name": "@aiclient/dsh-app",
+  "name": "@aiclient/dsh-probe",
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, worker-RPC bridge rows.",
+  "description": "Test-only DSH bundle for the ai-client probe drivers: the aiclient-probe IPC row (auto-approves) and the P0-6 compaction switch. Copied into a probe DSH_HOME profile; never part of the app build.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
-    "./bridge": "./lib/bridge.js",
-    "./shared-bridge": "./lib/shared-bridge.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

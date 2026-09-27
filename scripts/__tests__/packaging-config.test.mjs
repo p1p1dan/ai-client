@@ -1,12 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
 import { RETIRED_BUNDLED_PLUGIN_PACKAGES } from '../../src/agent-host/bundledPlugins.mjs';
-import { resolveResourcesDir } from '../afterPack.mjs';
+import { copyDshHost, resolveResourcesDir } from '../afterPack.mjs';
+import { npmCiArgs, PROBE_BUNDLE } from '../dsh-host-build-lib.mjs';
 
 /**
  * Packaging spec C4 / C5 / C6 — structural assertions on the two config files
@@ -23,6 +25,10 @@ const workflow = yaml.load(workflowText);
 const workerPackage = JSON.parse(
   readFileSync(path.join(repoRoot, 'src', 'agent-host', 'package.json'), 'utf8')
 );
+const dshHostDir = path.join(repoRoot, 'src', 'dsh-host');
+const dshPackage = JSON.parse(readFileSync(path.join(dshHostDir, 'package.json'), 'utf8'));
+const dshLock = JSON.parse(readFileSync(path.join(dshHostDir, 'package-lock.json'), 'utf8'));
+const dshBundle = JSON.parse(readFileSync(path.join(dshHostDir, 'bundle', 'package.json'), 'utf8'));
 
 describe('afterPack resource layout', () => {
   it('copies resources inside the macOS app bundle', () => {
@@ -166,6 +172,75 @@ describe('electron-builder.yml (C4)', () => {
       expect(from).not.toContain('agent-host');
     }
   });
+
+  it('keeps the DSH host artifact out of extraResources and the asar', () => {
+    // dsh-rebase P1-2: afterPack copies out-dsh-host to resources/dsh-host.
+    for (const entry of builderYml.extraResources ?? []) {
+      const from = typeof entry === 'string' ? entry : entry.from;
+      expect(from).not.toContain('dsh-host');
+    }
+    for (const pattern of builderYml.files) expect(String(pattern)).not.toContain('dsh-host');
+  });
+});
+
+/**
+ * dsh-rebase P1-2 — the DSH host package is the chat engine's dependency
+ * boundary: every entry is code the packaged host loads. Exact names, exact
+ * pins, one DSH version (decisions 003, 013).
+ */
+describe('DSH host package dependency boundary', () => {
+  const pin = dshPackage.dependencies['@deepseek-ai/dsh-base'];
+
+  it('declares exactly the host, the bundle and pnpm', () => {
+    expect(Object.keys(dshPackage.dependencies).sort()).toEqual([
+      '@aiclient/dsh-app',
+      '@deepseek-ai/cordis',
+      '@deepseek-ai/cordis-plugin-group',
+      '@deepseek-ai/cordis-plugin-include',
+      '@deepseek-ai/cordis-plugin-loader',
+      '@deepseek-ai/dsh-app-boot',
+      '@deepseek-ai/dsh-base',
+      '@deepseek-ai/dsh-home-paths',
+      '@deepseek-ai/dsh-launch-environment',
+      '@deepseek-ai/dsh-system-prompt',
+      'pnpm',
+    ]);
+    expect(dshPackage.devDependencies).toBeUndefined();
+    expect(dshPackage.dependencies['@aiclient/dsh-app']).toBe('file:./bundle');
+    expect(dshPackage.dependencies).not.toHaveProperty(PROBE_BUNDLE);
+  });
+
+  it('pins every registry dependency exactly', () => {
+    for (const [name, spec] of Object.entries(dshPackage.dependencies)) {
+      if (name === '@aiclient/dsh-app') continue;
+      expect(spec, name).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/);
+    }
+  });
+
+  it('locks every @deepseek-ai/dsh-* package at the one DSH pin', () => {
+    const dsh = Object.entries(dshLock.packages).filter(([rel]) =>
+      /(^|\/)node_modules\/@deepseek-ai\/dsh-[^/]+$/.test(rel)
+    );
+    expect(dsh.length).toBeGreaterThan(100);
+    for (const [rel, entry] of dsh) expect(entry.version, rel).toBe(pin);
+    expect(dshLock.packages[''].version).toBe(dshPackage.version);
+  });
+
+  it('gives the bundle a dsh peer DSH accepts: the pin itself', () => {
+    expect(dshBundle.peerDependencies['@deepseek-ai/dsh-llm']).toBe(pin);
+    expect(dshLock.packages.bundle.version).toBe(dshBundle.version);
+  });
+
+  it('ships no probe row in the product bundle (decision 015)', () => {
+    const patch = readFileSync(path.join(dshHostDir, 'bundle', 'cordis.patch.yml'), 'utf8');
+    expect(patch).not.toMatch(/id:\s*aiclient-probe\b/);
+    expect(patch).not.toContain('compaction-basic');
+    const probePatch = readFileSync(
+      path.join(dshHostDir, 'tools', 'probe-bundle', 'cordis.patch.yml'),
+      'utf8'
+    );
+    expect(probePatch).toMatch(/id:\s*aiclient-probe\b/);
+  });
 });
 
 describe('worker package dependency boundary', () => {
@@ -214,6 +289,7 @@ describe('build.yml gate wiring (C5)', () => {
     for (const cmd of [
       'pnpm typecheck',
       'pnpm typecheck:agent-host',
+      'pnpm typecheck:dsh-host',
       'pnpm lint',
       'pnpm test',
       'pnpm verify:release',
@@ -353,6 +429,46 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     expect(installRun('build-linux')).toBe('npm ci --omit=dev --omit=optional');
   });
 
+  it('installs the DSH host with its optional platform packages (decision 013)', () => {
+    // --omit=optional would drop koffi, ripgrep, sharp, NARB and node-addon-system.
+    const gate = jobs.gate.steps.find((step) => step['working-directory'] === 'src/dsh-host');
+    expect(gate?.run).toBe('npm ci --ignore-scripts --no-audit --no-fund');
+    for (const args of [
+      npmCiArgs({ platform: 'linux', arch: 'x64' }, { platform: 'linux', arch: 'x64' }),
+      npmCiArgs({ platform: 'win32', arch: 'x64' }, { platform: 'linux', arch: 'x64' }),
+    ]) {
+      expect(args.join(' ')).not.toContain('--omit');
+    }
+  });
+
+  it('builds the DSH host artifact before electron-builder on every packaging job', () => {
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
+      const steps = jobs[job].steps;
+      const build = steps.findIndex((s) => s.run === 'node scripts/build-dsh-host.mjs');
+      const pack = steps.findIndex((s) => s.run?.includes('electron-builder'));
+      expect(build, job).toBeGreaterThanOrEqual(0);
+      expect(build, job).toBeLessThan(pack);
+      const verify = steps.find((s) => s.run?.includes('verify-packaged-app.mjs'));
+      expect(verify.run, job).toContain('--dsh-report-file');
+      expect(verify.run, job).not.toContain('--skip-dsh-smoke');
+      const upload = steps.find((s) => s.name === 'Upload DSH host evidence');
+      expect(upload?.with?.path, job).toContain('out-dsh-host/dsh-host-manifest.json');
+    }
+  });
+
+  it('smokes the Windows package once more from a path with a space', () => {
+    const run = jobs['build-windows'].steps.find(
+      (s) => s.name === 'DSH host smoke from a path with a space'
+    )?.run;
+    expect(run).toContain("'C:\\p12app\\PiLab Ai'");
+    expect(run).toContain('packaged-dsh-host-smoke.mjs --app-dir $dir --level 1');
+  });
+
+  it('stages the DSH host in dist:prereq', () => {
+    expect(pkg.scripts['build:dsh-host']).toBe('node scripts/build-dsh-host.mjs');
+    expect(pkg.scripts['dist:prereq']).toContain('pnpm build:dsh-host');
+  });
+
   it('every job runs Node 24, matching src/agent-host engines', () => {
     // Three contradictory Node truths (.nvmrc 22 / CI 20 / engines >=24) cost a
     // full red CI run once already: Node 20 has no --experimental-strip-types.
@@ -402,5 +518,61 @@ describe('[FB9-5] the no-bundled-webfont red line has an artifact-level gate', (
     expect(scripts['dist:prereq'].indexOf('pnpm build')).toBeLessThan(
       scripts['dist:prereq'].indexOf('assert-no-webfonts.mjs')
     );
+  });
+});
+
+describe('afterPack copies the DSH host for its own target only (dsh-rebase P1-2)', () => {
+  const afterPackText = readFileSync(path.join(repoRoot, 'scripts', 'afterPack.mjs'), 'utf8');
+
+  function context(root, platform) {
+    return {
+      appOutDir: path.join(root, 'app'),
+      electronPlatformName: platform,
+      arch: 1,
+      packager: { info: { projectDir: root }, appInfo: { productFilename: 'PiLab Ai' } },
+    };
+  }
+
+  function artifact(root, target) {
+    const out = path.join(root, 'out-dsh-host');
+    for (const rel of ['host.js', 'package.json', 'node_modules/@aiclient/dsh-app/lib/bridge.js']) {
+      mkdirSync(path.dirname(path.join(out, rel)), { recursive: true });
+      writeFileSync(path.join(out, rel), '// x\n');
+    }
+    writeFileSync(
+      path.join(out, 'dsh-host-manifest.json'),
+      JSON.stringify({ version: '0.1.0', dsh: '0.1.7-rc.2', target })
+    );
+  }
+
+  it('copies a matching artifact to resources/dsh-host', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'afterpack-dsh-'));
+    try {
+      artifact(root, { platform: 'linux', arch: 'x64' });
+      copyDshHost(context(root, 'linux'));
+      expect(readFileSync(path.join(root, 'app', 'resources', 'dsh-host', 'host.js'), 'utf8')).toBe(
+        '// x\n'
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses an artifact built for another platform or none at all', () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'afterpack-dsh-'));
+    try {
+      expect(() => copyDshHost(context(root, 'linux'))).toThrow(/pnpm build:dsh-host/);
+      artifact(root, { platform: 'darwin', arch: 'arm64' });
+      expect(() => copyDshHost(context(root, 'linux'))).toThrow(
+        /built for darwin-arm64, not linux-x64/
+      );
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('runs the Windows TSD rewrite over resources/dsh-host too', () => {
+    expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'dsh-host')");
+    expect(afterPackText).toMatch(/copyAgentHost\(context\);\s+copyDshHost\(context\);/);
   });
 });

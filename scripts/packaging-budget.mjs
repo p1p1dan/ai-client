@@ -17,6 +17,31 @@ export function evaluateWorkerArtifactSize(bytes) {
   };
 }
 
+/**
+ * DSH host artifact (dsh-rebase decision 014): B-tier pruning measured about
+ * 95-100 MiB and 10.2k files per platform. The ceilings fail verification; the
+ * target is reported. A forgotten `.map/.d.ts` sweep (+55 MiB), foreign
+ * node-pty prebuilds (+23 MiB) or sharp's musl / wasm32 variants (+27 MiB)
+ * each cross them.
+ */
+export const DSH_HOST_ARTIFACT_MAX_BYTES = 128 * 1024 * 1024;
+export const DSH_HOST_ARTIFACT_MAX_FILES = 12_000;
+export const DSH_HOST_ARTIFACT_TARGET_BYTES = 110 * 1024 * 1024;
+
+export function evaluateDshHostArtifact({ bytes, files }) {
+  const reasons = [];
+  if (bytes > DSH_HOST_ARTIFACT_MAX_BYTES) reasons.push('bytes');
+  if (files > DSH_HOST_ARTIFACT_MAX_FILES) reasons.push('files');
+  return {
+    status: reasons.length === 0 ? 'ok' : 'over',
+    reasons,
+    overTarget: bytes > DSH_HOST_ARTIFACT_TARGET_BYTES,
+    bytes,
+    files,
+    ceiling: { bytes: DSH_HOST_ARTIFACT_MAX_BYTES, files: DSH_HOST_ARTIFACT_MAX_FILES },
+  };
+}
+
 export function topDirectories(dir, limit = 10) {
   const measure = (target) => {
     let total = 0;

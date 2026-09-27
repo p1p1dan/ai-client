@@ -1,20 +1,26 @@
 /**
- * P0-1 DSH host launcher.
+ * DSH host launcher: ai-client's worker engine (dsh-rebase plan).
  *
  * Boots one application-owned profile, bundles
- * `['@deepseek-ai/dsh-base', '@aiclient/dsh-app']`, with dsh-app-boot on plain
- * Node. Mirrors `@deepseek-ai/dsh/profile-boot` `runProfile` (the path DSH
- * Desktop's host uses) minus the proxy, command-line and bin concerns.
+ * `['@deepseek-ai/dsh-base', '@aiclient/dsh-app']`, with dsh-app-boot on the
+ * bundled Node. Mirrors `@deepseek-ai/dsh/profile-boot` `runProfile` (the path
+ * DSH Desktop's host uses) minus the proxy, command-line and bin concerns.
  *
- * Run: `node --expose-internals host.ts` with DSH_HOME set. The runtime
- * resolution patches Node's internal ESM/CJS resolvers; it reaches them via
- * `--expose-internals` or, failing that, the `node-addon-require-builtin` addon.
+ * One file, two forms (decision 011). A source checkout runs it as is:
+ * `node --expose-internals src/dsh-host/host.ts`. The packaged app runs
+ * `resources/dsh-host/host.js`, its esbuild transpile, beside the artifact's
+ * own node_modules and `dsh-host-manifest.json` (scripts/build-dsh-host.mjs).
+ * Both need DSH_HOME. The runtime resolution patches Node's internal ESM/CJS
+ * resolvers; it reaches them via `--expose-internals` or, failing that, the
+ * `node-addon-require-builtin` addon.
  *
  * IPC (when spawned with an 'ipc' stdio slot):
  *   host -> parent: { type: 'ready', ... } once boot() settles,
  *                   { type: 'stopped', ms } after disposal.
- *   parent -> host: { type: 'shutdown' }. Session requests go to the
- *                   aiclient-probe row of @aiclient/dsh-app.
+ *   parent -> host: { type: 'shutdown' }. The product composition answers
+ *                   nothing else here; probe drivers layer the test-only
+ *                   bundle @aiclient/dsh-probe (tools/probe-bundle), whose
+ *                   aiclient-probe row serves session requests (decision 015).
  *
  * Bridge mode (P0-3, AICLIENT_DSH_BRIDGE=1): the parent is Main's WorkerSlot and
  * the channel carries our worker RPC, served by the aiclient-bridge row. Every
@@ -24,7 +30,7 @@
  * worker RPC goes back over IPC in this mode; ready / stopped go to stderr.
  */
 
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -33,6 +39,9 @@ import { format } from 'node:util';
 
 const PROFILE_NAME = 'aiclient';
 const BUNDLES = ['@deepseek-ai/dsh-base', '@aiclient/dsh-app'] as const;
+// Test-only bundle carrying the auto-approving IPC probe (decision 015).
+const PROBE_BUNDLE = '@aiclient/dsh-probe';
+const PROBE_ROW = 'aiclient-probe';
 const BIN = 'dsh';
 // Rows that must never be composed into a worker engine.
 const FORBIDDEN_ROWS = ['webserver', 'frontend-static'];
@@ -78,8 +87,36 @@ function fail(message: string): never {
   process.exit(1);
 }
 
+/**
+ * Which form is running: `packaged` when scripts/build-dsh-host.mjs left its
+ * manifest beside this file, `source` in a checkout. Reported in `ready`.
+ */
+function describeArtifact(): Record<string, unknown> {
+  const own = JSON.parse(readFileSync(join(hostDir, 'package.json'), 'utf8')) as {
+    version?: string;
+  };
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(readFileSync(join(hostDir, 'dsh-host-manifest.json'), 'utf8'));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { form: 'source', version: own.version };
+    }
+    fail(`unreadable dsh-host-manifest.json: ${String(error)}`);
+  }
+  const pick = (key: string) => manifest[key];
+  return {
+    form: 'packaged',
+    version: own.version,
+    dsh: pick('dsh'),
+    target: pick('target'),
+    gitCommit: pick('gitCommit'),
+    builtAt: pick('builtAt'),
+  };
+}
+
 const home = process.env.DSH_HOME;
-if (home === undefined || home === '') fail('DSH_HOME must be set; the probe never uses ~/.dsh');
+if (home === undefined || home === '') fail('DSH_HOME must be set; the host never uses ~/.dsh');
 // os.userInfo() reads the account database, so an overridden HOME cannot hide the real one.
 if (resolve(home) === resolve(os.userInfo().homedir, '.dsh'))
   fail('DSH_HOME points at the real ~/.dsh');
@@ -88,7 +125,9 @@ const appBoot = await import('@deepseek-ai/dsh-app-boot');
 const { DSH_LAUNCH_ENVIRONMENT_KEY } = await import('@deepseek-ai/dsh-launch-environment');
 marks.modulesLoaded = performance.now();
 
-const installAnchor = join(dirname(fileURLToPath(import.meta.url)), 'package.json');
+const hostDir = dirname(fileURLToPath(import.meta.url));
+const installAnchor = join(hostDir, 'package.json');
+const artifact = describeArtifact();
 const profileDir = appBoot.resolveProfileDir(PROFILE_NAME, home);
 appBoot.initProfile(profileDir, BUNDLES);
 const profile = appBoot.loadProfileDirectory(BIN, profileDir, installAnchor);
@@ -113,17 +152,16 @@ const profileContext = {
   home,
   overlays: [],
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
-  // Plugin installs run pnpm's CLI on this same Node binary, as a packaged app
-  // would with its bundled pnpm (AICLIENT_DSH_PNPM_CLI = path to pnpm.cjs).
-  ...(process.env.AICLIENT_DSH_PNPM_CLI
-    ? {
-        packageManager: {
-          command: process.execPath,
-          args: [process.env.AICLIENT_DSH_PNPM_CLI],
-          env: {},
-        },
-      }
-    : {}),
+  // Plugin installs run pnpm's CLI on this same Node binary, from this host's
+  // own node_modules (the bundled copy in a packaged app), never a `pnpm` from
+  // PATH (decision 016). AICLIENT_DSH_PNPM_CLI names another pnpm.mjs / .cjs.
+  packageManager: {
+    command: process.execPath,
+    args: [
+      process.env.AICLIENT_DSH_PNPM_CLI || join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs'),
+    ],
+    env: {},
+  },
 };
 const patches = appBoot.readProfilePatches(BIN, profileContext, profile);
 
@@ -147,6 +185,13 @@ const notDisabled = REQUIRED_DISABLED.filter(
   (id) => flat.find((row) => row.id === id)?.disabled !== true
 );
 if (notDisabled.length > 0) fail(`rows expected disabled: ${notDisabled.join(', ')}`);
+// The auto-approving probe row may only arrive with its own test bundle.
+const probeLayered = profile.layers.some((layer) => layer.packageName === PROBE_BUNDLE);
+const probeRows = flat.filter(
+  (row) => row.id === PROBE_ROW || String(row.name ?? '').startsWith(PROBE_BUNDLE)
+);
+if (!probeLayered && probeRows.length > 0)
+  fail(`probe rows composed without ${PROBE_BUNDLE}: ${JSON.stringify(probeRows)}`);
 const composition = {
   rows: flat.length,
   disabledLiteral: flat.filter((row) => row.disabled === true).map((row) => row.id),
@@ -237,6 +282,7 @@ const ready = {
   node: process.version,
   execPath: process.execPath,
   execArgv: process.execArgv,
+  artifact,
   dshRuntimeVersion: appBoot.getDshRuntimeVersion(),
   bundles: profile.layers.map((layer) => layer.packageName),
   composition,

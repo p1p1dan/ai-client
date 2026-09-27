@@ -6,7 +6,7 @@
     1. 找到已安装应用的 resources\node-runtime\node.exe（白名单载体）。
     2. 在 -EncDir（受加密策略的目录）下建一个临时工作目录，用 PowerShell 写标记文件，
        并读文件头确认它们在盘上是 TSD 容器（前提）。
-    3. 用 node.exe 跑 host\p0-4-probe.ts：DSH 宿主启动（NARB 缓存三种）、
+    3. 用 node.exe 跑 host\tools\p0-4-probe.ts：DSH 宿主启动（NARB 缓存三种）、
        read / write / edit / grep / glob、pwsh 工具（沙箱开 / 关）、会话写锁与恢复、
        node-pty、%TEMP% spill、pnpm 装插件、Git Bash / PowerShell 直接读写。
        模型回合只打到脚本自己起的本地假网关，不连任何真实模型服务。
@@ -141,7 +141,7 @@ else { Write-Host "[P0-4] 前提不成立：$work 下 PowerShell 写的文件不
 # ---- 3. node-side probe ------------------------------------------------------
 $nodeReport = Join-Path $reportDir 'node-report.json'
 $probeLog = Join-Path $reportDir 'p0-4-probe.log'
-$probeArgs = @((Join-Path $kit 'host\p0-4-probe.ts'), '--work', $work, '--marker', $marker, '--out', $nodeReport, '--log', $probeLog, '--gateway', (Join-Path $kit 'gateway\fake-gateway.mjs'))
+$probeArgs = @((Join-Path $kit 'host\tools\p0-4-probe.ts'), '--work', $work, '--marker', $marker, '--out', $nodeReport, '--log', $probeLog, '--gateway', (Join-Path $kit 'gateway\fake-gateway.mjs'))
 $dshProcesses = @()
 $probeExit = $null
 if (-not $ControlGroup) {
@@ -289,7 +289,7 @@ Write-Utf8NoBom $psSideFile ($psSide | ConvertTo-Json -Depth 8)
 $final = Join-Path $reportDir 'p0-4-report.json'
 $summary = Join-Path $reportDir 'p0-4-summary.txt'
 $ErrorActionPreference = 'Continue'
-& $node (Join-Path $kit 'host\p0-4-report.ts') --node $nodeReport --ps $psSideFile --out $final --summary $summary | Out-Null
+& $node (Join-Path $kit 'host\tools\p0-4-report.ts') --node $nodeReport --ps $psSideFile --out $final --summary $summary | Out-Null
 $ErrorActionPreference = 'Stop'
 if (Test-Path -LiteralPath $final) {
     Remove-Item -LiteralPath $nodeReport, $inspectFile, $psSideFile -Force -ErrorAction SilentlyContinue

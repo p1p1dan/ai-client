@@ -53,6 +53,7 @@
       "!**/out",
       "!**/dist",
       "!**/out-agent-host",
+      "!**/out-dsh-host",
       "!**/out-node-runtime",
       "!**/*.min.js",
       "!**/*.css",

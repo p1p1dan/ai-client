@@ -8,6 +8,10 @@
  * - Spawn log: every child_process spawn (async and sync) and worker_threads
  *   Worker is logged with its command line. Native spawns (node-pty) bypass
  *   this; the supervisor's process-tree sampling and strace cover them.
+ * - Module log (AICLIENT_PROBE_MODULE_LOG=1, dsh-rebase P1-2): every module URL
+ *   the loaders load, every native addon `process.dlopen` opens, and at exit
+ *   the shared objects the process mapped. The packaged-host smoke uses it to
+ *   prove nothing resolved outside resources/dsh-host.
  *
  * Records go to the JSONL file named by AICLIENT_PROBE_HOOK_LOG.
  */
@@ -15,7 +19,7 @@
 import childProcess from 'node:child_process';
 import dns from 'node:dns';
 import fs from 'node:fs';
-import { syncBuiltinESMExports } from 'node:module';
+import module, { syncBuiltinESMExports } from 'node:module';
 import net from 'node:net';
 import { performance } from 'node:perf_hooks';
 import workerThreads from 'node:worker_threads';
@@ -100,6 +104,37 @@ workerThreads.Worker = class ProbeWorker extends OriginalWorker {
     super(filename, options);
   }
 };
+
+// ---- module log --------------------------------------------------------
+
+if (process.env.AICLIENT_PROBE_MODULE_LOG === '1') {
+  const seen = new Set();
+  if (typeof module.registerHooks === 'function') {
+    module.registerHooks({
+      load(url, context, nextLoad) {
+        if (!seen.has(url)) {
+          seen.add(url);
+          record('module', { url });
+        }
+        return nextLoad(url, context);
+      },
+    });
+  } else {
+    record('module-hooks-unavailable', { node: process.version });
+  }
+  const originalDlopen = process.dlopen;
+  process.dlopen = function probeDlopen(target, filename, ...rest) {
+    record('dlopen', { filename: String(filename) });
+    return originalDlopen.call(this, target, filename, ...rest);
+  };
+  process.on('exit', () => {
+    try {
+      record('shared-objects', { list: process.report.getReport().sharedObjects ?? [] });
+    } catch (error) {
+      record('shared-objects-failed', { message: String(error) });
+    }
+  });
+}
 
 syncBuiltinESMExports();
 record('hooks-installed', { argv: process.argv.slice(1), execArgv: process.execArgv });

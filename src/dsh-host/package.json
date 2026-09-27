@@ -1,12 +1,14 @@
 {
   "name": "@aiclient/dsh-host",
-  "version": "0.0.0-p0.1",
+  "version": "0.1.0",
   "private": true,
+  "license": "MIT",
   "type": "module",
-  "description": "P0-1 probe (dsh-rebase plan): a DeepSeek Harness host = dsh-base + @aiclient/dsh-app, booted with dsh-app-boot on plain Node. Throwaway; not part of the app build.",
+  "description": "ai-client DSH worker host: dsh-base + @aiclient/dsh-app booted by dsh-app-boot on the bundled Node runtime; packaged as resources/dsh-host.",
   "scripts": {
     "host": "node --expose-internals host.ts",
-    "measure": "node measure.ts"
+    "measure": "node tools/measure.ts",
+    "bridge-smoke": "node tools/bridge-smoke.ts"
   },
   "dependencies": {
     "@aiclient/dsh-app": "file:./bundle",

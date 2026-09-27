@@ -1,10 +1,11 @@
 {
-  // Type-check gate for the DSH host probes (dsh-rebase plan P0).
+  // Type-check gate for the DSH host, its bridge and the probe drivers under
+  // tools/ (dsh-rebase plan). CI runs it as `pnpm typecheck:dsh-host`.
   //
   // Separate config for the same reason as `src/runtime/tsconfig.json`: this
   // directory is its own npm package with its own `node_modules`
   // (@deepseek-ai/* pinned in `package.json`), so the root gate excludes
-  // `src/dsh-host/**` and never needs `npm ci` in here. Run from the repo root:
+  // `src/dsh-host/**`. Run from the repo root after `npm ci` in here:
   //   pnpm exec tsc --noEmit -p src/dsh-host/tsconfig.json
   //
   // P0-3: `bridge/` imports the worker RPC server and shared types from
@@ -27,7 +28,7 @@
     "types": ["node"]
   },
   // P1-1: the bridge's unit tests run in the root Vitest and are checked here,
-  // next to the code they exercise.
-  "include": ["*.ts", "lib/*.ts", "bridge/*.ts", "bridge/__tests__/*.ts"],
-  "exclude": ["node_modules", "bundle"]
+  // next to the code they exercise. P1-2: probe drivers moved to tools/.
+  "include": ["*.ts", "bridge/*.ts", "bridge/__tests__/*.ts", "tools/**/*.ts"],
+  "exclude": ["node_modules", "bundle", "tools/probe-bundle"]
 }

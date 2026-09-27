@@ -2,7 +2,7 @@
  * P0-4 report merger: node-side probe report + PowerShell-side facts -> one
  * JSON report and a short Chinese summary.
  *
- *   node.exe p0-4-report.ts --node <node-report.json> --ps <ps-side.json>
+ *   node.exe tools/p0-4-report.ts --node <node-report.json> --ps <ps-side.json>
  *            --out <p0-4-report.json> --summary <p0-4-summary.txt>
  *
  * The PowerShell side (run-p0-4.ps1) is the non-whitelisted observer: it wrote

@@ -1,10 +1,10 @@
 /**
  * P0-4 node-side probe for the TEC/TSD-encrypted Windows machine (dsh-rebase plan).
  *
- *   node.exe p0-4-probe.ts --work <dir> --marker <text> --out <report.json>
+ *   node.exe tools/p0-4-probe.ts --work <dir> --marker <text> --out <report.json>
  *            [--gateway <fake-gateway.mjs>] [--git-bash <bash.exe>] [--skip-pnpm]
  *            [--log <file>] [--make-markers] [--self-clean]
- *   node.exe p0-4-probe.ts --control --work <dir> --marker <text> --out <report.json>
+ *   node.exe tools/p0-4-probe.ts --control --work <dir> --marker <text> --out <report.json>
  *            [--port 18484] [--shell pwsh|bash]     (official DSH Desktop control group)
  *
  * Runs under the app's bundled node.exe (the whitelisted carrier) and drives the
@@ -46,8 +46,12 @@ import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { zstdDecompressSync } from 'node:zlib';
 import { captureStderr, exitOf, round, sleep, stopWithin, waitMessage } from './lib/kit.ts';
+import { installProbeBundle } from './lib/probe-bundle.ts';
 
+// Kit layout (tools/p0-4/build-kit.mjs) mirrors the repo: <kit>/host/host.ts,
+// <kit>/host/tools/<this file>, <kit>/gateway/fake-gateway.mjs.
 const here = dirname(fileURLToPath(import.meta.url));
+const hostDir = resolve(here, '..');
 const isWin = process.platform === 'win32';
 const TSD_MAGIC = '%TSD-Header-###%';
 const PLUGIN = 'dsh-office-tools@1.0.4';
@@ -76,19 +80,13 @@ const marker = required('marker');
 const outFile = resolve(required('out'));
 const gatewayEntry =
   option('gateway') ??
-  [
-    join(here, '..', 'gateway', 'fake-gateway.mjs'),
-    join(
-      here,
-      '..',
-      '..',
-      'docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs'
-    ),
-  ].find((file) => existsSync(file)) ??
+  [join(here, 'fake-gateway.mjs'), join(hostDir, '..', 'gateway', 'fake-gateway.mjs')].find(
+    (file) => existsSync(file)
+  ) ??
   '';
-const hostEntry = join(here, 'host.ts');
+const hostEntry = join(hostDir, 'host.ts');
 const hooksUrl = pathToFileURL(join(here, 'lib', 'probe-hooks.mjs')).href;
-const pnpmCli = join(here, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
+const pnpmCli = join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
 const skipPnpm = flag('skip-pnpm');
 const logs = join(work, 'logs');
 const dshHome = join(work, 'dsh-home');
@@ -354,6 +352,8 @@ async function call(
 }
 
 function launchHost(label: string, extraEnv: Record<string, string>): Host {
+  // The IPC probe row is the test-only bundle; the product bundle has none (decision 015).
+  installProbeBundle(dshHome);
   const child = spawn(process.execPath, ['--expose-internals', '--import', hooksUrl, hostEntry], {
     cwd: hostCwd,
     env: hostEnv(extraEnv),

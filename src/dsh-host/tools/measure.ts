@@ -2,10 +2,14 @@
  * P0-1 measurement driver: DSH host (dsh-base + @aiclient/dsh-app) versus our
  * native worker (out-agent-host/worker.js), both on the same bundled Node.
  *
- *   node measure.ts smoke                 one DSH boot + 1 session + stop, one worker bootstrap + stop
- *   node measure.ts run [--cold 3] [--warm 5] [--worker 5] [--out file.json]
- *   node measure.ts parallel [--n 4]      n engines started at once, one session each
- *   node measure.ts trace [--out file.json]
+ *   node tools/measure.ts smoke           one DSH boot + 1 session + stop, one worker bootstrap + stop
+ *   node tools/measure.ts run [--cold 3] [--warm 5] [--worker 5] [--out file.json]
+ *   node tools/measure.ts parallel [--n 4]  n engines started at once, one session each
+ *   node tools/measure.ts trace [--out file.json]
+ *
+ * (run from src/dsh-host). Sessions are driven through the aiclient-probe row
+ * of the test-only bundle tools/probe-bundle, which every DSH_HOME here gets
+ * before its host starts (dsh-rebase decision 015).
  *
  * `run` measures spawn -> ready, idle RSS, RSS with 1/2/4 sessions, stop time,
  * and samples each process tree (/proc, 250 ms) for child processes. `trace`
@@ -47,10 +51,12 @@ import {
   waitMessage,
   waitQuiet,
 } from './lib/kit.ts';
+import { installProbeBundle } from './lib/probe-bundle.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '..', '..');
-const hostEntry = join(here, 'host.ts');
+const hostDir = resolve(here, '..');
+const repoRoot = resolve(hostDir, '..', '..');
+const hostEntry = join(hostDir, 'host.ts');
 const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
 const workerEntry = join(repoRoot, 'out-agent-host', 'worker.js');
 const bundledNode = join(
@@ -88,7 +94,7 @@ const extraHostEnv: Record<string, string> = Object.fromEntries(
 const scratchRoot = join('/var/tmp', `aiclient-dsh-probe-${Date.now()}`);
 const sandbox = (label: string, dshHome?: string) => sandboxIn(scratchRoot, label, dshHome);
 const parseStrace = (file: string, box: Sandbox) =>
-  parseStraceIn(file, box, [here, join(repoRoot, 'out-agent-host')], repoRoot);
+  parseStraceIn(file, box, [hostDir, join(repoRoot, 'out-agent-host')], repoRoot);
 
 // ---- small utils ---------------------------------------------------------
 
@@ -139,6 +145,7 @@ interface LaunchOptions {
 
 async function runDsh(label: string, options: LaunchOptions & { ladder: boolean }) {
   const { box } = options;
+  installProbeBundle(box.dshHome);
   const env = {
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
@@ -351,6 +358,7 @@ async function runWorker(label: string, options: LaunchOptions) {
  * DSH_HOME, as per-session hosts of one installation would.
  */
 async function runParallel(engine: 'dsh' | 'worker', n: number, sharedDshHome?: string) {
+  if (engine === 'dsh' && sharedDshHome) installProbeBundle(sharedDshHome);
   const t0 = performance.now();
   const procs = Array.from({ length: n }, (_, index) => {
     const label = `parallel-${engine}-${index + 1}`;
@@ -429,7 +437,7 @@ async function runParallel(engine: 'dsh' | 'worker', n: number, sharedDshHome?: 
 
 function versions() {
   const read = (path: string) => JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
-  const lock = read(join(here, 'package-lock.json')) as {
+  const lock = read(join(hostDir, 'package-lock.json')) as {
     packages: Record<string, { version?: string }>;
   };
   const pinned = Object.fromEntries(
@@ -549,8 +557,8 @@ async function main() {
     const engineNode = realpathSync(nodeBin);
     const dshRoots = [
       engineNode,
-      join(here, 'node_modules'),
-      join(here, 'bundle'),
+      join(hostDir, 'node_modules'),
+      join(hostDir, 'bundle'),
       hostEntry,
       hooksEntry,
     ];

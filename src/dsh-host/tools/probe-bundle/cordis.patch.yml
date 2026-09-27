@@ -1,0 +1,21 @@
+# @aiclient/dsh-probe — test-only bundle stacked over the product composition
+# (profile bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app',
+# '@aiclient/dsh-probe']). Probe drivers copy it into the probe DSH_HOME's
+# profile directory, the second anchor DSH resolves bundles from
+# (src/dsh-host/tools/lib/probe-bundle.ts). It never ships: the aiclient-probe
+# row answers every approval with allowed-once (dsh-rebase decision 015).
+
+# P0-6 history probes grow sessions far past any real context window; they
+# switch automatic compaction off with AICLIENT_DSH_COMPACTION_AUTO=0 so the
+# stored log is exactly what the turns wrote. Default unchanged (on).
+- id: compaction-basic
+  config:
+    auto: !!js "process.env.AICLIENT_DSH_COMPACTION_AUTO !== '0'"
+
+- insert:
+    # IPC probe: sessions, prompts, commands, goal reads, plugin installs, an
+    # approval answerer and event capture over the Node IPC channel the parent
+    # opened. Off when a bridge serves the channel.
+    - id: aiclient-probe
+      name: '@aiclient/dsh-probe'
+      disabled: !!js "process.env.AICLIENT_DSH_BRIDGE === '1' || process.env.AICLIENT_DSH_SHARED_BRIDGE === '1'"

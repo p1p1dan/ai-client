@@ -1,10 +1,12 @@
 # @aiclient/dsh-app — ai-client's worker-engine bundle, stacked over dsh-base
 # (profile bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app']).
 #
-# P0 probe of the dsh-rebase plan. Host-only composition: no Web client, no
-# HTTP endpoint. `host/webserver` and `host/frontend-static` are rows of
-# dsh-web-app, which this profile never stacks, so they are absent rather than
-# disabled; host.ts asserts that absence on the composed entry list.
+# Host-only composition: no Web client, no HTTP endpoint. `host/webserver` and
+# `host/frontend-static` are rows of dsh-web-app, which this profile never
+# stacks, so they are absent rather than disabled; host.ts asserts that absence
+# on the composed entry list. This file ships in the packaged host
+# (resources/dsh-host, dsh-rebase decision 011). Probe-only rows live in the
+# test bundle src/dsh-host/tools/probe-bundle, never here (decision 015).
 
 # Never export session logs. The launcher also sets DSH_TELEMETRY_DISABLED,
 # which makes readProfilePatches append the same disable patch.
@@ -89,13 +91,6 @@
     provider: aiclient-gateway
     model: fake-1
 
-# P0-6 history probes grow sessions far past any real context window; they
-# switch automatic compaction off with AICLIENT_DSH_COMPACTION_AUTO=0 so the
-# stored log is exactly what the turns wrote. Default unchanged (on).
-- id: compaction-basic
-  config:
-    auto: !!js "process.env.AICLIENT_DSH_COMPACTION_AUTO !== '0'"
-
 # Plugin installs ask npm's own registry only; no mirror fallback.
 - id: plugin-manager
   config:
@@ -103,13 +98,6 @@
     fallbackRegistries: []
 
 - insert:
-    # IPC probe: sessions, prompts, commands, goal reads, plugin installs, an
-    # approval answerer and event capture over the Node IPC channel the parent
-    # opened. P0 measurement scaffolding; off when the bridge serves the channel.
-    - id: aiclient-probe
-      name: '@aiclient/dsh-app'
-      disabled: !!js "process.env.AICLIENT_DSH_BRIDGE === '1' || process.env.AICLIENT_DSH_SHARED_BRIDGE === '1'"
-
     # P0-3 / P1-1: ai-client's worker RPC on the same channel (Main's WorkerSlot
     # is the parent). Main's DshHostProcess sets AICLIENT_DSH_BRIDGE=1 for every
     # chat session.
@@ -119,7 +107,8 @@
 
     # P0-6: shared-host bridge prototype. One host, many sessions: every IPC
     # message carries a slot key and each slot runs its own worker RPC server.
-    # Probe-only; enabled by AICLIENT_DSH_SHARED_BRIDGE=1.
+    # Off unless AICLIENT_DSH_SHARED_BRIDGE=1, which Main never sets; P1-3
+    # (decision 019) turns it into the product bridge.
     - id: aiclient-shared-bridge
       name: '@aiclient/dsh-app/shared-bridge'
       disabled: !!js "process.env.AICLIENT_DSH_SHARED_BRIDGE !== '1'"

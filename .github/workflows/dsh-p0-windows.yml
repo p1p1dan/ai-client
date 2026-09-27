@@ -38,7 +38,7 @@ jobs:
           package-manager-cache: false
 
       - name: Build win32-x64 kit
-        run: node src/dsh-host/p0-4/build-kit.mjs --platform win32 --out "$RUNNER_TEMP/kit"
+        run: node src/dsh-host/tools/p0-4/build-kit.mjs --platform win32 --out "$RUNNER_TEMP/kit"
 
       - name: Upload kit
         uses: actions/upload-artifact@v5

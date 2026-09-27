@@ -1,0 +1,354 @@
+/**
+ * aiclient-shared-bridge — P0-6 shared-host bridge prototype.
+ *
+ * One DSH host serves many sessions. Every IPC message carries a slot key, and
+ * each slot gets its own unmodified `PiWorkerRpcServer` (src/agent-host) with a
+ * `DshSessionRuntime` (src/dsh-host/bridge), exactly the pair the P0-3
+ * one-session bridge runs. Closing a slot disposes only that session; the host
+ * keeps running.
+ *
+ *   parent -> host  { slot, rpc }                 worker RPC request for one slot
+ *                   { p06, requestId, ... }       instrumentation (below)
+ *   host -> parent  { slot, rpc }                 worker RPC response / event of one slot
+ *                   { p06Reply, requestId, ... }  instrumentation answer
+ *
+ * Instrumentation (P0-6 measurements, never product surface):
+ *   eld-start { resolutionMs }  start a monitorEventLoopDelay histogram and the
+ *                               host-side stream latency capture
+ *   eld-stop                    stop both; answer the histogram, the latency
+ *                               samples and the CPU time used meanwhile
+ *   mem { gc }                  process.memoryUsage + V8 heap stats (+ /proc)
+ *   read-session { sessionId, prefix?, find? }
+ *                               read the stored log (read access, no lock) and
+ *                               summarize it
+ *   live                        live agents and their status
+ *
+ * Stream latency: the P0-6 fake gateway stamps every text delta with its send
+ * time (`‹t<µs of CLOCK_MONOTONIC>›`); this row reads the stamp at the same
+ * `agent/assistant-stream` event the bridge translates, so the sample is
+ * "gateway wrote the SSE frame -> bridge received the chunk".
+ *
+ * Enabled only with AICLIENT_DSH_SHARED_BRIDGE=1 (see bundle/cordis.patch.yml);
+ * Main never sets it. Kept as the P1-3 starting point (dsh-rebase decision 019).
+ * Loaded the same two ways as `plugin.ts`: through the one-line re-export in
+ * `bundle/lib/shared-bridge.js` in a source checkout, and as the esbuild bundle
+ * scripts/build-dsh-host.mjs writes over it in the packaged host.
+ * @module @aiclient/dsh-app/shared-bridge
+ */
+
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { monitorEventLoopDelay, PerformanceObserver, performance } from 'node:perf_hooks';
+import v8 from 'node:v8';
+import { createUserMessage } from '@deepseek-ai/dsh-llm';
+import { PiWorkerRpcServer } from '../../agent-host/piWorkerRpcServer.ts';
+import { DshSessionRuntime } from './dshSessionRuntime.ts';
+
+/** Stable Cordis plugin name. */
+export const name = 'aiclient-shared-bridge';
+
+/** The services DshSessionRuntime reads (`sessions`, `agentLoop`: see plugin.ts). */
+export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop'];
+
+const STAMP = /‹t(\d+)›/g;
+
+function unsupported(what) {
+  const error = new Error(`${what} is not bridged to the DSH engine (P0-6 shared bridge)`);
+  error.code = 'WORKER_DSH_UNSUPPORTED';
+  return error;
+}
+
+function textOf(content) {
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((block) => block?.type === 'text' && typeof block.text === 'string')
+    .map((block) => block.text)
+    .join('');
+}
+
+function procStatusKb(field) {
+  try {
+    const match = readFileSync('/proc/self/status', 'utf8').match(
+      new RegExp(`^${field}:\\s+(\\d+)`, 'm')
+    );
+    return match ? Number(match[1]) : null;
+  } catch {
+    return null;
+  }
+}
+
+function digest(events) {
+  const hash = createHash('sha256');
+  for (const event of events)
+    hash.update(`${JSON.stringify([event.seq, event.type, event.data])}\n`);
+  return hash.digest('hex').slice(0, 16);
+}
+
+/** Compact, JSON-safe summary of one stored session log. */
+function summarize(events, options) {
+  const types = {};
+  const messages = { userHuman: 0, userOther: 0, assistant: 0, toolResult: 0 };
+  const turnEnds = [];
+  const toolErrors = [];
+  for (const event of events) {
+    types[event.type] = (types[event.type] ?? 0) + 1;
+    const data = event.data ?? {};
+    if (event.type === 'user/message') {
+      if (data.source?.kind === 'user') messages.userHuman += 1;
+      else messages.userOther += 1;
+    } else if (event.type === 'assistant/message') {
+      messages.assistant += 1;
+    } else if (event.type === 'tool/result') {
+      messages.toolResult += 1;
+      if (data.error || data.message?.isError) {
+        toolErrors.push({
+          seq: event.seq,
+          code: data.error?.code ?? null,
+          text: textOf(data.message?.content).slice(0, 160),
+        });
+      }
+    } else if (event.type === 'turn/end') {
+      turnEnds.push({ seq: event.seq, turn: data.turn, reason: data.reason?.kind ?? null });
+    }
+  }
+  const find = {};
+  for (const needle of options.find ?? []) {
+    find[needle] = events
+      .filter((event) => JSON.stringify(event.data ?? null).includes(needle))
+      .map((event) => ({
+        seq: event.seq,
+        type: event.type,
+        interrupted: event.data?.interrupted === true ? true : undefined,
+      }));
+  }
+  return {
+    count: events.length,
+    lastSeq: events.at(-1)?.seq ?? null,
+    digest: digest(events),
+    ...(Number.isInteger(options.prefix)
+      ? { prefixDigest: digest(events.slice(0, options.prefix)) }
+      : {}),
+    types,
+    messages: {
+      ...messages,
+      total: messages.userHuman + messages.userOther + messages.assistant + messages.toolResult,
+    },
+    turnEnds: turnEnds.slice(-8),
+    toolErrors: toolErrors.slice(-8),
+    find,
+    tail: events.slice(-12).map((event) => ({
+      seq: event.seq,
+      type: event.type,
+      ...(event.type === 'turn/end' ? { reason: event.data?.reason?.kind } : {}),
+      ...(event.type === 'assistant/message'
+        ? {
+            text: textOf(event.data?.message?.content).slice(0, 80),
+            interrupted: event.data?.interrupted === true ? true : undefined,
+          }
+        : {}),
+      ...(event.type === 'tool/result'
+        ? {
+            isError: event.data?.message?.isError === true,
+            code: event.data?.error?.code,
+          }
+        : {}),
+    })),
+  };
+}
+
+/**
+ * @param {import('@deepseek-ai/cordis').Context} ctx
+ */
+export function apply(ctx) {
+  if (typeof process.send !== 'function') {
+    ctx.logger('aiclient-shared-bridge').warn('no IPC channel; shared bridge is inert');
+    return;
+  }
+  const send = (message) => {
+    if (process.connected) process.send(message);
+  };
+
+  /** @type {Map<string, InstanceType<typeof PiWorkerRpcServer>>} */
+  const slots = new Map();
+  const slotServer = (slot, generation) => {
+    const known = slots.get(slot);
+    if (known) return known;
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (rpc) => send({ slot, rpc }) },
+      generation,
+      // Same constant the native worker entry passes (decision 009).
+      projectTrusted: true,
+      createRuntime: (options) => new DshSessionRuntime(ctx, options, { createUserMessage }),
+      createImportWriter: () => {
+        throw unsupported('Conversation import');
+      },
+      createUtilityRuntime: () => {
+        throw unsupported('One-shot completion');
+      },
+      log: (...args) => console.error(`[aiclient-shared-bridge ${slot}]`, ...args),
+      // A slot's worker.dispose closes that session only; the host stays up.
+      onDisposed: () => {
+        if (slots.get(slot) === server) slots.delete(slot);
+      },
+    });
+    slots.set(slot, server);
+    return server;
+  };
+
+  // ---- instrumentation --------------------------------------------------------
+  const capture = {
+    on: false,
+    samples: [],
+    histogram: null,
+    cpu: null,
+    started: 0,
+    resolution: 10,
+    gc: [],
+    gcObserver: null,
+  };
+  ctx.on('agent/assistant-stream', ({ frame }) => {
+    if (!capture.on || frame?.type !== 'chunk' || frame.chunk?.type !== 'text-delta') return;
+    const now = process.hrtime.bigint() / 1000n;
+    for (const match of String(frame.chunk.text).matchAll(STAMP)) {
+      capture.samples.push(Number(now - BigInt(match[1])) / 1000);
+    }
+  });
+
+  const ops = {
+    'eld-start'(message) {
+      capture.histogram?.disable();
+      capture.resolution = message.resolutionMs ?? 10;
+      capture.histogram = monitorEventLoopDelay({ resolution: capture.resolution });
+      capture.histogram.enable();
+      capture.samples = [];
+      capture.on = true;
+      capture.cpu = process.cpuUsage();
+      capture.gc = [];
+      capture.gcObserver?.disconnect();
+      capture.gcObserver = new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) capture.gc.push(entry.duration);
+      });
+      capture.gcObserver.observe({ entryTypes: ['gc'] });
+      capture.started = performance.now();
+      return { hostNowMs: capture.started };
+    },
+    'eld-stop'() {
+      const histogram = capture.histogram;
+      histogram?.disable();
+      capture.on = false;
+      const ms = (ns) => Math.round((ns / 1e6) * 1000) / 1000;
+      const cpu = process.cpuUsage(capture.cpu ?? undefined);
+      capture.gcObserver?.disconnect();
+      capture.gcObserver = null;
+      const gc = capture.gc;
+      const answer = {
+        hostNowMs: performance.now(),
+        resolutionMs: capture.resolution,
+        wallMs: Math.round(performance.now() - capture.started),
+        cpuMs: Math.round((cpu.user + cpu.system) / 1000),
+        eld: histogram
+          ? {
+              count: histogram.count,
+              min: ms(histogram.min),
+              mean: ms(histogram.mean),
+              p50: ms(histogram.percentile(50)),
+              p90: ms(histogram.percentile(90)),
+              p99: ms(histogram.percentile(99)),
+              max: ms(histogram.max),
+            }
+          : null,
+        gc: {
+          count: gc.length,
+          totalMs: Math.round(gc.reduce((a, b) => a + b, 0) * 10) / 10,
+          maxMs: Math.round(Math.max(0, ...gc) * 10) / 10,
+        },
+        hostLatencyMs: capture.samples.map((value) => Math.round(value * 100) / 100),
+      };
+      capture.histogram = null;
+      capture.samples = [];
+      return answer;
+    },
+    mem(message) {
+      if (message.gc && typeof globalThis.gc === 'function') {
+        globalThis.gc();
+        globalThis.gc();
+      }
+      const heap = v8.getHeapStatistics();
+      return {
+        gcRan: Boolean(message.gc && typeof globalThis.gc === 'function'),
+        memoryUsage: process.memoryUsage(),
+        heap: {
+          usedHeapSize: heap.used_heap_size,
+          totalHeapSize: heap.total_heap_size,
+          externalMemory: heap.external_memory,
+          mallocedMemory: heap.malloced_memory,
+        },
+        vmRssKb: procStatusKb('VmRSS'),
+        vmHwmKb: procStatusKb('VmHWM'),
+      };
+    },
+    async 'read-session'(message) {
+      const persistence = ctx.get('sessionPersistence');
+      if (persistence === undefined) throw new Error('no sessionPersistence service');
+      const started = performance.now();
+      const snapshot = await persistence.stat(message.sessionId);
+      const handle = await persistence.open(message.sessionId, 'read');
+      try {
+        const { events } = await handle.read(0);
+        return {
+          readMs: Math.round(performance.now() - started),
+          sizeBytes: snapshot?.sizeBytes ?? null,
+          ...summarize(events, message),
+        };
+      } finally {
+        await handle.close();
+      }
+    },
+    live() {
+      return {
+        slots: [...slots.keys()],
+        agents: ctx.agents.list().map((agent) => ({
+          id: agent.id,
+          status: typeof agent.status === 'object' ? agent.status?.kind : agent.status,
+        })),
+      };
+    },
+  };
+
+  const onMessage = (message) => {
+    if (message === null || typeof message !== 'object') return;
+    if (typeof message.slot === 'string' && message.rpc && typeof message.rpc === 'object') {
+      const generation = Number(message.rpc.generation);
+      slotServer(message.slot, Number.isSafeInteger(generation) ? generation : 1).receive(
+        message.rpc
+      );
+      return;
+    }
+    if (typeof message.p06 !== 'string') return;
+    const op = ops[message.p06];
+    if (op === undefined) {
+      send({ p06Reply: message.p06, requestId: message.requestId, error: 'unknown op' });
+      return;
+    }
+    Promise.resolve()
+      .then(() => op(message))
+      .then(
+        (answer) => send({ p06Reply: message.p06, requestId: message.requestId, ...answer }),
+        (error) =>
+          send({
+            p06Reply: message.p06,
+            requestId: message.requestId,
+            error: error instanceof Error ? (error.stack ?? error.message) : String(error),
+          })
+      );
+  };
+
+  ctx.effect(() => {
+    process.on('message', onMessage);
+    return () => {
+      process.off('message', onMessage);
+      capture.histogram?.disable();
+      capture.gcObserver?.disconnect();
+    };
+  }, 'aiclient-shared-bridge.ipc');
+}

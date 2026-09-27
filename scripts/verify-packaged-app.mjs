@@ -1,4 +1,9 @@
-/** Verify a packaged app's worker-only Pi runtime payload. */
+/**
+ * Verify a packaged app: legal notices, the worker-only Pi runtime payload,
+ * the bundled Node runtime and the DSH host artifact (dsh-rebase P1-2), then
+ * smoke both engines (`--skip-smoke` skips the Electron worker smoke,
+ * `--skip-dsh-smoke` the DSH one, which needs no Electron).
+ */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -7,9 +12,15 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { verifyArtifact } from './agent-host-build-lib.mjs';
+import { verifyDshArtifact } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import { evaluateWorkerSmokeReport } from './packaged-worker-report.mjs';
-import { evaluateWorkerArtifactSize, formatBytes, topDirectories } from './packaging-budget.mjs';
+import {
+  evaluateDshHostArtifact,
+  evaluateWorkerArtifactSize,
+  formatBytes,
+  topDirectories,
+} from './packaging-budget.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -18,7 +29,9 @@ function parseArgs(argv) {
   const args = {
     appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
     skipSmoke: false,
+    skipDshSmoke: false,
     reportFile: null,
+    dshReportFile: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--app-dir') {
@@ -28,6 +41,10 @@ function parseArgs(argv) {
       args.reportFile = path.resolve(argv[++i]);
     } else if (argv[i] === '--skip-smoke') {
       args.skipSmoke = true;
+    } else if (argv[i] === '--skip-dsh-smoke') {
+      args.skipDshSmoke = true;
+    } else if (argv[i] === '--dsh-report-file') {
+      args.dshReportFile = path.resolve(argv[++i]);
     } else {
       throw new Error(`unknown argument: ${argv[i]}`);
     }
@@ -85,6 +102,8 @@ function checkLegalNotices(resourceDir, failures) {
     'Copyright (c) 2026 justhil',
     'Copyright (c) 2026 Num Scope',
     '@earendil-works/pi-coding-agent',
+    // DSH host (dsh-rebase P1-2): the MIT notice of the @deepseek-ai packages.
+    'Copyright (c) 2026 DeepSeek',
   ]) {
     if (!notices.includes(required)) {
       failures.push(`third-party notices are missing required attribution: ${required}`);
@@ -133,6 +152,60 @@ function runWorkerSmoke(workerPath, failures) {
   }
   console.log(`[verify-packaged-app] native smoke: ${JSON.stringify(report)}`);
   return report;
+}
+
+/** The DSH host artifact under resources/dsh-host: structure, budget, TSD header. */
+function checkDshHost(resourceDir, failures) {
+  const dshDir = path.join(resourceDir, 'dsh-host');
+  try {
+    const verified = verifyDshArtifact({
+      outDir: dshDir,
+      target: { platform: process.platform, arch: process.arch },
+      requireManifest: true,
+    });
+    const verdict = evaluateDshHostArtifact(verified);
+    console.log(
+      `[verify-packaged-app] DSH host artifact: ${formatBytes(verified.bytes)} (${verified.bytes}B), ` +
+        `${verified.files} files, ${verified.natives.length} natives${verdict.overTarget ? ' (over the 110MiB target)' : ''}`
+    );
+    if (verdict.status !== 'ok')
+      failures.push(`DSH host artifact over budget: ${verdict.reasons.join(', ')}`);
+  } catch (error) {
+    failures.push(error instanceof Error ? error.message : String(error));
+  }
+  const hostJs = path.join(dshDir, 'host.js');
+  if (fs.existsSync(hostJs) && firstBytes(hostJs, 16).startsWith('%TSD')) {
+    failures.push('dsh-host/host.js has a TSD header');
+  }
+}
+
+/** L1 smoke of the packaged DSH host on the packaged node (decision 017); no Electron. */
+function runDshSmoke(appDir, reportFile, failures) {
+  const helper = path.join(repoRoot, 'scripts', 'packaged-dsh-host-smoke.mjs');
+  const report = reportFile ?? path.join(repoRoot, 'dist', 'dsh-host-smoke-report.json');
+  const result = spawnSync(
+    process.execPath,
+    [helper, '--app-dir', appDir, '--level', '1', '--report', report],
+    { cwd: repoRoot, encoding: 'utf8', timeout: 10 * 60_000, windowsHide: true }
+  );
+  let summary;
+  try {
+    summary = JSON.parse(result.stdout.trim().split(/\r?\n/).at(-1) ?? '');
+  } catch {
+    summary = undefined;
+  }
+  if (result.status !== 0 || summary?.ok !== true) {
+    failures.push(
+      `packaged DSH host smoke failed (status=${result.status} signal=${result.signal}): ` +
+        `${summary ? `failed checks ${summary.failed.join(', ')}; report ${report}` : ''} ${result.stderr}`.slice(
+          -2000
+        )
+    );
+  }
+  console.log(
+    `[verify-packaged-app] DSH smoke: ${result.stdout.trim().split(/\r?\n/).at(-1) ?? ''}`
+  );
+  return { dshSmoke: summary ?? null, report };
 }
 
 function main() {
@@ -196,10 +269,14 @@ function main() {
     }
   }
 
+  checkDshHost(resourceDir, failures);
   checkNodeRuntime(resourceDir, failures);
   const reports = [];
   if (!args.skipSmoke && failures.length === 0) {
     reports.push(runWorkerSmoke(workerPath, failures));
+  }
+  if (!args.skipDshSmoke && failures.length === 0) {
+    reports.push(runDshSmoke(args.appDir, args.dshReportFile, failures));
   }
   if (args.reportFile)
     fs.writeFileSync(
@@ -207,13 +284,14 @@ function main() {
       `${JSON.stringify({ appDir: args.appDir, reports, failures }, null, 2)}\n`
     );
   if (args.skipSmoke) console.log('[verify-packaged-app] worker smoke skipped (--skip-smoke)');
+  if (args.skipDshSmoke) console.log('[verify-packaged-app] DSH smoke skipped (--skip-dsh-smoke)');
 
   if (failures.length > 0) {
     console.error(`[verify-packaged-app] FAIL — ${failures.join('\n---\n')}`);
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + worker-only artifact + native read/bash + bootstrap/dispose/exit'
+    '[verify-packaged-app] PASS — legal notices + worker-only artifact + DSH host artifact + smokes that ran'
   );
 }
 

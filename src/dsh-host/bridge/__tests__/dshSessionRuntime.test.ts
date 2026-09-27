@@ -34,7 +34,7 @@ import {
  * dsh-rebase P1-1 — the bridge half of the engine cutover (decisions 006, 007
  * and 010), against a fake Cordis context: no DSH package is loaded, which is
  * why `createUserMessage` is injected. The real engine is exercised by
- * `bridge-smoke.ts`.
+ * `tools/bridge-smoke.ts`.
  */
 
 const CWD = '/repo';

@@ -1,12 +1,14 @@
 /**
  * Build the P0-4 encrypted-machine kit (dsh-rebase plan) on a Linux box.
  *
- *   node src/dsh-host/p0-4/build-kit.mjs [--platform win32|linux] [--out <dir>] [--no-zip]
+ *   node src/dsh-host/tools/p0-4/build-kit.mjs [--platform win32|linux] [--out <dir>] [--no-zip]
  *
  * Layout of `<out>/aiclient-p0-4-kit/`:
  *   run-p0-4.ps1          one-click script (UTF-8 BOM + CRLF for Windows PowerShell 5.1)
  *   kit-manifest.json     versions, native binaries (format + sha256), sizes
- *   host/                 src/dsh-host sources + node_modules for the target platform
+ *   host/                 src/dsh-host sources + node_modules for the target platform;
+ *                         the probe drivers under host/tools/ as in the repo, with the
+ *                         test-only probe bundle they layer into the probe DSH_HOME
  *   gateway/              the local fake model gateway
  *
  * The dependency tree comes from `npm ci` against src/dsh-host/package-lock.json
@@ -39,12 +41,8 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const hostSrc = resolve(here, '..');
-const repoRoot = resolve(hostSrc, '..', '..');
-const gatewaySrc = join(
-  repoRoot,
-  'docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs'
-);
+const hostSrc = resolve(here, '..', '..');
+const gatewaySrc = join(hostSrc, 'tools', 'fake-gateway.mjs');
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -106,17 +104,20 @@ for (const file of [
   'package.json',
   'package-lock.json',
   'host.ts',
-  'p0-4-probe.ts',
-  'p0-4-report.ts',
+  'tools/p0-4-probe.ts',
+  'tools/p0-4-report.ts',
+  'tools/lib/kit.ts',
+  'tools/lib/probe-hooks.mjs',
+  'tools/lib/probe-bundle.ts',
 ]) {
   cpSync(join(hostSrc, file), join(host, file));
 }
-for (const file of ['kit.ts', 'probe-hooks.mjs'])
-  cpSync(join(hostSrc, 'lib', file), join(host, 'lib', file));
-cpSync(join(hostSrc, 'bundle'), join(host, 'bundle'), {
-  recursive: true,
-  filter: (source) => !source.includes('node_modules'),
-});
+for (const dir of ['bundle', 'tools/probe-bundle']) {
+  cpSync(join(hostSrc, dir), join(host, dir), {
+    recursive: true,
+    filter: (source) => !source.includes('node_modules'),
+  });
+}
 mkdirSync(join(kit, 'gateway'));
 cpSync(gatewaySrc, join(kit, 'gateway', 'fake-gateway.mjs'));
 // Windows PowerShell 5.1 reads a BOM-less script in the ANSI code page.
@@ -253,7 +254,7 @@ const manifest = {
   builtWith: { node: process.version, host: `${process.platform}-${process.arch}` },
   expectedNode: 'v24.18.0 (resources\\node-runtime\\node.exe of the installed app)',
   source: Object.fromEntries(
-    ['host.ts', 'p0-4-probe.ts', 'p0-4-report.ts', 'package-lock.json'].map((file) => [
+    ['host.ts', 'tools/p0-4-probe.ts', 'tools/p0-4-report.ts', 'package-lock.json'].map((file) => [
       file,
       sha256(join(host, file)),
     ])

@@ -2,7 +2,7 @@
  * Headless bridge smoke: the DSH host in bridge mode, driven exactly as Main's
  * WorkerSlot drives a worker (Node IPC, worker RPC), with no Electron.
  *
- *   node bridge-smoke.ts [--keep] [--out file.json]
+ *   (cd src/dsh-host && ../../out-node-runtime/node tools/bridge-smoke.ts [--keep] [--out file.json])
  *
  * Every model reply comes from the local fake gateway (plan dsh-p0-2). Hosts,
  * in order — at most two alive at once:
@@ -47,12 +47,10 @@ import { fileURLToPath } from 'node:url';
 import { baseEnv, captureStderr, exitOf, sandbox, stopWithin, waitQuiet } from './lib/kit.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '..', '..');
-const hostEntry = join(here, 'host.ts');
-const gatewayEntry = join(
-  repoRoot,
-  'docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs'
-);
+const hostDir = resolve(here, '..');
+const repoRoot = resolve(hostDir, '..', '..');
+const hostEntry = join(hostDir, 'host.ts');
+const gatewayEntry = join(here, 'fake-gateway.mjs');
 const bundledNode = join(repoRoot, 'out-node-runtime', 'node');
 const nodeBin = existsSync(bundledNode) ? bundledNode : process.execPath;
 const argv = process.argv.slice(2);

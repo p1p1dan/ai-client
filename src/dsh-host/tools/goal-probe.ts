@@ -2,7 +2,11 @@
  * P0-2 driver: goal mode, todo, jobs and one community plugin on the DSH host,
  * with every model request answered by the local fake gateway (dsh-p0-2 plan).
  *
- *   node goal-probe.ts [--trace] [--keep] [--out file.json]
+ *   node tools/goal-probe.ts [--trace] [--keep] [--out file.json]   (from src/dsh-host)
+ *
+ * Sessions are driven through the aiclient-probe row of the test-only bundle
+ * tools/probe-bundle, layered into the probe DSH_HOME before every host start
+ * (dsh-rebase decision 015).
  *
  * Scenarios, each in its own session:
  *   ENV             bash prints .env canaries (which .env files reach tools)
@@ -47,16 +51,15 @@ import {
   waitMessage,
   waitQuiet,
 } from './lib/kit.ts';
+import { installProbeBundle } from './lib/probe-bundle.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '..', '..');
-const hostEntry = join(here, 'host.ts');
+const hostDir = resolve(here, '..');
+const repoRoot = resolve(hostDir, '..', '..');
+const hostEntry = join(hostDir, 'host.ts');
 const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
-const pnpmCli = join(here, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
-const gatewayEntry = join(
-  repoRoot,
-  'docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs'
-);
+const pnpmCli = join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
+const gatewayEntry = join(here, 'fake-gateway.mjs');
 const bundledNode = join(repoRoot, 'out-node-runtime', 'node');
 
 const argv = process.argv.slice(2);
@@ -164,6 +167,7 @@ async function startHost(
     AICLIENT_DSH_PNPM_CLI: pnpmCli,
   };
   const traceFile = trace ? join(box.root, `strace-${label}.log`) : undefined;
+  installProbeBundle(box.dshHome);
   const started = performance.now();
   const child = launch(
     [nodeBin, '--expose-internals', '--import', hooksEntry, hostEntry],
@@ -569,7 +573,7 @@ async function main() {
       return {
         host: h.label,
         dotenvOpens: dotenv,
-        ...parseStrace(file, box, [here], repoRoot),
+        ...parseStrace(file, box, [hostDir], repoRoot),
       };
     });
   }

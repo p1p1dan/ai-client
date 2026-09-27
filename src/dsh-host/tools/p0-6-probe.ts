@@ -6,14 +6,16 @@
  * driver plays Main: it spawns the host, bootstraps slots, sends turns, kills
  * the host by its exact pid, restarts it and resumes the sessions.
  *
- *   node p0-6-probe.ts crash        [--runs 3] [--out f.json]
- *   node p0-6-probe.ts latency      [--runs 3] [--levels 1,2,4,8] [--out f.json]
- *   node p0-6-probe.ts history-gen  [--turns 500] [--checkpoints 25,125,500] [--dir d]
- *   node p0-6-probe.ts history      [--runs 3] [--dir d] [--out f.json]
- *   node p0-6-probe.ts history-multi-gen [--sessions 4] [--turns 500] [--dir d]
- *   node p0-6-probe.ts history-multi [--runs 3] [--dir d] [--out f.json]
- *   node p0-6-probe.ts worker-history-gen   (after history-gen; same --dir)
- *   node p0-6-probe.ts worker-history [--runs 3] [--dir d] [--out f.json]
+ *   (run from src/dsh-host; every DSH_HOME gets the test-only bundle
+ *   tools/probe-bundle for its compaction switch, dsh-rebase decision 015)
+ *   node tools/p0-6-probe.ts crash        [--runs 3] [--out f.json]
+ *   node tools/p0-6-probe.ts latency      [--runs 3] [--levels 1,2,4,8] [--out f.json]
+ *   node tools/p0-6-probe.ts history-gen  [--turns 500] [--checkpoints 25,125,500] [--dir d]
+ *   node tools/p0-6-probe.ts history      [--runs 3] [--dir d] [--out f.json]
+ *   node tools/p0-6-probe.ts history-multi-gen [--sessions 4] [--turns 500] [--dir d]
+ *   node tools/p0-6-probe.ts history-multi [--runs 3] [--dir d] [--out f.json]
+ *   node tools/p0-6-probe.ts worker-history-gen   (after history-gen; same --dir)
+ *   node tools/p0-6-probe.ts worker-history [--runs 3] [--dir d] [--out f.json]
  *
  * crash    Kill 1: three sessions each finished one turn with a bash call, host
  *          idle. Kill 2 (same run, on the restarted host): the three recovered
@@ -88,15 +90,14 @@ import {
   waitMessage,
   waitQuiet,
 } from './lib/kit.ts';
+import { installProbeBundle } from './lib/probe-bundle.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(here, '..', '..');
-const hostEntry = join(here, 'host.ts');
+const hostDir = resolve(here, '..');
+const repoRoot = resolve(hostDir, '..', '..');
+const hostEntry = join(hostDir, 'host.ts');
 const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
-const gatewayEntry = join(
-  repoRoot,
-  'docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/tools/fake-gateway.mjs'
-);
+const gatewayEntry = join(here, 'fake-gateway.mjs');
 const bundledNode = join(repoRoot, 'out-node-runtime', 'node');
 const workerEntry = join(repoRoot, 'out-agent-host', 'worker.js');
 
@@ -267,6 +268,7 @@ class SharedHost implements RpcTarget {
       ...hostExtraEnv,
       ...extraEnv,
     };
+    installProbeBundle(box.dshHome);
     this.spawnedAt = performance.now();
     this.child = launch(
       [nodeBin, '--expose-internals', '--expose-gc', '--import', hooksEntry, hostEntry],

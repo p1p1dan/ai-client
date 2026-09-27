@@ -25,8 +25,9 @@ jobs:
   # ran here). Raise a value if a job legitimately grows, do not delete it.
   gate:
     runs-on: ubuntu-latest
-    # 10 -> 12 when the runtime package added its own `npm ci` plus two gates.
-    timeout-minutes: 12
+    # 10 -> 12 when the runtime package added its own `npm ci` plus two gates;
+    # 12 -> 14 for the DSH host package's `npm ci` and typecheck (dsh-rebase P1-2).
+    timeout-minutes: 14
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -75,34 +76,44 @@ jobs:
         run: npm ci --omit=optional --ignore-scripts
         working-directory: src/runtime
 
+      # The DSH host (dsh-rebase P1) is its own npm package, pinned by its
+      # committed lockfile. Never --omit=optional here or in the packaging build:
+      # every platform binary it needs is an optional dependency (decision 013).
+      - name: Install dsh-host dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: src/dsh-host
+
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/7 — typecheck
+      - name: Gate 1/8 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/7 — typecheck:agent-host
+      - name: Gate 2/8 — typecheck:agent-host
         run: pnpm typecheck:agent-host
 
-      - name: Gate 3/7 — typecheck:runtime
+      - name: Gate 3/8 — typecheck:runtime
         run: pnpm typecheck:runtime
 
-      - name: Gate 4/7 — lint
+      - name: Gate 4/8 — typecheck:dsh-host
+        run: pnpm typecheck:dsh-host
+
+      - name: Gate 5/8 — lint
         run: pnpm lint
 
-      - name: Gate 5/7 — test
+      - name: Gate 6/8 — test
         run: pnpm test
 
       # ARD risk R1's offline half: proves the Cordis graph comes up and that
       # `Agent` drives a turn to completion against pi-ai's own faux provider.
       # No credentials, no network — the live lane is run by hand on an install
       # that has logged in.
-      - name: Gate 6/7 — runtime smoke (offline)
+      - name: Gate 7/8 — runtime smoke (offline)
         run: pnpm smoke:runtime
 
       - name: Runtime tools smoke (offline)
         run: pnpm smoke:runtime-tools
 
-      - name: Gate 7/7 — release metadata
+      - name: Gate 8/8 — release metadata
         run: pnpm verify:release
 
   build-app:
@@ -150,7 +161,10 @@ jobs:
 
   build-windows:
     needs: build-app
-    timeout-minutes: 20
+    # 20 -> 30 for the DSH host (dsh-rebase P1-2): its npm ci, TSD rewrite of
+    # ~7k .js files, ~100 MiB more to compress, and two L1 smokes. Re-derive
+    # from the first green run.
+    timeout-minutes: 30
     # Pin to windows-2022: windows-latest 已升级到 windows-2025，仅装 VS 2026 (path \18\),
     # 而 @electron/rebuild@4.0.1 bundled node-gyp@11.5.0 的 find-visualstudio.js 白名单
     # 只到 [2019, 2022]，找不到 VS 2026 → "Could not find any Visual Studio installation".
@@ -235,6 +249,12 @@ jobs:
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
+      # DSH host artifact (dsh-rebase P1-2): a clean `npm ci` of src/dsh-host's
+      # lockfile for this runner's platform (optional deps included), pruned and
+      # verified into out-dsh-host/, which afterPack copies to resources/dsh-host.
+      - name: Build DSH host artifact
+        run: node scripts/build-dsh-host.mjs
+
       # The legacy pi permission-plugin smoke (T08-a) was removed with the legacy
       # engine (fe246bd6, P6-5): its script no longer exists and the native
       # permission system is exercised by "Verify packaged Pi worker" below.
@@ -266,7 +286,18 @@ jobs:
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
       - name: Verify packaged Pi worker
-        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
+
+      # The installed layout is `Programs\PiLab Ai` (a space in the path);
+      # win-unpacked has none, so run the DSH smoke once more from a copy that does.
+      - name: DSH host smoke from a path with a space
+        shell: pwsh
+        run: |
+          $dir = 'C:\p12app\PiLab Ai'
+          New-Item -ItemType Directory -Force 'C:\p12app' | Out-Null
+          Copy-Item -Recurse -Force 'dist\win-unpacked' $dir
+          node scripts/packaged-dsh-host-smoke.mjs --app-dir $dir --level 1 --report dist/dsh-host-smoke-report-spaced.json
+          if ($LASTEXITCODE -ne 0) { throw "DSH smoke exited $LASTEXITCODE" }
 
       - name: Upload worker smoke evidence
         if: always()
@@ -274,6 +305,20 @@ jobs:
         with:
           name: worker-smoke-${{ runner.os }}
           path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      # P1-2 evidence: the artifact manifest (size, files, natives), the licence
+      # list and the DSH smoke reports.
+      - name: Upload DSH host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-host-${{ runner.os }}
+          path: |
+            out-dsh-host/dsh-host-manifest.json
+            out-dsh-host/THIRD_PARTY_LICENSES.json
+            dist/dsh-host-smoke-report*.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -310,7 +355,8 @@ jobs:
 
   build-linux:
     needs: build-app
-    timeout-minutes: 20
+    # 20 -> 25 for the DSH host (dsh-rebase P1-2); re-derive from the first green run.
+    timeout-minutes: 25
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -374,6 +420,10 @@ jobs:
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
+      # DSH host artifact (dsh-rebase P1-2); see build-windows.
+      - name: Build DSH host artifact
+        run: node scripts/build-dsh-host.mjs
+
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
         with:
@@ -397,7 +447,7 @@ jobs:
       - name: Verify packaged Pi worker
         # Electron initializes Ozone even though the helper only exercises a
         # utilityProcess. Hosted Linux runners are headless, so provide Xvfb.
-        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json
+        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -405,6 +455,20 @@ jobs:
         with:
           name: worker-smoke-${{ runner.os }}
           path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      # P1-2 evidence: the artifact manifest (size, files, natives), the licence
+      # list and the DSH smoke reports.
+      - name: Upload DSH host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-host-${{ runner.os }}
+          path: |
+            out-dsh-host/dsh-host-manifest.json
+            out-dsh-host/THIRD_PARTY_LICENSES.json
+            dist/dsh-host-smoke-report*.json
           retention-days: 14
           if-no-files-found: warn
 
@@ -425,7 +489,8 @@ jobs:
     # dispatch 时构建，保留验证能力；hdiutil 修复后恢复。
     if: github.event_name == 'workflow_dispatch'
     needs: build-app
-    timeout-minutes: 25
+    # 25 -> 35 for the DSH host (dsh-rebase P1-2); re-derive from the first green run.
+    timeout-minutes: 35
     # An unsigned x64 artifact closes the structural packaged gate on a native
     # macOS runner. General release still requires Developer ID signing,
     # notarization, and Gatekeeper verification on a real Mac.
@@ -487,6 +552,11 @@ jobs:
       - name: Build Pi worker artifact
         run: node scripts/build-agent-host.mjs
 
+      # DSH host artifact (dsh-rebase P1-2); see build-windows. On macOS the
+      # build also restores spawn-helper's exec bit (decision 013).
+      - name: Build DSH host artifact
+        run: node scripts/build-dsh-host.mjs
+
       - name: Resolve native macOS target
         id: target
         run: |
@@ -534,7 +604,7 @@ jobs:
 
       - name: Verify packaged Pi worker
         # Quoted: `productName` is "PiLab Ai", so the bundle path has a space in it.
-        run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json
+        run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -542,6 +612,20 @@ jobs:
         with:
           name: worker-smoke-${{ runner.os }}
           path: dist/worker-smoke-report.json
+          retention-days: 14
+          if-no-files-found: warn
+
+      # P1-2 evidence: the artifact manifest (size, files, natives), the licence
+      # list and the DSH smoke reports.
+      - name: Upload DSH host evidence
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-host-${{ runner.os }}
+          path: |
+            out-dsh-host/dsh-host-manifest.json
+            out-dsh-host/THIRD_PARTY_LICENSES.json
+            dist/dsh-host-smoke-report*.json
           retention-days: 14
           if-no-files-found: warn
 
