@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-09-26。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-09-27。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -9,11 +9,11 @@ Role: implementation-status。更新日期：2026-09-26。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替已完成（`100ebcf1`，GUI 点验通过，[证据](evidence/p1-1-gui-2026-09-26.md)），决策 005～010 待用户审批。收尾 `e3ce1691` 已修掉点验缺陷 D1 / D2，并停止向宿主下发含明文 key 的 `modelCatalog`。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。P1-5 模型目录与凭据方案已定（[方案](topics/p1-5-models-and-credentials.md)，决策 033～040 待用户审批，其中 036、037、038 请重点审批）。P1-6 权限移植方案已定（[方案](topics/p1-6-permissions.md)，决策 041～049 待用户审批，其中 044、045 请重点审批）。
+P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～075 自主决定、待用户审批）。已落地：P1-0、P1-1（含收尾）、P1-2 本机部分、P1-3a / 3b / 3c、P1-4a 第一部分、P1-6a、P1-9a 与 9g 语料。所有聊天会话已共用一个 DSH 宿主；恢复与崩溃重启后能看到历史。
 
 ## Next Target
 
-P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 bridge-smoke 扩展；之后做开发机 GUI 点验（退出判据「新建会话走 DSH」）。
+P1-3d（共享宿主收尾）与 P1-9b（纯转换器）落地；之后 P1-4a 第二部分（只读回放）、P1-5a（模型计划与路由，修掉「界面选的模型被忽略」）、P1-4b～d、P1-6b / c。
 
 ## Last Landed
 
