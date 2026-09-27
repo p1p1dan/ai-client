@@ -17,32 +17,31 @@
 
 顺序：P0-1 → P0-2 → P0-3 已完成；P0-4 与 P0-6 可以并行，两项都完成后做 P0-5（编号不重排，P0-6 排在 P0-5 之前）。
 
-## P1 双引擎（草案待用户过目，约 6～8 人周）
+## P1 分支内 DSH 替换（草案待用户过目，约 8～11 人周，粗估）
 
-目标：DSH 成为应用里可选的第二引擎。设置里切换，新会话按设置选引擎，之后跟随会话；自有 runtime 仍是默认。P1 的交付是一个带「DSH 引擎（实验）」开关的测试版。分支：P1 接着在 `feat/dsh-p0-probe` 上做，最后一起合 main（用户 2026-09-26 定）。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)，从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。
+目标：在 `feat/dsh-p0-probe` 上把 agent 引擎整体换成 DSH，不做双引擎（[决策 004](decisions/004-branch-isolated-dsh-only.md)）。测试完毕后合入 main，合入即切换；main 在此之前继续维护 1.0.x。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)、[004](decisions/004-branch-isolated-dsh-only.md)；从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。2026-09-26 的双引擎草案作废，见 git 历史。
 
 | ID | 状态 | 内容 | 退出判据 |
 |---|---|---|---|
-| P1-1 | ⬜ | 按会话选引擎的接缝：`ManagedSlot` 与会话索引行记引擎，`AGENT_WIRE_NAMES` 加 DSH，新建 / 恢复 / fork / 崩溃重启 4 条拉起路径按会话引擎走，写死 `PI_AGENT` 的 5 处改掉；设置项「引擎」，新建会话时读取 | 切换设置后新会话走 DSH、旧会话仍走原引擎；4 条路径有单测 |
-| P1-2 | ⬜ | DSH 宿主转正：`src/dsh-host` 从探针转为产品子包，钉 `0.1.7-rc.2`、锁文件入库；打包进三平台安装包（沿用 P0-4 工具包的裁剪），定体积预算；「仅未打包可用」改为由设置开关控制 | 三平台安装包里能起 DSH 宿主；体积记入证据 |
-| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个 slot；宿主级崩溃处理（一次重启、并行 bootstrap、宿主级重启预算）；心跳与按 pid 强杀；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
+| P1-0 | ⬜ | 同步 main：把 v1.0.3 及之后的 main 提交合入本分支（分叉点 `b64f577f`），此后每次 main 发版都同步一次 | 合入后类型检查与相关测试通过 |
+| P1-1 | ⬜ | 引擎直替：WorkerSlot 直接拉起 DSH 宿主，去掉 `AICLIENT_DEV_ENGINE` 开关与「仅未打包」限制；新建 / 恢复 / fork / 崩溃重启 4 条路径全部走 DSH；会话索引与 `AGENT_WIRE_NAMES` 记为 DSH | 开发机上新建会话走 DSH；4 条路径有单测 |
+| P1-2 | ⬜ | DSH 宿主转正：`src/dsh-host` 从探针转为产品子包，钉 `0.1.7-rc.2`、锁文件入库；打包进三平台安装包（沿用 P0-4 工具包的裁剪），定体积预算 | 三平台安装包里能起 DSH 宿主；体积记入证据 |
+| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个会话；宿主级崩溃处理（一次重启、并行恢复、宿主级重启预算）；心跳与按 pid 强杀；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
 | P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
-| P1-5 | ⬜ | 模型目录与凭据接缝：Main 生成 `llm-pi-ai` 路由（网关根地址），key 经凭据接口按请求注入、不落 `.env`；模型菜单与 DSH 路由同步 | 真实网关下目录里的模型都能用；key 不以明文落盘 |
-| P1-6 | ⬜ | 权限移植：`src/runtime/plugins/permissions/` 抽成纯库；DSH 插件挂 `user-approval` answerer 与 `tools/pre-execute`；四档、会话授权记忆、bash / pwsh 分析、拒绝清单；Windows 沙箱按 [Q005](open-questions.md) 定 | 现有权限回归用例在 DSH 引擎下全过 |
+| P1-5 | ⬜ | 模型目录与凭据：Main 生成 `llm-pi-ai` 路由（网关根地址），key 经凭据接口按请求注入、不落 `.env`；模型菜单与 DSH 路由同步 | 真实网关下目录里的模型都能用；key 不以明文落盘 |
+| P1-6 | ⬜ | 权限移植：把 `src/runtime/plugins/permissions/` 抽成纯库或移入宿主插件；挂 `user-approval` answerer 与 `tools/pre-execute`；四档、会话授权记忆、bash / pwsh 分析、拒绝清单；Windows 沙箱按 [Q005](open-questions.md) 定 | 现有权限回归用例在 DSH 下全过 |
 | P1-7 | ⬜ | 渲染层：goal 条、todo 卡、jobs 面板、子代理面板；Windows 上 `pwsh` 工具行与审批文案（吸收 runtime-hardening 的 D3 / D4 / D7 / D8 / T138） | 开发机 GUI 点验；Windows 实测 |
 | P1-8 | ⬜ | 宿主插件：防空转、500 轮上限；长会话并发争用做成回归场景 | 回归场景进 CI |
-| P1-9 | ⬜ | 旧会话按需转换：pi 格式会话在 DSH 引擎下打开时转换，只复制、不改原文件 | 转换前后内容对照；原文件哈希不变 |
+| P1-9 | ⬜ | 无痛升级迁移：旧 pi 会话首次打开时复制转为 DSH 格式（原文件不动）；设置迁移（模型选择、权限档位、会话授权记忆）；CC / Codex 导入改为产出 DSH 格式 | 用 1.0.x 的真实数据做离线迁移测试；原文件哈希不变；回装 1.0.x 仍可读旧会话 |
 | P1-10 | ⬜ | 插件白名单与预装：内部白名单 + 官方包，预装后离线分发；pnpm 不在用户机上联网装包（P0-2） | 白名单插件离线可装可用 |
-| P1-11 | ⬜ | 收口：Windows CI（管理员 + 标准用户两路）跑 DSH 引擎冒烟；开发机点验；出带开关的测试版，Windows 实测一次 | 测试版实测通过，证据落 `evidence/` |
+| P1-11 | ⬜ | 内嵌终端去留（[Q003](open-questions.md)）：社区 `dsh-tui`（过白名单审查）或只当普通终端 | 用户拍板并落地 |
+| P1-12 | ⬜ | 退役自有 runtime：删 `src/runtime`、native worker 路径与 pi TUI 互通；更新 Pi-only 守卫与各类静态测试 | 全量测试通过；打包产物里没有旧 runtime |
+| P1-13 | ⬜ | 加密机上机与适配（合入前的否决关，[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md) / [004](decisions/004-branch-isolated-dsh-only.md)）：用[检查单](topics/p0-4-encrypted-machine-checklist.md)与上机包，读写全部明文；沙箱结论回填 [Q002](open-questions.md)；另装官方 DSH Desktop 作对照组。有机会可提前跑 | 读写全部明文；不过就回到决策点 |
+| P1-14 | ⬜ | 收口：Windows CI（管理员 + 标准用户两路）；开发机点验；出测试版并在 Windows 实测；回写 ARD；合入 main 并发版（推送与发版前确认） | 测试版实测通过，证据落 `evidence/` |
 
-顺序：P1-1 最先；P1-2、P1-3 随后；P1-4、P1-5 可并行；P1-6 在 P1-4 之后；P1-7～P1-10 在主链路通了之后并行；P1-11 最后。
-
-## Next
-
-- **P2 默认切换（3～4 人周 + 1 次上机）**：
-  - **前置：加密机上机与适配**（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md)，原 P0-4 范围）：用现成的上机包与[检查单](topics/p0-4-encrypted-machine-checklist.md)，DSH 宿主经随包 `node.exe` 在加密目录里执行各工具，结果与明文标记比对；`sandbox-windows-acl` 开关各一次，结论回填 [Q002](open-questions.md)；另装官方 DSH Desktop 0.1.7 作对照组。有上机机会可以提前跑；不过就回到决策点。
-  - 默认引擎改为 DSH；CC / Codex 导入改出 DSH 格式；定内嵌终端去留（[Q003](open-questions.md)）；原生 runtime 冻结并保留一个版本作回退；定 DSH 升级节奏；回写 ARD。
+顺序：P1-0、P1-1 最先；P1-2、P1-3 随后；P1-4、P1-5 可并行；P1-6 在 P1-4 之后；P1-7～P1-11 在主链路通了之后并行；P1-12、P1-13 在合入前；P1-14 最后。P1-13 的上机包现成，有机会可以随时提前跑。
 
 ## Deferred
 
-- **P3（L2，8～12 人周，未立项）**：聊天区换成 DSH Web 客户端。P2 之后按插件需求再议。
+- ~~P2 默认切换~~：按[决策 004](decisions/004-branch-isolated-dsh-only.md) 取消，内容并入 P1（P1-9、P1-11、P1-12、P1-13、P1-14）。
+- **P3（L2，8～12 人周，未立项）**：聊天区换成 DSH Web 客户端。合入 main 之后按插件需求再议。

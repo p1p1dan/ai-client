@@ -6,14 +6,14 @@ Q001（进程拓扑）已于 2026-09-26 定为共享宿主，见[决策 002](dec
 
 ## Q002 DSH 沙箱能否作为兜底层叠加
 
-- 裁决时点：P2 默认切换前的加密机关（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md) 把它移出了 P0）。普通 Windows 上沙箱开关能否正常工作由 P0-4 的 CI 实测回答，但那不能代替加密机的结论。
+- 裁决时点：合入 main 前的加密机关 P1-13（决策 004 把「P2 前」改为「合入前」；[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md) 把它移出了 P0）。普通 Windows 上沙箱开关能否正常工作由 P0-4 的 CI 实测回答，但那不能代替加密机的结论。
 - 依据：加密机上机，`sandbox-windows-acl` 开 / 关各测一次 read / write / edit / grep / glob 与 bash、pwsh 子进程读写。
-- 通过则 P1 / P2 叠加在我方审批之下；不通过则 Windows 上关闭沙箱。Linux / macOS 的 bwrap / landlock 另议。
+- 通过则叠加在我方审批之下；不通过则 Windows 上关闭沙箱。Linux / macOS 的 bwrap / landlock 另议。
 
 ## Q003 切换后内嵌终端跑什么
 
 - DSH 官方没有 TUI。候选：社区 `@deepseek-harness-tui/dsh-tui`（需过白名单审查），或内嵌终端不再提供 agent 界面、只当普通终端。
-- P2 默认切换前定。
+- 合入 main 前定（roadmap P1-11，决策 004）。
 
 Q004（版本通道）已于 2026-09-26 定为钉 `next` 的精确版本 `0.1.7-rc.2`，见[决策 003](decisions/003-p0-closeout-enter-p1.md)。
 
