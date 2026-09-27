@@ -17,3 +17,10 @@
 - 不选「交给新宿主启动时清理」：新宿主不知道旧宿主的 pid，按前缀清理有误杀的风险，比如第二个应用实例。
 - 不选「不管，等工具自己结束」：长时间运行的工具（比如 `sleep`、构建）会一直占着工作区和资源，用户看不见也停不掉。
 - 代价：多一次 `systemctl` 调用，要处理 systemctl 不存在或调用失败的情况，失败只写日志。
+
+## 实施补记（2026-09-27，P1-3d `b3b58f2b`，待用户审批）
+
+- 只用 `systemctl --user stop` 不够：被杀宿主留下的 bash 工具熬过 5 s 超时仍在；自建一个忽略 SIGTERM 的 scope 也会让 stop 等满超时。改用 DSH 自己宿主退出时的做法：先 `systemctl --user kill --kill-whom=all --signal=SIGKILL <确切单元名>`，再 `stop`。自建 scope 15 ms 内清掉。
+- 除 `dsh-subprocess-<pid>-*.scope` 外，另外覆盖 `dsh-terminal-<pid>-*.scope`。
+- 只在「就绪过的宿主异常退出」（信号或非 0 退出码）之后执行；新宿主最多为此等 6 s。
+- 实测：宿主被杀后，scope 里的工具进程 1.7 s 内消失。代价是每次崩溃多一次 `systemctl list-units`，恢复时间从 0.82～0.86 s 变为约 1.0～1.4 s。

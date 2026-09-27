@@ -1,0 +1,2026 @@
+{
+  "node": "<repo>/out-node-runtime/node",
+  "scratch": "<scratch>",
+  "bootstrapMs": 1219,
+  "bootstrap": {
+    "bootstrapped": true,
+    "logicalSessionId": "bridge-smoke",
+    "piSessionId": "aiclient-bridge-smoke",
+    "cwd": "<scratch>/run/workspace",
+    "agentDir": "<scratch>/run/dsh-home",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "leaf": {
+      "activeEntryId": null,
+      "fileTailEntryId": "aiclient-bridge-smoke#2"
+    },
+    "projectTrusted": true,
+    "permissionGate": "bundled",
+    "capabilities": {}
+  },
+  "commands": {
+    "commands": [],
+    "truncated": false
+  },
+  "files": {
+    "allowed": true,
+    "denied": false
+  },
+  "history": {
+    "logicalSessionId": "bridge-smoke",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "workspacePath": "<scratch>/run/workspace",
+    "page": {
+      "messages": [
+        {
+          "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77",
+          "entryId": "5cc5ab28-020f-412f-b019-399ac6865e77",
+          "role": "user",
+          "timestamp": 1790552326769,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ]
+        },
+        {
+          "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02",
+          "entryId": "de16ccdd-d086-4211-9fd3-c372f79c6e02",
+          "role": "assistant",
+          "timestamp": 1790552329428,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ]
+        },
+        {
+          "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+          "entryId": "ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+          "role": "user",
+          "timestamp": 1790552329443,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ]
+        },
+        {
+          "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe",
+          "entryId": "232c0f13-c96d-4b40-81f2-24946136cdfe",
+          "role": "assistant",
+          "timestamp": 1790552329453,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe:tool-call:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:3b1e6045-f143-4474-9510-6730e737e81b:tool-result:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "ok": true,
+              "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+            }
+          ],
+          "settledAt": 1790552329512
+        },
+        {
+          "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+          "entryId": "27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+          "role": "assistant",
+          "timestamp": 1790552329529,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ]
+        },
+        {
+          "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec",
+          "entryId": "2650fecb-6792-4890-ba70-0a145b20dbec",
+          "role": "user",
+          "timestamp": 1790552329543,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec:text:0",
+              "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/allowed.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6",
+          "entryId": "f650b334-6672-4cbf-bad7-67b2375d5eb6",
+          "role": "assistant",
+          "timestamp": 1790552329552,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6:tool-call:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/allowed.txt",
+                "content": "written after approval\n",
+                "path": "<scratch>/run/outside/allowed.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:fb8f6555-ff2d-4b61-82d0-03654f13c2b4:tool-result:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "ok": false,
+              "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+              "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+            }
+          ],
+          "settledAt": 1790552329559
+        },
+        {
+          "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+          "entryId": "2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+          "role": "assistant",
+          "timestamp": 1790552329588,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a:tool-call:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/allowed.txt",
+                "content": "written after approval\n",
+                "sandbox_permissions": "danger-full-access",
+                "justification": "The P0 probe needs one file outside the workspace.",
+                "path": "<scratch>/run/outside/allowed.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:2c1ee1a3-21fe-4338-b927-6250fd25ebfe:tool-result:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "ok": true,
+              "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+            }
+          ],
+          "settledAt": 1790552329607
+        },
+        {
+          "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403",
+          "entryId": "8dbc9250-6311-4b8c-ac65-f39176e25403",
+          "role": "assistant",
+          "timestamp": 1790552329624,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403:text:0",
+              "text": "Write outside the workspace attempted."
+            }
+          ]
+        },
+        {
+          "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+          "entryId": "9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+          "role": "user",
+          "timestamp": 1790552329634,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7:text:0",
+              "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/denied.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+          "entryId": "bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+          "role": "assistant",
+          "timestamp": 1790552329641,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c:tool-call:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/denied.txt",
+                "content": "written after approval\n",
+                "path": "<scratch>/run/outside/denied.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:3ad4fd46-cec2-4255-9460-344d09a2b3af:tool-result:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "ok": false,
+              "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+              "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+            }
+          ],
+          "settledAt": 1790552329646
+        },
+        {
+          "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+          "entryId": "960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+          "role": "assistant",
+          "timestamp": 1790552329662,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d:tool-call:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/denied.txt",
+                "content": "written after approval\n",
+                "sandbox_permissions": "danger-full-access",
+                "justification": "The P0 probe needs one file outside the workspace.",
+                "path": "<scratch>/run/outside/denied.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:06ad4905-0e7c-4172-840a-29b657eaa02f:tool-result:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "ok": false,
+              "output": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it",
+              "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+            }
+          ],
+          "settledAt": 1790552329667
+        },
+        {
+          "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb",
+          "entryId": "48346865-69ec-49fa-ad5f-354b9c84cdfb",
+          "role": "assistant",
+          "timestamp": 1790552329682,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb:text:0",
+              "text": "Write outside the workspace attempted."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 13,
+      "hasMore": false
+    }
+  },
+  "historyBeforeClose": {
+    "logicalSessionId": "bridge-smoke",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "workspacePath": "<scratch>/run/workspace",
+    "page": {
+      "messages": [
+        {
+          "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77",
+          "entryId": "5cc5ab28-020f-412f-b019-399ac6865e77",
+          "role": "user",
+          "timestamp": 1790552326769,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ]
+        },
+        {
+          "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02",
+          "entryId": "de16ccdd-d086-4211-9fd3-c372f79c6e02",
+          "role": "assistant",
+          "timestamp": 1790552329428,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ]
+        },
+        {
+          "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+          "entryId": "ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+          "role": "user",
+          "timestamp": 1790552329443,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ]
+        },
+        {
+          "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe",
+          "entryId": "232c0f13-c96d-4b40-81f2-24946136cdfe",
+          "role": "assistant",
+          "timestamp": 1790552329453,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe:tool-call:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:3b1e6045-f143-4474-9510-6730e737e81b:tool-result:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+              "ok": true,
+              "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+            }
+          ],
+          "settledAt": 1790552329512
+        },
+        {
+          "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+          "entryId": "27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+          "role": "assistant",
+          "timestamp": 1790552329529,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ]
+        },
+        {
+          "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec",
+          "entryId": "2650fecb-6792-4890-ba70-0a145b20dbec",
+          "role": "user",
+          "timestamp": 1790552329543,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec:text:0",
+              "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/allowed.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6",
+          "entryId": "f650b334-6672-4cbf-bad7-67b2375d5eb6",
+          "role": "assistant",
+          "timestamp": 1790552329552,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6:tool-call:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/allowed.txt",
+                "content": "written after approval\n",
+                "path": "<scratch>/run/outside/allowed.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:fb8f6555-ff2d-4b61-82d0-03654f13c2b4:tool-result:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+              "ok": false,
+              "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+              "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+            }
+          ],
+          "settledAt": 1790552329559
+        },
+        {
+          "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+          "entryId": "2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+          "role": "assistant",
+          "timestamp": 1790552329588,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a:tool-call:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/allowed.txt",
+                "content": "written after approval\n",
+                "sandbox_permissions": "danger-full-access",
+                "justification": "The P0 probe needs one file outside the workspace.",
+                "path": "<scratch>/run/outside/allowed.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:2c1ee1a3-21fe-4338-b927-6250fd25ebfe:tool-result:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+              "ok": true,
+              "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+            }
+          ],
+          "settledAt": 1790552329607
+        },
+        {
+          "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403",
+          "entryId": "8dbc9250-6311-4b8c-ac65-f39176e25403",
+          "role": "assistant",
+          "timestamp": 1790552329624,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403:text:0",
+              "text": "Write outside the workspace attempted."
+            }
+          ]
+        },
+        {
+          "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+          "entryId": "9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+          "role": "user",
+          "timestamp": 1790552329634,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7:text:0",
+              "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/denied.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+          "entryId": "bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+          "role": "assistant",
+          "timestamp": 1790552329641,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c:tool-call:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/denied.txt",
+                "content": "written after approval\n",
+                "path": "<scratch>/run/outside/denied.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:3ad4fd46-cec2-4255-9460-344d09a2b3af:tool-result:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+              "ok": false,
+              "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+              "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+            }
+          ],
+          "settledAt": 1790552329646
+        },
+        {
+          "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+          "entryId": "960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+          "role": "assistant",
+          "timestamp": 1790552329662,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d:tool-call:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "name": "write",
+              "input": {
+                "file_path": "<scratch>/run/outside/denied.txt",
+                "content": "written after approval\n",
+                "sandbox_permissions": "danger-full-access",
+                "justification": "The P0 probe needs one file outside the workspace.",
+                "path": "<scratch>/run/outside/denied.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:06ad4905-0e7c-4172-840a-29b657eaa02f:tool-result:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+              "ok": false,
+              "output": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it",
+              "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+            }
+          ],
+          "settledAt": 1790552329667
+        },
+        {
+          "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb",
+          "entryId": "48346865-69ec-49fa-ad5f-354b9c84cdfb",
+          "role": "assistant",
+          "timestamp": 1790552329682,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb:text:0",
+              "text": "Write outside the workspace attempted."
+            }
+          ]
+        },
+        {
+          "id": "h:651aa39c-805f-4b34-9e40-6a2d13dbba4b",
+          "entryId": "651aa39c-805f-4b34-9e40-6a2d13dbba4b",
+          "role": "user",
+          "timestamp": 1790552329711,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:651aa39c-805f-4b34-9e40-6a2d13dbba4b:text:0",
+              "text": "P0-ENV: print the env canaries."
+            }
+          ]
+        },
+        {
+          "id": "h:a6232037-f62d-498b-a258-64567333083b",
+          "entryId": "a6232037-f62d-498b-a258-64567333083b",
+          "role": "assistant",
+          "timestamp": 1790552329721,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:a6232037-f62d-498b-a258-64567333083b:tool-call:toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+              "toolCallId": "toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+              "name": "bash",
+              "input": {
+                "command": "echo \"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLIENT_DSH_GATEWAY_KEY:+present}\"; echo \"names: $(env | cut -d= -f1 | sort | tr \"\\n\" \" \")\"",
+                "description": "Print env canaries"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:3cbb0a1d-31b5-4fde-84b9-04fe65d531bb:tool-result:toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+              "toolCallId": "toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+              "ok": true,
+              "output": "ws=unset hostcwd=unset dshhome=unset gatewaykey=\nnames: _ AICLIENT_DSH_GATEWAY_URL AICLIENT_PROBE_HOOK_LOG DSH_HOME DSH_PROFILE DSH_PROFILE_DIR DSH_SESSION_ID DSH_SHELL GIT_PAGER HOME LANG LOGNAME NO_COLOR PAGER PATH PWD SHELL SHLVL TERM TMPDIR USER \n"
+            }
+          ],
+          "settledAt": 1790552329769
+        },
+        {
+          "id": "h:e92f1a66-fd0b-40df-83fe-e47428551fa7",
+          "entryId": "e92f1a66-fd0b-40df-83fe-e47428551fa7",
+          "role": "assistant",
+          "timestamp": 1790552329792,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:e92f1a66-fd0b-40df-83fe-e47428551fa7:text:0",
+              "text": "Env canaries printed."
+            }
+          ]
+        },
+        {
+          "id": "h:b6c50d59-0e6f-43ef-8a67-054030efff4f",
+          "entryId": "b6c50d59-0e6f-43ef-8a67-054030efff4f",
+          "role": "user",
+          "timestamp": 1790552329805,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:b6c50d59-0e6f-43ef-8a67-054030efff4f:text:0",
+              "text": "P0-FDS: list the inherited descriptors."
+            }
+          ]
+        },
+        {
+          "id": "h:e0e37b28-d7b0-4cfd-aada-a352edc775d0",
+          "entryId": "e0e37b28-d7b0-4cfd-aada-a352edc775d0",
+          "role": "assistant",
+          "timestamp": 1790552329812,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:e0e37b28-d7b0-4cfd-aada-a352edc775d0:tool-call:toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+              "toolCallId": "toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+              "name": "bash",
+              "input": {
+                "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+                "description": "List inherited file descriptors"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:970ec21d-26f1-4928-a71d-14c796dc05fc:tool-result:toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+              "toolCallId": "toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+              "ok": true,
+              "output": "pid=2 ppid=1 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[86490]\nfd 2 -> socket:[86492]\nfd 3 -> pipe:[86509]\n"
+            }
+          ],
+          "settledAt": 1790552329846
+        },
+        {
+          "id": "h:d24fc022-c070-4947-acb7-f9a82d5ec5aa",
+          "entryId": "d24fc022-c070-4947-acb7-f9a82d5ec5aa",
+          "role": "assistant",
+          "timestamp": 1790552329860,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:d24fc022-c070-4947-acb7-f9a82d5ec5aa:tool-call:toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+              "toolCallId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+              "name": "bash",
+              "input": {
+                "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+                "description": "List them again outside the sandbox",
+                "sandbox_permissions": "danger-full-access",
+                "justification": "The P1-3a probe compares what a tool inherits inside and outside the sandbox."
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:55902f76-4aad-4ef9-83ae-8bce9ecc6745:tool-result:toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+              "toolCallId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+              "ok": true,
+              "output": "pid=16034 ppid=15956 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[87673]\nfd 2 -> socket:[87675]\nfd 3 -> pipe:[86527]\n"
+            }
+          ],
+          "settledAt": 1790552329886
+        },
+        {
+          "id": "h:4a54959a-2fee-4c75-9a8f-904d6fbc121c",
+          "entryId": "4a54959a-2fee-4c75-9a8f-904d6fbc121c",
+          "role": "assistant",
+          "timestamp": 1790552329900,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:4a54959a-2fee-4c75-9a8f-904d6fbc121c:text:0",
+              "text": "Inherited file descriptors listed."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 20,
+      "hasMore": false
+    }
+  },
+  "dispose": {
+    "disposed": true
+  },
+  "graceful": true,
+  "historyBeforeKill": {
+    "logicalSessionId": "bridge-smoke-empty",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+    "workspacePath": "<scratch>/run/workspace",
+    "page": {
+      "messages": [
+        {
+          "id": "h:4b35cb99-1be3-4db4-a08d-8e7f62f18206",
+          "entryId": "4b35cb99-1be3-4db4-a08d-8e7f62f18206",
+          "role": "user",
+          "timestamp": 1790552333401,
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:4b35cb99-1be3-4db4-a08d-8e7f62f18206:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ]
+        },
+        {
+          "id": "h:47148319-56a4-4fd7-ae09-71a0c6dacf6b",
+          "entryId": "47148319-56a4-4fd7-ae09-71a0c6dacf6b",
+          "role": "assistant",
+          "timestamp": 1790552336082,
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:47148319-56a4-4fd7-ae09-71a0c6dacf6b:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "turns": {
+    "STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "TOOL": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-TOOL: list the workspace.\"",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Tool row finished: the workspace listin",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Tool row finished: the workspace listing is above.",
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t2-s1",
+          "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+          "ok": true,
+          "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "APPROVE-ALLOW": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved allow",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Write outside the workspace attempted.",
+      "permission": {
+        "permissionId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/allowed.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/allowed.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s1",
+          "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s2",
+          "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+          "ok": true,
+          "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "APPROVE-DENY": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved deny",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Write outside the workspace attempted.",
+      "permission": {
+        "permissionId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/denied.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/denied.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s1",
+          "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s2",
+          "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+          "ok": false,
+          "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "ENV": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-ENV: print the env canaries.\"",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Env canaries printed.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Env canaries printed.",
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t5-s1",
+          "toolCallId": "toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+          "ok": true,
+          "output": "ws=unset hostcwd=unset dshhome=unset gatewaykey=\nnames: _ AICLIENT_DSH_GATEWAY_URL AICLIENT_PROBE_HOOK_LOG DSH_HOME DSH_PROFILE DSH_PROFILE_DIR DSH_SESSION_ID DSH_SHELL GIT_PAGER HOME LANG LOGNAME NO_COLOR PAGER PATH PWD SHELL SHLVL TERM TMPDIR USER \n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "FDS": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-FDS: list the inherited descriptors.",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "permission.requested bash",
+        "permission.resolved allow",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Inherited file descriptors listed.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Inherited file descriptors listed.",
+      "permission": {
+        "permissionId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+        "toolName": "bash",
+        "action": "run_command",
+        "input": {
+          "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "exec",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "exec",
+          "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+          "cwd": "<scratch>/run/workspace"
+        },
+        "reason": "escalate sandbox to danger-full-access: The P1-3a probe compares what a tool inherits inside and outside the sandbox."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t6-s1",
+          "toolCallId": "toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+          "ok": true,
+          "output": "pid=2 ppid=1 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[86490]\nfd 2 -> socket:[86492]\nfd 3 -> pipe:[86509]\n"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t6-s2",
+          "toolCallId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+          "ok": true,
+          "output": "pid=16034 ppid=15956 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[87673]\nfd 2 -> socket:[87675]\nfd 3 -> pipe:[86527]\n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "RESUMED-STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    },
+    "RECALL-AFTER-KILL": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\"]}",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM missing=-\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    },
+    "SIDE-STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-side"]
+    },
+    "RECALL-OTHER-HOST": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\",\\",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM,P0-TOOL mis",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM,P0-TOOL missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "RECALL-RECREATED": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\"]}",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM missing=-\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    }
+  },
+  "hosts": {
+    "A": {
+      "pid": 15956,
+      "readyMs": 1192,
+      "ready": {
+        "type": "ready",
+        "pid": 15956
+      },
+      "bootstrapMs": 1219,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke",
+        "piSessionId": "aiclient-bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": "aiclient-bridge-smoke#2"
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "B": {
+      "pid": 16039,
+      "readyMs": 861,
+      "ready": {
+        "type": "ready",
+        "pid": 16039
+      },
+      "bootstrapMs": 911,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": "aiclient-bridge-smoke-empty#2"
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "killed": true,
+      "exit": {
+        "code": null,
+        "signal": "SIGKILL"
+      }
+    },
+    "C": {
+      "pid": 16051,
+      "readyMs": 945,
+      "ready": {
+        "type": "ready",
+        "pid": 16051
+      },
+      "bootstrapMs": 983,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": "aiclient-bridge-smoke-empty#3"
+        },
+        "initialHistory": {
+          "logicalSessionId": "bridge-smoke-empty",
+          "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+          "workspacePath": "<scratch>/run/workspace",
+          "page": {
+            "messages": [],
+            "offset": 0,
+            "limit": 80,
+            "totalCount": 0,
+            "hasMore": false
+          }
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "killed": true,
+      "exit": {
+        "code": null,
+        "signal": "SIGKILL"
+      }
+    },
+    "D": {
+      "pid": 16067,
+      "readyMs": 844,
+      "ready": {
+        "type": "ready",
+        "pid": 16067
+      },
+      "bootstrapMs": 856,
+      "bootstrap": {
+        "error": {
+          "code": "session_locked",
+          "message": "DSH session aiclient-bridge-smoke-empty is held by another process",
+          "retryable": true
+        }
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "E": {
+      "pid": 16079,
+      "readyMs": 853,
+      "ready": {
+        "type": "ready",
+        "pid": 16079
+      },
+      "bootstrapMs": 901,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-side",
+        "piSessionId": "aiclient-bridge-smoke-side",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-side.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": "aiclient-bridge-smoke-side#2"
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "F": {
+      "pid": 16091,
+      "readyMs": 980,
+      "ready": {
+        "type": "ready",
+        "pid": 16091
+      },
+      "bootstrapMs": 1020,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke",
+        "piSessionId": "aiclient-bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+        "leaf": {
+          "activeEntryId": "4a54959a-2fee-4c75-9a8f-904d6fbc121c",
+          "fileTailEntryId": "aiclient-bridge-smoke#102"
+        },
+        "initialHistory": {
+          "logicalSessionId": "bridge-smoke",
+          "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+          "workspacePath": "<scratch>/run/workspace",
+          "page": {
+            "messages": [
+              {
+                "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77",
+                "entryId": "5cc5ab28-020f-412f-b019-399ac6865e77",
+                "role": "user",
+                "timestamp": 1790552326769,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:5cc5ab28-020f-412f-b019-399ac6865e77:text:0",
+                    "text": "P0-STREAM: stream a paragraph back to me."
+                  }
+                ]
+              },
+              {
+                "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02",
+                "entryId": "de16ccdd-d086-4211-9fd3-c372f79c6e02",
+                "role": "assistant",
+                "timestamp": 1790552329428,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:de16ccdd-d086-4211-9fd3-c372f79c6e02:text:0",
+                    "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+                  }
+                ]
+              },
+              {
+                "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+                "entryId": "ce53df4f-cb5f-46b6-8472-ca915b11ac90",
+                "role": "user",
+                "timestamp": 1790552329443,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:ce53df4f-cb5f-46b6-8472-ca915b11ac90:text:0",
+                    "text": "P0-TOOL: list the workspace."
+                  }
+                ]
+              },
+              {
+                "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe",
+                "entryId": "232c0f13-c96d-4b40-81f2-24946136cdfe",
+                "role": "assistant",
+                "timestamp": 1790552329453,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:232c0f13-c96d-4b40-81f2-24946136cdfe:tool-call:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+                    "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+                    "name": "bash",
+                    "input": {
+                      "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                      "description": "List the workspace"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:3b1e6045-f143-4474-9510-6730e737e81b:tool-result:toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+                    "toolCallId": "toolu_39bb6ff0-0a08-4fb5-87e2-589378a821d8",
+                    "ok": true,
+                    "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+                  }
+                ],
+                "settledAt": 1790552329512
+              },
+              {
+                "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+                "entryId": "27ebd23a-90d9-43a2-874f-3d8e5ad685dc",
+                "role": "assistant",
+                "timestamp": 1790552329529,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:27ebd23a-90d9-43a2-874f-3d8e5ad685dc:text:0",
+                    "text": "Tool row finished: the workspace listing is above."
+                  }
+                ]
+              },
+              {
+                "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec",
+                "entryId": "2650fecb-6792-4890-ba70-0a145b20dbec",
+                "role": "user",
+                "timestamp": 1790552329543,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:2650fecb-6792-4890-ba70-0a145b20dbec:text:0",
+                    "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/allowed.txt"
+                  }
+                ]
+              },
+              {
+                "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6",
+                "entryId": "f650b334-6672-4cbf-bad7-67b2375d5eb6",
+                "role": "assistant",
+                "timestamp": 1790552329552,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:f650b334-6672-4cbf-bad7-67b2375d5eb6:tool-call:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+                    "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+                    "name": "write",
+                    "input": {
+                      "file_path": "<scratch>/run/outside/allowed.txt",
+                      "content": "written after approval\n",
+                      "path": "<scratch>/run/outside/allowed.txt"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:fb8f6555-ff2d-4b61-82d0-03654f13c2b4:tool-result:toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+                    "toolCallId": "toolu_9bd74d73-f819-4223-8bf1-2e9c9d25228f",
+                    "ok": false,
+                    "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+                    "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+                  }
+                ],
+                "settledAt": 1790552329559
+              },
+              {
+                "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+                "entryId": "2fcf1ccd-ed2e-4537-b0f8-1a57210d261a",
+                "role": "assistant",
+                "timestamp": 1790552329588,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:2fcf1ccd-ed2e-4537-b0f8-1a57210d261a:tool-call:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+                    "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+                    "name": "write",
+                    "input": {
+                      "file_path": "<scratch>/run/outside/allowed.txt",
+                      "content": "written after approval\n",
+                      "sandbox_permissions": "danger-full-access",
+                      "justification": "The P0 probe needs one file outside the workspace.",
+                      "path": "<scratch>/run/outside/allowed.txt"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:2c1ee1a3-21fe-4338-b927-6250fd25ebfe:tool-result:toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+                    "toolCallId": "toolu_d78edba6-13d7-4097-82b9-662ee5768a0c",
+                    "ok": true,
+                    "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+                  }
+                ],
+                "settledAt": 1790552329607
+              },
+              {
+                "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403",
+                "entryId": "8dbc9250-6311-4b8c-ac65-f39176e25403",
+                "role": "assistant",
+                "timestamp": 1790552329624,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:8dbc9250-6311-4b8c-ac65-f39176e25403:text:0",
+                    "text": "Write outside the workspace attempted."
+                  }
+                ]
+              },
+              {
+                "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+                "entryId": "9fcfa5c1-5669-4e75-af81-b6863b472ec7",
+                "role": "user",
+                "timestamp": 1790552329634,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:9fcfa5c1-5669-4e75-af81-b6863b472ec7:text:0",
+                    "text": "P0-APPROVAL: write outside, path=<scratch>/run/outside/denied.txt"
+                  }
+                ]
+              },
+              {
+                "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+                "entryId": "bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c",
+                "role": "assistant",
+                "timestamp": 1790552329641,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:bf4651e4-007a-4dbc-b7e9-c5ac9f236f6c:tool-call:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+                    "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+                    "name": "write",
+                    "input": {
+                      "file_path": "<scratch>/run/outside/denied.txt",
+                      "content": "written after approval\n",
+                      "path": "<scratch>/run/outside/denied.txt"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:3ad4fd46-cec2-4255-9460-344d09a2b3af:tool-result:toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+                    "toolCallId": "toolu_a915058c-5012-4e87-aa4b-cd55b217bac4",
+                    "ok": false,
+                    "output": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]",
+                    "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+                  }
+                ],
+                "settledAt": 1790552329646
+              },
+              {
+                "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+                "entryId": "960ad4c1-8e9b-4bc0-974f-f41671e36b6d",
+                "role": "assistant",
+                "timestamp": 1790552329662,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:960ad4c1-8e9b-4bc0-974f-f41671e36b6d:tool-call:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+                    "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+                    "name": "write",
+                    "input": {
+                      "file_path": "<scratch>/run/outside/denied.txt",
+                      "content": "written after approval\n",
+                      "sandbox_permissions": "danger-full-access",
+                      "justification": "The P0 probe needs one file outside the workspace.",
+                      "path": "<scratch>/run/outside/denied.txt"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:06ad4905-0e7c-4172-840a-29b657eaa02f:tool-result:toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+                    "toolCallId": "toolu_fa7ff9da-1e8a-4d8b-be96-879daa911781",
+                    "ok": false,
+                    "output": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it",
+                    "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+                  }
+                ],
+                "settledAt": 1790552329667
+              },
+              {
+                "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb",
+                "entryId": "48346865-69ec-49fa-ad5f-354b9c84cdfb",
+                "role": "assistant",
+                "timestamp": 1790552329682,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:48346865-69ec-49fa-ad5f-354b9c84cdfb:text:0",
+                    "text": "Write outside the workspace attempted."
+                  }
+                ]
+              },
+              {
+                "id": "h:651aa39c-805f-4b34-9e40-6a2d13dbba4b",
+                "entryId": "651aa39c-805f-4b34-9e40-6a2d13dbba4b",
+                "role": "user",
+                "timestamp": 1790552329711,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:651aa39c-805f-4b34-9e40-6a2d13dbba4b:text:0",
+                    "text": "P0-ENV: print the env canaries."
+                  }
+                ]
+              },
+              {
+                "id": "h:a6232037-f62d-498b-a258-64567333083b",
+                "entryId": "a6232037-f62d-498b-a258-64567333083b",
+                "role": "assistant",
+                "timestamp": 1790552329721,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:a6232037-f62d-498b-a258-64567333083b:tool-call:toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+                    "toolCallId": "toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+                    "name": "bash",
+                    "input": {
+                      "command": "echo \"ws=${P0_WS_CANARY:-unset} hostcwd=${P0_HOSTCWD_CANARY:-unset} dshhome=${P0_DSHHOME_CANARY:-unset} gatewaykey=${AICLIENT_DSH_GATEWAY_KEY:+present}\"; echo \"names: $(env | cut -d= -f1 | sort | tr \"\\n\" \" \")\"",
+                      "description": "Print env canaries"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:3cbb0a1d-31b5-4fde-84b9-04fe65d531bb:tool-result:toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+                    "toolCallId": "toolu_c3f67abf-9704-4660-8cd2-79055abe51e9",
+                    "ok": true,
+                    "output": "ws=unset hostcwd=unset dshhome=unset gatewaykey=\nnames: _ AICLIENT_DSH_GATEWAY_URL AICLIENT_PROBE_HOOK_LOG DSH_HOME DSH_PROFILE DSH_PROFILE_DIR DSH_SESSION_ID DSH_SHELL GIT_PAGER HOME LANG LOGNAME NO_COLOR PAGER PATH PWD SHELL SHLVL TERM TMPDIR USER \n"
+                  }
+                ],
+                "settledAt": 1790552329769
+              },
+              {
+                "id": "h:e92f1a66-fd0b-40df-83fe-e47428551fa7",
+                "entryId": "e92f1a66-fd0b-40df-83fe-e47428551fa7",
+                "role": "assistant",
+                "timestamp": 1790552329792,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:e92f1a66-fd0b-40df-83fe-e47428551fa7:text:0",
+                    "text": "Env canaries printed."
+                  }
+                ]
+              },
+              {
+                "id": "h:b6c50d59-0e6f-43ef-8a67-054030efff4f",
+                "entryId": "b6c50d59-0e6f-43ef-8a67-054030efff4f",
+                "role": "user",
+                "timestamp": 1790552329805,
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:b6c50d59-0e6f-43ef-8a67-054030efff4f:text:0",
+                    "text": "P0-FDS: list the inherited descriptors."
+                  }
+                ]
+              },
+              {
+                "id": "h:e0e37b28-d7b0-4cfd-aada-a352edc775d0",
+                "entryId": "e0e37b28-d7b0-4cfd-aada-a352edc775d0",
+                "role": "assistant",
+                "timestamp": 1790552329812,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:e0e37b28-d7b0-4cfd-aada-a352edc775d0:tool-call:toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+                    "toolCallId": "toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+                    "name": "bash",
+                    "input": {
+                      "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+                      "description": "List inherited file descriptors"
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:970ec21d-26f1-4928-a71d-14c796dc05fc:tool-result:toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+                    "toolCallId": "toolu_c9ca3dab-989d-406f-9bc4-807ae1cf919e",
+                    "ok": true,
+                    "output": "pid=2 ppid=1 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[86490]\nfd 2 -> socket:[86492]\nfd 3 -> pipe:[86509]\n"
+                  }
+                ],
+                "settledAt": 1790552329846
+              },
+              {
+                "id": "h:d24fc022-c070-4947-acb7-f9a82d5ec5aa",
+                "entryId": "d24fc022-c070-4947-acb7-f9a82d5ec5aa",
+                "role": "assistant",
+                "timestamp": 1790552329860,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "tool_call",
+                    "id": "h:d24fc022-c070-4947-acb7-f9a82d5ec5aa:tool-call:toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+                    "toolCallId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+                    "name": "bash",
+                    "input": {
+                      "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+                      "description": "List them again outside the sandbox",
+                      "sandbox_permissions": "danger-full-access",
+                      "justification": "The P1-3a probe compares what a tool inherits inside and outside the sandbox."
+                    }
+                  },
+                  {
+                    "type": "tool_result",
+                    "id": "h:55902f76-4aad-4ef9-83ae-8bce9ecc6745:tool-result:toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+                    "toolCallId": "toolu_d03857b0-8120-458d-8ff7-f5c319cb4766",
+                    "ok": true,
+                    "output": "pid=16034 ppid=15956 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[87673]\nfd 2 -> socket:[87675]\nfd 3 -> pipe:[86527]\n"
+                  }
+                ],
+                "settledAt": 1790552329886
+              },
+              {
+                "id": "h:4a54959a-2fee-4c75-9a8f-904d6fbc121c",
+                "entryId": "4a54959a-2fee-4c75-9a8f-904d6fbc121c",
+                "role": "assistant",
+                "timestamp": 1790552329900,
+                "model": "aiclient-gateway/fake-1",
+                "blocks": [
+                  {
+                    "type": "text",
+                    "id": "h:4a54959a-2fee-4c75-9a8f-904d6fbc121c:text:0",
+                    "text": "Inherited file descriptors listed."
+                  }
+                ]
+              }
+            ],
+            "offset": 0,
+            "limit": 80,
+            "totalCount": 20,
+            "hasMore": false
+          }
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "G": {
+      "pid": 16103,
+      "readyMs": 883,
+      "ready": {
+        "type": "ready",
+        "pid": 16103
+      },
+      "bootstrapMs": 914,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": "b374486a-8628-4cec-aeb2-838d9ece102b",
+          "fileTailEntryId": "aiclient-bridge-smoke-empty#27"
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  },
+  "disk": {
+    "newBeforeFirstTurn": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790552326694.1526
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke/session.v4.jsonl.zstd",
+          "bytes": 313,
+          "mtimeMs": 1790552326727.1528
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke/session.v4.jsonl.zstd",
+        "bytes": 313,
+        "mtimeMs": 1790552326727.1528
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke",
+        "logicalSessionId": "bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790552326730
+      },
+      "stubMtimeMs": 1790552326729.1528
+    },
+    "headerOnly": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790552332340.2007
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 315,
+          "mtimeMs": 1790552332357.201
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 315,
+        "mtimeMs": 1790552332357.201
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790552332363
+      },
+      "stubMtimeMs": 1790552332363.201
+    },
+    "afterKill": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790552336940.24
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 8932,
+          "mtimeMs": 1790552336088.233
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 8932,
+        "mtimeMs": 1790552336088.233
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790552332363
+      },
+      "stubMtimeMs": 1790552332363.201
+    },
+    "recreated": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790552342751.2898
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 15899,
+          "mtimeMs": 1790552342767.2898
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790552324448-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 15899,
+        "mtimeMs": 1790552342767.2898
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790552342775
+      },
+      "stubMtimeMs": 1790552342774.29
+    }
+  },
+  "protocol": {
+    "readyPid": {
+      "reported": 15956,
+      "spawned": 15956
+    },
+    "readySkippedPlugins": [],
+    "unknownChannel": {
+      "ok": false,
+      "code": "WORKER_CHANNEL_UNKNOWN",
+      "generation": 1,
+      "requestId": "smoke-3"
+    },
+    "pong": {
+      "host": "pong",
+      "id": 7,
+      "eldMaxMs": 0,
+      "rssMb": 180.6,
+      "channels": [
+        {
+          "ch": "c1-1",
+          "busy": false
+        }
+      ]
+    },
+    "closeUnknown": true,
+    "disposeCloses": {
+      "disposed": {
+        "disposed": true
+      },
+      "closed": true,
+      "order": [
+        "response:smoke-1",
+        "response:smoke-2",
+        "response:smoke-4",
+        "response:smoke-5",
+        "response:smoke-6",
+        "response:smoke-7",
+        "response:smoke-8",
+        "response:smoke-9",
+        "response:smoke-10",
+        "response:smoke-11",
+        "response:smoke-12",
+        "response:smoke-13",
+        "response:smoke-14",
+        "response:smoke-15",
+        "closed"
+      ]
+    },
+    "pongAfterClose": {
+      "host": "pong",
+      "id": 8,
+      "eldMaxMs": 17.9,
+      "rssMb": 214.1,
+      "channels": []
+    },
+    "twoChannels": {
+      "mainSessions": ["bridge-smoke-empty"],
+      "sideSessions": ["bridge-smoke-side"]
+    }
+  },
+  "experiments": {
+    "dotEnv": {
+      "line": "ws=unset hostcwd=unset dshhome=unset gatewaykey=",
+      "warned": 2
+    },
+    "ipcHandle": {
+      "systemdScope": false,
+      "hostFd3": "socket:[87179]",
+      "sandboxed": {
+        "lines": [
+          "pid=2 ppid=1 channel_fd=unset channel_mode=unset",
+          "fd 0 -> /dev/null",
+          "fd 1 -> socket:[86490]",
+          "fd 2 -> socket:[86492]",
+          "fd 3 -> pipe:[86509]"
+        ],
+        "inherited": false,
+        "channelVariable": false
+      },
+      "escalated": {
+        "lines": [
+          "pid=16034 ppid=15956 channel_fd=unset channel_mode=unset",
+          "fd 0 -> /dev/null",
+          "fd 1 -> socket:[87673]",
+          "fd 2 -> socket:[87675]",
+          "fd 3 -> pipe:[86527]"
+        ],
+        "inherited": false,
+        "channelVariable": false
+      }
+    },
+    "projectionCacheAfterDispose": [
+      "[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-bridge-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-bridge-smoke\": flush on a closed handle"
+    ]
+  },
+  "verdict": {
+    "streamedInManyDeltas": true,
+    "toolRowSettled": true,
+    "approvalCardShown": true,
+    "allowWrote": true,
+    "denyDidNotWrite": true,
+    "exitedCleanly": true,
+    "persistedBeforeFirstTurn": true,
+    "stubNotOlderThanLog": true,
+    "headerOnlyKilledHost": true,
+    "headerOnlyResumed": true,
+    "resumedTurnCompleted": true,
+    "lockedWhileOwned": true,
+    "exitedCleanlyAfterLockRefusal": true,
+    "resumedAfterSigkill": true,
+    "recalledAfterSigkill": true,
+    "resumedInOtherHostRecalled": true,
+    "exitedCleanlyAfterResume": true,
+    "initialHistoryMatchesBeforeResume": true,
+    "initialHistoryMatchesBeforeCrash": true,
+    "recreateReopenedExistingLog": true,
+    "readyOverIpcWithOwnPid": true,
+    "unknownChannelRefused": true,
+    "pongListsChannel": true,
+    "closeOfUnknownChannelAnswered": true,
+    "disposeAckThenClosed": true,
+    "hostOutlivesChannel": true,
+    "stoppedBeforeExit": true,
+    "channelsDoNotCross": true,
+    "dotEnvNotRead": true
+  }
+}

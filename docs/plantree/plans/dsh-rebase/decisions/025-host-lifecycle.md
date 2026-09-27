@@ -16,3 +16,8 @@
 - 代价：
   - 空闲后的第一条消息要多等一次冷启动，Windows 上的耗时没测。
   - 宿主关停会结束后台 jobs，回收会话时要参考 pong 里的 `busy`，与 P1-7 联动。
+
+## 实施补记（2026-09-27，P1-3d `b3b58f2b`，待用户审批）
+
+- 空闲关停按 supervisor 的通道数算（含进行中的 `openChannel`），不按 WorkerManager 的 entry 数：error 态的 entry 没有通道，不该让宿主常驻。有后台 job 的会话（pong 的 `busy`）不驱逐、不回收。
+- 更新：`quitAndInstall` 之前先关会话，再 `shutdown('app-quit')`，最多等 5 s，超时照装；只装一次，不抛错。已知遗留：引擎关停后如果 `quitAndInstall` 本身失败，应用在重启前没有聊天引擎。

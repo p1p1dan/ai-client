@@ -1,0 +1,342 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 1,
+  "narb": "dir",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/out-dsh-host",
+    "files": 10166,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/out-node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-a4EpQ7",
+  "startedAt": "2026-09-27T23:32:05.184Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 625,
+    "ready": {
+      "pid": 13408,
+      "spawnedPid": 13408,
+      "node": "v24.18.0",
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "7dc113844ebf3d645296c8ddbf002b5d70d563a6+dirty",
+        "builtAt": "2026-09-27T23:31:03.220Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "skippedPlugins": [],
+      "census": {
+        "active": 77,
+        "disabled": 18,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 94,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh"
+        ]
+      },
+      "marks": {
+        "entry": 30.94356,
+        "modulesLoaded": 63.106691,
+        "profileResolved": 101.909127,
+        "bootResolved": 623.541762
+      }
+    },
+    "pong": {
+      "host": "pong",
+      "id": 1,
+      "eldMaxMs": 0,
+      "rssMb": 143.6,
+      "channels": []
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 28.347350000000006,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 28ms\n"
+  },
+  "L1": {
+    "label": "L1",
+    "readyMs": 622,
+    "ready": {
+      "pid": 13428,
+      "spawnedPid": 13428,
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "7dc113844ebf3d645296c8ddbf002b5d70d563a6+dirty",
+        "builtAt": "2026-09-27T23:31:03.220Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 77,
+        "disabled": 18,
+        "inactive": []
+      }
+    },
+    "bootstrap": {
+      "bootstrapped": true
+    },
+    "fs": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/marker.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-f9905d5b plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-f9905d5b edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "ok": true,
+          "text": "The file /var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-f9905d5b EDITED-9637ac edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/dsh-written-9637ac.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/dsh-written-9637ac.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-f9905d5b WRITTEN-9637ac\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "ok": true,
+          "text": "Found 3 matches\n\nmarker.txt\nLine 1: P12-MARKER-f9905d5b plaintext line\n\ndsh-written-9637ac.txt\nLine 1: P12-MARKER-f9905d5b WRITTEN-9637ac\n\nedit-target.txt\nLine 1: P12-MARKER-f9905d5b EDITED-9637ac edit target"
+        },
+        {
+          "name": "glob",
+          "ok": true,
+          "text": "marker.txt\nedit-target.txt\ndsh-written-9637ac.txt"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "P12-MARKER-f9905d5b plaintext line\n"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "(no output)"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "e 1218 9637ac\nspill-line 1219 9637ac\nspill-line 1220 9637ac\nspill-line 1221 9637ac\nspill-line 1222 9637ac\nspill-line 1223 9637ac\nspill-line 1224 9637ac\nspill-line 1225 9637ac\nspill-line 1226 9637ac\nspill-line 1227 9637ac\nspill-line 1228 9637ac\nspill-line 1229 9637ac\nspill-line 1230 9637ac\nspill-line 1231 9637ac\nspill-line 1232 9637ac\nspill-line 1233 9637ac\nspill-line 1234 9637ac\nspill-line 1235 9637ac\nspill-line 1236 9637ac\nspill-line 1237 9637ac\nspill-line 1238 9637ac\nspill-line 1239 9637ac\nspill-line 1240 9637ac\nspill-line 1241 9637ac\nspill-line 1242 9637ac\nspill-line 1243 9637ac\nspill-line 1244 9637ac\nspill-line 1245 9637ac\nspill-line 1246 9637ac\nspill-line 1247 9637ac\nspill-line 1248 9637ac\nspill-line 1249 9637ac\nspill-line 1250 9637ac\nspill-line 1251 9637ac\nspill-line 1252 9637ac\nspill-line 1253 9637ac\nspill-line 1254 9637ac\nspill-line 1255 9637ac\nspill-line 1256 9637ac\nspill-line 1257 9637ac\nspill-line 1258 9637ac\nspill-line 1259 9637ac\nspill-line 1260 9637ac\nspill-line 1261 9637ac\nspill-line 1262 9637ac\nspill-line 1263 9637ac\nspill-line 1264 9637ac\nspill-line 1265 9637ac\nspill-line 1266 9637ac\nspill-line 1267 9637ac\nspill-line 1268 9637ac\nspill-line 1269 9637ac\nspill-line 1270 9637ac\nspill-line 1271 9637ac\nspill-line 1272 9637ac\nspill-line 1273 9637ac\nspill-line 1274 9637ac\nspill-line 1275 9637ac\nspill-line 1276 9637ac\nspill-line 1277 9637ac\nspill-line 1278 9637ac\nspill-line 1279 9637ac\nspill-line 1280 9637ac\nspill-line 1281 9637ac\nspill-line 1282 9637ac\nspill-line 1283 9637ac\nspill-line 1284 9637ac\nspill-line 1285 9637ac\nspill-line 1286 9637ac\nspill-line 1287 9637ac\nspill-line 1288 9637ac\nspill-line 1289 9637ac\nspill-line 1290 9637ac\nspill-line 1291 9637ac\nspill-line 1292 9637ac\nspill-line 1293 9637ac\nspill-line 1294 9637ac\nspill-line 1295 9637ac\nspill-line 1296 9637ac\nspill-line 1297 9637ac\nspill-line 1298 9637ac\nspill-line 1299 9637ac\nspill-line 1300 9637ac\nspill-line 1301 9637ac\nspill-line 1302 9637ac\nspill-line 1303 9637ac\nspill-line 1304 9637ac\nspill-line 1305 9637ac\nspill-line 1306 9637ac\nspill-line 1307 9637ac\nspill-line 1308 9637ac\nspill-line 1309 9637ac\nspill-line 1310 9637ac\nspill-line 1311 9637ac\nspill-line 1312 9637ac\nspill-line 1313 9637ac\nspill-line 1314 9637ac\nspill-line 1315 9637ac\nspill-line 1316 9637ac\nspill-line 1317 9637ac\nspill-line 1318 9637ac\nspill-line 1319 9637ac\nspill-line 1320 9637ac\nspill-line 1321 9637ac\nspill-line 1322 9637ac\nspill-line 1323 9637ac\nspill-line 1324 9637ac\nspill-line 1325 9637ac\nspill-line 1326 9637ac\nspill-line 1327 9637ac\nspill-line 1328 9637ac\nspill-line 1329 9637ac\nspill-line 1330 9637ac\nspill-line 1331 9637ac\nspill-line 1332 9637ac\nspill-line 1333 9637ac\nspill-line 1334 9637ac\nspill-line 1335 9637ac\nspill-line 1336 9637ac\nspill-line 1337 9637ac\nspill-line 1338 9637ac\nspill-line 1339 9637ac\nspill-line 1340 9637ac\nspill-line 1341 9637ac\nspill-line 1342 9637ac\nspill-line 1343 9637ac\nspill-line 1344 9637ac\nspill-line 1345 9637ac\nspill-line 1346 9637ac\nspill-line 1347 9637ac\nspill-line 1348 9637ac\nspill-line 1349 9637ac\nspill-line 1350 9637ac\nspill-line 1351 9637ac\nspill-line 1352 9637ac\nspill-line 1353 9637ac\nspill-line 1354 9637ac\nspill-line 1355 9637ac\nspill-line 1356 9637ac\nspill-line 1357 9637ac\nspill-line 1358 9637ac\nspill-line 1359 9637ac\nspill-line 1360 9637ac\nspill-line 1361 9637ac\nspill-line 1362 9637ac\nspill-line 1363 9637ac\nspill-line 1364 9637ac\nspill-line 1365 9637ac\nspill-line 1366 9637ac\nspill-line 1367 9637ac\nspill-line 1368 9637ac\nspill-line 1369 9637ac\nspill-line 1370 9637ac\nspill-line 1371 9637ac\nspill-line 1372 9637ac\nspill-line 1373 9637ac\nspill-line 1374 9637ac\nspill-line 1375 9637ac\nspill-line 1376 9637ac\nspill-line 1377 9637ac\nspill-line 1378 9637ac\nspill-line 1379 9637ac\nspill-line 1380 9637ac\nspill-line 1381 9637ac\nspill-line 1382 9637ac\nspill-line 1383 9637ac\nspill-line 1384 9637ac\nspill-line 1385 9637ac\nspill-line 1386 9637ac\nspill-line 1387 9637ac\nspill-line 1388 9637ac\nspill-line 1389 9637ac\nspill-line 1390 9637ac\nspill-line 1391 9637ac\nspill-line 1392 9637ac\nspill-line 1393 9637ac\nspill-line 1394 9637ac\nspill-line 1395 9637ac\nspill-line 1396 9637ac\nspill-line 1397 9637ac\nspill-line 1398 9637ac\nspill-line 1399 9637ac\nspill-line 1400 9637ac\nspill-line 1401 9637ac\nspill-line 1402 9637ac\nspill-line 1403 9637ac\nspill-line 1404 9637ac\nspill-line 1405 9637ac\nspill-line 1406 9637ac\nspill-line 1407 9637ac\nspill-line 1408 9637ac\nspill-line 1409 9637ac\nspill-line 1410 9637ac\nspill-line 1411 9637ac\nspill-line 1412 9637ac\nspill-line 1413 9637ac\nspill-line 1414 9637ac\nspill-line 1415 9637ac\nspill-line 1416 9637ac\nspill-line 1417 9637ac\nspill-line 1418 9637ac\nspill-line 1419 9637ac\nspill-line 1420 9637ac\nspill-line 1421 9637ac\nspill-line 1422 9637ac\nspill-line 1423 9637ac\nspill-line 1424 9637ac\nspill-line 1425 9637ac\nspill-line 1426 9637ac\nspill-line 1427 9637ac\nspill-line 1428 9637ac\nspill-line 1429 9637ac\nspill-line 1430 9637ac\nspill-line 1431 9637ac\nspill-line 1432 9637ac\nspill-line 1433 9637ac\nspill-line 1434 9637ac\nspill-line 1435 9637ac\nspill-line 1436 9637ac\nspill-line 1437 9637ac\nspill-line 1438 9637ac\nspill-line 1439 9637ac\nspill-line 1440 9637ac\nspill-line 1441 9637ac\nspill-line 1442 9637ac\nspill-line 1443 9637ac\nspill-line 1444 9637ac\nspill-line 1445 9637ac\nspill-line 1446 9637ac\nspill-line 1447 9637ac\nspill-line 1448 9637ac\nspill-line 1449 9637ac\nspill-line 1450 9637ac\nspill-line 1451 9637ac\nspill-line 1452 9637ac\nspill-line 1453 9637ac\nspill-line 1454 9637ac\nspill-line 1455 9637ac\nspill-line 1456 9637ac\nspill-line 1457 9637ac\nspill-line 1458 9637ac\nspill-line 1459 9637ac\nspill-line 1460 9637ac\nspill-line 1461 9637ac\nspill-line 1462 9637ac\nspill-line 1463 9637ac\nspill-line 1464 9637ac\nspill-line 1465 9637ac\nspill-line 1466 9637ac\nspill-line 1467 9637ac\nspill-line 1468 9637ac\nspill-line 1469 9637ac\nspill-line 1470 9637ac\nspill-line 1471 9637ac\nspill-line 1472 9637ac\nspill-line 1473 9637ac\nspill-line 1474 9637ac\nspill-line 1475 9637ac\nspill-line 1476 9637ac\nspill-line 1477 9637ac\nspill-line 1478 9637ac\nspill-line 1479 9637ac\nspill-line 1480 9637ac\nspill-line 1481 9637ac\nspill-line 1482 9637ac\nspill-line 1483 9637ac\nspill-line 1484 9637ac\nspill-line 1485 9637ac\nspill-line 1486 9637ac\nspill-line 1487 9637ac\nspill-line 1488 9637ac\nspill-line 1489 9637ac\nspill-line 1490 9637ac\nspill-line 1491 9637ac\nspill-line 1492 9637ac\nspill-line 1493 9637ac\nspill-line 1494 9637ac\nspill-line 1495 9637ac\nspill-line 1496 9637ac\nspill-line 1497 9637ac\nspill-line 1498 9637ac\nspill-line 1499 9637ac\nspill-line 1500 9637ac\nspill-line 1501 9637ac\nspill-line 1502 9637ac\nspill-line 1503 9637ac\nspill-line 1504 9637ac\nspill-line 1505 9637ac\nspill-line 1506 9637ac\nspill-line 1507 9637ac\nspill-line 1508 9637ac\nspill-line 1509 9637ac\nspill-line 1510 9637ac\nspill-line 1511 9637ac\nspill-line 1512 9637ac\nspill-line 1513 9637ac\nspill-line 1514 9637ac\nspill-line 1515 9637ac\nspill-line 1516 9637ac\nspill-line 1517 9637ac\nspill-line 1518 9637ac\nspill-line 1519 9637ac\nspill-line 1520 9637ac\nspill-line 1521 9637ac\nspill-line 1522 9637ac\nspill-line 1523 9637ac\nspill-line 1524 9637ac\nspill-line 1525 9637ac\nspill-line 1526 9637ac\nspill-line 1527 9637ac\nspill-line 1528 9637ac\nspill-line 1529 9637ac\nspill-line 1530 9637ac\nspill-line 1531 9637ac\nspill-line 1532 9637ac\nspill-line 1533 9637ac\nspill-line 1534 9637ac\nspill-line 1535 9637ac\nspill-line 1536 9637ac\nspill-line 1537 9637ac\nspill-line 1538 9637ac\nspill-line 1539 9637ac\nspill-line 1540 9637ac\nspill-line 1541 9637ac\nspill-line 1542 9637ac\nspill-line 1543 9637ac\nspill-line 1544 9637ac\nspill-line 1545 9637ac\nspill-line 1546 9637ac\nspill-line 1547 9637ac\nspill-line 1548 9637ac\nspill-line 1549 9637ac\nspill-line 1550 9637ac\nspill-line 1551 9637ac\nspill-line 1552 9637ac\nspill-line 1553 9637ac\nspill-line 1554 9637ac\nspill-line 1555 9637ac\nspill-line 1556 9637ac\nspill-line 1557 9637ac\nspill-line 1558 9637ac\nspill-line 1559 9637ac\nspill-line 1560 9637ac\nspill-line 1561 9637ac\nspill-line 1562 9637ac\nspill-line 1563 9637ac\nspill-line 1564 9637ac\nspill-line 1565 9637ac\nspill-line 1566 9637ac\nspill-line 1567 9637ac\nspill-line 1568 9637ac\nspill-line 1569 9637ac\nspill-line 1570 9637ac\nspill-line 1571 9637ac\nspill-line 1572 9637ac\nspill-line 1573 9637ac\nspill-line 1574 9637ac\nspill-line 1575 9637ac\nspill-line 1576 9637ac\nspill-line 1577 9637ac\nspill-line 1578 9637ac\nspill-line 1579 9637ac\nspill-line 1580 9637ac\nspill-line 1581 9637ac\nspill-line 1582 9637ac\nspill-line 1583 9637ac\nspill-line 1584 9637ac\nspill-line 1585 9637ac\nspill-line 1586 9637ac\nspill-line 1587 9637ac\nspill-line 1588 9637ac\nspill-line 1589 9637ac\nspill-line 1590 9637ac\nspill-line 1591 9637ac\nspill-line 1592 9637ac\nspill-line 1593 9637ac\nspill-line 1594 9637ac\nspill-line 1595 9637ac\nspill-line 1596 9637ac\nspill-line 1597 9637ac\nspill-line 1598 9637ac\nspill-line 1599 9637ac\nspill-line 1600 9637ac\nspill-line 1601 9637ac\nspill-line 1602 9637ac\nspill-line 1603 9637ac\nspill-line 1604 9637ac\nspill-line 1605 9637ac\nspill-line 1606 9637ac\nspill-line 1607 9637ac\nspill-line 1608 9637ac\nspill-line 1609 9637ac\nspill-line 1610 9637ac\nspill-line 1611 9637ac\nspill-line 1612 9637ac\nspill-line 1613 9637ac\nspill-line 1614 9637ac\nspill-line 1615 9637ac\nspill-line 1616 9637ac\nspill-line 1617 9637ac\nspill-line 1618 9637ac\nspill-line 1619 9637ac\nspill-line 1620 9637ac\nspill-line 1621 9637ac\nspill-line 1622 9637ac\nspill-line 1623 9637ac\nspill-line 1624 9637ac\nspill-line 1625 9637ac\nspill-line 1626 9637ac\nspill-line 1627 9637ac\nspill-line 1628 9637ac\nspill-line 1629 9637ac\nspill-line 1630 9637ac\nspill-line 1631 9637ac\nspill-line 1632 9637ac\nspill-line 1633 9637ac\nspill-line 1634 9637ac\nspill-line 1635 9637ac\nspill-line 1636 9637ac\nspill-line 1637 9637ac\nspill-line 1638 9637ac\nspill-line 1639 9637ac\nspill-line 1640 9637ac\nspill-line 1641 9637ac\nspill-line 1642 9637ac\nspill-line 1643 9637ac\nspill-line 1644 9637ac\nspill-line 1645 9637ac\nspill-line 1646 9637ac\nspill-line 1647 9637ac\nspill-line 1648 9637ac\nspill-line 1649 9637ac\nspill-line 1650 9637ac\nspill-line 1651 9637ac\nspill-line 1652 9637ac\nspill-line 1653 9637ac\nspill-line 1654 9637ac\nspill-line 1655 9637ac\nspill-line 1656 9637ac\nspill-line 1657 9637ac\nspill-line 1658 9637ac\nspill-line 1659 9637ac\nspill-line 1660 9637ac\nspill-line 1661 9637ac\nspill-line 1662 9637ac\nspill-line 1663 9637ac\nspill-line 1664 9637ac\nspill-line 1665 9637ac\nspill-line 1666 9637ac\nspill-line 1667 9637ac\nspill-line 1668 9637ac\nspill-line 1669 9637ac\nspill-line 1670 9637ac\nspill-line 1671 9637ac\nspill-line 1672 9637ac\nspill-line 1673 9637ac\nspill-line 1674 9637ac\nspill-line 1675 9637ac\nspill-line 1676 9637ac\nspill-line 1677 9637ac\nspill-line 1678 9637ac\nspill-line 1679 9637ac\nspill-line 1680 9637ac\nspill-line 1681 9637ac\nspill-line 1682 9637ac\nspill-line 1683 9637ac\nspill-line 1684 9637ac\nspill-line 1685 9637ac\nspill-line 1686 9637ac\nspill-line 1687 9637ac\nspill-line 1688 9637ac\nspill-line 1689 9637ac\nspill-line 1690 9637ac\nspill-line 1691 9637ac\nspill-line 1692 9637ac\nspill-line 1693 9637ac\nspill-line 1694 9637ac\nspill-line 1695 9637ac\nspill-line 1696 9637ac\nspill-line 1697 9637ac\nspill-line 1698 9637ac\nspill-line 1699 9637ac\nspill-line 1700 9637ac\nspill-line 1701 9637ac\nspill-line 1702 9637ac\nspill-line 1703 9637ac\nspill-line 1704 9637ac\nspill-line 1705 9637ac\nspill-line 1706 9637ac\nspill-line 1707 9637ac\nspill-line 1708 9637ac\nspill-line 1709 9637ac\nspill-line 1710 9637ac\nspill-line 1711 9637ac\nspill-line 1712 9637ac\nspill-line 1713 9637ac\nspill-line 1714 9637ac\nspill-line 1715 9637ac\nspill-line 1716 9637ac\nspill-line 1717 9637ac\nspill-line 1718 9637ac\nspill-line 1719 9637ac\nspill-line 1720 9637ac\nspill-line 1721 9637ac\nspill-line 1722 9637ac\nspill-line 1723 9637ac\nspill-line 1724 9637ac\nspill-line 1725 9637ac\nspill-line 1726 9637ac\nspill-line 1727 9637ac\nspill-line 1728 9637ac\nspill-line 1729 9637ac\nspill-line 1730 9637ac\nspill-line 1731 9637ac\nspill-line 1732 9637ac\nspill-line 1733 9637ac\nspill-line 1734 9637ac\nspill-line 1735 9637ac\nspill-line 1736 9637ac\nspill-line 1737 9637ac\nspill-line 1738 9637ac\nspill-line 1739 9637ac\nspill-line 1740 9637ac\nspill-line 1741 9637ac\nspill-line 1742 9637ac\nspill-line 1743 9637ac\nspill-line 1744 9637ac\nspill-line 1745 9637ac\nspill-line 1746 9637ac\nspill-line 1747 9637ac\nspill-line 1748 9637ac\nspill-line 1749 9637ac\nspill-line 1750 9637ac\nspill-line 1751 9637ac\nspill-line 1752 9637ac\nspill-line 1753 9637ac\nspill-line 1754 9637ac\nspill-line 1755 9637ac\nspill-line 1756 9637ac\nspill-line 1757 9637ac\nspill-line 1758 9637ac\nspill-line 1759 9637ac\nspill-line 1760 9637ac\nspill-line 1761 9637ac\nspill-line 1762 9637ac\nspill-line 1763 9637ac\nspill-line 1764 9637ac\nspill-line 1765 9637ac\nspill-line 1766 9637ac\nspill-line 1767 9637ac\nspill-line 1768 9637ac\nspill-line 1769 9637ac\nspill-line 1770 9637ac\nspill-line 1771 9637ac\nspill-line 1772 9637ac\nspill-line 1773 9637ac\nspill-line 1774 9637ac\nspill-line 1775 9637ac\nspill-line 1776 9637ac\nspill-line 1777 9637ac\nspill-line 1778 9637ac\nspill-line 1779 9637ac\nspill-line 1780 9637ac\nspill-line 1781 9637ac\nspill-line 1782 9637ac\nspill-line 1783 9637ac\nspill-line 1784 9637ac\nspill-line 1785 9637ac\nspill-line 1786 9637ac\nspill-line 1787 9637ac\nspill-line 1788 9637ac\nspill-line 1789 9637ac\nspill-line 1790 9637ac\nspill-line 1791 9637ac\nspill-line 1792 9637ac\nspill-line 1793 9637ac\nspill-line 1794 9637ac\nspill-line 1795 9637ac\nspill-line 1796 9637ac\nspill-line 1797 9637ac\nspill-line 1798 9637ac\nspill-line 1799 9637ac\nspill-line 1800 9637ac\nspill-line 1801 9637ac\nspill-line 1802 9637ac\nspill-line 1803 9637ac\nspill-line 1804 9637ac\nspill-line 1805 9637ac\nspill-line 1806 9637ac\nspill-line 1807 9637ac\nspill-line 1808 9637ac\nspill-line 1809 9637ac\nspill-line 1810 9637ac\nspill-line 1811 9637ac\nspill-line 1812 9637ac\nspill-line 1813 9637ac\nspill-line 1814 9637ac\nspill-line 1815 9637ac\nspill-line 1816 9637ac\nspill-line 1817 9637ac\nspill-line 1818 9637ac\nspill-line 1819 9637ac\nspill-line 1820 9637ac\nspill-line 1821 9637ac\nspill-line 1822 9637ac\nspill-line 1823 9637ac\nspill-line 1824 9637ac\nspill-line 1825 9637ac\nspill-line 1826 9637ac\nspill-line 1827 9637ac\nspill-line 1828 9637ac\nspill-line 1829 9637ac\nspill-line 1830 9637ac\nspill-line 1831 9637ac\nspill-line 1832 9637ac\nspill-line 1833 9637ac\nspill-line 1834 9637ac\nspill-line 1835 9637ac\nspill-line 1836 9637ac\nspill-line 1837 9637ac\nspill-line 1838 9637ac\nspill-line 1839 9637ac\nspill-line 1840 9637ac\nspill-line 1841 9637ac\nspill-line 1842 9637ac\nspill-line 1843 9637ac\nspill-line 1844 9637ac\nspill-line 1845 9637ac\nspill-line 1846 9637ac\nspill-line 1847 9637ac\nspill-line 1848 9637ac\nspill-line 1849 9637ac\nspill-line 1850 9637ac\nspill-line 1851 9637ac\nspill-line 1852 9637ac\nspill-line 1853 9637ac\nspill-line 1854 9637ac\nspill-line 1855 9637ac\nspill-line 1856 9637ac\nspill-line 1857 9637ac\nspill-line 1858 9637ac\nspill-line 1859 9637ac\nspill-line 1860 9637ac\nspill-line 1861 9637ac\nspill-line 1862 9637ac\nspill-line 1863 9637ac\nspill-line 1864 9637ac\nspill-line 1865 9637ac\nspill-line 1866 9637ac\nspill-line 1867 9637ac\nspill-line 1868 9637ac\nspill-line 1869 9637ac\nspill-line 1870 9637ac\nspill-line 1871 9637ac\nspill-line 1872 9637ac\nspill-line 1873 9637ac\nspill-line 1874 9637ac\nspill-line 1875 9637ac\nspill-line 1876 9637ac\nspill-line 1877 9637ac\nspill-line 1878 9637ac\nspill-line 1879 9637ac\nspill-line 1880 9637ac\nspill-line 1881 9637ac\nspill-line 1882 9637ac\nspill-line 1883 9637ac\nspill-line 1884 9637ac\nspill-line 1885 9637ac\nspill-line 1886 9637ac\nspill-line 1887 9637ac\nspill-line 1888 9637ac\nspill-line 1889 9637ac\nspill-line 1890 9637ac\nspill-line 1891 9637ac\nspill-line 1892 9637ac\nspill-line 1893 9637ac\nspill-line 1894 9637ac\nspill-line 1895 9637ac\nspill-line 1896 9637ac\nspill-line 1897 9637ac\nspill-line 1898 9637ac\nspill-line 1899 9637ac\nspill-line 1900 9637ac\nspill-line 1901 9637ac\nspill-line 1902 9637ac\nspill-line 1903 9637ac\nspill-line 1904 9637ac\nspill-line 1905 9637ac\nspill-line 1906 9637ac\nspill-line 1907 9637ac\nspill-line 1908 9637ac\nspill-line 1909 9637ac\nspill-line 1910 9637ac\nspill-line 1911 9637ac\nspill-line 1912 9637ac\nspill-line 1913 9637ac\nspill-line 1914 9637ac\nspill-line 1915 9637ac\nspill-line 1916 9637ac\nspill-line 1917 9637ac\nspill-line 1918 9637ac\nspill-line 1919 9637ac\nspill-line 1920 9637ac\nspill-line 1921 9637ac\nspill-line 1922 9637ac\nspill-line 1923 9637ac\nspill-line 1924 9637ac\nspill-line 1925 9637ac\nspill-line 1926 9637ac\nspill-line 1927 9637ac\nspill-line 1928 9637ac\nspill-line 1929 9637ac\nspill-line 1930 9637ac\nspill-line 1931 9637ac\nspill-line 1932 9637ac\nspill-line 1933 9637ac\nspill-line 1934 9637ac\nspill-line 1935 9637ac\nspill-line 1936 9637ac\nspill-line 1937 9637ac\nspill-line 1938 9637ac\nspill-line 1939 9637ac\nspill-line 1940 9637ac\nspill-line 1941 9637ac\nspill-line 1942 9637ac\nspill-line 1943 9637ac\nspill-line 1944 9637ac\nspill-line 1945 9637ac\nspill-line 1946 9637ac\nspill-line 1947 9637ac\nspill-line 1948 9637ac\nspill-line 1949 9637ac\nspill-line 1950 9637ac\nspill-line 1951 9637ac\nspill-line 1952 9637ac\nspill-line 1953 9637ac\nspill-line 1954 9637ac\nspill-line 1955 9637ac\nspill-line 1956 9637ac\nspill-line 1957 9637ac\nspill-line 1958 9637ac\nspill-line 1959 9637ac\nspill-line 1960 9637ac\nspill-line 1961 9637ac\nspill-line 1962 9637ac\nspill-line 1963 9637ac\nspill-line 1964 9637ac\nspill-line 1965 9637ac\nspill-line 1966 9637ac\nspill-line 1967 9637ac\nspill-line 1968 9637ac\nspill-line 1969 9637ac\nspill-line 1970 9637ac\nspill-line 1971 9637ac\nspill-line 1972 9637ac\nspill-line 1973 9637ac\nspill-line 1974 9637ac\nspill-line 1975 9637ac\nspill-line 1976 9637ac\nspill-line 1977 9637ac\nspill-line 1978 9637ac\nspill-line 1979 9637ac\nspill-line 1980 9637ac\nspill-line 1981 9637ac\nspill-line 1982 9637ac\nspill-line 1983 9637ac\nspill-line 1984 9637ac\nspill-line 1985 9637ac\nspill-line 1986 9637ac\nspill-line 1987 9637ac\nspill-line 1988 9637ac\nspill-line 1989 9637ac\nspill-line 1990 9637ac\nspill-line 1991 9637ac\nspill-line 1992 9637ac\nspill-line 1993 9637ac\nspill-line 1994 9637ac\nspill-line 1995 9637ac\nspill-line 1996 9637ac\nspill-line 1997 9637ac\nspill-line 1998 9637ac\nspill-line 1999 9637ac\nspill-line 2000 9637ac\nspill-line 2001 9637ac\nspill-line 2002 9637ac\nspill-line 2003 9637ac\nspill-line 2004 9637ac\nspill-line 2005 9637ac\nspill-line 2006 9637ac\nspill-line 2007 9637ac\nspill-line 2008 9637ac\nspill-line 2009 9637ac\nspill-line 2010 9637ac\nspill-line 2011 9637ac\nspill-line 2012 9637ac\nspill-line 2013 9637ac\nspill-line 2014 9637ac\nspill-line 2015 9637ac\nspill-line 2016 9637ac\nspill-line 2017 9637ac\nspill-line 2018 9637ac\nspill-line 2019 9637ac\nspill-line 2020 9637ac\nspill-line 2021 9637ac\nspill-line 2022 9637ac\nspill-line 2023 9637ac\nspill-line 2024 9637ac\nspill-line 2025 9637ac\nspill-line 2026 9637ac\nspill-line 2027 9637ac\nspill-line 2028 9637ac\nspill-line 2029 9637ac\nspill-line 2030 9637ac\nspill-line 2031 9637ac\nspill-line 2032 9637ac\nspill-line 2033 9637ac\nspill-line 2034 9637ac\nspill-line 2035 9637ac\nspill-line 2036 9637ac\nspill-line 2037 9637ac\nspill-line 2038 9637ac\nspill-line 2039 9637ac\nspill-line 2040 9637ac\nspill-line 2041 9637ac\nspill-line 2042 9637ac\nspill-line 2043 9637ac\nspill-line 2044 9637ac\nspill-line 2045 9637ac\nspill-line 2046 9637ac\nspill-line 2047 9637ac\nspill-line 2048 9637ac\nspill-line 2049 9637ac\nspill-line 2050 9637ac\nspill-line 2051 9637ac\nspill-line 2052 9637ac\nspill-line 2053 9637ac\nspill-line 2054 9637ac\nspill-line 2055 9637ac\nspill-line 2056 9637ac\nspill-line 2057 9637ac\nspill-line 2058 9637ac\nspill-line 2059 9637ac\nspill-line 2060 9637ac\nspill-line 2061 9637ac\nspill-line 2062 9637ac\nspill-line 2063 9637ac\nspill-line 2064 9637ac\nspill-line 2065 9637ac\nspill-line 2066 9637ac\nspill-line 2067 9637ac\nspill-line 2068 9637ac\nspill-line 2069 9637ac\nspill-line 2070 9637ac\nspill-line 2071 9637ac\nspill-line 2072 9637ac\nspill-line 2073 9637ac\nspill-line 2074 9637ac\nspill-line 2075 9637ac\nspill-line 2076 9637ac\nspill-line 2077 9637ac\nspill-line 2078 9637ac\nspill-line 2079 9637ac\nspill-line 2080 9637ac\nspill-line 2081 9637ac\nspill-line 2082 9637ac\nspill-line 2083 9637ac\nspill-line 2084 9637ac\nspill-line 2085 9637ac\nspill-line 2086 9637ac\nspill-line 2087 9637ac\nspill-line 2088 9637ac\nspill-line 2089 9637ac\nspill-line 2090 9637ac\nspill-line 2091 9637ac\nspill-line 2092 9637ac\nspill-line 2093 9637ac\nspill-line 2094 9637ac\nspill-line 2095 9637ac\nspill-line 2096 9637ac\nspill-line 2097 9637ac\nspill-line 2098 9637ac\nspill-line 2099 9637ac\nspill-line 2100 9637ac\nspill-line 2101 9637ac\nspill-line 2102 9637ac\nspill-line 2103 9637ac\nspill-line 2104 9637ac\nspill-line 2105 9637ac\nspill-line 2106 9637ac\nspill-line 2107 9637ac\nspill-line 2108 9637ac\nspill-line 2109 9637ac\nspill-line 2110 9637ac\nspill-line 2111 9637ac\nspill-line 2112 9637ac\nspill-line 2113 9637ac\nspill-line 2114 9637ac\nspill-line 2115 9637ac\nspill-line 2116 9637ac\nspill-line 2117 9637ac\nspill-line 2118 9637ac\nspill-line 2119 9637ac\nspill-line 2120 9637ac\nspill-line 2121 9637ac\nspill-line 2122 9637ac\nspill-line 2123 9637ac\nspill-line 2124 9637ac\nspill-line 2125 9637ac\nspill-line 2126 9637ac\nspill-line 2127 9637ac\nspill-line 2128 9637ac\nspill-line 2129 9637ac\nspill-line 2130 9637ac\nspill-line 2131 9637ac\nspill-line 2132 9637ac\nspill-line 2133 9637ac\nspill-line 2134 9637ac\nspill-line 2135 9637ac\nspill-line 2136 9637ac\nspill-line 2137 9637ac\nspill-line 2138 9637ac\nspill-line 2139 9637ac\nspill-line 2140 9637ac\nspill-line 2141 9637ac\nspill-line 2142 9637ac\nspill-line 2143 9637ac\nspill-line 2144 9637ac\nspill-line 2145 9637ac\nspill-line 2146 9637ac\nspill-line 2147 9637ac\nspill-line 2148 9637ac\nspill-line 2149 9637ac\nspill-line 2150 9637ac\nspill-line 2151 9637ac\nspill-line 2152 9637ac\nspill-line 2153 9637ac\nspill-line 2154 9637ac\nspill-line 2155 9637ac\nspill-line 2156 9637ac\nspill-line 2157 9637ac\nspill-line 2158 9637ac\nspill-line 2159 9637ac\nspill-line 2160 9637ac\nspill-line 2161 9637ac\nspill-line 2162 9637ac\nspill-line 2163 9637ac\nspill-line 2164 9637ac\nspill-line 2165 9637ac\nspill-line 2166 9637ac\nspill-line 2167 9637ac\nspill-line 2168 9637ac\nspill-line 2169 9637ac\nspill-line 2170 9637ac\nspill-line 2171 9637ac\nspill-line 2172 9637ac\nspill-line 2173 9637ac\nspill-line 2174 9637ac\nspill-line 2175 9637ac\nspill-line 2176 9637ac\nspill-line 2177 9637ac\nspill-line 2178 9637ac\nspill-line 2179 9637ac\nspill-line 2180 9637ac\nspill-line 2181 9637ac\nspill-line 2182 9637ac\nspill-line 2183 9637ac\nspill-line 2184 9637ac\nspill-line 2185 9637ac\nspill-line 2186 9637ac\nspill-line 2187 9637ac\nspill-line 2188 9637ac\nspill-line 2189 9637ac\nspill-line 2190 9637ac\nspill-line 2191 9637ac\nspill-line 2192 9637ac\nspill-line 2193 9637ac\nspill-line 2194 9637ac\nspill-line 2195 9637ac\nspill-line 2196 9637ac\nspill-line 2197 9637ac\nspill-line 2198 9637ac\nspill-line 2199 9637ac\nspill-line 2200 9637ac\nspill-line 2201 9637ac\nspill-line 2202 9637ac\nspill-line 2203 9637ac\nspill-line 2204 9637ac\nspill-line 2205 9637ac\nspill-line 2206 9637ac\nspill-line 2207 9637ac\nspill-line 2208 9637ac\nspill-line 2209 9637ac\nspill-line 2210 9637ac\nspill-line 2211 9637ac\nspill-line 2212 9637ac\nspill-line 2213 9637ac\nspill-line 2214 9637ac\nspill-line 2215 9637ac\nspill-line 2216 9637ac\nspill-line 2217 9637ac\nspill-line 2218 9637ac\nspill-line 2219 9637ac\nspill-line 2220 9637ac\nspill-line 2221 9637ac\nspill-line 2222 9637ac\nspill-line 2223 9637ac\nspill-line 2224 9637ac\nspill-line 2225 9637ac\nspill-line 2226 9637ac\nspill-line 2227 9637ac\nspill-line 2228 9637ac\nspill-line 2229 9637ac\nspill-line 2230 9637ac\nspill-line 2231 9637ac\nspill-line 2232 9637ac\nspill-line 2233 9637ac\nspill-line 2234 9637ac\nspill-line 2235 9637ac\nspill-line 2236 9637ac\nspill-line 2237 9637ac\nspill-line 2238 9637ac\nspill-line 2239 9637ac\nspill-line 2240 9637ac\nspill-line 2241 9637ac\nspill-line 2242 9637ac\nspill-line 2243 9637ac\nspill-line 2244 9637ac\nspill-line 2245 9637ac\nspill-line 2246 9637ac\nspill-line 2247 9637ac\nspill-line 2248 9637ac\nspill-line 2249 9637ac\nspill-line 2250 9637ac\nspill-line 2251 9637ac\nspill-line 2252 9637ac\nspill-line 2253 9637ac\nspill-line 2254 9637ac\nspill-line 2255 9637ac\nspill-line 2256 9637ac\nspill-line 2257 9637ac\nspill-line 2258 9637ac\nspill-line 2259 9637ac\nspill-line 2260 9637ac\nspill-line 2261 9637ac\nspill-line 2262 9637ac\nspill-line 2263 9637ac\nspill-line 2264 9637ac\nspill-line 2265 9637ac\nspill-line 2266 9637ac\nspill-line 2267 9637ac\nspill-line 2268 9637ac\nspill-line 2269 9637ac\nspill-line 2270 9637ac\nspill-line 2271 9637ac\nspill-line 2272 9637ac\nspill-line 2273 9637ac\nspill-line 2274 9637ac\nspill-line 2275 9637ac\nspill-line 2276 9637ac\nspill-line 2277 9637ac\nspill-line 2278 9637ac\nspill-line 2279 9637ac\nspill-line 2280 9637ac\nspill-line 2281 9637ac\nspill-line 2282 9637ac\nspill-line 2283 9637ac\nspill-line 2284 9637ac\nspill-line 2285 9637ac\nspill-line 2286 9637ac\nspill-line 2287 9637ac\nspill-line 2288 9637ac\nspill-line 2289 9637ac\nspill-line 2290 9637ac\nspill-line 2291 9637ac\nspill-line 2292 9637ac\nspill-line 2293 9637ac\nspill-line 2294 9637ac\nspill-line 2295 9637ac\nspill-line 2296 9637ac\nspill-line 2297 9637ac\nspill-line 2298 9637a\n\n[...]\n\n37ac\nspill-line 2927 9637ac\nspill-line 2928 9637ac\nspill-line 2929 9637ac\nspill-line 2930 9637ac\nspill-line 2931 9637ac\nspill-line 2932 9637ac\nspill-line 2933 9637ac\nspill-line 2934 9637ac\nspill-line 2935 9637ac\nspill-line 2936 9637ac\nspill-line 2937 9637ac\nspill-line 2938 9637ac\nspill-line 2939 9637ac\nspill-line 2940 9637ac\nspill-line 2941 9637ac\nspill-line 2942 9637ac\nspill-line 2943 9637ac\nspill-line 2944 9637ac\nspill-line 2945 9637ac\nspill-line 2946 9637ac\nspill-line 2947 9637ac\nspill-line 2948 9637ac\nspill-line 2949 9637ac\nspill-line 2950 9637ac\nspill-line 2951 9637ac\nspill-line 2952 9637ac\nspill-line 2953 9637ac\nspill-line 2954 9637ac\nspill-line 2955 9637ac\nspill-line 2956 9637ac\nspill-line 2957 9637ac\nspill-line 2958 9637ac\nspill-line 2959 9637ac\nspill-line 2960 9637ac\nspill-line 2961 9637ac\nspill-line 2962 9637ac\nspill-line 2963 9637ac\nspill-line 2964 9637ac\nspill-line 2965 9637ac\nspill-line 2966 9637ac\nspill-line 2967 9637ac\nspill-line 2968 9637ac\nspill-line 2969 9637ac\nspill-line 2970 9637ac\nspill-line 2971 9637ac\nspill-line 2972 9637ac\nspill-line 2973 9637ac\nspill-line 2974 9637ac\nspill-line 2975 9637ac\nspill-line 2976 9637ac\nspill-line 2977 9637ac\nspill-line 2978 9637ac\nspill-line 2979 9637ac\nspill-line 2980 9637ac\nspill-line 2981 9637ac\nspill-line 2982 9637ac\nspill-line 2983 9637ac\nspill-line 2984 9637ac\nspill-line 2985 9637ac\nspill-line 2986 9637ac\nspill-line 2987 9637ac\nspill-line 2988 9637ac\nspill-line 2989 9637ac\nspill-line 2990 9637ac\nspill-line 2991 9637ac\nspill-line 2992 9637ac\nspill-line 2993 9637ac\nspill-line 2994 9637ac\nspill-line 2995 9637ac\nspill-line 2996 9637ac\nspill-line 2997 9637ac\nspill-line 2998 9637ac\nspill-line 2999 9637ac\nspill-line 3000 9637ac\nspill-line 3001 9637ac\nspill-line 3002 9637ac\nspill-line 3003 9637ac\nspill-line 3004 9637ac\nspill-line 3005 9637ac\nspill-line 3006 9637ac\nspill-line 3007 9637ac\nspill-line 3008 9637ac\nspill-line 3009 9637ac\nspill-line 3010 9637ac\nspill-line 3011 9637ac\nspill-line 3012 9637ac\nspill-line 3013 9637ac\nspill-line 3014 9637ac\nspill-line 3015 9637ac\nspill-line 3016 9637ac\nspill-line 3017 9637ac\nspill-line 3018 9637ac\nspill-line 3019 9637ac\nspill-line 3020 9637ac\nspill-line 3021 9637ac\nspill-line 3022 9637ac\nspill-line 3023 9637ac\nspill-line 3024 9637ac\nspill-line 3025 9637ac\nspill-line 3026 9637ac\nspill-line 3027 9637ac\nspill-line 3028 9637ac\nspill-line 3029 9637ac\nspill-line 3030 9637ac\nspill-line 3031 9637ac\nspill-line 3032 9637ac\nspill-line 3033 9637ac\nspill-line 3034 9637ac\nspill-line 3035 9637ac\nspill-line 3036 9637ac\nspill-line 3037 9637ac\nspill-line 3038 9637ac\nspill-line 3039 9637ac\nspill-line 3040 9637ac\nspill-line 3041 9637ac\nspill-line 3042 9637ac\nspill-line 3043 9637ac\nspill-line 3044 9637ac\nspill-line 3045 9637ac\nspill-line 3046 9637ac\nspill-line 3047 9637ac\nspill-line 3048 9637ac\nspill-line 3049 9637ac\nspill-line 3050 9637ac\nspill-line 3051 9637ac\nspill-line 3052 9637ac\nspill-line 3053 9637ac\nspill-line 3054 9637ac\nspill-line 3055 9637ac\nspill-line 3056 9637ac\nspill-line 3057 9637ac\nspill-line 3058 9637ac\nspill-line 3059 9637ac\nspill-line 3060 9637ac\nspill-line 3061 9637ac\nspill-line 3062 9637ac\nspill-line 3063 9637ac\nspill-line 3064 9637ac\nspill-line 3065 9637ac\nspill-line 3066 9637ac\nspill-line 3067 9637ac\nspill-line 3068 9637ac\nspill-line 3069 9637ac\nspill-line 3070 9637ac\nspill-line 3071 9637ac\nspill-line 3072 9637ac\nspill-line 3073 9637ac\nspill-line 3074 9637ac\nspill-line 3075 9637ac\nspill-line 3076 9637ac\nspill-line 3077 9637ac\nspill-line 3078 9637ac\nspill-line 3079 9637ac\nspill-line 3080 9637ac\nspill-line 3081 9637ac\nspill-line 3082 9637ac\nspill-line 3083 9637ac\nspill-line 3084 9637ac\nspill-line 3085 9637ac\nspill-line 3086 9637ac\nspill-line 3087 9637ac\nspill-line 3088 9637ac\nspill-line 3089 9637ac\nspill-line 3090 9637ac\nspill-line 3091 9637ac\nspill-line 3092 9637ac\nspill-line 3093 9637ac\nspill-line 3094 9637ac\nspill-line 3095 9637ac\nspill-line 3096 9637ac\nspill-line 3097 9637ac\nspill-line 3098 9637ac\nspill-line 3099 9637ac\nspill-line 3100 9637ac\nspill-line 3101 9637ac\nspill-line 3102 9637ac\nspill-line 3103 9637ac\nspill-line 3104 9637ac\nspill-line 3105 9637ac\nspill-line 3106 9637ac\nspill-line 3107 9637ac\nspill-line 3108 9637ac\nspill-line 3109 9637ac\nspill-line 3110 9637ac\nspill-line 3111 9637ac\nspill-line 3112 9637ac\nspill-line 3113 9637ac\nspill-line 3114 9637ac\nspill-line 3115 9637ac\nspill-line 3116 9637ac\nspill-line 3117 9637ac\nspill-line 3118 9637ac\nspill-line 3119 9637ac\nspill-line 3120 9637ac\nspill-line 3121 9637ac\nspill-line 3122 9637ac\nspill-line 3123 9637ac\nspill-line 3124 9637ac\nspill-line 3125 9637ac\nspill-line 3126 9637ac\nspill-line 3127 9637ac\nspill-line 3128 9637ac\nspill-line 3129 9637ac\nspill-line 3130 9637ac\nspill-line 3131 9637ac\nspill-line 3132 9637ac\nspill-line 3133 9637ac\nspill-line 3134 9637ac\nspill-line 3135 9637ac\nspill-line 3136 9637ac\nspill-line 3137 9637ac\nspill-line 3138 9637ac\nspill-line 3139 9637ac\nspill-line 3140 9637ac\nspill-line 3141 9637ac\nspill-line 3142 9637ac\nspill-line 3143 9637ac\nspill-line 3144 9637ac\nspill-line 3145 9637ac\nspill-line 3146 9637ac\nspill-line 3147 9637ac\nspill-line 3148 9637ac\nspill-line 3149 9637ac\nspill-line 3150 9637ac\nspill-line 3151 9637ac\nspill-line 3152 9637ac\nspill-line 3153 9637ac\nspill-line 3154 9637ac\nspill-line 3155 9637ac\nspill-line 3156 9637ac\nspill-line 3157 9637ac\nspill-line 3158 9637ac\nspill-line 3159 9637ac\nspill-line 3160 9637ac\nspill-line 3161 9637ac\nspill-line 3162 9637ac\nspill-line 3163 9637ac\nspill-line 3164 9637ac\nspill-line 3165 9637ac\nspill-line 3166 9637ac\nspill-line 3167 9637ac\nspill-line 3168 9637ac\nspill-line 3169 9637ac\nspill-line 3170 9637ac\nspill-line 3171 9637ac\nspill-line 3172 9637ac\nspill-line 3173 9637ac\nspill-line 3174 9637ac\nspill-line 3175 9637ac\nspill-line 3176 9637ac\nspill-line 3177 9637ac\nspill-line 3178 9637ac\nspill-line 3179 9637ac\nspill-line 3180 9637ac\nspill-line 3181 9637ac\nspill-line 3182 9637ac\nspill-line 3183 9637ac\nspill-line 3184 9637ac\nspill-line 3185 9637ac\nspill-line 3186 9637ac\nspill-line 3187 9637ac\nspill-line 3188 9637ac\nspill-line 3189 9637ac\nspill-line 3190 9637ac\nspill-line 3191 9637ac\nspill-line 3192 9637ac\nspill-line 3193 9637ac\nspill-line 3194 9637ac\nspill-line 3195 9637ac\nspill-line 3196 9637ac\nspill-line 3197 9637ac\nspill-line 3198 9637ac\nspill-line 3199 9637ac\nspill-line 3200 9637ac\nspill-line 3201 9637ac\nspill-line 3202 9637ac\nspill-line 3203 9637ac\nspill-line 3204 9637ac\nspill-line 3205 9637ac\nspill-line 3206 9637ac\nspill-line 3207 9637ac\nspill-line 3208 9637ac\nspill-line 3209 9637ac\nspill-line 3210 9637ac\nspill-line 3211 9637ac\nspill-line 3212 9637ac\nspill-line 3213 9637ac\nspill-line 3214 9637ac\nspill-line 3215 9637ac\nspill-line 3216 9637ac\nspill-line 3217 9637ac\nspill-line 3218 9637ac\nspill-line 3219 9637ac\nspill-line 3220 9637ac\nspill-line 3221 9637ac\nspill-line 3222 9637ac\nspill-line 3223 9637ac\nspill-line 3224 9637ac\nspill-line 3225 9637ac\nspill-line 3226 9637ac\nspill-line 3227 9637ac\nspill-line 3228 9637ac\nspill-line 3229 9637ac\nspill-line 3230 9637ac\nspill-line 3231 9637ac\nspill-line 3232 9637ac\nspill-line 3233 9637ac\nspill-line 3234 9637ac\nspill-line 3235 9637ac\nspill-line 3236 9637ac\nspill-line 3237 9637ac\nspill-line 3238 9637ac\nspill-line 3239 9637ac\nspill-line 3240 9637ac\nspill-line 3241 9637ac\nspill-line 3242 9637ac\nspill-line 3243 9637ac\nspill-line 3244 9637ac\nspill-line 3245 9637ac\nspill-line 3246 9637ac\nspill-line 3247 9637ac\nspill-line 3248 9637ac\nspill-line 3249 9637ac\nspill-line 3250 9637ac\nspill-line 3251 9637ac\nspill-line 3252 9637ac\nspill-line 3253 9637ac\nspill-line 3254 9637ac\nspill-line 3255 9637ac\nspill-line 3256 9637ac\nspill-line 3257 9637ac\nspill-line 3258 9637ac\nspill-line 3259 9637ac\nspill-line 3260 9637ac\nspill-line 3261 9637ac\nspill-line 3262 9637ac\nspill-line 3263 9637ac\nspill-line 3264 9637ac\nspill-line 3265 9637ac\nspill-line 3266 9637ac\nspill-line 3267 9637ac\nspill-line 3268 9637ac\nspill-line 3269 9637ac\nspill-line 3270 9637ac\nspill-line 3271 9637ac\nspill-line 3272 9637ac\nspill-line 3273 9637ac\nspill-line 3274 9637ac\nspill-line 3275 9637ac\nspill-line 3276 9637ac\nspill-line 3277 9637ac\nspill-line 3278 9637ac\nspill-line 3279 9637ac\nspill-line 3280 9637ac\nspill-line 3281 9637ac\nspill-line 3282 9637ac\nspill-line 3283 9637ac\nspill-line 3284 9637ac\nspill-line 3285 9637ac\nspill-line 3286 9637ac\nspill-line 3287 9637ac\nspill-line 3288 9637ac\nspill-line 3289 9637ac\nspill-line 3290 9637ac\nspill-line 3291 9637ac\nspill-line 3292 9637ac\nspill-line 3293 9637ac\nspill-line 3294 9637ac\nspill-line 3295 9637ac\nspill-line 3296 9637ac\nspill-line 3297 9637ac\nspill-line 3298 9637ac\nspill-line 3299 9637ac\nspill-line 3300 9637ac\nspill-line 3301 9637ac\nspill-line 3302 9637ac\nspill-line 3303 9637ac\nspill-line 3304 9637ac\nspill-line 3305 9637ac\nspill-line 3306 9637ac\nspill-line 3307 9637ac\nspill-line 3308 9637ac\nspill-line 3309 9637ac\nspill-line 3310 9637ac\nspill-line 3311 9637ac\nspill-line 3312 9637ac\nspill-line 3313 9637ac\nspill-line 3314 9637ac\nspill-line 3315 9637ac\nspill-line 3316 9637ac\nspill-line 3317 9637ac\nspill-line 3318 9637ac\nspill-line 3319 9637ac\nspill-line 3320 9637ac\nspill-line 3321 9637ac\nspill-line 3322 9637ac\nspill-line 3323 9637ac\nspill-line 3324 9637ac\nspill-line 3325 9637ac\nspill-line 3326 9637ac\nspill-line 3327 9637ac\nspill-line 3328 9637ac\nspill-line 3329 9637ac\nspill-line 3330 9637ac\nspill-line 3331 9637ac\nspill-line 3332 9637ac\nspill-line 3333 9637ac\nspill-line 3334 9637ac\nspill-line 3335 9637ac\nspill-line 3336 9637ac\nspill-line 3337 9637ac\nspill-line 3338 9637ac\nspill-line 3339 9637ac\nspill-line 3340 9637ac\nspill-line 3341 9637ac\nspill-line 3342 9637ac\nspill-line 3343 9637ac\nspill-line 3344 9637ac\nspill-line 3345 9637ac\nspill-line 3346 9637ac\nspill-line 3347 9637ac\nspill-line 3348 9637ac\nspill-line 3349 9637ac\nspill-line 3350 9637ac\nspill-line 3351 9637ac\nspill-line 3352 9637ac\nspill-line 3353 9637ac\nspill-line 3354 9637ac\nspill-line 3355 9637ac\nspill-line 3356 9637ac\nspill-line 3357 9637ac\nspill-line 3358 9637ac\nspill-line 3359 9637ac\nspill-line 3360 9637ac\nspill-line 3361 9637ac\nspill-line 3362 9637ac\nspill-line 3363 9637ac\nspill-line 3364 9637ac\nspill-line 3365 9637ac\nspill-line 3366 9637ac\nspill-line 3367 9637ac\nspill-line 3368 9637ac\nspill-line 3369 9637ac\nspill-line 3370 9637ac\nspill-line 3371 9637ac\nspill-line 3372 9637ac\nspill-line 3373 9637ac\nspill-line 3374 9637ac\nspill-line 3375 9637ac\nspill-line 3376 9637ac\nspill-line 3377 9637ac\nspill-line 3378 9637ac\nspill-line 3379 9637ac\nspill-line 3380 9637ac\nspill-line 3381 9637ac\nspill-line 3382 9637ac\nspill-line 3383 9637ac\nspill-line 3384 9637ac\nspill-line 3385 9637ac\nspill-line 3386 9637ac\nspill-line 3387 9637ac\nspill-line 3388 9637ac\nspill-line 3389 9637ac\nspill-line 3390 9637ac\nspill-line 3391 9637ac\nspill-line 3392 9637ac\nspill-line 3393 9637ac\nspill-line 3394 9637ac\nspill-line 3395 9637ac\nspill-line 3396 9637ac\nspill-line 3397 9637ac\nspill-line 3398 9637ac\nspill-line 3399 9637ac\nspill-line 3400 9637ac\nspill-line 3401 9637ac\nspill-line 3402 9637ac\nspill-line 3403 9637ac\nspill-line 3404 9637ac\nspill-line 3405 9637ac\nspill-line 3406 9637ac\nspill-line 3407 9637ac\nspill-line 3408 9637ac\nspill-line 3409 9637ac\nspill-line 3410 9637ac\nspill-line 3411 9637ac\nspill-line 3412 9637ac\nspill-line 3413 9637ac\nspill-line 3414 9637ac\nspill-line 3415 9637ac\nspill-line 3416 9637ac\nspill-line 3417 9637ac\nspill-line 3418 9637ac\nspill-line 3419 9637ac\nspill-line 3420 9637ac\nspill-line 3421 9637ac\nspill-line 3422 9637ac\nspill-line 3423 9637ac\nspill-line 3424 9637ac\nspill-line 3425 9637ac\nspill-line 3426 9637ac\nspill-line 3427 9637ac\nspill-line 3428 9637ac\nspill-line 3429 9637ac\nspill-line 3430 9637ac\nspill-line 3431 9637ac\nspill-line 3432 9637ac\nspill-line 3433 9637ac\nspill-line 3434 9637ac\nspill-line 3435 9637ac\nspill-line 3436 9637ac\nspill-line 3437 9637ac\nspill-line 3438 9637ac\nspill-line 3439 9637ac\nspill-line 3440 9637ac\nspill-line 3441 9637ac\nspill-line 3442 9637ac\nspill-line 3443 9637ac\nspill-line 3444 9637ac\nspill-line 3445 9637ac\nspill-line 3446 9637ac\nspill-line 3447 9637ac\nspill-line 3448 9637ac\nspill-line 3449 9637ac\nspill-line 3450 9637ac\nspill-line 3451 9637ac\nspill-line 3452 9637ac\nspill-line 3453 9637ac\nspill-line 3454 9637ac\nspill-line 3455 9637ac\nspill-line 3456 9637ac\nspill-line 3457 9637ac\nspill-line 3458 9637ac\nspill-line 3459 9637ac\nspill-line 3460 9637ac\nspill-line 3461 9637ac\nspill-line 3462 9637ac\nspill-line 3463 9637ac\nspill-line 3464 9637ac\nspill-line 3465 9637ac\nspill-line 3466 9637ac\nspill-line 3467 9637ac\nspill-line 3468 9637ac\nspill-line 3469 9637ac\nspill-line 3470 9637ac\nspill-line 3471 9637ac\nspill-line 3472 9637ac\nspill-line 3473 9637ac\nspill-line 3474 9637ac\nspill-line 3475 9637ac\nspill-line 3476 9637ac\nspill-line 3477 9637ac\nspill-line 3478 9637ac\nspill-line 3479 9637ac\nspill-line 3480 9637ac\nspill-line 3481 9637ac\nspill-line 3482 9637ac\nspill-line 3483 9637ac\nspill-line 3484 9637ac\nspill-line 3485 9637ac\nspill-line 3486 9637ac\nspill-line 3487 9637ac\nspill-line 3488 9637ac\nspill-line 3489 9637ac\nspill-line 3490 9637ac\nspill-line 3491 9637ac\nspill-line 3492 9637ac\nspill-line 3493 9637ac\nspill-line 3494 9637ac\nspill-line 3495 9637ac\nspill-line 3496 9637ac\nspill-line 3497 9637ac\nspill-line 3498 9637ac\nspill-line 3499 9637ac\nspill-line 3500 9637ac\nspill-line 3501 9637ac\nspill-line 3502 9637ac\nspill-line 3503 9637ac\nspill-line 3504 9637ac\nspill-line 3505 9637ac\nspill-line 3506 9637ac\nspill-line 3507 9637ac\nspill-line 3508 9637ac\nspill-line 3509 9637ac\nspill-line 3510 9637ac\nspill-line 3511 9637ac\nspill-line 3512 9637ac\nspill-line 3513 9637ac\nspill-line 3514 9637ac\nspill-line 3515 9637ac\nspill-line 3516 9637ac\nspill-line 3517 9637ac\nspill-line 3518 9637ac\nspill-line 3519 9637ac\nspill-line 3520 9637ac\nspill-line 3521 9637ac\nspill-line 3522 9637ac\nspill-line 3523 9637ac\nspill-line 3524 9637ac\nspill-line 3525 9637ac\nspill-line 3526 9637ac\nspill-line 3527 9637ac\nspill-line 3528 9637ac\nspill-line 3529 9637ac\nspill-line 3530 9637ac\nspill-line 3531 9637ac\nspill-line 3532 9637ac\nspill-line 3533 9637ac\nspill-line 3534 9637ac\nspill-line 3535 9637ac\nspill-line 3536 9637ac\nspill-line 3537 9637ac\nspill-line 3538 9637ac\nspill-line 3539 9637ac\nspill-line 3540 9637ac\nspill-line 3541 9637ac\nspill-line 3542 9637ac\nspill-line 3543 9637ac\nspill-line 3544 9637ac\nspill-line 3545 9637ac\nspill-line 3546 9637ac\nspill-line 3547 9637ac\nspill-line 3548 9637ac\nspill-line 3549 9637ac\nspill-line 3550 9637ac\nspill-line 3551 9637ac\nspill-line 3552 9637ac\nspill-line 3553 9637ac\nspill-line 3554 9637ac\nspill-line 3555 9637ac\nspill-line 3556 9637ac\nspill-line 3557 9637ac\nspill-line 3558 9637ac\nspill-line 3559 9637ac\nspill-line 3560 9637ac\nspill-line 3561 9637ac\nspill-line 3562 9637ac\nspill-line 3563 9637ac\nspill-line 3564 9637ac\nspill-line 3565 9637ac\nspill-line 3566 9637ac\nspill-line 3567 9637ac\nspill-line 3568 9637ac\nspill-line 3569 9637ac\nspill-line 3570 9637ac\nspill-line 3571 9637ac\nspill-line 3572 9637ac\nspill-line 3573 9637ac\nspill-line 3574 9637ac\nspill-line 3575 9637ac\nspill-line 3576 9637ac\nspill-line 3577 9637ac\nspill-line 3578 9637ac\nspill-line 3579 9637ac\nspill-line 3580 9637ac\nspill-line 3581 9637ac\nspill-line 3582 9637ac\nspill-line 3583 9637ac\nspill-line 3584 9637ac\nspill-line 3585 9637ac\nspill-line 3586 9637ac\nspill-line 3587 9637ac\nspill-line 3588 9637ac\nspill-line 3589 9637ac\nspill-line 3590 9637ac\nspill-line 3591 9637ac\nspill-line 3592 9637ac\nspill-line 3593 9637ac\nspill-line 3594 9637ac\nspill-line 3595 9637ac\nspill-line 3596 9637ac\nspill-line 3597 9637ac\nspill-line 3598 9637ac\nspill-line 3599 9637ac\nspill-line 3600 9637ac\nspill-line 3601 9637ac\nspill-line 3602 9637ac\nspill-line 3603 9637ac\nspill-line 3604 9637ac\nspill-line 3605 9637ac\nspill-line 3606 9637ac\nspill-line 3607 9637ac\nspill-line 3608 9637ac\nspill-line 3609 9637ac\nspill-line 3610 9637ac\nspill-line 3611 9637ac\nspill-line 3612 9637ac\nspill-line 3613 9637ac\nspill-line 3614 9637ac\nspill-line 3615 9637ac\nspill-line 3616 9637ac\nspill-line 3617 9637ac\nspill-line 3618 9637ac\nspill-line 3619 9637ac\nspill-line 3620 9637ac\nspill-line 3621 9637ac\nspill-line 3622 9637ac\nspill-line 3623 9637ac\nspill-line 3624 9637ac\nspill-line 3625 9637ac\nspill-line 3626 9637ac\nspill-line 3627 9637ac\nspill-line 3628 9637ac\nspill-line 3629 9637ac\nspill-line 3630 9637ac\nspill-line 3631 9637ac\nspill-line 3632 9637ac\nspill-line 3633 9637ac\nspill-line 3634 9637ac\nspill-line 3635 9637ac\nspill-line 3636 9637ac\nspill-line 3637 9637ac\nspill-line 3638 9637ac\nspill-line 3639 9637ac\nspill-line 3640 9637ac\nspill-line 3641 9637ac\nspill-line 3642 9637ac\nspill-line 3643 9637ac\nspill-line 3644 9637ac\nspill-line 3645 9637ac\nspill-line 3646 9637ac\nspill-line 3647 9637ac\nspill-line 3648 9637ac\nspill-line 3649 9637ac\nspill-line 3650 9637ac\nspill-line 3651 9637ac\nspill-line 3652 9637ac\nspill-line 3653 9637ac\nspill-line 3654 9637ac\nspill-line 3655 9637ac\nspill-line 3656 9637ac\nspill-line 3657 9637ac\nspill-line 3658 9637ac\nspill-line 3659 9637ac\nspill-line 3660 9637ac\nspill-line 3661 9637ac\nspill-line 3662 9637ac\nspill-line 3663 9637ac\nspill-line 3664 9637ac\nspill-line 3665 9637ac\nspill-line 3666 9637ac\nspill-line 3667 9637ac\nspill-line 3668 9637ac\nspill-line 3669 9637ac\nspill-line 3670 9637ac\nspill-line 3671 9637ac\nspill-line 3672 9637ac\nspill-line 3673 9637ac\nspill-line 3674 9637ac\nspill-line 3675 9637ac\nspill-line 3676 9637ac\nspill-line 3677 9637ac\nspill-line 3678 9637ac\nspill-line 3679 9637ac\nspill-line 3680 9637ac\nspill-line 3681 9637ac\nspill-line 3682 9637ac\nspill-line 3683 9637ac\nspill-line 3684 9637ac\nspill-line 3685 9637ac\nspill-line 3686 9637ac\nspill-line 3687 9637ac\nspill-line 3688 9637ac\nspill-line 3689 9637ac\nspill-line 3690 9637ac\nspill-line 3691 9637ac\nspill-line 3692 9637ac\nspill-line 3693 9637ac\nspill-line 3694 9637ac\nspill-line 3695 9637ac\nspill-line 3696 9637ac\nspill-line 3697 9637ac\nspill-line 3698 9637ac\nspill-line 3699 9637ac\nspill-line 3700 9637ac\nspill-line 3701 9637ac\nspill-line 3702 9637ac\nspill-line 3703 9637ac\nspill-line 3704 9637ac\nspill-line 3705 9637ac\nspill-line 3706 9637ac\nspill-line 3707 9637ac\nspill-line 3708 9637ac\nspill-line 3709 9637ac\nspill-line 3710 9637ac\nspill-line 3711 9637ac\nspill-line 3712 9637ac\nspill-line 3713 9637ac\nspill-line 3714 9637ac\nspill-line 3715 9637ac\nspill-line 3716 9637ac\nspill-line 3717 9637ac\nspill-line 3718 9637ac\nspill-line 3719 9637ac\nspill-line 3720 9637ac\nspill-line 3721 9637ac\nspill-line 3722 9637ac\nspill-line 3723 9637ac\nspill-line 3724 9637ac\nspill-line 3725 9637ac\nspill-line 3726 9637ac\nspill-line 3727 9637ac\nspill-line 3728 9637ac\nspill-line 3729 9637ac\nspill-line 3730 9637ac\nspill-line 3731 9637ac\nspill-line 3732 9637ac\nspill-line 3733 9637ac\nspill-line 3734 9637ac\nspill-line 3735 9637ac\nspill-line 3736 9637ac\nspill-line 3737 9637ac\nspill-line 3738 9637ac\nspill-line 3739 9637ac\nspill-line 3740 9637ac\nspill-line 3741 9637ac\nspill-line 3742 9637ac\nspill-line 3743 9637ac\nspill-line 3744 9637ac\nspill-line 3745 9637ac\nspill-line 3746 9637ac\nspill-line 3747 9637ac\nspill-line 3748 9637ac\nspill-line 3749 9637ac\nspill-line 3750 9637ac\nspill-line 3751 9637ac\nspill-line 3752 9637ac\nspill-line 3753 9637ac\nspill-line 3754 9637ac\nspill-line 3755 9637ac\nspill-line 3756 9637ac\nspill-line 3757 9637ac\nspill-line 3758 9637ac\nspill-line 3759 9637ac\nspill-line 3760 9637ac\nspill-line 3761 9637ac\nspill-line 3762 9637ac\nspill-line 3763 9637ac\nspill-line 3764 9637ac\nspill-line 3765 9637ac\nspill-line 3766 9637ac\nspill-line 3767 9637ac\nspill-line 3768 9637ac\nspill-line 3769 9637ac\nspill-line 3770 9637ac\nspill-line 3771 9637ac\nspill-line 3772 9637ac\nspill-line 3773 9637ac\nspill-line 3774 9637ac\nspill-line 3775 9637ac\nspill-line 3776 9637ac\nspill-line 3777 9637ac\nspill-line 3778 9637ac\nspill-line 3779 9637ac\nspill-line 3780 9637ac\nspill-line 3781 9637ac\nspill-line 3782 9637ac\nspill-line 3783 9637ac\nspill-line 3784 9637ac\nspill-line 3785 9637ac\nspill-line 3786 9637ac\nspill-line 3787 9637ac\nspill-line 3788 9637ac\nspill-line 3789 9637ac\nspill-line 3790 9637ac\nspill-line 3791 9637ac\nspill-line 3792 9637ac\nspill-line 3793 9637ac\nspill-line 3794 9637ac\nspill-line 3795 9637ac\nspill-line 3796 9637ac\nspill-line 3797 9637ac\nspill-line 3798 9637ac\nspill-line 3799 9637ac\nspill-line 3800 9637ac\nspill-line 3801 9637ac\nspill-line 3802 9637ac\nspill-line 3803 9637ac\nspill-line 3804 9637ac\nspill-line 3805 9637ac\nspill-line 3806 9637ac\nspill-line 3807 9637ac\nspill-line 3808 9637ac\nspill-line 3809 9637ac\nspill-line 3810 9637ac\nspill-line 3811 9637ac\nspill-line 3812 9637ac\nspill-line 3813 9637ac\nspill-line 3814 9637ac\nspill-line 3815 9637ac\nspill-line 3816 9637ac\nspill-line 3817 9637ac\nspill-line 3818 9637ac\nspill-line 3819 9637ac\nspill-line 3820 9637ac\nspill-line 3821 9637ac\nspill-line 3822 9637ac\nspill-line 3823 9637ac\nspill-line 3824 9637ac\nspill-line 3825 9637ac\nspill-line 3826 9637ac\nspill-line 3827 9637ac\nspill-line 3828 9637ac\nspill-line 3829 9637ac\nspill-line 3830 9637ac\nspill-line 3831 9637ac\nspill-line 3832 9637ac\nspill-line 3833 9637ac\nspill-line 3834 9637ac\nspill-line 3835 9637ac\nspill-line 3836 9637ac\nspill-line 3837 9637ac\nspill-line 3838 9637ac\nspill-line 3839 9637ac\nspill-line 3840 9637ac\nspill-line 3841 9637ac\nspill-line 3842 9637ac\nspill-line 3843 9637ac\nspill-line 3844 9637ac\nspill-line 3845 9637ac\nspill-line 3846 9637ac\nspill-line 3847 9637ac\nspill-line 3848 9637ac\nspill-line 3849 9637ac\nspill-line 3850 9637ac\nspill-line 3851 9637ac\nspill-line 3852 9637ac\nspill-line 3853 9637ac\nspill-line 3854 9637ac\nspill-line 3855 9637ac\nspill-line 3856 9637ac\nspill-line 3857 9637ac\nspill-line 3858 9637ac\nspill-line 3859 9637ac\nspill-line 3860 9637ac\nspill-line 3861 9637ac\nspill-line 3862 9637ac\nspill-line 3863 9637ac\nspill-line 3864 9637ac\nspill-line 3865 9637ac\nspill-line 3866 9637ac\nspill-line 3867 9637ac\nspill-line 3868 9637ac\nspill-line 3869 9637ac\nspill-line 3870 9637ac\nspill-line 3871 9637ac\nspill-line 3872 9637ac\nspill-line 3873 9637ac\nspill-line 3874 9637ac\nspill-line 3875 9637ac\nspill-line 3876 9637ac\nspill-line 3877 9637ac\nspill-line 3878 9637ac\nspill-line 3879 9637ac\nspill-line 3880 9637ac\nspill-line 3881 9637ac\nspill-line 3882 9637ac\nspill-line 3883 9637ac\nspill-line 3884 9637ac\nspill-line 3885 9637ac\nspill-line 3886 9637ac\nspill-line 3887 9637ac\nspill-line 3888 9637ac\nspill-line 3889 9637ac\nspill-line 3890 9637ac\nspill-line 3891 9637ac\nspill-line 3892 9637ac\nspill-line 3893 9637ac\nspill-line 3894 9637ac\nspill-line 3895 9637ac\nspill-line 3896 9637ac\nspill-line 3897 9637ac\nspill-line 3898 9637ac\nspill-line 3899 9637ac\nspill-line 3900 9637ac\nspill-line 3901 9637ac\nspill-line 3902 9637ac\nspill-line 3903 9637ac\nspill-line 3904 9637ac\nspill-line 3905 9637ac\nspill-line 3906 9637ac\nspill-line 3907 9637ac\nspill-line 3908 9637ac\nspill-line 3909 9637ac\nspill-line 3910 9637ac\nspill-line 3911 9637ac\nspill-line 3912 9637ac\nspill-line 3913 9637ac\nspill-line 3914 9637ac\nspill-line 3915 9637ac\nspill-line 3916 9637ac\nspill-line 3917 9637ac\nspill-line 3918 9637ac\nspill-line 3919 9637ac\nspill-line 3920 9637ac\nspill-line 3921 9637ac\nspill-line 3922 9637ac\nspill-line 3923 9637ac\nspill-line 3924 9637ac\nspill-line 3925 9637ac\nspill-line 3926 9637ac\nspill-line 3927 9637ac\nspill-line 3928 9637ac\nspill-line 3929 9637ac\nspill-line 3930 9637ac\nspill-line 3931 9637ac\nspill-line 3932 9637ac\nspill-line 3933 9637ac\nspill-line 3934 9637ac\nspill-line 3935 9637ac\nspill-line 3936 9637ac\nspill-line 3937 9637ac\nspill-line 3938 9637ac\nspill-line 3939 9637ac\nspill-line 3940 9637ac\nspill-line 3941 9637ac\nspill-line 3942 9637ac\nspill-line 3943 9637ac\nspill-line 3944 9637ac\nspill-line 3945 9637ac\nspill-line 3946 9637ac\nspill-line 3947 9637ac\nspill-line 3948 9637ac\nspill-line 3949 9637ac\nspill-line 3950 9637ac\nspill-line 3951 9637ac\nspill-line 3952 9637ac\nspill-line 3953 9637ac\nspill-line 3954 9637ac\nspill-line 3955 9637ac\nspill-line 3956 9637ac\nspill-line 3957 9637ac\nspill-line 3958 9637ac\nspill-line 3959 9637ac\nspill-line 3960 9637ac\nspill-line 3961 9637ac\nspill-line 3962 9637ac\nspill-line 3963 9637ac\nspill-line 3964 9637ac\nspill-line 3965 9637ac\nspill-line 3966 9637ac\nspill-line 3967 9637ac\nspill-line 3968 9637ac\nspill-line 3969 9637ac\nspill-line 3970 9637ac\nspill-line 3971 9637ac\nspill-line 3972 9637ac\nspill-line 3973 9637ac\nspill-line 3974 9637ac\nspill-line 3975 9637ac\nspill-line 3976 9637ac\nspill-line 3977 9637ac\nspill-line 3978 9637ac\nspill-line 3979 9637ac\nspill-line 3980 9637ac\nspill-line 3981 9637ac\nspill-line 3982 9637ac\nspill-line 3983 9637ac\nspill-line 3984 9637ac\nspill-line 3985 9637ac\nspill-line 3986 9637ac\nspill-line 3987 9637ac\nspill-line 3988 9637ac\nspill-line 3989 9637ac\nspill-line 3990 9637ac\nspill-line 3991 9637ac\nspill-line 3992 9637ac\nspill-line 3993 9637ac\nspill-line 3994 9637ac\nspill-line 3995 9637ac\nspill-line 3996 9637ac\nspill-line 3997 9637ac\nspill-line 3998 9637ac\nspill-line 3999 9637ac\nspill-line 4000 9637ac\n\n[output truncated; full output: /var/tmp/aiclient-dsh-smoke-a4EpQ7/tmp/dsh-subprocess-X9kAbL/dsh-subprocess-13428-1-6679e7b079fa-stdout.log]\n\n(Omitted 14441 bytes. Full formatted result stored at: /var/tmp/aiclient-dsh-smoke-a4EpQ7/tmp/dsh-spill-sEYL4q/session-5c15f1688456/2bbf30201de7-bash.txt. Use read with offset/limit, or grep this path to search within it.)"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/workspace/shell-written-9637ac.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-f9905d5b SHELL-9637ac\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "reply": "P0-FS l1 finished.",
+      "permissions": [],
+      "resolved": [],
+      "errors": [],
+      "files": {
+        "written": "P12-MARKER-f9905d5b WRITTEN-9637ac\n",
+        "shellWritten": "P12-MARKER-f9905d5b SHELL-9637ac\n",
+        "edited": "P12-MARKER-f9905d5b EDITED-9637ac edit target\n"
+      },
+      "marker": "P12-MARKER-f9905d5b",
+      "token": "9637ac",
+      "shell": "bash"
+    },
+    "approval": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "write",
+          "ok": false,
+          "text": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-a4EpQ7/outside/approved.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "reply": "Write outside the workspace attempted.",
+      "permissions": ["write"],
+      "resolved": ["allow"],
+      "errors": [],
+      "fileWritten": true
+    },
+    "autoAnswered": [
+      {
+        "toolName": "write",
+        "permissionId": "toolu_bc9f98ec-4f00-4a7d-8c47-baf17fba6e55"
+      }
+    ],
+    "dispose": {
+      "disposed": true
+    },
+    "channelClosed": true,
+    "stopped": {
+      "type": "stopped",
+      "ms": 20.916763000000174,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-packaged-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-packaged-smoke\": flush on a closed handle\n[dsh-host] stopped (ipc) in 21ms\n"
+  },
+  "natives": {
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "hookLog": "/var/tmp/aiclient-dsh-smoke-a4EpQ7/logs/natives-hooks.jsonl",
+    "sharp": {
+      "pngBytes": 96,
+      "libvips": "8.18.6"
+    },
+    "pty": {
+      "text": "pty-ok\r\n",
+      "exitCode": 0
+    },
+    "leftovers": []
+  },
+  "hooks": {
+    "moduleCount": 1683,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "/var/tmp/aiclient-dsh-smoke-a4EpQ7/narb-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+        "where": "narb-cache"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/node-pty/prebuilds/linux-x64/pty.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg"
+    ],
+    "spawnedExecutables": ["systemd-run", "systemctl", "bwrap"]
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0ReadyOwnPid": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0Pong": true,
+    "l0Stopped": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "l1Bootstrapped": true,
+    "l1ReadyOwnPid": true,
+    "l1Packaged": true,
+    "l1FsTurnIdle": true,
+    "l1FsTools": true,
+    "l1FsToolsOk": true,
+    "l1ReadSawMarker": true,
+    "l1GrepSawMarker": true,
+    "l1ShellSawMarker": true,
+    "l1FilesWritten": true,
+    "l1FsReplied": true,
+    "l1ApprovalRoundTrip": true,
+    "l1Disposed": true,
+    "l1ChannelClosed": true,
+    "l1Stopped": true,
+    "l1ExitedZero": true,
+    "l1NoLeftovers": true,
+    "l1RipgrepFromArtifact": true,
+    "nativesSharpLoaded": true,
+    "nativesPtyRan": true,
+    "nativesExitedZero": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T23:32:07.864Z"
+}
