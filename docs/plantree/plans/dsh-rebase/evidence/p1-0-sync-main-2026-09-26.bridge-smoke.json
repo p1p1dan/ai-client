@@ -1,0 +1,246 @@
+{
+  "node": "<repo>/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node",
+  "scratch": "<scratch>",
+  "bootstrapMs": 8402,
+  "bootstrap": {
+    "bootstrapped": true,
+    "logicalSessionId": "bridge-smoke",
+    "piSessionId": "aiclient-bridge-smoke",
+    "cwd": "<scratch>/run/workspace",
+    "agentDir": "<scratch>/run/dsh-home",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "leaf": {
+      "activeEntryId": null,
+      "fileTailEntryId": null
+    },
+    "projectTrusted": true,
+    "permissionGate": "bundled",
+    "capabilities": {}
+  },
+  "commands": {
+    "commands": [],
+    "truncated": false
+  },
+  "files": {
+    "allowed": true,
+    "denied": false
+  },
+  "history": {
+    "logicalSessionId": "bridge-smoke",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "workspacePath": "<scratch>/run/workspace",
+    "page": {
+      "messages": [],
+      "offset": 0,
+      "limit": 100,
+      "totalCount": 0,
+      "hasMore": false
+    }
+  },
+  "dispose": {
+    "disposed": true
+  },
+  "graceful": true,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "turns": {
+    "STREAM": {
+      "idle": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "tools": []
+    },
+    "TOOL": {
+      "idle": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-TOOL: list the workspace.\"",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Tool row finished: the workspace listin",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t2-s1",
+          "toolCallId": "toolu_91632917-c306-4908-95d8-a020199d69fc",
+          "ok": true,
+          "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+        }
+      ]
+    },
+    "APPROVE-ALLOW": {
+      "idle": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved allow",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "permission": {
+        "permissionId": "toolu_cee5ca40-220d-4b4a-b31e-029b7767e3c8",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/allowed.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/allowed.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s1",
+          "toolCallId": "toolu_fe14ef90-39d7-4612-8026-901d007f345b",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s2",
+          "toolCallId": "toolu_cee5ca40-220d-4b4a-b31e-029b7767e3c8",
+          "ok": true,
+          "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ]
+    },
+    "APPROVE-DENY": {
+      "idle": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved deny",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "permission": {
+        "permissionId": "toolu_73733a43-47d0-42e5-945f-e9d59bf28ff7",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/denied.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/denied.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s1",
+          "toolCallId": "toolu_12f7fafe-7848-4751-afe5-9f4aa2539295",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s2",
+          "toolCallId": "toolu_73733a43-47d0-42e5-945f-e9d59bf28ff7",
+          "ok": false,
+          "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+        }
+      ]
+    }
+  },
+  "verdict": {
+    "streamedInManyDeltas": true,
+    "toolRowSettled": true,
+    "approvalCardShown": true,
+    "allowWrote": true,
+    "denyDidNotWrite": true,
+    "exitedCleanly": true
+  }
+}

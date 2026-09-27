@@ -17,17 +17,17 @@
 
 顺序：P0-1 → P0-2 → P0-3 已完成；P0-4 与 P0-6 可以并行，两项都完成后做 P0-5（编号不重排，P0-6 排在 P0-5 之前）。
 
-## P1 分支内 DSH 替换（2026-09-26 用户批准，下一步 P1-0；约 8～11 人周，粗估）
+## P1 分支内 DSH 替换（2026-09-26 用户批准并授权按计划推进，P1-0 已完成，下一步 P1-1；约 8～11 人周，粗估）
 
 目标：在 `feat/dsh-p0-probe` 上把 agent 引擎整体换成 DSH，不做双引擎（[决策 004](decisions/004-branch-isolated-dsh-only.md)）。测试完毕后合入 main，合入即切换；main 在此之前继续维护 1.0.x。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)、[004](decisions/004-branch-isolated-dsh-only.md)；从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。2026-09-26 的双引擎草案作废，见 git 历史。
 
 | ID | 状态 | 内容 | 退出判据 |
 |---|---|---|---|
-| P1-0 | ⬜ | 同步 main：把 v1.0.3 及之后的 main 提交合入本分支（分叉点 `b64f577f`），此后每次 main 发版都同步一次 | 合入后类型检查与相关测试通过 |
+| P1-0 | ✅ | （2026-09-26 退出判据已满足：合并提交 `30a0c257`，零冲突；四套 tsc、相关单测 19 文件 / 314 例、无界面 bridge 回归全过；证据 [p1-0-sync-main-2026-09-26.md](evidence/p1-0-sync-main-2026-09-26.md)。v1.0.3 新增的插话、重试上一轮两项语义 DSH 桥接尚未实现，已记入 P1-4；Stop 看门狗强杀在共享宿主下会连带其他会话，已记入 P1-3）同步 main：把 v1.0.3 及之后的 main 提交合入本分支（分叉点 `b64f577f`），此后每次 main 发版都同步一次 | 合入后类型检查与相关测试通过 |
 | P1-1 | ⬜ | 引擎直替：WorkerSlot 直接拉起 DSH 宿主，去掉 `AICLIENT_DEV_ENGINE` 开关与「仅未打包」限制；新建 / 恢复 / fork / 崩溃重启 4 条路径全部走 DSH；会话索引与 `AGENT_WIRE_NAMES` 记为 DSH | 开发机上新建会话走 DSH；4 条路径有单测 |
 | P1-2 | ⬜ | DSH 宿主转正：`src/dsh-host` 从探针转为产品子包，钉 `0.1.7-rc.2`、锁文件入库；打包进三平台安装包（沿用 P0-4 工具包的裁剪），定体积预算 | 三平台安装包里能起 DSH 宿主；体积记入证据 |
-| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个会话；宿主级崩溃处理（一次重启、并行恢复、宿主级重启预算）；心跳与按 pid 强杀；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
-| P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
+| P1-3 | ⬜ | 共享宿主 supervisor（Main）：一个宿主进程承载多个会话；宿主级崩溃处理（一次重启、并行恢复、宿主级重启预算）；心跳与按 pid 强杀；Stop 看门狗（T144，10 s 强杀重启）改为先按会话收尾、最后才动宿主；`XDG_RUNTIME_DIR` 等环境策略；宿主启动目录与 `$DSH_HOME` 下 `.env` 不进工具环境 | P0-6 的崩溃场景在应用内复现通过，会话不停在 error |
+| P1-4 | ⬜ | bridge 对等：RuntimeEvent 全映射（历史、用量、权限档位、goal / todo、中断回合、`TOOL_OUTCOME_UNKNOWN`）；v1.0.3 的 worker 语义：Ctrl+Enter 插话（`interject` 与 `turnActive`）、失败后重试上一轮（`mode: 'retry'` / `WORKER_RETRY_UNAVAILABLE`）；恢复时投影历史（`initialHistory`、`history` / `tree` / `leaf`）；录制事件流做回归门禁 | 录制门禁进 CI；开发机 GUI 点验主要场景 |
 | P1-5 | ⬜ | 模型目录与凭据：Main 生成 `llm-pi-ai` 路由（网关根地址），key 经凭据接口按请求注入、不落 `.env`；模型菜单与 DSH 路由同步 | 真实网关下目录里的模型都能用；key 不以明文落盘 |
 | P1-6 | ⬜ | 权限移植：把 `src/runtime/plugins/permissions/` 抽成纯库或移入宿主插件；挂 `user-approval` answerer 与 `tools/pre-execute`；四档、会话授权记忆、bash / pwsh 分析、拒绝清单；Windows 沙箱按 [Q005](open-questions.md) 定 | 现有权限回归用例在 DSH 下全过 |
 | P1-7 | ⬜ | 渲染层：goal 条、todo 卡、jobs 面板、子代理面板；Windows 上 `pwsh` 工具行与审批文案（吸收 runtime-hardening 的 D3 / D4 / D7 / D8 / T138） | 开发机 GUI 点验；Windows 实测 |
