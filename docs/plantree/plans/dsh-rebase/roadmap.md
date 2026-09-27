@@ -17,7 +17,7 @@
 
 顺序：P0-1 → P0-2 → P0-3 已完成；P0-4 与 P0-6 可以并行，两项都完成后做 P0-5（编号不重排，P0-6 排在 P0-5 之前）。
 
-## P1 分支内 DSH 替换（草案待用户过目，约 8～11 人周，粗估）
+## P1 分支内 DSH 替换（2026-09-26 用户批准，下一步 P1-0；约 8～11 人周，粗估）
 
 目标：在 `feat/dsh-p0-probe` 上把 agent 引擎整体换成 DSH，不做双引擎（[决策 004](decisions/004-branch-isolated-dsh-only.md)）。测试完毕后合入 main，合入即切换；main 在此之前继续维护 1.0.x。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)、[004](decisions/004-branch-isolated-dsh-only.md)；从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。2026-09-26 的双引擎草案作废，见 git 历史。
 

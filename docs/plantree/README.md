@@ -20,7 +20,7 @@
 | 计划 | 状态 | 当前阶段 | 任务树 | 用户看板 |
 |---|---|---|---|---|
 | Runtime 加固与收口 | In Progress | 批次 M（Ctrl+Enter 插话分支收口，T118～T136）六个提交已落地未推送，待开发机点验与 Windows `1.0.3-test.1` 实测后快进 main；此前各批次状态见看板与 roadmap | [T001～T136](plans/runtime-hardening/roadmap.md) | [当前进度](进度看板.md) |
-| DSH 二开迁移（B 路线） | Planning | P0 已完成（分支 `feat/dsh-p0-probe`；[决策 002](plans/dsh-rebase/decisions/002-defer-encrypted-machine-and-shared-host.md) 加密机移到 P2 前、共享宿主；[决策 003](plans/dsh-rebase/decisions/003-p0-closeout-enter-p1.md) 进入 P1、钉 `0.1.7-rc.2`、暂不加 Claude SDK）；[决策 004](plans/dsh-rebase/decisions/004-branch-isolated-dsh-only.md) 改为分支内整体替换、不做双引擎，合入 main 即切换；P1 任务草案 P1-0～P1-14 待过目 | [P0～P2](plans/dsh-rebase/roadmap.md) | — |
+| DSH 二开迁移（B 路线） | In Progress | P0 已完成（分支 `feat/dsh-p0-probe`；[决策 002](plans/dsh-rebase/decisions/002-defer-encrypted-machine-and-shared-host.md) 加密机移到 P2 前、共享宿主；[决策 003](plans/dsh-rebase/decisions/003-p0-closeout-enter-p1.md) 进入 P1、钉 `0.1.7-rc.2`、暂不加 Claude SDK）；[决策 004](plans/dsh-rebase/decisions/004-branch-isolated-dsh-only.md) 改为分支内整体替换、不做双引擎，合入 main 即切换；P1 任务 P1-0～P1-14 已批准，下一步 P1-0（同步 main） | [P0～P2](plans/dsh-rebase/roadmap.md) | — |
 | Runtime 自主化演进（含 GUI 改进） | 已收口（参考与证据基线） | 代码侧节点全部执行完；现场与修补移交上一行 | [P0～P6 / GUI](plans/runtime-evolution/README.md) | [收口快照](plans/runtime-evolution/history/2026-09-14-进度看板-收口快照.md) |
 
 GUI 原计划根保留为[功能与验收参考](plans/gui-sdk-experience/README.md)，不再作为独立执行状态源。

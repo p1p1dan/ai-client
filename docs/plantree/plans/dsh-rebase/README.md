@@ -1,6 +1,6 @@
 # DSH 二开迁移（B 路线）
 
-Role: plan-entrypoint。建立日期：2026-09-25。状态：P0 已完成（2026-09-26），P1「分支内 DSH 替换」任务草案待过目。
+Role: plan-entrypoint。建立日期：2026-09-25。状态：P0 已完成（2026-09-26）；P1「分支内 DSH 替换」任务 P1-0～P1-14 已批准，下一步 P1-0（同步 main）。
 
 用户 2026-09-24 定方向：整个产品向 DeepSeek Harness（DSH）看齐、兼容其生态，同时保留登录、额度等自有功能。2026-09-25 批准调研推荐的 **B 路线**：DSH 宿主做 worker 引擎，外壳与渲染层保留，先做 P0 探针（[决策 001](decisions/001-route-b-and-scope.md)）。2026-09-26 把加密机移出 P0 门槛，挪到 P2 前；P0 只看 Linux 与普通 Windows；进程拓扑定为共享宿主（[决策 002](decisions/002-defer-encrypted-machine-and-shared-host.md)）。
 
