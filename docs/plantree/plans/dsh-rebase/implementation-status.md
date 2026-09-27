@@ -9,7 +9,7 @@ Role: implementation-status。更新日期：2026-09-26。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），代码已落地（`100ebcf1`），开发机 GUI 点验进行中。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。P1-5 模型目录与凭据方案已定（[方案](topics/p1-5-models-and-credentials.md)，决策 033～040 待用户审批，其中 036、037、038 请重点审批）。
+P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），代码已落地（`100ebcf1`），开发机 GUI 点验进行中。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。P1-5 模型目录与凭据方案已定（[方案](topics/p1-5-models-and-credentials.md)，决策 033～040 待用户审批，其中 036、037、038 请重点审批）。P1-6 权限移植方案已定（[方案](topics/p1-6-permissions.md)，决策 041～049 待用户审批，其中 044、045 请重点审批）。
 
 ## Next Target
 
@@ -26,7 +26,7 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 2. P1-2 施工，排在 P1-1 落地之后（两者都改 bridge 入口）。
 3. P1-1 落地后并行施工 P1-2 与 P1-3b；P1-3a 排在 P1-2 搬 bridge 之后。
 4. 安全缺口先修：停止向 DSH 宿主下发含明文 key 的 `modelCatalog`（P1-5 方案 §1 第 3 条），等 GUI 点验结束后派工。
-5. 决策 005～040 与 Q007（许可）等用户审批；P1-6 权限方案调研中。
+5. 决策 005～049 与 Q007（许可）等用户审批。
 
 ## Blocked By
 
