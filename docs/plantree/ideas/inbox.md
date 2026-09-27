@@ -9,3 +9,4 @@
 - 2026-09-26（DSH [决策 022](../plans/dsh-rebase/decisions/022-host-env-inherits-main.md)）：DSH 会从工具环境剔除 `KEY|PASSWORD|SECRET|TOKEN` 名字的变量。若用户需要在工具里用某个令牌，可加「显式转发的环境变量名单」设置（DSH 允许显式 env 覆盖清洗结果）。未立项。
 - 2026-09-26（DSH [决策 036](../plans/dsh-rebase/decisions/036-filter-unsupported-protocols.md)）：DSH 手写路由只支持三种协议，用户自建的 google / mistral / bedrock / vertex / azure / codex / pi-messages 服务在 DSH 下不可用。若确有用户需要，可自写一个 LLM 适配插件承接。未立项。
 - 2026-09-27（DSH [决策 061](../plans/dsh-rebase/decisions/061-port-mcp-bridge-as-host-plugin.md)）：P1 先移植我方 MCP 桥；以后可评估白名单官方 `dsh-mcp-client`（配置格式、工具命名、起进程方式待联网核实），以便与 DSH 生态对齐。未立项。
+- 2026-09-27（DSH [决策 065](../plans/dsh-rebase/decisions/065-loop-guard-host-plugin.md)）：通用工具总量闸，即任何工具单条回复超过 64 个调用就掐断。它超出 09-24 决策 042 限定的范围，要用户点头才做。未立项。
