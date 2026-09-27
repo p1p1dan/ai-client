@@ -13,3 +13,7 @@
 
 - 只改一处调用，不改 DSH 包。
 - 代价：用户不能再通过 `$DSH_HOME/.env` 配代理之类的设置。代理改由继承 Main 的环境获得（[决策 022](022-host-env-inherits-main.md)）。
+
+## 补记（2026-09-27）
+
+[决策 059](059-allowlist-verification-and-audits.md)（待审批）细化了第 3 条：home 层补丁如果插入了白名单未声明的行，产品态拒绝启动，不再只是告警。

@@ -12,3 +12,7 @@
 
 - 现在删掉，P1-10 的离线安装很可能还得加回来。留着则多约 16 MiB，已计入[决策 014](014-host-size-budget.md) 的预算。
 - pnpm 的 `dist/pnpm.mjs` 是打包过的，里面合进了哪些第三方代码、需不需要额外声明，还没核，记入 [Q007](../open-questions.md)。
+
+## 补记（2026-09-27）
+
+由[决策 058](058-plugins-preinstalled-no-pnpm.md)（待审批）收口：插件在构建期预装进安装包，用户机上不再需要 pnpm，pnpm 从宿主依赖里去掉。

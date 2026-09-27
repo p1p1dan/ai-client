@@ -29,7 +29,7 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 2. P1-3a 施工中（opus 代理）：宿主侧多路复用、`host.ts` 不读 `.env`、重申 bundles、Main 接线到共享宿主、真宿主集成测试，另做两个开工实验（IPC 句柄继承、projection-cache 告警）。
 3. P1-6a 施工中（opus 代理）：权限纯库抽取，约 115 例旧用例原样通过。
 4. 排队：P1-3c（WorkerManager 宿主级语义）在 P1-3a 之后；P1-9a（解码链进 shared）与 P1-9g 的 v4 语料等测试名额。
-5. 决策 005～056 与 Q007（许可）等用户审批。
+5. 决策 005～064 与 Q007（许可）等用户审批。P1-10 / P1-16 方案已定（[方案](topics/p1-10-p1-16-extensions.md)）。
 
 ## Blocked By
 
