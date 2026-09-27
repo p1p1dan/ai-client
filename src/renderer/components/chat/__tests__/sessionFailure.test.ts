@@ -125,6 +125,29 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
     expect(deriveSessionFailure({ error: 'raw text' }).action).toBe('continue');
   });
 
+  it('names the engine going away as the engine, and leaves its process sentence out (P1-3c)', () => {
+    // dsh-rebase P1-3c: Main writes these two for a turn the shared engine
+    // process took with it. "Worker exited (code=null signal=SIGKILL)" is the
+    // raw English the point-check must not show.
+    const crashed = deriveSessionFailure({
+      errorCode: 'dsh_host_crashed',
+      error: 'Worker exited (code=null signal=SIGKILL)',
+    });
+    expect(crashed.title).toBe('The chat engine stopped unexpectedly');
+    expect(crashed.action).toBe('continue');
+    expect(crashed.showsDetail).toBe(false);
+    expect(zhTranslations[crashed.title]).toBe('对话引擎意外退出');
+    const restarted = deriveSessionFailure({ errorCode: 'dsh_engine_restarted' });
+    expect(restarted.title).toBe('The chat engine was restarted');
+    expect(restarted.reason).toContain('another chat');
+    expect(restarted.action).toBe('continue');
+    expect(restarted.showsDetail).toBe(false);
+    expect(zhTranslations[restarted.title]).toBe('对话引擎已重启');
+    // Every other code keeps printing its sentence as evidence.
+    expect(deriveSessionFailure({ errorCode: 'stop_error' }).showsDetail).toBe(true);
+    expect(deriveSessionFailure({ errorCode: 'something_new' }).showsDetail).toBe(true);
+  });
+
   it('does not read a code out of the prototype chain', () => {
     // `'constructor' in {}` is true; `Object.hasOwn` is the difference, and a
     // code of `constructor` would otherwise index the table and render
@@ -149,6 +172,8 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'timeout',
       'lock_timeout',
       'model_missing',
+      'dsh_host_crashed',
+      'dsh_engine_restarted',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });
@@ -197,6 +222,9 @@ describe('the failed card is wired to the reason and to a Continue', () => {
     // The reason is the fix; the sentence is what the user forwards. Deleting
     // it would trade one unactionable card for another, one level up.
     expect(timeline).toContain('{lastError}');
+    // Except where the code says the sentence is this app's own about its
+    // engine process (P1-3c).
+    expect(timeline).toContain('failure.showsDetail');
   });
 
   it('reads the error code from the store rather than parsing the sentence', () => {
@@ -267,6 +295,8 @@ describe('every failure sentence has a Chinese entry', () => {
       'timeout',
       'lock_timeout',
       'model_missing',
+      'dsh_host_crashed',
+      'dsh_engine_restarted',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });

@@ -27,7 +27,8 @@ export type HistoryErrorCode =
   | 'model_missing'
   | 'session_locked'
   | 'session_too_large'
-  | 'legacy_session_readonly';
+  | 'legacy_session_readonly'
+  | 'engine_unavailable';
 
 /**
  * ah-lib-03 — what a failed resume can carry, and which card each one gets.
@@ -71,6 +72,9 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // dsh-rebase decision 005: Main refuses to resume a chat the previous engine
   // wrote. Spelled the same on both sides, like `session_locked`.
   legacy_session_readonly: 'legacy_session_readonly',
+  // dsh-rebase P1-3c (decision 020 rule 6): the shared DSH engine could not be
+  // brought up for this open. Main's code for it (`WorkerManager.ts`).
+  dsh_host_unavailable: 'engine_unavailable',
 };
 
 /**
@@ -133,6 +137,21 @@ export function isReadOnlyResumeRefusal(code: HistoryErrorCode): boolean {
   return code === 'legacy_session_readonly';
 }
 
+/**
+ * dsh-rebase P1-3c — a failure that is the shared DSH engine being down
+ * (Main's `dsh_host_unavailable`), whichever surface it reached: a resume, a
+ * create, or a send that fell back to one. The composer's status strip shows
+ * {@link ENGINE_UNAVAILABLE_HINT} for it instead of Main's English sentence;
+ * the `engine_unavailable` card keeps that sentence under Details.
+ */
+export function isEngineUnavailableError(message: string | null | undefined): boolean {
+  return typeof message === 'string' && /\bdsh_host_unavailable\b/.test(message);
+}
+
+/** The status strip's one line for it; a dictionary key. */
+export const ENGINE_UNAVAILABLE_HINT =
+  'The chat engine is not running. Retry, or send a message: either one starts the engine again.';
+
 export interface HistoryErrorView {
   code: HistoryErrorCode;
   /** Alert variant. Warning = nothing on disk; error = history exists but is unreadable. */
@@ -181,8 +200,10 @@ export interface HistoryErrorView {
    * concurrency-02 — the action that resolves this code, when one exists.
    *
    * Kept out of `recovery`, which opens a settings pane: this one re-runs the
-   * resume with the lock forced, which is a different kind of button (it
-   * changes something on disk) and needs the warning that rides with it.
+   * resume with `forceTakeover`, which is a different kind of button and needs
+   * the warning that rides with it. On DSH (P1-3c) Main answers that flag by
+   * restarting the shared engine before it opens the chat, so the label is
+   * "Restart engine" and the warning is what the restart costs the others.
    */
   forceTakeover?: { label: string; warning: string };
 }
@@ -272,22 +293,45 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     continuationHint: 'Open it from the workspace it belongs to, or start a new chat.',
   },
   // concurrency-02. Retryable as well as forceable, and both on purpose: the
-  // holder may simply be a window the user is about to close, in which case a
-  // plain Retry is the correct, harmless answer and the takeover is the one to
-  // avoid. The card offers the safe button first.
+  // holder may simply be about to let go, in which case a plain Retry is the
+  // correct, harmless answer and the takeover is the one to avoid. The card
+  // offers the safe button first.
+  //
+  // dsh-rebase P1-3c: on DSH the lock is a kernel lock nothing can force, and
+  // the holder this app can reach is its own shared engine, keeping an agent
+  // that never let go (a Stop or a close it could not finish). So the second
+  // button restarts the engine — the same host restart as Stop ladder B
+  // (decision 021) — which releases every lock the engine holds and then
+  // opens the chat. It is always offered rather than only while no other chat
+  // runs: the restart interrupts those replies, but they reconnect by
+  // themselves, and a button that vanished whenever any chat was busy would
+  // leave this one locked with nothing to press. The warning says what it
+  // costs.
   session_locked: {
     severity: 'error',
     title: 'Session is locked by another writer',
     guidance:
-      "Another process holds this chat's write lock, so it was not opened. Nothing on disk was changed.",
+      "This chat's write lock is still held — usually by a reply in this app's chat engine that never finished stopping — so it was not opened. Nothing on disk was changed.",
     retryable: true,
     continuationHint:
-      'Retrying works once the other writer lets go; until then this chat cannot be opened here.',
+      'Retrying works once the lock is released. Restarting the engine releases any lock the engine itself holds.',
     forceTakeover: {
-      label: 'Force takeover',
+      label: 'Restart engine',
       warning:
-        'Take the lock only if that writer is really gone. If it is still running, two processes will write to this chat at once and messages can be lost.',
+        'Restarting the engine stops the replies running in your other chats; they reconnect by themselves and can be continued. It cannot release a lock held by a program outside this app.',
     },
+  },
+  // dsh-rebase P1-3c (decision 020 rule 6). The engine went down more often
+  // than it may be restarted automatically, or could not start at all.
+  // Nothing about this chat is wrong, and a user's retry is exactly what may
+  // start the engine again — so, unlike most codes here, it is retryable.
+  engine_unavailable: {
+    severity: 'error',
+    title: 'The chat engine is not running',
+    guidance:
+      'The engine that runs your chats stopped several times in a short while, or could not start, so it is no longer restarted by itself. Nothing is wrong with this chat.',
+    retryable: true,
+    continuationHint: 'Retry, or send a message: either one starts the engine again.',
   },
   workspace_missing: {
     severity: 'error',
@@ -542,11 +586,15 @@ export function deriveRetryControl(input: HistoryRetryControlInput): HistoryRetr
   };
 }
 
-/** concurrency-02 — the takeover's own mid-turn and failed-attempt copy. */
+/**
+ * concurrency-02 — the takeover's own mid-turn and failed-attempt copy. On DSH
+ * the takeover is an engine restart (dsh-rebase P1-3c), so a lock that
+ * survives it belongs to something outside the app.
+ */
 export const HISTORY_TAKEOVER_BUSY_HINT =
-  'The chat is mid-turn; you can take the session over once this turn ends.';
+  'The chat is mid-turn; you can restart the engine once this turn ends.';
 export const HISTORY_TAKEOVER_FAILED_HINT =
-  'The takeover did not go through; the session is still held by another writer.';
+  'The engine restarted, but the chat is still locked: a program outside this app may be holding it.';
 
 export interface HistoryTakeoverControlInput {
   /** The code offers a takeover at all — i.e. `view.forceTakeover` exists. */

@@ -29,8 +29,9 @@ export interface ResumeIntent {
     permissions?: RuntimePermissionSettings;
     /**
      * concurrency-02 — reopen even though the session's writer lock still
-     * looks held. Only ever `true`, and only from the "Force takeover" button
-     * the `session_locked` notice shows.
+     * looks held. Only ever `true`, and only from the "Restart engine" button
+     * the `session_locked` notice shows (on DSH, Main restarts the shared
+     * engine first; P1-3c).
      */
     forceTakeover?: true;
   };

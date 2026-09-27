@@ -16,13 +16,16 @@ import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
 const norm = (p: string) => normalizeWorkerPath(p);
 const slotKey = (p: string) => sessionWorkerKey(p);
 
+import { DSH_HOST_RESTART_BUDGET, DshHostSupervisorError } from '../DshHostSupervisor';
 import {
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
   STOP_WATCHDOG_MS,
   WorkerManager,
+  type WorkerManagerHost,
 } from '../WorkerManager';
 import { WorkerSlotError, type WorkerSlotLifecycleEvent } from '../WorkerSlot';
+import { installKillTripwire } from './fakeDshHost';
 
 function importPayload(): WorkerImportConversationPayload {
   return {
@@ -57,14 +60,48 @@ interface FakeSlotRecord {
   sessionFile: string;
   generation: number;
   slotKey: string;
+  /** The slot object the manager holds; `state` moves like WorkerSlot's. */
+  slot: { state: string };
   request: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   forceKillNow: ReturnType<typeof vi.fn>;
   emit(event: Record<string, unknown>): void;
   /** One raw stderr chunk, split at whatever boundary the OS handed over. */
   stderr(chunk: string): void;
-  crash(message?: string): void;
+  crash(
+    message?: string,
+    exit?: { code: number | null; signal: string | null; cause?: string }
+  ): void;
 }
+
+/**
+ * dsh-rebase P1-3c — the shared DSH host every fake slot of one harness runs
+ * on: the supervisor's interface (`WorkerManagerHost`) with its restart budget
+ * (decision 020 rule 4) and its user-action bypass. The harness's `hostCrash`
+ * ends every live slot's channel at once, the way a real host exit does.
+ */
+interface FakeHost {
+  state: 'ready' | 'idle' | 'restarting' | 'failed' | 'disposed';
+  generation: number;
+  /** Hosts brought up after the first. */
+  starts: number;
+  faults: number[];
+  lastExit?: { generation: number; reason: string; code: null; signal: string; at: number };
+  failure?: Error;
+  status: ReturnType<typeof vi.fn>;
+  ensureHost: ReturnType<typeof vi.fn>;
+  restart: ReturnType<typeof vi.fn>;
+  shutdown: ReturnType<typeof vi.fn>;
+  forceKillNow: ReturnType<typeof vi.fn>;
+}
+
+const BUDGETED_HOST_EXITS = new Set([
+  'crashed',
+  'hung',
+  'disconnected',
+  'start-failed',
+  'stuck-session',
+]);
 
 function createHarness(
   input: {
@@ -123,10 +160,88 @@ function createHarness(
      * only place its content can be inspected at all.
      */
     log?: (...args: unknown[]) => void;
+    /** dsh-rebase P1-3c — give every slot one shared fake DSH host (`FakeHost`). */
+    host?: boolean;
   } = {}
 ) {
   const records: FakeSlotRecord[] = [];
   const events: Array<Record<string, unknown>> = [];
+  const host: FakeHost | null = input.host ? createFakeHost() : null;
+
+  function createFakeHost(): FakeHost {
+    const fake: FakeHost = {
+      state: 'ready',
+      generation: 1,
+      starts: 0,
+      faults: [],
+      status: vi.fn(() => ({
+        state: fake.state,
+        generation: fake.generation,
+        channels: 0,
+        recentFaults: fake.faults.length,
+        ...(fake.lastExit ? { lastExit: { ...fake.lastExit } } : {}),
+      })),
+      ensureHost: vi.fn(async (options: { userInitiated?: boolean } = {}) => {
+        if (fake.state === 'disposed') {
+          throw new DshHostSupervisorError('DSH_HOST_DISPOSED', 'the supervisor is disposed');
+        }
+        if (fake.state === 'ready') return { generation: fake.generation, pid: 4242 };
+        if (!options.userInitiated) {
+          if (fake.state === 'failed' && fake.failure) throw fake.failure;
+          const cutoff = Date.now() - DSH_HOST_RESTART_BUDGET.windowMs;
+          fake.faults = fake.faults.filter((at) => at > cutoff);
+          if (fake.faults.length > DSH_HOST_RESTART_BUDGET.restarts) {
+            fake.state = 'failed';
+            fake.failure = new DshHostSupervisorError(
+              'DSH_HOST_UNAVAILABLE',
+              `the DSH host went down ${fake.faults.length} times within 5 min`
+            );
+            throw fake.failure;
+          }
+        }
+        fake.generation += 1;
+        fake.starts += 1;
+        fake.state = 'ready';
+        fake.failure = undefined;
+        return { generation: fake.generation, pid: 4242 + fake.generation };
+      }),
+      restart: vi.fn(async (reason: string, options: { userInitiated?: boolean } = {}) => {
+        // A graceful takedown: every live channel ends with the old host.
+        if (fake.state === 'ready') hostCrash(reason);
+        return fake.ensureHost(options);
+      }),
+      shutdown: vi.fn(async (reason: string) => {
+        if (fake.state === 'ready') hostCrash(reason);
+        fake.state = reason === 'app-quit' ? 'disposed' : 'idle';
+      }),
+      forceKillNow: vi.fn(() => {
+        fake.state = 'disposed';
+        return true;
+      }),
+    };
+    return fake;
+  }
+
+  /** The host exits: every slot still running ends with `cause: 'host-exit'`, in one burst. */
+  function hostCrash(reason = 'crashed'): void {
+    if (!host) throw new Error('this harness has no host');
+    host.lastExit = {
+      generation: host.generation,
+      reason,
+      code: null,
+      signal: 'SIGKILL',
+      at: Date.now(),
+    };
+    if (BUDGETED_HOST_EXITS.has(reason)) host.faults.push(Date.now());
+    if (host.state === 'ready') host.state = 'idle';
+    for (const record of records.filter((candidate) => candidate.slot.state === 'running')) {
+      record.crash('Worker exited (code=null signal=SIGKILL)', {
+        code: null,
+        signal: 'SIGKILL',
+        cause: 'host-exit',
+      });
+    }
+  }
   const bindRuntimeIdentity = vi.fn(
     input.bindRuntimeIdentity ?? (async (_sessionId: string, _sessionFile: string) => undefined)
   );
@@ -143,6 +258,9 @@ function createHarness(
     if (input.createFailureAfter !== undefined && createCount > input.createFailureAfter) {
       throw new Error(`restart spawn ${createCount} failed`);
     }
+    // What `createPiWorkerSlot` does first: open a channel, which brings the
+    // shared host up, and only a user's spawn past a failed one (decision 020).
+    if (host) await host.ensureHost({ userInitiated: options.userInitiated === true });
     const sessionId = String(options.logicalSessionId);
     const generation = Number(options.generation ?? 1);
     // Normalize the fallback so the mock's sessionFile always matches the
@@ -296,14 +414,21 @@ function createHarness(
         return { applied: true };
       throw new Error(`unexpected request ${type}`);
     });
+    const slotState = { state: 'running' };
     const record: FakeSlotRecord = {
       sessionId,
       sessionFile,
       generation,
       slotKey: String(options.slotKey),
+      slot: slotState,
       request,
-      dispose: vi.fn(async () => undefined),
-      forceKillNow: vi.fn(() => true),
+      dispose: vi.fn(async () => {
+        slotState.state = 'disposed';
+      }),
+      forceKillNow: vi.fn(() => {
+        slotState.state = 'disposed';
+        return true;
+      }),
       emit(event) {
         onEvent?.({
           protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
@@ -316,27 +441,28 @@ function createHarness(
       stderr(chunk) {
         onStderr?.(chunk, generation);
       },
-      crash(message = 'worker crashed') {
+      crash(message = 'worker crashed', exit) {
+        if (slotState.state === 'running') slotState.state = 'crashed';
         onLifecycle?.({
           type: 'crashed',
           slotKey: String(options.slotKey),
           generation,
           error: Object.assign(new Error(message), { code: 'WORKER_EXITED' }),
+          ...(exit ? { exit } : {}),
         } as WorkerSlotLifecycleEvent);
       },
     };
     records.push(record);
     return {
-      slot: {
+      slot: Object.assign(slotState, {
         generation,
-        state: 'running',
         pid: 4000 + records.length,
         pendingRequestCount: 0,
         remapSlotKey: vi.fn(),
         request,
         dispose: record.dispose,
         forceKillNow: record.forceKillNow,
-      },
+      }),
       bootstrap: {
         bootstrapped: true,
         logicalSessionId: sessionId,
@@ -398,6 +524,7 @@ function createHarness(
       : {}),
     onEvent: (event) => events.push(event as unknown as Record<string, unknown>),
     ...(input.log ? { log: input.log } : {}),
+    ...(host ? { host: host as unknown as WorkerManagerHost } : {}),
     capacity: input.capacity ?? 4,
     idleTimeoutMs: 0,
     idleSweepIntervalMs: 0,
@@ -412,6 +539,8 @@ function createHarness(
     manager,
     records,
     events,
+    host,
+    hostCrash,
     createSlot,
     bindRuntimeIdentity,
     commitResumed,
@@ -3863,5 +3992,492 @@ describe('WorkerManager P1-1: every spawn path runs on DSH', () => {
       warn.mockRestore();
       error.mockRestore();
     }
+  });
+});
+
+/**
+ * dsh-rebase P1-3c — the manager on one shared DSH host (decisions 020, 021,
+ * 025). Every fake slot of a harness runs on the same `FakeHost`; `hostCrash`
+ * ends all of their channels at once, the way a host exit does.
+ */
+describe('WorkerManager on one shared DSH host (P1-3c)', () => {
+  const TERMINALS = ['session.completed', 'session.failed', 'session.stopped'];
+
+  /** What one session was told, in order: statuses (with their reason), terminals, resumes. */
+  function trace(events: Array<Record<string, unknown>>, sessionId: string): string[] {
+    return events
+      .filter(
+        (event) =>
+          event.sessionId === sessionId &&
+          (TERMINALS.includes(String(event.type)) ||
+            event.type === 'session.status' ||
+            event.type === 'session.resumed')
+      )
+      .map((event) => {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        if (event.type === 'session.status') {
+          return `status:${String(payload.status)}${payload.disconnectReason ? `/${String(payload.disconnectReason)}` : ''}`;
+        }
+        if (event.type === 'session.failed') {
+          return `failed${payload.errorCode ? `(${String(payload.errorCode)})` : ''}`;
+        }
+        if (event.type === 'session.stopped') {
+          return `stopped${payload.stopCause ? `(${String(payload.stopCause)})` : ''}`;
+        }
+        return String(event.type);
+      });
+  }
+
+  function snapshot(h: ReturnType<typeof createHarness>, sessionId: string) {
+    return h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === sessionId);
+  }
+
+  async function allReady(h: ReturnType<typeof createHarness>): Promise<void> {
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots().map((slot) => slot.state)).toEqual(
+        h.manager.getSlotSnapshots().map(() => 'ready')
+      )
+    );
+  }
+
+  let processKill: ReturnType<typeof installKillTripwire>;
+  let attempt = 0;
+  const running = async (
+    h: ReturnType<typeof createHarness>,
+    sessionId: string,
+    owner?: number
+  ): Promise<string> => {
+    attempt += 1;
+    const turnId = await h.manager.send({
+      sessionId,
+      attemptId: `attempt-${attempt}`,
+      text: 'go',
+      ownerWebContentsId: owner,
+    });
+    const record = h.records.filter((candidate) => candidate.sessionId === sessionId).at(-1);
+    record?.emit({ type: 'session.status', sessionId, payload: { status: 'running' } });
+    return turnId;
+  };
+
+  beforeEach(() => {
+    processKill = installKillTripwire();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    expect(processKill).not.toHaveBeenCalled();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('[WMH-01] a host crash reopens every session in one batch: foreground, then mid-turn, then the rest', async () => {
+    const h = createHarness({ host: true });
+    // Created (and so crashed) in the reverse of the order they must reopen in.
+    await create(h.manager, 'idle');
+    await create(h.manager, 'busy');
+    await create(h.manager, 'fg', 7);
+    const turn = await running(h, 'busy');
+    h.events.length = 0;
+    h.createSlot.mockClear();
+
+    h.hostCrash();
+    // At once, before anything is reopened: a turn in flight is failed with
+    // the host's code; everyone is disconnected.
+    expect(trace(h.events, 'fg')).toEqual(['status:disconnected']);
+    expect(trace(h.events, 'busy')).toEqual(['status:disconnected', 'failed(dsh_host_crashed)']);
+    expect(trace(h.events, 'idle')).toEqual(['status:disconnected']);
+    expect(h.events.find((event) => event.type === 'session.failed')?.requestId).toBe(turn);
+
+    await allReady(h);
+    // Recency alone would put `busy` first: it was used last.
+    expect(h.createSlot.mock.calls.map(([options]) => options.logicalSessionId)).toEqual([
+      'fg',
+      'busy',
+      'idle',
+    ]);
+    expect(h.host?.starts).toBe(1);
+    expect(
+      h.manager
+        .getSlotSnapshots()
+        .map((slot) => [slot.logicalSessionId, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['idle', 2, 0],
+      ['busy', 2, 0],
+      ['fg', 2, 0],
+    ]);
+    for (const id of ['fg', 'busy', 'idle']) {
+      expect(trace(h.events, id).slice(-2), id).toEqual(['session.resumed', 'status:idle']);
+    }
+    expect(h.manager.getStatus().state).toBe('ready');
+  });
+
+  it('[WMH-01b] crashes inside one minute never park a session on its own budget', async () => {
+    const h = createHarness({ host: true, maxRestartAttempts: 2 });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    for (let crash = 1; crash <= 3; crash += 1) {
+      h.hostCrash();
+      await allReady(h);
+    }
+    expect(
+      h.manager
+        .getSlotSnapshots()
+        .map((slot) => [slot.state, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['ready', 4, 0],
+      ['ready', 4, 0],
+    ]);
+    expect(h.host?.starts).toBe(3);
+  });
+
+  it('[WMH-02] past the host budget every session waits in one error; a user open starts the host again', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    for (let crash = 1; crash <= DSH_HOST_RESTART_BUDGET.restarts; crash += 1) {
+      h.hostCrash();
+      await allReady(h);
+    }
+    expect(h.host?.starts).toBe(DSH_HOST_RESTART_BUDGET.restarts);
+
+    h.hostCrash();
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots().map((slot) => slot.state)).toEqual(['error', 'error'])
+    );
+    for (const slot of h.manager.getSlotSnapshots()) {
+      expect(slot.error).toMatch(/^dsh_host_unavailable: DSH_HOST_UNAVAILABLE/);
+      expect(slot.restartAttempts).toBe(0);
+    }
+    expect(h.manager.getStatus().state).toBe('degraded');
+    expect(h.host?.starts).toBe(DSH_HOST_RESTART_BUDGET.restarts);
+
+    // Every user open or retry may bring the host up once more.
+    await expect(
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: norm('/sessions/s1.jsonl'),
+        workspacePath: '/repo',
+        ownerWebContentsId: 7,
+      })
+    ).resolves.toMatch(/^resume-/);
+    expect(snapshot(h, 's1')).toMatchObject({ state: 'ready' });
+    expect(h.host?.starts).toBe(DSH_HOST_RESTART_BUDGET.restarts + 1);
+    expect(h.host?.ensureHost).toHaveBeenLastCalledWith({ userInitiated: true });
+  });
+
+  it('[WMH-03] a session mid-turn at two host faults in a row is left in error; the others come back', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2', 8);
+    await running(h, 's1', 7);
+    h.hostCrash();
+    await allReady(h);
+    await running(h, 's1', 7);
+    h.hostCrash();
+
+    await vi.waitFor(() =>
+      expect(snapshot(h, 's2')).toMatchObject({ state: 'ready', generation: 3 })
+    );
+    expect(snapshot(h, 's1')).toMatchObject({ state: 'error', restartAttempts: 0 });
+    expect(snapshot(h, 's1')?.error).toMatch(/^dsh_session_suspect: /);
+
+    // The user's retry clears it: a fresh entry, a clean record.
+    await h.manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: norm('/sessions/s1.jsonl'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 7,
+    });
+    expect(snapshot(h, 's1')).toMatchObject({ state: 'ready', generation: 1 });
+    // Idle at the next fault: that presence does not count.
+    h.hostCrash();
+    await allReady(h);
+    expect(snapshot(h, 's1')).toMatchObject({ state: 'ready', generation: 2 });
+  });
+
+  it("[WMH-04] a reopen that fails for the session's own reason spends only its own budget", async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    h.createSlot.mockClear();
+    h.createSlot.mockImplementationOnce(async () => {
+      throw Object.assign(
+        new Error('dsh_session_missing: DSH session aiclient-s1 is not on disk'),
+        {
+          remoteError: {
+            code: 'dsh_session_missing',
+            message: 'DSH session aiclient-s1 is not on disk',
+          },
+        }
+      );
+    });
+    h.hostCrash();
+    await allReady(h);
+    expect(h.createSlot.mock.calls.map(([options]) => options.logicalSessionId)).toEqual([
+      's1',
+      's2',
+      's1',
+    ]);
+    expect(snapshot(h, 's1')).toMatchObject({ generation: 3, restartAttempts: 1 });
+    expect(snapshot(h, 's2')).toMatchObject({ generation: 2, restartAttempts: 0 });
+    expect(h.host?.starts).toBe(1);
+  });
+
+  it('[WMH-05] Stop ladder A: a channel that closes is reopened alone; the host is never restarted', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2', 8);
+    await running(h, 's1', 7);
+    h.events.length = 0;
+    await h.manager.stop('s1');
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+    expect(trace(h.events, 's1').slice(0, 2)).toEqual(['stopped(forced)', 'status:idle']);
+    await vi.waitFor(() =>
+      expect(snapshot(h, 's1')).toMatchObject({ state: 'ready', generation: 2 })
+    );
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+    expect(h.host?.restart).not.toHaveBeenCalled();
+    expect(h.host?.starts).toBe(0);
+    expect(snapshot(h, 's2')).toMatchObject({ state: 'ready', generation: 1 });
+    expect(h.events.filter((event) => event.sessionId === 's2')).toEqual([]);
+  });
+
+  it('[WMH-06] Stop ladder B: a channel that never closes restarts the host once; the stuck session reopens first', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    await create(h.manager, 'stuck', 7);
+    // Ends before `other` does, so the batch's order is not the crash order.
+    await create(h.manager, 'quiet');
+    await create(h.manager, 'other');
+    await running(h, 'stuck', 7);
+    const otherTurn = await running(h, 'other');
+    // Neither the dispose ACK nor the channel close ever comes back.
+    h.records[0].dispose.mockImplementation(async () => {
+      h.records[0].slot.state = 'dispose-failed';
+      throw new WorkerSlotError(
+        'WORKER_EXIT_TIMEOUT',
+        'Worker slot stuck did not exit within 3000ms'
+      );
+    });
+    h.events.length = 0;
+    h.createSlot.mockClear();
+
+    await h.manager.stop('stuck');
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+    // T144: settled for the user at the watchdog, whatever follows.
+    expect(trace(h.events, 'stuck').slice(0, 2)).toEqual(['stopped(forced)', 'status:idle']);
+
+    await allReady(h);
+    expect(trace(h.events, 'stuck')).toEqual([
+      'stopped(forced)',
+      'status:idle',
+      'session.resumed',
+      'status:idle',
+    ]);
+    expect(h.host?.restart).toHaveBeenCalledTimes(1);
+    expect(h.host?.restart).toHaveBeenCalledWith('stuck-session', {});
+    expect(h.records[0].forceKillNow).toHaveBeenCalledTimes(1);
+    expect(h.createSlot.mock.calls.map(([options]) => options.logicalSessionId)).toEqual([
+      'stuck',
+      'other',
+      'quiet',
+    ]);
+    // The others were restarted on purpose, and are told so.
+    expect(trace(h.events, 'other')).toEqual([
+      'status:disconnected/engine_restarted',
+      'failed(dsh_engine_restarted)',
+      'session.resumed',
+      'status:idle',
+    ]);
+    expect(
+      h.events.find((event) => event.type === 'session.failed' && event.sessionId === 'other')
+        ?.requestId
+    ).toBe(otherTurn);
+    expect(trace(h.events, 'quiet')).toEqual([
+      'status:disconnected/engine_restarted',
+      'session.resumed',
+      'status:idle',
+    ]);
+    // Only the stuck session pays: its own restart.
+    expect(
+      h.manager
+        .getSlotSnapshots()
+        .map((slot) => [slot.logicalSessionId, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['stuck', 2, 1],
+      ['quiet', 2, 0],
+      ['other', 2, 0],
+    ]);
+    expect(h.host?.starts).toBe(1);
+  });
+
+  it('[WMH-06b] a session that wedges the host twice in a row is not reopened after the second restart', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true, maxRestartAttempts: 5 });
+    await create(h.manager, 'stuck', 7);
+    await create(h.manager, 'other', 8);
+    const wedge = () => {
+      const record = h.records.filter((candidate) => candidate.sessionId === 'stuck').at(-1);
+      record?.dispose.mockImplementation(async () => {
+        if (record) record.slot.state = 'dispose-failed';
+        throw new WorkerSlotError('WORKER_EXIT_TIMEOUT', 'did not exit');
+      });
+    };
+    for (let round = 1; round <= 2; round += 1) {
+      await running(h, 'stuck', 7);
+      wedge();
+      await h.manager.stop('stuck');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+      await vi.waitFor(() => expect(snapshot(h, 'other')?.state).toBe('ready'));
+      await vi.waitFor(() => expect(snapshot(h, 'stuck')?.state).not.toBe('restarting'));
+    }
+    expect(h.host?.restart).toHaveBeenCalledTimes(2);
+    expect(snapshot(h, 'stuck')).toMatchObject({ state: 'error' });
+    expect(snapshot(h, 'stuck')?.error).toMatch(/^dsh_session_suspect: /);
+    expect(snapshot(h, 'other')).toMatchObject({ state: 'ready', generation: 3 });
+  });
+
+  it('[WMH-07] app quit stops the host once instead of disposing each channel', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    const turn = await running(h, 's1', 7);
+    h.events.length = 0;
+
+    await h.manager.disposeAll('app-shutdown');
+
+    expect(h.host?.shutdown).toHaveBeenCalledTimes(1);
+    expect(h.host?.shutdown).toHaveBeenCalledWith('app-quit');
+    for (const record of h.records) {
+      expect(record.dispose).not.toHaveBeenCalled();
+      expect(record.forceKillNow).toHaveBeenCalledTimes(1);
+    }
+    // The turn in flight is told first; nothing is reopened.
+    expect(trace(h.events, 's1')).toEqual(['stopped(forced)', 'status:disconnected']);
+    expect(h.events.every((event) => event.requestId === turn)).toBe(true);
+    expect(h.createSlot).toHaveBeenCalledTimes(2);
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+    expect(h.manager.getStatus().state).toBe('stopped');
+
+    // The deadline path SIGKILLs the host through its supervisor, after the slots.
+    h.manager.forceKillAllNow();
+    expect(h.host?.forceKillNow).toHaveBeenCalledTimes(1);
+    for (const record of h.records) expect(record.forceKillNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('[WMH-08] invalidation disposes every session, then stops the host', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+
+    await h.manager.invalidateAll();
+
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+    expect(h.records[1].dispose).toHaveBeenCalledWith('slot-replace');
+    expect(h.host?.shutdown).toHaveBeenCalledTimes(1);
+    expect(h.host?.shutdown).toHaveBeenCalledWith('invalidate');
+    const lastDispose = Math.max(
+      ...h.records.map((record) => record.dispose.mock.invocationCallOrder[0])
+    );
+    expect(h.host?.shutdown.mock.invocationCallOrder[0]).toBeGreaterThan(lastDispose);
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+
+    // The next session brings up a fresh host.
+    await create(h.manager, 's3', 7);
+    expect(h.host?.starts).toBe(1);
+    expect(snapshot(h, 's3')).toMatchObject({ state: 'ready' });
+  });
+
+  it('[WMH-09] a host that dies again mid-batch ends that batch; one more batch reopens the rest', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    await create(h.manager, 's3');
+    const normal = h.createSlot.getMockImplementation();
+    if (!normal) throw new Error('harness createSlot has no implementation');
+    h.createSlot.mockClear();
+    h.createSlot.mockImplementationOnce(normal).mockImplementationOnce(async () => {
+      // The replacement dies while the second session bootstraps on it.
+      h.hostCrash();
+      throw new WorkerSlotError('WORKER_EXITED', 'Worker exited (code=null signal=SIGKILL)');
+    });
+
+    h.hostCrash();
+    await allReady(h);
+
+    // One host per exit, and no session reopened twice on the same host.
+    expect(h.host?.starts).toBe(2);
+    const reopened = h.createSlot.mock.calls.map(([options]) => String(options.logicalSessionId));
+    expect(reopened).toHaveLength(5);
+    expect(reopened.filter((id) => id === 's1')).toHaveLength(2);
+    expect(new Set(reopened.slice(2))).toEqual(new Set(['s1', 's2', 's3']));
+    for (const slot of h.manager.getSlotSnapshots()) expect(slot.restartAttempts).toBe(0);
+  });
+
+  it('[WMH-lock-01] "Restart engine" on a locked session restarts the host before reopening it', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 'other', 8);
+    h.events.length = 0;
+    h.createSlot.mockClear();
+
+    await h.manager.resumeSession({
+      sessionId: 'locked',
+      sessionFile: norm('/sessions/locked.jsonl'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 7,
+      forceTakeover: true,
+    });
+
+    expect(h.host?.restart).toHaveBeenCalledTimes(1);
+    expect(h.host?.restart).toHaveBeenCalledWith('user', { userInitiated: true });
+    expect(h.host?.restart.mock.invocationCallOrder[0]).toBeLessThan(
+      h.createSlot.mock.invocationCallOrder[0]
+    );
+    expect(trace(h.events, 'other')[0]).toBe('status:disconnected/engine_restarted');
+    await vi.waitFor(() =>
+      expect(snapshot(h, 'other')).toMatchObject({ state: 'ready', generation: 2 })
+    );
+    expect(h.createSlot.mock.calls.map(([options]) => options.logicalSessionId)).toEqual([
+      'locked',
+      'other',
+    ]);
+    expect(snapshot(h, 'locked')).toMatchObject({ state: 'ready' });
+    // A user's restart spends none of the host budget.
+    expect(h.host?.faults).toEqual([]);
+  });
+
+  it('[WMH-11] a user open the host cannot serve fails with dsh_host_unavailable', async () => {
+    const h = createHarness({ host: true });
+    h.host?.ensureHost.mockRejectedValueOnce(
+      new DshHostSupervisorError('DSH_HOST_START_FAILED', 'the DSH host refused to start: boom')
+    );
+    await expect(create(h.manager, 's1', 7)).rejects.toMatchObject({
+      code: 'dsh_host_unavailable',
+      message: expect.stringContaining('DSH_HOST_START_FAILED'),
+    });
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+    // Nothing is left behind: the next open works.
+    await expect(create(h.manager, 's1', 7)).resolves.toMatch(/^create-/);
+  });
+
+  it('[WMH-12] a crash of one channel on a live host stays that session’s own restart', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    await create(h.manager, 's2');
+    h.events.length = 0;
+    h.records[0].crash('Worker exited (code=0 signal=null)', {
+      code: 0,
+      signal: null,
+      cause: 'channel-closed',
+    });
+    expect(trace(h.events, 's1')).toEqual(['status:disconnected']);
+    await vi.waitFor(() =>
+      expect(snapshot(h, 's1')).toMatchObject({ state: 'ready', generation: 2 })
+    );
+    expect(snapshot(h, 's1')?.restartAttempts).toBe(1);
+    expect(snapshot(h, 's2')).toMatchObject({ state: 'ready', generation: 1 });
+    expect(h.host?.starts).toBe(0);
   });
 });

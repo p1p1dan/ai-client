@@ -86,7 +86,12 @@ import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
-import { encodePiResumeError, isReadOnlyResumeRefusal } from './historyError';
+import {
+  ENGINE_UNAVAILABLE_HINT,
+  encodePiResumeError,
+  isEngineUnavailableError,
+  isReadOnlyResumeRefusal,
+} from './historyError';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
@@ -908,15 +913,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           // Chinese UI. Same `t()` the timeline's two surfaces already use.
           isModelMissingError(lastError)
           ? t(MODEL_MISSING_ERROR_VIEW.hint)
-          : lastError
-            ? `Error: ${lastError}`
-            : sendingHere
-              ? 'Starting Agent Host / sending…'
-              : busy
-                ? 'Agent Host running — use Stop to abort'
-                : effectiveCwd
-                  ? `Ready · cwd: ${effectiveCwd}`
-                  : 'Ready · temporary chat — a private folder is created on the first message.';
+          : // dsh-rebase P1-3c: the shared engine is down. Said in words, not
+            // as Main's sentence; the `engine_unavailable` card keeps that.
+            isEngineUnavailableError(lastError)
+            ? t(ENGINE_UNAVAILABLE_HINT)
+            : lastError
+              ? `Error: ${lastError}`
+              : sendingHere
+                ? 'Starting Agent Host / sending…'
+                : busy
+                  ? 'Agent Host running — use Stop to abort'
+                  : effectiveCwd
+                    ? `Ready · cwd: ${effectiveCwd}`
+                    : 'Ready · temporary chat — a private folder is created on the first message.';
 
   // T-27 round-3 (point-check #10): fire-and-forget after ANY `runSend` call
   // site sees a 'committed' outcome (the Host admitted the turn — see

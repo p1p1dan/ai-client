@@ -403,6 +403,53 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(patch.messages).toBeUndefined();
   });
 
+  // dsh-rebase P1-3c: Main restarted the shared engine; its own reopen binds
+  // the session again, and a failed one leaves the next send to resume.
+  it('P1-3c: an engine restart drops the host binding, keeps the transcript, and a resume re-binds', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'waiting_permission' })],
+      hostBoundSessionIds: [SESSION_ID, 'other'],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'm1', role: 'user' })] },
+      // A card the dead engine can no longer answer (P1-3 plan, 02-design §3.4).
+      pendingPermissions: [{ sessionId: SESSION_ID, permissionId: 'p1', messageId: 'm1' }],
+    });
+    const restarted = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', disconnectReason: 'engine_restarted' },
+      },
+      {
+        type: 'session.failed',
+        seq: 2,
+        sessionId: SESSION_ID,
+        timestamp: 2,
+        payload: { error: 'Worker exited', errorCode: 'dsh_engine_restarted' },
+      },
+    ]);
+    expect(restarted.hostBoundSessionIds).toEqual(['other']);
+    expect(restarted.messages).toBeUndefined();
+    expect(restarted.pendingPermissions).toEqual([]);
+    const failed = restarted.sessions?.find((session) => session.id === SESSION_ID);
+    expect(failed).toMatchObject({ status: 'failed', runtimeErrorCode: 'dsh_engine_restarted' });
+
+    const reopened = applyRuntimeEvents(
+      { ...base, ...restarted } as ChatSessionsState,
+      [
+        {
+          type: 'session.resumed',
+          seq: 3,
+          sessionId: SESSION_ID,
+          timestamp: 3,
+          payload: { agent: 'dsh', runtimeIdentity: '/dsh-home/aiclient-sessions/s.dsh.json' },
+        },
+      ] as RuntimeEvent[]
+    );
+    expect(reopened.hostBoundSessionIds).toEqual(['other', SESSION_ID]);
+  });
+
   it('D12: an ordinary status change leaves the host binding alone', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'running' })],

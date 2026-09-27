@@ -21,9 +21,12 @@
  *     this supervisor spawned, after checking its pid. Never `process.kill`
  *     with a computed pid, never a process group (the kill(-1) incident).
  *   - A new host starts on demand only (`ensureHost`, `openChannel`,
- *     `restart`). A crash or a hang leaves the supervisor idle; P1-3c's
- *     recovery batch asks for the one replacement, and the host restart
- *     budget (decision 020) gates that request.
+ *     `restart`). A crash or a hang leaves the supervisor idle; WorkerManager's
+ *     recovery batch asks for the one replacement (P1-3c).
+ *   - Restart budget (decision 020 rule 4): crashes, hangs, lost IPC, failed
+ *     starts and Stop ladder B restarts are counted over a sliding 5 min. Past
+ *     three, an automatic request fails the supervisor (`DSH_HOST_UNAVAILABLE`);
+ *     every user-initiated request may still start one host.
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -79,6 +82,13 @@ export const DSH_HOST_TIMINGS = {
   warnIntervalMs: 60_000,
 } as const;
 
+/**
+ * Decision 020 rule 4: automatic host replacements allowed per sliding window.
+ * The fourth budgeted exit inside the window leaves the host down until a user
+ * action asks for it.
+ */
+export const DSH_HOST_RESTART_BUDGET = { restarts: 3, windowMs: 5 * 60_000 } as const;
+
 /** Unacked ping ids kept for round-trip timing. */
 const MAX_TRACKED_PINGS = 8;
 
@@ -117,8 +127,11 @@ export class DshHostSupervisorError extends Error {
   }
 }
 
-/** Planned restarts. P1-3c: `stuck-session` is Stop ladder B; P1-10: `config`. */
-export type DshHostRestartReason = 'stuck-session' | 'config';
+/**
+ * Restarts Main asks for. `stuck-session` is Stop ladder B (decision 021);
+ * `user` is the session_locked card's "Restart engine"; `config` is P1-10's.
+ */
+export type DshHostRestartReason = 'stuck-session' | 'config' | 'user';
 
 /** Planned stops. Only `app-quit` is terminal (decision 025). */
 export type DshHostShutdownReason = 'app-quit' | 'idle' | 'invalidate';
@@ -138,8 +151,32 @@ const QUIET_EXIT_REASONS: ReadonlySet<DshHostExitReason> = new Set([
   'idle',
   'invalidate',
   'config',
+  'user',
   'force-kill',
 ]);
+
+/**
+ * Exits that spend the restart budget: faults, and ladder B, which only runs
+ * because a session wedged the host (decision 020 rule 4).
+ */
+const BUDGETED_EXIT_REASONS: ReadonlySet<DshHostExitReason> = new Set([
+  'crashed',
+  'start-failed',
+  'hung',
+  'disconnected',
+  'stuck-session',
+]);
+
+const PLANNED_RESTART_REASONS: ReadonlySet<DshHostExitReason> = new Set<DshHostExitReason>([
+  'stuck-session',
+  'config',
+  'user',
+]);
+
+/** A host Main itself restarted: its sessions were interrupted gracefully, not by a crash. */
+export function isPlannedHostRestart(reason: DshHostExitReason | undefined): boolean {
+  return reason !== undefined && PLANNED_RESTART_REASONS.has(reason);
+}
 
 export interface DshHostInfo {
   generation: number;
@@ -178,6 +215,8 @@ export interface DshHostSupervisorStatus {
   readyAt?: number;
   lastPong?: DshHostPongRecord;
   lastExit?: DshHostExitRecord;
+  /** Budgeted exits inside the current restart window (decision 020 rule 4). */
+  recentFaults: number;
   failure?: { code: DshHostSupervisorErrorCode; message: string };
 }
 
@@ -288,6 +327,8 @@ export class DshHostSupervisor {
   private terminal = false;
   private failure: DshHostSupervisorError | null = null;
   private lastExit: DshHostExitRecord | null = null;
+  /** When each budgeted exit happened, oldest first; pruned to the window on read. */
+  private budgetedExits: number[] = [];
   private powerMonitor: DshPowerMonitor | null = null;
   private readonly lastWarnAt = new Map<string, number>();
 
@@ -334,6 +375,7 @@ export class DshHostSupervisor {
       ...(live?.readyAt !== undefined ? { readyAt: live.readyAt } : {}),
       ...(host?.lastPong ? { lastPong: { ...host.lastPong } } : {}),
       ...(this.lastExit ? { lastExit: { ...this.lastExit } } : {}),
+      recentFaults: this.recentFaults(),
       ...(this.failure
         ? { failure: { code: this.failure.code, message: this.failure.message } }
         : {}),
@@ -361,6 +403,18 @@ export class DshHostSupervisor {
         }
         if (host && !host.exitInfo) throw this.exitUnconfirmedError(host);
       }
+      if (!options.userInitiated) {
+        const faults = this.recentFaults();
+        if (faults > DSH_HOST_RESTART_BUDGET.restarts) {
+          const error = new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            `the DSH host went down ${faults} times within ${DSH_HOST_RESTART_BUDGET.windowMs / 60_000} min; ` +
+              'it starts again only for a user action'
+          );
+          this.fail(error);
+          throw error;
+        }
+      }
       return this.start();
     }
   }
@@ -383,13 +437,15 @@ export class DshHostSupervisor {
 
   /**
    * Replace the host: graceful stop (3.5 s), SIGKILL if it lingers, then one
-   * new host once the old one's exit is confirmed. Single flight.
+   * new host once the old one's exit is confirmed. Single flight. A
+   * `stuck-session` restart spends the budget and may therefore end `failed`;
+   * a user's restart passes `userInitiated` and is never refused by it.
    */
-  restart(reason: DshHostRestartReason): Promise<DshHostInfo> {
+  restart(reason: DshHostRestartReason, options: DshHostEnsureOptions = {}): Promise<DshHostInfo> {
     if (this.restartTask) return this.restartTask;
     const host = this.host;
     if (this.state === 'ready' && host) void this.beginTakedown(host, 'graceful', reason);
-    const task = this.ensureHost();
+    const task = this.ensureHost(options);
     this.restartTask = task;
     const clear = () => {
       if (this.restartTask === task) this.restartTask = null;
@@ -717,6 +773,7 @@ export class DshHostSupervisor {
       reason,
       at: this.now(),
     };
+    if (BUDGETED_EXIT_REASONS.has(reason)) this.budgetedExits.push(this.lastExit.at);
     host.resolveExited();
     const channels = this.host === host ? this.takeChannels() : [];
     if (!host.readySettled) {
@@ -1086,6 +1143,15 @@ export class DshHostSupervisor {
     this.failure = error;
     this.setState('failed');
     console.error(`[dsh-host] supervisor failed: ${error.message}`);
+  }
+
+  /** Budgeted exits inside the sliding window; older ones are dropped. */
+  private recentFaults(): number {
+    const cutoff = this.now() - DSH_HOST_RESTART_BUDGET.windowMs;
+    if (this.budgetedExits.some((at) => at <= cutoff)) {
+      this.budgetedExits = this.budgetedExits.filter((at) => at > cutoff);
+    }
+    return this.budgetedExits.length;
   }
 
   private infoOf(host: HostRecord): DshHostInfo {

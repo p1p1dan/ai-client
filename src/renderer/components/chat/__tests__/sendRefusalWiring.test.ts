@@ -144,3 +144,18 @@ describe('both refusals go through the one affordance authority', () => {
     );
   });
 });
+
+/**
+ * dsh-rebase P1-3c — the shared DSH engine is down (Main's
+ * `dsh_host_unavailable`). The card names it; the status strip under the
+ * composer, which is on screen when the card has scrolled away, says it in
+ * words too instead of printing Main's English sentence.
+ */
+describe('P1-3c — the shared engine is down (dsh_host_unavailable)', () => {
+  it('the status strip says so in words, ahead of the raw fallback', () => {
+    const detector = COMPOSER.indexOf('isEngineUnavailableError(lastError)');
+    expect(detector).toBeGreaterThan(-1);
+    expect(COMPOSER).toContain('t(ENGINE_UNAVAILABLE_HINT)');
+    expect(detector).toBeLessThan(COMPOSER.indexOf(`\`Error: \${lastError}\``));
+  });
+});

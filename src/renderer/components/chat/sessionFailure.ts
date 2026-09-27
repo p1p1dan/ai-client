@@ -19,7 +19,9 @@
  * `turn_limit` by the loop's old 64-turn ceiling (legacy — see the entry
  * below), `stop_error` by `resolveError`
  * when a provider stream died, `context_too_large` by the preflight budget
- * check, `loop_threw` by an exception inside the loop.
+ * check, `loop_threw` by an exception inside the loop. Main writes two of its
+ * own (dsh-rebase P1-3c): `dsh_host_crashed` and `dsh_engine_restarted`, for a
+ * turn the shared DSH engine process took with it.
  *
  * So the classification is a READ, never a substring guess — the same rule
  * `piModelSyncNoticeModel.ts` records for its own failures. Matching on the
@@ -61,6 +63,14 @@ export interface SessionFailureView {
   /** One sentence: what to do, or what continuing will do. */
   hint: string;
   action: SessionFailureAction;
+  /**
+   * Whether the card prints the raw sentence under the reason. True for every
+   * code whose sentence is the provider's or the loop's own evidence; false
+   * where this app wrote it about its own engine process
+   * ("Worker exited (code=null signal=SIGKILL)"), which the reason already
+   * says in words and the operator log keeps.
+   */
+  showsDetail: boolean;
 }
 
 /**
@@ -158,6 +168,27 @@ const FAILURE_VIEWS = {
     hint: 'Open settings and add the model, then continue.',
     action: 'configure',
   },
+  // dsh-rebase P1-3c (decision 020): the one engine process every chat runs
+  // in went away under this turn — a crash, a hang, a lost connection. Main
+  // reopens every chat by itself, so nothing stands in the way of a retry.
+  dsh_host_crashed: {
+    title: 'The chat engine stopped unexpectedly',
+    reason:
+      'The engine that runs your chats exited while this reply was being written, so the reply was cut off. Your chats reconnect by themselves.',
+    hint: 'Continue to ask again.',
+    action: 'continue',
+    detail: false,
+  },
+  // decision 021 ladder B, or the locked card's "Restart engine": the engine
+  // was restarted on purpose, for another chat, and took this turn with it.
+  dsh_engine_restarted: {
+    title: 'The chat engine was restarted',
+    reason:
+      'The engine was restarted to recover another chat, so this reply was interrupted. Your chats reconnect by themselves.',
+    hint: 'Continue to carry on from here.',
+    action: 'continue',
+    detail: false,
+  },
   unknown: {
     title: 'The turn stopped',
     reason: 'This app does not recognise the reason the turn ended with.',
@@ -203,6 +234,7 @@ export function deriveSessionFailure(input: {
     reason: view.reason,
     hint: view.hint,
     action: view.action,
+    showsDetail: !('detail' in view && view.detail === false),
   };
 }
 

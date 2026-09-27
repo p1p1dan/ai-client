@@ -7,6 +7,10 @@ const slotSource = fs.readFileSync(
   new URL('../../services/agent-host/WorkerSlot.ts', import.meta.url),
   'utf8'
 );
+const supervisorSource = fs.readFileSync(
+  new URL('../../services/agent-host/DshHostSupervisor.ts', import.meta.url),
+  'utf8'
+);
 
 function number(source: string, name: string): number {
   const match = source.match(new RegExp(`const ${name} = ([0-9_]+)`));
@@ -32,5 +36,14 @@ describe('Pi worker app-cleanup budget', () => {
     expect(cleanupBudget).toBeGreaterThan(disposeBudget + exitBudget);
     expect(cleanupBudget).toBeLessThan(forceExitBudget);
     expect(cleanupSource).toContain('cleanupWorkerManagerSync();');
+  });
+
+  // dsh-rebase decision 025: at quit the shared DSH host is asked to stop once
+  // and SIGKILLed after its graceful budget; the deadline backstops the rest.
+  it('lets the shared DSH host stop gracefully before the deadline kills it', () => {
+    const cleanupBudget = number(cleanupSource, 'TOTAL_ASYNC_TIMEOUT');
+    const graceful = supervisorSource.match(/gracefulStopMs: ([0-9_]+)/)?.[1];
+    expect(graceful).toBeDefined();
+    expect(cleanupBudget).toBeGreaterThan(Number(graceful?.replaceAll('_', '')));
   });
 });

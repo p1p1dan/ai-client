@@ -11,12 +11,14 @@ import type {
   WorkerReconcileImportedSessionPayload,
   WorkerReconcileImportedSessionResult,
 } from '@shared/types/legacyImport';
-import type {
-  PermissionDecisionId,
-  RuntimeEvent,
-  RuntimeEventDraft,
-  SessionRetryInfo,
-  SessionRuntimeStatus,
+import {
+  type PermissionDecisionId,
+  type RuntimeEvent,
+  type RuntimeEventDraft,
+  SESSION_FAILED_ENGINE_RESTARTED,
+  SESSION_FAILED_HOST_CRASHED,
+  type SessionRetryInfo,
+  type SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
 import {
   DEFAULT_RUNTIME_PERMISSION,
@@ -103,11 +105,19 @@ import {
   type CreatedPiWorkerSlot,
   createPiWorkerSlot,
 } from './createPiWorkerSlot';
+import {
+  type DshHostRestartReason,
+  type DshHostSupervisor,
+  DshHostSupervisorError,
+  dshHostSupervisor,
+  isPlannedHostRestart,
+} from './DshHostSupervisor';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
 import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
 import { type PromptCacheTtlSettings, promptCacheTtlSettings } from './promptCacheSettings';
 import { type ProviderTimeoutSettings, providerTimeoutSettings } from './providerTimeoutSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
+import type { WorkerTransportExit } from './WorkerTransport';
 import {
   joinWorkerPath,
   normalizeWorkerPath,
@@ -262,7 +272,25 @@ interface ManagedSlot {
    * anything, so a latch it never confirmed is not replayed as `running`.
    */
   reportedStatus?: SessionRuntimeStatus;
+  /**
+   * dsh-rebase decision 020 rule 5 — unplanned host exits in a row this session
+   * was active at (a turn, a Stop, or its own recovery), plus Stop ladder B
+   * restarts it caused. At {@link HOST_FAULT_SUSPECT_STREAK} it is no longer
+   * recovered automatically; a user retry builds a fresh entry and clears it.
+   */
+  hostFaultStreak?: number;
+  /** It was running or stopping a turn when the host last went away: recovered early. */
+  activeAtHostExit?: boolean;
 }
+
+/**
+ * dsh-rebase P1-3c — the shared DSH host, as WorkerManager drives it. The
+ * supervisor's own interface; a narrower type so tests can stand one in.
+ */
+export type WorkerManagerHost = Pick<
+  DshHostSupervisor,
+  'status' | 'ensureHost' | 'restart' | 'shutdown' | 'forceKillNow'
+>;
 
 export interface WorkerManagerOptions {
   createSlot?: typeof createPiWorkerSlot;
@@ -343,6 +371,15 @@ export interface WorkerManagerOptions {
   restartWindowMs?: number;
   /** decision 046 — see {@link STOP_WATCHDOG_MS}. */
   stopWatchdogMs?: number;
+  /**
+   * dsh-rebase P1-3c — the shared DSH host every session's channel runs on.
+   * With one, a host exit is recovered in one batch under the host's own
+   * restart budget (decision 020), a channel that will not close escalates to
+   * a host restart (decision 021), and app quit and invalidation stop the host
+   * itself (decision 025). Without one (tests that fake the slot), every crash
+   * is a per-session restart.
+   */
+  host?: WorkerManagerHost;
 }
 
 export interface WorkerManagerSlotSnapshot {
@@ -357,12 +394,47 @@ export interface WorkerManagerSlotSnapshot {
   lastUsedAt: number;
   lastIdleAt: number;
   error: string | null;
+  /** Its own restarts inside the current window (decision 020: host exits never add one). */
+  restartAttempts: number;
 }
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_IDLE_SWEEP_INTERVAL_MS = 60_000;
 const DEFAULT_MAX_RESTART_ATTEMPTS = 2;
 const DEFAULT_RESTART_WINDOW_MS = 60_000;
+
+/** decision 020 rule 5: host faults in a row a session may be present at before it is left alone. */
+const HOST_FAULT_SUSPECT_STREAK = 2;
+
+/**
+ * dsh-rebase P1-3c — codes a session parks in `error` under (`entry.error`
+ * leads with one), and the code a user-facing spawn fails with while the
+ * shared host cannot be brought up. The renderer maps the last one to its own
+ * card (`historyError.ts`).
+ */
+const HOST_UNAVAILABLE = 'dsh_host_unavailable';
+const SESSION_SUSPECT = 'dsh_session_suspect';
+const SESSION_RESTART_EXHAUSTED = 'session_restart_exhausted';
+
+/** The shared host's own refusal: it is down, failed, or was stopped under the caller. */
+function isHostSupervisorFailure(error: unknown): boolean {
+  if (error instanceof DshHostSupervisorError) return true;
+  const code = (error as { code?: unknown } | null)?.code;
+  return (
+    (typeof code === 'string' && code.startsWith('DSH_HOST_')) ||
+    (error instanceof WorkerManagerError && error.code === HOST_UNAVAILABLE)
+  );
+}
+
+/** The supervisor's refusal in this layer's vocabulary, so it crosses IPC with a code. */
+function hostUnavailableError(error: unknown): unknown {
+  if (error instanceof WorkerManagerError || !isHostSupervisorFailure(error)) return error;
+  return new WorkerManagerError(
+    HOST_UNAVAILABLE,
+    error instanceof Error ? error.message : String(error),
+    true
+  );
+}
 
 /**
  * decision 046 — how long a Stop the worker accepted may take to produce the
@@ -533,8 +605,16 @@ export class WorkerManager {
   private state: WorkerManagerState = 'stopped';
   private configGeneration = 1;
   private idleTimer: NodeJS.Timeout | null = null;
+  /** See {@link WorkerManagerOptions.host}. */
+  private readonly host: WorkerManagerHost | null;
+  /** Entries a host exit took down, waiting for the one recovery batch (decision 020). */
+  private readonly pendingHostRecovery = new Set<ManagedSlot>();
+  private hostRecoveryScheduled = false;
+  /** Set while Main itself restarts the host: the exits it causes read `engine_restarted`. */
+  private plannedHostRestart: DshHostRestartReason | null = null;
 
   constructor(options: WorkerManagerOptions = {}) {
+    this.host = options.host ?? null;
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
     // The DEFAULT is a constant, not a settings read. Reading the real file
     // needs Electron's `app` paths, and a manager built without a host — every
@@ -740,6 +820,7 @@ export class WorkerManager {
   }
 
   getSlotSnapshots(): WorkerManagerSlotSnapshot[] {
+    const now = this.now();
     return [...this.entriesBySession.values()].map((entry) => ({
       key: entry.key,
       logicalSessionId: entry.logicalSessionId,
@@ -752,6 +833,9 @@ export class WorkerManager {
       lastUsedAt: entry.lastUsedAt,
       lastIdleAt: entry.lastIdleAt,
       error: entry.error,
+      restartAttempts: entry.restartAttempts.filter(
+        (attempt) => now - attempt <= this.restartWindowMs
+      ).length,
     }));
   }
 
@@ -1118,7 +1202,7 @@ export class WorkerManager {
     // concurrency-02: part of the fingerprint, so a plain resume and a forced
     // one are never answered by each other's in-flight promise. Reporting an
     // identity conflict is the right failure here — silently reusing the plain
-    // flight would leave the user pressing "Force takeover" to no effect.
+    // flight would leave the user pressing "Restart engine" to no effect.
     const fingerprint = JSON.stringify([
       sessionFile,
       cwd,
@@ -1230,6 +1314,14 @@ export class WorkerManager {
           `Pi session file is already owned by logical session ${conflict.logicalSessionId}`
         );
       }
+      // concurrency-02 on DSH (P1-3c): the session lock is a kernel lock that
+      // cannot be forced, and the holder this app can reach is its own shared
+      // host keeping an agent that never let go. Restarting the host is the
+      // takeover — the session_locked card's "Restart engine". The other
+      // sessions are interrupted gracefully and reopened in one batch after
+      // this resume. A holder outside the app keeps the lock regardless, and
+      // the reopen below reports it again.
+      if (input.forceTakeover && this.host) await this.restartHost('user');
       const timestamp = this.now();
       entry = {
         key: durableKey,
@@ -2195,6 +2287,11 @@ export class WorkerManager {
    * decision 046 rule 2 — the watchdog fired: the worker took the Stop and never
    * ended the turn. Main stops waiting on it and restarts the slot through the
    * crash path, which is the one teardown that does not need the worker's help.
+   *
+   * On the shared DSH host that restart is dsh-rebase decision 021's ladder:
+   * closing this session's channel (A), and a host restart if the channel
+   * never confirms it closed (B, `escalateStuckChannel`). The user's Stop is
+   * settled here either way.
    */
   private forceStop(entry: ManagedSlot, slot: WorkerSlot, generation: number): void {
     if (!this.ownsLiveSlot(entry, slot) || !this.isAuthoritative(entry, generation)) return;
@@ -2455,11 +2552,29 @@ export class WorkerManager {
     return this.serialize(() => this.reclaimIdleInternal());
   }
 
+  /**
+   * Login, logout, a model or plugin change: every session is rebuilt.
+   *
+   * dsh-rebase decision 025 rule 2: the shared host goes too, gracefully, so
+   * no credential or route outlives the change inside it. After the sessions:
+   * each channel's own disposal lets a turn in flight settle first (DSH cancels
+   * it, waits for the agent to go idle and saves what it had streamed), so the
+   * host is stopped with nothing left running. The next session starts a
+   * fresh host.
+   */
   invalidateAll(): Promise<void> {
     return this.serialize(async () => {
       this.configGeneration += 1;
       await this.disposeEntries([...this.entriesBySession.values()], 'slot-replace');
+      this.pendingHostRecovery.clear();
       this.updateManagerState();
+      if (this.host) {
+        try {
+          await this.host.shutdown('invalidate');
+        } catch (error) {
+          this.log('[worker-manager] DSH host stop after invalidation failed', error);
+        }
+      }
     });
   }
 
@@ -2494,9 +2609,33 @@ export class WorkerManager {
         // `forceKillAllNow`.
         this.log('[worker-manager] legacy import disposal failed', error);
       }
-      await this.disposeEntries([...this.entriesBySession.values()], reason);
+      if (reason === 'app-shutdown' && this.host) await this.shutDownWithHost();
+      else await this.disposeEntries([...this.entriesBySession.values()], reason);
       this.state = 'stopped';
     });
+  }
+
+  /**
+   * dsh-rebase decision 025 rule 3 — app quit goes to the host, not to each
+   * channel: one `{type:'shutdown'}` makes DSH dispose every agent and save
+   * what it had streamed, and SIGKILL follows after 3.5 s. The sessions are
+   * retired locally first (a turn in flight reads stopped(forced)); their
+   * slots are released once the host is gone, every channel with it.
+   */
+  private async shutDownWithHost(): Promise<void> {
+    const entries = [...this.entriesBySession.values()];
+    for (const entry of entries) this.retireEntry(entry);
+    this.pendingHostRecovery.clear();
+    try {
+      await this.host?.shutdown('app-quit');
+    } catch (error) {
+      this.log('[worker-manager] DSH host shutdown failed', error);
+    } finally {
+      for (const entry of entries) entry.drainingEvents = false;
+      for (const slot of [...this.ownedSlots]) {
+        if (slot.forceKillNow()) this.ownedSlots.delete(slot);
+      }
+    }
   }
 
   forceKillAllNow(): void {
@@ -2524,6 +2663,9 @@ export class WorkerManager {
     for (const slot of slots) {
       if (slot.forceKillNow()) this.ownedSlots.delete(slot);
     }
+    this.pendingHostRecovery.clear();
+    // After the slots detached: SIGKILL the shared host itself (decision 025).
+    this.host?.forceKillNow();
   }
 
   private async spawnForEntry(
@@ -2592,7 +2734,9 @@ export class WorkerManager {
       // A worker that dies during bootstrap never reaches handleLifecycle, so
       // this is the only place its own stderr can still be recovered.
       this.dumpWorkerStderr(entry, 'failed to start');
-      throw error;
+      // dsh-rebase P1-3c: a shared host that could not be brought up reaches
+      // the renderer as `dsh_host_unavailable`, its card, not as prose.
+      throw hostUnavailableError(error);
     });
     this.ownedSlots.add(created.slot);
     expectedSlot = created.slot;
@@ -3176,11 +3320,28 @@ export class WorkerManager {
     ) {
       return;
     }
+    const hostFault = this.hostFaultOf(event.exit);
+    // decision 020 rule 5: a session the host died under while it was being
+    // recovered was at the scene as much as one mid-turn.
+    const recovering = entry.state === 'restarting';
     const { turnId: activeRequestId, stopping } = this.enterCrashed(
       entry,
       event.error.message,
       `crashed: ${event.error.message}`
     );
+    if (hostFault) {
+      entry.activeAtHostExit = activeRequestId !== null || stopping;
+      // Main's own restarts are not faults; ladder B bills the one session
+      // that caused it (`escalateStuckChannel`).
+      if (hostFault === 'crashed') {
+        entry.hostFaultStreak =
+          entry.activeAtHostExit || recovering ? (entry.hostFaultStreak ?? 0) + 1 : 0;
+      }
+    }
+    const status = {
+      status: 'disconnected' as const,
+      ...(hostFault === 'restarted' ? { disconnectReason: 'engine_restarted' as const } : {}),
+    };
     if (stopping) {
       // Died on its way out of a Stop: for the user that IS the stop, forced.
       this.dispatchForcedStop(entry.logicalSessionId, activeRequestId);
@@ -3189,13 +3350,19 @@ export class WorkerManager {
         type: 'session.status',
         sessionId: entry.logicalSessionId,
         requestId: activeRequestId,
-        payload: { status: 'disconnected' },
+        payload: status,
       });
       this.dispatch({
         type: 'session.failed',
         sessionId: entry.logicalSessionId,
         requestId: activeRequestId,
-        payload: { error: event.error.message },
+        payload: {
+          error: event.error.message,
+          // dsh-rebase P1-3c: the renderer names the cause from this, not from
+          // the sentence (`sessionFailure.ts`).
+          ...(hostFault === 'crashed' ? { errorCode: SESSION_FAILED_HOST_CRASHED } : {}),
+          ...(hostFault === 'restarted' ? { errorCode: SESSION_FAILED_ENGINE_RESTARTED } : {}),
+        },
       });
     } else {
       // decision 046: no turn Main knew of, but a renderer that still thinks
@@ -3205,11 +3372,159 @@ export class WorkerManager {
         type: 'session.status',
         sessionId: entry.logicalSessionId,
         requestId: nextRequestId('crash'),
-        payload: { status: 'disconnected' },
+        payload: status,
       });
     }
     this.updateManagerState();
-    void this.serialize(() => this.restartEntry(entry));
+    if (hostFault) this.queueHostRecovery(entry);
+    else void this.serialize(() => this.restartEntry(entry));
+  }
+
+  /**
+   * dsh-rebase P1-3c — did this slot die with the shared host, and how?
+   *
+   * `null` is the session's own crash (its channel closed, or its transport
+   * failed on a live host): restarted alone, on its own budget. Otherwise the
+   * host went away under it — `restarted` when Main itself restarted the host
+   * (Stop ladder B, the user's "Restart engine"), `crashed` for anything else
+   * (a crash, a hang, lost IPC). A transport failure while the host is not
+   * ready is the host's too: a send that races the host's exit fails before
+   * the exit is reported.
+   */
+  private hostFaultOf(exit: WorkerTransportExit | undefined): 'crashed' | 'restarted' | null {
+    const host = this.host;
+    if (!host) return null;
+    const hostExit = exit?.cause === 'host-exit';
+    const status = host.status();
+    if (!hostExit && status.state === 'ready') return null;
+    if (this.plannedHostRestart !== null) return 'restarted';
+    return hostExit && isPlannedHostRestart(status.lastExit?.reason) ? 'restarted' : 'crashed';
+  }
+
+  /** One host exit, one recovery batch: every channel of a host ends in the same burst. */
+  private queueHostRecovery(entry: ManagedSlot): void {
+    this.pendingHostRecovery.add(entry);
+    if (this.hostRecoveryScheduled) return;
+    this.hostRecoveryScheduled = true;
+    queueMicrotask(() => {
+      void this.serialize(() => this.recoverHostEntries());
+    });
+  }
+
+  private awaitsHostRecovery(entry: ManagedSlot): boolean {
+    return (
+      this.entriesBySession.get(entry.logicalSessionId) === entry &&
+      entry.state === 'crashed' &&
+      entry.acceptEvents
+    );
+  }
+
+  /**
+   * decision 020 rule 3 — one replacement host for everything the exit took,
+   * then its sessions one by one: the foreground ones, those that were mid-turn,
+   * then the rest from the most recently used. The host is single-threaded, so
+   * serial costs little (P0-6) and says which session brought it down again.
+   *
+   * No session budget is spent here (rule 4). A session present at two host
+   * faults in a row stays in `error` (rule 5); a host its budget will not bring
+   * back leaves every waiting session in the same `error` (rule 6), and a
+   * user's next open or retry starts one again.
+   */
+  private async recoverHostEntries(): Promise<void> {
+    this.hostRecoveryScheduled = false;
+    const host = this.host;
+    const waiting = [...this.pendingHostRecovery].filter((entry) => this.awaitsHostRecovery(entry));
+    this.pendingHostRecovery.clear();
+    if (!host || waiting.length === 0) return;
+    const batch: ManagedSlot[] = [];
+    for (const entry of waiting) {
+      if ((entry.hostFaultStreak ?? 0) >= HOST_FAULT_SUSPECT_STREAK) {
+        this.parkInError(
+          entry,
+          SESSION_SUSPECT,
+          `present at ${entry.hostFaultStreak} DSH host faults in a row, so it is not reopened automatically`
+        );
+      } else {
+        batch.push(entry);
+      }
+    }
+    if (batch.length === 0) {
+      this.updateManagerState();
+      return;
+    }
+    const rank = (entry: ManagedSlot) =>
+      entry.ownerWebContentsId !== null ? 0 : entry.activeAtHostExit ? 1 : 2;
+    batch.sort((left, right) => rank(left) - rank(right) || right.lastUsedAt - left.lastUsedAt);
+    let generation: number;
+    try {
+      generation = (await host.ensureHost()).generation;
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      for (const entry of batch) {
+        if (this.awaitsHostRecovery(entry)) this.parkInError(entry, HOST_UNAVAILABLE, reason);
+      }
+      this.updateManagerState();
+      return;
+    }
+    for (const [index, entry] of batch.entries()) {
+      if (!this.awaitsHostRecovery(entry)) continue;
+      const status = host.status();
+      if (status.state !== 'ready' || status.generation !== generation) {
+        // The replacement went down under this batch. The rest waits for the
+        // next one, which this schedules (the exit of any session reopened on
+        // it joins the same one): never a second host from here.
+        for (const rest of batch.slice(index)) {
+          if (this.awaitsHostRecovery(rest)) this.queueHostRecovery(rest);
+        }
+        return;
+      }
+      await this.restartEntry(entry, { hostFault: true });
+    }
+    this.updateManagerState();
+  }
+
+  /** `error` is terminal for the worker, never for the session: a user's open retires it. */
+  private parkInError(entry: ManagedSlot, code: string, reason: string): void {
+    entry.state = 'error';
+    entry.error = `${code}: ${reason}`;
+    console.error(`[worker-manager] ${entry.logicalSessionId}: ${entry.error}`);
+  }
+
+  /** The last host exit the supervisor recorded, as a comparable mark. */
+  private hostExitMark(): string {
+    const exit = this.host?.status().lastExit;
+    return exit ? `${exit.generation}@${exit.at}` : '';
+  }
+
+  /**
+   * A restart attempt that failed because the shared host went away under it
+   * (it refused, failed, or exited since `exitMark`), rather than for the
+   * session's own reasons (its log missing, a cwd mismatch, a corrupt file).
+   */
+  private isHostFault(error: unknown, exitMark: string): boolean {
+    const host = this.host;
+    if (!host) return false;
+    if (isHostSupervisorFailure(error)) return true;
+    return host.status().state !== 'ready' || this.hostExitMark() !== exitMark;
+  }
+
+  /**
+   * Main's own host restart (decision 021 ladder B; the session_locked card's
+   * "Restart engine"): graceful stop, SIGKILL after 3.5 s, one new host. Every
+   * other session's channel ends with the old host; `plannedHostRestart` makes
+   * those exits read `engine_restarted`, and one batch reopens them afterwards.
+   */
+  private async restartHost(reason: DshHostRestartReason): Promise<void> {
+    const host = this.host;
+    if (!host) return;
+    this.plannedHostRestart = reason;
+    try {
+      await host.restart(reason, reason === 'user' ? { userInitiated: true } : {});
+    } catch (error) {
+      throw hostUnavailableError(error);
+    } finally {
+      this.plannedHostRestart = null;
+    }
   }
 
   /**
@@ -3234,7 +3549,19 @@ export class WorkerManager {
     return { turnId, stopping };
   }
 
-  private async restartEntry(entry: ManagedSlot): Promise<void> {
+  /**
+   * Reopen one crashed session on a fresh slot.
+   *
+   * `hostFault` — dsh-rebase decision 020 rule 4: the recovery batch reopens a
+   * session the shared host took down, which costs the session nothing. Its
+   * own budget (per `restartWindowMs`) is spent only by its own crashes and by
+   * attempts that fail for its own reasons; an attempt the host went away
+   * under goes back to the host's batch instead.
+   */
+  private async restartEntry(
+    entry: ManagedSlot,
+    options: { hostFault?: boolean } = {}
+  ): Promise<void> {
     if (
       this.entriesBySession.get(entry.logicalSessionId) !== entry ||
       entry.state !== 'crashed' ||
@@ -3252,14 +3579,18 @@ export class WorkerManager {
     entry.restartAttempts = entry.restartAttempts.filter(
       (attempt) => now - attempt <= this.restartWindowMs
     );
-    if (entry.restartAttempts.length >= this.maxRestartAttempts) {
-      entry.state = 'error';
-      entry.error = `Worker restart budget exhausted (${this.maxRestartAttempts} attempts per ${this.restartWindowMs}ms)`;
-      console.error(`[worker-manager] ${entry.logicalSessionId}: ${entry.error}`);
-      this.updateManagerState();
-      return;
+    if (!options.hostFault) {
+      if (entry.restartAttempts.length >= this.maxRestartAttempts) {
+        this.parkInError(
+          entry,
+          SESSION_RESTART_EXHAUSTED,
+          `Worker restart budget exhausted (${this.maxRestartAttempts} attempts per ${this.restartWindowMs}ms)`
+        );
+        this.updateManagerState();
+        return;
+      }
+      entry.restartAttempts.push(now);
     }
-    entry.restartAttempts.push(now);
     entry.state = 'restarting';
     const oldSlot = entry.slot;
     // A session whose identity was never committed has no file on disk to
@@ -3274,6 +3605,7 @@ export class WorkerManager {
     const rematerialize =
       !entry.identityCommitted &&
       (entry.sessionFile === null || !(await this.sessionFileExists(entry.sessionFile)));
+    let exitMark = this.hostExitMark();
     try {
       if (oldSlot) {
         // Never open the same JSONL in a replacement until old-process exit is
@@ -3285,7 +3617,22 @@ export class WorkerManager {
           // decision 046: a worker the stop watchdog gave up on is wedged, so
           // missing its dispose ACK is expected. The exit is what the
           // replacement needs, and `disposed` is the slot confirming it.
-          if (oldSlot.state !== 'disposed') throw error;
+          if (oldSlot.state !== 'disposed') {
+            // A channel on the shared host is never confirmed by waiting
+            // longer: its agent still holds the lock (decision 021 ladder B).
+            if (!this.host) throw error;
+            await this.escalateStuckChannel(entry, oldSlot);
+            exitMark = this.hostExitMark();
+            if ((entry.hostFaultStreak ?? 0) >= HOST_FAULT_SUSPECT_STREAK) {
+              this.parkInError(
+                entry,
+                SESSION_SUSPECT,
+                'its channel would not close twice in a row, so it is not reopened automatically'
+              );
+              this.updateManagerState();
+              return;
+            }
+          }
         }
         this.ownedSlots.delete(oldSlot);
       }
@@ -3364,6 +3711,22 @@ export class WorkerManager {
     } catch (error) {
       entry.state = 'crashed';
       entry.error = error instanceof Error ? error.message : String(error);
+      if (this.host && this.isHostFault(error, exitMark)) {
+        // decision 020 rule 4: the host went away under this attempt, which is
+        // not the session's doing and costs it nothing. A failed host (budget
+        // spent, or a predecessor that would not die) leaves it in the shared
+        // `error`; otherwise the host's next batch reopens it.
+        if (this.host.status().state === 'failed') {
+          this.parkInError(entry, HOST_UNAVAILABLE, entry.error);
+        } else {
+          console.warn(
+            `[worker-manager] ${entry.logicalSessionId}: reopening waits for the DSH host: ${entry.error}`
+          );
+          this.queueHostRecovery(entry);
+        }
+        this.updateManagerState();
+        return;
+      }
       // Each failed attempt eats the restart budget, and exhausting it parks the
       // session in `error` for good. Without this line the only trace of WHY is
       // a field nobody reads, and the session just stops working.
@@ -3373,6 +3736,26 @@ export class WorkerManager {
       this.updateManagerState();
       void this.serialize(() => this.restartEntry(entry));
     }
+  }
+
+  /**
+   * decision 021 ladder B — the channel neither answered `worker.dispose` nor
+   * confirmed its close, and the host did not exit: an agent stuck inside the
+   * host still holds this session's lock, and only a host restart releases it.
+   * Graceful first (every other session's streamed text is saved as
+   * interrupted), SIGKILL after 3.5 s, then one new host. The others read
+   * `engine_restarted` and are reopened in one batch after this session, which
+   * goes first. The restart spends the host budget, and wedging the host counts
+   * as this session's presence at a fault (decision 020 rule 5).
+   */
+  private async escalateStuckChannel(entry: ManagedSlot, oldSlot: WorkerSlot): Promise<void> {
+    console.warn(
+      `[worker-manager] ${entry.logicalSessionId}: its channel did not close; restarting the DSH host (Stop ladder B)`
+    );
+    entry.hostFaultStreak = (entry.hostFaultStreak ?? 0) + 1;
+    await this.restartHost('stuck-session');
+    // Its channel went with the old host; this only retires the slot object.
+    if (oldSlot.forceKillNow()) this.ownedSlots.delete(oldSlot);
   }
 
   /** Drop a replacement slot that failed its identity check; keep it force-killable. */
@@ -3526,6 +3909,9 @@ export class WorkerManager {
 }
 
 export const workerManager = new WorkerManager({
+  // dsh-rebase P1-3c: the one shared DSH host every chat channel runs on, the
+  // same supervisor `createPiWorkerSlot` opens channels from.
+  host: dshHostSupervisor,
   // P5-2-5: the real settings read, injected here rather than defaulted inside
   // the class. See the constructor note.
   readSubagentSettings: () => nativeSubagentSettings(),

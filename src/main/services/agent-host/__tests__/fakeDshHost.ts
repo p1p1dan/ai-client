@@ -100,6 +100,8 @@ export function createFakeHostHarness(
     pids?: Array<number | undefined>;
     selfPid?: number;
     resolveLaunch?: () => DshHostLaunch;
+    /** Scripts each child as it is spawned (its index counts from 0), before the supervisor attaches. */
+    onSpawn?: (child: FakeChild, index: number) => void;
   } = {}
 ): FakeHostHarness {
   const children: FakeChild[] = [];
@@ -108,6 +110,7 @@ export function createFakeHostHarness(
     const index = children.length;
     const child = new FakeChild(index < pids.length ? pids[index] : FAKE_PID + index);
     children.push(child);
+    options.onSpawn?.(child, index);
     return child as unknown as ChildProcess;
   });
   const monitor = new EventEmitter();

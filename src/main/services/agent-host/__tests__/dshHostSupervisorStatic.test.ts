@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../../../renderer/components/chat/__tests__/stripComments';
 
 /**
- * dsh-rebase P1-3b static guards (SG-01, SG-03).
+ * dsh-rebase P1-3b / P1-3c static guards (SG-01, SG-02, SG-03).
  *
  * The supervisor is the one Main component allowed to signal the shared DSH
  * host, and it may only ever do it one way: `child.kill('SIGKILL')` on the
@@ -43,6 +43,16 @@ describe('shared DSH host signalling (SG-01)', () => {
     expect(launch).not.toMatch(/detached/);
     // P1-3a: the supervisor is the only thing that spawns the DSH host.
     expect(launch).not.toMatch(/\bspawn\(|\bfork\(/);
+  });
+
+  // SG-02 (P1-3c): the manager restarts and stops the host only by asking the
+  // supervisor; it never signals a process of its own.
+  it('WorkerManager never signals anything itself (SG-02)', () => {
+    const manager = code('WorkerManager.ts');
+    expect(manager).not.toContain('process.kill');
+    expect(manager).not.toMatch(/\.kill\(/);
+    expect(manager).toContain('host.restart(');
+    expect(manager).toContain(".shutdown('app-quit')");
   });
 
   it('a chat slot reaches the DSH host only through a supervisor channel (P1-3a)', () => {

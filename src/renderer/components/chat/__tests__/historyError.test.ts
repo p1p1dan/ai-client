@@ -12,6 +12,7 @@ import {
   deriveRetryControl,
   deriveTakeoverControl,
   describeSessionLockOwner,
+  ENGINE_UNAVAILABLE_HINT,
   encodePiResumeError,
   HISTORY_ERROR_DEAD_SESSION_HINT,
   HISTORY_ERROR_NON_FATAL_HINT,
@@ -21,6 +22,7 @@ import {
   HISTORY_TAKEOVER_BUSY_HINT,
   HISTORY_TAKEOVER_FAILED_HINT,
   type HistoryErrorCode,
+  isEngineUnavailableError,
   isReadOnlyResumeRefusal,
   parseHistoryError,
   parseSessionLockOwner,
@@ -134,6 +136,7 @@ describe('parseHistoryError (T-03)', () => {
       // Appended, not inserted: the severity assertions below are positional.
       'model_missing',
       'session_locked',
+      'engine_unavailable',
     ];
     const views = codes.map((code) => parseHistoryError(`${code}: x`));
     for (const view of views) {
@@ -1116,5 +1119,59 @@ describe('isModelMissingError (H/21 P0)', () => {
     'catalog_empty: the model catalog is empty, so there is nothing to run against',
   ])('rejects %s', (text) => {
     expect(isModelMissingError(text)).toBe(false);
+  });
+});
+
+/**
+ * dsh-rebase P1-3c — the shared DSH engine. Main refuses a user's open with
+ * `dsh_host_unavailable` when the engine cannot be brought up (its restart
+ * budget spent and the start failing, or a start that fails outright); and the
+ * locked card's second button restarts the engine instead of forcing a kernel
+ * lock DSH cannot force.
+ */
+describe('the shared engine (P1-3c)', () => {
+  const UNAVAILABLE =
+    "Error invoking remote method 'chat:resumeSession': Error: dsh_host_unavailable: DSH_HOST_START_FAILED: the DSH host refused to start: product bundles skipped";
+
+  it('files an open the engine could not serve under its own card, which offers a retry', () => {
+    const encoded = encodePiResumeError(new Error(UNAVAILABLE));
+    expect(encoded.code).toBe('engine_unavailable');
+    const view = parseHistoryError(encoded.encoded);
+    expect(view).toMatchObject({ code: 'engine_unavailable', severity: 'error', retryable: true });
+    expect(view?.forceTakeover).toBeUndefined();
+    // The chat is fine; the copy must not say otherwise.
+    expect(view?.guidance).not.toContain('damaged');
+    expect(view?.continuationHint).not.toBe(HISTORY_ERROR_DEAD_SESSION_HINT);
+    expect(isReadOnlyResumeRefusal(encoded.code)).toBe(false);
+    for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
+      expect(key && zhTranslations[key], key).toBeDefined();
+    }
+  });
+
+  it('offers "Restart engine" on a locked chat, and says what it costs the others', () => {
+    const view = parseHistoryError(
+      'session_locked: DSH session aiclient-s1 is held by another process'
+    );
+    expect(view?.forceTakeover?.label).toBe('Restart engine');
+    expect(zhTranslations['Restart engine']).toBe('重启引擎');
+    expect(view?.forceTakeover?.warning).toContain('other chats');
+    expect(view?.guidance).toContain('engine');
+    // Still second to the harmless Retry.
+    expect(view?.retryable).toBe(true);
+    expect(HISTORY_TAKEOVER_FAILED_HINT).toContain('engine restarted');
+  });
+
+  it('lets the composer strip say "engine not running" in words, for every surface it reaches', () => {
+    for (const message of [
+      UNAVAILABLE,
+      'dsh_host_unavailable: DSH_HOST_UNAVAILABLE: the DSH host went down 4 times within 5 min',
+      'Error: dsh_host_unavailable: DSH_HOST_EXIT_UNCONFIRMED: DSH host pid 7 has not been confirmed gone',
+    ]) {
+      expect(isEngineUnavailableError(message), message).toBe(true);
+    }
+    for (const message of [null, undefined, '', 'session_locked: held', 'xdsh_host_unavailable']) {
+      expect(isEngineUnavailableError(message), String(message)).toBe(false);
+    }
+    expect(zhTranslations[ENGINE_UNAVAILABLE_HINT]).toBeDefined();
   });
 });

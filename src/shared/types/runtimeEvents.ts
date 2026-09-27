@@ -205,8 +205,21 @@ export interface SessionLivenessNote {
  * A rider on `session.status` rather than a new event type, per the convention
  * `SessionRetryInfo` set: old consumers ignore the extra key and keep reading
  * the status they already understood.
+ *
+ * dsh-rebase P1-3c (decisions 020, 021) adds `engine_restarted`: Main restarted
+ * the shared DSH host on purpose (Stop ladder B, or the user's "Restart
+ * engine"), which took this session's connection with it. Main reopens the
+ * session by itself; the renderer drops the host binding and says so once.
  */
-export type SessionDisconnectReason = 'capacity_reclaimed';
+export type SessionDisconnectReason = 'capacity_reclaimed' | 'engine_restarted';
+
+/**
+ * dsh-rebase P1-3c (decision 020) — `errorCode` of the `session.failed` Main
+ * synthesizes for a turn the shared DSH host took with it: the host died on
+ * its own (crash, hang, lost IPC), or Main restarted it for another session.
+ */
+export const SESSION_FAILED_HOST_CRASHED = 'dsh_host_crashed';
+export const SESSION_FAILED_ENGINE_RESTARTED = 'dsh_engine_restarted';
 
 /**
  * T034 (session-02): this session's file was rewritten when it was opened,

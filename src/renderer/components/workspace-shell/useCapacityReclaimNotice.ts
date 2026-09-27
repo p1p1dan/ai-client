@@ -11,22 +11,44 @@
  * file, so nothing is lost but the load time), and turning that into a required
  * decision would interrupt every new chat once the pool is full.
  *
+ * dsh-rebase P1-3c adds the other disconnect the user did not ask for:
+ * `engine_restarted`, when Main restarted the shared DSH engine (Stop ladder B,
+ * or the locked card's "Restart engine"). Every session on it goes at once, so
+ * that one is said once per restart, not once per session.
+ *
  * A hook rather than a reducer branch: `addToast` is a side effect, and the
  * store's event reducer is pure. The reducer's half of this (dropping the host
  * binding) lives there; the sentence lives here.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 
+/** One engine restart reaches every session within this span; one notice covers them all. */
+const ENGINE_RESTART_NOTICE_WINDOW_MS = 5_000;
+
 export function useCapacityReclaimNotice(): void {
   const { t } = useI18n();
+  const lastEngineRestartNoticeAt = useRef(0);
 
   useEffect(() => {
     return subscribeRuntimeEvent((event) => {
       if (event.type !== 'session.status') return;
+      if (event.payload.disconnectReason === 'engine_restarted') {
+        const now = Date.now();
+        if (now - lastEngineRestartNoticeAt.current < ENGINE_RESTART_NOTICE_WINDOW_MS) return;
+        lastEngineRestartNoticeAt.current = now;
+        addToast({
+          type: 'info',
+          title: t('The chat engine was restarted'),
+          description: t(
+            'Your chats reconnect by themselves. A reply that was running was interrupted; you can continue it in its chat.'
+          ),
+        });
+        return;
+      }
       if (event.payload.disconnectReason !== 'capacity_reclaimed') return;
       // Read the title fresh at event time rather than subscribing to the
       // session list: this effect must not re-subscribe on every store change,

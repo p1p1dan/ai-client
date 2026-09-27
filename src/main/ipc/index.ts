@@ -104,6 +104,9 @@ export async function cleanupAllResources(): Promise<void> {
   // was still running and causing double-cleanup of node-pty native resources.
   // WorkerSlot's worst graceful path is 3s dispose ACK + 3s exit confirmation.
   // Keep this above that 6s contract and below Main's 8s force-exit timer.
+  // Chat sessions no longer take that path at quit (dsh-rebase decision 025):
+  // the shared DSH host gets one `shutdown` and is SIGKILLed after 3.5s.
+  // Utility workers still do.
   const TOTAL_ASYNC_TIMEOUT = 7000;
   let deadlineTimer: NodeJS.Timeout | undefined;
   const deadline = new Promise<void>((resolve) => {

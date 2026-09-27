@@ -1,6 +1,7 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { createPiWorkerSlot } from '../createPiWorkerSlot';
+import { DSH_HOST_RESTART_BUDGET, DSH_HOST_TIMINGS } from '../DshHostSupervisor';
 import { STOP_WATCHDOG_MS, WorkerManager } from '../WorkerManager';
 import {
   createFakeHostHarness,
@@ -22,28 +23,34 @@ vi.mock('node:child_process', () => ({
 vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => '/fake/state' }));
 
 /**
- * dsh-rebase P1-3a — what the Stop watchdog does to a session on the shared
- * host. Real WorkerManager, createPiWorkerSlot, WorkerSlot, DshChannelTransport
- * and DshHostSupervisor; the host process is a scripted fake, so nothing is
- * spawned or signalled.
+ * dsh-rebase P1-3a / P1-3c — sessions on the shared host, with everything real
+ * but the host process: WorkerManager (given the supervisor as its host),
+ * createPiWorkerSlot, WorkerSlot, DshChannelTransport and DshHostSupervisor.
+ * Each spawned host is a scripted fake, so nothing is spawned or signalled.
  *
- * The watchdog's forced stop restarts the entry through the crash path, and
- * the old slot's dispose becomes, on a channel, `worker.dispose` then
- * `{host:'close'}`: it can end that channel, never the host. The full ladder
- * (escalating a channel that never closes to a host restart) is P1-3c.
+ *  - Stop ladder A (decision 021): the watchdog's forced stop reopens the
+ *    session through the crash path, and the old slot's dispose becomes, on a
+ *    channel, `worker.dispose` then `{host:'close'}`. A host that closes the
+ *    channel keeps serving everyone else.
+ *  - Stop ladder B: a channel that never closes escalates to one host restart.
+ *  - Host faults (decision 020): one new host per exit, one recovery batch, the
+ *    host budget, and the user action that starts a failed host again.
  */
 
 interface Script {
-  /** The host answers a channel's worker.dispose (ACK, then closed). */
-  disposes: boolean;
-  /** The host answers `{host:'close'}` with closed. */
-  closes: boolean;
+  /** Sessions whose channel answers neither worker.dispose nor close: an agent stuck in the host. */
+  stuck?: ReadonlySet<string>;
+  /** `{type:'shutdown'}` ends the host (stopped, then exit 0); otherwise only SIGKILL does. */
+  exitsOnShutdown?: boolean;
 }
 
 const stubFor = (sessionId: string) => `/dsh-home/aiclient-sessions/aiclient-${sessionId}.dsh.json`;
 
-/** A host that answers like the bridge, per `script`, to whatever Main sends it. */
-function scriptHost(child: FakeChild, script: Script): void {
+/** A host that answers like the bridge, per `script`; returns the sessions it bootstrapped, in order. */
+function scriptHost(child: FakeChild, script: Script): string[] {
+  const sessionOf = new Map<string, string>();
+  const bootstraps: string[] = [];
+  const stuck = (ch: string) => script.stuck?.has(sessionOf.get(ch) ?? '') === true;
   const respond = (ch: string, rpc: Record<string, unknown>, result: unknown) =>
     child.post({
       ch,
@@ -61,8 +68,15 @@ function scriptHost(child: FakeChild, script: Script): void {
       child.post({ host: 'pong', id: message.id, eldMaxMs: 0, rssMb: 180, channels: [] });
       return;
     }
+    if (message.type === 'shutdown') {
+      if (script.exitsOnShutdown) {
+        child.post({ type: 'stopped', ms: 5, reason: 'ipc' });
+        child.die(0);
+      }
+      return;
+    }
     if (message.host === 'close') {
-      if (script.closes) child.post({ host: 'closed', ch: message.ch });
+      if (!stuck(String(message.ch))) child.post({ host: 'closed', ch: message.ch });
       return;
     }
     const ch = message.ch as string | undefined;
@@ -71,6 +85,8 @@ function scriptHost(child: FakeChild, script: Script): void {
     const payload = rpc.payload as Record<string, string>;
     switch (rpc.type) {
       case 'worker.bootstrap': {
+        sessionOf.set(ch, payload.logicalSessionId);
+        bootstraps.push(payload.logicalSessionId);
         const sessionFile = payload.sessionFile ?? stubFor(payload.logicalSessionId);
         respond(ch, rpc, {
           bootstrapped: true,
@@ -120,7 +136,7 @@ function scriptHost(child: FakeChild, script: Script): void {
         respond(ch, rpc, { stopped: true });
         return;
       case 'worker.dispose':
-        if (!script.disposes) return;
+        if (stuck(ch)) return;
         respond(ch, rpc, { disposed: true });
         child.post({ host: 'closed', ch });
         return;
@@ -134,6 +150,14 @@ function scriptHost(child: FakeChild, script: Script): void {
     queueMicrotask(() => answer(message as Record<string, unknown>));
     return true;
   });
+  // SIGKILL ends the fake the way it ends a process: an exit follows.
+  child.kill.mockImplementation(() => {
+    queueMicrotask(() => {
+      if (child.exitCode === null && child.signalCode === null) child.die(null, 'SIGKILL');
+    });
+    return true;
+  });
+  return bootstraps;
 }
 
 let processKill: MockInstance;
@@ -151,10 +175,21 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function twoSessionsOnOneHost(script: Script) {
-  const h: FakeHostHarness = createFakeHostHarness();
+/** Sessions `[id, owner]` created in order on one supervisor; each host it spawns is scripted. */
+async function sessionsOnOneHost(
+  sessions: Array<[string, number | undefined]>,
+  scriptFor: (hostIndex: number) => Script = () => ({})
+) {
+  const bootstrapsByHost: string[][] = [];
+  const h: FakeHostHarness = createFakeHostHarness({
+    onSpawn: (child, index) => {
+      bootstrapsByHost[index] = scriptHost(child, scriptFor(index));
+      queueMicrotask(() => child.ready());
+    },
+  });
   const events: RuntimeEvent[] = [];
   const manager = new WorkerManager({
+    host: h.supervisor,
     createSlot: (options) =>
       createPiWorkerSlot({
         ...options,
@@ -167,50 +202,51 @@ async function twoSessionsOnOneHost(script: Script) {
     idleTimeoutMs: 0,
     idleSweepIntervalMs: 0,
   });
-  const first = manager.createSession({
-    sessionId: 's1',
-    workspacePath: '/repo',
-    ownerWebContentsId: 7,
-  });
-  for (let i = 0; i < 50 && h.spawn.mock.calls.length === 0; i += 1) await flushMicrotasks();
-  const child = h.child();
-  scriptHost(child, script);
-  child.ready();
-  await first;
-  await manager.createSession({ sessionId: 's2', workspacePath: '/repo', ownerWebContentsId: 8 });
-  await manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
-  await flushMicrotasks();
-  return { h, child, manager, events };
+  for (const [sessionId, owner] of sessions) {
+    await manager.createSession({ sessionId, workspacePath: '/repo', ownerWebContentsId: owner });
+  }
+  return { h, manager, events, bootstrapsByHost };
 }
 
-const forS1 = (events: RuntimeEvent[]) =>
+/** What one session was told: statuses (with their reason), stops (with their cause), the rest by type. */
+const forSession = (events: RuntimeEvent[], sessionId: string) =>
   events
-    .filter((event) => event.sessionId === 's1')
-    .map((event) =>
-      event.type === 'session.status'
-        ? `status:${(event.payload as { status: string }).status}`
-        : event.type === 'session.stopped'
-          ? `stopped:${(event.payload as { stopCause?: string }).stopCause}`
-          : event.type
-    );
+    .filter((event) => event.sessionId === sessionId)
+    .map((event) => {
+      const payload = (event.payload ?? {}) as Record<string, unknown>;
+      if (event.type === 'session.status') {
+        return `status:${String(payload.status)}${payload.disconnectReason ? `/${String(payload.disconnectReason)}` : ''}`;
+      }
+      if (event.type === 'session.stopped') return `stopped:${String(payload.stopCause)}`;
+      return event.type;
+    });
 
 const controls = (child: FakeChild) =>
   child.sent.filter(
     (message) => typeof message === 'object' && message !== null && !('rpc' in message)
   ) as Array<Record<string, unknown>>;
 
-describe('Stop watchdog on the shared host (P1-3a)', () => {
-  it('a channel the host closes restarts that session on the same host, the other untouched', async () => {
-    const { h, child, manager, events } = await twoSessionsOnOneHost({
-      disposes: true,
-      closes: true,
-    });
+async function everyoneReady(manager: WorkerManager): Promise<void> {
+  await vi.waitFor(() =>
+    expect(manager.getSlotSnapshots().every((slot) => slot.state === 'ready')).toBe(true)
+  );
+}
+
+describe('Stop on the shared host (P1-3a, P1-3c; decision 021)', () => {
+  it('[WMH-05] ladder A: a channel the host closes reopens that session on the same host, the other untouched', async () => {
+    const { h, manager, events } = await sessionsOnOneHost([
+      ['s1', 7],
+      ['s2', 8],
+    ]);
+    const child = h.child();
+    await manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
+    await flushMicrotasks();
     await manager.stop('s1');
     const stopAt = events.length;
     await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
     await vi.advanceTimersByTimeAsync(100);
 
-    expect(forS1(events.slice(stopAt))).toEqual([
+    expect(forSession(events.slice(stopAt), 's1')).toEqual([
       'stopped:forced',
       'status:idle',
       'session.resumed',
@@ -226,43 +262,205 @@ describe('Stop watchdog on the shared host (P1-3a)', () => {
     expect(child.kill).not.toHaveBeenCalled();
     expect(controls(child).filter((message) => message.type === 'shutdown')).toEqual([]);
     // s1 reopened on a fresh channel; s2's channel was never closed.
-    expect(h.supervisor.status()).toMatchObject({ state: 'ready', channels: 2 });
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready', channels: 2, recentFaults: 0 });
     expect(controls(child).filter((message) => message.host === 'close')).toEqual([]);
   });
 
-  it('a channel that never closes ends that session in error in bounded time; the host lives on', async () => {
-    const { h, child, manager, events } = await twoSessionsOnOneHost({
-      disposes: false,
-      closes: false,
-    });
+  it('[WMH-06] ladder B: a channel that never closes restarts the host once, and every session comes back', async () => {
+    const { h, manager, events, bootstrapsByHost } = await sessionsOnOneHost(
+      [
+        ['s1', 7],
+        ['s3', undefined],
+        ['s2', undefined],
+      ],
+      // The first host keeps an agent it cannot stop, and cannot stop itself either.
+      (hostIndex) => (hostIndex === 0 ? { stuck: new Set(['s1']) } : {})
+    );
+    const child = h.child();
+    await manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
+    const s2Turn = await manager.send({ sessionId: 's2', attemptId: 'b1', text: 'go' });
+    await flushMicrotasks();
     await manager.stop('s1');
     const stopAt = events.length;
-    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
-    // T144: the Stop is settled for the user at the watchdog, whatever follows.
-    expect(forS1(events.slice(stopAt))).toEqual(['stopped:forced', 'status:idle']);
 
-    // worker.dispose (3 s) goes unanswered, then the channel close (3 s).
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+    // T144: settled for the user at the watchdog, whatever follows.
+    expect(forSession(events.slice(stopAt), 's1')).toEqual(['stopped:forced', 'status:idle']);
+
+    // worker.dispose (3 s) and then the channel close (3 s) go unanswered: the
+    // host is asked to stop, gracefully first.
     await vi.advanceTimersByTimeAsync(3_000 + 3_000 + 100);
     expect(controls(child).filter((message) => message.host === 'close')).toEqual([
       { host: 'close', ch: 'c1-1' },
     ]);
-    const s1 = manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 's1');
-    expect(s1).toMatchObject({ state: 'error' });
-    expect(s1?.error).toMatch(/restart budget exhausted/);
+    expect(controls(child).filter((message) => message.type === 'shutdown')).toHaveLength(1);
+    expect(child.kill).not.toHaveBeenCalled();
+
+    // Wedged, it is SIGKILLed 3.5 s later; one new host then serves everyone.
+    await vi.advanceTimersByTimeAsync(DSH_HOST_TIMINGS.gracefulStopMs);
+    expect(child.kill).toHaveBeenCalledTimes(1);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    await everyoneReady(manager);
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    // The stuck session first, then the one that was mid-turn, then the rest.
+    expect(bootstrapsByHost[1]).toEqual(['s1', 's2', 's3']);
+    expect(
+      manager.getSlotSnapshots().map((slot) => [slot.logicalSessionId, slot.generation])
+    ).toEqual([
+      ['s1', 2],
+      ['s3', 2],
+      ['s2', 2],
+    ]);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      generation: 2,
+      channels: 3,
+      recentFaults: 1,
+      lastExit: { reason: 'stuck-session', signal: 'SIGKILL', generation: 1 },
+    });
+
+    // The others were restarted on purpose, and are told so.
+    expect(forSession(events.slice(stopAt), 's2')).toEqual([
+      'status:disconnected/engine_restarted',
+      'session.failed',
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+    expect(
+      events.find((event) => event.type === 'session.failed' && event.sessionId === 's2')
+    ).toMatchObject({ requestId: s2Turn, payload: { errorCode: 'dsh_engine_restarted' } });
+    expect(forSession(events.slice(stopAt), 's3')).toEqual([
+      'status:disconnected/engine_restarted',
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+    expect(forSession(events.slice(stopAt), 's1').slice(-3)).toEqual([
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+  });
+
+  it('ladder B needs no signal for a host that stops when asked', async () => {
+    const { h, manager } = await sessionsOnOneHost([['s1', 7]], (hostIndex) =>
+      hostIndex === 0 ? { stuck: new Set(['s1']), exitsOnShutdown: true } : {}
+    );
+    const child = h.child();
+    await manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
+    await flushMicrotasks();
+    await manager.stop('s1');
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS + 3_000 + 3_000 + 100);
+    await everyoneReady(manager);
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      lastExit: { reason: 'stuck-session', code: 0 },
+    });
+    expect(manager.getSlotSnapshots()).toEqual([
+      expect.objectContaining({ logicalSessionId: 's1', state: 'ready', generation: 2 }),
+    ]);
+  });
+});
+
+describe('Host faults on the shared host (P1-3c; decision 020)', () => {
+  it('[WMH-01] a crash brings up one host and reopens every session in priority order, at no session cost', async () => {
+    const { h, manager, events, bootstrapsByHost } = await sessionsOnOneHost([
+      ['idle', undefined],
+      ['busy', undefined],
+      ['fg', 7],
+    ]);
+    const turn = await manager.send({ sessionId: 'busy', attemptId: 'a1', text: 'go' });
+    await flushMicrotasks();
+    const crashAt = events.length;
+
+    h.child().die(null, 'SIGKILL');
+    await everyoneReady(manager);
+
+    expect(h.spawn).toHaveBeenCalledTimes(2);
+    expect(bootstrapsByHost[1]).toEqual(['fg', 'busy', 'idle']);
+    expect(
+      manager
+        .getSlotSnapshots()
+        .map((slot) => [slot.logicalSessionId, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['idle', 2, 0],
+      ['busy', 2, 0],
+      ['fg', 2, 0],
+    ]);
+    expect(forSession(events.slice(crashAt), 'busy')).toEqual([
+      'status:disconnected',
+      'session.failed',
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+    expect(events.find((event) => event.type === 'session.failed')).toMatchObject({
+      requestId: turn,
+      payload: { errorCode: 'dsh_host_crashed' },
+    });
+    expect(forSession(events.slice(crashAt), 'idle')).toEqual([
+      'status:disconnected',
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      generation: 2,
+      channels: 3,
+      recentFaults: 1,
+      lastExit: { reason: 'crashed', signal: 'SIGKILL' },
+    });
+    expect(manager.getStatus().state).toBe('ready');
+  });
+
+  it('[WMH-02] three faults are recovered; the fourth in 5 min waits for a user open', async () => {
+    const { h, manager } = await sessionsOnOneHost([
+      ['s1', 7],
+      ['s2', undefined],
+    ]);
+    for (let fault = 1; fault <= DSH_HOST_RESTART_BUDGET.restarts; fault += 1) {
+      h.child().die(null, 'SIGKILL');
+      await vi.waitFor(() => expect(h.spawn).toHaveBeenCalledTimes(fault + 1));
+      await everyoneReady(manager);
+    }
+    // Three host crashes inside a minute cost no session anything.
+    expect(
+      manager.getSlotSnapshots().map((slot) => [slot.state, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['ready', 4, 0],
+      ['ready', 4, 0],
+    ]);
+
+    h.child().die(null, 'SIGKILL');
+    await vi.waitFor(() =>
+      expect(manager.getSlotSnapshots().map((slot) => slot.state)).toEqual(['error', 'error'])
+    );
+    expect(h.spawn).toHaveBeenCalledTimes(DSH_HOST_RESTART_BUDGET.restarts + 1);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'failed',
+      recentFaults: 4,
+      failure: { code: 'DSH_HOST_UNAVAILABLE' },
+    });
+    for (const slot of manager.getSlotSnapshots()) {
+      expect(slot.error).toMatch(/^dsh_host_unavailable: DSH_HOST_UNAVAILABLE: /);
+    }
     expect(manager.getStatus().state).toBe('degraded');
 
-    // The other session never noticed, and keeps working on the same host.
-    const s2 = manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 's2');
-    expect(s2).toMatchObject({ state: 'ready', generation: 1 });
-    await manager.send({
-      sessionId: 's2',
-      attemptId: 'b1',
-      text: 'still here',
-      ownerWebContentsId: 8,
+    // A user's open may start the host once more, whatever the budget says.
+    await manager.resumeSession({
+      sessionId: 's1',
+      sessionFile: stubFor('s1'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 7,
     });
-    expect(h.spawn).toHaveBeenCalledTimes(1);
-    expect(child.kill).not.toHaveBeenCalled();
-    expect(controls(child).filter((message) => message.type === 'shutdown')).toEqual([]);
+    expect(h.spawn).toHaveBeenCalledTimes(DSH_HOST_RESTART_BUDGET.restarts + 2);
+    expect(manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 's1')).toMatchObject(
+      { state: 'ready', generation: 1 }
+    );
     expect(h.supervisor.status()).toMatchObject({ state: 'ready' });
   });
 });

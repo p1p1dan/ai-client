@@ -24,7 +24,8 @@ export interface UseResumeSessionResult {
       model?: string;
       /**
        * concurrency-02 — reopen a session whose writer lock still looks held.
-       * Passed only by the `session_locked` notice's "Force takeover" button.
+       * Passed only by the `session_locked` notice's "Restart engine" button;
+       * on DSH, Main restarts the shared engine before it reopens (P1-3c).
        */
       forceTakeover?: boolean;
     }

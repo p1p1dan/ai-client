@@ -935,7 +935,9 @@ export function MessageTimeline({
                         what a reader can act on, the sentence is the evidence
                         they forward when they ask for help. */}
                       <p className="mt-1 text-muted-foreground">{t(failure.reason)}</p>
-                      {lastError && failedCardShowsError && (
+                      {/* P1-3c: an engine-process sentence ("Worker exited …")
+                        is not evidence a user can forward; the reason says it. */}
+                      {lastError && failedCardShowsError && failure.showsDetail && (
                         // D25 M3d: machine diagnostic text (rawEvents=/hostAfter=/cwd=), same
                         // content family as ChatComposer's destructive banner — mono.
                         // Round-10 ③: suppressed when the latest error notice above
@@ -1061,6 +1063,8 @@ const HISTORY_ERROR_ICON = {
   model_missing: PackageSearch,
   // dsh-rebase decision 005: viewable, not continuable — nothing is wrong with it.
   legacy_session_readonly: Eye,
+  // dsh-rebase P1-3c: the engine is down, not the chat.
+  engine_unavailable: TriangleAlert,
   unknown: TriangleAlert,
 } as const;
 
@@ -1127,8 +1131,9 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
     }
   };
 
-  // concurrency-02: the same resume, with the lock forced. Nothing else about
-  // the call changes — the model still has to be resolved, or a session opened
+  // concurrency-02: the same resume, with `forceTakeover`; on DSH Main answers
+  // it by restarting the shared engine first (P1-3c). Nothing else about the
+  // call changes — the model still has to be resolved, or a session opened
   // through this button would lose the user's pick (see `handleRetry`).
   const handleForceTakeover = async () => {
     setTakingOver(true);
@@ -1217,8 +1222,8 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
             </Button>
           )}
           {/* concurrency-02: second, never first. Retry is the harmless answer
-              when the holder is a window the user is about to close; the
-              takeover displaces a writer that may still be alive. */}
+              when the holder is about to let go; the engine restart (P1-3c)
+              interrupts every other chat's running reply. */}
           {takeoverControl.visible && view.forceTakeover && (
             <Button
               size="xs"

@@ -1266,8 +1266,14 @@ function applyRuntimeEventCore(
       // conversation on purpose, the user did not ask for this, and the
       // transcript they were reading must not blank out under them. It costs a
       // resume on the next send, which is exactly what reclamation trades away.
+      //
+      // dsh-rebase P1-3c: `engine_restarted` too — Main restarted the shared
+      // engine and this session's connection went with it. Main reopens it by
+      // itself (its `session.resumed` binds it again); if that cannot happen,
+      // the next send resumes instead of addressing a connection that is gone.
       const hostBoundSessionIds =
-        event.payload.disconnectReason === 'capacity_reclaimed'
+        event.payload.disconnectReason === 'capacity_reclaimed' ||
+        event.payload.disconnectReason === 'engine_restarted'
           ? state.hostBoundSessionIds.filter((id) => id !== sessionId)
           : state.hostBoundSessionIds;
       // D1: a failed run closes with this idle. Letting it overwrite `failed`

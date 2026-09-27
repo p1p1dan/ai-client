@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
-import { DSH_HOST_TIMINGS } from '../DshHostSupervisor';
+import { DSH_HOST_RESTART_BUDGET, DSH_HOST_TIMINGS } from '../DshHostSupervisor';
 import {
   createFakeHostHarness,
   FAKE_PID,
@@ -740,5 +740,125 @@ describe('DshHostSupervisor crash and stderr', () => {
       expect.stringContaining('unrecognized message (string)'),
     ]);
     expect(h.supervisor.status().state).toBe('ready');
+  });
+});
+
+describe('DshHostSupervisor restart budget (decision 020)', () => {
+  const B = DSH_HOST_RESTART_BUDGET;
+
+  /** The live host dies on its own. */
+  const crash = (h: ReturnType<typeof createFakeHostHarness>) => h.child().die(null, 'SIGKILL');
+
+  /** An automatic request brings the next host up. */
+  async function recover(h: ReturnType<typeof createFakeHostHarness>) {
+    const next = h.supervisor.ensureHost();
+    h.child().ready();
+    return next;
+  }
+
+  it('[SH-08] the fourth fault in 5 min refuses automatic starts; each user action gets one host', async () => {
+    const h = createFakeHostHarness();
+    await startReadyHost(h);
+    for (let fault = 1; fault <= B.restarts; fault += 1) {
+      crash(h);
+      await recover(h);
+    }
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      generation: B.restarts + 1,
+      recentFaults: B.restarts,
+    });
+
+    crash(h);
+    await expect(h.supervisor.ensureHost()).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    await expect(h.supervisor.openChannel()).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+    });
+    expect(h.spawn).toHaveBeenCalledTimes(B.restarts + 1);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'failed',
+      recentFaults: B.restarts + 1,
+      failure: { code: 'DSH_HOST_UNAVAILABLE' },
+    });
+    expect(
+      errorLines().some((line) => line.includes('it starts again only for a user action'))
+    ).toBe(true);
+
+    // A user's open is let through, budget or not.
+    const opened = h.supervisor.openChannel({ userInitiated: true });
+    expect(h.spawn).toHaveBeenCalledTimes(B.restarts + 2);
+    h.child().ready();
+    await expect(opened).resolves.toMatchObject({ ch: `c${B.restarts + 2}-1` });
+    // The next fault still finds it spent; the next user action is let through again.
+    crash(h);
+    await expect(h.supervisor.ensureHost()).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    const again = h.supervisor.ensureHost({ userInitiated: true });
+    h.child().ready();
+    await expect(again).resolves.toMatchObject({ generation: B.restarts + 3 });
+
+    // Faults age out of the window: automatic restarts come back.
+    vi.setSystemTime(Date.now() + B.windowMs);
+    crash(h);
+    await expect(recover(h)).resolves.toMatchObject({ generation: B.restarts + 4 });
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready', recentFaults: 1 });
+  });
+
+  it('[SH-08] planned stops and restarts are not faults; a Stop ladder B restart is', async () => {
+    const h = createFakeHostHarness();
+    let child = await startReadyHost(h);
+    for (const reason of ['idle', 'invalidate'] as const) {
+      const stopping = h.supervisor.shutdown(reason);
+      child.die(0);
+      await stopping;
+      child = await startReadyHost(h);
+    }
+    for (const [reason, options] of [
+      ['user', { userInitiated: true }],
+      ['config', {}],
+    ] as const) {
+      const restarted = h.supervisor.restart(reason, options);
+      child.die(0);
+      await flushMicrotasks();
+      h.child().ready();
+      await restarted;
+      child = h.child();
+    }
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      recentFaults: 0,
+      lastExit: { reason: 'config' },
+    });
+    // Nothing is replayed for them either: they are routine.
+    expect(errorLines().filter((line) => line.includes('stderr'))).toEqual([]);
+
+    const stuck = h.supervisor.restart('stuck-session');
+    child.die(0);
+    await flushMicrotasks();
+    h.child().ready();
+    await stuck;
+    expect(h.supervisor.status()).toMatchObject({
+      recentFaults: 1,
+      lastExit: { reason: 'stuck-session' },
+    });
+  });
+
+  it('[SH-08] a ladder B restart past the budget ends failed, with no new host', async () => {
+    const h = createFakeHostHarness();
+    await startReadyHost(h);
+    for (let fault = 1; fault <= B.restarts; fault += 1) {
+      crash(h);
+      await recover(h);
+    }
+    const child = h.child();
+    const restarted = h.supervisor.restart('stuck-session');
+    child.die(0);
+    await expect(restarted).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    expect(h.spawn).toHaveBeenCalledTimes(B.restarts + 1);
+    expect(h.supervisor.status()).toMatchObject({ state: 'failed', recentFaults: B.restarts + 1 });
+    // A user's restart is refused by nothing but a host that will not die.
+    const user = h.supervisor.restart('user', { userInitiated: true });
+    expect(h.spawn).toHaveBeenCalledTimes(B.restarts + 2);
+    h.child().ready();
+    await expect(user).resolves.toMatchObject({ generation: B.restarts + 2 });
   });
 });
