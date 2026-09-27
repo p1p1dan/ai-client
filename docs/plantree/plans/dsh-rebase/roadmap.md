@@ -19,7 +19,7 @@
 
 ## P1 双引擎（草案待用户过目，约 6～8 人周）
 
-目标：DSH 成为应用里可选的第二引擎。设置里切换，新会话按设置选引擎，之后跟随会话；自有 runtime 仍是默认。P1 的交付是一个带「DSH 引擎（实验）」开关的测试版。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)，从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。
+目标：DSH 成为应用里可选的第二引擎。设置里切换，新会话按设置选引擎，之后跟随会话；自有 runtime 仍是默认。P1 的交付是一个带「DSH 引擎（实验）」开关的测试版。分支：P1 接着在 `feat/dsh-p0-probe` 上做，最后一起合 main（用户 2026-09-26 定）。依据：[决策 001](decisions/001-route-b-and-scope.md)、[003](decisions/003-p0-closeout-enter-p1.md)，从 P0 带来的必做项见 [P0-5 收口](evidence/p0-5-closeout-2026-09-26.md#p1-入口从-p0-带过来的必做项)。
 
 | ID | 状态 | 内容 | 退出判据 |
 |---|---|---|---|
