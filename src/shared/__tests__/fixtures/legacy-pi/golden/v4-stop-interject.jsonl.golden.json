@@ -1,0 +1,566 @@
+{
+  "file": "v4-stop-interject.jsonl",
+  "bytes": 4502,
+  "sha256": "d93d3d45c711d7ebf1b8f0dafc411326f8248f196f4e635eb57309d4b692c35c",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "ebb63047-9231-46b5-be38-c081d568092e",
+      "createdAt": 1790513904728,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:24.728Z"
+    },
+    "seq": 12,
+    "leafId": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "702c3dbe-96f8-46e8-ac5a-3d3458c6cfde",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513904733
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "2fff2bdb-2df7-4bee-97f6-408804cb903c",
+        "seq": 2,
+        "parentId": "702c3dbe-96f8-46e8-ac5a-3d3458c6cfde",
+        "timestamp": 1790513904733
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "auto"
+        },
+        "id": "95aeea28-352d-42ff-b2a8-b646bc56297a",
+        "seq": 3,
+        "parentId": "2fff2bdb-2df7-4bee-97f6-408804cb903c",
+        "timestamp": 1790513904734
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Tell me a story."
+            }
+          ],
+          "timestamp": 1790513904734
+        },
+        "id": "8114f0b7-1657-4e71-a480-992234e980d9",
+        "seq": 4,
+        "parentId": "95aeea28-352d-42ff-b2a8-b646bc56297a",
+        "timestamp": 1790513904734
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Once upon a time"
+            }
+          ],
+          "api": "faux:1790513904724:924oiy66s07",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 924,
+            "output": 31,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 955,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "aborted",
+          "errorMessage": "Request was aborted",
+          "timestamp": 1790513904936
+        },
+        "id": "43b03256-e654-46b8-96bb-00931acda8b3",
+        "seq": 5,
+        "parentId": "8114f0b7-1657-4e71-a480-992234e980d9",
+        "timestamp": 1790513904936
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.runStop",
+        "data": {
+          "cause": "user_stop",
+          "runId": "bdf0b5fb-a338-4930-bf23-e02a312da1c5"
+        },
+        "id": "5c204861-fe00-406b-939b-23d8bcce5132",
+        "seq": 6,
+        "parentId": "43b03256-e654-46b8-96bb-00931acda8b3",
+        "timestamp": 1790513904937
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Check the notes, then continue."
+            }
+          ],
+          "timestamp": 1790513904938
+        },
+        "id": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+        "seq": 7,
+        "parentId": "5c204861-fe00-406b-939b-23d8bcce5132",
+        "timestamp": 1790513904938
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Checking."
+            },
+            {
+              "type": "toolCall",
+              "id": "call-read-stop",
+              "name": "read",
+              "arguments": {
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "faux:1790513904724:924oiy66s07",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 933,
+            "output": 9,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 942,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790513904724
+        },
+        "id": "f47953cb-7452-443e-866a-54abda342adc",
+        "seq": 8,
+        "parentId": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+        "timestamp": 1790513905140
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call-read-stop",
+          "toolName": "read",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "details": {
+            "path": "/tmp/aiclient-legacy-pi-corpus/workspace/notes.txt",
+            "bytes": 11,
+            "truncated": false,
+            "nextOffset": 3
+          },
+          "isError": false,
+          "timestamp": 1790513905143
+        },
+        "id": "a3e5533b-b532-4075-99ee-560fbde90441",
+        "seq": 9,
+        "parentId": "f47953cb-7452-443e-866a-54abda342adc",
+        "timestamp": 1790513905143
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.runStop",
+        "data": {
+          "cause": "interjected",
+          "runId": "363e48ae-f746-472f-b251-3cfd220d28ff"
+        },
+        "id": "fe3cceea-a596-42f4-aac5-6f4090917b2a",
+        "seq": 10,
+        "parentId": "a3e5533b-b532-4075-99ee-560fbde90441",
+        "timestamp": 1790513905144
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Now summarize."
+            }
+          ],
+          "timestamp": 1790513905145
+        },
+        "id": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+        "seq": 11,
+        "parentId": "fe3cceea-a596-42f4-aac5-6f4090917b2a",
+        "timestamp": 1790513905145
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Here is the summary you asked for."
+            }
+          ],
+          "api": "faux:1790513904724:924oiy66s07",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 958,
+            "output": 9,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 967,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513904724
+        },
+        "id": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+        "seq": 12,
+        "parentId": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+        "timestamp": 1790513905373
+      }
+    ]
+  },
+  "branch": [
+    "702c3dbe-96f8-46e8-ac5a-3d3458c6cfde",
+    "2fff2bdb-2df7-4bee-97f6-408804cb903c",
+    "95aeea28-352d-42ff-b2a8-b646bc56297a",
+    "8114f0b7-1657-4e71-a480-992234e980d9",
+    "43b03256-e654-46b8-96bb-00931acda8b3",
+    "5c204861-fe00-406b-939b-23d8bcce5132",
+    "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+    "f47953cb-7452-443e-866a-54abda342adc",
+    "a3e5533b-b532-4075-99ee-560fbde90441",
+    "fe3cceea-a596-42f4-aac5-6f4090917b2a",
+    "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+    "86f2a93a-eb83-4a85-838f-ec04713c141f"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Tell me a story."
+      },
+      {
+        "role": "user",
+        "text": "Check the notes, then continue."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["text", "toolCall:read:call-read-stop"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call-read-stop",
+        "isError": false
+      },
+      {
+        "role": "user",
+        "text": "Now summarize."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "history": [
+    {
+      "id": "h:8114f0b7-1657-4e71-a480-992234e980d9",
+      "entryId": "8114f0b7-1657-4e71-a480-992234e980d9",
+      "role": "user",
+      "timestamp": 1790513904734,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8114f0b7-1657-4e71-a480-992234e980d9:text:0",
+          "text": "Tell me a story."
+        }
+      ]
+    },
+    {
+      "id": "h:43b03256-e654-46b8-96bb-00931acda8b3",
+      "entryId": "43b03256-e654-46b8-96bb-00931acda8b3",
+      "role": "assistant",
+      "timestamp": 1790513904936,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:43b03256-e654-46b8-96bb-00931acda8b3:text:0",
+          "text": "Once upon a time"
+        }
+      ],
+      "stopReason": "aborted",
+      "incomplete": true,
+      "stopCause": "user_stop",
+      "settledAt": 1790513904937
+    },
+    {
+      "id": "h:434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+      "entryId": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+      "role": "user",
+      "timestamp": 1790513904938,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:434e0387-57f3-4d45-aa1e-e7024d2d14f7:text:0",
+          "text": "Check the notes, then continue."
+        }
+      ]
+    },
+    {
+      "id": "h:f47953cb-7452-443e-866a-54abda342adc",
+      "entryId": "f47953cb-7452-443e-866a-54abda342adc",
+      "role": "assistant",
+      "timestamp": 1790513905140,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:f47953cb-7452-443e-866a-54abda342adc:text:0",
+          "text": "Checking."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:f47953cb-7452-443e-866a-54abda342adc:tool-call:call-read-stop",
+          "toolCallId": "call-read-stop",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:a3e5533b-b532-4075-99ee-560fbde90441:tool-result:call-read-stop",
+          "toolCallId": "call-read-stop",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1790513905144,
+      "stopCause": "interjected"
+    },
+    {
+      "id": "h:1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+      "entryId": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+      "role": "user",
+      "timestamp": 1790513905145,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:1f153a12-d8f3-4dcc-9693-ff76f53f18ee:text:0",
+          "text": "Now summarize."
+        }
+      ]
+    },
+    {
+      "id": "h:86f2a93a-eb83-4a85-838f-ec04713c141f",
+      "entryId": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+      "role": "assistant",
+      "timestamp": 1790513905373,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:86f2a93a-eb83-4a85-838f-ec04713c141f:text:0",
+          "text": "Here is the summary you asked for."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-stop-interject.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+      "fileTailEntryId": "86f2a93a-eb83-4a85-838f-ec04713c141f"
+    },
+    "nodes": [
+      {
+        "id": "702c3dbe-96f8-46e8-ac5a-3d3458c6cfde",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513904733,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "2fff2bdb-2df7-4bee-97f6-408804cb903c",
+        "parentId": "702c3dbe-96f8-46e8-ac5a-3d3458c6cfde",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513904733,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "95aeea28-352d-42ff-b2a8-b646bc56297a",
+        "parentId": "2fff2bdb-2df7-4bee-97f6-408804cb903c",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513904734,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "8114f0b7-1657-4e71-a480-992234e980d9",
+        "parentId": "95aeea28-352d-42ff-b2a8-b646bc56297a",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Tell me a story.",
+        "role": "user",
+        "timestamp": 1790513904734,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "43b03256-e654-46b8-96bb-00931acda8b3",
+        "parentId": "8114f0b7-1657-4e71-a480-992234e980d9",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "Once upon a time",
+        "role": "assistant",
+        "timestamp": 1790513904936,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+        "parentId": "43b03256-e654-46b8-96bb-00931acda8b3",
+        "depth": 5,
+        "entryType": "message",
+        "preview": "Check the notes, then continue.",
+        "role": "user",
+        "timestamp": 1790513904938,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "f47953cb-7452-443e-866a-54abda342adc",
+        "parentId": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+        "depth": 6,
+        "entryType": "message",
+        "preview": "Checking.",
+        "role": "assistant",
+        "timestamp": 1790513905140,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "a3e5533b-b532-4075-99ee-560fbde90441",
+        "parentId": "f47953cb-7452-443e-866a-54abda342adc",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "alpha beta",
+        "role": "toolResult",
+        "timestamp": 1790513905143,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+        "parentId": "a3e5533b-b532-4075-99ee-560fbde90441",
+        "depth": 8,
+        "entryType": "message",
+        "preview": "Now summarize.",
+        "role": "user",
+        "timestamp": 1790513905145,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+        "parentId": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+        "depth": 9,
+        "entryType": "message",
+        "preview": "Here is the summary you asked for.",
+        "role": "assistant",
+        "timestamp": 1790513905373,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 10,
+    "returnedNodes": 10,
+    "truncated": false
+  }
+}

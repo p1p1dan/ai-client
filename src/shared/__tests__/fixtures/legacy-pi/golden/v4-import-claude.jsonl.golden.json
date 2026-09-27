@@ -1,0 +1,492 @@
+{
+  "file": "v4-import-claude.jsonl",
+  "bytes": 3934,
+  "sha256": "759225bb9c4232a70406a6e17729992254c2e5e0d2cf2ff1c14e2a89dc6a5fd0",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "import-claude-0001",
+      "createdAt": 1790513905629,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.629Z"
+    },
+    "seq": 9,
+    "leafId": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+    "name": "Imported Claude Code session",
+    "entries": [
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.provenance",
+        "data": {
+          "version": 1,
+          "sourceKind": "claude-code",
+          "stableSourceIdentity": "claude-code:corpus:0001",
+          "sourceSessionId": "claude-session-0001",
+          "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000017",
+          "schemaVersion": 1,
+          "importerVersion": "b4-legacy-v2",
+          "startedAt": 1785574800000,
+          "endedAt": 1785574860000,
+          "diagnostics": ["1 unsupported entry was skipped"]
+        },
+        "id": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905630
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": "Please check the build.",
+          "timestamp": 1785574801000
+        },
+        "id": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+        "seq": 3,
+        "parentId": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+        "timestamp": 1790513905632
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Run the build first."
+            },
+            {
+              "type": "text",
+              "text": "Running the build."
+            },
+            {
+              "type": "toolCall",
+              "id": "toolu_01",
+              "name": "Bash",
+              "arguments": {
+                "command": "npm run build"
+              }
+            }
+          ],
+          "api": "legacy-import",
+          "provider": "legacy-import",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1785574802000
+        },
+        "id": "726562c5-c1c0-4541-88f3-64bacac1a186",
+        "seq": 4,
+        "parentId": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+        "timestamp": 1790513905633
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "toolu_01",
+          "toolName": "Bash",
+          "content": [
+            {
+              "type": "text",
+              "text": "build ok"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1785574803000
+        },
+        "id": "28f931c9-0e07-43f4-9352-6b667c57c43b",
+        "seq": 5,
+        "parentId": "726562c5-c1c0-4541-88f3-64bacac1a186",
+        "timestamp": 1790513905633
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.display",
+        "data": {
+          "version": 1,
+          "displayKind": "tool",
+          "title": "Read",
+          "toolCallId": "toolu_02",
+          "toolName": "Read",
+          "input": {
+            "file_path": "README.md"
+          },
+          "output": "# Readme",
+          "timestamp": 1785574804000
+        },
+        "id": "9723296f-2745-418f-a994-4f35faa208d3",
+        "seq": 6,
+        "parentId": "28f931c9-0e07-43f4-9352-6b667c57c43b",
+        "timestamp": 1790513905633
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.display",
+        "data": {
+          "version": 1,
+          "displayKind": "attachment",
+          "title": "screenshot.png",
+          "body": "Image attachment was not imported.",
+          "redacted": true,
+          "timestamp": 1785574805000
+        },
+        "id": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+        "seq": 7,
+        "parentId": "9723296f-2745-418f-a994-4f35faa208d3",
+        "timestamp": 1790513905633
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.display",
+        "data": {
+          "version": 1,
+          "displayKind": "diagnostic",
+          "title": "Skipped entries",
+          "body": "1 unsupported entry was skipped.",
+          "timestamp": 1785574806000
+        },
+        "id": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+        "seq": 8,
+        "parentId": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+        "timestamp": 1790513905634
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The build passed."
+            }
+          ],
+          "api": "legacy-import",
+          "provider": "legacy-import",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1785574807000
+        },
+        "id": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+        "seq": 9,
+        "parentId": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+        "timestamp": 1790513905634
+      }
+    ]
+  },
+  "branch": [
+    "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+    "9194ca33-86f7-4a41-9df1-8989bc722a56",
+    "726562c5-c1c0-4541-88f3-64bacac1a186",
+    "28f931c9-0e07-43f4-9352-6b667c57c43b",
+    "9723296f-2745-418f-a994-4f35faa208d3",
+    "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+    "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+    "cac5d55c-c399-4b26-ade3-27ce1bbfaba4"
+  ],
+  "context": {
+    "model": {
+      "provider": "legacy-import",
+      "modelId": "claude-legacy"
+    },
+    "thinkingLevel": "off",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Please check the build."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["thinking", "text", "toolCall:Bash:toolu_01"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "toolu_01",
+        "isError": false
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": null,
+  "history": [
+    {
+      "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+      "entryId": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+      "role": "system",
+      "timestamp": 1790513905630,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96:provenance:0",
+          "text": "This history was imported from a claude-code session (claude-session-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
+          "notice": {
+            "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
+            "params": {
+              "sourceKind": "claude-code",
+              "sourceSessionId": "claude-session-0001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "h:9194ca33-86f7-4a41-9df1-8989bc722a56",
+      "entryId": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+      "role": "user",
+      "timestamp": 1790513905632,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:9194ca33-86f7-4a41-9df1-8989bc722a56:text:0",
+          "text": "Please check the build."
+        }
+      ]
+    },
+    {
+      "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186",
+      "entryId": "726562c5-c1c0-4541-88f3-64bacac1a186",
+      "role": "assistant",
+      "timestamp": 1790513905633,
+      "model": "legacy-import/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:thinking:0",
+          "text": "Run the build first."
+        },
+        {
+          "type": "text",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:text:1",
+          "text": "Running the build."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:tool-call:toolu_01",
+          "toolCallId": "toolu_01",
+          "name": "Bash",
+          "input": {
+            "command": "npm run build"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:28f931c9-0e07-43f4-9352-6b667c57c43b:tool-result:toolu_01",
+          "toolCallId": "toolu_01",
+          "ok": true,
+          "output": "build ok"
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:9723296f-2745-418f-a994-4f35faa208d3",
+      "entryId": "9723296f-2745-418f-a994-4f35faa208d3",
+      "role": "assistant",
+      "timestamp": 1790513905633,
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:9723296f-2745-418f-a994-4f35faa208d3:legacy-tool-call:0",
+          "toolCallId": "toolu_02",
+          "name": "Read",
+          "input": {
+            "file_path": "README.md"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:9723296f-2745-418f-a994-4f35faa208d3:legacy-tool-result:0",
+          "toolCallId": "toolu_02",
+          "ok": true,
+          "output": "# Readme"
+        }
+      ]
+    },
+    {
+      "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2",
+      "entryId": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+      "role": "system",
+      "timestamp": 1790513905633,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2:legacy-display:0",
+          "text": "screenshot.png\n\nImage attachment was not imported."
+        }
+      ]
+    },
+    {
+      "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+      "entryId": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+      "role": "system",
+      "timestamp": 1790513905634,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a:legacy-display:0",
+          "text": "Skipped entries\n\n1 unsupported entry was skipped."
+        }
+      ]
+    },
+    {
+      "id": "h:cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+      "entryId": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+      "role": "assistant",
+      "timestamp": 1790513905634,
+      "model": "legacy-import/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:cac5d55c-c399-4b26-ade3-27ce1bbfaba4:text:0",
+          "text": "The build passed."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-import-claude.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+      "fileTailEntryId": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4"
+    },
+    "nodes": [
+      {
+        "id": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "custom",
+        "timestamp": 1790513905630,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+        "parentId": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+        "depth": 1,
+        "entryType": "message",
+        "preview": "Please check the build.",
+        "role": "user",
+        "timestamp": 1790513905632,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "726562c5-c1c0-4541-88f3-64bacac1a186",
+        "parentId": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+        "depth": 2,
+        "entryType": "message",
+        "preview": "Running the build.",
+        "role": "assistant",
+        "timestamp": 1790513905633,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "28f931c9-0e07-43f4-9352-6b667c57c43b",
+        "parentId": "726562c5-c1c0-4541-88f3-64bacac1a186",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "build ok",
+        "role": "toolResult",
+        "timestamp": 1790513905633,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "9723296f-2745-418f-a994-4f35faa208d3",
+        "parentId": "28f931c9-0e07-43f4-9352-6b667c57c43b",
+        "depth": 4,
+        "entryType": "custom",
+        "timestamp": 1790513905633,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+        "parentId": "9723296f-2745-418f-a994-4f35faa208d3",
+        "depth": 5,
+        "entryType": "custom",
+        "timestamp": 1790513905633,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+        "parentId": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
+        "depth": 6,
+        "entryType": "custom",
+        "timestamp": 1790513905634,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+        "parentId": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "The build passed.",
+        "role": "assistant",
+        "timestamp": 1790513905634,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 8,
+    "returnedNodes": 8,
+    "truncated": false
+  }
+}

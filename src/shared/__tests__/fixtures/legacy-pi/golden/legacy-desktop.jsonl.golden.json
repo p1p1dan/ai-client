@@ -1,0 +1,639 @@
+{
+  "file": "legacy-desktop.jsonl",
+  "bytes": 1965,
+  "sha256": "64377dde1faab2d168e4b930e1be6c979d0cb65cb9413036e6f382a31d3073cf",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "golden-0001",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "createdAt": 1772360400000,
+      "metadata": {
+        "importedFrom": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-desktop.jsonl",
+        "sourceSha256": "64377dde1faab2d168e4b930e1be6c979d0cb65cb9413036e6f382a31d3073cf",
+        "sourceSessionId": "desktop-session",
+        "sourceFormat": "pi-desktop-1",
+        "legacyHeader": {
+          "type": "session",
+          "schema": 1,
+          "sessionId": "desktop-session",
+          "createdAt": "2026-03-01T10:20:00.000Z"
+        }
+      },
+      "type": "session",
+      "timestamp": "2026-03-01T10:20:00.000Z"
+    },
+    "seq": 9,
+    "leafId": "d-a3",
+    "entries": [
+      {
+        "id": "d-u1",
+        "timestamp": 1772360460000,
+        "parentId": null,
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "desktop: read the notes"
+            },
+            {
+              "type": "image",
+              "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+              "mimeType": "image/png"
+            }
+          ],
+          "timestamp": 1772360460000
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-u1",
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "desktop: read the notes"
+            },
+            {
+              "type": "attachment",
+              "attachment": {
+                "name": "diagram.png",
+                "mediaType": "image/png",
+                "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="
+              }
+            }
+          ],
+          "createdAt": "2026-03-01T10:21:00.000Z"
+        },
+        "seq": 1
+      },
+      {
+        "id": "d-a1",
+        "timestamp": 1772360520000,
+        "parentId": "d-u1",
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Read it first."
+            },
+            {
+              "type": "text",
+              "text": "Reading."
+            },
+            {
+              "type": "toolCall",
+              "id": "d-call-1",
+              "name": "read",
+              "arguments": {
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "timestamp": 1772360520000,
+          "api": "openai-completions",
+          "provider": "anthropic",
+          "model": "claude-desktop",
+          "stopReason": "toolUse",
+          "usage": {
+            "inputTokens": 40,
+            "outputTokens": 5,
+            "input": 40,
+            "output": 5,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 45,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-a1",
+          "role": "assistant",
+          "blocks": [
+            {
+              "type": "thinking",
+              "thinking": "Read it first."
+            },
+            {
+              "type": "text",
+              "text": "Reading."
+            }
+          ],
+          "meta": {
+            "providerId": "anthropic",
+            "modelId": "claude-desktop",
+            "usage": {
+              "inputTokens": 40,
+              "outputTokens": 5
+            }
+          },
+          "createdAt": "2026-03-01T10:22:00.000Z"
+        },
+        "seq": 2
+      },
+      {
+        "id": "d-t1",
+        "timestamp": 1772360580000,
+        "parentId": "d-a1",
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "timestamp": 1772360580000,
+          "toolCallId": "d-call-1",
+          "toolName": "read",
+          "isError": false,
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta"
+            }
+          ]
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-t1",
+          "role": "tool",
+          "toolName": "read",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "callId": "d-call-1",
+              "name": "read",
+              "args": {
+                "path": "notes.txt"
+              },
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "alpha\nbeta"
+                  }
+                ]
+              }
+            }
+          ],
+          "createdAt": "2026-03-01T10:23:00.000Z"
+        },
+        "seq": 3
+      },
+      {
+        "id": "d-sub",
+        "timestamp": 1772360640000,
+        "parentId": "d-t1",
+        "type": "custom",
+        "customType": "legacy:subagent",
+        "data": {
+          "type": "message",
+          "id": "d-sub",
+          "role": "assistant",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Delegate-private text."
+            }
+          ],
+          "meta": {
+            "parentToolCallId": "d-call-1"
+          },
+          "createdAt": "2026-03-01T10:24:00.000Z"
+        },
+        "seq": 4
+      },
+      {
+        "id": "d-a2",
+        "timestamp": 1772360700000,
+        "parentId": "d-sub",
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The notes hold alpha and beta."
+            }
+          ],
+          "timestamp": 1772360700000,
+          "api": "openai-completions",
+          "provider": "legacy",
+          "model": "legacy",
+          "stopReason": "stop",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-a2",
+          "role": "assistant",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "The notes hold alpha and beta."
+            }
+          ],
+          "createdAt": "2026-03-01T10:25:00.000Z"
+        },
+        "seq": 5
+      },
+      {
+        "id": "d-u2",
+        "timestamp": 1772360760000,
+        "parentId": "d-a2",
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "desktop: thanks"
+            },
+            {
+              "type": "text",
+              "text": "[Attachment: missing.pdf]"
+            }
+          ],
+          "timestamp": 1772360760000
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-u2",
+          "role": "user",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "desktop: thanks"
+            },
+            {
+              "type": "attachment",
+              "attachment": {
+                "name": "missing.pdf",
+                "path": "/nowhere/missing.pdf"
+              }
+            }
+          ],
+          "createdAt": "2026-03-01T10:26:00.000Z"
+        },
+        "seq": 6
+      },
+      {
+        "type": "compaction",
+        "id": "d-c1",
+        "summary": "desktop summary",
+        "throughMessageId": "d-a2",
+        "tokensBefore": 500,
+        "retainedTail": [
+          {
+            "role": "user",
+            "content": "kept desktop task",
+            "timestamp": 1772360340000
+          },
+          {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "desktop: thanks"
+              },
+              {
+                "type": "text",
+                "text": "[Attachment: missing.pdf]"
+              }
+            ],
+            "timestamp": 1772360760000
+          }
+        ],
+        "createdAt": "2026-03-01T10:27:00.000Z",
+        "timestamp": 1772360820000,
+        "parentId": "d-u2",
+        "seq": 7
+      },
+      {
+        "id": "d-a3",
+        "timestamp": 1772360880000,
+        "parentId": "d-c1",
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Rate limited."
+            }
+          ],
+          "timestamp": 1772360880000,
+          "api": "openai-completions",
+          "provider": "legacy",
+          "model": "legacy",
+          "stopReason": "error",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          }
+        },
+        "legacyRecord": {
+          "type": "message",
+          "id": "d-a3",
+          "role": "assistant",
+          "blocks": [
+            {
+              "type": "text",
+              "text": "Rate limited."
+            }
+          ],
+          "meta": {
+            "status": "error",
+            "error": "rate limited"
+          },
+          "createdAt": "2026-03-01T10:28:00.000Z"
+        },
+        "seq": 8
+      }
+    ]
+  },
+  "branch": ["d-u1", "d-a1", "d-t1", "d-sub", "d-a2", "d-u2", "d-c1", "d-a3"],
+  "context": {
+    "model": {
+      "provider": "legacy",
+      "modelId": "legacy"
+    },
+    "thinkingLevel": "off",
+    "messages": [
+      {
+        "role": "compactionSummary",
+        "summary": "desktop summary"
+      },
+      {
+        "role": "user",
+        "text": "kept desktop task"
+      },
+      {
+        "role": "user",
+        "text": "desktop: thanks[Attachment: missing.pdf]"
+      }
+    ]
+  },
+  "permissions": null,
+  "history": [
+    {
+      "id": "h:d-u1",
+      "entryId": "d-u1",
+      "role": "user",
+      "timestamp": 1772360460000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-u1:text:0",
+          "text": "desktop: read the notes"
+        }
+      ],
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "h:d-a1",
+      "entryId": "d-a1",
+      "role": "assistant",
+      "timestamp": 1772360520000,
+      "model": "anthropic/claude-desktop",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:d-a1:thinking:0",
+          "text": "Read it first."
+        },
+        {
+          "type": "text",
+          "id": "h:d-a1:text:1",
+          "text": "Reading."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:d-a1:tool-call:d-call-1",
+          "toolCallId": "d-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:d-t1:tool-result:d-call-1",
+          "toolCallId": "d-call-1",
+          "ok": true,
+          "output": "alpha\nbeta"
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1772360580000
+    },
+    {
+      "id": "h:d-a2",
+      "entryId": "d-a2",
+      "role": "assistant",
+      "timestamp": 1772360700000,
+      "model": "legacy/legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-a2:text:0",
+          "text": "The notes hold alpha and beta."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:d-u2",
+      "entryId": "d-u2",
+      "role": "user",
+      "timestamp": 1772360760000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-u2:text:0",
+          "text": "desktop: thanks[Attachment: missing.pdf]"
+        }
+      ]
+    },
+    {
+      "id": "h:d-c1",
+      "entryId": "d-c1",
+      "role": "system",
+      "timestamp": 1772360820000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-c1:summary:0",
+          "text": "Context summary\n\ndesktop summary"
+        }
+      ]
+    },
+    {
+      "id": "h:d-a3",
+      "entryId": "d-a3",
+      "role": "assistant",
+      "timestamp": 1772360880000,
+      "model": "legacy/legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-a3:text:0",
+          "text": "Rate limited."
+        }
+      ],
+      "stopReason": "error",
+      "incomplete": true
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "legacy-desktop.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "d-a3",
+      "fileTailEntryId": "d-a3"
+    },
+    "nodes": [
+      {
+        "id": "d-u1",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "message",
+        "preview": "desktop: read the notes",
+        "role": "user",
+        "timestamp": 1772360460000,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-a1",
+        "parentId": "d-u1",
+        "depth": 1,
+        "entryType": "message",
+        "preview": "Reading.",
+        "role": "assistant",
+        "timestamp": 1772360520000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-t1",
+        "parentId": "d-a1",
+        "depth": 2,
+        "entryType": "message",
+        "preview": "alpha beta",
+        "role": "toolResult",
+        "timestamp": 1772360580000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-sub",
+        "parentId": "d-t1",
+        "depth": 3,
+        "entryType": "custom",
+        "timestamp": 1772360640000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-a2",
+        "parentId": "d-sub",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "The notes hold alpha and beta.",
+        "role": "assistant",
+        "timestamp": 1772360700000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-u2",
+        "parentId": "d-a2",
+        "depth": 5,
+        "entryType": "message",
+        "preview": "desktop: thanks [Attachment: missing.pdf]",
+        "role": "user",
+        "timestamp": 1772360760000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-c1",
+        "parentId": "d-u2",
+        "depth": 6,
+        "entryType": "compaction",
+        "preview": "desktop summary",
+        "timestamp": 1772360820000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d-a3",
+        "parentId": "d-c1",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "Rate limited.",
+        "role": "assistant",
+        "timestamp": 1772360880000,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 8,
+    "returnedNodes": 8,
+    "truncated": false
+  }
+}

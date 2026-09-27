@@ -1,0 +1,377 @@
+{
+  "generatedBy": "scripts/gen-legacy-pi-fixtures.ts",
+  "root": "/tmp/aiclient-legacy-pi-corpus",
+  "files": [
+    {
+      "file": "damaged-empty.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "bytes",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-empty.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["zero-byte file"],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "damaged-invalid-utf8.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "bytes",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-invalid-utf8.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["invalid UTF-8 in a middle row"],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "damaged-middle-row.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-middle-row.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["unparseable middle row (dropped, reported as skipped)"],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "damaged-seq-gap.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-seq-gap.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["seq jump no CLI row explains (refused)"],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "damaged-torn-tail.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-torn-tail.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["torn tail: last row cut mid-write, no newline"],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "damaged-unfinished-record.jsonl",
+      "generation": "damaged",
+      "writer": "derived from v4-basic.jsonl by the generator",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/damaged-unfinished-record.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "pi SDK record rows",
+        "operation_started with no operation_finished (tolerateUnfinished)"
+      ],
+      "derivedFrom": "v4-basic.jsonl"
+    },
+    {
+      "file": "legacy-desktop.jsonl",
+      "generation": "pi-desktop-1",
+      "writer": "hand-written (no writer for this format ships any more)",
+      "read": "legacy",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "PI-Desktop blocks",
+        "attachment block (image, missing)",
+        "tool row joined to its carrier",
+        "delegate row (legacy:subagent)",
+        "throughMessageId compaction",
+        "error status"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-desktop.jsonl"
+    },
+    {
+      "file": "legacy-desktop.jsonl.native-v4.jsonl",
+      "generation": "native-v4",
+      "writer": "prepareSessionConfig (1.0.x copy of a legacy file)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "importedFrom / sourceSha256 / legacyHeader metadata",
+        "converted entries",
+        "trailing lane row"
+      ],
+      "copyOf": "legacy-desktop.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-desktop.jsonl.native-v4.jsonl"
+    },
+    {
+      "file": "legacy-pi-v1.jsonl",
+      "generation": "pi-v1",
+      "writer": "hand-written (no writer for this format ships any more)",
+      "read": "legacy",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["v1 positional ids", "firstKeptEntryIndex", "hookMessage", "header tier"],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v1.jsonl"
+    },
+    {
+      "file": "legacy-pi-v1.jsonl.native-v4.jsonl",
+      "generation": "native-v4",
+      "writer": "prepareSessionConfig (1.0.x copy of a legacy file)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "importedFrom / sourceSha256 / legacyHeader metadata",
+        "converted entries",
+        "trailing lane row"
+      ],
+      "copyOf": "legacy-pi-v1.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v1.jsonl.native-v4.jsonl"
+    },
+    {
+      "file": "legacy-pi-v2.jsonl",
+      "generation": "pi-v2",
+      "writer": "hand-written (no writer for this format ships any more)",
+      "read": "legacy",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["v2 ids and parents", "hookMessage", "branch", "thinking signature"],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v2.jsonl"
+    },
+    {
+      "file": "legacy-pi-v2.jsonl.native-v4.jsonl",
+      "generation": "native-v4",
+      "writer": "prepareSessionConfig (1.0.x copy of a legacy file)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "importedFrom / sourceSha256 / legacyHeader metadata",
+        "converted entries",
+        "trailing lane row"
+      ],
+      "copyOf": "legacy-pi-v2.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v2.jsonl.native-v4.jsonl"
+    },
+    {
+      "file": "legacy-pi-v3-drifted.jsonl",
+      "generation": "pi-v3",
+      "writer": "pi-coding-agent 0.84.4 SessionManager, appended after the copy",
+      "read": "legacy",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["source changed after its native copy (session_import_source_changed)"],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3-drifted.jsonl"
+    },
+    {
+      "file": "legacy-pi-v3-drifted.jsonl.native-v4.jsonl",
+      "generation": "native-v4",
+      "writer": "prepareSessionConfig (copy of the source before it drifted)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["stale sourceSha256"],
+      "copyOf": "legacy-pi-v3-drifted.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3-drifted.jsonl.native-v4.jsonl"
+    },
+    {
+      "file": "legacy-pi-v3.jsonl",
+      "generation": "pi-v3",
+      "writer": "pi-coding-agent 0.84.4 SessionManager",
+      "read": "legacy",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "v3 tree",
+        "branch_summary (branchWithSummary)",
+        "compaction by firstKeptEntryId",
+        "bashExecution",
+        "custom_message",
+        "legacy tier entry (aiclient-session-tier)",
+        "session_info",
+        "label",
+        "aborted reply"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3.jsonl"
+    },
+    {
+      "file": "legacy-pi-v3.jsonl.native-v4.jsonl",
+      "generation": "native-v4",
+      "writer": "prepareSessionConfig, then one native turn",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["converted v3 copy", "native rows after the conversion"],
+      "copyOf": "legacy-pi-v3.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3.jsonl.native-v4.jsonl"
+    },
+    {
+      "file": "v4-basic.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "user",
+        "assistant",
+        "thinking+signature",
+        "text-signature",
+        "responseId",
+        "tool-call+result (read, write with details)",
+        "image attachment (aiclientName)",
+        "model_change",
+        "thinking_level_change",
+        "aiclient.permissions",
+        "session name fact",
+        "label fact"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-basic.jsonl"
+    },
+    {
+      "file": "v4-branches.fork.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore.fork, then one resumed turn",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["fork file (parentSessionId, copied branch, name and labels)"],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-branches.fork.jsonl"
+    },
+    {
+      "file": "v4-branches.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "failed reply (stopReason error) left on a retry branch",
+        "retry run (no user message)",
+        "rewind before a user message",
+        "lane rows (navigate away and back)",
+        "empty aiclient.permissionGrants written by each navigation",
+        "label on an abandoned branch",
+        "leaf on the newest branch"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-branches.jsonl"
+    },
+    {
+      "file": "v4-cli.jsonl",
+      "generation": "native-v4+cli",
+      "writer": "runtime JsonlSessionStore, then pi-coding-agent 0.84.4 SessionManager, then the runtime again",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "CLI rows without kind/seq (v3 shape)",
+        "custom_message",
+        "bashExecution message",
+        "session_info and label as inert pi-cli entries",
+        "CLI compaction rebuilt from firstKeptEntryId",
+        "native rows written after the CLI tip"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-cli.jsonl"
+    },
+    {
+      "file": "v4-compaction.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "compaction (summary family, new_context tool)",
+        "compaction (fresh_window family, second pass)",
+        "firstKeptEntryId anchor",
+        "retainedTail",
+        "compaction with an empty tail and no anchor (store appendCompaction)"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-compaction.jsonl"
+    },
+    {
+      "file": "v4-crash-dangling.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore, copied while the tool call was awaiting approval",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-crash.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["crash mid-tool: dangling tool call with no result"]
+    },
+    {
+      "file": "v4-crash-midstream.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore, copied while the provider request was open",
+      "read": "v4",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-crash.jsonl",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["crash while streaming: user message with no reply"]
+    },
+    {
+      "file": "v4-crash-recovered.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore: the dangling image, resumed for one turn",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": ["synthetic interrupted tool result (recovery.ts)"],
+      "derivedFrom": "v4-crash-dangling.jsonl",
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-crash-recovered.jsonl"
+    },
+    {
+      "file": "v4-import-claude.jsonl",
+      "generation": "native-v4-import",
+      "writer": "NativeLegacyImportWriter (the CC / Codex import path)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "aiclient.legacy-import.provenance",
+        "aiclient.legacy-import.display: tool, attachment (redacted image), diagnostic",
+        "imported assistant with thinking and a paired tool call/result (provider legacy-import, zero usage)"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/agent/sessions/import-claude-0001.jsonl"
+    },
+    {
+      "file": "v4-import-codex.jsonl",
+      "generation": "native-v4-import",
+      "writer": "NativeLegacyImportWriter (the CC / Codex import path)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "aiclient.legacy-import.provenance",
+        "aiclient.legacy-import.display: tool (display-only call), custom",
+        "imported assistant (provider legacy-import, zero usage)"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/agent/sessions/import-codex-0001.jsonl"
+    },
+    {
+      "file": "v4-internal.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "internal user message: project-instructions (on-demand AGENTS.md)",
+        "internal user message: turn-ceiling"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-internal.jsonl"
+    },
+    {
+      "file": "v4-permissions.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "aiclient.permissionGrants (path grant, command-prefix grant)",
+        "aiclient.permissionGrants cleared on a mode change",
+        "aiclient.permissions (agent/ask, plan/ask, agent/auto)",
+        "bash tool result"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-permissions.jsonl"
+    },
+    {
+      "file": "v4-stop-interject.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "aborted reply with partial text (user Stop)",
+        "aiclient.runStop user_stop",
+        "aiclient.runStop interjected (Ctrl+Enter at a tool boundary)"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-stop-interject.jsonl"
+    },
+    {
+      "file": "v4-subagent.jsonl",
+      "generation": "native-v4",
+      "writer": "runtime JsonlSessionStore (createRuntime + faux, Task delegation)",
+      "read": "v4",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "covers": [
+        "aiclient.subagent (started, message, settled)",
+        "internal user message: subagent-report"
+      ],
+      "sourcePath": "/tmp/aiclient-legacy-pi-corpus/sessions/v4-subagent.jsonl"
+    }
+  ]
+}

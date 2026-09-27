@@ -1,0 +1,167 @@
+{
+  "file": "v4-crash-midstream.jsonl",
+  "bytes": 1139,
+  "sha256": "e4fc21cc3584dbaa6caaf423bd79f32af7b15390e42f2f296bc6e7ec6d808cf2",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "8c693db7-05c0-43f1-afea-3ae3f4ec7862",
+      "createdAt": 1790513905547,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.547Z"
+    },
+    "seq": 4,
+    "leafId": "107bcdea-08d7-41a3-afff-e902feccd090",
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905553
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "seq": 2,
+        "parentId": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "timestamp": 1790513905554
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "ask"
+        },
+        "id": "207447ef-4030-44d4-8d37-81db090ede54",
+        "seq": 3,
+        "parentId": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "timestamp": 1790513905554
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Write crash.txt."
+            }
+          ],
+          "timestamp": 1790513905554
+        },
+        "id": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "seq": 4,
+        "parentId": "207447ef-4030-44d4-8d37-81db090ede54",
+        "timestamp": 1790513905554
+      }
+    ]
+  },
+  "branch": [
+    "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+    "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+    "207447ef-4030-44d4-8d37-81db090ede54",
+    "107bcdea-08d7-41a3-afff-e902feccd090"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Write crash.txt."
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "ask"
+  },
+  "history": [
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "role": "user",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:text:0",
+          "text": "Write crash.txt."
+        }
+      ]
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-crash-midstream.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "fileTailEntryId": "107bcdea-08d7-41a3-afff-e902feccd090"
+    },
+    "nodes": [
+      {
+        "id": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905553,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "parentId": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905554,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "207447ef-4030-44d4-8d37-81db090ede54",
+        "parentId": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905554,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "parentId": "207447ef-4030-44d4-8d37-81db090ede54",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Write crash.txt.",
+        "role": "user",
+        "timestamp": 1790513905554,
+        "childCount": 0,
+        "forkable": false,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 4,
+    "returnedNodes": 4,
+    "truncated": false
+  }
+}

@@ -1,0 +1,462 @@
+{
+  "file": "legacy-pi-v3-drifted.jsonl",
+  "bytes": 2568,
+  "sha256": "80d2d8b3f92da8fffa350fc4ae1482dc626fcdd9077c22330e2259c74270531f",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "golden-0001",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "createdAt": 1790513905676,
+      "metadata": {
+        "importedFrom": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3-drifted.jsonl",
+        "sourceSha256": "80d2d8b3f92da8fffa350fc4ae1482dc626fcdd9077c22330e2259c74270531f",
+        "sourceSessionId": "01a0e2f2-000c-7f17-ba95-db8af8d63f7b",
+        "sourceFormat": "pi-v3",
+        "sourceCwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+        "legacyHeader": {
+          "type": "session",
+          "version": 3,
+          "id": "01a0e2f2-000c-7f17-ba95-db8af8d63f7b",
+          "timestamp": "2026-09-27T12:58:25.676Z",
+          "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace"
+        }
+      },
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.676Z"
+    },
+    "seq": 9,
+    "leafId": "388cc347",
+    "entries": [
+      {
+        "type": "model_change",
+        "id": "8aa63147",
+        "parentId": null,
+        "timestamp": 1790513905676,
+        "provider": "anthropic",
+        "modelId": "claude-legacy",
+        "seq": 1
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "c9a8a3b4",
+        "parentId": "8aa63147",
+        "timestamp": 1790513905676,
+        "thinkingLevel": "medium",
+        "seq": 2
+      },
+      {
+        "type": "message",
+        "id": "84a39a4f",
+        "parentId": "c9a8a3b4",
+        "timestamp": 1790513905676,
+        "message": {
+          "role": "user",
+          "content": "v3: read the notes",
+          "timestamp": 1775030401000
+        },
+        "seq": 3
+      },
+      {
+        "type": "message",
+        "id": "2c4234e4",
+        "parentId": "84a39a4f",
+        "timestamp": 1790513905676,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Reading first.",
+              "thinkingSignature": "v3-sig"
+            },
+            {
+              "type": "toolCall",
+              "id": "v3-call-1",
+              "name": "read",
+              "arguments": {
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1775030402000
+        },
+        "seq": 4
+      },
+      {
+        "type": "message",
+        "id": "8869f0e5",
+        "parentId": "2c4234e4",
+        "timestamp": 1790513905676,
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "v3-call-1",
+          "toolName": "read",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1775030403000
+        },
+        "seq": 5
+      },
+      {
+        "type": "message",
+        "id": "ad7ad70d",
+        "parentId": "8869f0e5",
+        "timestamp": 1790513905676,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The notes say alpha, beta."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1775030404000
+        },
+        "seq": 6
+      },
+      {
+        "type": "message",
+        "id": "abbbd715",
+        "parentId": "ad7ad70d",
+        "timestamp": 1790513905679,
+        "message": {
+          "role": "user",
+          "content": "v3: written after the copy was made",
+          "timestamp": 1775116800000
+        },
+        "seq": 7
+      },
+      {
+        "type": "message",
+        "id": "388cc347",
+        "parentId": "abbbd715",
+        "timestamp": 1790513905679,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The copy never saw this."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1775116801000
+        },
+        "seq": 8
+      }
+    ]
+  },
+  "branch": [
+    "8aa63147",
+    "c9a8a3b4",
+    "84a39a4f",
+    "2c4234e4",
+    "8869f0e5",
+    "ad7ad70d",
+    "abbbd715",
+    "388cc347"
+  ],
+  "context": {
+    "model": {
+      "provider": "anthropic",
+      "modelId": "claude-legacy"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "v3: read the notes"
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["thinking", "toolCall:read:v3-call-1"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "v3-call-1",
+        "isError": false
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "v3: written after the copy was made"
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": null,
+  "history": [
+    {
+      "id": "h:84a39a4f",
+      "entryId": "84a39a4f",
+      "role": "user",
+      "timestamp": 1790513905676,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:84a39a4f:text:0",
+          "text": "v3: read the notes"
+        }
+      ]
+    },
+    {
+      "id": "h:2c4234e4",
+      "entryId": "2c4234e4",
+      "role": "assistant",
+      "timestamp": 1790513905676,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:2c4234e4:thinking:0",
+          "text": "Reading first."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:2c4234e4:tool-call:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:8869f0e5:tool-result:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "stopReason": "toolUse"
+    },
+    {
+      "id": "h:ad7ad70d",
+      "entryId": "ad7ad70d",
+      "role": "assistant",
+      "timestamp": 1790513905676,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ad7ad70d:text:0",
+          "text": "The notes say alpha, beta."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:abbbd715",
+      "entryId": "abbbd715",
+      "role": "user",
+      "timestamp": 1790513905679,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:abbbd715:text:0",
+          "text": "v3: written after the copy was made"
+        }
+      ]
+    },
+    {
+      "id": "h:388cc347",
+      "entryId": "388cc347",
+      "role": "assistant",
+      "timestamp": 1790513905679,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:388cc347:text:0",
+          "text": "The copy never saw this."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "legacy-pi-v3-drifted.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "388cc347",
+      "fileTailEntryId": "388cc347"
+    },
+    "nodes": [
+      {
+        "id": "8aa63147",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "anthropic/claude-legacy",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c9a8a3b4",
+        "parentId": "8aa63147",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "84a39a4f",
+        "parentId": "c9a8a3b4",
+        "depth": 2,
+        "entryType": "message",
+        "preview": "v3: read the notes",
+        "role": "user",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "2c4234e4",
+        "parentId": "84a39a4f",
+        "depth": 3,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "8869f0e5",
+        "parentId": "2c4234e4",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "alpha beta",
+        "role": "toolResult",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ad7ad70d",
+        "parentId": "8869f0e5",
+        "depth": 5,
+        "entryType": "message",
+        "preview": "The notes say alpha, beta.",
+        "role": "assistant",
+        "timestamp": 1790513905676,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "abbbd715",
+        "parentId": "ad7ad70d",
+        "depth": 6,
+        "entryType": "message",
+        "preview": "v3: written after the copy was made",
+        "role": "user",
+        "timestamp": 1790513905679,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "388cc347",
+        "parentId": "abbbd715",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "The copy never saw this.",
+        "role": "assistant",
+        "timestamp": 1790513905679,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 8,
+    "returnedNodes": 8,
+    "truncated": false
+  }
+}

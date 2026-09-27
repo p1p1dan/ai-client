@@ -78,6 +78,11 @@ The Pi coding agent and its Pi packages are distributed under the MIT License.
 The npm package manifest identifies Mario Zechner as the author. AiClient
 bundles the Pi SDK and CLI as its conversation runtime.
 
+`src/shared/legacyPiSession/context.ts` contains a vendored subset of
+`buildSessionContext` from `@earendil-works/pi-agent-core` 0.84.4
+(`dist/harness/session/context.js` and `dist/harness/messages.js`), used to read
+Pi session files without the package; it carries the notice below.
+
 MIT License
 
 Copyright (c) 2025 Mario Zechner

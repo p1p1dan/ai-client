@@ -1,0 +1,1019 @@
+{
+  "file": "v4-permissions.jsonl",
+  "bytes": 8190,
+  "sha256": "a1b8d594ff50f6bbf66be41f469312102151106df82f3a56692b6fdd14b30b41",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "8fa756b6-3f4b-43c5-9ef6-1dd12357ee68",
+      "createdAt": 1790513905382,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.382Z"
+    },
+    "seq": 21,
+    "leafId": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "e8d94af7-55cb-4072-b780-1ec32d3fcbd0",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905389
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "9e581dd2-05df-430a-bc4d-e30ba8a4cf4c",
+        "seq": 2,
+        "parentId": "e8d94af7-55cb-4072-b780-1ec32d3fcbd0",
+        "timestamp": 1790513905389
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "ask"
+        },
+        "id": "a5cadc6d-4595-4b80-af16-3031595d6e75",
+        "seq": 3,
+        "parentId": "9e581dd2-05df-430a-bc4d-e30ba8a4cf4c",
+        "timestamp": 1790513905389
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Write a draft file."
+            }
+          ],
+          "timestamp": 1790513905390
+        },
+        "id": "423aea80-a55b-42ca-8dc8-d5646d322556",
+        "seq": 4,
+        "parentId": "a5cadc6d-4595-4b80-af16-3031595d6e75",
+        "timestamp": 1790513905390
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call-w",
+              "name": "write",
+              "arguments": {
+                "path": "draft.md",
+                "content": "# Draft\n"
+              }
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 925,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 937,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790513905376
+        },
+        "id": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+        "seq": 5,
+        "parentId": "423aea80-a55b-42ca-8dc8-d5646d322556",
+        "timestamp": 1790513905390
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissionGrants",
+        "data": {
+          "version": 2,
+          "grants": [
+            {
+              "kind": "path",
+              "tool": "write",
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md"
+            }
+          ]
+        },
+        "id": "187d02e6-7b9f-4057-bd5f-00cf1272c826",
+        "seq": 6,
+        "parentId": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+        "timestamp": 1790513905392
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call-w",
+          "toolName": "write",
+          "content": [
+            {
+              "type": "text",
+              "text": "Wrote 8 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/draft.md"
+            }
+          ],
+          "details": {
+            "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+            "review": {
+              "version": 1,
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+              "status": "added",
+              "patch": "@@ -0,0 +1,1 @@\n+# Draft"
+            }
+          },
+          "isError": false,
+          "timestamp": 1790513905394
+        },
+        "id": "14198681-2b6c-4db6-94de-d46e9779beda",
+        "seq": 7,
+        "parentId": "187d02e6-7b9f-4057-bd5f-00cf1272c826",
+        "timestamp": 1790513905394
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Draft written."
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 961,
+            "output": 4,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 965,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905376
+        },
+        "id": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+        "seq": 8,
+        "parentId": "14198681-2b6c-4db6-94de-d46e9779beda",
+        "timestamp": 1790513905394
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Run a harmless command."
+            }
+          ],
+          "timestamp": 1790513905396
+        },
+        "id": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+        "seq": 9,
+        "parentId": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+        "timestamp": 1790513905396
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call-bash",
+              "name": "bash",
+              "arguments": {
+                "command": "echo corpus"
+              }
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 975,
+            "output": 8,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 983,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790513905376
+        },
+        "id": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+        "seq": 10,
+        "parentId": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+        "timestamp": 1790513905396
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissionGrants",
+        "data": {
+          "version": 2,
+          "grants": [
+            {
+              "kind": "path",
+              "tool": "write",
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md"
+            },
+            {
+              "kind": "command",
+              "prefix": "echo",
+              "root": "/tmp/aiclient-legacy-pi-corpus/workspace"
+            }
+          ]
+        },
+        "id": "cc8b1ef0-ce8c-40ff-ad72-f8ddd3c27e5e",
+        "seq": 11,
+        "parentId": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+        "timestamp": 1790513905431
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call-bash",
+          "toolName": "bash",
+          "content": [
+            {
+              "type": "text",
+              "text": "corpus\n\n[exit=0; exit]"
+            }
+          ],
+          "details": {
+            "exitCode": 0,
+            "signal": null,
+            "termination": "exit",
+            "stdoutBytes": 7,
+            "stderrBytes": 0,
+            "truncated": false
+          },
+          "isError": false,
+          "timestamp": 1790513905465
+        },
+        "id": "ac27e264-4dda-4edf-a749-f34412044389",
+        "seq": 12,
+        "parentId": "cc8b1ef0-ce8c-40ff-ad72-f8ddd3c27e5e",
+        "timestamp": 1790513905465
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The command printed corpus."
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 995,
+            "output": 7,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 1002,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905376
+        },
+        "id": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+        "seq": 13,
+        "parentId": "ac27e264-4dda-4edf-a749-f34412044389",
+        "timestamp": 1790513905466
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissionGrants",
+        "data": {
+          "version": 2,
+          "grants": []
+        },
+        "id": "c932e364-8a03-463a-8ef6-1b68c5ff5f63",
+        "seq": 14,
+        "parentId": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+        "timestamp": 1790513905467
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "plan",
+          "gear": "ask"
+        },
+        "id": "165b587f-44d5-4207-b220-dab56d069238",
+        "seq": 15,
+        "parentId": "c932e364-8a03-463a-8ef6-1b68c5ff5f63",
+        "timestamp": 1790513905468
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Plan the next step."
+            }
+          ],
+          "timestamp": 1790513905468
+        },
+        "id": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+        "seq": 16,
+        "parentId": "165b587f-44d5-4207-b220-dab56d069238",
+        "timestamp": 1790513905468
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Plan: edit draft.md, then run the checks."
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 802,
+            "output": 11,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 813,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905376
+        },
+        "id": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+        "seq": 17,
+        "parentId": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+        "timestamp": 1790513905469
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissionGrants",
+        "data": {
+          "version": 2,
+          "grants": []
+        },
+        "id": "1d965cec-373f-4be3-9f0e-b8577f4b57d8",
+        "seq": 18,
+        "parentId": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+        "timestamp": 1790513905469
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "auto"
+        },
+        "id": "c928de86-cc89-4d32-b58c-a5bc4bf4b178",
+        "seq": 19,
+        "parentId": "1d965cec-373f-4be3-9f0e-b8577f4b57d8",
+        "timestamp": 1790513905470
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Carry on."
+            }
+          ],
+          "timestamp": 1790513905471
+        },
+        "id": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+        "seq": 20,
+        "parentId": "c928de86-cc89-4d32-b58c-a5bc4bf4b178",
+        "timestamp": 1790513905471
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Back in agent mode."
+            }
+          ],
+          "api": "faux:1790513905376:czw8h77pxlw",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 1029,
+            "output": 5,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 1034,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905376
+        },
+        "id": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+        "seq": 21,
+        "parentId": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+        "timestamp": 1790513905471
+      }
+    ]
+  },
+  "branch": [
+    "e8d94af7-55cb-4072-b780-1ec32d3fcbd0",
+    "9e581dd2-05df-430a-bc4d-e30ba8a4cf4c",
+    "a5cadc6d-4595-4b80-af16-3031595d6e75",
+    "423aea80-a55b-42ca-8dc8-d5646d322556",
+    "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+    "187d02e6-7b9f-4057-bd5f-00cf1272c826",
+    "14198681-2b6c-4db6-94de-d46e9779beda",
+    "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+    "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+    "b609bfda-5012-4af3-86b6-7fff1cff461f",
+    "cc8b1ef0-ce8c-40ff-ad72-f8ddd3c27e5e",
+    "ac27e264-4dda-4edf-a749-f34412044389",
+    "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+    "c932e364-8a03-463a-8ef6-1b68c5ff5f63",
+    "165b587f-44d5-4207-b220-dab56d069238",
+    "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+    "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+    "1d965cec-373f-4be3-9f0e-b8577f4b57d8",
+    "c928de86-cc89-4d32-b58c-a5bc4bf4b178",
+    "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+    "c0d59b76-7505-400a-8781-3aacaa8fce81"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Write a draft file."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["toolCall:write:call-w"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call-w",
+        "isError": false
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "Run a harmless command."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["toolCall:bash:call-bash"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call-bash",
+        "isError": false
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "Plan the next step."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "Carry on."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "history": [
+    {
+      "id": "h:423aea80-a55b-42ca-8dc8-d5646d322556",
+      "entryId": "423aea80-a55b-42ca-8dc8-d5646d322556",
+      "role": "user",
+      "timestamp": 1790513905390,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:423aea80-a55b-42ca-8dc8-d5646d322556:text:0",
+          "text": "Write a draft file."
+        }
+      ]
+    },
+    {
+      "id": "h:a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+      "entryId": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+      "role": "assistant",
+      "timestamp": 1790513905390,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:a8f8033d-6ab2-40b4-a2b4-c997283a9efe:tool-call:call-w",
+          "toolCallId": "call-w",
+          "name": "write",
+          "input": {
+            "path": "draft.md",
+            "content": "# Draft\n"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:14198681-2b6c-4db6-94de-d46e9779beda:tool-result:call-w",
+          "toolCallId": "call-w",
+          "ok": true,
+          "output": "Wrote 8 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+          "review": {
+            "version": 1,
+            "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+            "status": "added",
+            "patch": "@@ -0,0 +1,1 @@\n+# Draft"
+          }
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1790513905394
+    },
+    {
+      "id": "h:ee745260-fd01-4c50-b262-b8ec20d8e11e",
+      "entryId": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+      "role": "assistant",
+      "timestamp": 1790513905394,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ee745260-fd01-4c50-b262-b8ec20d8e11e:text:0",
+          "text": "Draft written."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:7c255834-f03f-42a6-a0e8-a5b100b4511a",
+      "entryId": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+      "role": "user",
+      "timestamp": 1790513905396,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:7c255834-f03f-42a6-a0e8-a5b100b4511a:text:0",
+          "text": "Run a harmless command."
+        }
+      ]
+    },
+    {
+      "id": "h:b609bfda-5012-4af3-86b6-7fff1cff461f",
+      "entryId": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+      "role": "assistant",
+      "timestamp": 1790513905396,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:b609bfda-5012-4af3-86b6-7fff1cff461f:tool-call:call-bash",
+          "toolCallId": "call-bash",
+          "name": "bash",
+          "input": {
+            "command": "echo corpus"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ac27e264-4dda-4edf-a749-f34412044389:tool-result:call-bash",
+          "toolCallId": "call-bash",
+          "ok": true,
+          "output": "corpus\n\n[exit=0; exit]"
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1790513905465
+    },
+    {
+      "id": "h:6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+      "entryId": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+      "role": "assistant",
+      "timestamp": 1790513905466,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:6254cb7d-b440-4a05-bcdc-35e7e08dff79:text:0",
+          "text": "The command printed corpus."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+      "entryId": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+      "role": "user",
+      "timestamp": 1790513905468,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b606d16c-20b7-4162-ba11-0bd7ee7a3917:text:0",
+          "text": "Plan the next step."
+        }
+      ]
+    },
+    {
+      "id": "h:b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+      "entryId": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+      "role": "assistant",
+      "timestamp": 1790513905469,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b4c3c261-fc60-411f-badb-2cc8fc8d34ae:text:0",
+          "text": "Plan: edit draft.md, then run the checks."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+      "entryId": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+      "role": "user",
+      "timestamp": 1790513905471,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4:text:0",
+          "text": "Carry on."
+        }
+      ]
+    },
+    {
+      "id": "h:c0d59b76-7505-400a-8781-3aacaa8fce81",
+      "entryId": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+      "role": "assistant",
+      "timestamp": 1790513905471,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c0d59b76-7505-400a-8781-3aacaa8fce81:text:0",
+          "text": "Back in agent mode."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-permissions.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+      "fileTailEntryId": "c0d59b76-7505-400a-8781-3aacaa8fce81"
+    },
+    "nodes": [
+      {
+        "id": "e8d94af7-55cb-4072-b780-1ec32d3fcbd0",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905389,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "9e581dd2-05df-430a-bc4d-e30ba8a4cf4c",
+        "parentId": "e8d94af7-55cb-4072-b780-1ec32d3fcbd0",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905389,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "a5cadc6d-4595-4b80-af16-3031595d6e75",
+        "parentId": "9e581dd2-05df-430a-bc4d-e30ba8a4cf4c",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905389,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "423aea80-a55b-42ca-8dc8-d5646d322556",
+        "parentId": "a5cadc6d-4595-4b80-af16-3031595d6e75",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Write a draft file.",
+        "role": "user",
+        "timestamp": 1790513905390,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+        "parentId": "423aea80-a55b-42ca-8dc8-d5646d322556",
+        "depth": 4,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1790513905390,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "187d02e6-7b9f-4057-bd5f-00cf1272c826",
+        "parentId": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+        "depth": 5,
+        "entryType": "custom",
+        "timestamp": 1790513905392,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "14198681-2b6c-4db6-94de-d46e9779beda",
+        "parentId": "187d02e6-7b9f-4057-bd5f-00cf1272c826",
+        "depth": 6,
+        "entryType": "message",
+        "preview": "Wrote 8 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+        "role": "toolResult",
+        "timestamp": 1790513905394,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+        "parentId": "14198681-2b6c-4db6-94de-d46e9779beda",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "Draft written.",
+        "role": "assistant",
+        "timestamp": 1790513905394,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+        "parentId": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+        "depth": 8,
+        "entryType": "message",
+        "preview": "Run a harmless command.",
+        "role": "user",
+        "timestamp": 1790513905396,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+        "parentId": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+        "depth": 9,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1790513905396,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "cc8b1ef0-ce8c-40ff-ad72-f8ddd3c27e5e",
+        "parentId": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+        "depth": 10,
+        "entryType": "custom",
+        "timestamp": 1790513905431,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ac27e264-4dda-4edf-a749-f34412044389",
+        "parentId": "cc8b1ef0-ce8c-40ff-ad72-f8ddd3c27e5e",
+        "depth": 11,
+        "entryType": "message",
+        "preview": "corpus [exit=0; exit]",
+        "role": "toolResult",
+        "timestamp": 1790513905465,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+        "parentId": "ac27e264-4dda-4edf-a749-f34412044389",
+        "depth": 12,
+        "entryType": "message",
+        "preview": "The command printed corpus.",
+        "role": "assistant",
+        "timestamp": 1790513905466,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c932e364-8a03-463a-8ef6-1b68c5ff5f63",
+        "parentId": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+        "depth": 13,
+        "entryType": "custom",
+        "timestamp": 1790513905467,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "165b587f-44d5-4207-b220-dab56d069238",
+        "parentId": "c932e364-8a03-463a-8ef6-1b68c5ff5f63",
+        "depth": 14,
+        "entryType": "custom",
+        "timestamp": 1790513905468,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+        "parentId": "165b587f-44d5-4207-b220-dab56d069238",
+        "depth": 15,
+        "entryType": "message",
+        "preview": "Plan the next step.",
+        "role": "user",
+        "timestamp": 1790513905468,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+        "parentId": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+        "depth": 16,
+        "entryType": "message",
+        "preview": "Plan: edit draft.md, then run the checks.",
+        "role": "assistant",
+        "timestamp": 1790513905469,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "1d965cec-373f-4be3-9f0e-b8577f4b57d8",
+        "parentId": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+        "depth": 17,
+        "entryType": "custom",
+        "timestamp": 1790513905469,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c928de86-cc89-4d32-b58c-a5bc4bf4b178",
+        "parentId": "1d965cec-373f-4be3-9f0e-b8577f4b57d8",
+        "depth": 18,
+        "entryType": "custom",
+        "timestamp": 1790513905470,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+        "parentId": "c928de86-cc89-4d32-b58c-a5bc4bf4b178",
+        "depth": 19,
+        "entryType": "message",
+        "preview": "Carry on.",
+        "role": "user",
+        "timestamp": 1790513905471,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+        "parentId": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+        "depth": 20,
+        "entryType": "message",
+        "preview": "Back in agent mode.",
+        "role": "assistant",
+        "timestamp": 1790513905471,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 21,
+    "returnedNodes": 21,
+    "truncated": false
+  }
+}

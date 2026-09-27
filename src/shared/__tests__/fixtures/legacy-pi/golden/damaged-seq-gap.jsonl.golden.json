@@ -1,0 +1,15 @@
+{
+  "file": "damaged-seq-gap.jsonl",
+  "bytes": 6790,
+  "sha256": "132f042872f5ca4ae6e81934f734ce7155d46fd33a6f2154a168854cdcc4c43e",
+  "strict": {
+    "code": "session_invalid",
+    "name": "LegacyPiSessionError",
+    "message": "non-consecutive seq at line 6"
+  },
+  "tolerant": {
+    "code": "session_invalid",
+    "name": "LegacyPiSessionError",
+    "message": "non-consecutive seq at line 6"
+  }
+}

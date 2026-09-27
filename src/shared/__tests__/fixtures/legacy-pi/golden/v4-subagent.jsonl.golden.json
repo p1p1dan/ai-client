@@ -1,0 +1,646 @@
+{
+  "file": "v4-subagent.jsonl",
+  "bytes": 6652,
+  "sha256": "7dd55c4f1b504b83ca4eb0f13b221582d20a89904388f069f574a775d513712b",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "e9574120-38c1-442f-9ff1-733d0802e474",
+      "createdAt": 1790513905479,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.479Z"
+    },
+    "seq": 13,
+    "leafId": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "21e41b16-28a9-47d5-8f13-1f1eebf175ef",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905493
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "c5691941-f976-4596-99f6-f3c46b1ba8f5",
+        "seq": 2,
+        "parentId": "21e41b16-28a9-47d5-8f13-1f1eebf175ef",
+        "timestamp": 1790513905496
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "auto"
+        },
+        "id": "cee3e70b-1861-4cf7-8f30-027f3d3349e6",
+        "seq": 3,
+        "parentId": "c5691941-f976-4596-99f6-f3c46b1ba8f5",
+        "timestamp": 1790513905496
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Delegate a look at the notes."
+            }
+          ],
+          "timestamp": 1790513905496
+        },
+        "id": "712735ba-f997-4c14-95a8-327e4a5a8354",
+        "seq": 4,
+        "parentId": "cee3e70b-1861-4cf7-8f30-027f3d3349e6",
+        "timestamp": 1790513905496
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "call-task",
+              "name": "Task",
+              "arguments": {
+                "agent": "explorer",
+                "task": "Look at notes.txt."
+              }
+            }
+          ],
+          "api": "faux:1790513905475:6imeg9sb746",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 2837,
+            "output": 14,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 2851,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790513905497
+        },
+        "id": "7011591c-7121-40f0-9edf-3232edd49094",
+        "seq": 5,
+        "parentId": "712735ba-f997-4c14-95a8-327e4a5a8354",
+        "timestamp": 1790513905497
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.subagent",
+        "data": {
+          "kind": "started",
+          "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+          "agentName": "explorer",
+          "parentToolCallId": "call-task",
+          "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+          "task": "Look at notes.txt.",
+          "model": {
+            "provider": "faux",
+            "modelId": "faux-corpus"
+          },
+          "startedAt": 1790513905499
+        },
+        "id": "664890a1-ee7e-41b1-93ee-d124b6f8bfc7",
+        "seq": 6,
+        "parentId": "7011591c-7121-40f0-9edf-3232edd49094",
+        "timestamp": 1790513905500
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.subagent",
+        "data": {
+          "kind": "message",
+          "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+          "agentName": "explorer",
+          "parentToolCallId": "call-task",
+          "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+          "message": {
+            "role": "user",
+            "content": [
+              {
+                "type": "text",
+                "text": "Look at notes.txt."
+              }
+            ],
+            "timestamp": 1790513905502
+          },
+          "at": 1790513905503
+        },
+        "id": "5b9cc76e-4392-4f7e-b638-43e355d60c60",
+        "seq": 7,
+        "parentId": "664890a1-ee7e-41b1-93ee-d124b6f8bfc7",
+        "timestamp": 1790513905503
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "call-task",
+          "toolName": "Task",
+          "content": [
+            {
+              "type": "text",
+              "text": "Delegation 119d3924-3a27-4fab-b960-0338b5ba0535 started: the explorer subagent is working in the background. Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it."
+            }
+          ],
+          "details": {
+            "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+            "agent": "explorer",
+            "status": "running",
+            "startedAt": 1790513905499
+          },
+          "isError": false,
+          "timestamp": 1790513905503
+        },
+        "id": "ebc72451-fdd9-423a-9585-58719573db12",
+        "seq": 8,
+        "parentId": "5b9cc76e-4392-4f7e-b638-43e355d60c60",
+        "timestamp": 1790513905504
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.subagent",
+        "data": {
+          "kind": "message",
+          "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+          "agentName": "explorer",
+          "parentToolCallId": "call-task",
+          "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+          "message": {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Explorer report: notes.txt holds alpha and beta."
+              }
+            ],
+            "api": "faux:1790513905475:6imeg9sb746",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "usage": {
+              "input": 1255,
+              "output": 12,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 1267,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1790513905503
+          },
+          "at": 1790513905504
+        },
+        "id": "22bd2505-296b-4f16-90d0-6e6739576ba1",
+        "seq": 9,
+        "parentId": "ebc72451-fdd9-423a-9585-58719573db12",
+        "timestamp": 1790513905504
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.subagent",
+        "data": {
+          "kind": "settled",
+          "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+          "agentName": "explorer",
+          "parentToolCallId": "call-task",
+          "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+          "status": "completed",
+          "turns": 1,
+          "toolCalls": 0,
+          "report": "Explorer report: notes.txt holds alpha and beta.",
+          "usage": {
+            "input": 1255,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 1267,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "completedAt": 1790513905504
+        },
+        "id": "98989a22-07ce-41f4-842d-b45bc5926dbe",
+        "seq": 10,
+        "parentId": "22bd2505-296b-4f16-90d0-6e6739576ba1",
+        "timestamp": 1790513905505
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Waiting for the explorer."
+            }
+          ],
+          "api": "faux:1790513905475:6imeg9sb746",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 2919,
+            "output": 7,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 2926,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905505
+        },
+        "id": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+        "seq": 11,
+        "parentId": "98989a22-07ce-41f4-842d-b45bc5926dbe",
+        "timestamp": 1790513905506
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "The following subagents have finished; their reports are below and are now delivered to you. Integrate them and continue the user's original task.\n\n## explorer (119d3924-3a27-4fab-b960-0338b5ba0535) — completed\nExplorer report: notes.txt holds alpha and beta."
+            }
+          ],
+          "timestamp": 1790513905506,
+          "aiclientInternal": "subagent-report"
+        },
+        "id": "f77faa8a-9531-4496-85ce-67cd162cbe03",
+        "seq": 12,
+        "parentId": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+        "timestamp": 1790513905507
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Integrated: the explorer found two lines in notes.txt."
+            }
+          ],
+          "api": "faux:1790513905475:6imeg9sb746",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 2995,
+            "output": 14,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 3009,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905507
+        },
+        "id": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+        "seq": 13,
+        "parentId": "f77faa8a-9531-4496-85ce-67cd162cbe03",
+        "timestamp": 1790513905507
+      }
+    ]
+  },
+  "branch": [
+    "21e41b16-28a9-47d5-8f13-1f1eebf175ef",
+    "c5691941-f976-4596-99f6-f3c46b1ba8f5",
+    "cee3e70b-1861-4cf7-8f30-027f3d3349e6",
+    "712735ba-f997-4c14-95a8-327e4a5a8354",
+    "7011591c-7121-40f0-9edf-3232edd49094",
+    "664890a1-ee7e-41b1-93ee-d124b6f8bfc7",
+    "5b9cc76e-4392-4f7e-b638-43e355d60c60",
+    "ebc72451-fdd9-423a-9585-58719573db12",
+    "22bd2505-296b-4f16-90d0-6e6739576ba1",
+    "98989a22-07ce-41f4-842d-b45bc5926dbe",
+    "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+    "f77faa8a-9531-4496-85ce-67cd162cbe03",
+    "0a0d1113-a960-4cd6-a084-8a5a668e90e0"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Delegate a look at the notes."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["toolCall:Task:call-task"]
+      },
+      {
+        "role": "toolResult",
+        "toolCallId": "call-task",
+        "isError": false
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "The following subagents have finished; their reports are below and are now delivered to you. Integrate them and continue the user's original task.\n\n## explorer (119d3924-3a27-4fab-b960-0338b5ba0535) — completed\nExplorer report: notes.txt holds alpha and beta.",
+        "internal": "subagent-report"
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "history": [
+    {
+      "id": "h:712735ba-f997-4c14-95a8-327e4a5a8354",
+      "entryId": "712735ba-f997-4c14-95a8-327e4a5a8354",
+      "role": "user",
+      "timestamp": 1790513905496,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:712735ba-f997-4c14-95a8-327e4a5a8354:text:0",
+          "text": "Delegate a look at the notes."
+        }
+      ]
+    },
+    {
+      "id": "h:7011591c-7121-40f0-9edf-3232edd49094",
+      "entryId": "7011591c-7121-40f0-9edf-3232edd49094",
+      "role": "assistant",
+      "timestamp": 1790513905497,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:7011591c-7121-40f0-9edf-3232edd49094:tool-call:call-task",
+          "toolCallId": "call-task",
+          "name": "Task",
+          "input": {
+            "agent": "explorer",
+            "task": "Look at notes.txt."
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ebc72451-fdd9-423a-9585-58719573db12:tool-result:call-task",
+          "toolCallId": "call-task",
+          "ok": true,
+          "output": "Delegation 119d3924-3a27-4fab-b960-0338b5ba0535 started: the explorer subagent is working in the background. Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it."
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1790513905504
+    },
+    {
+      "id": "h:b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+      "entryId": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+      "role": "assistant",
+      "timestamp": 1790513905506,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b0defb9e-1e3e-4ab2-93f3-e79d9672a59b:text:0",
+          "text": "Waiting for the explorer."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+      "entryId": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+      "role": "assistant",
+      "timestamp": 1790513905507,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:0a0d1113-a960-4cd6-a084-8a5a668e90e0:text:0",
+          "text": "Integrated: the explorer found two lines in notes.txt."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-subagent.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+      "fileTailEntryId": "0a0d1113-a960-4cd6-a084-8a5a668e90e0"
+    },
+    "nodes": [
+      {
+        "id": "21e41b16-28a9-47d5-8f13-1f1eebf175ef",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905493,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c5691941-f976-4596-99f6-f3c46b1ba8f5",
+        "parentId": "21e41b16-28a9-47d5-8f13-1f1eebf175ef",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905496,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "cee3e70b-1861-4cf7-8f30-027f3d3349e6",
+        "parentId": "c5691941-f976-4596-99f6-f3c46b1ba8f5",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905496,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "712735ba-f997-4c14-95a8-327e4a5a8354",
+        "parentId": "cee3e70b-1861-4cf7-8f30-027f3d3349e6",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Delegate a look at the notes.",
+        "role": "user",
+        "timestamp": 1790513905496,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "7011591c-7121-40f0-9edf-3232edd49094",
+        "parentId": "712735ba-f997-4c14-95a8-327e4a5a8354",
+        "depth": 4,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1790513905497,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "664890a1-ee7e-41b1-93ee-d124b6f8bfc7",
+        "parentId": "7011591c-7121-40f0-9edf-3232edd49094",
+        "depth": 5,
+        "entryType": "custom",
+        "timestamp": 1790513905500,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "5b9cc76e-4392-4f7e-b638-43e355d60c60",
+        "parentId": "664890a1-ee7e-41b1-93ee-d124b6f8bfc7",
+        "depth": 6,
+        "entryType": "custom",
+        "timestamp": 1790513905503,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ebc72451-fdd9-423a-9585-58719573db12",
+        "parentId": "5b9cc76e-4392-4f7e-b638-43e355d60c60",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "Delegation 119d3924-3a27-4fab-b960-0338b5ba0535 started: the explorer subagent is working in th…",
+        "role": "toolResult",
+        "timestamp": 1790513905504,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "22bd2505-296b-4f16-90d0-6e6739576ba1",
+        "parentId": "ebc72451-fdd9-423a-9585-58719573db12",
+        "depth": 8,
+        "entryType": "custom",
+        "timestamp": 1790513905504,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "98989a22-07ce-41f4-842d-b45bc5926dbe",
+        "parentId": "22bd2505-296b-4f16-90d0-6e6739576ba1",
+        "depth": 9,
+        "entryType": "custom",
+        "timestamp": 1790513905505,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+        "parentId": "98989a22-07ce-41f4-842d-b45bc5926dbe",
+        "depth": 10,
+        "entryType": "message",
+        "preview": "Waiting for the explorer.",
+        "role": "assistant",
+        "timestamp": 1790513905506,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "f77faa8a-9531-4496-85ce-67cd162cbe03",
+        "parentId": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+        "depth": 11,
+        "entryType": "message",
+        "preview": "The following subagents have finished; their reports are below and are now delivered to you. In…",
+        "role": "user",
+        "timestamp": 1790513905507,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+        "parentId": "f77faa8a-9531-4496-85ce-67cd162cbe03",
+        "depth": 12,
+        "entryType": "message",
+        "preview": "Integrated: the explorer found two lines in notes.txt.",
+        "role": "assistant",
+        "timestamp": 1790513905507,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 13,
+    "returnedNodes": 13,
+    "truncated": false
+  }
+}

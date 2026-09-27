@@ -1,0 +1,539 @@
+{
+  "file": "legacy-pi-v1.jsonl.native-v4.jsonl",
+  "bytes": 4338,
+  "sha256": "c10b90a2b071981411e5c569d9894d131f133e50d7982aab17002c7a1e854f4d",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "0fefa329-b61d-45ec-a545-ed0bfc80f6c1",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "createdAt": 1772359200000,
+      "metadata": {
+        "importedFrom": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v1.jsonl",
+        "sourceSha256": "9fd18bc9e89d0a2dfbb8e0aa3c30fa7d992ae3911ad4d31065f2dacee67ca8d7",
+        "sourceSessionId": "legacy-v1-session",
+        "sourceFormat": "pi-v1",
+        "sourceCwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+        "legacyHeader": {
+          "type": "session",
+          "version": 1,
+          "id": "legacy-v1-session",
+          "timestamp": "2026-03-01T10:00:00.000Z",
+          "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+          "tier": "pragmatic"
+        },
+        "permissions": {
+          "mode": "agent",
+          "gear": "ask"
+        }
+      },
+      "type": "session",
+      "timestamp": "2026-03-01T10:00:00.000Z"
+    },
+    "seq": 10,
+    "leafId": "93c3ea47-1bc3-4244-ad6e-af1118f13397",
+    "entries": [
+      {
+        "type": "message",
+        "timestamp": 1772359260000,
+        "message": {
+          "role": "user",
+          "content": "v1: list the files",
+          "timestamp": 1772359260000
+        },
+        "id": "d46271adbbeab2b7",
+        "parentId": null,
+        "seq": 1
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359320000,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "toolCall",
+              "id": "v1-call-1",
+              "name": "ls",
+              "arguments": {
+                "path": "."
+              }
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1772359320000
+        },
+        "id": "f4e2e27968e336d9",
+        "parentId": "d46271adbbeab2b7",
+        "seq": 2
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359380000,
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "v1-call-1",
+          "toolName": "ls",
+          "content": [
+            {
+              "type": "text",
+              "text": "notes.txt\nsrc"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1772359380000
+        },
+        "id": "4312212a443ef4bc",
+        "parentId": "f4e2e27968e336d9",
+        "seq": 3
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359440000,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Two entries: notes.txt and src."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1772359440000
+        },
+        "id": "9e25b70c0fee68bd",
+        "parentId": "4312212a443ef4bc",
+        "seq": 4
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359500000,
+        "message": {
+          "role": "custom",
+          "customType": "legacy-hook",
+          "content": "A hook said hello.",
+          "display": true,
+          "timestamp": 1772359500000
+        },
+        "id": "6e166e071467eeaa",
+        "parentId": "9e25b70c0fee68bd",
+        "seq": 5
+      },
+      {
+        "type": "compaction",
+        "timestamp": 1772359560000,
+        "summary": "v1 summary: listed the files.",
+        "tokensBefore": 1200,
+        "firstKeptEntryIndex": 4,
+        "id": "8d698e9c075adc5e",
+        "parentId": "6e166e071467eeaa",
+        "firstKeptEntryId": "9e25b70c0fee68bd",
+        "retainedTail": [
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Two entries: notes.txt and src."
+              }
+            ],
+            "api": "anthropic-messages",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "usage": {
+              "input": 40,
+              "output": 12,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 52,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1772359440000
+          },
+          {
+            "role": "custom",
+            "customType": "legacy-hook",
+            "content": "A hook said hello.",
+            "display": true,
+            "timestamp": 1772359500000
+          }
+        ],
+        "seq": 6
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359620000,
+        "message": {
+          "role": "user",
+          "content": "v1: continue after the compaction",
+          "timestamp": 1772359620000
+        },
+        "id": "dd50ebacba544d63",
+        "parentId": "8d698e9c075adc5e",
+        "seq": 7
+      },
+      {
+        "type": "message",
+        "timestamp": 1772359680000,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Continuing."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1772359680000
+        },
+        "id": "80c3d7e4d0df076d",
+        "parentId": "dd50ebacba544d63",
+        "seq": 8
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "ask"
+        },
+        "id": "93c3ea47-1bc3-4244-ad6e-af1118f13397",
+        "timestamp": 1790513905652,
+        "parentId": "80c3d7e4d0df076d",
+        "seq": 9
+      }
+    ]
+  },
+  "branch": [
+    "d46271adbbeab2b7",
+    "f4e2e27968e336d9",
+    "4312212a443ef4bc",
+    "9e25b70c0fee68bd",
+    "6e166e071467eeaa",
+    "8d698e9c075adc5e",
+    "dd50ebacba544d63",
+    "80c3d7e4d0df076d",
+    "93c3ea47-1bc3-4244-ad6e-af1118f13397"
+  ],
+  "context": {
+    "model": {
+      "provider": "anthropic",
+      "modelId": "claude-legacy"
+    },
+    "thinkingLevel": "off",
+    "messages": [
+      {
+        "role": "compactionSummary",
+        "summary": "v1 summary: listed the files."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "custom",
+        "customType": "legacy-hook",
+        "text": "A hook said hello."
+      },
+      {
+        "role": "user",
+        "text": "v1: continue after the compaction"
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "ask"
+  },
+  "history": [
+    {
+      "id": "h:d46271adbbeab2b7",
+      "entryId": "d46271adbbeab2b7",
+      "role": "user",
+      "timestamp": 1772359260000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d46271adbbeab2b7:text:0",
+          "text": "v1: list the files"
+        }
+      ]
+    },
+    {
+      "id": "h:f4e2e27968e336d9",
+      "entryId": "f4e2e27968e336d9",
+      "role": "assistant",
+      "timestamp": 1772359320000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:f4e2e27968e336d9:tool-call:v1-call-1",
+          "toolCallId": "v1-call-1",
+          "name": "ls",
+          "input": {
+            "path": "."
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:4312212a443ef4bc:tool-result:v1-call-1",
+          "toolCallId": "v1-call-1",
+          "ok": true,
+          "output": "notes.txt\nsrc"
+        }
+      ],
+      "stopReason": "toolUse",
+      "settledAt": 1772359380000
+    },
+    {
+      "id": "h:9e25b70c0fee68bd",
+      "entryId": "9e25b70c0fee68bd",
+      "role": "assistant",
+      "timestamp": 1772359440000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:9e25b70c0fee68bd:text:0",
+          "text": "Two entries: notes.txt and src."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:8d698e9c075adc5e",
+      "entryId": "8d698e9c075adc5e",
+      "role": "system",
+      "timestamp": 1772359560000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8d698e9c075adc5e:summary:0",
+          "text": "Context summary\n\nv1 summary: listed the files."
+        }
+      ]
+    },
+    {
+      "id": "h:dd50ebacba544d63",
+      "entryId": "dd50ebacba544d63",
+      "role": "user",
+      "timestamp": 1772359620000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:dd50ebacba544d63:text:0",
+          "text": "v1: continue after the compaction"
+        }
+      ]
+    },
+    {
+      "id": "h:80c3d7e4d0df076d",
+      "entryId": "80c3d7e4d0df076d",
+      "role": "assistant",
+      "timestamp": 1772359680000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:80c3d7e4d0df076d:text:0",
+          "text": "Continuing."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "legacy-pi-v1.jsonl.native-v4.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "93c3ea47-1bc3-4244-ad6e-af1118f13397",
+      "fileTailEntryId": "93c3ea47-1bc3-4244-ad6e-af1118f13397"
+    },
+    "nodes": [
+      {
+        "id": "d46271adbbeab2b7",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "message",
+        "preview": "v1: list the files",
+        "role": "user",
+        "timestamp": 1772359260000,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "f4e2e27968e336d9",
+        "parentId": "d46271adbbeab2b7",
+        "depth": 1,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1772359320000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "4312212a443ef4bc",
+        "parentId": "f4e2e27968e336d9",
+        "depth": 2,
+        "entryType": "message",
+        "preview": "notes.txt src",
+        "role": "toolResult",
+        "timestamp": 1772359380000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "9e25b70c0fee68bd",
+        "parentId": "4312212a443ef4bc",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Two entries: notes.txt and src.",
+        "role": "assistant",
+        "timestamp": 1772359440000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "6e166e071467eeaa",
+        "parentId": "9e25b70c0fee68bd",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "A hook said hello.",
+        "role": "custom",
+        "timestamp": 1772359500000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "8d698e9c075adc5e",
+        "parentId": "6e166e071467eeaa",
+        "depth": 5,
+        "entryType": "compaction",
+        "preview": "v1 summary: listed the files.",
+        "timestamp": 1772359560000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "dd50ebacba544d63",
+        "parentId": "8d698e9c075adc5e",
+        "depth": 6,
+        "entryType": "message",
+        "preview": "v1: continue after the compaction",
+        "role": "user",
+        "timestamp": 1772359620000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "80c3d7e4d0df076d",
+        "parentId": "dd50ebacba544d63",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "Continuing.",
+        "role": "assistant",
+        "timestamp": 1772359680000,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "93c3ea47-1bc3-4244-ad6e-af1118f13397",
+        "parentId": "80c3d7e4d0df076d",
+        "depth": 8,
+        "entryType": "custom",
+        "timestamp": 1790513905652,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 9,
+    "returnedNodes": 9,
+    "truncated": false
+  }
+}

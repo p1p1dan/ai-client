@@ -1,0 +1,311 @@
+{
+  "file": "v4-import-codex.jsonl",
+  "bytes": 2509,
+  "sha256": "8925391ec4ff26c3714b9479b9b2524b185e9196a1874fccc3c535a4598243ce",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "import-codex-0001",
+      "createdAt": 1790513905640,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.640Z"
+    },
+    "seq": 6,
+    "leafId": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+    "name": "Imported Codex session",
+    "entries": [
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.provenance",
+        "data": {
+          "version": 1,
+          "sourceKind": "codex",
+          "stableSourceIdentity": "codex:corpus:0001",
+          "sourceSessionId": "codex-rollout-0001",
+          "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000011",
+          "schemaVersion": 1,
+          "importerVersion": "b4-legacy-v2",
+          "startedAt": 1785574800000,
+          "endedAt": 1785574830000,
+          "diagnostics": []
+        },
+        "id": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905640
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": "List the files.",
+          "timestamp": 1785574801000
+        },
+        "id": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+        "seq": 3,
+        "parentId": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+        "timestamp": 1790513905641
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.display",
+        "data": {
+          "version": 1,
+          "displayKind": "tool",
+          "title": "shell",
+          "toolCallId": "call_codex_1",
+          "toolName": "shell",
+          "input": {
+            "command": ["ls"]
+          },
+          "output": "notes.txt\nsrc",
+          "isError": false,
+          "timestamp": 1785574802000
+        },
+        "id": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+        "seq": 4,
+        "parentId": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+        "timestamp": 1790513905641
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.legacy-import.display",
+        "data": {
+          "version": 1,
+          "displayKind": "custom",
+          "title": "Reasoning summary",
+          "body": "Listed the workspace.",
+          "timestamp": 1785574802500
+        },
+        "id": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+        "seq": 5,
+        "parentId": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+        "timestamp": 1790513905641
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Two entries: notes.txt and src."
+            }
+          ],
+          "api": "legacy-import",
+          "provider": "legacy-import",
+          "model": "gpt-codex-legacy",
+          "usage": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 0,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1785574803000
+        },
+        "id": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+        "seq": 6,
+        "parentId": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+        "timestamp": 1790513905642
+      }
+    ]
+  },
+  "branch": [
+    "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+    "635e062d-f8ff-462e-9dd6-903ae653a80d",
+    "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+    "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+    "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81"
+  ],
+  "context": {
+    "model": {
+      "provider": "legacy-import",
+      "modelId": "gpt-codex-legacy"
+    },
+    "thinkingLevel": "off",
+    "messages": [
+      {
+        "role": "user",
+        "text": "List the files."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": null,
+  "history": [
+    {
+      "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+      "entryId": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+      "role": "system",
+      "timestamp": 1790513905640,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360:provenance:0",
+          "text": "This history was imported from a codex session (codex-rollout-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
+          "notice": {
+            "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
+            "params": {
+              "sourceKind": "codex",
+              "sourceSessionId": "codex-rollout-0001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "h:635e062d-f8ff-462e-9dd6-903ae653a80d",
+      "entryId": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+      "role": "user",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:635e062d-f8ff-462e-9dd6-903ae653a80d:text:0",
+          "text": "List the files."
+        }
+      ]
+    },
+    {
+      "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36",
+      "entryId": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+      "role": "assistant",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36:legacy-tool-call:0",
+          "toolCallId": "call_codex_1",
+          "name": "shell",
+          "input": {
+            "command": ["ls"]
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36:legacy-tool-result:0",
+          "toolCallId": "call_codex_1",
+          "ok": true,
+          "output": "notes.txt\nsrc"
+        }
+      ]
+    },
+    {
+      "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab",
+      "entryId": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+      "role": "system",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab:legacy-display:0",
+          "text": "Reasoning summary\n\nListed the workspace."
+        }
+      ]
+    },
+    {
+      "id": "h:c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+      "entryId": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+      "role": "assistant",
+      "timestamp": 1790513905642,
+      "model": "legacy-import/gpt-codex-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81:text:0",
+          "text": "Two entries: notes.txt and src."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-import-codex.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+      "fileTailEntryId": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81"
+    },
+    "nodes": [
+      {
+        "id": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "custom",
+        "timestamp": 1790513905640,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+        "parentId": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+        "depth": 1,
+        "entryType": "message",
+        "preview": "List the files.",
+        "role": "user",
+        "timestamp": 1790513905641,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+        "parentId": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905641,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+        "parentId": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
+        "depth": 3,
+        "entryType": "custom",
+        "timestamp": 1790513905641,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+        "parentId": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "Two entries: notes.txt and src.",
+        "role": "assistant",
+        "timestamp": 1790513905642,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 5,
+    "returnedNodes": 5,
+    "truncated": false
+  }
+}

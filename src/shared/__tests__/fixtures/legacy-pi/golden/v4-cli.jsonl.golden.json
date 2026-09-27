@@ -1,0 +1,793 @@
+{
+  "file": "v4-cli.jsonl",
+  "bytes": 4973,
+  "sha256": "5abb45717f572b3f9e82287a2c13af17db7cab10b228110dddc50673d104ac40",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "34dd6753-2739-4ff5-8787-6a3fcfc20a8d",
+      "createdAt": 1790513905576,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.576Z"
+    },
+    "seq": 8,
+    "leafId": "70c0efea-afba-4704-9d34-dd19041b934d",
+    "name": "Renamed in the TUI",
+    "labels": {
+      "08288297-2d7f-41fa-bb2f-69dcf124df4a": "from the GUI"
+    },
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "87fcc320-6f90-4d83-b4b0-32940845beec",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905582
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "522292d7-571d-49d3-b211-eb678df93714",
+        "seq": 2,
+        "parentId": "87fcc320-6f90-4d83-b4b0-32940845beec",
+        "timestamp": 1790513905582
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "auto"
+        },
+        "id": "27d913f6-54dc-4bee-8da2-33abc6b8121e",
+        "seq": 3,
+        "parentId": "522292d7-571d-49d3-b211-eb678df93714",
+        "timestamp": 1790513905583
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "A native turn before the terminal opens."
+            }
+          ],
+          "timestamp": 1790513905583
+        },
+        "id": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+        "seq": 4,
+        "parentId": "27d913f6-54dc-4bee-8da2-33abc6b8121e",
+        "timestamp": 1790513905583
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Native answer before the terminal."
+            }
+          ],
+          "api": "faux:1790513905573:p8fojpsfcfo",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 930,
+            "output": 9,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 939,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905573
+        },
+        "id": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+        "seq": 5,
+        "parentId": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+        "timestamp": 1790513905584
+      },
+      {
+        "id": "fdc45e45",
+        "parentId": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+        "timestamp": 1790513905589,
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": "Typed in the terminal.",
+          "timestamp": 1789898401000
+        }
+      },
+      {
+        "id": "f836aaca",
+        "parentId": "fdc45e45",
+        "timestamp": 1790513905589,
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Answered in the terminal."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-cli",
+          "usage": {
+            "input": 10,
+            "output": 4,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 14,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1789898402000
+        }
+      },
+      {
+        "id": "05b666d2",
+        "parentId": "f836aaca",
+        "timestamp": 1790513905589,
+        "type": "message",
+        "message": {
+          "role": "bashExecution",
+          "command": "ls",
+          "output": "notes.txt\nsrc\n",
+          "exitCode": 0,
+          "cancelled": false,
+          "truncated": false,
+          "timestamp": 1789898403000
+        }
+      },
+      {
+        "id": "e45295a8",
+        "parentId": "05b666d2",
+        "timestamp": 1790513905589,
+        "type": "message",
+        "message": {
+          "role": "custom",
+          "customType": "cli-extension",
+          "content": "A note an extension added for the model.",
+          "display": false,
+          "timestamp": 1790513905589
+        }
+      },
+      {
+        "type": "custom",
+        "customType": "cli-extension-state",
+        "data": {
+          "step": 1
+        },
+        "id": "bcf55e4f",
+        "parentId": "e45295a8",
+        "timestamp": 1790513905589
+      },
+      {
+        "type": "model_change",
+        "id": "b30b9568",
+        "parentId": "bcf55e4f",
+        "timestamp": 1790513905590,
+        "provider": "anthropic",
+        "modelId": "claude-cli"
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "7d3c9e31",
+        "parentId": "b30b9568",
+        "timestamp": 1790513905590,
+        "thinkingLevel": "low"
+      },
+      {
+        "id": "757d0734",
+        "parentId": "7d3c9e31",
+        "timestamp": 1790513905590,
+        "type": "custom",
+        "customType": "pi-cli:session_info",
+        "data": {
+          "type": "session_info",
+          "id": "757d0734",
+          "parentId": "7d3c9e31",
+          "timestamp": "2026-09-27T12:58:25.590Z",
+          "name": "Renamed in the TUI"
+        }
+      },
+      {
+        "id": "0eadc266",
+        "parentId": "757d0734",
+        "timestamp": 1790513905590,
+        "type": "custom",
+        "customType": "pi-cli:label",
+        "data": {
+          "type": "label",
+          "id": "0eadc266",
+          "parentId": "757d0734",
+          "timestamp": "2026-09-27T12:58:25.590Z",
+          "targetId": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+          "label": "from the GUI"
+        }
+      },
+      {
+        "type": "compaction",
+        "id": "2d6c40f5",
+        "parentId": "0eadc266",
+        "timestamp": 1790513905590,
+        "summary": "Terminal summary of everything so far.",
+        "firstKeptEntryId": "fdc45e45",
+        "tokensBefore": 900,
+        "retainedTail": [
+          {
+            "role": "user",
+            "content": "Typed in the terminal.",
+            "timestamp": 1789898401000
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Answered in the terminal."
+              }
+            ],
+            "api": "anthropic-messages",
+            "provider": "anthropic",
+            "model": "claude-cli",
+            "usage": {
+              "input": 10,
+              "output": 4,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 14,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1789898402000
+          },
+          {
+            "role": "bashExecution",
+            "command": "ls",
+            "output": "notes.txt\nsrc\n",
+            "exitCode": 0,
+            "cancelled": false,
+            "truncated": false,
+            "timestamp": 1789898403000
+          },
+          {
+            "role": "custom",
+            "customType": "cli-extension",
+            "content": "A note an extension added for the model.",
+            "display": false,
+            "timestamp": 1790513905589
+          }
+        ]
+      },
+      {
+        "id": "50d1f080",
+        "parentId": "2d6c40f5",
+        "timestamp": 1790513905590,
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": "After the terminal compaction.",
+          "timestamp": 1789898404000
+        }
+      },
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "51122c06-fe37-4737-8b83-b3c291401595",
+        "seq": 6,
+        "parentId": "50d1f080",
+        "timestamp": 1790513905619
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Back in the GUI."
+            }
+          ],
+          "timestamp": 1790513905620
+        },
+        "id": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+        "seq": 7,
+        "parentId": "51122c06-fe37-4737-8b83-b3c291401595",
+        "timestamp": 1790513905620
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "GUI answer after the terminal."
+            }
+          ],
+          "api": "faux:1790513905590:fjxtdm0i6zf",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 1009,
+            "output": 8,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 1017,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905590
+        },
+        "id": "70c0efea-afba-4704-9d34-dd19041b934d",
+        "seq": 8,
+        "parentId": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+        "timestamp": 1790513905624
+      }
+    ]
+  },
+  "branch": [
+    "87fcc320-6f90-4d83-b4b0-32940845beec",
+    "522292d7-571d-49d3-b211-eb678df93714",
+    "27d913f6-54dc-4bee-8da2-33abc6b8121e",
+    "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+    "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+    "fdc45e45",
+    "f836aaca",
+    "05b666d2",
+    "e45295a8",
+    "bcf55e4f",
+    "b30b9568",
+    "7d3c9e31",
+    "757d0734",
+    "0eadc266",
+    "2d6c40f5",
+    "50d1f080",
+    "51122c06-fe37-4737-8b83-b3c291401595",
+    "dc9eee64-8038-41cd-b197-5def0c36b96d",
+    "70c0efea-afba-4704-9d34-dd19041b934d"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "low",
+    "messages": [
+      {
+        "role": "compactionSummary",
+        "summary": "Terminal summary of everything so far."
+      },
+      {
+        "role": "user",
+        "text": "Typed in the terminal."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "bashExecution",
+        "command": "ls"
+      },
+      {
+        "role": "custom",
+        "customType": "cli-extension",
+        "text": "A note an extension added for the model."
+      },
+      {
+        "role": "user",
+        "text": "After the terminal compaction."
+      },
+      {
+        "role": "user",
+        "text": "Back in the GUI."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "history": [
+    {
+      "id": "h:8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+      "entryId": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+      "role": "user",
+      "timestamp": 1790513905583,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8bd69ec8-c606-4cbf-976a-0a378b2f163c:text:0",
+          "text": "A native turn before the terminal opens."
+        }
+      ]
+    },
+    {
+      "id": "h:08288297-2d7f-41fa-bb2f-69dcf124df4a",
+      "entryId": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+      "role": "assistant",
+      "timestamp": 1790513905584,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:08288297-2d7f-41fa-bb2f-69dcf124df4a:text:0",
+          "text": "Native answer before the terminal."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:fdc45e45",
+      "entryId": "fdc45e45",
+      "role": "user",
+      "timestamp": 1790513905589,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:fdc45e45:text:0",
+          "text": "Typed in the terminal."
+        }
+      ]
+    },
+    {
+      "id": "h:f836aaca",
+      "entryId": "f836aaca",
+      "role": "assistant",
+      "timestamp": 1790513905589,
+      "model": "anthropic/claude-cli",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:f836aaca:text:0",
+          "text": "Answered in the terminal."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:2d6c40f5",
+      "entryId": "2d6c40f5",
+      "role": "system",
+      "timestamp": 1790513905590,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:2d6c40f5:summary:0",
+          "text": "Context summary\n\nTerminal summary of everything so far."
+        }
+      ]
+    },
+    {
+      "id": "h:50d1f080",
+      "entryId": "50d1f080",
+      "role": "user",
+      "timestamp": 1790513905590,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:50d1f080:text:0",
+          "text": "After the terminal compaction."
+        }
+      ]
+    },
+    {
+      "id": "h:dc9eee64-8038-41cd-b197-5def0c36b96d",
+      "entryId": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+      "role": "user",
+      "timestamp": 1790513905620,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:dc9eee64-8038-41cd-b197-5def0c36b96d:text:0",
+          "text": "Back in the GUI."
+        }
+      ]
+    },
+    {
+      "id": "h:70c0efea-afba-4704-9d34-dd19041b934d",
+      "entryId": "70c0efea-afba-4704-9d34-dd19041b934d",
+      "role": "assistant",
+      "timestamp": 1790513905624,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:70c0efea-afba-4704-9d34-dd19041b934d:text:0",
+          "text": "GUI answer after the terminal."
+        }
+      ],
+      "stopReason": "stop"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-cli.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "70c0efea-afba-4704-9d34-dd19041b934d",
+      "fileTailEntryId": "70c0efea-afba-4704-9d34-dd19041b934d"
+    },
+    "nodes": [
+      {
+        "id": "87fcc320-6f90-4d83-b4b0-32940845beec",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905582,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "522292d7-571d-49d3-b211-eb678df93714",
+        "parentId": "87fcc320-6f90-4d83-b4b0-32940845beec",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905582,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "27d913f6-54dc-4bee-8da2-33abc6b8121e",
+        "parentId": "522292d7-571d-49d3-b211-eb678df93714",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905583,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+        "parentId": "27d913f6-54dc-4bee-8da2-33abc6b8121e",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "A native turn before the terminal opens.",
+        "role": "user",
+        "timestamp": 1790513905583,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+        "parentId": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "Native answer before the terminal.",
+        "role": "assistant",
+        "label": "from the GUI",
+        "timestamp": 1790513905584,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "fdc45e45",
+        "parentId": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+        "depth": 5,
+        "entryType": "message",
+        "preview": "Typed in the terminal.",
+        "role": "user",
+        "timestamp": 1790513905589,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "f836aaca",
+        "parentId": "fdc45e45",
+        "depth": 6,
+        "entryType": "message",
+        "preview": "Answered in the terminal.",
+        "role": "assistant",
+        "timestamp": 1790513905589,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "05b666d2",
+        "parentId": "f836aaca",
+        "depth": 7,
+        "entryType": "message",
+        "role": "bashExecution",
+        "timestamp": 1790513905589,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "e45295a8",
+        "parentId": "05b666d2",
+        "depth": 8,
+        "entryType": "message",
+        "preview": "A note an extension added for the model.",
+        "role": "custom",
+        "timestamp": 1790513905589,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "bcf55e4f",
+        "parentId": "e45295a8",
+        "depth": 9,
+        "entryType": "custom",
+        "timestamp": 1790513905589,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "b30b9568",
+        "parentId": "bcf55e4f",
+        "depth": 10,
+        "entryType": "model_change",
+        "preview": "anthropic/claude-cli",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "7d3c9e31",
+        "parentId": "b30b9568",
+        "depth": 11,
+        "entryType": "thinking_level_change",
+        "preview": "low",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "757d0734",
+        "parentId": "7d3c9e31",
+        "depth": 12,
+        "entryType": "custom",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "0eadc266",
+        "parentId": "757d0734",
+        "depth": 13,
+        "entryType": "custom",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "2d6c40f5",
+        "parentId": "0eadc266",
+        "depth": 14,
+        "entryType": "compaction",
+        "preview": "Terminal summary of everything so far.",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "50d1f080",
+        "parentId": "2d6c40f5",
+        "depth": 15,
+        "entryType": "message",
+        "preview": "After the terminal compaction.",
+        "role": "user",
+        "timestamp": 1790513905590,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "51122c06-fe37-4737-8b83-b3c291401595",
+        "parentId": "50d1f080",
+        "depth": 16,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905619,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+        "parentId": "51122c06-fe37-4737-8b83-b3c291401595",
+        "depth": 17,
+        "entryType": "message",
+        "preview": "Back in the GUI.",
+        "role": "user",
+        "timestamp": 1790513905620,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "70c0efea-afba-4704-9d34-dd19041b934d",
+        "parentId": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+        "depth": 18,
+        "entryType": "message",
+        "preview": "GUI answer after the terminal.",
+        "role": "assistant",
+        "timestamp": 1790513905624,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 19,
+    "returnedNodes": 19,
+    "truncated": false
+  }
+}

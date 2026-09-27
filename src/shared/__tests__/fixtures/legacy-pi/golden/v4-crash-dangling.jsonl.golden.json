@@ -1,0 +1,255 @@
+{
+  "file": "v4-crash-dangling.jsonl",
+  "bytes": 1793,
+  "sha256": "d09ed221400b58228d5caad0acef7b4faa56749b7279ba68cb1044374935bcc6",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "8c693db7-05c0-43f1-afea-3ae3f4ec7862",
+      "createdAt": 1790513905547,
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.547Z"
+    },
+    "seq": 5,
+    "leafId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+    "entries": [
+      {
+        "type": "model_change",
+        "provider": "faux",
+        "modelId": "faux-corpus",
+        "id": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "seq": 1,
+        "parentId": null,
+        "timestamp": 1790513905553
+      },
+      {
+        "type": "thinking_level_change",
+        "thinkingLevel": "medium",
+        "id": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "seq": 2,
+        "parentId": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "timestamp": 1790513905554
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "ask"
+        },
+        "id": "207447ef-4030-44d4-8d37-81db090ede54",
+        "seq": 3,
+        "parentId": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "timestamp": 1790513905554
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Write crash.txt."
+            }
+          ],
+          "timestamp": 1790513905554
+        },
+        "id": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "seq": 4,
+        "parentId": "207447ef-4030-44d4-8d37-81db090ede54",
+        "timestamp": 1790513905554
+      },
+      {
+        "type": "message",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Writing the file."
+            },
+            {
+              "type": "toolCall",
+              "id": "call-crash",
+              "name": "write",
+              "arguments": {
+                "path": "crash.txt",
+                "content": "never written\n"
+              }
+            }
+          ],
+          "api": "faux:1790513905545:9azdi5dci7q",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 924,
+            "output": 18,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 942,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1790513905555
+        },
+        "id": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "seq": 5,
+        "parentId": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "timestamp": 1790513905555
+      }
+    ]
+  },
+  "branch": [
+    "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+    "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+    "207447ef-4030-44d4-8d37-81db090ede54",
+    "107bcdea-08d7-41a3-afff-e902feccd090",
+    "ed01f064-237c-46e3-82c2-7fecaf4b8cd4"
+  ],
+  "context": {
+    "model": {
+      "provider": "faux",
+      "modelId": "faux-corpus"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "user",
+        "text": "Write crash.txt."
+      },
+      {
+        "role": "assistant",
+        "stopReason": "toolUse",
+        "blocks": ["text", "toolCall:write:call-crash"]
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "ask"
+  },
+  "history": [
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "role": "user",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:text:0",
+          "text": "Write crash.txt."
+        }
+      ]
+    },
+    {
+      "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "entryId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "role": "assistant",
+      "timestamp": 1790513905555,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:text:0",
+          "text": "Writing the file."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:tool-call:call-crash",
+          "toolCallId": "call-crash",
+          "name": "write",
+          "input": {
+            "path": "crash.txt",
+            "content": "never written\n"
+          }
+        }
+      ],
+      "stopReason": "toolUse"
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "v4-crash-dangling.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "fileTailEntryId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4"
+    },
+    "nodes": [
+      {
+        "id": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "faux/faux-corpus",
+        "timestamp": 1790513905553,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "parentId": "7fef16c8-b25a-43a8-9f58-c0fa5b87cd02",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905554,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "207447ef-4030-44d4-8d37-81db090ede54",
+        "parentId": "ab8960ff-90ad-49ed-bc1e-2ee6e941a54d",
+        "depth": 2,
+        "entryType": "custom",
+        "timestamp": 1790513905554,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "parentId": "207447ef-4030-44d4-8d37-81db090ede54",
+        "depth": 3,
+        "entryType": "message",
+        "preview": "Write crash.txt.",
+        "role": "user",
+        "timestamp": 1790513905554,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "parentId": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "Writing the file.",
+        "role": "assistant",
+        "timestamp": 1790513905555,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 5,
+    "returnedNodes": 5,
+    "truncated": false
+  }
+}

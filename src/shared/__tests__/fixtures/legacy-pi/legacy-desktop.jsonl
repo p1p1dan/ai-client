@@ -1,0 +1,9 @@
+{"type":"session","schema":1,"sessionId":"desktop-session","createdAt":"2026-03-01T10:20:00.000Z"}
+{"type":"message","id":"d-u1","role":"user","blocks":[{"type":"text","text":"desktop: read the notes"},{"type":"attachment","attachment":{"name":"diagram.png","mediaType":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="}}],"createdAt":"2026-03-01T10:21:00.000Z"}
+{"type":"message","id":"d-a1","role":"assistant","blocks":[{"type":"thinking","thinking":"Read it first."},{"type":"text","text":"Reading."}],"meta":{"providerId":"anthropic","modelId":"claude-desktop","usage":{"inputTokens":40,"outputTokens":5}},"createdAt":"2026-03-01T10:22:00.000Z"}
+{"type":"message","id":"d-t1","role":"tool","toolName":"read","blocks":[{"type":"tool_call","callId":"d-call-1","name":"read","args":{"path":"notes.txt"},"result":{"content":[{"type":"text","text":"alpha\nbeta"}]}}],"createdAt":"2026-03-01T10:23:00.000Z"}
+{"type":"message","id":"d-sub","role":"assistant","blocks":[{"type":"text","text":"Delegate-private text."}],"meta":{"parentToolCallId":"d-call-1"},"createdAt":"2026-03-01T10:24:00.000Z"}
+{"type":"message","id":"d-a2","role":"assistant","blocks":[{"type":"text","text":"The notes hold alpha and beta."}],"createdAt":"2026-03-01T10:25:00.000Z"}
+{"type":"message","id":"d-u2","role":"user","blocks":[{"type":"text","text":"desktop: thanks"},{"type":"attachment","attachment":{"name":"missing.pdf","path":"/nowhere/missing.pdf"}}],"createdAt":"2026-03-01T10:26:00.000Z"}
+{"type":"compaction","id":"d-c1","summary":"desktop summary","throughMessageId":"d-a2","tokensBefore":500,"retainedTail":[{"role":"user","content":"kept desktop task","timestamp":1772360340000}],"createdAt":"2026-03-01T10:27:00.000Z"}
+{"type":"message","id":"d-a3","role":"assistant","blocks":[{"type":"text","text":"Rate limited."}],"meta":{"status":"error","error":"rate limited"},"createdAt":"2026-03-01T10:28:00.000Z"}

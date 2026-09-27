@@ -47,15 +47,15 @@
 import { readFile, stat } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import {
-  paginatePiSessionHistory,
-  projectPiSessionHistory,
-} from '../../../agent-host/piSessionTimeline';
-import {
   branchEntries,
   decodeSession,
   SESSION_MAX_BYTES,
-} from '../../../runtime/plugins/session/codec';
-import { convertLegacySession } from '../../../runtime/plugins/session/legacy';
+} from '../../../shared/legacyPiSession/codec';
+import { convertLegacySession } from '../../../shared/legacyPiSession/legacy';
+import {
+  paginatePiSessionHistory,
+  projectPiSessionHistory,
+} from '../../../shared/legacyPiSession/timeline';
 import type { SessionHistoryPage } from '../../../shared/types/sessionHistory';
 
 /** The one code a caller branches on: fall back to the resume path. */

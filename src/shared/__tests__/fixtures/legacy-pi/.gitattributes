@@ -1,0 +1,4 @@
+# Byte-exact on every checkout: the goldens pin each file's sha256, and every
+# `.native-v4.jsonl` copy pins its source's. An EOL conversion would make each
+# legacy source look like it drifted after its copy was made.
+*.jsonl -text

@@ -1,0 +1,9 @@
+{
+  "file": "damaged-invalid-utf8.jsonl",
+  "bytes": 6792,
+  "sha256": "889510a4ca2f1b0b1e948404b4b1600cdf1b555630d15db54b45c59313333682",
+  "unreadable": {
+    "stage": "utf-8",
+    "code": "ERR_ENCODING_INVALID_ENCODED_DATA"
+  }
+}

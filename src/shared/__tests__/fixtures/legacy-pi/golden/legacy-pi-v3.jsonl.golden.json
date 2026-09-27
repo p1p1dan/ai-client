@@ -1,0 +1,899 @@
+{
+  "file": "legacy-pi-v3.jsonl",
+  "bytes": 5045,
+  "sha256": "431d50f13163dba80cc6da7f7ac46340c40a852b95d2ea08661b116046cd6d95",
+  "strict": "ok",
+  "document": {
+    "header": {
+      "kind": "header",
+      "version": 4,
+      "id": "golden-0001",
+      "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+      "createdAt": 1790513905659,
+      "metadata": {
+        "importedFrom": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v3.jsonl",
+        "sourceSha256": "431d50f13163dba80cc6da7f7ac46340c40a852b95d2ea08661b116046cd6d95",
+        "sourceSessionId": "01a0e2f1-fffb-7cc7-a79e-b5fb1ff74945",
+        "sourceFormat": "pi-v3",
+        "sourceCwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+        "legacyHeader": {
+          "type": "session",
+          "version": 3,
+          "id": "01a0e2f1-fffb-7cc7-a79e-b5fb1ff74945",
+          "timestamp": "2026-09-27T12:58:25.659Z",
+          "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace"
+        }
+      },
+      "type": "session",
+      "timestamp": "2026-09-27T12:58:25.659Z"
+    },
+    "seq": 23,
+    "leafId": "golden-0004",
+    "name": "Legacy v3 session",
+    "labels": {
+      "0c12b489": "answered"
+    },
+    "entries": [
+      {
+        "type": "model_change",
+        "id": "b76023d6",
+        "parentId": null,
+        "timestamp": 1790513905659,
+        "provider": "anthropic",
+        "modelId": "claude-legacy",
+        "seq": 1
+      },
+      {
+        "type": "thinking_level_change",
+        "id": "d352c6a0",
+        "parentId": "b76023d6",
+        "timestamp": 1790513905659,
+        "thinkingLevel": "medium",
+        "seq": 2
+      },
+      {
+        "type": "message",
+        "id": "c7b0feab",
+        "parentId": "d352c6a0",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "user",
+          "content": "v3: read the notes",
+          "timestamp": 1775030401000
+        },
+        "seq": 3
+      },
+      {
+        "type": "message",
+        "id": "2d2d1a2a",
+        "parentId": "c7b0feab",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "thinking",
+              "thinking": "Reading first.",
+              "thinkingSignature": "v3-sig"
+            },
+            {
+              "type": "toolCall",
+              "id": "v3-call-1",
+              "name": "read",
+              "arguments": {
+                "path": "notes.txt"
+              }
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "toolUse",
+          "timestamp": 1775030402000
+        },
+        "seq": 4
+      },
+      {
+        "type": "message",
+        "id": "7b262e12",
+        "parentId": "2d2d1a2a",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "toolResult",
+          "toolCallId": "v3-call-1",
+          "toolName": "read",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "isError": false,
+          "timestamp": 1775030403000
+        },
+        "seq": 5
+      },
+      {
+        "type": "message",
+        "id": "0c12b489",
+        "parentId": "7b262e12",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The notes say alpha, beta."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1775030404000
+        },
+        "seq": 6
+      },
+      {
+        "type": "message",
+        "id": "341d4337",
+        "parentId": "0c12b489",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "bashExecution",
+          "command": "ls",
+          "output": "notes.txt\nsrc\n",
+          "exitCode": 0,
+          "cancelled": false,
+          "truncated": false,
+          "timestamp": 1775030405000
+        },
+        "seq": 7
+      },
+      {
+        "id": "7e0d03dd",
+        "timestamp": 1790513905659,
+        "parentId": "341d4337",
+        "type": "message",
+        "message": {
+          "role": "custom",
+          "customType": "legacy-extension",
+          "content": "An extension note for the model.",
+          "display": true,
+          "timestamp": 1790513905659
+        },
+        "seq": 8
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient-session-tier",
+        "data": "handsoff",
+        "id": "cfb9078c",
+        "parentId": "7e0d03dd",
+        "timestamp": 1790513905659,
+        "seq": 9
+      },
+      {
+        "id": "8c99b4b1",
+        "timestamp": 1790513905659,
+        "parentId": "cfb9078c",
+        "type": "custom",
+        "customType": "legacy:session_info",
+        "data": {
+          "type": "session_info",
+          "id": "8c99b4b1",
+          "parentId": "cfb9078c",
+          "timestamp": "2026-09-27T12:58:25.659Z",
+          "name": "Legacy v3 session"
+        },
+        "seq": 10
+      },
+      {
+        "id": "71839bb2",
+        "timestamp": 1790513905659,
+        "parentId": "8c99b4b1",
+        "type": "custom",
+        "customType": "legacy:label",
+        "data": {
+          "type": "label",
+          "id": "71839bb2",
+          "parentId": "8c99b4b1",
+          "timestamp": "2026-09-27T12:58:25.659Z",
+          "targetId": "0c12b489",
+          "label": "answered"
+        },
+        "seq": 12
+      },
+      {
+        "type": "message",
+        "id": "c3e0f3f9",
+        "parentId": "71839bb2",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "user",
+          "content": "v3: an idea we drop",
+          "timestamp": 1775030406000
+        },
+        "seq": 14
+      },
+      {
+        "type": "message",
+        "id": "9bc97604",
+        "parentId": "c3e0f3f9",
+        "timestamp": 1790513905659,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Dropped idea."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1775030407000
+        },
+        "seq": 15
+      },
+      {
+        "type": "branch_summary",
+        "id": "bda3d570",
+        "parentId": "71839bb2",
+        "timestamp": 1790513905660,
+        "fromId": "9bc97604",
+        "summary": "Tried an idea and came back.",
+        "seq": 16
+      },
+      {
+        "type": "message",
+        "id": "58950f76",
+        "parentId": "bda3d570",
+        "timestamp": 1790513905660,
+        "message": {
+          "role": "user",
+          "content": "v3: second question",
+          "timestamp": 1775030408000
+        },
+        "seq": 17
+      },
+      {
+        "type": "message",
+        "id": "74125a6e",
+        "parentId": "58950f76",
+        "timestamp": 1790513905660,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Second answer."
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1775030409000
+        },
+        "seq": 18
+      },
+      {
+        "type": "compaction",
+        "id": "1dee86f3",
+        "parentId": "74125a6e",
+        "timestamp": 1790513905660,
+        "summary": "v3 summary: read the notes, answered twice.",
+        "firstKeptEntryId": "58950f76",
+        "tokensBefore": 2400,
+        "retainedTail": [
+          {
+            "role": "user",
+            "content": "v3: second question",
+            "timestamp": 1775030408000
+          },
+          {
+            "role": "assistant",
+            "content": [
+              {
+                "type": "text",
+                "text": "Second answer."
+              }
+            ],
+            "api": "anthropic-messages",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "usage": {
+              "input": 40,
+              "output": 12,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "totalTokens": 52,
+              "cost": {
+                "input": 0,
+                "output": 0,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0
+              }
+            },
+            "stopReason": "stop",
+            "timestamp": 1775030409000
+          }
+        ],
+        "seq": 19
+      },
+      {
+        "type": "message",
+        "id": "282b4634",
+        "parentId": "1dee86f3",
+        "timestamp": 1790513905660,
+        "message": {
+          "role": "user",
+          "content": "v3: after the compaction",
+          "timestamp": 1775030410000
+        },
+        "seq": 20
+      },
+      {
+        "type": "message",
+        "id": "ad26f318",
+        "parentId": "282b4634",
+        "timestamp": 1790513905660,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Half an answer before the Stop"
+            }
+          ],
+          "api": "anthropic-messages",
+          "provider": "anthropic",
+          "model": "claude-legacy",
+          "usage": {
+            "input": 40,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 52,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "aborted",
+          "timestamp": 1775030411000
+        },
+        "seq": 21
+      },
+      {
+        "type": "custom",
+        "customType": "aiclient.permissions",
+        "data": {
+          "mode": "agent",
+          "gear": "accept-edits"
+        },
+        "id": "golden-0004",
+        "timestamp": 1767225600000,
+        "parentId": "ad26f318",
+        "seq": 22
+      }
+    ]
+  },
+  "branch": [
+    "b76023d6",
+    "d352c6a0",
+    "c7b0feab",
+    "2d2d1a2a",
+    "7b262e12",
+    "0c12b489",
+    "341d4337",
+    "7e0d03dd",
+    "cfb9078c",
+    "8c99b4b1",
+    "71839bb2",
+    "bda3d570",
+    "58950f76",
+    "74125a6e",
+    "1dee86f3",
+    "282b4634",
+    "ad26f318",
+    "golden-0004"
+  ],
+  "context": {
+    "model": {
+      "provider": "anthropic",
+      "modelId": "claude-legacy"
+    },
+    "thinkingLevel": "medium",
+    "messages": [
+      {
+        "role": "compactionSummary",
+        "summary": "v3 summary: read the notes, answered twice."
+      },
+      {
+        "role": "user",
+        "text": "v3: second question"
+      },
+      {
+        "role": "assistant",
+        "stopReason": "stop",
+        "blocks": ["text"]
+      },
+      {
+        "role": "user",
+        "text": "v3: after the compaction"
+      }
+    ]
+  },
+  "permissions": {
+    "mode": "agent",
+    "gear": "accept-edits"
+  },
+  "history": [
+    {
+      "id": "h:c7b0feab",
+      "entryId": "c7b0feab",
+      "role": "user",
+      "timestamp": 1790513905659,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c7b0feab:text:0",
+          "text": "v3: read the notes"
+        }
+      ]
+    },
+    {
+      "id": "h:2d2d1a2a",
+      "entryId": "2d2d1a2a",
+      "role": "assistant",
+      "timestamp": 1790513905659,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:2d2d1a2a:thinking:0",
+          "text": "Reading first."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:2d2d1a2a:tool-call:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:7b262e12:tool-result:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "stopReason": "toolUse"
+    },
+    {
+      "id": "h:0c12b489",
+      "entryId": "0c12b489",
+      "role": "assistant",
+      "timestamp": 1790513905659,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:0c12b489:text:0",
+          "text": "The notes say alpha, beta."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:bda3d570",
+      "entryId": "bda3d570",
+      "role": "system",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:bda3d570:summary:0",
+          "text": "Context summary\n\nTried an idea and came back."
+        }
+      ]
+    },
+    {
+      "id": "h:58950f76",
+      "entryId": "58950f76",
+      "role": "user",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:58950f76:text:0",
+          "text": "v3: second question"
+        }
+      ]
+    },
+    {
+      "id": "h:74125a6e",
+      "entryId": "74125a6e",
+      "role": "assistant",
+      "timestamp": 1790513905660,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:74125a6e:text:0",
+          "text": "Second answer."
+        }
+      ],
+      "stopReason": "stop"
+    },
+    {
+      "id": "h:1dee86f3",
+      "entryId": "1dee86f3",
+      "role": "system",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:1dee86f3:summary:0",
+          "text": "Context summary\n\nv3 summary: read the notes, answered twice."
+        }
+      ]
+    },
+    {
+      "id": "h:282b4634",
+      "entryId": "282b4634",
+      "role": "user",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:282b4634:text:0",
+          "text": "v3: after the compaction"
+        }
+      ]
+    },
+    {
+      "id": "h:ad26f318",
+      "entryId": "ad26f318",
+      "role": "assistant",
+      "timestamp": 1790513905660,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ad26f318:text:0",
+          "text": "Half an answer before the Stop"
+        }
+      ],
+      "stopReason": "aborted",
+      "incomplete": true
+    }
+  ],
+  "tree": {
+    "logicalSessionId": "golden",
+    "sessionFile": "legacy-pi-v3.jsonl",
+    "workspacePath": "/tmp/aiclient-legacy-pi-corpus/workspace",
+    "leaf": {
+      "activeEntryId": "golden-0004",
+      "fileTailEntryId": "golden-0004"
+    },
+    "nodes": [
+      {
+        "id": "b76023d6",
+        "parentId": null,
+        "depth": 0,
+        "entryType": "model_change",
+        "preview": "anthropic/claude-legacy",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "d352c6a0",
+        "parentId": "b76023d6",
+        "depth": 1,
+        "entryType": "thinking_level_change",
+        "preview": "medium",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c7b0feab",
+        "parentId": "d352c6a0",
+        "depth": 2,
+        "entryType": "message",
+        "preview": "v3: read the notes",
+        "role": "user",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": false,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "2d2d1a2a",
+        "parentId": "c7b0feab",
+        "depth": 3,
+        "entryType": "message",
+        "role": "assistant",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "7b262e12",
+        "parentId": "2d2d1a2a",
+        "depth": 4,
+        "entryType": "message",
+        "preview": "alpha beta",
+        "role": "toolResult",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "0c12b489",
+        "parentId": "7b262e12",
+        "depth": 5,
+        "entryType": "message",
+        "preview": "The notes say alpha, beta.",
+        "role": "assistant",
+        "label": "answered",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "341d4337",
+        "parentId": "0c12b489",
+        "depth": 6,
+        "entryType": "message",
+        "role": "bashExecution",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "7e0d03dd",
+        "parentId": "341d4337",
+        "depth": 7,
+        "entryType": "message",
+        "preview": "An extension note for the model.",
+        "role": "custom",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "cfb9078c",
+        "parentId": "7e0d03dd",
+        "depth": 8,
+        "entryType": "custom",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "8c99b4b1",
+        "parentId": "cfb9078c",
+        "depth": 9,
+        "entryType": "custom",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "71839bb2",
+        "parentId": "8c99b4b1",
+        "depth": 10,
+        "entryType": "custom",
+        "timestamp": 1790513905659,
+        "childCount": 2,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "c3e0f3f9",
+        "parentId": "71839bb2",
+        "depth": 11,
+        "entryType": "message",
+        "preview": "v3: an idea we drop",
+        "role": "user",
+        "timestamp": 1790513905659,
+        "childCount": 1,
+        "forkable": true,
+        "active": false,
+        "leaf": false
+      },
+      {
+        "id": "9bc97604",
+        "parentId": "c3e0f3f9",
+        "depth": 12,
+        "entryType": "message",
+        "preview": "Dropped idea.",
+        "role": "assistant",
+        "timestamp": 1790513905659,
+        "childCount": 0,
+        "forkable": true,
+        "active": false,
+        "leaf": false
+      },
+      {
+        "id": "bda3d570",
+        "parentId": "71839bb2",
+        "depth": 11,
+        "entryType": "branch_summary",
+        "preview": "Tried an idea and came back.",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "58950f76",
+        "parentId": "bda3d570",
+        "depth": 12,
+        "entryType": "message",
+        "preview": "v3: second question",
+        "role": "user",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "74125a6e",
+        "parentId": "58950f76",
+        "depth": 13,
+        "entryType": "message",
+        "preview": "Second answer.",
+        "role": "assistant",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "1dee86f3",
+        "parentId": "74125a6e",
+        "depth": 14,
+        "entryType": "compaction",
+        "preview": "v3 summary: read the notes, answered twice.",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "282b4634",
+        "parentId": "1dee86f3",
+        "depth": 15,
+        "entryType": "message",
+        "preview": "v3: after the compaction",
+        "role": "user",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "ad26f318",
+        "parentId": "282b4634",
+        "depth": 16,
+        "entryType": "message",
+        "preview": "Half an answer before the Stop",
+        "role": "assistant",
+        "timestamp": 1790513905660,
+        "childCount": 1,
+        "forkable": true,
+        "active": true,
+        "leaf": false
+      },
+      {
+        "id": "golden-0004",
+        "parentId": "ad26f318",
+        "depth": 17,
+        "entryType": "custom",
+        "timestamp": 1767225600000,
+        "childCount": 0,
+        "forkable": true,
+        "active": true,
+        "leaf": true
+      }
+    ],
+    "totalNodes": 20,
+    "returnedNodes": 20,
+    "truncated": false
+  }
+}
