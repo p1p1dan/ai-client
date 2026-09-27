@@ -1,0 +1,27 @@
+# 决策 034：key 由宿主每次请求时向 Main 拉取，宿主不缓存；关掉 dsh-base 的明文凭据行
+
+日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-5 方案 §5 D2](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03](../topics/p1-5-models-and-credentials/03-design.md)。
+
+## 规则
+
+1. 关掉 dsh-base 的 `credentials` 行。它挂的 `dsh-credentials-local` 会把明文写进 `$DSH_HOME/.credentials.yaml`。
+2. 宿主侧换成我方只读提供者 `aiclient-credentials`：
+   - 只认计划里的引用名，其余一律返回 undefined；
+   - 每次请求发 `{host:'credential', id, ref, nonce}`，5 s 超时；
+   - 不缓存，写接口全部拒绝。
+3. Main 侧 `DshCredentialBroker`：
+   - 校验通道、nonce 和引用名；
+   - 按现有的归属规则从 vault 取 key，内存缓存到 vault 下次变更为止；
+   - 登出或钥匙串锁住时回 `unavailable`（新失败码 `CREDENTIALS_UNAVAILABLE`），不再退回去读 `auth.json`；
+   - 永不记录 key 的值。
+4. **前置条件：实查工具进程会不会继承宿主的 IPC 句柄**（方案 IT-07，Windows 在 P1-14 的 CI 上补测）。如果会继承，工具就能冒充宿主要 key，nonce 只能防冒充、防不住读走应答。那时要先在 P1-3 的拉起方式上堵住，再落地本决策。
+
+## 取舍
+
+- 这就是 roadmap 写的「按请求注入」：登出、换 key 之后，下一次请求就生效，宿主里不常驻 key。
+- 备选：
+  - Main 推送、宿主常驻：key 会一直留在宿主内存里。
+  - Main 本地反代，宿主只拿一次性令牌：能顺带解决 UA 问题（[决策 037](037-user-agent-test-first.md)），但 Main 要搬运全部流量。
+- 代价：
+  - 每次请求多一次本机 IPC；依赖 P1-3 的控制通道。
+  - Linux 上钥匙串锁住时会话无法请求模型。1.0.x 这时还能用磁盘上的 key。

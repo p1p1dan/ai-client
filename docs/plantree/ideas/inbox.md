@@ -7,3 +7,4 @@
 - 2026-09-18 · **已评估，不采用**：GitHub `duoduoler-ops/Table-skills/project-handoff` 技能。脚本是 Windows 专有（`import msvcrt`），依赖宿主生命周期 hook 与 Codex 专有线程工具，且与本仓已有的 plan-tree 状态载体冲突；用户决定不采用。
 - 2026-09-18 · **已评估，不采用**：生命周期 hooks（Claude Code / Codex 那种「配一条命令挂到某个事件上」的能力）。本仓 runtime 目前无此能力；同类形态里 DSH 有代码级事件拦截，pi-desktop 与 pi 本体只有扩展/订阅形态。用户表示只是想了解现状，不立项。
 - 2026-09-26（DSH [决策 022](../plans/dsh-rebase/decisions/022-host-env-inherits-main.md)）：DSH 会从工具环境剔除 `KEY|PASSWORD|SECRET|TOKEN` 名字的变量。若用户需要在工具里用某个令牌，可加「显式转发的环境变量名单」设置（DSH 允许显式 env 覆盖清洗结果）。未立项。
+- 2026-09-26（DSH [决策 036](../plans/dsh-rebase/decisions/036-filter-unsupported-protocols.md)）：DSH 手写路由只支持三种协议，用户自建的 google / mistral / bedrock / vertex / azure / codex / pi-messages 服务在 DSH 下不可用。若确有用户需要，可自写一个 LLM 适配插件承接。未立项。
