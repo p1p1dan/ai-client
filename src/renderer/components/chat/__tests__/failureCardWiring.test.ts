@@ -41,9 +41,9 @@ describe('D1 — composer wiring for a failure that outlives its idle', () => {
     );
     expect(COMPOSER).toContain('status: nextTurnStatus,');
     expect(COMPOSER).not.toContain("status: activeSession?.status ?? 'idle',\n    runEntry");
-    expect(COMPOSER).toMatch(
-      /canStop \|\| nextTurnStatus === 'idle' \|\| nextTurnStatus === 'completed'/
-    );
+    // Decision 046: "Send now" reads the same status through the pure gate
+    // (`queuedSendNowBlocker`, which admits `disconnected` like the release).
+    expect(COMPOSER).toMatch(/queuedSendNowBlocker\(\{[^}]*canStop,\s*nextTurnStatus,/);
   });
 
   it('[FW-02] a new send acknowledges the old failure before anything is dispatched', () => {

@@ -24,7 +24,10 @@ describe('T24/T26 send experience wiring', () => {
   it('publishes an attempt-identified pending user message before the first Host await', () => {
     const sendStart = composer.lastIndexOf('onSendStart?.(origin)');
     const publish = composer.indexOf('usePendingUserMessagesStore.getState().publish({');
-    const ensureHost = composer.indexOf('await window.electronAPI.chat.ensureHost()', publish);
+    const ensureHost = composer.indexOf(
+      'await cancellation.race(window.electronAPI.chat.ensureHost())',
+      publish
+    );
 
     expect(sendStart).toBeGreaterThan(-1);
     expect(publish).toBeGreaterThan(sendStart);

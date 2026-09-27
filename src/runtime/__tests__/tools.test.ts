@@ -412,6 +412,39 @@ describe('native tools', () => {
       'timeout'
     );
   });
+  it('T146 — bash publishes execStartedAt via onUpdate, after approval and before exec runs', async () => {
+    const order: string[] = [];
+    const r = await runtime({
+      permissions: {
+        approve: async () => {
+          order.push('approved');
+          return 'allow-once';
+        },
+      },
+    });
+    const tool = r.ctx.runtimeTools.list().find((candidate) => candidate.name === 'bash');
+    if (!tool) throw new Error('missing bash');
+    const before = Date.now();
+    const updates: unknown[] = [];
+    const result = await tool.execute(
+      'test-bash',
+      { command: 'printf amber' },
+      undefined,
+      (partial) => {
+        order.push('update');
+        updates.push(partial);
+      }
+    );
+    expect(content(result)).toContain('amber');
+    // Exactly one update, strictly after the approval and before the caller
+    // sees the settled result — the display's honest exec-start origin.
+    expect(order).toEqual(['approved', 'update']);
+    expect(updates).toHaveLength(1);
+    const [update] = updates as [{ content: unknown[]; details: { execStartedAt: number } }];
+    expect(update.content).toEqual([]);
+    expect(update.details.execStartedAt).toBeGreaterThanOrEqual(before);
+    expect(update.details.execStartedAt).toBeLessThanOrEqual(Date.now());
+  });
   it('grants the approved file itself, and clears it on settings change', async () => {
     // This used to assert the EXACT CALL: approving `a` re-asked for `a` again
     // with different content, because the grant was the whole request

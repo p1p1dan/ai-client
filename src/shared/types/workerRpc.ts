@@ -440,7 +440,21 @@ export interface WorkerSendPayload {
   attachments?: SessionAttachment[];
   model?: string;
   effort?: SessionEffortLevel;
+  /**
+   * T135 / decision 045 — `'retry'` re-runs the last turn from the context
+   * before its failure instead of sending `text`: no user message is added.
+   * `text` must then be empty and `attachments` absent. A worker with no
+   * cut-short turn to re-run refuses with {@link WORKER_RETRY_UNAVAILABLE}.
+   */
+  mode?: 'retry';
 }
+
+/**
+ * The worker's refusal of a `mode: 'retry'` send that found nothing to re-run:
+ * the branch's last turn completed, or was never recorded. No run started and
+ * no event was emitted — the session is exactly as it was.
+ */
+export const WORKER_RETRY_UNAVAILABLE = 'WORKER_RETRY_UNAVAILABLE';
 
 export interface WorkerSendResult {
   accepted: true;
@@ -585,6 +599,11 @@ export interface WorkerInterjectPayload {
 export interface WorkerInterjectResult {
   /** False when no turn was active to interject into. */
   interjected: boolean;
+  /**
+   * decision 046 — whether the worker holds a turn at all. `false` lets Main
+   * drop a busy latch the worker no longer backs; absent means "not reported".
+   */
+  turnActive?: boolean;
 }
 
 /**
@@ -993,6 +1012,14 @@ export function isWorkerSendPayload(value: unknown): value is WorkerSendPayload 
   ) {
     return false;
   }
+  // T135: a retry carries no prompt of its own, so one that does is malformed
+  // rather than a send the worker would have to pick a meaning for.
+  if (
+    value.mode !== undefined &&
+    (value.mode !== 'retry' || value.text !== '' || value.attachments !== undefined)
+  ) {
+    return false;
+  }
   return value.effort === undefined || isWorkerEffort(value.effort);
 }
 
@@ -1377,7 +1404,11 @@ export function isWorkerInterjectPayload(value: unknown): value is WorkerInterje
 }
 
 export function isWorkerInterjectResult(value: unknown): value is WorkerInterjectResult {
-  return isRecord(value) && typeof value.interjected === 'boolean';
+  return (
+    isRecord(value) &&
+    typeof value.interjected === 'boolean' &&
+    (value.turnActive === undefined || typeof value.turnActive === 'boolean')
+  );
 }
 
 const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);

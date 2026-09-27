@@ -756,8 +756,19 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
      * Optional-field addition, the same compatibility precedent as
      * `SessionLivenessNote`: a renderer that predates it reads a plain
      * completion.
+     *
+     * decision 046 adds two causes that only Main synthesizes, and only on
+     * `session.stopped` (always followed by a settling `session.status`):
+     *
+     * `no_active_turn`: a Stop (or Ctrl+Enter) reached a worker with no turn
+     * running. Nothing was interrupted; the event only settles a session some
+     * reader still believed was running, and must not mark a turn as stopped.
+     *
+     * `forced`: the turn did not end on its own — Main tore its worker down
+     * (the Stop watchdog expired, the worker died while stopping, or the
+     * session was closed mid-turn).
      */
-    stopCause?: 'turn_limit' | 'interjected';
+    stopCause?: 'turn_limit' | 'interjected' | 'no_active_turn' | 'forced';
   };
 }
 
@@ -964,6 +975,18 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
      * arrives once, settled, on `tool.completed`.
      */
     status?: string;
+    /**
+     * T146 — epoch ms the `bash` tool actually handed the command to
+     * `runtimeExec.run`, published as an `onUpdate` right before that call
+     * (see `plugins/tools/index.ts`). `tool.started` fires while arguments
+     * are still streaming (T101), so its own elapsed already includes arg
+     * streaming, the approval wait and the path re-check; this is the
+     * runtime's own timeout origin, so a running row can show "elapsed /
+     * limit" without the earlier, longer wait making it look past the limit.
+     * Absent for every other tool and for a `tool.updated` that only carries
+     * revised `input`.
+     */
+    execStartedAt?: number;
   };
 }
 

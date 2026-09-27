@@ -25,6 +25,7 @@ import {
   type SessionSkippedRow,
 } from './codec.ts';
 import { sessionPermissions } from './legacy.ts';
+import { isRetryableContext, retryCut, type SessionRetryPoint } from './retry.ts';
 import { acquireWriterLock, releaseWriterLock, type WriterLock } from './writerLock.ts';
 
 export interface SessionConfig {
@@ -276,7 +277,11 @@ export class JsonlSessionStore {
   }
 
   snapshot(): SessionSnapshot {
-    const entries = structuredClone(branchEntries(this.document));
+    return this.snapshotAt(this.document.leafId);
+  }
+
+  private snapshotAt(leafId: string | null): SessionSnapshot {
+    const entries = structuredClone(branchEntries(this.document, leafId));
     const clean = entries.filter(
       (item) => item.type !== 'message' || isSuccessfulMessage(item.message)
     );
@@ -499,6 +504,31 @@ export class JsonlSessionStore {
         this.document.leafId = entryId;
       });
       return this.snapshot();
+    });
+  }
+
+  /**
+   * T135 / decision 045 — ready this branch to re-run its last turn with no new
+   * user message, or answer `undefined` when there is no cut-short turn to
+   * re-run (see `retry.ts`).
+   *
+   * Moves the leaf back over the turn's failed replies, which stay in the file
+   * on an abandoned branch. Unlike `navigate`, the caller has nothing to
+   * restore: the entries stepped over are replies and run records, never a
+   * permission or model change, so the gate and the model stay as they are.
+   */
+  async prepareRetry(): Promise<SessionRetryPoint | undefined> {
+    return this.withNavigation(async () => {
+      await this.flush();
+      const branch = branchEntries(this.document);
+      const cut = retryCut(branch);
+      const leafId = cut.index >= 0 ? (branch[cut.index]?.id ?? null) : null;
+      if (!isRetryableContext(this.snapshotAt(leafId).messages)) return undefined;
+      if (leafId !== this.document.leafId)
+        await this.mutate({ kind: 'lane', lane: 'main', leafId }, () => {
+          this.document.leafId = leafId;
+        });
+      return { leafId, abandoned: cut.abandoned };
     });
   }
 

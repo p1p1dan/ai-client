@@ -12,7 +12,6 @@ import {
   Lock,
   PackageSearch,
   RefreshCw,
-  Send,
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
@@ -81,6 +80,7 @@ import {
   type TurnItem,
   type TurnSegment,
 } from './chatTurn';
+import { FailureContinueButton } from './FailureContinueButton';
 import {
   deriveHistoryNotice,
   deriveRetryControl,
@@ -116,6 +116,7 @@ import { QuestionCard } from './QuestionCard';
 import { deriveQuestionCardState } from './questionCardModel';
 import { ReadingColumn } from './ReadingColumn';
 import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
+import { continueBlockedReason } from './retryLastTurn';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { canContinueSession, deriveSessionFailure } from './sessionFailure';
 import { useResumeSession } from './sessionIndex/useResumeSession';
@@ -301,6 +302,13 @@ export function MessageTimeline({
   const lastErrorCode = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.runtimeErrorCode ?? null
   );
+  /**
+   * T135 — the failed run's closing `idle` has arrived, so the worker holds no
+   * turn and the card's Continue (a retry of that turn) may go.
+   */
+  const failureSettled = useChatSessionsStore(
+    (state) => state.sessions.find((session) => session.id === sessionId)?.failureSettled === true
+  );
   /** decision 040 — the last run paused at the turn ceiling (see `TurnCeilingNotice`). */
   const stopCause = useChatSessionsStore(
     (state) => state.sessions.find((session) => session.id === sessionId)?.stopCause ?? null
@@ -435,13 +443,17 @@ export function MessageTimeline({
   }, [bucket, pendingUserMessages]);
 
   /**
-   * The message Continue would send again: the LAST user message in this
+   * The prompt of the turn Continue retries: the LAST user message in this
    * session's transcript.
+   *
+   * T135: Continue no longer sends it again — the worker re-runs the turn from
+   * its own session file. The id rides the intent only for the fallback: when
+   * the worker finds no cut-short turn to re-run, this text goes back into an
+   * empty composer for the user to check and send (`retry_unavailable`).
    *
    * The last one, not the first unanswered one, because a turn that failed was
    * admitted — the Host echoed its user message before anything went wrong, so
-   * the prompt that failed IS the newest user message. Looking further back
-   * would re-send a prompt that already produced a reply.
+   * the prompt that failed IS the newest user message.
    *
    * `null` means there is nothing to continue from (a failure before any user
    * message existed, e.g. a create handshake that never got that far), which is
@@ -948,17 +960,18 @@ export function MessageTimeline({
                         in words instead of offering the button. What is gone
                         is the case where it did nothing at all. */}
                       {canContinueSession(failure, resumeMessageId != null) ? (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="mt-2 h-6 text-ui"
-                          onClick={() =>
+                        // T135 / decision 045: retries the failed turn itself
+                        // (no second copy of the prompt), and only once the
+                        // failure has settled — see `retryLastTurn.ts`.
+                        <FailureContinueButton
+                          blockedReason={continueBlockedReason({
+                            failureSettled,
+                            sendInFlight: sendStatus != null,
+                          })}
+                          onContinue={() =>
                             resumeMessageId && requestContinue(sessionId, resumeMessageId)
                           }
-                        >
-                          <Send className="mr-1 h-3.5 w-3.5" />
-                          {t('Continue')}
-                        </Button>
+                        />
                       ) : (
                         <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
                       )}

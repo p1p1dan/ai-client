@@ -383,12 +383,25 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     } catch (error) {
       const sessionId =
         request.logicalSessionId ?? this.ctx.get(SESSION_SERVICE)?.metadata().id ?? runId;
-      this.ctx.runtimeEvents.emit({
-        type: 'session.failed',
-        sessionId,
-        requestId: runId,
-        payload: { error: thrownRunErrorText(error) },
-      });
+      // decision 046 (H3a) — a Stop that landed before the run reached its own
+      // finish path is still a stop: the worker already said `stopping`, and
+      // the terminal that answers it must say `stopped`, not `failed`.
+      if (request.signal?.aborted) {
+        this.ctx.get('runtimeSubagents')?.abortAll();
+        this.ctx.runtimeEvents.emit({
+          type: 'session.stopped',
+          sessionId,
+          requestId: runId,
+          payload: { error: 'the run was aborted by its caller', errorCode: 'aborted' },
+        });
+      } else {
+        this.ctx.runtimeEvents.emit({
+          type: 'session.failed',
+          sessionId,
+          requestId: runId,
+          payload: { error: thrownRunErrorText(error) },
+        });
+      }
       this.ctx.runtimeEvents.emit({
         type: 'session.status',
         sessionId,
@@ -409,7 +422,13 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     interjection: RunInterjection
   ): Promise<RuntimeRunResult> {
     const session = this.ctx.get(SESSION_SERVICE);
-    await session?.flush();
+    // decision 046 (H3a) — until the `Agent` below exists nothing listens for
+    // the Stop, so every await before it races the signal instead. A Stop that
+    // lands here ends the run now rather than after a slow flush, prompt
+    // assembly or catalog re-read; before `startRun` that is a throw, which
+    // `run()` reports as `session.stopped` without ever saying `running`. (A
+    // signal already dead on entry takes the ordinary path; see the helper.)
+    if (session) await unlessAborted(session.flush(), request.signal);
     const snapshot = session?.snapshot();
     const adapter = this.ctx.runtimeModel;
     const saved = snapshot?.model;
@@ -440,13 +459,17 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     let systemPrompt = request.systemPrompt;
     let composed: ComposedPrompt | undefined;
     if (systemPrompt === undefined) {
-      composed = await this.ctx.runtimePrompt.compose();
+      composed = await unlessAborted(this.ctx.runtimePrompt.compose(), request.signal);
       systemPrompt = composed.text;
     }
     // Before the trace and before `startRun`: the text the model is given is the
     // text that belongs in the trace, and the metadata has to reach the
     // projector in time to ride the user echo.
-    const prepared = preparePrompt(request.prompt, request.attachments);
+    // T135: a retry sends no new prompt, so there is nothing to prepare.
+    const retry = request.retry === true;
+    const prepared = retry
+      ? preparePrompt('', undefined)
+      : preparePrompt(request.prompt, request.attachments);
     const trace = this.ctx.runtimeTrace.begin({
       runId: request.runId,
       input: prepared.text,
@@ -474,6 +497,7 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
         : {}),
       thinking_level: thinkingLevel,
       single_turn: this.config.singleTurn,
+      ...(retry ? { retry_last_turn: true } : {}),
       catalog_source: adapter.source,
       mode: this.ctx.get('runtimePermissions')?.mode ?? null,
       permission_gear: this.ctx.get('runtimePermissions')?.gear ?? null,
@@ -513,7 +537,15 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     // note has always claimed ("an edit lands on the next turn by itself").
     // Before the tools snapshot below, because `Task`'s description carries the
     // menu. Delegates already running keep their own definition object.
-    await subagents?.refresh();
+    //
+    // decision 046 (H3a): past `startRun`, so a Stop here must not escape as a
+    // throw — it falls through to the `throwIfAborted` inside the try below,
+    // which ends the run on its normal stopped path.
+    if (subagents) {
+      await unlessAborted(subagents.refresh(), request.signal).catch((error: unknown) => {
+        if (!request.signal?.aborted) throw error;
+      });
+    }
 
     // P5-2-4 — delegations started from here belong to this session and this
     // run. Bound before any tool can fire, because the first thing `Task` does
@@ -988,6 +1020,8 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       repetition ? `${describeRepetition(repetition)} (run ${trace.runId})` : undefined;
 
     let thrown: Error | undefined;
+    // Whether this run's prompt reached the model loop (and so the session).
+    let prompted = false;
     try {
       request.signal?.throwIfAborted();
       // New input must fit on its own; only the completed history can be
@@ -1016,7 +1050,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
             model: resolved.model,
             models: resolved.models,
             thinkingLevel,
-            retention: 'completed_turn',
+            // T135: a retry resumes a turn that was cut short, so its user
+            // message must survive a compaction here — it is the instruction
+            // the re-asked request answers, and no new prompt follows it.
+            retention: retry ? 'active_turn' : 'completed_turn',
             additionalTokens: incomingTokens,
             signal: request.signal,
           });
@@ -1054,7 +1091,24 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       // ended before another turn boundary came round. Draining here puts it in
       // this run's first request, right after the user's own message.
       flushDiscoveredInstructions();
-      await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
+      if (retry) {
+        // T135 / decision 045: re-ask from the context the failed request was
+        // sent with. The session already dropped the failed reply from it; a
+        // context that still ends on a reply has nothing to re-ask, and
+        // `continue()` would refuse it anyway, less legibly.
+        const last = agent.state.messages.at(-1);
+        if (!last || last.role === 'assistant')
+          throw new RuntimeHostError(
+            'retry_unavailable',
+            'the conversation does not end on a turn that was cut short'
+          );
+        trace.note('note', { event: 'retry_last_turn', resumes_from: last.role });
+        prompted = true;
+        await agent.continue();
+      } else {
+        prompted = true;
+        await agent.prompt(prepared.text, prepared.images.length ? prepared.images : undefined);
+      }
       await agent.waitForIdle();
       await drainStreamRetries();
       // P5-2-2 — the parent going idle is not the end of the logical run while
@@ -1262,7 +1316,10 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
       : interjected
         ? 'interjected'
         : undefined;
-    if (session && userStop) await recordRunStop(session, trace, userStop);
+    // decision 046: a Stop that landed before the prompt did (now reachable
+    // from the run's first await) leaves this run nothing in the file to mark;
+    // the record would be folded onto the PREVIOUS turn's reply on replay.
+    if (session && userStop && prompted) await recordRunStop(session, trace, userStop);
     const result: Omit<RuntimeRunResult, 'trace'> = {
       runId: trace.runId,
       success: !error,
@@ -1288,6 +1345,43 @@ export class AgentLoopPlugin extends Service implements AgentLoopService {
     projected.finish(result);
     return { ...result, latencyMs: finished.latency_ms, trace: finished };
   }
+}
+
+/**
+ * decision 046 (H3a) — `work`, or a rejection as soon as `signal` aborts.
+ *
+ * For the awaits a run makes before its `Agent` exists, where nothing else
+ * reacts to a Stop. `work` itself keeps going; the run only stops waiting, and
+ * `work`'s own handlers below stay attached, so a late failure of the losing
+ * side (host IO disposed under it) is consumed rather than left unhandled.
+ *
+ * A signal that is ALREADY aborted is not raced: `work` is awaited as it was
+ * before decision 046, and the run then ends on its normal stopped path, which
+ * resolves with the aborted result a caller passing a dead signal relies on.
+ * Only a Stop that lands during the wait cuts it short.
+ */
+function unlessAborted<T>(work: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal || signal.aborted) return work;
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(abortReason(signal));
+    signal.addEventListener('abort', onAbort, { once: true });
+    work.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      }
+    );
+  });
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new RuntimeHostError('aborted', 'the run was aborted by its caller');
 }
 
 /** One run's interjection state; see `AgentLoopPlugin.activeRun`. */

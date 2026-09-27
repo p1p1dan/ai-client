@@ -1075,6 +1075,17 @@ const electronAPI = {
       /** Round-2 P0: per-turn override; falls back to the session default. */
       model?: string;
     }): Promise<{ requestId: string }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_SEND, payload),
+    /**
+     * T135 / decision 045 — re-run the last turn with no new user message.
+     * Rejects with a `retry_unavailable` message when there is nothing to re-run.
+     */
+    retryLastTurn: (payload: {
+      sessionId: string;
+      attemptId: string;
+      effort?: SessionEffortLevel;
+      model?: string;
+    }): Promise<{ requestId: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RETRY_LAST_TURN, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
     interject: (payload: { sessionId: string }): Promise<{ interjected: boolean }> =>

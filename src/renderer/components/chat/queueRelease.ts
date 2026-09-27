@@ -26,7 +26,7 @@ export interface CanStartTurnInput {
   /** sessionId AND cwd are both resolved (`resolveActiveTarget().cwd != null`). */
   hasTarget: boolean;
   disabled: boolean;
-  /** `isStoppable(session.status)` — the four Host-side "a turn is running" statuses. */
+  /** `isStoppable(session.status)` — the running statuses plus `stopping` (`isStoppableStatus`). */
   busy: boolean;
   /** The Composer's own pre-first-token latch (`sendAndWait`'s `sending` state). */
   sending: boolean;
@@ -104,9 +104,17 @@ export interface DecideQueueReleaseInput {
  * which entry. Short-circuit order is priority order — each hold has a named,
  * assertable reason (decision 3.2 table, plus the dormant `head-failed`
  * check below).
- * `idle`/`completed` are the only two releasing statuses; the other seven all
- * hold as `not-idle`, including `failed` and `disconnected` (retry/reconnect
- * only, never auto-release — decision 3.2's "back off" rule).
+ * The releasing statuses are `isReleasableStatus`'s three; the other six hold
+ * as `not-idle`, including `failed` (retry only, never auto-release — decision
+ * 3.2's "back off" rule).
+ *
+ * Decision 046 rule 3: `disconnected` releases. It used to hold like `failed`,
+ * but a direct send in `disconnected` was always allowed (it resumes the
+ * session file), so the queue was the one gate stricter than `runSend`'s own:
+ * after "End conversation" every Enter joined a queue that could never drain.
+ * A released entry takes the same resume path a direct send does, and a resume
+ * the Host refuses pauses the queue (`shouldPauseQueueOnRejection`), so this
+ * cannot loop.
  *
  * `head-failed`: DORMANT in the current wiring — the T-19 fix review (R5)
  * reverted batch 3's "released entry's turn fails, requeue at the head with
@@ -138,10 +146,20 @@ export function decideQueueRelease(input: DecideQueueReleaseInput): QueueRelease
   }
   if (!input.hasTarget || input.disabled) return { type: 'hold', reason: 'no-target' };
   if (input.sending || input.inFlight) return { type: 'hold', reason: 'in-flight' };
-  if (input.status !== 'idle' && input.status !== 'completed') {
+  if (!isReleasableStatus(input.status)) {
     return { type: 'hold', reason: 'not-idle' };
   }
   return { type: 'release', entryId: input.entries[0].id };
+}
+
+/**
+ * Statuses in which nothing is running and the next turn may start: the queue
+ * releases, and "Send now" on a queued row sends without stopping anything.
+ * `disconnected` (the conversation was ended, or its idle worker reclaimed)
+ * counts — see `decideQueueRelease`.
+ */
+export function isReleasableStatus(status: SessionRuntimeStatus): boolean {
+  return status === 'idle' || status === 'completed' || status === 'disconnected';
 }
 
 // ---- decideRunEntryOutcome (T-19/round-2 P0 hardening) ----
@@ -633,16 +651,25 @@ export type ActionButtonKind = 'send' | 'retry' | 'stop' | 'enqueue' | 'send-now
 export interface ActionButtonSpec {
   kind: ActionButtonKind;
   disabled: boolean;
+  /**
+   * Stop only: a stop is already under way (the session reports `stopping`, or
+   * this composer's own Stop has not settled yet), so the button is offered as
+   * "force stop". Pressing it sends Stop again; Main's watchdog settles the
+   * turn either way (decision 046 rule 2). Absent on every other spec.
+   */
+  force?: true;
 }
 
+/** Title (i18n key) of the round Stop while a spec carries `force`. */
+export const FORCE_STOP_TITLE =
+  'Force stop — still stopping. Press again to resend Stop; the turn is ended within about 10 seconds.';
+
 /**
- * Statuses `runSend`'s `sending`/Stop affordance treats as "a turn is
- * running" — exported so `ChatComposer.tsx`'s `isStoppable` can import this
- * directly instead of hand-copying the list (M6 fix: a hand-copy is exactly
- * the "must be kept in sync by inspection" risk the T-19 fix review flagged).
- * Encodes the same Host contract as `runSend`'s own `busy` derivation:
- * `starting`/`running`/`waiting_permission`/`waiting_question` — NOT
- * `stopping` (an existing, separately-tracked gap, out of this batch's scope).
+ * The four statuses in which a turn is actually running:
+ * `starting`/`running`/`waiting_permission`/`waiting_question`. `stopping` is
+ * not one of them — the turn is being torn down — but it is still STOPPABLE,
+ * which is the question the composer's affordances ask; see
+ * `isStoppableStatus`.
  */
 export function isRunningStatus(status: SessionRuntimeStatus): boolean {
   return (
@@ -651,6 +678,21 @@ export function isRunningStatus(status: SessionRuntimeStatus): boolean {
     status === 'waiting_permission' ||
     status === 'waiting_question'
   );
+}
+
+/**
+ * Whether Stop (button and Esc) is offered for a session in this status —
+ * exported so `ChatComposer.tsx`'s `isStoppable` imports it rather than
+ * hand-copying the list (M6 fix).
+ *
+ * Decision 046 rule 2: `stopping` is included. It used to be left out, so the
+ * moment a Stop was acknowledged the button disappeared and Esc went dead —
+ * and when the turn never finished stopping (the worker stuck on an await that
+ * ignores abort), there was no way left to press Stop again. A second press now
+ * reaches Main, whose watchdog force-settles the turn.
+ */
+export function isStoppableStatus(status: SessionRuntimeStatus): boolean {
+  return isRunningStatus(status) || status === 'stopping';
 }
 
 export interface DeriveActionButtonsInput {
@@ -685,6 +727,12 @@ export interface DeriveActionButtonsInput {
    * Optional so every existing caller keeps its exact behaviour when omitted.
    */
   otherSendInFlight?: boolean;
+  /**
+   * This composer's own Stop for this session has been pressed and not yet
+   * settled. Together with a `stopping` status it turns Stop into force stop.
+   * Optional: omitted means "no stop pending".
+   */
+  stopRequested?: boolean;
 }
 
 /**
@@ -698,10 +746,11 @@ export interface DeriveActionButtonsInput {
  * put the two on screen together either.
  */
 export function deriveActionButtons(input: DeriveActionButtonsInput): readonly ActionButtonSpec[] {
-  const canStop = isRunningStatus(input.status) || input.sending;
+  const canStop = isStoppableStatus(input.status) || input.sending;
   if (canStop) {
+    const force = input.status === 'stopping' || input.stopRequested === true;
     return [
-      { kind: 'stop', disabled: false },
+      { kind: 'stop', disabled: false, ...(force ? { force: true as const } : {}) },
       ...(input.hasDraftContent ? [{ kind: 'send-now' as const, disabled: false }] : []),
       { kind: 'enqueue', disabled: !input.hasDraftContent },
     ];
@@ -720,6 +769,48 @@ export function deriveActionButtons(input: DeriveActionButtonsInput): readonly A
   }
   return [{ kind: 'send', disabled: false }];
 }
+
+// ---- queued "Send now" gate (decision 046 rule 4) ----
+
+/** Why a queued row's "Send now" is unavailable — rendered as the button's tooltip. */
+export type QueuedSendNowBlocker = 'unavailable' | 'other-send' | 'not-ready';
+
+export interface QueuedSendNowInput {
+  hasTarget: boolean;
+  disabled: boolean;
+  /** Stop is offered for this session (`isStoppableStatus(status) || sendingHere`). */
+  canStop: boolean;
+  /** `statusForNextTurn(session)` — a failure the runtime has closed reads `idle`. */
+  nextTurnStatus: SessionRuntimeStatus;
+  /** A different session's send holds the composer's single send slot. */
+  otherSendInFlight: boolean;
+}
+
+/**
+ * `null` when the head row's "Send now" may be pressed: either there is a turn
+ * to interrupt, or nothing is running and the release gate would let the head
+ * go (`isReleasableStatus`, so `disconnected` counts, as it does for the queue).
+ * Otherwise the reason, so the disabled button can say why instead of looking
+ * broken.
+ *
+ * A composer Stop that has not settled yet does not block it: pressing "Send
+ * now" then only re-sends Stop and marks the head, and the release itself stays
+ * gated by the stop latch in `useQueueRelease`.
+ */
+export function queuedSendNowBlocker(input: QueuedSendNowInput): QueuedSendNowBlocker | null {
+  if (!input.hasTarget || input.disabled) return 'unavailable';
+  if (input.otherSendInFlight) return 'other-send';
+  if (input.canStop || isReleasableStatus(input.nextTurnStatus)) return null;
+  return 'not-ready';
+}
+
+/** Tooltip copy (i18n keys) for each `QueuedSendNowBlocker`. */
+export const QUEUED_SEND_NOW_BLOCKER_COPY: Record<QueuedSendNowBlocker, string> = {
+  unavailable: 'Sending is unavailable in this conversation right now',
+  'other-send': 'Another conversation is still sending — this message goes out after it',
+  'not-ready':
+    'This conversation cannot take a new message yet — it is sent automatically once it can',
+};
 
 // ---- deriveQueueStripModel (decision 5) ----
 

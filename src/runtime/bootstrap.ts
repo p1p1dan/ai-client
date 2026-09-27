@@ -102,6 +102,13 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
  * so an oversized one is DIAGNOSED rather than silently truncated into shape. */
 const SUBAGENT_SCAN_BYTES = 64 * 1024;
 /**
+ * decision 046 — how long `dispose()` waits for an aborted run before tearing
+ * the rest of the graph down anyway. A run that ignores its abort must not hold
+ * the session lock (or the worker's dispose ACK) hostage; Main's dispose ACK
+ * budget is 3 s, so this stays under it.
+ */
+export const DISPOSE_RUN_GRACE_MS = 2_000;
+/**
  * The generation of THIS runtime's behaviour, stamped into every trace.
  *
  * It exists so two archived runs can be told apart by what the model saw and
@@ -253,6 +260,12 @@ export interface RuntimeHandle {
   session?: RuntimeSessionService;
   events: RuntimeEventsService;
   run(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
+  /**
+   * `run`, with its refusals (`runtime_disposed`, `runtime_busy`) thrown
+   * synchronously instead of returned as a rejected promise, so a caller can
+   * tell "never admitted" from "admitted, then failed" (decision 046 rule 5).
+   */
+  start(request: RuntimeRunRequest): Promise<RuntimeRunResult>;
   dispose(): Promise<void>;
 }
 
@@ -630,6 +643,21 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
 
     const runtimeExec = exec;
     const runtimeIo = io;
+    const start = (request: RuntimeRunRequest): Promise<RuntimeRunResult> => {
+      if (disposal) throw new RuntimeHostError('runtime_disposed', 'runtime is disposed');
+      if (active.size > 0 || session?.busy)
+        throw new RuntimeHostError('runtime_busy', 'a run is already active in this runtime');
+      const signal = request.signal
+        ? AbortSignal.any([controller.signal, request.signal])
+        : controller.signal;
+      session?.setRunning(true);
+      const work = ctx.runtimeLoop.run({ ...request, signal });
+      active.add(work);
+      return work.finally(() => {
+        active.delete(work);
+        session?.setRunning(false);
+      });
+    };
     return {
       ctx,
       flags,
@@ -647,23 +675,13 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
       events: ctx.runtimeEvents,
       session: session ? ctx.runtimeSession : undefined,
       run: (request) => {
-        if (disposal)
-          return Promise.reject(new RuntimeHostError('runtime_disposed', 'runtime is disposed'));
-        if (active.size > 0 || session?.busy)
-          return Promise.reject(
-            new RuntimeHostError('runtime_busy', 'a run is already active in this runtime')
-          );
-        const signal = request.signal
-          ? AbortSignal.any([controller.signal, request.signal])
-          : controller.signal;
-        session?.setRunning(true);
-        const work = ctx.runtimeLoop.run({ ...request, signal });
-        active.add(work);
-        return work.finally(() => {
-          active.delete(work);
-          session?.setRunning(false);
-        });
+        try {
+          return start(request);
+        } catch (error) {
+          return Promise.reject(error);
+        }
       },
+      start,
       dispose: () => {
         disposal ??= (async () => {
           controller.abort();
@@ -681,7 +699,13 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
               failures.push(error);
             }
           };
-          const outcomes = await Promise.allSettled([runtimeExec.shutdown(), ...active]);
+          // Bounded: the abort above ends a healthy run promptly, and one that
+          // ignores it must not keep the steps below (session lock release
+          // included) from running at all.
+          const outcomes = await Promise.allSettled([
+            runtimeExec.shutdown(),
+            ...[...active].map((work) => settleWithin(work, DISPOSE_RUN_GRACE_MS)),
+          ]);
           for (const outcome of outcomes)
             if (outcome.status === 'rejected') failures.push(outcome.reason);
           // A run ended by Ctrl+Enter leaves its delegates running into the
@@ -720,6 +744,21 @@ export async function createRuntime(options: RuntimeBootstrapOptions = {}): Prom
     }
     throw error;
   }
+}
+
+/** `work`, or a `run_did_not_settle` rejection once `ms` passes without it settling. */
+function settleWithin<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () =>
+        reject(
+          new RuntimeHostError('run_did_not_settle', `an aborted run did not settle within ${ms}ms`)
+        ),
+      ms
+    );
+  });
+  return Promise.race([work, expired]).finally(() => clearTimeout(timer));
 }
 
 /** Codes, not stack traces: the aggregate message is what a log line shows. */

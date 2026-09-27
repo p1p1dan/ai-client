@@ -369,6 +369,12 @@ export const IPC_CHANNELS = {
    */
   CHAT_RELOAD_SESSION: 'chat:reloadSession',
   CHAT_SEND: 'chat:send',
+  /**
+   * T135 / decision 045 — the failure card's Continue: re-run the session's
+   * last turn from the context before its failure, with no new user message.
+   * Rejects with `retry_unavailable` when there is no cut-short turn to re-run.
+   */
+  CHAT_RETRY_LAST_TURN: 'chat:retryLastTurn',
   CHAT_STOP: 'chat:stop',
   /**
    * Ask the agent loop to stop after its current turn and deliver a queued

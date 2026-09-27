@@ -48,10 +48,11 @@ import {
   STAGED_FORK_MARKER_SUFFIX,
   WORKER_COMMAND_INVENTORY_MAX,
   WORKER_COMPACT_BUDGET_MS,
+  WORKER_RETRY_UNAVAILABLE,
   type WorkerSlashCommandInfo,
 } from '../../shared/types/workerRpc.ts';
-import { createRuntime, type RuntimeHandle } from '../bootstrap.ts';
-import type { RuntimeHostConfig } from '../contracts.ts';
+import { createRuntime, DISPOSE_RUN_GRACE_MS, type RuntimeHandle } from '../bootstrap.ts';
+import type { RuntimeHostConfig, RuntimeRunRequest, RuntimeSessionService } from '../contracts.ts';
 import { RuntimeHostError } from '../host/errors.ts';
 import { resolveWorkerShell } from '../host/shell.ts';
 import { JsonlSessionStore, type SessionConfig } from '../plugins/session/store.ts';
@@ -404,35 +405,72 @@ export class NativeWorkerRuntime {
     await this.bootstrap();
     const handle = this.requireHandle();
     const controller = new AbortController();
+    const retry = input.mode === 'retry';
+    // Parsed first: a malformed ref must refuse before a retry moves the leaf.
+    const model = input.model ? parseModelRef(input.model) : undefined;
+    // T135 / decision 045 — a retry is admitted only when the branch ends on a
+    // turn that was cut short. The leaf moves back over the failed reply here,
+    // before `start` marks the session running (a moving leaf needs it idle).
+    // Refusing is not a run refusal: nothing was started and the session is
+    // exactly as it was, so no terminal is emitted — the renderer never drew
+    // this attempt as running, and the code tells it what happened. A failure
+    // to move the leaf IS a refusal of this request (decision 046 rule 5).
+    if (retry) {
+      let point: Awaited<ReturnType<RuntimeSessionService['prepareRetry']>>;
+      try {
+        point = await this.requireSession().prepareRetry();
+      } catch (error) {
+        throw this.refuseRun(input.requestId, error);
+      }
+      if (!point) {
+        throw new NativeWorkerRuntimeError(
+          WORKER_RETRY_UNAVAILABLE,
+          'There is no cut-short turn to retry: the last turn on this branch completed or was never recorded'
+        );
+      }
+    }
     // P5-1 — `/name` and `/skill:name` become the text they stand for before
     // the turn starts. The expansion IS the user message, in the session and in
     // the timeline, which is what the legacy backend does too: pi's
     // `session.prompt()` stores `expandedText`, not what was typed. Keeping the
     // two backends different here would make the same transcript read
     // differently depending on which one wrote it.
-    const prompt = await this.expand(input.text);
+    const prompt = retry ? '' : await this.expand(input.text);
+    const request: RuntimeRunRequest = {
+      prompt,
+      ...(retry ? { retry: true } : {}),
+      runId: input.requestId,
+      // Round-tripped so the composer can retire its optimistic bubble when
+      // the authoritative user echo lands; without it the prompt shows twice.
+      attemptId: input.attemptId,
+      logicalSessionId: this.logicalSessionId,
+      signal: controller.signal,
+      ...(input.attachments?.length ? { attachments: input.attachments } : {}),
+      ...(model ? { model } : {}),
+      // The composer's effort chip is the turn's thinking level. Dropping it
+      // here is invisible: the loop falls back to its own default and the run
+      // reports `thinking_level: off` no matter what the user picked. The
+      // per-turn value wins over the one the session bootstrapped with.
+      ...((input.effort ?? this.options.effort)
+        ? { thinkingLevel: input.effort ?? this.options.effort }
+        : {}),
+    };
     // startSend only admits the turn. Awaiting the run here would hold the
     // server's serialized RPC chain for the whole prompt and make worker.stop
     // unreachable — the same reason the legacy backend starts it out of band.
-    const done = handle
-      .run({
-        prompt,
-        runId: input.requestId,
-        // Round-tripped so the composer can retire its optimistic bubble when
-        // the authoritative user echo lands; without it the prompt shows twice.
-        attemptId: input.attemptId,
-        logicalSessionId: this.logicalSessionId,
-        signal: controller.signal,
-        ...(input.attachments?.length ? { attachments: input.attachments } : {}),
-        ...(input.model ? { model: parseModelRef(input.model) } : {}),
-        // The composer's effort chip is the turn's thinking level. Dropping it
-        // here is invisible: the loop falls back to its own default and the run
-        // reports `thinking_level: off` no matter what the user picked. The
-        // per-turn value wins over the one the session bootstrapped with.
-        ...((input.effort ?? this.options.effort)
-          ? { thinkingLevel: input.effort ?? this.options.effort }
-          : {}),
-      })
+    //
+    // decision 046 rule 5 — but it does wait for the ADMISSION. `start` throws
+    // a refusal synchronously; `run` used to return it as a rejection that the
+    // handler below swallowed after this method had already answered
+    // `accepted: true`, so Main kept a turn latched that never existed and
+    // nothing ever told the renderer it was over.
+    let work: Promise<unknown>;
+    try {
+      work = handle.start(request);
+    } catch (error) {
+      throw this.refuseRun(input.requestId, error);
+    }
+    const done = work
       .then(
         () => undefined,
         (error) => {
@@ -447,6 +485,35 @@ export class NativeWorkerRuntime {
       });
     this.turn = { requestId: input.requestId, controller, done };
     return { accepted: true, requestId: input.requestId };
+  }
+
+  /**
+   * A run the graph refused before it began: report it as this request's
+   * failure, settle the session, and hand back the error the RPC rejects with.
+   * The events matter as much as the rejection — a renderer that already drew
+   * the turn as running learns from them, not from Main's send reply.
+   */
+  private refuseRun(requestId: string, error: unknown): NativeWorkerRuntimeError {
+    const code = error instanceof RuntimeHostError ? error.code : 'run_refused';
+    const message = error instanceof Error ? error.message : String(error);
+    this.options.log?.('[native-runtime] run refused', error);
+    this.emit({
+      type: 'session.failed',
+      sessionId: this.logicalSessionId,
+      requestId,
+      payload: { error: `${code}: ${message}` },
+    });
+    this.emit({
+      type: 'session.status',
+      sessionId: this.logicalSessionId,
+      requestId,
+      payload: { status: 'idle' },
+    });
+    return code === 'runtime_busy'
+      ? new NativeWorkerRuntimeError('WORKER_SESSION_BUSY', `${code}: ${message}`, true)
+      : code === 'runtime_disposed'
+        ? new NativeWorkerRuntimeError('WORKER_SESSION_DISPOSED', `${code}: ${message}`)
+        : new NativeWorkerRuntimeError('WORKER_RUN_REFUSED', `${code}: ${message}`);
   }
 
   /**
@@ -489,18 +556,21 @@ export class NativeWorkerRuntime {
     // that waited would hold it for however long the provider takes to notice
     // the abort — and a second stop, or the dispose behind it, could not get
     // through. `stopped` reports that the stop was issued; the turn's own
-    // terminal event reports that it finished. `dispose` still waits, because
-    // there the session lock has to be released before the call returns.
+    // terminal event reports that it finished — and Main's stop watchdog is
+    // what answers for a turn that never does. `dispose` still waits (bounded),
+    // because there the session lock has to be released before the call returns.
     return { stopped: true };
   }
 
   interject(input: WorkerInterjectPayload): WorkerInterjectResult {
     this.assertLogicalSession(input.logicalSessionId);
-    if (!this.handle || !this.turn) return { interjected: false };
+    // `turnActive` tells Main whether a `false` here means "too late for this
+    // turn" or "there is no turn": only the second lets it drop its latch.
+    if (!this.handle || !this.turn) return { interjected: false, turnActive: false };
     // The loop's own answer, not `true` by assumption: the turn can end between
     // the two lines above and this check, and claiming otherwise would have the
     // composer tell the user a stop is coming that never will.
-    return { interjected: this.handle.loop.interject() };
+    return { interjected: this.handle.loop.interject(), turnActive: true };
   }
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
@@ -837,7 +907,7 @@ export class NativeWorkerRuntime {
       const turn = this.turn;
       if (turn) {
         turn.controller.abort();
-        await turn.done.catch(() => undefined);
+        await this.awaitAbortedTurn(turn);
       }
       await handle.session?.flush().catch(() => undefined);
       await io.unlink(input.sessionFile).catch((error: unknown) => {
@@ -986,7 +1056,7 @@ export class NativeWorkerRuntime {
     const turn = this.turn;
     if (turn) {
       turn.controller.abort();
-      await turn.done.catch(() => undefined);
+      await this.awaitAbortedTurn(turn);
     }
     this.unsubscribe?.();
     this.unsubscribe = null;
@@ -1000,6 +1070,32 @@ export class NativeWorkerRuntime {
     await handle?.dispose().catch((error: unknown) => {
       this.options.log?.('[native-runtime] graph dispose failed', error);
     });
+  }
+
+  /**
+   * Wait for an aborted turn, but not forever (decision 046).
+   *
+   * A run stuck on an await that ignores its abort used to hold `dispose` —
+   * and with it the dispose ACK and the session lock — for good. Past the
+   * grace the teardown goes on without it; the graph's own dispose bounds its
+   * wait the same way.
+   */
+  private async awaitAbortedTurn(turn: ActiveTurn): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settled = await Promise.race([
+      turn.done.then(
+        () => true,
+        () => true
+      ),
+      new Promise<boolean>((resolve) => {
+        timer = setTimeout(() => resolve(false), DISPOSE_RUN_GRACE_MS);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    if (!settled) {
+      this.options.log?.(
+        `[native-runtime] aborted turn ${turn.requestId} did not settle within ${DISPOSE_RUN_GRACE_MS}ms; tearing down without it`
+      );
+    }
   }
 
   private emit(event: RuntimeEventDraft): void {

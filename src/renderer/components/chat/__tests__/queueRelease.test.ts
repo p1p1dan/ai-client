@@ -1,9 +1,17 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { zhTranslations } from '@shared/i18n';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
-import type { QueuedMessage } from '../messageQueue';
+import {
+  createEmptyState,
+  enqueue,
+  interject,
+  prioritizeEntry,
+  type QueuedMessage,
+  selectSessionQueue,
+} from '../messageQueue';
 import {
   type ActionButtonKind,
   type CanStartTurnInput,
@@ -20,9 +28,14 @@ import {
   deriveActionButtons,
   deriveQueueStripModel,
   type FailureAffordance,
+  FORCE_STOP_TITLE,
   isAdmittedOutcome,
+  isReleasableStatus,
   isRunningStatus,
+  isStoppableStatus,
   QUEUE_PERMISSION_HINT,
+  QUEUED_SEND_NOW_BLOCKER_COPY,
+  queuedSendNowBlocker,
   type RestoredDraftMarker,
   type RunEntryOutcome,
   type RunSendOrigin,
@@ -49,7 +62,8 @@ const ALL_STATUSES: readonly SessionRuntimeStatus[] = [
   'disconnected',
 ];
 
-const RELEASING_STATUSES: readonly SessionRuntimeStatus[] = ['idle', 'completed'];
+// Decision 046 rule 3: `disconnected` (the conversation was ended) releases too.
+const RELEASING_STATUSES: readonly SessionRuntimeStatus[] = ['idle', 'completed', 'disconnected'];
 
 function baseCanStartTurn(overrides: Partial<CanStartTurnInput> = {}): CanStartTurnInput {
   return {
@@ -1590,5 +1604,226 @@ describe('shouldRevokeRestoredDraft (F2 S3 §5.3, D1 provenance)', () => {
     expect(shouldRevokeRestoredDraft(textOnly, { ...untouched, draftIds: [] })).toBe(true);
     // The user attached something afterwards — no longer purely ours.
     expect(shouldRevokeRestoredDraft(textOnly, { ...untouched, draftIds: ['att-z'] })).toBe(false);
+  });
+});
+
+/**
+ * Decision 046 (T145) — the renderer half of "Stop always settles".
+ *
+ * Field report (Windows 1.0.3-test.2): after the failure card's Continue the
+ * session showed running forever; Stop, Esc and Ctrl+Enter did nothing; after
+ * "End conversation" a new message went into the queue, and the queued row's
+ * "Send now" put it back into the composer. The first three cases below are
+ * the 2026-09-25 probe (`/tmp/stuckprobe/rendererQueue.test.ts`), inverted to
+ * pin the fixed behaviour.
+ */
+describe('decision 046 — stoppable stopping, releasable disconnected', () => {
+  const SID = 's1';
+  function queued(id: string, text: string, priority?: 'next'): QueuedMessage {
+    return {
+      id,
+      sessionId: SID,
+      text,
+      attachments: [],
+      queuedAt: 1,
+      ...(priority ? { priority } : {}),
+    };
+  }
+  const readyGate = {
+    hasTarget: true,
+    disabled: false,
+    sending: false,
+    inFlight: false,
+  };
+
+  it('after End conversation a stranded entry releases, and Send now is live', () => {
+    const added = enqueue(createEmptyState(), queued('q1', 'typed while stuck'));
+    if (!added.ok) throw new Error('enqueue');
+    const queue = selectSessionQueue(added.state, SID);
+    // The release gate agrees with `runSend`: a direct send in `disconnected`
+    // resumes the session file, so the head may go the same way.
+    expect(
+      decideQueueRelease({
+        sessionId: SID,
+        entries: queue.entries,
+        paused: queue.paused,
+        ...readyGate,
+        status: 'disconnected',
+      })
+    ).toEqual({ type: 'release', entryId: 'q1' });
+    // "Send now" is enabled, so a click can never fall through to the row.
+    expect(
+      queuedSendNowBlocker({
+        hasTarget: true,
+        disabled: false,
+        canStop: false,
+        nextTurnStatus: 'disconnected',
+        otherSendInFlight: false,
+      })
+    ).toBeNull();
+    // A paused queue's explicit "Send now" token still passes in `disconnected`.
+    const paused = { ...queue, paused: 'send-rejected' as const };
+    const prioritized = selectSessionQueue(prioritizeEntry(added.state, SID, 'q1'), SID);
+    expect(
+      decideQueueRelease({
+        sessionId: SID,
+        entries: prioritized.entries,
+        paused: paused.paused,
+        ...(prioritized.priorityEntryId ? { priorityEntryId: prioritized.priorityEntryId } : {}),
+        ...readyGate,
+        status: 'disconnected',
+      })
+    ).toEqual({ type: 'release', entryId: 'q1' });
+  });
+
+  it('after End conversation Enter still queues behind the entry, which now drains', () => {
+    // FIFO ownership is unchanged: a non-empty queue owns the next turn...
+    expect(
+      decideSendAction({
+        ...readyGate,
+        busy: isStoppableStatus('disconnected'),
+        hasContent: true,
+        reading: 0,
+        hasQueuedEntries: true,
+      })
+    ).toBe('enqueue');
+    // ...and offers no Stop, because nothing is running.
+    expect(
+      deriveActionButtons({
+        status: 'disconnected',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: true,
+        hasQueuedEntries: true,
+      }).map((spec) => spec.kind)
+    ).toEqual(['enqueue']);
+    // Two stranded entries (a Ctrl+Enter and a plain one) release in order.
+    const first = enqueue(createEmptyState(), queued('later1', 'plain queued'));
+    if (!first.ok) throw new Error('enqueue');
+    const second = interject(first.state, queued('next1', 'ctrl+enter', 'next'));
+    if (!second.ok) throw new Error('interject');
+    const both = selectSessionQueue(second.state, SID);
+    expect(
+      decideQueueRelease({
+        sessionId: SID,
+        entries: both.entries,
+        paused: both.paused,
+        ...readyGate,
+        status: 'disconnected',
+      })
+    ).toEqual({ type: 'release', entryId: 'next1' });
+  });
+
+  it("a 'stopping' that never resolves keeps Stop (as force stop), Esc and Send now", () => {
+    expect(isStoppableStatus('stopping')).toBe(true);
+    const buttons = deriveActionButtons({
+      status: 'stopping',
+      sending: false,
+      hasFailed: false,
+      hasDraftContent: true,
+      hasQueuedEntries: false,
+    });
+    expect(buttons).toEqual([
+      { kind: 'stop', disabled: false, force: true },
+      { kind: 'send-now', disabled: false },
+      { kind: 'enqueue', disabled: false },
+    ]);
+    // Enter queues behind the turn being torn down; the queue itself waits
+    // for Main's settle (idle), which decision 046 guarantees within ~10 s.
+    expect(
+      decideSendAction({
+        ...readyGate,
+        busy: isStoppableStatus('stopping'),
+        hasContent: true,
+        reading: 0,
+        hasQueuedEntries: false,
+      })
+    ).toBe('enqueue');
+    expect(
+      decideQueueRelease({
+        sessionId: SID,
+        entries: [queued('q', 'x')],
+        paused: null,
+        ...readyGate,
+        status: 'stopping',
+      })
+    ).toEqual({ type: 'hold', reason: 'not-idle' });
+    // "Send now" interrupts (re-sends Stop) rather than looking dead.
+    expect(
+      queuedSendNowBlocker({
+        hasTarget: true,
+        disabled: false,
+        canStop: isStoppableStatus('stopping'),
+        nextTurnStatus: 'stopping',
+        otherSendInFlight: false,
+      })
+    ).toBeNull();
+  });
+
+  it('isStoppableStatus is the running four plus stopping, and never a releasing status', () => {
+    expect(ALL_STATUSES.filter(isStoppableStatus)).toEqual([
+      'starting',
+      'running',
+      'waiting_permission',
+      'waiting_question',
+      'stopping',
+    ]);
+    expect(RELEASING_STATUSES.filter(isStoppableStatus)).toEqual([]);
+    expect(ALL_STATUSES.filter(isReleasableStatus)).toEqual([...RELEASING_STATUSES]);
+  });
+
+  it("the composer's own unsettled Stop marks Stop as force, on any stoppable status", () => {
+    const [stop] = deriveActionButtons({
+      status: 'running',
+      sending: false,
+      hasFailed: false,
+      hasDraftContent: false,
+      hasQueuedEntries: false,
+      stopRequested: true,
+    });
+    expect(stop).toEqual({ kind: 'stop', disabled: false, force: true });
+    // Omitted or false: the plain Stop, with no `force` key at all.
+    expect(
+      deriveActionButtons({
+        status: 'running',
+        sending: false,
+        hasFailed: false,
+        hasDraftContent: false,
+        hasQueuedEntries: false,
+      })[0]
+    ).toEqual({ kind: 'stop', disabled: false });
+  });
+
+  it('queuedSendNowBlocker names why Send now is unavailable', () => {
+    const base = {
+      hasTarget: true,
+      disabled: false,
+      canStop: false,
+      nextTurnStatus: 'idle' as SessionRuntimeStatus,
+      otherSendInFlight: false,
+    };
+    expect(queuedSendNowBlocker(base)).toBeNull();
+    expect(queuedSendNowBlocker({ ...base, nextTurnStatus: 'completed' })).toBeNull();
+    expect(queuedSendNowBlocker({ ...base, nextTurnStatus: 'running', canStop: true })).toBeNull();
+    expect(queuedSendNowBlocker({ ...base, hasTarget: false })).toBe('unavailable');
+    expect(queuedSendNowBlocker({ ...base, disabled: true })).toBe('unavailable');
+    expect(queuedSendNowBlocker({ ...base, otherSendInFlight: true })).toBe('other-send');
+    // A failure the runtime has not closed with `idle` yet (a worker restart).
+    expect(queuedSendNowBlocker({ ...base, nextTurnStatus: 'failed' })).toBe('not-ready');
+    // Agreement with the release gate: every status "Send now" accepts without
+    // a turn to interrupt is one the release gate accepts too.
+    for (const status of ALL_STATUSES) {
+      if (queuedSendNowBlocker({ ...base, nextTurnStatus: status }) !== null) continue;
+      expect(decideQueueRelease(baseRelease({ status }))).toEqual({
+        type: 'release',
+        entryId: 'q-1',
+      });
+    }
+  });
+
+  it('the new copy is in the Chinese catalog (it reaches t() through constants)', () => {
+    for (const key of [FORCE_STOP_TITLE, ...Object.values(QUEUED_SEND_NOW_BLOCKER_COPY)]) {
+      expect(zhTranslations[key], key).toBeTruthy();
+    }
   });
 });

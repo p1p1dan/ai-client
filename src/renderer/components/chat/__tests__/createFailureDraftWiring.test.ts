@@ -30,10 +30,12 @@ describe('create-failure draft restore wiring (D15)', () => {
     // opened never runs — the payload goes to the Retry icon and the composer
     // stays empty, which is exactly what the field run saw.
     const sequence = slice(
-      "const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout'> => {",
+      "const runCreateSequence = async (): Promise<'ok' | 'fatal' | 'timeout' | 'cancelled'> => {",
       'const sendAndWait ='
     );
-    expect(sequence).toContain('createResult = await window.electronAPI.chat.createSession({');
+    // Decision 046: raced against the send's cancel signal, still caught here.
+    expect(sequence).toContain('createResult = await cancellation.race(');
+    expect(sequence).toContain('window.electronAPI.chat.createSession({');
     expect(sequence).toContain('} catch (error) {');
     // The user still has to SEE why, so the rejection text keeps its old route
     // to the error card the outer catch used to write.

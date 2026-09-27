@@ -211,7 +211,10 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
           the deadline the runtime will enforce when the input named one.
           "12s / 30m" reads without a label because the row's own verb already
           says Running. A leaf of its own so the per-second tick re-renders
-          this span and nothing above it. */}
+          this span and nothing above it.
+          T146 — once `execStartedAtMs` is known (bash, past approval and path
+          checks), both numbers switch to that origin instead, and the limit
+          is withheld until then — see `deriveToolRowView`. */}
       {view.running && typeof view.runningStartedAtMs === 'number' && (
         <RunningToolClock startedAtMs={view.runningStartedAtMs} timeoutMs={view.runningTimeoutMs} />
       )}

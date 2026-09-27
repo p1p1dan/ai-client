@@ -134,9 +134,16 @@ describe('runSend cancellation-token ordering (F6 + 2026-08-10 stop-hang fix)', 
    * that produces `session.stopped`.
    */
   it('handleStop bumps the generation before awaiting anything', () => {
+    // Decision 046: the second writer is `cancelInFlightSend`, which Stop and
+    // "End conversation" share; handleStop calls it before its own IPC.
+    const cancelAt = only('const cancelInFlightSend = useCallback(');
     const stopBump = offsets('sendGenerationRef.current += 1;')[1];
+    expect(stopBump).toBeGreaterThan(cancelAt);
+    const stopStart = only('const handleStop = () => {');
+    const cancelCall = source.indexOf('cancelInFlightSend(stopTarget);', stopStart);
     const stopCall = only('void stopChatSession(stopTarget)');
-    expect(stopBump).toBeLessThan(stopCall);
+    expect(cancelCall).toBeGreaterThan(stopStart);
+    expect(cancelCall).toBeLessThan(stopCall);
   });
 });
 
@@ -183,10 +190,16 @@ describe('handleStop targets one session for both the pause and the abort (T091)
     // Stop cancels the turn, not the queued follow-ups: nothing here may pause.
     expect(body).not.toContain('pauseSession');
     // The generation bump is scoped to the send this component owns — a
-    // different chat's in-flight handshake must survive this Stop.
-    expect(body).toContain(
-      'if (inFlightSessionIdRef.current === stopTarget) sendGenerationRef.current += 1;'
+    // different chat's in-flight handshake must survive this Stop. Decision
+    // 046 moved it into `cancelInFlightSend`, which keeps the same guard.
+    expect(body).toContain('cancelInFlightSend(stopTarget);');
+    const cancel = source.slice(
+      only('const cancelInFlightSend = useCallback('),
+      only('const releaseStopLatch = useCallback(')
     );
+    expect(cancel).toContain('if (inFlightSessionIdRef.current !== sessionId) return;');
+    expect(cancel).toContain('sendGenerationRef.current += 1;');
+    expect(cancel).toContain('sendCancellationRef.current?.cancel();');
     // The store action that re-resolves the session for itself must not be
     // reachable from this component at all — not from `handleStop`, and not
     // from a selector kept around "just in case".
@@ -491,7 +504,7 @@ describe('sendAndWait dispatch guard (2026-08-10 stop-hang fix)', () => {
     // The anchor lost its `.send({` tail when the dispatch grew a `.catch`
     // for WorkerManager refusals and the formatter broke the member chain
     // across lines. Ordering, not formatting, is what this guard is about.
-    const dispatch = only('const sendResult = await window.electronAPI.chat');
+    const dispatch = only('const sendResult = await cancellation');
     const sendAndWaitStart = only('const sendAndWait = async (): Promise<WaitResult> => {');
     expect(classification).toBeGreaterThan(dispatch);
     expect(guard).toBeGreaterThan(sendAndWaitStart);
@@ -518,8 +531,14 @@ describe('sendAndWait dispatch guard (2026-08-10 stop-hang fix)', () => {
  * SHOULD be re-read.
  */
 function stopBranchBody(): string {
-  const start = only("case 'terminal':");
-  const end = source.indexOf("case 'progress': {", start);
+  // Decision 046: the body moved into `settleStoppedAttempt`, which the
+  // handshake's cancel points share; the case itself only delegates to it.
+  const caseStart = only("case 'terminal':");
+  const caseEnd = source.indexOf("case 'progress': {", caseStart);
+  expect(caseEnd).toBeGreaterThan(caseStart);
+  expect(source.slice(caseStart, caseEnd)).toContain('return settleStoppedAttempt();');
+  const start = only('const settleStoppedAttempt = (): RunEntryOutcome => {');
+  const end = source.indexOf('\n    };', start);
   expect(end).toBeGreaterThan(start);
   return source.slice(start, end);
 }
@@ -806,7 +825,7 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    * same rule.
    */
   it('[S-9] a confirmed death — and only that — replays the payload', () => {
-    expect(source).toContain('if (isSessionFailedForSend(event, watch.sessionId)) {');
+    expect(source).toContain('if (isSessionFailedForSend(event, watchedSessionId)) {');
     // Exactly two automatic restores in the whole file, both through the
     // lifted, provenance-writing function.
     // Two CALL sites (the definition reads `= useCallback(`, so it does not
@@ -815,8 +834,12 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     expect(offsets('restoredDraftRef.current = {')).toHaveLength(1);
     // The watch is frozen before it is dropped (§5.4 step 2), or the payload
     // would be gone by the time the restore runs.
-    const freeze = only('const committed = watch.committed;');
-    const drop = only('resolvePendingReplyLanded(watch.sessionId);\n        restoreDraft');
+    const freeze = only(
+      'const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;'
+    );
+    const drop = only(
+      'resolvePendingReplyLanded(watchedSessionId);\n        if (committed) restoreDraft'
+    );
     expect(freeze).toBeLessThan(drop);
   });
 
@@ -830,8 +853,10 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
    */
   it('[D-1] the late-event cleanup chain runs in its declared order', () => {
     // Step 1 (scope) precedes every step that touches state.
-    const scope = only('if (isSessionFailedForSend(event, watch.sessionId)) {');
-    const freeze = only('const committed = watch.committed;');
+    const scope = only('if (isSessionFailedForSend(event, watchedSessionId)) {');
+    const freeze = only(
+      'const committed = watch?.sessionId === watchedSessionId ? watch.committed : null;'
+    );
     expect(scope).toBeLessThan(freeze);
     // Steps 4 and 8 for the watch, then step 7 for the draft — inside the one
     // function both callers go through, so neither can do half the chain.
@@ -865,8 +890,8 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
   it('[D-5] a user Stop clears the pending watch too', () => {
     const chainStart = only('const unsubscribe = subscribeRuntimeEvent((event) => {');
     const chainEnd = only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);');
-    const completed = only('if (isSessionCompletedForSend(event, watch.sessionId)) {');
-    const stopped = only('if (isSessionStoppedForSend(event, watch.sessionId)) {');
+    const completed = only('if (isSessionCompletedForSend(event, watchedSessionId)) {');
+    const stopped = only('if (isSessionStoppedForSend(event, watchedSessionId)) {');
     // Inside the cleanup chain, and after the completed branch it mirrors.
     expect(chainStart).toBeLessThan(completed);
     expect(completed).toBeLessThan(stopped);
@@ -875,8 +900,37 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
     // `if` to the chain's end is that branch alone: it routes into the one
     // cleanup authority, and — unlike the failed branch — restores no draft.
     const branch = source.slice(stopped, chainEnd);
-    expect(branch).toContain('resolvePendingReplyLanded(watch.sessionId);');
+    expect(branch).toContain('resolvePendingReplyLanded(watchedSessionId);');
     expect(branch).not.toContain('restoreDraftIfComposerEmpty(');
+  });
+
+  /**
+   * `[D-6]` — decision 046 (T145 item 3). The chain is keyed on the STORE slot
+   * the turn head renders, and only falls back to this instance's ref. Keyed
+   * on the ref, a watch armed by an earlier composer instance (remount), or a
+   * slot left behind after the ref moved on, was never cleared by any terminal
+   * event and the head kept counting.
+   */
+  it('[D-6] the terminal chain reads the store slot before the instance ref', () => {
+    const chain = source.slice(
+      only('const unsubscribe = subscribeRuntimeEvent((event) => {'),
+      only('  }, [resolvePendingReplyLanded, restoreDraftIfComposerEmpty]);')
+    );
+    const slot = chain.indexOf('useTurnSendStatusStore.getState().pendingReply?.sessionId');
+    const ref = chain.indexOf('pendingReplyRef.current?.sessionId');
+    expect(slot).toBeGreaterThan(-1);
+    expect(ref).toBeGreaterThan(slot);
+    // The old ref-only early exit must not come back.
+    expect(chain).not.toContain('if (!watch) return;');
+    // Clearing the ref is scoped to its own session, so a late terminal for
+    // one session cannot drop another session's payload.
+    const land = source.slice(
+      only('const resolvePendingReplyLanded = useCallback('),
+      only('  useEffect(() => {\n    const watch = pendingReplyRef.current;')
+    );
+    expect(land).toContain(
+      'if (pendingReplyRef.current?.sessionId === sessionId) pendingReplyRef.current = null;'
+    );
   });
 
   /**
@@ -999,5 +1053,153 @@ describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
     const signalled = body.indexOf("if (mode === 'interject') await signalInterjection(");
     expect(committed).toBeGreaterThan(-1);
     expect(signalled).toBeGreaterThan(committed);
+  });
+});
+
+/**
+ * Decision 046 (T145) — Stop always settles the composer.
+ *
+ * The field report: after the failure card's Continue, the session showed
+ * running forever and Stop, Esc and Ctrl+Enter did nothing. Two renderer
+ * halves of that are closure facts in `runSend` / `handleStop`, so they are
+ * pinned over the source like the groups above.
+ */
+describe('decision 046 — Stop always settles the composer', () => {
+  function runSendBody(): string {
+    const start = only('const runSend = async (');
+    const end = only('useQueueRelease({');
+    expect(end).toBeGreaterThan(start);
+    return source.slice(start, end);
+  }
+
+  /**
+   * `[H-1]` — H3b. The generation used to be read only inside the main wait's
+   * predicate, so a Stop pressed while `ensureHost` / `createSession` /
+   * `resumeSession` / `chat.send` was pending did nothing until that IPC came
+   * back, and the send latch stayed closed. Every await in `runSend` is now
+   * one of: a race against the attempt's cancel signal, a poll whose
+   * predicate reads it (or the generation), the 250 ms busy backoff (followed
+   * by the F6 generation check), or one of `runSend`'s own steps.
+   */
+  it('[H-1] every await in runSend is cancellable', () => {
+    const body = runSendBody();
+    const awaits = [...body.matchAll(/\bawait\s+([\w.]+)/g)].map((match) => match[1]);
+    expect(awaits.length).toBeGreaterThan(0);
+    const allowed = new Set([
+      'cancellation',
+      'cancellation.race',
+      'waitUntil',
+      'sleep',
+      'sendAndWait',
+      'runCreateSequence',
+    ]);
+    for (const target of awaits) {
+      expect(allowed.has(target), `un-cancellable await in runSend: await ${target}`).toBe(true);
+    }
+    // No IPC or store call is awaited bare.
+    expect(body).not.toMatch(/await\s+window\.electronAPI/);
+    expect(body).not.toMatch(/await\s+useScratchWorkspaceStore/);
+    // Each handshake poll also wakes on the cancel signal, and each is
+    // followed by a cancelled check before its result is read.
+    const polls = offsets('deadlineAt(5000)');
+    expect(polls).toHaveLength(3);
+    for (const at of polls) {
+      const predicate = source.slice(source.lastIndexOf('await waitUntil(', at), at);
+      expect(predicate).toContain('cancellation.cancelled');
+    }
+  });
+
+  it('[H-1] every raced result is checked for SEND_CANCELLED before it is used', () => {
+    const body = runSendBody();
+    const races = (body.match(/cancellation(?:\s*\.race\(|\.race\()/g) ?? []).length;
+    // ensureHost, scratch dir, createSession, resumeSession, send, the exact-file
+    // reopen, and the diagnostic host probe.
+    expect(races).toBe(7);
+    expect((body.match(/=== SEND_CANCELLED/g) ?? []).length).toBe(7);
+    // A cancelled create routes to the shared Stop exit at both call sites.
+    expect(offsets("if (seq === 'cancelled') return settleStoppedAttempt();")).toHaveLength(2);
+    // A cancelled dispatch classifies exactly like a Stop during the wait.
+    expect(body).toContain("if (sendResult === SEND_CANCELLED) return 'cancelled';");
+  });
+
+  it('[H-2] the cancel signal is armed with the generation and dropped only by its owner', () => {
+    const snapshot = only('const myGeneration = sendGenerationRef.current;');
+    const armed = only('sendCancellationRef.current = cancellation;');
+    expect(armed).toBeGreaterThan(snapshot);
+    expect(armed - snapshot).toBeLessThan(600);
+    expect(source).toContain(
+      'if (sendCancellationRef.current === cancellation) sendCancellationRef.current = null;'
+    );
+  });
+
+  /**
+   * `[K-1]` — rule 2. `handleStop` used to return early while an earlier
+   * Stop's IPC was pending (`stoppingRef`), and the latch only opened when
+   * that IPC settled — so a stop IPC that never answered swallowed every later
+   * Stop and Esc for good. The latch now opens on the first of the IPC
+   * settling, the target's terminal event and a ceiling, each gated on the
+   * press that armed it.
+   */
+  it('[K-1] a pending Stop never swallows the next press, and its latch is bounded', () => {
+    const start = only('const handleStop = () => {');
+    const body = source.slice(start, source.indexOf('\n  };', start));
+    expect(body).toContain('if (!stopTarget) return;');
+    expect(body).not.toContain('stoppingRef.current) return');
+    expect(body).toContain('stopTokenRef.current += 1;');
+    expect(body).toContain(
+      'window.setTimeout(() => releaseStopLatch(token), STOP_LATCH_CEILING_MS)'
+    );
+    expect(body).toContain('releaseStopLatch(token);');
+    expect(body).toContain('dropPendingReplyWatch(stopTarget);');
+    const release = source.slice(
+      only('const releaseStopLatch = useCallback('),
+      only('const dropPendingReplyWatch = useCallback(')
+    );
+    expect(release).toContain('if (token !== undefined && token !== stopTokenRef.current) return;');
+    // "Send now" no longer bails on a pending Stop either.
+    const sendNow = source.slice(
+      only('const handleQueueSendNow = (entryId: string) => {'),
+      source.indexOf('\n  };', only('const handleQueueSendNow = (entryId: string) => {'))
+    );
+    expect(sendNow).not.toContain('stoppingRef');
+  });
+
+  it('[K-2] the stop latch also opens on the target session’s terminal event', () => {
+    const at = only('const target = stopTargetRef.current;');
+    const effect = source.slice(at, source.indexOf('[releaseStopLatch]', at));
+    for (const predicate of [
+      'isSessionStoppedForSend(event, target)',
+      'isSessionCompletedForSend(event, target)',
+      'isSessionFailedForSend(event, target)',
+    ]) {
+      expect(effect).toContain(predicate);
+    }
+    expect(effect).toContain('releaseStopLatch();');
+  });
+
+  it('[K-3] Stop stays pressable while stopping and reads as force stop', () => {
+    const start = only("if (spec.kind === 'stop') {");
+    const block = source.slice(start, matchingBraceEnd(source, start));
+    expect(block).toContain('disabled={disabled || spec.disabled}');
+    expect(block).not.toContain('stopping');
+    expect(block).toContain('title={spec.force ? t(FORCE_STOP_TITLE) : undefined}');
+    // `busy` is `isStoppable(status)`, which now admits `stopping`, so Esc
+    // (gated on `canStop`, pinned by [E-1]) and the Ctrl+Enter interjection
+    // stay live in that state too.
+    expect(source).toContain('return status != null && isStoppableStatus(status);');
+    expect(source).toContain('if (event.ctrlKey && canStop) {');
+  });
+
+  /**
+   * `[E-2]` — rule 3. Ending a conversation from the sidebar reaches the
+   * composer through `sessionEndSignal`, and releases exactly what the
+   * composer holds for that session.
+   */
+  it('[E-2] ending a conversation releases the composer’s send, stop and pending-reply latches', () => {
+    const at = only('onSessionEnded((sessionId) => {');
+    const handler = source.slice(at, matchingBraceEnd(source, at));
+    expect(handler).toContain('cancelInFlightSend(sessionId);');
+    expect(handler).toContain('if (stopTargetRef.current === sessionId) releaseStopLatch();');
+    expect(handler).toContain('dropPendingReplyWatch(sessionId);');
   });
 });

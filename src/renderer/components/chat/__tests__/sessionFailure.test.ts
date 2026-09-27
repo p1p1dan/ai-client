@@ -186,9 +186,11 @@ describe('the failed card is wired to the reason and to a Continue', () => {
     expect(timeline).toContain('{t(failure.reason)}');
   });
 
-  it('publishes a Continue intent naming the message to resend', () => {
+  it("publishes a Continue intent naming the failed turn's prompt", () => {
     expect(timeline).toContain('requestContinue(sessionId, resumeMessageId)');
     expect(timeline).toContain('canContinueSession(failure, resumeMessageId != null)');
+    // T135: the button is gated on the failure having settled.
+    expect(timeline).toContain('<FailureContinueButton');
   });
 
   it('still prints the raw sentence, as evidence', () => {
@@ -216,10 +218,14 @@ describe('the failed card is wired to the reason and to a Continue', () => {
 describe('the composer honours the intent', () => {
   const composer = code(source('ChatComposer.tsx'));
 
-  it('resolves the named message and re-sends it through runSend', () => {
+  it('retries the failed turn through runSend instead of re-sending its prompt (T135)', () => {
     expect(composer).toContain('useContinueIntentStore');
     expect(composer).toContain('clearContinue()');
-    expect(composer).toContain("runSend(text, [], { origin: 'retry' })");
+    expect(composer).toContain(
+      "runSend('', [], { origin: 'retry', retryLastTurn: { fallbackText } })"
+    );
+    // The old resend — the prompt as a second user message — is gone.
+    expect(composer).not.toContain("runSend(text, [], { origin: 'retry' })");
   });
 
   it('only acts on an intent for the session on screen', () => {

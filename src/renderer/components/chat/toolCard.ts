@@ -50,6 +50,14 @@ export interface ToolRun {
   /** Error text for a failed run (store carries it on `tool_result.text`). */
   errorText?: string;
   /**
+   * T146 — epoch ms `bash` handed the command to `runtimeExec.run`, off the
+   * block's `toolExecStartedAt` (a live `tool.updated` field; see
+   * `stores/chatSessions.ts`). Undefined for every non-bash call and for a
+   * call replayed from history, neither of which ever carries the stamp —
+   * `deriveToolRowView` falls back to the `tool.started` origin for those.
+   */
+  execStartedAtMs?: number;
+  /**
    * FB7: the RESOLVED `permission_request` block whose decision settled this
    * call, attached by `joinResolvedPermissions` (never by `pairToolBlocks` --
    * the pairing layer only ever sees one message, and the join's search domain
@@ -92,6 +100,9 @@ export function pairToolBlocks(blocks: readonly ChatBlock[]): ToolRun[] {
       status: !result ? 'running' : failed ? 'failed' : 'ok',
       output: result ? normalizeToolOutput(result.toolOutput, result.text) : undefined,
       errorText: failed ? result?.text : undefined,
+      ...(typeof block.toolExecStartedAt === 'number'
+        ? { execStartedAtMs: block.toolExecStartedAt }
+        : {}),
       ...(result?.toolOutput && typeof result.toolOutput === 'object'
         ? { result: result.toolOutput }
         : {}),
@@ -609,8 +620,30 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // is on record, so a turn that is not running (the caller passes no lookup)
   // and un-timestamped history simply omit the readout.
   const startedAtMs = running ? options.toolStartedAtMs?.(run.toolCallId) : undefined;
-  const runningStartedAtMs = typeof startedAtMs === 'number' ? startedAtMs : undefined;
-  const runningTimeoutMs = running ? bashTimeoutMsFromInput(run) : undefined;
+  // T146 — `run.execStartedAtMs` is the instant `bash` actually handed the
+  // command to `runtimeExec.run`, i.e. the runtime's own timeout origin.
+  // Prefer it once known: showing "elapsed / limit" against the earlier
+  // `tool.started` origin is exactly the "3m55s/2m" illusion this fixes,
+  // because that origin includes arg streaming, the approval wait and the
+  // path re-check, none of which the limit ever counted against. Only `bash`
+  // ever sets `execStartedAtMs` (see `pairToolBlocks`), so every other tool
+  // — and a bash call still waiting on approval, or replayed from history —
+  // keeps the `tool.started` origin it always had.
+  const execStartedAtMs = running ? run.execStartedAtMs : undefined;
+  const runningStartedAtMs =
+    typeof execStartedAtMs === 'number'
+      ? execStartedAtMs
+      : typeof startedAtMs === 'number'
+        ? startedAtMs
+        : undefined;
+  // The "/ limit" tail is withheld until `execStartedAtMs` is known: before
+  // that, the row is still streaming its arguments, waiting on approval, or
+  // being path-checked, none of which the timeout is counting against yet —
+  // showing the limit there is what read as "already past it" in the field
+  // report. It reappears the moment exec really starts, measured from that
+  // same instant, so elapsed and limit always share one origin.
+  const runningTimeoutMs =
+    running && typeof execStartedAtMs === 'number' ? bashTimeoutMsFromInput(run) : undefined;
 
   return {
     key: run.blockId,

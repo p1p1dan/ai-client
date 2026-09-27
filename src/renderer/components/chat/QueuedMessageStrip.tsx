@@ -15,8 +15,17 @@
  * in production. `QueueStripEntryModel.failed`/`failureMessage` stay defined
  * in the pure layer as a dormant field for a future T-19b; this view simply
  * does not consume them anymore.
+ *
+ * Decision 046 rule 4: a disabled control must not turn a click into another
+ * action. Disabled buttons here are `pointer-events: none` (the `Button` base
+ * class and `ICON_BUTTON_CLASS`), so a click on one lands on whatever is under
+ * it — and that used to be the row, whose click is "take back into the draft".
+ * Pressing a disabled "Send now" after ending a conversation moved the message
+ * out of the queue and into the composer. The row's controls therefore sit in
+ * one group that swallows clicks and keys, and a disabled "Send now" says why.
  */
 import { ArrowDown, ArrowUp, CornerDownRight, Pencil, X, Zap } from 'lucide-react';
+import type { KeyboardEvent, MouseEvent } from 'react';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
 import { queueStripWrapperClass } from './middleColumnLayout';
@@ -41,6 +50,16 @@ export interface QueuedMessageStripProps {
   onSendNow: (entryId: string) => void;
   /** Whether the composer can dispatch right now; `entry.canSendNow` decides WHICH row offers it. */
   sendNowDisabled?: boolean;
+  /** Translated reason shown as the tooltip while "Send now" is disabled. */
+  sendNowDisabledReason?: string;
+}
+
+/**
+ * Keeps a click or key inside the row's controls from reaching the row's own
+ * "edit" handler — including a click that passed THROUGH a disabled button.
+ */
+function stopRowActivation(event: MouseEvent | KeyboardEvent): void {
+  event.stopPropagation();
 }
 
 export function QueuedMessageStrip({
@@ -51,6 +70,7 @@ export function QueuedMessageStrip({
   onRemove,
   onSendNow,
   sendNowDisabled,
+  sendNowDisabledReason,
 }: QueuedMessageStripProps) {
   const { t } = useI18n();
 
@@ -84,6 +104,7 @@ export function QueuedMessageStrip({
           onRemove={onRemove}
           onSendNow={onSendNow}
           sendNowDisabled={sendNowDisabled}
+          sendNowDisabledReason={sendNowDisabledReason}
         />
       ))}
     </div>
@@ -97,6 +118,7 @@ function QueueEntryRow({
   onRemove,
   onSendNow,
   sendNowDisabled,
+  sendNowDisabledReason,
 }: {
   entry: QueueStripEntryModel;
   onEdit: (entryId: string) => void;
@@ -104,6 +126,7 @@ function QueueEntryRow({
   onRemove: (entryId: string) => void;
   onSendNow: (entryId: string) => void;
   sendNowDisabled?: boolean;
+  sendNowDisabledReason?: string;
 }) {
   const { t } = useI18n();
   return (
@@ -141,67 +164,70 @@ function QueueEntryRow({
           {entry.attachmentCount} file{entry.attachmentCount > 1 ? 's' : ''}
         </span>
       )}
-      {entry.canSendNow && (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={sendNowDisabled}
-          title={t('Send now — interrupt the running turn')}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSendNow(entry.id);
-          }}
+      <div
+        className="flex shrink-0 items-center gap-1.5"
+        data-testid="queue-row-actions"
+        onClick={stopRowActivation}
+        onKeyDown={stopRowActivation}
+      >
+        {entry.canSendNow && (
+          // The wrapper, not the button, carries the disabled tooltip: a
+          // disabled button receives no pointer events, so its own title
+          // never shows.
+          <span
+            className="flex shrink-0"
+            data-testid="queue-send-now"
+            title={sendNowDisabled ? sendNowDisabledReason : undefined}
+          >
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={sendNowDisabled}
+              title={
+                sendNowDisabled ? sendNowDisabledReason : t('Send now — interrupt the running turn')
+              }
+              onClick={() => onSendNow(entry.id)}
+            >
+              <Zap className="size-3" />
+              {t('Send now')}
+            </Button>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onMove(entry.id, 'up')}
+          disabled={!entry.canMoveUp}
+          aria-label={t('Move queued message up')}
+          className={ICON_BUTTON_CLASS}
         >
-          <Zap className="size-3" />
-          {t('Send now')}
-        </Button>
-      )}
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onMove(entry.id, 'up');
-        }}
-        disabled={!entry.canMoveUp}
-        aria-label={t('Move queued message up')}
-        className={ICON_BUTTON_CLASS}
-      >
-        <ArrowUp className="size-3" />
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onMove(entry.id, 'down');
-        }}
-        disabled={!entry.canMoveDown}
-        aria-label={t('Move queued message down')}
-        className={ICON_BUTTON_CLASS}
-      >
-        <ArrowDown className="size-3" />
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onEdit(entry.id);
-        }}
-        aria-label={t('Edit queued message')}
-        className={ICON_BUTTON_CLASS}
-      >
-        <Pencil className="size-3" />
-      </button>
-      <button
-        type="button"
-        onClick={(event) => {
-          event.stopPropagation();
-          onRemove(entry.id);
-        }}
-        aria-label={t('Remove queued message')}
-        className={ICON_BUTTON_CLASS}
-      >
-        <X className="size-3" />
-      </button>
+          <ArrowUp className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(entry.id, 'down')}
+          disabled={!entry.canMoveDown}
+          aria-label={t('Move queued message down')}
+          className={ICON_BUTTON_CLASS}
+        >
+          <ArrowDown className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onEdit(entry.id)}
+          aria-label={t('Edit queued message')}
+          className={ICON_BUTTON_CLASS}
+        >
+          <Pencil className="size-3" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onRemove(entry.id)}
+          aria-label={t('Remove queued message')}
+          className={ICON_BUTTON_CLASS}
+        >
+          <X className="size-3" />
+        </button>
+      </div>
     </div>
   );
 }

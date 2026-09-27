@@ -88,9 +88,10 @@ describe('[U05-b] the composer can send without a bound folder', () => {
   it('allocates the isolated directory inside the send handshake', () => {
     // Position matters: inside the try that already owns `ensureHost`, so an
     // allocation failure is reported and the draft preserved by the same
-    // `finalizeOutcome` path every other handshake failure uses.
+    // `finalizeOutcome` path every other handshake failure uses. Decision 046:
+    // both awaits race the send's cancel signal, so Stop is not held by them.
     expect(COMPOSER).toMatch(
-      /await window\.electronAPI\.chat\.ensureHost\(\);\s*if \(!workspacePath\) \{[\s\S]{0,600}useScratchWorkspaceStore\.getState\(\)\.ensure\(sessionId\)/
+      /cancellation\.race\(window\.electronAPI\.chat\.ensureHost\(\)\)\) === SEND_CANCELLED\) \{\s*return settleStoppedAttempt\(\);\s*\}\s*if \(!workspacePath\) \{[\s\S]{0,600}cancellation\.race\(\s*useScratchWorkspaceStore\.getState\(\)\.ensure\(sessionId\)\s*\)/
     );
   });
 

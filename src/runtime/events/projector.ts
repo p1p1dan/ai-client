@@ -629,12 +629,23 @@ export class RuntimeEventProjector {
         break;
       }
       case 'tool_execution_update': {
-        const result = event.partialResult as { content?: unknown };
+        const result = event.partialResult as { content?: unknown; details?: unknown };
         const line = text(result?.content)
           .split('\n')
           .map((line) => line.trim())
           .filter(Boolean)
           .at(-1);
+        // T146 — `bash` publishes an `onUpdate` carrying `execStartedAt` in
+        // `details` right before it hands the command to `runtimeExec.run`;
+        // every other tool's `details` has no such field, so this stays
+        // absent for them. See `ToolUpdatedEvent.payload.execStartedAt`.
+        const details = result?.details;
+        const execStartedAt =
+          details &&
+          typeof details === 'object' &&
+          typeof (details as { execStartedAt?: unknown }).execStartedAt === 'number'
+            ? (details as { execStartedAt: number }).execStartedAt
+            : undefined;
         this.emit({
           type: 'tool.updated',
           sessionId,
@@ -649,6 +660,7 @@ export class RuntimeEventProjector {
             // card showing the older set for the life of the turn.
             input: event.args,
             ...(line ? { status: line.slice(0, 120) } : {}),
+            ...(execStartedAt !== undefined ? { execStartedAt } : {}),
           },
         });
         break;

@@ -592,6 +592,36 @@ export function registerChatHandlers(): void {
   );
 
   ipcMain.handle(
+    IPC_CHANNELS.CHAT_RETRY_LAST_TURN,
+    async (
+      e,
+      payload: {
+        sessionId: string;
+        attemptId: string;
+        effort?: SessionEffortLevel;
+        model?: string;
+      }
+    ): Promise<{ requestId: string }> => {
+      // Same preamble as CHAT_SEND: a retry is a turn, and the turn it re-runs
+      // must be read from the file as a terminal on this session left it.
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      await handOverFromTui(payload.sessionId, ownerWebContentsId);
+      try {
+        const requestId = await workerManager.retryLastTurn({
+          sessionId: payload.sessionId,
+          attemptId: payload.attemptId,
+          ...(payload.model ? { model: payload.model } : {}),
+          ...(payload.effort ? { effort: payload.effort } : {}),
+          ownerWebContentsId,
+        });
+        return { requestId };
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
     IPC_CHANNELS.CHAT_STOP,
     async (e, payload: { sessionId: string }): Promise<{ requestId: string }> => {
       claimSessionForSender(e, payload.sessionId);

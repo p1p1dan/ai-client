@@ -2519,6 +2519,25 @@ export const zhTranslations: Record<string, string> = {
     '当前没有正在运行的回合 —— 消息已作为普通排队等待发送',
   'Could not send the interject signal — the message is still queued: {{error}}':
     '插话信号发送失败 —— 消息仍在排队中：{{error}}',
+  // Decision 046 (T145): Stop stays pressable while a stop is under way, and a
+  // disabled queued "Send now" says why instead of looking broken.
+  'Force stop — still stopping. Press again to resend Stop; the turn is ended within about 10 seconds.':
+    '强制停止 —— 仍在停止中。再按一次会重新发送停止；本回合最迟约 10 秒内结束。',
+  'Sending is unavailable in this conversation right now': '这个对话现在无法发送',
+  'Another conversation is still sending — this message goes out after it':
+    '另一个对话的消息还在发送中 —— 这条会在它之后发出',
+  'This conversation cannot take a new message yet — it is sent automatically once it can':
+    '这个对话暂时还不能接收新消息 —— 就绪后会自动发送',
+  // T135 / decision 045: the failure card's Continue retries the failed turn
+  // instead of sending its prompt a second time.
+  'Retry the last turn from where it failed': '从失败的地方重试上一轮',
+  'The last turn is still wrapping up': '上一轮仍在收尾',
+  'Retrying the last turn…': '正在重试上一轮…',
+  'There is no interrupted turn to retry': '没有可重试的上一轮',
+  'The last turn left nothing to re-run — it may never have been recorded, or the history was compacted. Its prompt is back in the input box: check it, then send.':
+    '上一轮没有留下可以重跑的记录 —— 可能根本没被记录下来，或者历史已被压缩。上一条提示已放回输入框，确认无误后再发送。',
+  'The last turn left nothing to re-run — it may never have been recorded, or the history was compacted. Send your message again from the input box.':
+    '上一轮没有留下可以重跑的记录 —— 可能根本没被记录下来，或者历史已被压缩。请在输入框中重新发送。',
 
   // D47 S5 §1.4: the three-state user profile chip (WindowTitleBar /
   // UserProfileCard, `deriveUserProfilePresentation`) — 'attention'

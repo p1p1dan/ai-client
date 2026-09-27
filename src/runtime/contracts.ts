@@ -65,6 +65,8 @@ export type RuntimeSessionService = Pick<
   | 'history'
   | 'navigate'
   | 'rewind'
+  // T135: the failure card's Continue re-runs the last turn from here.
+  | 'prepareRetry'
   | 'fork'
   | 'rename'
   | 'label'
@@ -255,6 +257,15 @@ export interface RuntimeRunRequest {
    * it the prompt stays on screen twice, forever.
    */
   attemptId?: string;
+  /**
+   * T135 / decision 045 — re-run the branch's last turn instead of starting a
+   * new one: `prompt` and `attachments` are ignored, no user message is added,
+   * and the model is asked again from the current context (`agent.continue()`).
+   *
+   * The caller moves the leaf first (`session.prepareRetry()`); the run only
+   * refuses (`retry_unavailable`) when the context still ends on a reply.
+   */
+  retry?: boolean;
   /** Explicit override for fixed probes; omitted uses runtimePrompt assembly. */
   systemPrompt?: string;
   model?: RuntimeModelRef;

@@ -213,9 +213,13 @@ export function deriveSessionFailure(input: {
  *
  *  - the reason allows it (`action === 'continue'`), because a button that
  *    cannot work is worse than no button;
- *  - there IS a message to resend. A failure that happened before any user
- *    message existed (a create handshake that never got that far) has nothing
- *    to continue FROM, and the card falls back to its written hint.
+ *  - there IS a prompt in the transcript. A failure that happened before any
+ *    user message existed (a create handshake that never got that far) has no
+ *    turn to retry (T135: Continue re-runs the failed turn, it does not resend
+ *    the prompt), and the card falls back to its written hint.
+ *
+ * Whether it may be PRESSED yet is a separate question — the failure must have
+ * settled first; see `continueBlockedReason` in `retryLastTurn.ts`.
  */
 export function canContinueSession(
   view: SessionFailureView,
