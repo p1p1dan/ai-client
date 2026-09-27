@@ -25,3 +25,7 @@
 - 代价：
   - 每次请求多一次本机 IPC；依赖 P1-3 的控制通道。
   - Linux 上钥匙串锁住时会话无法请求模型。1.0.x 这时还能用磁盘上的 key。
+
+## 实施补记（2026-09-27，P1-3a 实验）
+
+第 4 条的前置条件在 Linux 上成立：Node 24 给 IPC fd 设了 `O_CLOEXEC`，并在用户代码运行前删掉 `NODE_CHANNEL_FD`。bash 在沙箱内、升级出沙箱、systemd scope、回退路径这四种情况下，都只有 fd 0/1/2。Windows、macOS 留给 P1-14 的 CI 补测。证据见 [p1-3a-shared-host-2026-09-27.md](../evidence/p1-3a-shared-host-2026-09-27.md)。

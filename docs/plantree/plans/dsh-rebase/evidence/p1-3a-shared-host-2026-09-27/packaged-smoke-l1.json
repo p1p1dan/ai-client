@@ -1,0 +1,342 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 1,
+  "narb": "dir",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/out-dsh-host",
+    "files": 10166,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/out-node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-AGYg6m",
+  "startedAt": "2026-09-27T12:41:59.774Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 705,
+    "ready": {
+      "pid": 106864,
+      "spawnedPid": 106864,
+      "node": "v24.18.0",
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "beafffb13a2015fdb9b644e98fdd00d54b22657b+dirty",
+        "builtAt": "2026-09-27T12:39:45.786Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "skippedPlugins": [],
+      "census": {
+        "active": 77,
+        "disabled": 18,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 94,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh"
+        ]
+      },
+      "marks": {
+        "entry": 27.87743,
+        "modulesLoaded": 66.441624,
+        "profileResolved": 107.329306,
+        "bootResolved": 700.09874
+      }
+    },
+    "pong": {
+      "host": "pong",
+      "id": 1,
+      "eldMaxMs": 0,
+      "rssMb": 153.7,
+      "channels": []
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 17.09812599999998,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 17ms\n"
+  },
+  "L1": {
+    "label": "L1",
+    "readyMs": 628,
+    "ready": {
+      "pid": 106890,
+      "spawnedPid": 106890,
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "beafffb13a2015fdb9b644e98fdd00d54b22657b+dirty",
+        "builtAt": "2026-09-27T12:39:45.786Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 77,
+        "disabled": 18,
+        "inactive": []
+      }
+    },
+    "bootstrap": {
+      "bootstrapped": true
+    },
+    "fs": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/marker.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-dd4260e1 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-dd4260e1 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "ok": true,
+          "text": "The file /var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-dd4260e1 EDITED-58480a edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/dsh-written-58480a.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/dsh-written-58480a.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-dd4260e1 WRITTEN-58480a\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "ok": true,
+          "text": "Found 3 matches\n\ndsh-written-58480a.txt\nLine 1: P12-MARKER-dd4260e1 WRITTEN-58480a\n\nmarker.txt\nLine 1: P12-MARKER-dd4260e1 plaintext line\n\nedit-target.txt\nLine 1: P12-MARKER-dd4260e1 EDITED-58480a edit target"
+        },
+        {
+          "name": "glob",
+          "ok": true,
+          "text": "marker.txt\nedit-target.txt\ndsh-written-58480a.txt"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "P12-MARKER-dd4260e1 plaintext line\n"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "(no output)"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "e 1218 58480a\nspill-line 1219 58480a\nspill-line 1220 58480a\nspill-line 1221 58480a\nspill-line 1222 58480a\nspill-line 1223 58480a\nspill-line 1224 58480a\nspill-line 1225 58480a\nspill-line 1226 58480a\nspill-line 1227 58480a\nspill-line 1228 58480a\nspill-line 1229 58480a\nspill-line 1230 58480a\nspill-line 1231 58480a\nspill-line 1232 58480a\nspill-line 1233 58480a\nspill-line 1234 58480a\nspill-line 1235 58480a\nspill-line 1236 58480a\nspill-line 1237 58480a\nspill-line 1238 58480a\nspill-line 1239 58480a\nspill-line 1240 58480a\nspill-line 1241 58480a\nspill-line 1242 58480a\nspill-line 1243 58480a\nspill-line 1244 58480a\nspill-line 1245 58480a\nspill-line 1246 58480a\nspill-line 1247 58480a\nspill-line 1248 58480a\nspill-line 1249 58480a\nspill-line 1250 58480a\nspill-line 1251 58480a\nspill-line 1252 58480a\nspill-line 1253 58480a\nspill-line 1254 58480a\nspill-line 1255 58480a\nspill-line 1256 58480a\nspill-line 1257 58480a\nspill-line 1258 58480a\nspill-line 1259 58480a\nspill-line 1260 58480a\nspill-line 1261 58480a\nspill-line 1262 58480a\nspill-line 1263 58480a\nspill-line 1264 58480a\nspill-line 1265 58480a\nspill-line 1266 58480a\nspill-line 1267 58480a\nspill-line 1268 58480a\nspill-line 1269 58480a\nspill-line 1270 58480a\nspill-line 1271 58480a\nspill-line 1272 58480a\nspill-line 1273 58480a\nspill-line 1274 58480a\nspill-line 1275 58480a\nspill-line 1276 58480a\nspill-line 1277 58480a\nspill-line 1278 58480a\nspill-line 1279 58480a\nspill-line 1280 58480a\nspill-line 1281 58480a\nspill-line 1282 58480a\nspill-line 1283 58480a\nspill-line 1284 58480a\nspill-line 1285 58480a\nspill-line 1286 58480a\nspill-line 1287 58480a\nspill-line 1288 58480a\nspill-line 1289 58480a\nspill-line 1290 58480a\nspill-line 1291 58480a\nspill-line 1292 58480a\nspill-line 1293 58480a\nspill-line 1294 58480a\nspill-line 1295 58480a\nspill-line 1296 58480a\nspill-line 1297 58480a\nspill-line 1298 58480a\nspill-line 1299 58480a\nspill-line 1300 58480a\nspill-line 1301 58480a\nspill-line 1302 58480a\nspill-line 1303 58480a\nspill-line 1304 58480a\nspill-line 1305 58480a\nspill-line 1306 58480a\nspill-line 1307 58480a\nspill-line 1308 58480a\nspill-line 1309 58480a\nspill-line 1310 58480a\nspill-line 1311 58480a\nspill-line 1312 58480a\nspill-line 1313 58480a\nspill-line 1314 58480a\nspill-line 1315 58480a\nspill-line 1316 58480a\nspill-line 1317 58480a\nspill-line 1318 58480a\nspill-line 1319 58480a\nspill-line 1320 58480a\nspill-line 1321 58480a\nspill-line 1322 58480a\nspill-line 1323 58480a\nspill-line 1324 58480a\nspill-line 1325 58480a\nspill-line 1326 58480a\nspill-line 1327 58480a\nspill-line 1328 58480a\nspill-line 1329 58480a\nspill-line 1330 58480a\nspill-line 1331 58480a\nspill-line 1332 58480a\nspill-line 1333 58480a\nspill-line 1334 58480a\nspill-line 1335 58480a\nspill-line 1336 58480a\nspill-line 1337 58480a\nspill-line 1338 58480a\nspill-line 1339 58480a\nspill-line 1340 58480a\nspill-line 1341 58480a\nspill-line 1342 58480a\nspill-line 1343 58480a\nspill-line 1344 58480a\nspill-line 1345 58480a\nspill-line 1346 58480a\nspill-line 1347 58480a\nspill-line 1348 58480a\nspill-line 1349 58480a\nspill-line 1350 58480a\nspill-line 1351 58480a\nspill-line 1352 58480a\nspill-line 1353 58480a\nspill-line 1354 58480a\nspill-line 1355 58480a\nspill-line 1356 58480a\nspill-line 1357 58480a\nspill-line 1358 58480a\nspill-line 1359 58480a\nspill-line 1360 58480a\nspill-line 1361 58480a\nspill-line 1362 58480a\nspill-line 1363 58480a\nspill-line 1364 58480a\nspill-line 1365 58480a\nspill-line 1366 58480a\nspill-line 1367 58480a\nspill-line 1368 58480a\nspill-line 1369 58480a\nspill-line 1370 58480a\nspill-line 1371 58480a\nspill-line 1372 58480a\nspill-line 1373 58480a\nspill-line 1374 58480a\nspill-line 1375 58480a\nspill-line 1376 58480a\nspill-line 1377 58480a\nspill-line 1378 58480a\nspill-line 1379 58480a\nspill-line 1380 58480a\nspill-line 1381 58480a\nspill-line 1382 58480a\nspill-line 1383 58480a\nspill-line 1384 58480a\nspill-line 1385 58480a\nspill-line 1386 58480a\nspill-line 1387 58480a\nspill-line 1388 58480a\nspill-line 1389 58480a\nspill-line 1390 58480a\nspill-line 1391 58480a\nspill-line 1392 58480a\nspill-line 1393 58480a\nspill-line 1394 58480a\nspill-line 1395 58480a\nspill-line 1396 58480a\nspill-line 1397 58480a\nspill-line 1398 58480a\nspill-line 1399 58480a\nspill-line 1400 58480a\nspill-line 1401 58480a\nspill-line 1402 58480a\nspill-line 1403 58480a\nspill-line 1404 58480a\nspill-line 1405 58480a\nspill-line 1406 58480a\nspill-line 1407 58480a\nspill-line 1408 58480a\nspill-line 1409 58480a\nspill-line 1410 58480a\nspill-line 1411 58480a\nspill-line 1412 58480a\nspill-line 1413 58480a\nspill-line 1414 58480a\nspill-line 1415 58480a\nspill-line 1416 58480a\nspill-line 1417 58480a\nspill-line 1418 58480a\nspill-line 1419 58480a\nspill-line 1420 58480a\nspill-line 1421 58480a\nspill-line 1422 58480a\nspill-line 1423 58480a\nspill-line 1424 58480a\nspill-line 1425 58480a\nspill-line 1426 58480a\nspill-line 1427 58480a\nspill-line 1428 58480a\nspill-line 1429 58480a\nspill-line 1430 58480a\nspill-line 1431 58480a\nspill-line 1432 58480a\nspill-line 1433 58480a\nspill-line 1434 58480a\nspill-line 1435 58480a\nspill-line 1436 58480a\nspill-line 1437 58480a\nspill-line 1438 58480a\nspill-line 1439 58480a\nspill-line 1440 58480a\nspill-line 1441 58480a\nspill-line 1442 58480a\nspill-line 1443 58480a\nspill-line 1444 58480a\nspill-line 1445 58480a\nspill-line 1446 58480a\nspill-line 1447 58480a\nspill-line 1448 58480a\nspill-line 1449 58480a\nspill-line 1450 58480a\nspill-line 1451 58480a\nspill-line 1452 58480a\nspill-line 1453 58480a\nspill-line 1454 58480a\nspill-line 1455 58480a\nspill-line 1456 58480a\nspill-line 1457 58480a\nspill-line 1458 58480a\nspill-line 1459 58480a\nspill-line 1460 58480a\nspill-line 1461 58480a\nspill-line 1462 58480a\nspill-line 1463 58480a\nspill-line 1464 58480a\nspill-line 1465 58480a\nspill-line 1466 58480a\nspill-line 1467 58480a\nspill-line 1468 58480a\nspill-line 1469 58480a\nspill-line 1470 58480a\nspill-line 1471 58480a\nspill-line 1472 58480a\nspill-line 1473 58480a\nspill-line 1474 58480a\nspill-line 1475 58480a\nspill-line 1476 58480a\nspill-line 1477 58480a\nspill-line 1478 58480a\nspill-line 1479 58480a\nspill-line 1480 58480a\nspill-line 1481 58480a\nspill-line 1482 58480a\nspill-line 1483 58480a\nspill-line 1484 58480a\nspill-line 1485 58480a\nspill-line 1486 58480a\nspill-line 1487 58480a\nspill-line 1488 58480a\nspill-line 1489 58480a\nspill-line 1490 58480a\nspill-line 1491 58480a\nspill-line 1492 58480a\nspill-line 1493 58480a\nspill-line 1494 58480a\nspill-line 1495 58480a\nspill-line 1496 58480a\nspill-line 1497 58480a\nspill-line 1498 58480a\nspill-line 1499 58480a\nspill-line 1500 58480a\nspill-line 1501 58480a\nspill-line 1502 58480a\nspill-line 1503 58480a\nspill-line 1504 58480a\nspill-line 1505 58480a\nspill-line 1506 58480a\nspill-line 1507 58480a\nspill-line 1508 58480a\nspill-line 1509 58480a\nspill-line 1510 58480a\nspill-line 1511 58480a\nspill-line 1512 58480a\nspill-line 1513 58480a\nspill-line 1514 58480a\nspill-line 1515 58480a\nspill-line 1516 58480a\nspill-line 1517 58480a\nspill-line 1518 58480a\nspill-line 1519 58480a\nspill-line 1520 58480a\nspill-line 1521 58480a\nspill-line 1522 58480a\nspill-line 1523 58480a\nspill-line 1524 58480a\nspill-line 1525 58480a\nspill-line 1526 58480a\nspill-line 1527 58480a\nspill-line 1528 58480a\nspill-line 1529 58480a\nspill-line 1530 58480a\nspill-line 1531 58480a\nspill-line 1532 58480a\nspill-line 1533 58480a\nspill-line 1534 58480a\nspill-line 1535 58480a\nspill-line 1536 58480a\nspill-line 1537 58480a\nspill-line 1538 58480a\nspill-line 1539 58480a\nspill-line 1540 58480a\nspill-line 1541 58480a\nspill-line 1542 58480a\nspill-line 1543 58480a\nspill-line 1544 58480a\nspill-line 1545 58480a\nspill-line 1546 58480a\nspill-line 1547 58480a\nspill-line 1548 58480a\nspill-line 1549 58480a\nspill-line 1550 58480a\nspill-line 1551 58480a\nspill-line 1552 58480a\nspill-line 1553 58480a\nspill-line 1554 58480a\nspill-line 1555 58480a\nspill-line 1556 58480a\nspill-line 1557 58480a\nspill-line 1558 58480a\nspill-line 1559 58480a\nspill-line 1560 58480a\nspill-line 1561 58480a\nspill-line 1562 58480a\nspill-line 1563 58480a\nspill-line 1564 58480a\nspill-line 1565 58480a\nspill-line 1566 58480a\nspill-line 1567 58480a\nspill-line 1568 58480a\nspill-line 1569 58480a\nspill-line 1570 58480a\nspill-line 1571 58480a\nspill-line 1572 58480a\nspill-line 1573 58480a\nspill-line 1574 58480a\nspill-line 1575 58480a\nspill-line 1576 58480a\nspill-line 1577 58480a\nspill-line 1578 58480a\nspill-line 1579 58480a\nspill-line 1580 58480a\nspill-line 1581 58480a\nspill-line 1582 58480a\nspill-line 1583 58480a\nspill-line 1584 58480a\nspill-line 1585 58480a\nspill-line 1586 58480a\nspill-line 1587 58480a\nspill-line 1588 58480a\nspill-line 1589 58480a\nspill-line 1590 58480a\nspill-line 1591 58480a\nspill-line 1592 58480a\nspill-line 1593 58480a\nspill-line 1594 58480a\nspill-line 1595 58480a\nspill-line 1596 58480a\nspill-line 1597 58480a\nspill-line 1598 58480a\nspill-line 1599 58480a\nspill-line 1600 58480a\nspill-line 1601 58480a\nspill-line 1602 58480a\nspill-line 1603 58480a\nspill-line 1604 58480a\nspill-line 1605 58480a\nspill-line 1606 58480a\nspill-line 1607 58480a\nspill-line 1608 58480a\nspill-line 1609 58480a\nspill-line 1610 58480a\nspill-line 1611 58480a\nspill-line 1612 58480a\nspill-line 1613 58480a\nspill-line 1614 58480a\nspill-line 1615 58480a\nspill-line 1616 58480a\nspill-line 1617 58480a\nspill-line 1618 58480a\nspill-line 1619 58480a\nspill-line 1620 58480a\nspill-line 1621 58480a\nspill-line 1622 58480a\nspill-line 1623 58480a\nspill-line 1624 58480a\nspill-line 1625 58480a\nspill-line 1626 58480a\nspill-line 1627 58480a\nspill-line 1628 58480a\nspill-line 1629 58480a\nspill-line 1630 58480a\nspill-line 1631 58480a\nspill-line 1632 58480a\nspill-line 1633 58480a\nspill-line 1634 58480a\nspill-line 1635 58480a\nspill-line 1636 58480a\nspill-line 1637 58480a\nspill-line 1638 58480a\nspill-line 1639 58480a\nspill-line 1640 58480a\nspill-line 1641 58480a\nspill-line 1642 58480a\nspill-line 1643 58480a\nspill-line 1644 58480a\nspill-line 1645 58480a\nspill-line 1646 58480a\nspill-line 1647 58480a\nspill-line 1648 58480a\nspill-line 1649 58480a\nspill-line 1650 58480a\nspill-line 1651 58480a\nspill-line 1652 58480a\nspill-line 1653 58480a\nspill-line 1654 58480a\nspill-line 1655 58480a\nspill-line 1656 58480a\nspill-line 1657 58480a\nspill-line 1658 58480a\nspill-line 1659 58480a\nspill-line 1660 58480a\nspill-line 1661 58480a\nspill-line 1662 58480a\nspill-line 1663 58480a\nspill-line 1664 58480a\nspill-line 1665 58480a\nspill-line 1666 58480a\nspill-line 1667 58480a\nspill-line 1668 58480a\nspill-line 1669 58480a\nspill-line 1670 58480a\nspill-line 1671 58480a\nspill-line 1672 58480a\nspill-line 1673 58480a\nspill-line 1674 58480a\nspill-line 1675 58480a\nspill-line 1676 58480a\nspill-line 1677 58480a\nspill-line 1678 58480a\nspill-line 1679 58480a\nspill-line 1680 58480a\nspill-line 1681 58480a\nspill-line 1682 58480a\nspill-line 1683 58480a\nspill-line 1684 58480a\nspill-line 1685 58480a\nspill-line 1686 58480a\nspill-line 1687 58480a\nspill-line 1688 58480a\nspill-line 1689 58480a\nspill-line 1690 58480a\nspill-line 1691 58480a\nspill-line 1692 58480a\nspill-line 1693 58480a\nspill-line 1694 58480a\nspill-line 1695 58480a\nspill-line 1696 58480a\nspill-line 1697 58480a\nspill-line 1698 58480a\nspill-line 1699 58480a\nspill-line 1700 58480a\nspill-line 1701 58480a\nspill-line 1702 58480a\nspill-line 1703 58480a\nspill-line 1704 58480a\nspill-line 1705 58480a\nspill-line 1706 58480a\nspill-line 1707 58480a\nspill-line 1708 58480a\nspill-line 1709 58480a\nspill-line 1710 58480a\nspill-line 1711 58480a\nspill-line 1712 58480a\nspill-line 1713 58480a\nspill-line 1714 58480a\nspill-line 1715 58480a\nspill-line 1716 58480a\nspill-line 1717 58480a\nspill-line 1718 58480a\nspill-line 1719 58480a\nspill-line 1720 58480a\nspill-line 1721 58480a\nspill-line 1722 58480a\nspill-line 1723 58480a\nspill-line 1724 58480a\nspill-line 1725 58480a\nspill-line 1726 58480a\nspill-line 1727 58480a\nspill-line 1728 58480a\nspill-line 1729 58480a\nspill-line 1730 58480a\nspill-line 1731 58480a\nspill-line 1732 58480a\nspill-line 1733 58480a\nspill-line 1734 58480a\nspill-line 1735 58480a\nspill-line 1736 58480a\nspill-line 1737 58480a\nspill-line 1738 58480a\nspill-line 1739 58480a\nspill-line 1740 58480a\nspill-line 1741 58480a\nspill-line 1742 58480a\nspill-line 1743 58480a\nspill-line 1744 58480a\nspill-line 1745 58480a\nspill-line 1746 58480a\nspill-line 1747 58480a\nspill-line 1748 58480a\nspill-line 1749 58480a\nspill-line 1750 58480a\nspill-line 1751 58480a\nspill-line 1752 58480a\nspill-line 1753 58480a\nspill-line 1754 58480a\nspill-line 1755 58480a\nspill-line 1756 58480a\nspill-line 1757 58480a\nspill-line 1758 58480a\nspill-line 1759 58480a\nspill-line 1760 58480a\nspill-line 1761 58480a\nspill-line 1762 58480a\nspill-line 1763 58480a\nspill-line 1764 58480a\nspill-line 1765 58480a\nspill-line 1766 58480a\nspill-line 1767 58480a\nspill-line 1768 58480a\nspill-line 1769 58480a\nspill-line 1770 58480a\nspill-line 1771 58480a\nspill-line 1772 58480a\nspill-line 1773 58480a\nspill-line 1774 58480a\nspill-line 1775 58480a\nspill-line 1776 58480a\nspill-line 1777 58480a\nspill-line 1778 58480a\nspill-line 1779 58480a\nspill-line 1780 58480a\nspill-line 1781 58480a\nspill-line 1782 58480a\nspill-line 1783 58480a\nspill-line 1784 58480a\nspill-line 1785 58480a\nspill-line 1786 58480a\nspill-line 1787 58480a\nspill-line 1788 58480a\nspill-line 1789 58480a\nspill-line 1790 58480a\nspill-line 1791 58480a\nspill-line 1792 58480a\nspill-line 1793 58480a\nspill-line 1794 58480a\nspill-line 1795 58480a\nspill-line 1796 58480a\nspill-line 1797 58480a\nspill-line 1798 58480a\nspill-line 1799 58480a\nspill-line 1800 58480a\nspill-line 1801 58480a\nspill-line 1802 58480a\nspill-line 1803 58480a\nspill-line 1804 58480a\nspill-line 1805 58480a\nspill-line 1806 58480a\nspill-line 1807 58480a\nspill-line 1808 58480a\nspill-line 1809 58480a\nspill-line 1810 58480a\nspill-line 1811 58480a\nspill-line 1812 58480a\nspill-line 1813 58480a\nspill-line 1814 58480a\nspill-line 1815 58480a\nspill-line 1816 58480a\nspill-line 1817 58480a\nspill-line 1818 58480a\nspill-line 1819 58480a\nspill-line 1820 58480a\nspill-line 1821 58480a\nspill-line 1822 58480a\nspill-line 1823 58480a\nspill-line 1824 58480a\nspill-line 1825 58480a\nspill-line 1826 58480a\nspill-line 1827 58480a\nspill-line 1828 58480a\nspill-line 1829 58480a\nspill-line 1830 58480a\nspill-line 1831 58480a\nspill-line 1832 58480a\nspill-line 1833 58480a\nspill-line 1834 58480a\nspill-line 1835 58480a\nspill-line 1836 58480a\nspill-line 1837 58480a\nspill-line 1838 58480a\nspill-line 1839 58480a\nspill-line 1840 58480a\nspill-line 1841 58480a\nspill-line 1842 58480a\nspill-line 1843 58480a\nspill-line 1844 58480a\nspill-line 1845 58480a\nspill-line 1846 58480a\nspill-line 1847 58480a\nspill-line 1848 58480a\nspill-line 1849 58480a\nspill-line 1850 58480a\nspill-line 1851 58480a\nspill-line 1852 58480a\nspill-line 1853 58480a\nspill-line 1854 58480a\nspill-line 1855 58480a\nspill-line 1856 58480a\nspill-line 1857 58480a\nspill-line 1858 58480a\nspill-line 1859 58480a\nspill-line 1860 58480a\nspill-line 1861 58480a\nspill-line 1862 58480a\nspill-line 1863 58480a\nspill-line 1864 58480a\nspill-line 1865 58480a\nspill-line 1866 58480a\nspill-line 1867 58480a\nspill-line 1868 58480a\nspill-line 1869 58480a\nspill-line 1870 58480a\nspill-line 1871 58480a\nspill-line 1872 58480a\nspill-line 1873 58480a\nspill-line 1874 58480a\nspill-line 1875 58480a\nspill-line 1876 58480a\nspill-line 1877 58480a\nspill-line 1878 58480a\nspill-line 1879 58480a\nspill-line 1880 58480a\nspill-line 1881 58480a\nspill-line 1882 58480a\nspill-line 1883 58480a\nspill-line 1884 58480a\nspill-line 1885 58480a\nspill-line 1886 58480a\nspill-line 1887 58480a\nspill-line 1888 58480a\nspill-line 1889 58480a\nspill-line 1890 58480a\nspill-line 1891 58480a\nspill-line 1892 58480a\nspill-line 1893 58480a\nspill-line 1894 58480a\nspill-line 1895 58480a\nspill-line 1896 58480a\nspill-line 1897 58480a\nspill-line 1898 58480a\nspill-line 1899 58480a\nspill-line 1900 58480a\nspill-line 1901 58480a\nspill-line 1902 58480a\nspill-line 1903 58480a\nspill-line 1904 58480a\nspill-line 1905 58480a\nspill-line 1906 58480a\nspill-line 1907 58480a\nspill-line 1908 58480a\nspill-line 1909 58480a\nspill-line 1910 58480a\nspill-line 1911 58480a\nspill-line 1912 58480a\nspill-line 1913 58480a\nspill-line 1914 58480a\nspill-line 1915 58480a\nspill-line 1916 58480a\nspill-line 1917 58480a\nspill-line 1918 58480a\nspill-line 1919 58480a\nspill-line 1920 58480a\nspill-line 1921 58480a\nspill-line 1922 58480a\nspill-line 1923 58480a\nspill-line 1924 58480a\nspill-line 1925 58480a\nspill-line 1926 58480a\nspill-line 1927 58480a\nspill-line 1928 58480a\nspill-line 1929 58480a\nspill-line 1930 58480a\nspill-line 1931 58480a\nspill-line 1932 58480a\nspill-line 1933 58480a\nspill-line 1934 58480a\nspill-line 1935 58480a\nspill-line 1936 58480a\nspill-line 1937 58480a\nspill-line 1938 58480a\nspill-line 1939 58480a\nspill-line 1940 58480a\nspill-line 1941 58480a\nspill-line 1942 58480a\nspill-line 1943 58480a\nspill-line 1944 58480a\nspill-line 1945 58480a\nspill-line 1946 58480a\nspill-line 1947 58480a\nspill-line 1948 58480a\nspill-line 1949 58480a\nspill-line 1950 58480a\nspill-line 1951 58480a\nspill-line 1952 58480a\nspill-line 1953 58480a\nspill-line 1954 58480a\nspill-line 1955 58480a\nspill-line 1956 58480a\nspill-line 1957 58480a\nspill-line 1958 58480a\nspill-line 1959 58480a\nspill-line 1960 58480a\nspill-line 1961 58480a\nspill-line 1962 58480a\nspill-line 1963 58480a\nspill-line 1964 58480a\nspill-line 1965 58480a\nspill-line 1966 58480a\nspill-line 1967 58480a\nspill-line 1968 58480a\nspill-line 1969 58480a\nspill-line 1970 58480a\nspill-line 1971 58480a\nspill-line 1972 58480a\nspill-line 1973 58480a\nspill-line 1974 58480a\nspill-line 1975 58480a\nspill-line 1976 58480a\nspill-line 1977 58480a\nspill-line 1978 58480a\nspill-line 1979 58480a\nspill-line 1980 58480a\nspill-line 1981 58480a\nspill-line 1982 58480a\nspill-line 1983 58480a\nspill-line 1984 58480a\nspill-line 1985 58480a\nspill-line 1986 58480a\nspill-line 1987 58480a\nspill-line 1988 58480a\nspill-line 1989 58480a\nspill-line 1990 58480a\nspill-line 1991 58480a\nspill-line 1992 58480a\nspill-line 1993 58480a\nspill-line 1994 58480a\nspill-line 1995 58480a\nspill-line 1996 58480a\nspill-line 1997 58480a\nspill-line 1998 58480a\nspill-line 1999 58480a\nspill-line 2000 58480a\nspill-line 2001 58480a\nspill-line 2002 58480a\nspill-line 2003 58480a\nspill-line 2004 58480a\nspill-line 2005 58480a\nspill-line 2006 58480a\nspill-line 2007 58480a\nspill-line 2008 58480a\nspill-line 2009 58480a\nspill-line 2010 58480a\nspill-line 2011 58480a\nspill-line 2012 58480a\nspill-line 2013 58480a\nspill-line 2014 58480a\nspill-line 2015 58480a\nspill-line 2016 58480a\nspill-line 2017 58480a\nspill-line 2018 58480a\nspill-line 2019 58480a\nspill-line 2020 58480a\nspill-line 2021 58480a\nspill-line 2022 58480a\nspill-line 2023 58480a\nspill-line 2024 58480a\nspill-line 2025 58480a\nspill-line 2026 58480a\nspill-line 2027 58480a\nspill-line 2028 58480a\nspill-line 2029 58480a\nspill-line 2030 58480a\nspill-line 2031 58480a\nspill-line 2032 58480a\nspill-line 2033 58480a\nspill-line 2034 58480a\nspill-line 2035 58480a\nspill-line 2036 58480a\nspill-line 2037 58480a\nspill-line 2038 58480a\nspill-line 2039 58480a\nspill-line 2040 58480a\nspill-line 2041 58480a\nspill-line 2042 58480a\nspill-line 2043 58480a\nspill-line 2044 58480a\nspill-line 2045 58480a\nspill-line 2046 58480a\nspill-line 2047 58480a\nspill-line 2048 58480a\nspill-line 2049 58480a\nspill-line 2050 58480a\nspill-line 2051 58480a\nspill-line 2052 58480a\nspill-line 2053 58480a\nspill-line 2054 58480a\nspill-line 2055 58480a\nspill-line 2056 58480a\nspill-line 2057 58480a\nspill-line 2058 58480a\nspill-line 2059 58480a\nspill-line 2060 58480a\nspill-line 2061 58480a\nspill-line 2062 58480a\nspill-line 2063 58480a\nspill-line 2064 58480a\nspill-line 2065 58480a\nspill-line 2066 58480a\nspill-line 2067 58480a\nspill-line 2068 58480a\nspill-line 2069 58480a\nspill-line 2070 58480a\nspill-line 2071 58480a\nspill-line 2072 58480a\nspill-line 2073 58480a\nspill-line 2074 58480a\nspill-line 2075 58480a\nspill-line 2076 58480a\nspill-line 2077 58480a\nspill-line 2078 58480a\nspill-line 2079 58480a\nspill-line 2080 58480a\nspill-line 2081 58480a\nspill-line 2082 58480a\nspill-line 2083 58480a\nspill-line 2084 58480a\nspill-line 2085 58480a\nspill-line 2086 58480a\nspill-line 2087 58480a\nspill-line 2088 58480a\nspill-line 2089 58480a\nspill-line 2090 58480a\nspill-line 2091 58480a\nspill-line 2092 58480a\nspill-line 2093 58480a\nspill-line 2094 58480a\nspill-line 2095 58480a\nspill-line 2096 58480a\nspill-line 2097 58480a\nspill-line 2098 58480a\nspill-line 2099 58480a\nspill-line 2100 58480a\nspill-line 2101 58480a\nspill-line 2102 58480a\nspill-line 2103 58480a\nspill-line 2104 58480a\nspill-line 2105 58480a\nspill-line 2106 58480a\nspill-line 2107 58480a\nspill-line 2108 58480a\nspill-line 2109 58480a\nspill-line 2110 58480a\nspill-line 2111 58480a\nspill-line 2112 58480a\nspill-line 2113 58480a\nspill-line 2114 58480a\nspill-line 2115 58480a\nspill-line 2116 58480a\nspill-line 2117 58480a\nspill-line 2118 58480a\nspill-line 2119 58480a\nspill-line 2120 58480a\nspill-line 2121 58480a\nspill-line 2122 58480a\nspill-line 2123 58480a\nspill-line 2124 58480a\nspill-line 2125 58480a\nspill-line 2126 58480a\nspill-line 2127 58480a\nspill-line 2128 58480a\nspill-line 2129 58480a\nspill-line 2130 58480a\nspill-line 2131 58480a\nspill-line 2132 58480a\nspill-line 2133 58480a\nspill-line 2134 58480a\nspill-line 2135 58480a\nspill-line 2136 58480a\nspill-line 2137 58480a\nspill-line 2138 58480a\nspill-line 2139 58480a\nspill-line 2140 58480a\nspill-line 2141 58480a\nspill-line 2142 58480a\nspill-line 2143 58480a\nspill-line 2144 58480a\nspill-line 2145 58480a\nspill-line 2146 58480a\nspill-line 2147 58480a\nspill-line 2148 58480a\nspill-line 2149 58480a\nspill-line 2150 58480a\nspill-line 2151 58480a\nspill-line 2152 58480a\nspill-line 2153 58480a\nspill-line 2154 58480a\nspill-line 2155 58480a\nspill-line 2156 58480a\nspill-line 2157 58480a\nspill-line 2158 58480a\nspill-line 2159 58480a\nspill-line 2160 58480a\nspill-line 2161 58480a\nspill-line 2162 58480a\nspill-line 2163 58480a\nspill-line 2164 58480a\nspill-line 2165 58480a\nspill-line 2166 58480a\nspill-line 2167 58480a\nspill-line 2168 58480a\nspill-line 2169 58480a\nspill-line 2170 58480a\nspill-line 2171 58480a\nspill-line 2172 58480a\nspill-line 2173 58480a\nspill-line 2174 58480a\nspill-line 2175 58480a\nspill-line 2176 58480a\nspill-line 2177 58480a\nspill-line 2178 58480a\nspill-line 2179 58480a\nspill-line 2180 58480a\nspill-line 2181 58480a\nspill-line 2182 58480a\nspill-line 2183 58480a\nspill-line 2184 58480a\nspill-line 2185 58480a\nspill-line 2186 58480a\nspill-line 2187 58480a\nspill-line 2188 58480a\nspill-line 2189 58480a\nspill-line 2190 58480a\nspill-line 2191 58480a\nspill-line 2192 58480a\nspill-line 2193 58480a\nspill-line 2194 58480a\nspill-line 2195 58480a\nspill-line 2196 58480a\nspill-line 2197 58480a\nspill-line 2198 58480a\nspill-line 2199 58480a\nspill-line 2200 58480a\nspill-line 2201 58480a\nspill-line 2202 58480a\nspill-line 2203 58480a\nspill-line 2204 58480a\nspill-line 2205 58480a\nspill-line 2206 58480a\nspill-line 2207 58480a\nspill-line 2208 58480a\nspill-line 2209 58480a\nspill-line 2210 58480a\nspill-line 2211 58480a\nspill-line 2212 58480a\nspill-line 2213 58480a\nspill-line 2214 58480a\nspill-line 2215 58480a\nspill-line 2216 58480a\nspill-line 2217 58480a\nspill-line 2218 58480a\nspill-line 2219 58480a\nspill-line 2220 58480a\nspill-line 2221 58480a\nspill-line 2222 58480a\nspill-line 2223 58480a\nspill-line 2224 58480a\nspill-line 2225 58480a\nspill-line 2226 58480a\nspill-line 2227 58480a\nspill-line 2228 58480a\nspill-line 2229 58480a\nspill-line 2230 58480a\nspill-line 2231 58480a\nspill-line 2232 58480a\nspill-line 2233 58480a\nspill-line 2234 58480a\nspill-line 2235 58480a\nspill-line 2236 58480a\nspill-line 2237 58480a\nspill-line 2238 58480a\nspill-line 2239 58480a\nspill-line 2240 58480a\nspill-line 2241 58480a\nspill-line 2242 58480a\nspill-line 2243 58480a\nspill-line 2244 58480a\nspill-line 2245 58480a\nspill-line 2246 58480a\nspill-line 2247 58480a\nspill-line 2248 58480a\nspill-line 2249 58480a\nspill-line 2250 58480a\nspill-line 2251 58480a\nspill-line 2252 58480a\nspill-line 2253 58480a\nspill-line 2254 58480a\nspill-line 2255 58480a\nspill-line 2256 58480a\nspill-line 2257 58480a\nspill-line 2258 58480a\nspill-line 2259 58480a\nspill-line 2260 58480a\nspill-line 2261 58480a\nspill-line 2262 58480a\nspill-line 2263 58480a\nspill-line 2264 58480a\nspill-line 2265 58480a\nspill-line 2266 58480a\nspill-line 2267 58480a\nspill-line 2268 58480a\nspill-line 2269 58480a\nspill-line 2270 58480a\nspill-line 2271 58480a\nspill-line 2272 58480a\nspill-line 2273 58480a\nspill-line 2274 58480a\nspill-line 2275 58480a\nspill-line 2276 58480a\nspill-line 2277 58480a\nspill-line 2278 58480a\nspill-line 2279 58480a\nspill-line 2280 58480a\nspill-line 2281 58480a\nspill-line 2282 58480a\nspill-line 2283 58480a\nspill-line 2284 58480a\nspill-line 2285 58480a\nspill-line 2286 58480a\nspill-line 2287 58480a\nspill-line 2288 58480a\nspill-line 2289 58480a\nspill-line 2290 58480a\nspill-line 2291 58480a\nspill-line 2292 58480a\nspill-line 2293 58480a\nspill-line 2294 58480a\nspill-line 2295 58480a\nspill-line 2296 58480a\nspill-line 2297 58480a\nspill-line 2298 58480\n\n[...]\n\n80a\nspill-line 2927 58480a\nspill-line 2928 58480a\nspill-line 2929 58480a\nspill-line 2930 58480a\nspill-line 2931 58480a\nspill-line 2932 58480a\nspill-line 2933 58480a\nspill-line 2934 58480a\nspill-line 2935 58480a\nspill-line 2936 58480a\nspill-line 2937 58480a\nspill-line 2938 58480a\nspill-line 2939 58480a\nspill-line 2940 58480a\nspill-line 2941 58480a\nspill-line 2942 58480a\nspill-line 2943 58480a\nspill-line 2944 58480a\nspill-line 2945 58480a\nspill-line 2946 58480a\nspill-line 2947 58480a\nspill-line 2948 58480a\nspill-line 2949 58480a\nspill-line 2950 58480a\nspill-line 2951 58480a\nspill-line 2952 58480a\nspill-line 2953 58480a\nspill-line 2954 58480a\nspill-line 2955 58480a\nspill-line 2956 58480a\nspill-line 2957 58480a\nspill-line 2958 58480a\nspill-line 2959 58480a\nspill-line 2960 58480a\nspill-line 2961 58480a\nspill-line 2962 58480a\nspill-line 2963 58480a\nspill-line 2964 58480a\nspill-line 2965 58480a\nspill-line 2966 58480a\nspill-line 2967 58480a\nspill-line 2968 58480a\nspill-line 2969 58480a\nspill-line 2970 58480a\nspill-line 2971 58480a\nspill-line 2972 58480a\nspill-line 2973 58480a\nspill-line 2974 58480a\nspill-line 2975 58480a\nspill-line 2976 58480a\nspill-line 2977 58480a\nspill-line 2978 58480a\nspill-line 2979 58480a\nspill-line 2980 58480a\nspill-line 2981 58480a\nspill-line 2982 58480a\nspill-line 2983 58480a\nspill-line 2984 58480a\nspill-line 2985 58480a\nspill-line 2986 58480a\nspill-line 2987 58480a\nspill-line 2988 58480a\nspill-line 2989 58480a\nspill-line 2990 58480a\nspill-line 2991 58480a\nspill-line 2992 58480a\nspill-line 2993 58480a\nspill-line 2994 58480a\nspill-line 2995 58480a\nspill-line 2996 58480a\nspill-line 2997 58480a\nspill-line 2998 58480a\nspill-line 2999 58480a\nspill-line 3000 58480a\nspill-line 3001 58480a\nspill-line 3002 58480a\nspill-line 3003 58480a\nspill-line 3004 58480a\nspill-line 3005 58480a\nspill-line 3006 58480a\nspill-line 3007 58480a\nspill-line 3008 58480a\nspill-line 3009 58480a\nspill-line 3010 58480a\nspill-line 3011 58480a\nspill-line 3012 58480a\nspill-line 3013 58480a\nspill-line 3014 58480a\nspill-line 3015 58480a\nspill-line 3016 58480a\nspill-line 3017 58480a\nspill-line 3018 58480a\nspill-line 3019 58480a\nspill-line 3020 58480a\nspill-line 3021 58480a\nspill-line 3022 58480a\nspill-line 3023 58480a\nspill-line 3024 58480a\nspill-line 3025 58480a\nspill-line 3026 58480a\nspill-line 3027 58480a\nspill-line 3028 58480a\nspill-line 3029 58480a\nspill-line 3030 58480a\nspill-line 3031 58480a\nspill-line 3032 58480a\nspill-line 3033 58480a\nspill-line 3034 58480a\nspill-line 3035 58480a\nspill-line 3036 58480a\nspill-line 3037 58480a\nspill-line 3038 58480a\nspill-line 3039 58480a\nspill-line 3040 58480a\nspill-line 3041 58480a\nspill-line 3042 58480a\nspill-line 3043 58480a\nspill-line 3044 58480a\nspill-line 3045 58480a\nspill-line 3046 58480a\nspill-line 3047 58480a\nspill-line 3048 58480a\nspill-line 3049 58480a\nspill-line 3050 58480a\nspill-line 3051 58480a\nspill-line 3052 58480a\nspill-line 3053 58480a\nspill-line 3054 58480a\nspill-line 3055 58480a\nspill-line 3056 58480a\nspill-line 3057 58480a\nspill-line 3058 58480a\nspill-line 3059 58480a\nspill-line 3060 58480a\nspill-line 3061 58480a\nspill-line 3062 58480a\nspill-line 3063 58480a\nspill-line 3064 58480a\nspill-line 3065 58480a\nspill-line 3066 58480a\nspill-line 3067 58480a\nspill-line 3068 58480a\nspill-line 3069 58480a\nspill-line 3070 58480a\nspill-line 3071 58480a\nspill-line 3072 58480a\nspill-line 3073 58480a\nspill-line 3074 58480a\nspill-line 3075 58480a\nspill-line 3076 58480a\nspill-line 3077 58480a\nspill-line 3078 58480a\nspill-line 3079 58480a\nspill-line 3080 58480a\nspill-line 3081 58480a\nspill-line 3082 58480a\nspill-line 3083 58480a\nspill-line 3084 58480a\nspill-line 3085 58480a\nspill-line 3086 58480a\nspill-line 3087 58480a\nspill-line 3088 58480a\nspill-line 3089 58480a\nspill-line 3090 58480a\nspill-line 3091 58480a\nspill-line 3092 58480a\nspill-line 3093 58480a\nspill-line 3094 58480a\nspill-line 3095 58480a\nspill-line 3096 58480a\nspill-line 3097 58480a\nspill-line 3098 58480a\nspill-line 3099 58480a\nspill-line 3100 58480a\nspill-line 3101 58480a\nspill-line 3102 58480a\nspill-line 3103 58480a\nspill-line 3104 58480a\nspill-line 3105 58480a\nspill-line 3106 58480a\nspill-line 3107 58480a\nspill-line 3108 58480a\nspill-line 3109 58480a\nspill-line 3110 58480a\nspill-line 3111 58480a\nspill-line 3112 58480a\nspill-line 3113 58480a\nspill-line 3114 58480a\nspill-line 3115 58480a\nspill-line 3116 58480a\nspill-line 3117 58480a\nspill-line 3118 58480a\nspill-line 3119 58480a\nspill-line 3120 58480a\nspill-line 3121 58480a\nspill-line 3122 58480a\nspill-line 3123 58480a\nspill-line 3124 58480a\nspill-line 3125 58480a\nspill-line 3126 58480a\nspill-line 3127 58480a\nspill-line 3128 58480a\nspill-line 3129 58480a\nspill-line 3130 58480a\nspill-line 3131 58480a\nspill-line 3132 58480a\nspill-line 3133 58480a\nspill-line 3134 58480a\nspill-line 3135 58480a\nspill-line 3136 58480a\nspill-line 3137 58480a\nspill-line 3138 58480a\nspill-line 3139 58480a\nspill-line 3140 58480a\nspill-line 3141 58480a\nspill-line 3142 58480a\nspill-line 3143 58480a\nspill-line 3144 58480a\nspill-line 3145 58480a\nspill-line 3146 58480a\nspill-line 3147 58480a\nspill-line 3148 58480a\nspill-line 3149 58480a\nspill-line 3150 58480a\nspill-line 3151 58480a\nspill-line 3152 58480a\nspill-line 3153 58480a\nspill-line 3154 58480a\nspill-line 3155 58480a\nspill-line 3156 58480a\nspill-line 3157 58480a\nspill-line 3158 58480a\nspill-line 3159 58480a\nspill-line 3160 58480a\nspill-line 3161 58480a\nspill-line 3162 58480a\nspill-line 3163 58480a\nspill-line 3164 58480a\nspill-line 3165 58480a\nspill-line 3166 58480a\nspill-line 3167 58480a\nspill-line 3168 58480a\nspill-line 3169 58480a\nspill-line 3170 58480a\nspill-line 3171 58480a\nspill-line 3172 58480a\nspill-line 3173 58480a\nspill-line 3174 58480a\nspill-line 3175 58480a\nspill-line 3176 58480a\nspill-line 3177 58480a\nspill-line 3178 58480a\nspill-line 3179 58480a\nspill-line 3180 58480a\nspill-line 3181 58480a\nspill-line 3182 58480a\nspill-line 3183 58480a\nspill-line 3184 58480a\nspill-line 3185 58480a\nspill-line 3186 58480a\nspill-line 3187 58480a\nspill-line 3188 58480a\nspill-line 3189 58480a\nspill-line 3190 58480a\nspill-line 3191 58480a\nspill-line 3192 58480a\nspill-line 3193 58480a\nspill-line 3194 58480a\nspill-line 3195 58480a\nspill-line 3196 58480a\nspill-line 3197 58480a\nspill-line 3198 58480a\nspill-line 3199 58480a\nspill-line 3200 58480a\nspill-line 3201 58480a\nspill-line 3202 58480a\nspill-line 3203 58480a\nspill-line 3204 58480a\nspill-line 3205 58480a\nspill-line 3206 58480a\nspill-line 3207 58480a\nspill-line 3208 58480a\nspill-line 3209 58480a\nspill-line 3210 58480a\nspill-line 3211 58480a\nspill-line 3212 58480a\nspill-line 3213 58480a\nspill-line 3214 58480a\nspill-line 3215 58480a\nspill-line 3216 58480a\nspill-line 3217 58480a\nspill-line 3218 58480a\nspill-line 3219 58480a\nspill-line 3220 58480a\nspill-line 3221 58480a\nspill-line 3222 58480a\nspill-line 3223 58480a\nspill-line 3224 58480a\nspill-line 3225 58480a\nspill-line 3226 58480a\nspill-line 3227 58480a\nspill-line 3228 58480a\nspill-line 3229 58480a\nspill-line 3230 58480a\nspill-line 3231 58480a\nspill-line 3232 58480a\nspill-line 3233 58480a\nspill-line 3234 58480a\nspill-line 3235 58480a\nspill-line 3236 58480a\nspill-line 3237 58480a\nspill-line 3238 58480a\nspill-line 3239 58480a\nspill-line 3240 58480a\nspill-line 3241 58480a\nspill-line 3242 58480a\nspill-line 3243 58480a\nspill-line 3244 58480a\nspill-line 3245 58480a\nspill-line 3246 58480a\nspill-line 3247 58480a\nspill-line 3248 58480a\nspill-line 3249 58480a\nspill-line 3250 58480a\nspill-line 3251 58480a\nspill-line 3252 58480a\nspill-line 3253 58480a\nspill-line 3254 58480a\nspill-line 3255 58480a\nspill-line 3256 58480a\nspill-line 3257 58480a\nspill-line 3258 58480a\nspill-line 3259 58480a\nspill-line 3260 58480a\nspill-line 3261 58480a\nspill-line 3262 58480a\nspill-line 3263 58480a\nspill-line 3264 58480a\nspill-line 3265 58480a\nspill-line 3266 58480a\nspill-line 3267 58480a\nspill-line 3268 58480a\nspill-line 3269 58480a\nspill-line 3270 58480a\nspill-line 3271 58480a\nspill-line 3272 58480a\nspill-line 3273 58480a\nspill-line 3274 58480a\nspill-line 3275 58480a\nspill-line 3276 58480a\nspill-line 3277 58480a\nspill-line 3278 58480a\nspill-line 3279 58480a\nspill-line 3280 58480a\nspill-line 3281 58480a\nspill-line 3282 58480a\nspill-line 3283 58480a\nspill-line 3284 58480a\nspill-line 3285 58480a\nspill-line 3286 58480a\nspill-line 3287 58480a\nspill-line 3288 58480a\nspill-line 3289 58480a\nspill-line 3290 58480a\nspill-line 3291 58480a\nspill-line 3292 58480a\nspill-line 3293 58480a\nspill-line 3294 58480a\nspill-line 3295 58480a\nspill-line 3296 58480a\nspill-line 3297 58480a\nspill-line 3298 58480a\nspill-line 3299 58480a\nspill-line 3300 58480a\nspill-line 3301 58480a\nspill-line 3302 58480a\nspill-line 3303 58480a\nspill-line 3304 58480a\nspill-line 3305 58480a\nspill-line 3306 58480a\nspill-line 3307 58480a\nspill-line 3308 58480a\nspill-line 3309 58480a\nspill-line 3310 58480a\nspill-line 3311 58480a\nspill-line 3312 58480a\nspill-line 3313 58480a\nspill-line 3314 58480a\nspill-line 3315 58480a\nspill-line 3316 58480a\nspill-line 3317 58480a\nspill-line 3318 58480a\nspill-line 3319 58480a\nspill-line 3320 58480a\nspill-line 3321 58480a\nspill-line 3322 58480a\nspill-line 3323 58480a\nspill-line 3324 58480a\nspill-line 3325 58480a\nspill-line 3326 58480a\nspill-line 3327 58480a\nspill-line 3328 58480a\nspill-line 3329 58480a\nspill-line 3330 58480a\nspill-line 3331 58480a\nspill-line 3332 58480a\nspill-line 3333 58480a\nspill-line 3334 58480a\nspill-line 3335 58480a\nspill-line 3336 58480a\nspill-line 3337 58480a\nspill-line 3338 58480a\nspill-line 3339 58480a\nspill-line 3340 58480a\nspill-line 3341 58480a\nspill-line 3342 58480a\nspill-line 3343 58480a\nspill-line 3344 58480a\nspill-line 3345 58480a\nspill-line 3346 58480a\nspill-line 3347 58480a\nspill-line 3348 58480a\nspill-line 3349 58480a\nspill-line 3350 58480a\nspill-line 3351 58480a\nspill-line 3352 58480a\nspill-line 3353 58480a\nspill-line 3354 58480a\nspill-line 3355 58480a\nspill-line 3356 58480a\nspill-line 3357 58480a\nspill-line 3358 58480a\nspill-line 3359 58480a\nspill-line 3360 58480a\nspill-line 3361 58480a\nspill-line 3362 58480a\nspill-line 3363 58480a\nspill-line 3364 58480a\nspill-line 3365 58480a\nspill-line 3366 58480a\nspill-line 3367 58480a\nspill-line 3368 58480a\nspill-line 3369 58480a\nspill-line 3370 58480a\nspill-line 3371 58480a\nspill-line 3372 58480a\nspill-line 3373 58480a\nspill-line 3374 58480a\nspill-line 3375 58480a\nspill-line 3376 58480a\nspill-line 3377 58480a\nspill-line 3378 58480a\nspill-line 3379 58480a\nspill-line 3380 58480a\nspill-line 3381 58480a\nspill-line 3382 58480a\nspill-line 3383 58480a\nspill-line 3384 58480a\nspill-line 3385 58480a\nspill-line 3386 58480a\nspill-line 3387 58480a\nspill-line 3388 58480a\nspill-line 3389 58480a\nspill-line 3390 58480a\nspill-line 3391 58480a\nspill-line 3392 58480a\nspill-line 3393 58480a\nspill-line 3394 58480a\nspill-line 3395 58480a\nspill-line 3396 58480a\nspill-line 3397 58480a\nspill-line 3398 58480a\nspill-line 3399 58480a\nspill-line 3400 58480a\nspill-line 3401 58480a\nspill-line 3402 58480a\nspill-line 3403 58480a\nspill-line 3404 58480a\nspill-line 3405 58480a\nspill-line 3406 58480a\nspill-line 3407 58480a\nspill-line 3408 58480a\nspill-line 3409 58480a\nspill-line 3410 58480a\nspill-line 3411 58480a\nspill-line 3412 58480a\nspill-line 3413 58480a\nspill-line 3414 58480a\nspill-line 3415 58480a\nspill-line 3416 58480a\nspill-line 3417 58480a\nspill-line 3418 58480a\nspill-line 3419 58480a\nspill-line 3420 58480a\nspill-line 3421 58480a\nspill-line 3422 58480a\nspill-line 3423 58480a\nspill-line 3424 58480a\nspill-line 3425 58480a\nspill-line 3426 58480a\nspill-line 3427 58480a\nspill-line 3428 58480a\nspill-line 3429 58480a\nspill-line 3430 58480a\nspill-line 3431 58480a\nspill-line 3432 58480a\nspill-line 3433 58480a\nspill-line 3434 58480a\nspill-line 3435 58480a\nspill-line 3436 58480a\nspill-line 3437 58480a\nspill-line 3438 58480a\nspill-line 3439 58480a\nspill-line 3440 58480a\nspill-line 3441 58480a\nspill-line 3442 58480a\nspill-line 3443 58480a\nspill-line 3444 58480a\nspill-line 3445 58480a\nspill-line 3446 58480a\nspill-line 3447 58480a\nspill-line 3448 58480a\nspill-line 3449 58480a\nspill-line 3450 58480a\nspill-line 3451 58480a\nspill-line 3452 58480a\nspill-line 3453 58480a\nspill-line 3454 58480a\nspill-line 3455 58480a\nspill-line 3456 58480a\nspill-line 3457 58480a\nspill-line 3458 58480a\nspill-line 3459 58480a\nspill-line 3460 58480a\nspill-line 3461 58480a\nspill-line 3462 58480a\nspill-line 3463 58480a\nspill-line 3464 58480a\nspill-line 3465 58480a\nspill-line 3466 58480a\nspill-line 3467 58480a\nspill-line 3468 58480a\nspill-line 3469 58480a\nspill-line 3470 58480a\nspill-line 3471 58480a\nspill-line 3472 58480a\nspill-line 3473 58480a\nspill-line 3474 58480a\nspill-line 3475 58480a\nspill-line 3476 58480a\nspill-line 3477 58480a\nspill-line 3478 58480a\nspill-line 3479 58480a\nspill-line 3480 58480a\nspill-line 3481 58480a\nspill-line 3482 58480a\nspill-line 3483 58480a\nspill-line 3484 58480a\nspill-line 3485 58480a\nspill-line 3486 58480a\nspill-line 3487 58480a\nspill-line 3488 58480a\nspill-line 3489 58480a\nspill-line 3490 58480a\nspill-line 3491 58480a\nspill-line 3492 58480a\nspill-line 3493 58480a\nspill-line 3494 58480a\nspill-line 3495 58480a\nspill-line 3496 58480a\nspill-line 3497 58480a\nspill-line 3498 58480a\nspill-line 3499 58480a\nspill-line 3500 58480a\nspill-line 3501 58480a\nspill-line 3502 58480a\nspill-line 3503 58480a\nspill-line 3504 58480a\nspill-line 3505 58480a\nspill-line 3506 58480a\nspill-line 3507 58480a\nspill-line 3508 58480a\nspill-line 3509 58480a\nspill-line 3510 58480a\nspill-line 3511 58480a\nspill-line 3512 58480a\nspill-line 3513 58480a\nspill-line 3514 58480a\nspill-line 3515 58480a\nspill-line 3516 58480a\nspill-line 3517 58480a\nspill-line 3518 58480a\nspill-line 3519 58480a\nspill-line 3520 58480a\nspill-line 3521 58480a\nspill-line 3522 58480a\nspill-line 3523 58480a\nspill-line 3524 58480a\nspill-line 3525 58480a\nspill-line 3526 58480a\nspill-line 3527 58480a\nspill-line 3528 58480a\nspill-line 3529 58480a\nspill-line 3530 58480a\nspill-line 3531 58480a\nspill-line 3532 58480a\nspill-line 3533 58480a\nspill-line 3534 58480a\nspill-line 3535 58480a\nspill-line 3536 58480a\nspill-line 3537 58480a\nspill-line 3538 58480a\nspill-line 3539 58480a\nspill-line 3540 58480a\nspill-line 3541 58480a\nspill-line 3542 58480a\nspill-line 3543 58480a\nspill-line 3544 58480a\nspill-line 3545 58480a\nspill-line 3546 58480a\nspill-line 3547 58480a\nspill-line 3548 58480a\nspill-line 3549 58480a\nspill-line 3550 58480a\nspill-line 3551 58480a\nspill-line 3552 58480a\nspill-line 3553 58480a\nspill-line 3554 58480a\nspill-line 3555 58480a\nspill-line 3556 58480a\nspill-line 3557 58480a\nspill-line 3558 58480a\nspill-line 3559 58480a\nspill-line 3560 58480a\nspill-line 3561 58480a\nspill-line 3562 58480a\nspill-line 3563 58480a\nspill-line 3564 58480a\nspill-line 3565 58480a\nspill-line 3566 58480a\nspill-line 3567 58480a\nspill-line 3568 58480a\nspill-line 3569 58480a\nspill-line 3570 58480a\nspill-line 3571 58480a\nspill-line 3572 58480a\nspill-line 3573 58480a\nspill-line 3574 58480a\nspill-line 3575 58480a\nspill-line 3576 58480a\nspill-line 3577 58480a\nspill-line 3578 58480a\nspill-line 3579 58480a\nspill-line 3580 58480a\nspill-line 3581 58480a\nspill-line 3582 58480a\nspill-line 3583 58480a\nspill-line 3584 58480a\nspill-line 3585 58480a\nspill-line 3586 58480a\nspill-line 3587 58480a\nspill-line 3588 58480a\nspill-line 3589 58480a\nspill-line 3590 58480a\nspill-line 3591 58480a\nspill-line 3592 58480a\nspill-line 3593 58480a\nspill-line 3594 58480a\nspill-line 3595 58480a\nspill-line 3596 58480a\nspill-line 3597 58480a\nspill-line 3598 58480a\nspill-line 3599 58480a\nspill-line 3600 58480a\nspill-line 3601 58480a\nspill-line 3602 58480a\nspill-line 3603 58480a\nspill-line 3604 58480a\nspill-line 3605 58480a\nspill-line 3606 58480a\nspill-line 3607 58480a\nspill-line 3608 58480a\nspill-line 3609 58480a\nspill-line 3610 58480a\nspill-line 3611 58480a\nspill-line 3612 58480a\nspill-line 3613 58480a\nspill-line 3614 58480a\nspill-line 3615 58480a\nspill-line 3616 58480a\nspill-line 3617 58480a\nspill-line 3618 58480a\nspill-line 3619 58480a\nspill-line 3620 58480a\nspill-line 3621 58480a\nspill-line 3622 58480a\nspill-line 3623 58480a\nspill-line 3624 58480a\nspill-line 3625 58480a\nspill-line 3626 58480a\nspill-line 3627 58480a\nspill-line 3628 58480a\nspill-line 3629 58480a\nspill-line 3630 58480a\nspill-line 3631 58480a\nspill-line 3632 58480a\nspill-line 3633 58480a\nspill-line 3634 58480a\nspill-line 3635 58480a\nspill-line 3636 58480a\nspill-line 3637 58480a\nspill-line 3638 58480a\nspill-line 3639 58480a\nspill-line 3640 58480a\nspill-line 3641 58480a\nspill-line 3642 58480a\nspill-line 3643 58480a\nspill-line 3644 58480a\nspill-line 3645 58480a\nspill-line 3646 58480a\nspill-line 3647 58480a\nspill-line 3648 58480a\nspill-line 3649 58480a\nspill-line 3650 58480a\nspill-line 3651 58480a\nspill-line 3652 58480a\nspill-line 3653 58480a\nspill-line 3654 58480a\nspill-line 3655 58480a\nspill-line 3656 58480a\nspill-line 3657 58480a\nspill-line 3658 58480a\nspill-line 3659 58480a\nspill-line 3660 58480a\nspill-line 3661 58480a\nspill-line 3662 58480a\nspill-line 3663 58480a\nspill-line 3664 58480a\nspill-line 3665 58480a\nspill-line 3666 58480a\nspill-line 3667 58480a\nspill-line 3668 58480a\nspill-line 3669 58480a\nspill-line 3670 58480a\nspill-line 3671 58480a\nspill-line 3672 58480a\nspill-line 3673 58480a\nspill-line 3674 58480a\nspill-line 3675 58480a\nspill-line 3676 58480a\nspill-line 3677 58480a\nspill-line 3678 58480a\nspill-line 3679 58480a\nspill-line 3680 58480a\nspill-line 3681 58480a\nspill-line 3682 58480a\nspill-line 3683 58480a\nspill-line 3684 58480a\nspill-line 3685 58480a\nspill-line 3686 58480a\nspill-line 3687 58480a\nspill-line 3688 58480a\nspill-line 3689 58480a\nspill-line 3690 58480a\nspill-line 3691 58480a\nspill-line 3692 58480a\nspill-line 3693 58480a\nspill-line 3694 58480a\nspill-line 3695 58480a\nspill-line 3696 58480a\nspill-line 3697 58480a\nspill-line 3698 58480a\nspill-line 3699 58480a\nspill-line 3700 58480a\nspill-line 3701 58480a\nspill-line 3702 58480a\nspill-line 3703 58480a\nspill-line 3704 58480a\nspill-line 3705 58480a\nspill-line 3706 58480a\nspill-line 3707 58480a\nspill-line 3708 58480a\nspill-line 3709 58480a\nspill-line 3710 58480a\nspill-line 3711 58480a\nspill-line 3712 58480a\nspill-line 3713 58480a\nspill-line 3714 58480a\nspill-line 3715 58480a\nspill-line 3716 58480a\nspill-line 3717 58480a\nspill-line 3718 58480a\nspill-line 3719 58480a\nspill-line 3720 58480a\nspill-line 3721 58480a\nspill-line 3722 58480a\nspill-line 3723 58480a\nspill-line 3724 58480a\nspill-line 3725 58480a\nspill-line 3726 58480a\nspill-line 3727 58480a\nspill-line 3728 58480a\nspill-line 3729 58480a\nspill-line 3730 58480a\nspill-line 3731 58480a\nspill-line 3732 58480a\nspill-line 3733 58480a\nspill-line 3734 58480a\nspill-line 3735 58480a\nspill-line 3736 58480a\nspill-line 3737 58480a\nspill-line 3738 58480a\nspill-line 3739 58480a\nspill-line 3740 58480a\nspill-line 3741 58480a\nspill-line 3742 58480a\nspill-line 3743 58480a\nspill-line 3744 58480a\nspill-line 3745 58480a\nspill-line 3746 58480a\nspill-line 3747 58480a\nspill-line 3748 58480a\nspill-line 3749 58480a\nspill-line 3750 58480a\nspill-line 3751 58480a\nspill-line 3752 58480a\nspill-line 3753 58480a\nspill-line 3754 58480a\nspill-line 3755 58480a\nspill-line 3756 58480a\nspill-line 3757 58480a\nspill-line 3758 58480a\nspill-line 3759 58480a\nspill-line 3760 58480a\nspill-line 3761 58480a\nspill-line 3762 58480a\nspill-line 3763 58480a\nspill-line 3764 58480a\nspill-line 3765 58480a\nspill-line 3766 58480a\nspill-line 3767 58480a\nspill-line 3768 58480a\nspill-line 3769 58480a\nspill-line 3770 58480a\nspill-line 3771 58480a\nspill-line 3772 58480a\nspill-line 3773 58480a\nspill-line 3774 58480a\nspill-line 3775 58480a\nspill-line 3776 58480a\nspill-line 3777 58480a\nspill-line 3778 58480a\nspill-line 3779 58480a\nspill-line 3780 58480a\nspill-line 3781 58480a\nspill-line 3782 58480a\nspill-line 3783 58480a\nspill-line 3784 58480a\nspill-line 3785 58480a\nspill-line 3786 58480a\nspill-line 3787 58480a\nspill-line 3788 58480a\nspill-line 3789 58480a\nspill-line 3790 58480a\nspill-line 3791 58480a\nspill-line 3792 58480a\nspill-line 3793 58480a\nspill-line 3794 58480a\nspill-line 3795 58480a\nspill-line 3796 58480a\nspill-line 3797 58480a\nspill-line 3798 58480a\nspill-line 3799 58480a\nspill-line 3800 58480a\nspill-line 3801 58480a\nspill-line 3802 58480a\nspill-line 3803 58480a\nspill-line 3804 58480a\nspill-line 3805 58480a\nspill-line 3806 58480a\nspill-line 3807 58480a\nspill-line 3808 58480a\nspill-line 3809 58480a\nspill-line 3810 58480a\nspill-line 3811 58480a\nspill-line 3812 58480a\nspill-line 3813 58480a\nspill-line 3814 58480a\nspill-line 3815 58480a\nspill-line 3816 58480a\nspill-line 3817 58480a\nspill-line 3818 58480a\nspill-line 3819 58480a\nspill-line 3820 58480a\nspill-line 3821 58480a\nspill-line 3822 58480a\nspill-line 3823 58480a\nspill-line 3824 58480a\nspill-line 3825 58480a\nspill-line 3826 58480a\nspill-line 3827 58480a\nspill-line 3828 58480a\nspill-line 3829 58480a\nspill-line 3830 58480a\nspill-line 3831 58480a\nspill-line 3832 58480a\nspill-line 3833 58480a\nspill-line 3834 58480a\nspill-line 3835 58480a\nspill-line 3836 58480a\nspill-line 3837 58480a\nspill-line 3838 58480a\nspill-line 3839 58480a\nspill-line 3840 58480a\nspill-line 3841 58480a\nspill-line 3842 58480a\nspill-line 3843 58480a\nspill-line 3844 58480a\nspill-line 3845 58480a\nspill-line 3846 58480a\nspill-line 3847 58480a\nspill-line 3848 58480a\nspill-line 3849 58480a\nspill-line 3850 58480a\nspill-line 3851 58480a\nspill-line 3852 58480a\nspill-line 3853 58480a\nspill-line 3854 58480a\nspill-line 3855 58480a\nspill-line 3856 58480a\nspill-line 3857 58480a\nspill-line 3858 58480a\nspill-line 3859 58480a\nspill-line 3860 58480a\nspill-line 3861 58480a\nspill-line 3862 58480a\nspill-line 3863 58480a\nspill-line 3864 58480a\nspill-line 3865 58480a\nspill-line 3866 58480a\nspill-line 3867 58480a\nspill-line 3868 58480a\nspill-line 3869 58480a\nspill-line 3870 58480a\nspill-line 3871 58480a\nspill-line 3872 58480a\nspill-line 3873 58480a\nspill-line 3874 58480a\nspill-line 3875 58480a\nspill-line 3876 58480a\nspill-line 3877 58480a\nspill-line 3878 58480a\nspill-line 3879 58480a\nspill-line 3880 58480a\nspill-line 3881 58480a\nspill-line 3882 58480a\nspill-line 3883 58480a\nspill-line 3884 58480a\nspill-line 3885 58480a\nspill-line 3886 58480a\nspill-line 3887 58480a\nspill-line 3888 58480a\nspill-line 3889 58480a\nspill-line 3890 58480a\nspill-line 3891 58480a\nspill-line 3892 58480a\nspill-line 3893 58480a\nspill-line 3894 58480a\nspill-line 3895 58480a\nspill-line 3896 58480a\nspill-line 3897 58480a\nspill-line 3898 58480a\nspill-line 3899 58480a\nspill-line 3900 58480a\nspill-line 3901 58480a\nspill-line 3902 58480a\nspill-line 3903 58480a\nspill-line 3904 58480a\nspill-line 3905 58480a\nspill-line 3906 58480a\nspill-line 3907 58480a\nspill-line 3908 58480a\nspill-line 3909 58480a\nspill-line 3910 58480a\nspill-line 3911 58480a\nspill-line 3912 58480a\nspill-line 3913 58480a\nspill-line 3914 58480a\nspill-line 3915 58480a\nspill-line 3916 58480a\nspill-line 3917 58480a\nspill-line 3918 58480a\nspill-line 3919 58480a\nspill-line 3920 58480a\nspill-line 3921 58480a\nspill-line 3922 58480a\nspill-line 3923 58480a\nspill-line 3924 58480a\nspill-line 3925 58480a\nspill-line 3926 58480a\nspill-line 3927 58480a\nspill-line 3928 58480a\nspill-line 3929 58480a\nspill-line 3930 58480a\nspill-line 3931 58480a\nspill-line 3932 58480a\nspill-line 3933 58480a\nspill-line 3934 58480a\nspill-line 3935 58480a\nspill-line 3936 58480a\nspill-line 3937 58480a\nspill-line 3938 58480a\nspill-line 3939 58480a\nspill-line 3940 58480a\nspill-line 3941 58480a\nspill-line 3942 58480a\nspill-line 3943 58480a\nspill-line 3944 58480a\nspill-line 3945 58480a\nspill-line 3946 58480a\nspill-line 3947 58480a\nspill-line 3948 58480a\nspill-line 3949 58480a\nspill-line 3950 58480a\nspill-line 3951 58480a\nspill-line 3952 58480a\nspill-line 3953 58480a\nspill-line 3954 58480a\nspill-line 3955 58480a\nspill-line 3956 58480a\nspill-line 3957 58480a\nspill-line 3958 58480a\nspill-line 3959 58480a\nspill-line 3960 58480a\nspill-line 3961 58480a\nspill-line 3962 58480a\nspill-line 3963 58480a\nspill-line 3964 58480a\nspill-line 3965 58480a\nspill-line 3966 58480a\nspill-line 3967 58480a\nspill-line 3968 58480a\nspill-line 3969 58480a\nspill-line 3970 58480a\nspill-line 3971 58480a\nspill-line 3972 58480a\nspill-line 3973 58480a\nspill-line 3974 58480a\nspill-line 3975 58480a\nspill-line 3976 58480a\nspill-line 3977 58480a\nspill-line 3978 58480a\nspill-line 3979 58480a\nspill-line 3980 58480a\nspill-line 3981 58480a\nspill-line 3982 58480a\nspill-line 3983 58480a\nspill-line 3984 58480a\nspill-line 3985 58480a\nspill-line 3986 58480a\nspill-line 3987 58480a\nspill-line 3988 58480a\nspill-line 3989 58480a\nspill-line 3990 58480a\nspill-line 3991 58480a\nspill-line 3992 58480a\nspill-line 3993 58480a\nspill-line 3994 58480a\nspill-line 3995 58480a\nspill-line 3996 58480a\nspill-line 3997 58480a\nspill-line 3998 58480a\nspill-line 3999 58480a\nspill-line 4000 58480a\n\n[output truncated; full output: /var/tmp/aiclient-dsh-smoke-AGYg6m/tmp/dsh-subprocess-XVkh2u/dsh-subprocess-106890-1-3710b949c78d-stdout.log]\n\n(Omitted 14442 bytes. Full formatted result stored at: /var/tmp/aiclient-dsh-smoke-AGYg6m/tmp/dsh-spill-RHy1nQ/session-5c15f1688456/9ae547eadf71-bash.txt. Use read with offset/limit, or grep this path to search within it.)"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/workspace/shell-written-58480a.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-dd4260e1 SHELL-58480a\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "reply": "P0-FS l1 finished.",
+      "permissions": [],
+      "resolved": [],
+      "errors": [],
+      "files": {
+        "written": "P12-MARKER-dd4260e1 WRITTEN-58480a\n",
+        "shellWritten": "P12-MARKER-dd4260e1 SHELL-58480a\n",
+        "edited": "P12-MARKER-dd4260e1 EDITED-58480a edit target\n"
+      },
+      "marker": "P12-MARKER-dd4260e1",
+      "token": "58480a",
+      "shell": "bash"
+    },
+    "approval": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "write",
+          "ok": false,
+          "text": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-AGYg6m/outside/approved.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "reply": "Write outside the workspace attempted.",
+      "permissions": ["write"],
+      "resolved": ["allow"],
+      "errors": [],
+      "fileWritten": true
+    },
+    "autoAnswered": [
+      {
+        "toolName": "write",
+        "permissionId": "toolu_8b7657dd-82a2-4202-b0f2-56edeb156e9b"
+      }
+    ],
+    "dispose": {
+      "disposed": true
+    },
+    "channelClosed": true,
+    "stopped": {
+      "type": "stopped",
+      "ms": 21.88626700000009,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-packaged-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-packaged-smoke\": flush on a closed handle\n[dsh-host] stopped (ipc) in 22ms\n"
+  },
+  "natives": {
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "hookLog": "/var/tmp/aiclient-dsh-smoke-AGYg6m/logs/natives-hooks.jsonl",
+    "sharp": {
+      "pngBytes": 96,
+      "libvips": "8.18.6"
+    },
+    "pty": {
+      "text": "pty-ok\r\n",
+      "exitCode": 0
+    },
+    "leftovers": []
+  },
+  "hooks": {
+    "moduleCount": 1683,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "/var/tmp/aiclient-dsh-smoke-AGYg6m/narb-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+        "where": "narb-cache"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/node-pty/prebuilds/linux-x64/pty.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg"
+    ],
+    "spawnedExecutables": ["systemd-run", "systemctl", "bwrap"]
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0ReadyOwnPid": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0Pong": true,
+    "l0Stopped": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "l1Bootstrapped": true,
+    "l1ReadyOwnPid": true,
+    "l1Packaged": true,
+    "l1FsTurnIdle": true,
+    "l1FsTools": true,
+    "l1FsToolsOk": true,
+    "l1ReadSawMarker": true,
+    "l1GrepSawMarker": true,
+    "l1ShellSawMarker": true,
+    "l1FilesWritten": true,
+    "l1FsReplied": true,
+    "l1ApprovalRoundTrip": true,
+    "l1Disposed": true,
+    "l1ChannelClosed": true,
+    "l1Stopped": true,
+    "l1ExitedZero": true,
+    "l1NoLeftovers": true,
+    "l1RipgrepFromArtifact": true,
+    "nativesSharpLoaded": true,
+    "nativesPtyRan": true,
+    "nativesExitedZero": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T12:42:02.520Z"
+}

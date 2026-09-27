@@ -1,0 +1,932 @@
+{
+  "node": "<repo>/out-node-runtime/node",
+  "scratch": "<scratch>",
+  "bootstrapMs": 847,
+  "bootstrap": {
+    "bootstrapped": true,
+    "logicalSessionId": "bridge-smoke",
+    "piSessionId": "aiclient-bridge-smoke",
+    "cwd": "<scratch>/run/workspace",
+    "agentDir": "<scratch>/run/dsh-home",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "leaf": {
+      "activeEntryId": null,
+      "fileTailEntryId": null
+    },
+    "projectTrusted": true,
+    "permissionGate": "bundled",
+    "capabilities": {}
+  },
+  "commands": {
+    "commands": [],
+    "truncated": false
+  },
+  "files": {
+    "allowed": true,
+    "denied": false
+  },
+  "history": {
+    "logicalSessionId": "bridge-smoke",
+    "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+    "workspacePath": "<scratch>/run/workspace",
+    "page": {
+      "messages": [],
+      "offset": 0,
+      "limit": 100,
+      "totalCount": 0,
+      "hasMore": false
+    }
+  },
+  "dispose": {
+    "disposed": true
+  },
+  "graceful": true,
+  "exit": {
+    "code": 0,
+    "signal": null
+  },
+  "turns": {
+    "STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "TOOL": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-TOOL: list the workspace.\"",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Tool row finished: the workspace listin",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Tool row finished: the workspace listing is above.",
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t2-s1",
+          "toolCallId": "toolu_015bcd21-5a72-42c0-8e29-173d4d228b91",
+          "ok": true,
+          "output": "bridge tool row ok\n<scratch>/run/workspace\n.\n..\n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "APPROVE-ALLOW": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved allow",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Write outside the workspace attempted.",
+      "permission": {
+        "permissionId": "toolu_4243f68f-0f80-4d29-a5a4-85eafc5b6804",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/allowed.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/allowed.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s1",
+          "toolCallId": "toolu_eff057b0-0803-4ca4-b19e-ab45a4c8334f",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t3-s2",
+          "toolCallId": "toolu_4243f68f-0f80-4d29-a5a4-85eafc5b6804",
+          "ok": true,
+          "output": "<path><scratch>/run/outside/allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "APPROVE-DENY": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-APPROVAL: write outside, path=/var/t",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "tool.started write",
+        "tool.updated",
+        "permission.requested write",
+        "permission.resolved deny",
+        "tool.completed ok=false",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Write outside the workspace attempted.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Write outside the workspace attempted.",
+      "permission": {
+        "permissionId": "toolu_2c803c0d-b731-4650-82d7-d75fe99815d2",
+        "toolName": "write",
+        "action": "write_file",
+        "input": {
+          "path": "<scratch>/run/outside/denied.txt",
+          "content": "written after approval\n",
+          "contentLabel": "Content",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "file_change",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "file_change",
+          "changes": [
+            {
+              "path": "<scratch>/run/outside/denied.txt",
+              "change": "add"
+            }
+          ]
+        },
+        "reason": "escalate sandbox to danger-full-access: The P0 probe needs one file outside the workspace."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s1",
+          "toolCallId": "toolu_b6f6f927-9c18-4b03-bf0c-eaa2f4d15ad4",
+          "ok": false,
+          "error": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t4-s2",
+          "toolCallId": "toolu_2c803c0d-b731-4650-82d7-d75fe99815d2",
+          "ok": false,
+          "error": "Error: the user rejected escalating this operation to \"danger-full-access\"; it stays denied, so stop and explain instead of working around it"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "ENV": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-ENV: print the env canaries.\"",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Env canaries printed.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Env canaries printed.",
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t5-s1",
+          "toolCallId": "toolu_14a6f6a3-1f38-4499-9e47-7bb56b80e040",
+          "ok": true,
+          "output": "ws=unset hostcwd=unset dshhome=unset gatewaykey=\nnames: _ AICLIENT_DSH_GATEWAY_URL AICLIENT_PROBE_HOOK_LOG DBUS_SESSION_BUS_ADDRESS DSH_HOME DSH_PROFILE DSH_PROFILE_DIR DSH_SESSION_ID DSH_SHELL GIT_PAGER HOME LANG LOGNAME NO_COLOR PAGER PATH PWD SHELL SHLVL TERM TMPDIR USER XDG_RUNTIME_DIR \n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "FDS": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-FDS: list the inherited descriptors.",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "tool.started bash",
+        "tool.updated",
+        "permission.requested bash",
+        "permission.resolved allow",
+        "tool.completed ok=true",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"Inherited file descriptors listed.\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "Inherited file descriptors listed.",
+      "permission": {
+        "permissionId": "toolu_bc1f6079-5712-4ecc-8c6f-9df73d33c8f6",
+        "toolName": "bash",
+        "action": "run_command",
+        "input": {
+          "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+          "workspace": "<scratch>/run/workspace"
+        },
+        "kind": "exec",
+        "decisions": ["allow", "deny"],
+        "detail": {
+          "kind": "exec",
+          "command": "echo \"pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}\"; for fd in /proc/$$/fd/*; do echo \"fd ${fd##*/} -> $(readlink \"$fd\")\"; done",
+          "cwd": "<scratch>/run/workspace"
+        },
+        "reason": "escalate sandbox to danger-full-access: The P1-3a probe compares what a tool inherits inside and outside the sandbox."
+      },
+      "tools": [
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t6-s1",
+          "toolCallId": "toolu_aa56e358-646c-481c-a79a-631a8980d8af",
+          "ok": true,
+          "output": "pid=2 ppid=1 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[569753]\nfd 2 -> socket:[569755]\nfd 3 -> pipe:[569779]\n"
+        },
+        {
+          "messageId": "dsh-aiclient-bridge-smoke-t6-s2",
+          "toolCallId": "toolu_bc1f6079-5712-4ecc-8c6f-9df73d33c8f6",
+          "ok": true,
+          "output": "pid=96092 ppid=96028 channel_fd=unset channel_mode=unset\nfd 0 -> /dev/null\nfd 1 -> socket:[569793]\nfd 2 -> socket:[569795]\nfd 3 -> pipe:[569195]\n"
+        }
+      ],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "RESUMED-STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    },
+    "RECALL-AFTER-KILL": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\"]}",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM missing=-\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    },
+    "SIDE-STREAM": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-STREAM: stream a paragraph back to m",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"DSH 引\"",
+        "message.delta \"擎经 ai\"",
+        "message.delta \"clien\"",
+        "message.delta \"t-bri\"",
+        "message.delta \"dge 流\"",
+        "message.delta \"式回复：这\"",
+        "message.delta \"段文字分成\"",
+        "message.delta \"二十小块，\"",
+        "message.delta \"每块间隔约\"",
+        "message.delta \"一百五十毫\"",
+        "message.delta \"秒送出，用\"",
+        "message.delta \"来确认渲染\"",
+        "message.delta \"层看到的是\"",
+        "message.delta \"逐块增长的\"",
+        "message.delta \"正文，而不\"",
+        "message.delta \"是一次性出\"",
+        "message.delta \"现的整段。\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 17,
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-side"]
+    },
+    "RECALL-OTHER-HOST": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\",\\",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM,P0-TOOL mis",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM,P0-TOOL missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke"]
+    },
+    "RECALL-RECREATED": {
+      "idle": true,
+      "completed": true,
+      "sequence": [
+        "session.status running",
+        "message.started user",
+        "message.delta \"P0-RECALL {\\\"markers\\\":[\\\"P0-STREAM\\\"]}",
+        "message.completed",
+        "message.started assistant",
+        "message.delta \"P0-RECALL present=P0-STREAM missing=-\"",
+        "message.completed",
+        "session.completed",
+        "session.status idle"
+      ],
+      "assistantDeltas": 1,
+      "reply": "P0-RECALL present=P0-STREAM missing=-",
+      "tools": [],
+      "sessionIds": ["bridge-smoke-empty"]
+    }
+  },
+  "hosts": {
+    "A": {
+      "pid": 96028,
+      "readyMs": 824,
+      "ready": {
+        "type": "ready",
+        "pid": 96028
+      },
+      "bootstrapMs": 847,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke",
+        "piSessionId": "aiclient-bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "B": {
+      "pid": 96104,
+      "readyMs": 699,
+      "ready": {
+        "type": "ready",
+        "pid": 96104
+      },
+      "bootstrapMs": 743,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "killed": true,
+      "exit": {
+        "code": null,
+        "signal": "SIGKILL"
+      }
+    },
+    "C": {
+      "pid": 96120,
+      "readyMs": 683,
+      "ready": {
+        "type": "ready",
+        "pid": 96120
+      },
+      "bootstrapMs": 710,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "initialHistory": {
+          "logicalSessionId": "bridge-smoke-empty",
+          "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+          "workspacePath": "<scratch>/run/workspace",
+          "page": {
+            "messages": [],
+            "offset": 0,
+            "limit": 80,
+            "totalCount": 0,
+            "hasMore": false
+          }
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "killed": true,
+      "exit": {
+        "code": null,
+        "signal": "SIGKILL"
+      }
+    },
+    "D": {
+      "pid": 96132,
+      "readyMs": 691,
+      "ready": {
+        "type": "ready",
+        "pid": 96132
+      },
+      "bootstrapMs": 702,
+      "bootstrap": {
+        "error": {
+          "code": "session_locked",
+          "message": "DSH session aiclient-bridge-smoke-empty is held by another process",
+          "retryable": true
+        }
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "E": {
+      "pid": 96155,
+      "readyMs": 738,
+      "ready": {
+        "type": "ready",
+        "pid": 96155
+      },
+      "bootstrapMs": 778,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-side",
+        "piSessionId": "aiclient-bridge-smoke-side",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-side.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "F": {
+      "pid": 96167,
+      "readyMs": 727,
+      "ready": {
+        "type": "ready",
+        "pid": 96167
+      },
+      "bootstrapMs": 757,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke",
+        "piSessionId": "aiclient-bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "initialHistory": {
+          "logicalSessionId": "bridge-smoke",
+          "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke.dsh.json",
+          "workspacePath": "<scratch>/run/workspace",
+          "page": {
+            "messages": [],
+            "offset": 0,
+            "limit": 80,
+            "totalCount": 0,
+            "hasMore": false
+          }
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "G": {
+      "pid": 96179,
+      "readyMs": 766,
+      "ready": {
+        "type": "ready",
+        "pid": 96179
+      },
+      "bootstrapMs": 794,
+      "bootstrap": {
+        "bootstrapped": true,
+        "logicalSessionId": "bridge-smoke-empty",
+        "piSessionId": "aiclient-bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "agentDir": "<scratch>/run/dsh-home",
+        "sessionFile": "<scratch>/run/dsh-home/aiclient-sessions/aiclient-bridge-smoke-empty.dsh.json",
+        "leaf": {
+          "activeEntryId": null,
+          "fileTailEntryId": null
+        },
+        "projectTrusted": true,
+        "permissionGate": "bundled",
+        "capabilities": {}
+      },
+      "stopped": true,
+      "graceful": true,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    }
+  },
+  "disk": {
+    "newBeforeFirstTurn": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790495108208.643
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke/session.v4.jsonl.zstd",
+          "bytes": 315,
+          "mtimeMs": 1790495108234.6433
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke/session.v4.jsonl.zstd",
+        "bytes": 315,
+        "mtimeMs": 1790495108234.6433
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke",
+        "logicalSessionId": "bridge-smoke",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790495108239
+      },
+      "stubMtimeMs": 1790495108238.6433
+    },
+    "headerOnly": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790495113948.6921
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 317,
+          "mtimeMs": 1790495113958.6921
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 317,
+        "mtimeMs": 1790495113958.6921
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790495113961
+      },
+      "stubMtimeMs": 1790495113960.6921
+    },
+    "afterKill": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790495118065.7273
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 8929,
+          "mtimeMs": 1790495117367.7214
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 8929,
+        "mtimeMs": 1790495117367.7214
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790495113961
+      },
+      "stubMtimeMs": 1790495113960.6921
+    },
+    "recreated": {
+      "logFiles": [
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.lock",
+          "bytes": 0,
+          "mtimeMs": 1790495123364.7727
+        },
+        {
+          "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+          "bytes": 15894,
+          "mtimeMs": 1790495123377.7727
+        }
+      ],
+      "log": {
+        "file": "sessions/--var-tmp-aiclient-dsh-p1-3a-smoke-1790495106313-run-workspace--/aiclient-bridge-smoke-empty/session.v4.jsonl.zstd",
+        "bytes": 15894,
+        "mtimeMs": 1790495123377.7727
+      },
+      "stub": {
+        "engine": "dsh",
+        "version": 1,
+        "dshSessionId": "aiclient-bridge-smoke-empty",
+        "logicalSessionId": "bridge-smoke-empty",
+        "cwd": "<scratch>/run/workspace",
+        "createdAt": 1790495123385
+      },
+      "stubMtimeMs": 1790495123384.7727
+    }
+  },
+  "protocol": {
+    "readyPid": {
+      "reported": 96028,
+      "spawned": 96028
+    },
+    "readySkippedPlugins": [],
+    "unknownChannel": {
+      "ok": false,
+      "code": "WORKER_CHANNEL_UNKNOWN",
+      "generation": 1,
+      "requestId": "smoke-3"
+    },
+    "pong": {
+      "host": "pong",
+      "id": 7,
+      "eldMaxMs": 1.4,
+      "rssMb": 181.6,
+      "channels": [
+        {
+          "ch": "c1-1",
+          "busy": false
+        }
+      ]
+    },
+    "closeUnknown": true,
+    "disposeCloses": {
+      "disposed": {
+        "disposed": true
+      },
+      "closed": true,
+      "order": [
+        "response:smoke-1",
+        "response:smoke-2",
+        "response:smoke-4",
+        "response:smoke-5",
+        "response:smoke-6",
+        "response:smoke-7",
+        "response:smoke-8",
+        "response:smoke-9",
+        "response:smoke-10",
+        "response:smoke-11",
+        "response:smoke-12",
+        "response:smoke-13",
+        "response:smoke-14",
+        "closed"
+      ]
+    },
+    "pongAfterClose": {
+      "host": "pong",
+      "id": 8,
+      "eldMaxMs": 88.8,
+      "rssMb": 205.7,
+      "channels": []
+    },
+    "twoChannels": {
+      "mainSessions": ["bridge-smoke-empty"],
+      "sideSessions": ["bridge-smoke-side"]
+    }
+  },
+  "experiments": {
+    "dotEnv": {
+      "line": "ws=unset hostcwd=unset dshhome=unset gatewaykey=",
+      "warned": 2
+    },
+    "ipcHandle": {
+      "systemdScope": true,
+      "hostFd3": "socket:[569661]",
+      "sandboxed": {
+        "lines": [
+          "pid=2 ppid=1 channel_fd=unset channel_mode=unset",
+          "fd 0 -> /dev/null",
+          "fd 1 -> socket:[569753]",
+          "fd 2 -> socket:[569755]",
+          "fd 3 -> pipe:[569779]"
+        ],
+        "inherited": false,
+        "channelVariable": false
+      },
+      "escalated": {
+        "lines": [
+          "pid=96092 ppid=96028 channel_fd=unset channel_mode=unset",
+          "fd 0 -> /dev/null",
+          "fd 1 -> socket:[569793]",
+          "fd 2 -> socket:[569795]",
+          "fd 3 -> pipe:[569195]"
+        ],
+        "inherited": false,
+        "channelVariable": false
+      }
+    },
+    "projectionCacheAfterDispose": [
+      "[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-bridge-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-bridge-smoke\": flush on a closed handle"
+    ]
+  },
+  "verdict": {
+    "streamedInManyDeltas": true,
+    "toolRowSettled": true,
+    "approvalCardShown": true,
+    "allowWrote": true,
+    "denyDidNotWrite": true,
+    "exitedCleanly": true,
+    "persistedBeforeFirstTurn": true,
+    "stubNotOlderThanLog": true,
+    "headerOnlyKilledHost": true,
+    "headerOnlyResumed": true,
+    "resumedTurnCompleted": true,
+    "lockedWhileOwned": true,
+    "exitedCleanlyAfterLockRefusal": true,
+    "resumedAfterSigkill": true,
+    "recalledAfterSigkill": true,
+    "resumedInOtherHostRecalled": true,
+    "exitedCleanlyAfterResume": true,
+    "recreateReopenedExistingLog": true,
+    "readyOverIpcWithOwnPid": true,
+    "unknownChannelRefused": true,
+    "pongListsChannel": true,
+    "closeOfUnknownChannelAnswered": true,
+    "disposeAckThenClosed": true,
+    "hostOutlivesChannel": true,
+    "stoppedBeforeExit": true,
+    "channelsDoNotCross": true,
+    "dotEnvNotRead": true
+  }
+}

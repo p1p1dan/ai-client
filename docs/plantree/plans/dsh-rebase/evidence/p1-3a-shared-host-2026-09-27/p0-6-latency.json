@@ -1,0 +1,150 @@
+{
+  "mode": "latency",
+  "node": "<repo>/out-node-runtime/node",
+  "levels": [1],
+  "staggerMs": 0,
+  "workload": "P0-LOAD: 4 model steps (40 + 40 + 40 + 80 stamped text deltas, 30 ms apart) with bash (ls + cat of the source files, ~25 KB out), read, bash calls between them",
+  "startedAt": "2026-09-27T12:44:29.159Z",
+  "runs": [
+    {
+      "run": 1,
+      "machine": {
+        "at": "2026-09-27T12:44:30.170Z",
+        "memAvailableMb": 1975,
+        "memFreeMb": 967,
+        "swapUsedMb": 1838,
+        "load1": 0.19
+      },
+      "readyMs": 739,
+      "idle": {
+        "eld": {
+          "count": 476,
+          "min": 9.101,
+          "mean": 10.485,
+          "p50": 10.519,
+          "p90": 10.674,
+          "p99": 11.706,
+          "max": 12.739
+        },
+        "cpuMs": 11,
+        "wallMs": 5003
+      },
+      "warmup": {
+        "wallMs": 6675,
+        "eld": {
+          "count": 620,
+          "min": 9.003,
+          "mean": 10.754,
+          "p50": 10.519,
+          "p90": 11.239,
+          "p99": 12.354,
+          "max": 73.335
+        },
+        "syncSpawnMsMax": 9.1
+      },
+      "rounds": [
+        {
+          "n": 1,
+          "syncSpawns": {
+            "count": 2,
+            "totalMs": 11,
+            "maxMs": 5.6,
+            "files": ["systemd-run"]
+          },
+          "wallMs": 6557,
+          "turnMs": [6557],
+          "turnEnds": ["session.completed"],
+          "allCompleted": true,
+          "stampsExpected": 200,
+          "eld": {
+            "count": 617,
+            "min": 8.97,
+            "mean": 10.608,
+            "p50": 10.527,
+            "p90": 11.1,
+            "p99": 11.796,
+            "max": 20.759
+          },
+          "hostLatencyMs": {
+            "n": 200,
+            "p50": 0.31,
+            "p90": 0.58,
+            "p99": 2.52,
+            "max": 3.66
+          },
+          "parentLatencyMs": {
+            "n": 200,
+            "p50": 0.44,
+            "p90": 0.79,
+            "p99": 2.68,
+            "max": 3.83
+          },
+          "hostCpuMs": 227,
+          "gc": {
+            "count": 19,
+            "totalMs": 7.3,
+            "maxMs": 0.7
+          },
+          "hostCpuPercent": 4,
+          "hostRssMaxMb": 165.5,
+          "machineAfter": {
+            "at": "2026-09-27T12:44:57.206Z",
+            "memAvailableMb": 1870,
+            "memFreeMb": 856,
+            "swapUsedMb": 1831,
+            "load1": 0.25
+          }
+        }
+      ],
+      "shutdown": {
+        "graceful": true,
+        "stopMs": 42,
+        "exit": {
+          "code": 0,
+          "signal": null
+        }
+      },
+      "hooks": {
+        "spawnCount": 9
+      },
+      "hostStderrTail": "[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-r1-n0-s1\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-r1-n0-s1\": flush on a closed handle\n[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-r1-n1-s1\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-r1-n1-s1\": flush on a closed handle\n[dsh-host] stopped (ipc) in 23ms\n"
+    }
+  ],
+  "summary": {
+    "idleEld": [
+      {
+        "count": 476,
+        "min": 9.101,
+        "mean": 10.485,
+        "p50": 10.519,
+        "p90": 10.674,
+        "p99": 11.706,
+        "max": 12.739
+      }
+    ],
+    "n1": {
+      "eldP50": 10.53,
+      "eldP99": 11.8,
+      "eldMax": 20.76,
+      "eldMaxOfRuns": 20.759,
+      "hostLatP50": 0.31,
+      "hostLatP99": 2.52,
+      "hostLatMax": 3.66,
+      "parentLatP50": 0.44,
+      "parentLatP99": 2.68,
+      "parentLatMax": 3.83,
+      "turnMsMedian": 6557,
+      "wallMs": 6557,
+      "hostCpuPercent": 4,
+      "hostRssMaxMb": 165.5,
+      "allCompleted": true,
+      "stampsSeenHost": [200],
+      "stampsSeenParent": [200],
+      "syncSpawnMaxMs": 5.6,
+      "syncSpawnTotalMs": 11,
+      "gcMaxMs": 0.7,
+      "gcTotalMs": 7.3
+    }
+  },
+  "finishedAt": "2026-09-27T12:44:59.253Z"
+}

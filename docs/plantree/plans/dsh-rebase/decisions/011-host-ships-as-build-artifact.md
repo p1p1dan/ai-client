@@ -17,3 +17,7 @@
 ## 影响
 
 - P1-2 施工。决策 009 的打包态入口 `resources/dsh-host/host.js` 与本决策一致。
+
+## 实施补记（2026-09-27，P1-3a `1427a870`）
+
+`host.js` 从单纯转译改成 esbuild 打包：`host.ts` 连同 `lib/` 打在一起，npm 包全部外置；另加 `checkHostMetafile` 与产物校验。目的是让宿主的纯规则可以测试，并能进安装包。

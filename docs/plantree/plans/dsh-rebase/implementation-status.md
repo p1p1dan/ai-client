@@ -17,6 +17,7 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Last Landed
 
+- 2026-09-27 P1-3a：`1427a870` 共享宿主接线，所有聊天会话共用一个 DSH 宿主。复跑：三套 tsc 通过，单测 55 个文件、754 例通过，真宿主集成测试 4/4，bridge-smoke 27 项、打包冒烟 37 项全过。
 - 2026-09-27 P1-6a：`16c8ef16` 权限逻辑抽成 `src/shared/permissions` 纯库，runtime 改为薄封装。复跑：三套 tsc 通过，runtime 与纯库相关 72 个文件、1291 例全过。
 - 2026-09-27 P1-3b：`04ba4166` 共享宿主 Main 侧组件（未接线）。复跑：四套 tsc 通过，相关单测 49 个文件、656 例全过。
 - 2026-09-27 P1-2：`2788952f` DSH 宿主转正并接入三平台打包（构建产物、干净安装与删除式裁剪、打包冒烟、CI 接入，未推送）。编排器复跑：dsh-host、agent-host 两套 tsc 通过；P1-2 单测 4 个文件、115 例全过；产物 L1 冒烟 31 项全过；bridge-smoke 18 项全为真。
@@ -27,9 +28,9 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 ## Active TODO
 
 1. P1-2 本机部分完成（`2788952f`，[证据](evidence/p1-2-host-packaging-2026-09-27.md)）；三平台 CI 实跑待用户确认推送。
-2. P1-3a 施工中（opus 代理）：宿主侧多路复用、`host.ts` 不读 `.env`、重申 bundles、Main 接线到共享宿主、真宿主集成测试，另做两个开工实验（IPC 句柄继承、projection-cache 告警）。
+2. P1-3c 施工中（opus 代理）：WorkerManager 宿主级语义，包括批次恢复、两级预算、熔断、Stop 阶梯 B、`engine_restarted`，以及退出与 `invalidateAll` 连带关宿主。
 3. P1-9a（解码链进 shared）与 P1-9g 的 v4 语料施工中（opus 代理）。
-4. 排队：P1-3c（WorkerManager 宿主级语义）在 P1-3a 之后。P1-8 / P1-11 方案已定（决策 065～067 待审批）；P1-11 等用户答复 Q003。
+4. P1-7 渲染层方案调研中。P1-8 / P1-11 方案已定（决策 065～067 待审批）；P1-11 等用户答复 Q003。
 5. 决策 005～067 与 Q007（许可）等用户审批。P1-10 / P1-16 方案已定（[方案](topics/p1-10-p1-16-extensions.md)）。
 
 ## Blocked By
