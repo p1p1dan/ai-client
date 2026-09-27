@@ -1,0 +1,176 @@
+{
+  "file": "v4-permissions.jsonl",
+  "messages": [
+    {
+      "id": "h:423aea80-a55b-42ca-8dc8-d5646d322556",
+      "entryId": "423aea80-a55b-42ca-8dc8-d5646d322556",
+      "role": "user",
+      "timestamp": 1790513905390,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:423aea80-a55b-42ca-8dc8-d5646d322556:text:0",
+          "text": "Write a draft file."
+        }
+      ]
+    },
+    {
+      "id": "h:a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+      "entryId": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+      "role": "assistant",
+      "timestamp": 1790513905390,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:a8f8033d-6ab2-40b4-a2b4-c997283a9efe:tool-call:call-w",
+          "toolCallId": "call-w",
+          "name": "write",
+          "input": {
+            "path": "draft.md",
+            "content": "# Draft\n"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:14198681-2b6c-4db6-94de-d46e9779beda:tool-result:call-w",
+          "toolCallId": "call-w",
+          "ok": true,
+          "output": "Wrote 8 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/draft.md"
+        }
+      ],
+      "settledAt": 1790513905394
+    },
+    {
+      "id": "h:ee745260-fd01-4c50-b262-b8ec20d8e11e",
+      "entryId": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+      "role": "assistant",
+      "timestamp": 1790513905394,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ee745260-fd01-4c50-b262-b8ec20d8e11e:text:0",
+          "text": "Draft written."
+        }
+      ]
+    },
+    {
+      "id": "h:7c255834-f03f-42a6-a0e8-a5b100b4511a",
+      "entryId": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+      "role": "user",
+      "timestamp": 1790513905396,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:7c255834-f03f-42a6-a0e8-a5b100b4511a:text:0",
+          "text": "Run a harmless command."
+        }
+      ]
+    },
+    {
+      "id": "h:b609bfda-5012-4af3-86b6-7fff1cff461f",
+      "entryId": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+      "role": "assistant",
+      "timestamp": 1790513905396,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:b609bfda-5012-4af3-86b6-7fff1cff461f:tool-call:call-bash",
+          "toolCallId": "call-bash",
+          "name": "bash",
+          "input": {
+            "command": "echo corpus"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ac27e264-4dda-4edf-a749-f34412044389:tool-result:call-bash",
+          "toolCallId": "call-bash",
+          "ok": true,
+          "output": "corpus\n\n[exit=0; exit]"
+        }
+      ],
+      "settledAt": 1790513905465
+    },
+    {
+      "id": "h:6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+      "entryId": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+      "role": "assistant",
+      "timestamp": 1790513905466,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:6254cb7d-b440-4a05-bcdc-35e7e08dff79:text:0",
+          "text": "The command printed corpus."
+        }
+      ]
+    },
+    {
+      "id": "h:b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+      "entryId": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+      "role": "user",
+      "timestamp": 1790513905468,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b606d16c-20b7-4162-ba11-0bd7ee7a3917:text:0",
+          "text": "Plan the next step."
+        }
+      ]
+    },
+    {
+      "id": "h:b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+      "entryId": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+      "role": "assistant",
+      "timestamp": 1790513905469,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b4c3c261-fc60-411f-badb-2cc8fc8d34ae:text:0",
+          "text": "Plan: edit draft.md, then run the checks."
+        }
+      ]
+    },
+    {
+      "id": "h:69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+      "entryId": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+      "role": "user",
+      "timestamp": 1790513905471,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4:text:0",
+          "text": "Carry on."
+        }
+      ]
+    },
+    {
+      "id": "h:c0d59b76-7505-400a-8781-3aacaa8fce81",
+      "entryId": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+      "role": "assistant",
+      "timestamp": 1790513905471,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c0d59b76-7505-400a-8781-3aacaa8fce81:text:0",
+          "text": "Back in agent mode."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "tool-result-details",
+        "id": "h:a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+        "field": "block tool_result:call-w.review"
+      }
+    ],
+    "context": []
+  }
+}

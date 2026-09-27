@@ -1,0 +1,744 @@
+{
+  "file": "v4-internal.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "3274c65c76cf772af75623e9e2f732669a7cb62a5fb0c5b2824192f8e005b29a",
+    "sourceBytes": 8104,
+    "sourceSessionId": "06834c2a-81df-4a69-a815-9d83e4ef9420",
+    "sourceCreatedAt": 1790513905513,
+    "sourceFormat": "native-v4"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513905526,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513905526,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513905526,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "7e1c9cc9-a2e9-4df5-8c3c-091f3663f533:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513905526,
+      "data": {
+        "id": "7e1c9cc9-a2e9-4df5-8c3c-091f3663f533",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Look at src/app.ts."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513905526,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "4565579c-696c-488b-a7fa-7bd666e428dc",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-read-src",
+              "name": "read",
+              "arguments": "{\"path\":\"src/app.ts\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1558,
+          "outputTokens": 7,
+          "totalTokens": 1565
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1790513905526,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "call-read-src",
+        "name": "read",
+        "arguments": "{\"path\":\"src/app.ts\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 6,
+      "time": 1790513905530,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "703924b9-3ce4-4e4b-99af-aed53f0cb68f",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "export const answer = 42;\n"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-read-src"
+          },
+          "toolCallId": "call-read-src",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/src/app.ts",
+              "bytes": 26,
+              "truncated": false,
+              "nextOffset": 2
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "step/end",
+      "seq": 7,
+      "time": 1790513905530,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 8,
+      "time": 1790513905530,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 9,
+      "time": 1790513905530,
+      "data": {
+        "id": "5b076535-7fe4-4143-b3dc-4e48d630abb1",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "# Project instructions (newly in scope)\n\nYou just worked with files in a directory that carries its own instruction file. These add to the project instructions already in your system prompt; where two entries conflict, the more specific file says so itself.\n\n## src/AGENTS.md\n\nCorpus rule: keep src/ files small."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-internal",
+          "origin": "project-instructions"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 10,
+      "time": 1790513905531,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "52732302-9fe0-48cd-9269-9932757afebb",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "src/app.ts exports answer = 42."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1658,
+          "outputTokens": 8,
+          "totalTokens": 1666
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 11,
+      "time": 1790513905531,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 12,
+      "time": 1790513905531,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 13,
+      "time": 1790513905534,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 14,
+      "time": 1790513905534,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 15,
+      "time": 1790513905534,
+      "data": {
+        "id": "3f8621c0-f97a-4005-96ac-2b116a15fbee",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Keep reading until you are stopped."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 16,
+      "time": 1790513905535,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "d6d12026-14be-4dd0-80bb-ed6ffba53a95",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-ceiling-1",
+              "name": "read",
+              "arguments": "{\"path\":\"notes.txt\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1679,
+          "outputTokens": 7,
+          "totalTokens": 1686
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 17,
+      "time": 1790513905535,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "call-ceiling-1",
+        "name": "read",
+        "arguments": "{\"path\":\"notes.txt\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 18,
+      "time": 1790513905537,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "64a7c7d3-4cf5-4ca2-8011-7df1822883a8",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-ceiling-1"
+          },
+          "toolCallId": "call-ceiling-1",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/notes.txt",
+              "bytes": 11,
+              "truncated": false,
+              "nextOffset": 3
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [17]
+    },
+    {
+      "type": "step/end",
+      "seq": 19,
+      "time": 1790513905537,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 20,
+      "time": 1790513905537,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 21,
+      "time": 1790513905537,
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "id": "9d2b1b88-6819-4bc0-b245-ef912760b18b",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-ceiling-2",
+              "name": "read",
+              "arguments": "{\"path\":\"notes.txt\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1696,
+          "outputTokens": 7,
+          "totalTokens": 1703
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 22,
+      "time": 1790513905537,
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "callId": "call-ceiling-2",
+        "name": "read",
+        "arguments": "{\"path\":\"notes.txt\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 23,
+      "time": 1790513905539,
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "id": "8fb9cd96-6605-4e53-b82f-aded1e227b5b",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-ceiling-2"
+          },
+          "toolCallId": "call-ceiling-2",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/notes.txt",
+              "bytes": 11,
+              "truncated": false,
+              "nextOffset": 3
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [22]
+    },
+    {
+      "type": "step/end",
+      "seq": 24,
+      "time": 1790513905539,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 25,
+      "time": 1790513905540,
+      "data": {
+        "turn": 2,
+        "step": 3
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 26,
+      "time": 1790513905540,
+      "data": {
+        "turn": 2,
+        "step": 3,
+        "message": {
+          "id": "dd20ce98-0910-4bf2-90f9-9575548fc99b",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-ceiling-3",
+              "name": "read",
+              "arguments": "{\"path\":\"notes.txt\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1712,
+          "outputTokens": 7,
+          "totalTokens": 1719
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 27,
+      "time": 1790513905540,
+      "data": {
+        "turn": 2,
+        "step": 3,
+        "callId": "call-ceiling-3",
+        "name": "read",
+        "arguments": "{\"path\":\"notes.txt\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 28,
+      "time": 1790513905541,
+      "data": {
+        "turn": 2,
+        "step": 3,
+        "message": {
+          "id": "b7526129-50c3-442a-b267-709788153812",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-ceiling-3"
+          },
+          "toolCallId": "call-ceiling-3",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/notes.txt",
+              "bytes": 11,
+              "truncated": false,
+              "nextOffset": 3
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [27]
+    },
+    {
+      "type": "step/end",
+      "seq": 29,
+      "time": 1790513905541,
+      "data": {
+        "turn": 2,
+        "step": 3
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 30,
+      "time": 1790513905542,
+      "data": {
+        "turn": 2,
+        "step": 4
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 31,
+      "time": 1790513905542,
+      "data": {
+        "id": "3ead322b-aa6e-460b-b56e-0463cfa67c23",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "You have taken 3 assistant turns on this request, which is this app's ceiling for one run. Stop working now and do not call any tool — a tool call in this reply will be refused. Write your final reply to the user, in the language they have been using: what you have done, where things stand, and what is left. The user can reply \"continue\" to carry on from exactly here."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-internal",
+          "origin": "turn-ceiling"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 32,
+      "time": 1790513905542,
+      "data": {
+        "turn": 2,
+        "step": 4,
+        "message": {
+          "id": "752479a4-fb8a-4b2e-92e1-e3fcdb897fa7",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Summary at the turn ceiling: notes.txt read three times."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905510:k3zeidjddpa",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1823,
+          "outputTokens": 14,
+          "totalTokens": 1837
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 33,
+      "time": 1790513905542,
+      "data": {
+        "turn": 2,
+        "step": 4
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 34,
+      "time": 1790513905542,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

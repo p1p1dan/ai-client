@@ -1,0 +1,99 @@
+{
+  "file": "v4-crash-dangling.jsonl",
+  "messages": [
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "role": "user",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:text:0",
+          "text": "Write crash.txt."
+        }
+      ]
+    },
+    {
+      "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "entryId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "role": "assistant",
+      "timestamp": 1790513905555,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:text:0",
+          "text": "Writing the file."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:tool-call:call-crash",
+          "toolCallId": "call-crash",
+          "name": "write",
+          "input": {
+            "path": "crash.txt",
+            "content": "never written\n"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:unknown-result:call-crash:tool-result:call-crash",
+          "toolCallId": "call-crash",
+          "ok": false,
+          "output": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+          "error": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+          "outcomeUnknown": true
+        }
+      ],
+      "incomplete": true,
+      "stopReason": "interrupted"
+    },
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "role": "system",
+      "timestamp": 1790513905555,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted:interrupted:0",
+          "text": "This turn was interrupted when the engine stopped unexpectedly.",
+          "notice": {
+            "key": "This turn was interrupted when the engine stopped unexpectedly."
+          }
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "interrupted-turn-notice",
+        "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+        "field": "message"
+      },
+      {
+        "category": "interrupted-turn",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "incomplete"
+      },
+      {
+        "category": "interrupted-turn",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "stopReason"
+      },
+      {
+        "category": "outcome-unknown",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "block tool_result:call-crash"
+      }
+    ],
+    "context": [
+      {
+        "category": "dangling-closure",
+        "side": "dsh"
+      }
+    ]
+  }
+}

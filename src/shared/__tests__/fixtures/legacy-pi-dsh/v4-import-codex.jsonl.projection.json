@@ -1,0 +1,109 @@
+{
+  "file": "v4-import-codex.jsonl",
+  "messages": [
+    {
+      "id": "h:aiclient-legacy-provenance-0",
+      "entryId": "aiclient-legacy-provenance-0",
+      "role": "system",
+      "timestamp": 1790513905640,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:aiclient-legacy-provenance-0:provenance:0",
+          "text": "This history was imported from a codex session (codex-rollout-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
+          "notice": {
+            "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
+            "params": {
+              "sourceKind": "codex",
+              "sourceSessionId": "codex-rollout-0001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "h:635e062d-f8ff-462e-9dd6-903ae653a80d",
+      "entryId": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+      "role": "user",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:635e062d-f8ff-462e-9dd6-903ae653a80d:text:0",
+          "text": "List the files."
+        }
+      ]
+    },
+    {
+      "id": "h:aiclient-legacy-display-5",
+      "entryId": "aiclient-legacy-display-5",
+      "role": "assistant",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:aiclient-legacy-display-5:legacy-tool-call:0",
+          "toolCallId": "call_codex_1",
+          "name": "shell",
+          "input": {
+            "command": ["ls"]
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:aiclient-legacy-display-5:legacy-tool-result:0",
+          "toolCallId": "call_codex_1",
+          "ok": true,
+          "output": "notes.txt\nsrc"
+        }
+      ]
+    },
+    {
+      "id": "h:aiclient-legacy-display-6",
+      "entryId": "aiclient-legacy-display-6",
+      "role": "system",
+      "timestamp": 1790513905641,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:aiclient-legacy-display-6:legacy-display:0",
+          "text": "Reasoning summary\n\nListed the workspace."
+        }
+      ]
+    },
+    {
+      "id": "h:c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+      "entryId": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+      "role": "assistant",
+      "timestamp": 1790513905642,
+      "model": "legacy-import/gpt-codex-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81:text:0",
+          "text": "Two entries: notes.txt and src."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "legacy-row-id",
+        "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+        "field": "id"
+      },
+      {
+        "category": "legacy-row-id",
+        "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36",
+        "field": "id"
+      },
+      {
+        "category": "legacy-row-id",
+        "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab",
+        "field": "id"
+      }
+    ],
+    "context": []
+  }
+}

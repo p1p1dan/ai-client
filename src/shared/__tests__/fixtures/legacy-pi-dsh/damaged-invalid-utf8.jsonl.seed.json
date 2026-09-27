@@ -1,0 +1,8 @@
+{
+  "file": "damaged-invalid-utf8.jsonl",
+  "ok": false,
+  "failure": {
+    "stage": "read",
+    "code": "source_invalid_utf8"
+  }
+}

@@ -1,0 +1,683 @@
+{
+  "file": "v4-permissions.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "a1b8d594ff50f6bbf66be41f469312102151106df82f3a56692b6fdd14b30b41",
+    "sourceBytes": 8190,
+    "sourceSessionId": "8fa756b6-3f4b-43c5-9ef6-1dd12357ee68",
+    "sourceCreatedAt": 1790513905382,
+    "sourceFormat": "native-v4"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513905390,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513905390,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513905390,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "423aea80-a55b-42ca-8dc8-d5646d322556:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513905390,
+      "data": {
+        "id": "423aea80-a55b-42ca-8dc8-d5646d322556",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Write a draft file."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513905390,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "a8f8033d-6ab2-40b4-a2b4-c997283a9efe",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-w",
+              "name": "write",
+              "arguments": "{\"path\":\"draft.md\",\"content\":\"# Draft\\n\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 925,
+          "outputTokens": 12,
+          "totalTokens": 937
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1790513905390,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "call-w",
+        "name": "write",
+        "arguments": "{\"path\":\"draft.md\",\"content\":\"# Draft\\n\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 6,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "14198681-2b6c-4db6-94de-d46e9779beda",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "Wrote 8 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/draft.md"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-w"
+          },
+          "toolCallId": "call-w",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+              "review": {
+                "version": 1,
+                "path": "/tmp/aiclient-legacy-pi-corpus/workspace/draft.md",
+                "status": "added",
+                "patch": "@@ -0,0 +1,1 @@\n+# Draft"
+              }
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "step/end",
+      "seq": 7,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 8,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 9,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "ee745260-fd01-4c50-b262-b8ec20d8e11e",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Draft written."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 961,
+          "outputTokens": 4,
+          "totalTokens": 965
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 10,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 11,
+      "time": 1790513905394,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 12,
+      "time": 1790513905396,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 13,
+      "time": 1790513905396,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 14,
+      "time": 1790513905396,
+      "data": {
+        "id": "7c255834-f03f-42a6-a0e8-a5b100b4511a",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Run a harmless command."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 15,
+      "time": 1790513905396,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "b609bfda-5012-4af3-86b6-7fff1cff461f",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-bash",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo corpus\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 975,
+          "outputTokens": 8,
+          "totalTokens": 983
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 16,
+      "time": 1790513905396,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "call-bash",
+        "name": "bash",
+        "arguments": "{\"command\":\"echo corpus\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 17,
+      "time": 1790513905465,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "ac27e264-4dda-4edf-a749-f34412044389",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "corpus\n\n[exit=0; exit]"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-bash"
+          },
+          "toolCallId": "call-bash",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "exitCode": 0,
+              "signal": null,
+              "termination": "exit",
+              "stdoutBytes": 7,
+              "stderrBytes": 0,
+              "truncated": false
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [16]
+    },
+    {
+      "type": "step/end",
+      "seq": 18,
+      "time": 1790513905465,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 19,
+      "time": 1790513905466,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 20,
+      "time": 1790513905466,
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "id": "6254cb7d-b440-4a05-bcdc-35e7e08dff79",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The command printed corpus."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 995,
+          "outputTokens": 7,
+          "totalTokens": 1002
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 21,
+      "time": 1790513905466,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 22,
+      "time": 1790513905466,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 23,
+      "time": 1790513905468,
+      "data": {
+        "turn": 3
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 24,
+      "time": 1790513905468,
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 25,
+      "time": 1790513905468,
+      "data": {
+        "id": "b606d16c-20b7-4162-ba11-0bd7ee7a3917",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Plan the next step."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 26,
+      "time": 1790513905469,
+      "data": {
+        "turn": 3,
+        "step": 1,
+        "message": {
+          "id": "b4c3c261-fc60-411f-badb-2cc8fc8d34ae",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Plan: edit draft.md, then run the checks."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 802,
+          "outputTokens": 11,
+          "totalTokens": 813
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 27,
+      "time": 1790513905469,
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 28,
+      "time": 1790513905469,
+      "data": {
+        "turn": 3,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 29,
+      "time": 1790513905471,
+      "data": {
+        "turn": 4
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 30,
+      "time": 1790513905471,
+      "data": {
+        "turn": 4,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 31,
+      "time": 1790513905471,
+      "data": {
+        "id": "69cc97a2-4a0a-4cf5-b98b-b70f46bbdfa4",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Carry on."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 32,
+      "time": 1790513905471,
+      "data": {
+        "turn": 4,
+        "step": 1,
+        "message": {
+          "id": "c0d59b76-7505-400a-8781-3aacaa8fce81",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Back in agent mode."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905376:czw8h77pxlw",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1029,
+          "outputTokens": 5,
+          "totalTokens": 1034
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 33,
+      "time": 1790513905471,
+      "data": {
+        "turn": 4,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 34,
+      "time": 1790513905471,
+      "data": {
+        "turn": 4,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

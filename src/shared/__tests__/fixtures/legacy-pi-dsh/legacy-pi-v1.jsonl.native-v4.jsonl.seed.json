@@ -1,0 +1,404 @@
+{
+  "file": "legacy-pi-v1.jsonl.native-v4.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "c10b90a2b071981411e5c569d9894d131f133e50d7982aab17002c7a1e854f4d",
+    "sourceBytes": 4338,
+    "sourceSessionId": "0fefa329-b61d-45ec-a545-ed0bfc80f6c1",
+    "sourceCreatedAt": 1772359200000,
+    "sourceFormat": "native-v4",
+    "importedFrom": "/tmp/aiclient-legacy-pi-corpus/sessions/legacy-pi-v1.jsonl",
+    "importedSourceSha256": "9fd18bc9e89d0a2dfbb8e0aa3c30fa7d992ae3911ad4d31065f2dacee67ca8d7"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "ask"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1772359260000,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1772359260000,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1772359260000,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "d46271adbbeab2b7:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1772359260000,
+      "data": {
+        "id": "d46271adbbeab2b7",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "v1: list the files"
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1772359320000,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "f4e2e27968e336d9",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "v1-call-1",
+              "name": "ls",
+              "arguments": "{\"path\":\".\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1772359320000,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "v1-call-1",
+        "name": "ls",
+        "arguments": "{\"path\":\".\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 6,
+      "time": 1772359380000,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "4312212a443ef4bc",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "notes.txt\nsrc"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "v1-call-1"
+          },
+          "toolCallId": "v1-call-1",
+          "isError": false
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "step/end",
+      "seq": 7,
+      "time": 1772359380000,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 8,
+      "time": 1772359440000,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 9,
+      "time": 1772359440000,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "9e25b70c0fee68bd",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Two entries: notes.txt and src."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 10,
+      "time": 1772359440000,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 11,
+      "time": 1772359440000,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 12,
+      "time": 1772359500000,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 13,
+      "time": 1772359500000,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 14,
+      "time": 1772359500000,
+      "data": {
+        "id": "6e166e071467eeaa",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "A hook said hello."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-custom",
+          "customType": "legacy-hook"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 15,
+      "time": 1772359560000,
+      "data": {
+        "id": "8d698e9c075adc5e",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.\n\n<compacted-summary>"
+          },
+          {
+            "type": "text",
+            "text": "v1 summary: listed the files."
+          },
+          {
+            "type": "text",
+            "text": "</compacted-summary>"
+          }
+        ],
+        "source": {
+          "kind": "compact-checkpoint",
+          "compactionId": "8d698e9c075adc5e"
+        }
+      },
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 3,
+        "endSeq": 6
+      },
+      "sourceEventSeqs": [3, 4, 6]
+    },
+    {
+      "type": "user/message",
+      "seq": 16,
+      "time": 1772359620000,
+      "data": {
+        "id": "dd50ebacba544d63",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "v1: continue after the compaction"
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 17,
+      "time": 1772359680000,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "80c3d7e4d0df076d",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Continuing."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 18,
+      "time": 1772359680000,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 19,
+      "time": 1772359680000,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

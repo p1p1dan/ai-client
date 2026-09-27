@@ -1,0 +1,279 @@
+{
+  "file": "v4-import-claude.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "759225bb9c4232a70406a6e17729992254c2e5e0d2cf2ff1c14e2a89dc6a5fd0",
+    "sourceBytes": 3934,
+    "sourceSessionId": "import-claude-0001",
+    "sourceCreatedAt": 1790513905629,
+    "sourceFormat": "native-v4-import"
+  },
+  "grants": null,
+  "legacyPermissions": null,
+  "images": [],
+  "seed": [
+    {
+      "type": "aiclient/legacy-provenance",
+      "seq": 0,
+      "time": 1790513905630,
+      "data": {
+        "version": 1,
+        "sourceKind": "claude-code",
+        "stableSourceIdentity": "claude-code:corpus:0001",
+        "sourceSessionId": "claude-session-0001",
+        "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000017",
+        "schemaVersion": 1,
+        "importerVersion": "b4-legacy-v2",
+        "startedAt": 1785574800000,
+        "endedAt": 1785574860000,
+        "diagnostics": ["1 unsupported entry was skipped"],
+        "entryId": "3b1a9058-dab3-4475-a3c5-a24abbd32e96"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "turn/start",
+      "seq": 1,
+      "time": 1790513905632,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 2,
+      "time": 1790513905632,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 3,
+      "time": 1790513905632,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "9194ca33-86f7-4a41-9df1-8989bc722a56:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 4,
+      "time": 1790513905632,
+      "data": {
+        "id": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Please check the build."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 5,
+      "time": 1790513905633,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "726562c5-c1c0-4541-88f3-64bacac1a186",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "reasoning",
+              "text": "Run the build first."
+            },
+            {
+              "type": "text",
+              "text": "Running the build."
+            },
+            {
+              "type": "tool-call",
+              "id": "toolu_01",
+              "name": "Bash",
+              "arguments": "{\"command\":\"npm run build\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "legacy-import",
+            "model": "claude-legacy"
+          }
+        },
+        "stream": []
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 6,
+      "time": 1790513905633,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "toolu_01",
+        "name": "Bash",
+        "arguments": "{\"command\":\"npm run build\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 7,
+      "time": 1790513905633,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "28f931c9-0e07-43f4-9352-6b667c57c43b",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "build ok"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_01"
+          },
+          "toolCallId": "toolu_01",
+          "isError": false
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [6]
+    },
+    {
+      "type": "aiclient/legacy-display",
+      "seq": 8,
+      "time": 1790513905633,
+      "data": {
+        "version": 1,
+        "displayKind": "tool",
+        "title": "Read",
+        "toolCallId": "toolu_02",
+        "toolName": "Read",
+        "input": {
+          "file_path": "README.md"
+        },
+        "output": "# Readme",
+        "timestamp": 1785574804000,
+        "entryId": "9723296f-2745-418f-a994-4f35faa208d3"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "aiclient/legacy-display",
+      "seq": 9,
+      "time": 1790513905633,
+      "data": {
+        "version": 1,
+        "displayKind": "attachment",
+        "title": "screenshot.png",
+        "body": "Image attachment was not imported.",
+        "redacted": true,
+        "timestamp": 1785574805000,
+        "entryId": "bf22836e-1d88-4996-8bcc-bdb7239983e2"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "aiclient/legacy-display",
+      "seq": 10,
+      "time": 1790513905634,
+      "data": {
+        "version": 1,
+        "displayKind": "diagnostic",
+        "title": "Skipped entries",
+        "body": "1 unsupported entry was skipped.",
+        "timestamp": 1785574806000,
+        "entryId": "824c6d3b-7216-4489-ac19-e6222c8c2b3a"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "step/end",
+      "seq": 11,
+      "time": 1790513905634,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 12,
+      "time": 1790513905634,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 13,
+      "time": 1790513905634,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The build passed."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "legacy-import",
+            "model": "claude-legacy"
+          }
+        },
+        "stream": []
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 14,
+      "time": 1790513905634,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 15,
+      "time": 1790513905634,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

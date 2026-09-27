@@ -1,0 +1,209 @@
+{
+  "file": "v4-compaction.jsonl",
+  "messages": [
+    {
+      "id": "h:12dbc7bf-4de2-4807-9498-317f43e8e398",
+      "entryId": "12dbc7bf-4de2-4807-9498-317f43e8e398",
+      "role": "user",
+      "timestamp": 1790513904655,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:12dbc7bf-4de2-4807-9498-317f43e8e398:text:0",
+          "text": "Start the long task."
+        }
+      ]
+    },
+    {
+      "id": "h:a00ff40c-643e-4e38-9510-24b4384cfa7d",
+      "entryId": "a00ff40c-643e-4e38-9510-24b4384cfa7d",
+      "role": "assistant",
+      "timestamp": 1790513904656,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:a00ff40c-643e-4e38-9510-24b4384cfa7d:text:0",
+          "text": "Step one is done."
+        }
+      ]
+    },
+    {
+      "id": "h:380b26c0-e452-4d88-a978-9c6119501495",
+      "entryId": "380b26c0-e452-4d88-a978-9c6119501495",
+      "role": "user",
+      "timestamp": 1790513904658,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:380b26c0-e452-4d88-a978-9c6119501495:text:0",
+          "text": "Continue, and rotate the context when you need to."
+        }
+      ]
+    },
+    {
+      "id": "h:72d3a6f6-334e-4c23-bacf-88fe07d1c1a3",
+      "entryId": "72d3a6f6-334e-4c23-bacf-88fe07d1c1a3",
+      "role": "assistant",
+      "timestamp": 1790513904659,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:72d3a6f6-334e-4c23-bacf-88fe07d1c1a3:text:0",
+          "text": "Rotating context."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:72d3a6f6-334e-4c23-bacf-88fe07d1c1a3:tool-call:call-rotate-1",
+          "toolCallId": "call-rotate-1",
+          "name": "new_context",
+          "input": {}
+        },
+        {
+          "type": "tool_result",
+          "id": "h:9226f9b4-eba1-4f88-9f6f-b294e35c17e2:tool-result:call-rotate-1",
+          "toolCallId": "call-rotate-1",
+          "ok": true,
+          "output": "A new context window will start with a summary of the conversation history."
+        }
+      ],
+      "settledAt": 1790513904660
+    },
+    {
+      "id": "h:8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+      "entryId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+      "role": "system",
+      "timestamp": 1790513904662,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8ec1b609-0b5a-43fa-82ef-2e2ad65f840a:summary:0",
+          "text": "Context summary\n\nSummary: step one done, step two under way."
+        }
+      ]
+    },
+    {
+      "id": "h:3ceb229c-e15b-4036-b2f1-b32e527606c2",
+      "entryId": "3ceb229c-e15b-4036-b2f1-b32e527606c2",
+      "role": "assistant",
+      "timestamp": 1790513904663,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:3ceb229c-e15b-4036-b2f1-b32e527606c2:text:0",
+          "text": "Continuing after the checkpoint."
+        }
+      ]
+    },
+    {
+      "id": "h:4bd14315-b29f-4427-ac68-e42e4a9ded48",
+      "entryId": "4bd14315-b29f-4427-ac68-e42e4a9ded48",
+      "role": "user",
+      "timestamp": 1790513904675,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:4bd14315-b29f-4427-ac68-e42e4a9ded48:text:0",
+          "text": "Rotate again and keep going."
+        }
+      ]
+    },
+    {
+      "id": "h:45f9a7c6-9375-4b6d-95b4-f667df83a800",
+      "entryId": "45f9a7c6-9375-4b6d-95b4-f667df83a800",
+      "role": "assistant",
+      "timestamp": 1790513904677,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:45f9a7c6-9375-4b6d-95b4-f667df83a800:tool-call:call-rotate-2",
+          "toolCallId": "call-rotate-2",
+          "name": "new_context",
+          "input": {}
+        },
+        {
+          "type": "tool_result",
+          "id": "h:26fcac8b-0ce1-467a-b349-d6fe50a7726e:tool-result:call-rotate-2",
+          "toolCallId": "call-rotate-2",
+          "ok": true,
+          "output": "A new context window will start without summarizing conversation history."
+        }
+      ],
+      "settledAt": 1790513904678
+    },
+    {
+      "id": "h:4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+      "entryId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+      "role": "system",
+      "timestamp": 1790513904679,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:4a3e6278-d61e-4daa-8101-22ddfb8a5aa6:summary:0",
+          "text": "Context summary\n\n[context rollover: a new context window was started without summarizing conversation history]\n\nEarlier messages in this session are not part of this request. The complete transcript is still available to the user, and the environment is unchanged.\n\nAsk before assuming anything about work that is not visible here."
+        }
+      ]
+    },
+    {
+      "id": "h:e97ddb0b-47fa-418f-8296-e44ba10a7f30",
+      "entryId": "e97ddb0b-47fa-418f-8296-e44ba10a7f30",
+      "role": "assistant",
+      "timestamp": 1790513904680,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:e97ddb0b-47fa-418f-8296-e44ba10a7f30:text:0",
+          "text": "Fresh window, carrying on."
+        }
+      ]
+    },
+    {
+      "id": "h:78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+      "entryId": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+      "role": "system",
+      "timestamp": 1790513904680,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa:summary:0",
+          "text": "Context summary\n\nCheckpoint that retained nothing."
+        }
+      ]
+    },
+    {
+      "id": "h:823c2f12-9124-4a70-bc94-1d5130aa72d4",
+      "entryId": "823c2f12-9124-4a70-bc94-1d5130aa72d4",
+      "role": "user",
+      "timestamp": 1790513904681,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:823c2f12-9124-4a70-bc94-1d5130aa72d4:text:0",
+          "text": "Wrap it up."
+        }
+      ]
+    },
+    {
+      "id": "h:fa9ccc9f-cc6a-45bb-8c86-526bc65da8e0",
+      "entryId": "fa9ccc9f-cc6a-45bb-8c86-526bc65da8e0",
+      "role": "assistant",
+      "timestamp": 1790513904682,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:fa9ccc9f-cc6a-45bb-8c86-526bc65da8e0:text:0",
+          "text": "All steps done."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

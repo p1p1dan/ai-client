@@ -1,0 +1,124 @@
+{
+  "file": "legacy-desktop.jsonl",
+  "messages": [
+    {
+      "id": "h:d-u1",
+      "entryId": "d-u1",
+      "role": "user",
+      "timestamp": 1772360460000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-u1:text:0",
+          "text": "desktop: read the notes"
+        }
+      ],
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png"
+        }
+      ]
+    },
+    {
+      "id": "h:d-a1",
+      "entryId": "d-a1",
+      "role": "assistant",
+      "timestamp": 1772360520000,
+      "model": "anthropic/claude-desktop",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:d-a1:thinking:0",
+          "text": "Read it first."
+        },
+        {
+          "type": "text",
+          "id": "h:d-a1:text:1",
+          "text": "Reading."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:d-a1:tool-call:d-call-1",
+          "toolCallId": "d-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:d-t1:tool-result:d-call-1",
+          "toolCallId": "d-call-1",
+          "ok": true,
+          "output": "alpha\nbeta"
+        }
+      ],
+      "settledAt": 1772360580000
+    },
+    {
+      "id": "h:d-a2",
+      "entryId": "d-a2",
+      "role": "assistant",
+      "timestamp": 1772360700000,
+      "model": "legacy/legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-a2:text:0",
+          "text": "The notes hold alpha and beta."
+        }
+      ]
+    },
+    {
+      "id": "h:d-u2",
+      "entryId": "d-u2",
+      "role": "user",
+      "timestamp": 1772360760000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-u2:text:0",
+          "text": "desktop: thanks[Attachment: missing.pdf]"
+        }
+      ]
+    },
+    {
+      "id": "h:d-c1",
+      "entryId": "d-c1",
+      "role": "system",
+      "timestamp": 1772360820000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d-c1:summary:0",
+          "text": "Context summary\n\ndesktop summary"
+        }
+      ]
+    },
+    {
+      "id": "h:d-u2:end",
+      "entryId": "d-u2:end",
+      "role": "assistant",
+      "timestamp": 1772360880000,
+      "blocks": [],
+      "incomplete": true,
+      "stopReason": "error"
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "failed-reply-body",
+        "id": "h:d-a3",
+        "field": "message"
+      },
+      {
+        "category": "failed-reply-placeholder",
+        "id": "h:d-u2:end",
+        "field": "message"
+      }
+    ],
+    "context": []
+  }
+}

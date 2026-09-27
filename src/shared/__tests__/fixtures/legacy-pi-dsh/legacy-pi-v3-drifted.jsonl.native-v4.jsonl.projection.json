@@ -1,0 +1,66 @@
+{
+  "file": "legacy-pi-v3-drifted.jsonl.native-v4.jsonl",
+  "messages": [
+    {
+      "id": "h:84a39a4f",
+      "entryId": "84a39a4f",
+      "role": "user",
+      "timestamp": 1790513905676,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:84a39a4f:text:0",
+          "text": "v3: read the notes"
+        }
+      ]
+    },
+    {
+      "id": "h:2c4234e4",
+      "entryId": "2c4234e4",
+      "role": "assistant",
+      "timestamp": 1790513905676,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:2c4234e4:thinking:0",
+          "text": "Reading first."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:2c4234e4:tool-call:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:8869f0e5:tool-result:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ]
+    },
+    {
+      "id": "h:ad7ad70d",
+      "entryId": "ad7ad70d",
+      "role": "assistant",
+      "timestamp": 1790513905676,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ad7ad70d:text:0",
+          "text": "The notes say alpha, beta."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

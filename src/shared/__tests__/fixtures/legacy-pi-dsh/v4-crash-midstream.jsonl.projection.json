@@ -1,0 +1,44 @@
+{
+  "file": "v4-crash-midstream.jsonl",
+  "messages": [
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "role": "user",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:text:0",
+          "text": "Write crash.txt."
+        }
+      ]
+    },
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "role": "system",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted:interrupted:0",
+          "text": "This turn was interrupted when the engine stopped unexpectedly.",
+          "notice": {
+            "key": "This turn was interrupted when the engine stopped unexpectedly."
+          }
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "interrupted-turn-notice",
+        "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+        "field": "message"
+      }
+    ],
+    "context": []
+  }
+}

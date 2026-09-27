@@ -1,0 +1,86 @@
+{
+  "file": "legacy-pi-v3.jsonl.native-v4.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "native-v4",
+    "bytes": 8713,
+    "sha256": "256b026d6953e2a3",
+    "entries": {
+      "model_change": 2,
+      "thinking_level_change": 1,
+      "message:user": 5,
+      "message:assistant": 6,
+      "message:toolResult": 1,
+      "message:bashExecution": 1,
+      "message:custom": 1,
+      "custom:aiclient-session-tier": 1,
+      "custom:legacy:*": 2,
+      "branch_summary": 1,
+      "compaction": 1,
+      "custom:aiclient.permissions": 2
+    },
+    "copiedFrom": "pi-v3",
+    "leaves": 2,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 22
+  },
+  "result": {
+    "events": {
+      "turn/start": 4,
+      "step/start": 5,
+      "system/message": 1,
+      "user/message": 8,
+      "assistant/message": 5,
+      "tool/call": 1,
+      "tool/result": 1,
+      "step/end": 5,
+      "aiclient/pi-label": 1,
+      "turn/end": 4,
+      "aiclient/pi-entry": 2
+    },
+    "turns": 4,
+    "steps": 5,
+    "turnEnds": {
+      "completed": 3,
+      "aborted:legacy": 1
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {
+      "aiclient/pi-label": 1,
+      "aiclient/pi-entry": 2
+    },
+    "checkpoints": {
+      "keptOriginals": 1,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": true
+  },
+  "lossy": {
+    "offBranchEntries": 2,
+    "offBranchLabels": 0,
+    "labels": 1,
+    "bookkeeping": 6,
+    "sessionName": true,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 1,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 0,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

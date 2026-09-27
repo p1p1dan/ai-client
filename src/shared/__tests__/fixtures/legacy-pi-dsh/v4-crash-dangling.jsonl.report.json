@@ -1,0 +1,72 @@
+{
+  "file": "v4-crash-dangling.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "native-v4",
+    "bytes": 1793,
+    "sha256": "d09ed221400b5822",
+    "entries": {
+      "model_change": 1,
+      "thinking_level_change": 1,
+      "custom:aiclient.permissions": 1,
+      "message:user": 1,
+      "message:assistant": 1
+    },
+    "leaves": 1,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 5
+  },
+  "result": {
+    "events": {
+      "turn/start": 1,
+      "step/start": 1,
+      "system/message": 1,
+      "user/message": 1,
+      "assistant/message": 1,
+      "tool/call": 1,
+      "tool/result": 1,
+      "step/end": 1,
+      "turn/end": 1
+    },
+    "turns": 1,
+    "steps": 1,
+    "turnEnds": {
+      "interrupted": 1
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {},
+    "checkpoints": {
+      "keptOriginals": 0,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": true
+  },
+  "lossy": {
+    "offBranchEntries": 0,
+    "offBranchLabels": 0,
+    "labels": 0,
+    "bookkeeping": 3,
+    "sessionName": false,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 0,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 1,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

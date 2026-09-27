@@ -1,0 +1,63 @@
+{
+  "file": "v4-branches.jsonl",
+  "messages": [
+    {
+      "id": "h:25ff7fcd-528c-40b4-a157-a0662bc51555",
+      "entryId": "25ff7fcd-528c-40b4-a157-a0662bc51555",
+      "role": "user",
+      "timestamp": 1790513904693,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:25ff7fcd-528c-40b4-a157-a0662bc51555:text:0",
+          "text": "First question."
+        }
+      ]
+    },
+    {
+      "id": "h:8b17f69f-4dbb-4b5d-a351-3a61ac3bf137",
+      "entryId": "8b17f69f-4dbb-4b5d-a351-3a61ac3bf137",
+      "role": "assistant",
+      "timestamp": 1790513904694,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8b17f69f-4dbb-4b5d-a351-3a61ac3bf137:text:0",
+          "text": "First answer."
+        }
+      ]
+    },
+    {
+      "id": "h:87b93a4a-e0aa-434e-8d10-1bea4bd78459",
+      "entryId": "87b93a4a-e0aa-434e-8d10-1bea4bd78459",
+      "role": "user",
+      "timestamp": 1790513904707,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:87b93a4a-e0aa-434e-8d10-1bea4bd78459:text:0",
+          "text": "Second question, rephrased."
+        }
+      ]
+    },
+    {
+      "id": "h:3b71c549-59c7-4395-8f8a-20ff2d3cd471",
+      "entryId": "3b71c549-59c7-4395-8f8a-20ff2d3cd471",
+      "role": "assistant",
+      "timestamp": 1790513904707,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:3b71c549-59c7-4395-8f8a-20ff2d3cd471:text:0",
+          "text": "Answer to the rephrased second question."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

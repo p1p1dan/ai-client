@@ -1,0 +1,8 @@
+{
+  "file": "damaged-seq-gap.jsonl",
+  "ok": false,
+  "failure": {
+    "stage": "decode",
+    "code": "session_invalid"
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "file": "damaged-torn-tail.jsonl",
+  "messages": [
+    {
+      "id": "h:e44e74e5-192d-45c9-8151-e66b2839c76b",
+      "entryId": "e44e74e5-192d-45c9-8151-e66b2839c76b",
+      "role": "user",
+      "timestamp": 1790513904591,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:e44e74e5-192d-45c9-8151-e66b2839c76b:text:0",
+          "text": "What do the notes say?"
+        }
+      ]
+    },
+    {
+      "id": "h:dce3b6c2-83a0-49e1-a2b2-6157c3ad817e",
+      "entryId": "dce3b6c2-83a0-49e1-a2b2-6157c3ad817e",
+      "role": "assistant",
+      "timestamp": 1790513904597,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:dce3b6c2-83a0-49e1-a2b2-6157c3ad817e:thinking:0",
+          "text": "The notes file should answer this."
+        },
+        {
+          "type": "text",
+          "id": "h:dce3b6c2-83a0-49e1-a2b2-6157c3ad817e:text:1",
+          "text": "Reading the notes."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:dce3b6c2-83a0-49e1-a2b2-6157c3ad817e:tool-call:call-read-1",
+          "toolCallId": "call-read-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ed7df372-e191-4daf-8e4d-45862ee9f283:tool-result:call-read-1",
+          "toolCallId": "call-read-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "settledAt": 1790513904615
+    },
+    {
+      "id": "h:469bc4f5-cbec-49ee-b286-1a2ab00e86fa",
+      "entryId": "469bc4f5-cbec-49ee-b286-1a2ab00e86fa",
+      "role": "assistant",
+      "timestamp": 1790513904618,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:469bc4f5-cbec-49ee-b286-1a2ab00e86fa:text:0",
+          "text": "The notes say alpha and beta."
+        }
+      ]
+    },
+    {
+      "id": "h:5df691e9-f8f5-4eee-9bb6-dd97bf519aa8",
+      "entryId": "5df691e9-f8f5-4eee-9bb6-dd97bf519aa8",
+      "role": "user",
+      "timestamp": 1790513904622,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:5df691e9-f8f5-4eee-9bb6-dd97bf519aa8:text:0",
+          "text": "What is in this picture?"
+        }
+      ],
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png",
+          "name": "pixel.png"
+        }
+      ]
+    },
+    {
+      "id": "h:2c1ef368-5332-4584-aa28-6b51d16191ad",
+      "entryId": "2c1ef368-5332-4584-aa28-6b51d16191ad",
+      "role": "assistant",
+      "timestamp": 1790513904623,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:2c1ef368-5332-4584-aa28-6b51d16191ad:text:0",
+          "text": "A single red pixel."
+        }
+      ]
+    },
+    {
+      "id": "h:7c11fee0-dafd-4dd3-ac8e-b8fb640b0e0e",
+      "entryId": "7c11fee0-dafd-4dd3-ac8e-b8fb640b0e0e",
+      "role": "user",
+      "timestamp": 1790513904629,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:7c11fee0-dafd-4dd3-ac8e-b8fb640b0e0e:text:0",
+          "text": "Write a short summary file."
+        }
+      ]
+    },
+    {
+      "id": "h:edf9ea6e-cf7e-4142-be16-0106169fb985",
+      "entryId": "edf9ea6e-cf7e-4142-be16-0106169fb985",
+      "role": "assistant",
+      "timestamp": 1790513904630,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:edf9ea6e-cf7e-4142-be16-0106169fb985:tool-call:call-write-1",
+          "toolCallId": "call-write-1",
+          "name": "write",
+          "input": {
+            "path": "out/summary.md",
+            "content": "# Summary\n\nalpha, beta\n"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:9d3e50d5-3c7e-4bcf-8340-abcba290ea05:tool-result:call-write-1",
+          "toolCallId": "call-write-1",
+          "ok": true,
+          "output": "Wrote 23 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/out/summary.md"
+        }
+      ],
+      "settledAt": 1790513904635
+    },
+    {
+      "id": "h:7bbf73d8-07cc-4429-99c9-081bcb36cd12",
+      "entryId": "7bbf73d8-07cc-4429-99c9-081bcb36cd12",
+      "role": "assistant",
+      "timestamp": 1790513904636,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:7bbf73d8-07cc-4429-99c9-081bcb36cd12:text:0",
+          "text": "Wrote out/summary.md."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "tool-result-details",
+        "id": "h:edf9ea6e-cf7e-4142-be16-0106169fb985",
+        "field": "block tool_result:call-write-1.review"
+      }
+    ],
+    "context": []
+  }
+}

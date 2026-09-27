@@ -1,0 +1,122 @@
+{
+  "file": "v4-crash-recovered.jsonl",
+  "messages": [
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090",
+      "role": "user",
+      "timestamp": 1790513905554,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:text:0",
+          "text": "Write crash.txt."
+        }
+      ]
+    },
+    {
+      "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "entryId": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+      "role": "assistant",
+      "timestamp": 1790513905555,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:text:0",
+          "text": "Writing the file."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4:tool-call:call-crash",
+          "toolCallId": "call-crash",
+          "name": "write",
+          "input": {
+            "path": "crash.txt",
+            "content": "never written\n"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ec8b9692-a485-4f7f-8862-1110b9d5a42e:tool-result:call-crash",
+          "toolCallId": "call-crash",
+          "ok": false,
+          "output": "The previous run ended before this tool result was recorded. Its effects are unknown; inspect the environment before deciding whether to repeat it.",
+          "error": "The previous run ended before this tool result was recorded. Its effects are unknown; inspect the environment before deciding whether to repeat it.",
+          "outcomeUnknown": true
+        }
+      ],
+      "settledAt": 1790513905569,
+      "incomplete": true,
+      "stopReason": "interrupted"
+    },
+    {
+      "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "entryId": "107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+      "role": "system",
+      "timestamp": 1790513905569,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted:interrupted:0",
+          "text": "This turn was interrupted when the engine stopped unexpectedly.",
+          "notice": {
+            "key": "This turn was interrupted when the engine stopped unexpectedly."
+          }
+        }
+      ]
+    },
+    {
+      "id": "h:b8708750-4af7-48ca-94aa-1de326477416",
+      "entryId": "b8708750-4af7-48ca-94aa-1de326477416",
+      "role": "user",
+      "timestamp": 1790513905570,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b8708750-4af7-48ca-94aa-1de326477416:text:0",
+          "text": "Are you still there?"
+        }
+      ]
+    },
+    {
+      "id": "h:6bb56fba-fa1c-438a-8009-54eabadda4b3",
+      "entryId": "6bb56fba-fa1c-438a-8009-54eabadda4b3",
+      "role": "assistant",
+      "timestamp": 1790513905571,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:6bb56fba-fa1c-438a-8009-54eabadda4b3:text:0",
+          "text": "I am back; crash.txt may or may not exist."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "interrupted-turn-notice",
+        "id": "h:107bcdea-08d7-41a3-afff-e902feccd090:interrupted",
+        "field": "message"
+      },
+      {
+        "category": "interrupted-turn",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "incomplete"
+      },
+      {
+        "category": "interrupted-turn",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "stopReason"
+      },
+      {
+        "category": "outcome-unknown",
+        "id": "h:ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+        "field": "block tool_result:call-crash.outcomeUnknown"
+      }
+    ],
+    "context": []
+  }
+}

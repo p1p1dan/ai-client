@@ -1,0 +1,102 @@
+{
+  "file": "legacy-pi-v1.jsonl",
+  "messages": [
+    {
+      "id": "h:d46271adbbeab2b7",
+      "entryId": "d46271adbbeab2b7",
+      "role": "user",
+      "timestamp": 1772359260000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:d46271adbbeab2b7:text:0",
+          "text": "v1: list the files"
+        }
+      ]
+    },
+    {
+      "id": "h:f4e2e27968e336d9",
+      "entryId": "f4e2e27968e336d9",
+      "role": "assistant",
+      "timestamp": 1772359320000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:f4e2e27968e336d9:tool-call:v1-call-1",
+          "toolCallId": "v1-call-1",
+          "name": "ls",
+          "input": {
+            "path": "."
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:4312212a443ef4bc:tool-result:v1-call-1",
+          "toolCallId": "v1-call-1",
+          "ok": true,
+          "output": "notes.txt\nsrc"
+        }
+      ],
+      "settledAt": 1772359380000
+    },
+    {
+      "id": "h:9e25b70c0fee68bd",
+      "entryId": "9e25b70c0fee68bd",
+      "role": "assistant",
+      "timestamp": 1772359440000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:9e25b70c0fee68bd:text:0",
+          "text": "Two entries: notes.txt and src."
+        }
+      ]
+    },
+    {
+      "id": "h:8d698e9c075adc5e",
+      "entryId": "8d698e9c075adc5e",
+      "role": "system",
+      "timestamp": 1772359560000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8d698e9c075adc5e:summary:0",
+          "text": "Context summary\n\nv1 summary: listed the files."
+        }
+      ]
+    },
+    {
+      "id": "h:dd50ebacba544d63",
+      "entryId": "dd50ebacba544d63",
+      "role": "user",
+      "timestamp": 1772359620000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:dd50ebacba544d63:text:0",
+          "text": "v1: continue after the compaction"
+        }
+      ]
+    },
+    {
+      "id": "h:80c3d7e4d0df076d",
+      "entryId": "80c3d7e4d0df076d",
+      "role": "assistant",
+      "timestamp": 1772359680000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:80c3d7e4d0df076d:text:0",
+          "text": "Continuing."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

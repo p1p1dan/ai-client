@@ -1,0 +1,74 @@
+{
+  "file": "v4-import-codex.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "native-v4-import",
+    "bytes": 2509,
+    "sha256": "8925391ec4ff26c3",
+    "entries": {
+      "custom:aiclient.legacy-import.provenance": 1,
+      "message:user": 1,
+      "custom:aiclient.legacy-import.display": 2,
+      "message:assistant": 1
+    },
+    "leaves": 1,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 5
+  },
+  "result": {
+    "events": {
+      "aiclient/legacy-provenance": 1,
+      "turn/start": 1,
+      "step/start": 1,
+      "system/message": 1,
+      "user/message": 1,
+      "aiclient/legacy-display": 2,
+      "assistant/message": 1,
+      "step/end": 1,
+      "turn/end": 1
+    },
+    "turns": 1,
+    "steps": 1,
+    "turnEnds": {
+      "completed": 1
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {
+      "aiclient/legacy-provenance": 1,
+      "aiclient/legacy-display": 2
+    },
+    "checkpoints": {
+      "keptOriginals": 0,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": false
+  },
+  "lossy": {
+    "offBranchEntries": 0,
+    "offBranchLabels": 0,
+    "labels": 0,
+    "bookkeeping": 0,
+    "sessionName": true,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 0,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 0,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "file": "v4-cli.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "native-v4+cli",
+    "bytes": 4973,
+    "sha256": "5abb45717f572b3f",
+    "entries": {
+      "model_change": 3,
+      "thinking_level_change": 2,
+      "custom:aiclient.permissions": 1,
+      "message:user": 4,
+      "message:assistant": 3,
+      "message:bashExecution": 1,
+      "message:custom": 1,
+      "custom:other": 1,
+      "custom:pi-cli:*": 2,
+      "compaction": 1
+    },
+    "leaves": 1,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 19
+  },
+  "result": {
+    "events": {
+      "turn/start": 3,
+      "step/start": 3,
+      "system/message": 1,
+      "user/message": 7,
+      "assistant/message": 3,
+      "aiclient/pi-label": 1,
+      "step/end": 3,
+      "turn/end": 3,
+      "aiclient/pi-entry": 1
+    },
+    "turns": 3,
+    "steps": 3,
+    "turnEnds": {
+      "completed": 3
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {
+      "aiclient/pi-label": 1,
+      "aiclient/pi-entry": 1
+    },
+    "checkpoints": {
+      "keptOriginals": 1,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": true
+  },
+  "lossy": {
+    "offBranchEntries": 0,
+    "offBranchLabels": 0,
+    "labels": 1,
+    "bookkeeping": 8,
+    "sessionName": true,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 0,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 0,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "file": "legacy-pi-v3.jsonl.native-v4.jsonl",
+  "messages": [
+    {
+      "id": "h:c7b0feab",
+      "entryId": "c7b0feab",
+      "role": "user",
+      "timestamp": 1790513905659,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:c7b0feab:text:0",
+          "text": "v3: read the notes"
+        }
+      ]
+    },
+    {
+      "id": "h:2d2d1a2a",
+      "entryId": "2d2d1a2a",
+      "role": "assistant",
+      "timestamp": 1790513905659,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:2d2d1a2a:thinking:0",
+          "text": "Reading first."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:2d2d1a2a:tool-call:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:7b262e12:tool-result:v3-call-1",
+          "toolCallId": "v3-call-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ]
+    },
+    {
+      "id": "h:0c12b489",
+      "entryId": "0c12b489",
+      "role": "assistant",
+      "timestamp": 1790513905659,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:0c12b489:text:0",
+          "text": "The notes say alpha, beta."
+        }
+      ]
+    },
+    {
+      "id": "h:58950f76",
+      "entryId": "58950f76",
+      "role": "user",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:58950f76:text:0",
+          "text": "v3: second question"
+        }
+      ]
+    },
+    {
+      "id": "h:74125a6e",
+      "entryId": "74125a6e",
+      "role": "assistant",
+      "timestamp": 1790513905660,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:74125a6e:text:0",
+          "text": "Second answer."
+        }
+      ]
+    },
+    {
+      "id": "h:1dee86f3",
+      "entryId": "1dee86f3",
+      "role": "system",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:1dee86f3:summary:0",
+          "text": "Context summary\n\nv3 summary: read the notes, answered twice."
+        }
+      ]
+    },
+    {
+      "id": "h:282b4634",
+      "entryId": "282b4634",
+      "role": "user",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:282b4634:text:0",
+          "text": "v3: after the compaction"
+        }
+      ]
+    },
+    {
+      "id": "h:ad26f318",
+      "entryId": "ad26f318",
+      "role": "assistant",
+      "timestamp": 1790513905660,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:ad26f318:text:0",
+          "text": "Half an answer before the Stop"
+        }
+      ],
+      "incomplete": true,
+      "stopReason": "aborted"
+    },
+    {
+      "id": "h:340cd24c-ee67-48a1-9fe4-3aee48d2bfa6",
+      "entryId": "340cd24c-ee67-48a1-9fe4-3aee48d2bfa6",
+      "role": "user",
+      "timestamp": 1790513905673,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:340cd24c-ee67-48a1-9fe4-3aee48d2bfa6:text:0",
+          "text": "Continue the legacy conversation."
+        }
+      ]
+    },
+    {
+      "id": "h:beb720d9-79a4-46f7-808a-1b6d6d7a8a6d",
+      "entryId": "beb720d9-79a4-46f7-808a-1b6d6d7a8a6d",
+      "role": "assistant",
+      "timestamp": 1790513905674,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:beb720d9-79a4-46f7-808a-1b6d6d7a8a6d:text:0",
+          "text": "Continued in 1.0.x."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "branch-summary-row",
+        "id": "h:bda3d570",
+        "field": "message"
+      }
+    ],
+    "context": [
+      {
+        "category": "interrupted-reply",
+        "side": "dsh"
+      }
+    ]
+  }
+}

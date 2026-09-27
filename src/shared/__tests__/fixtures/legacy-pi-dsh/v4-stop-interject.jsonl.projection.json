@@ -1,0 +1,117 @@
+{
+  "file": "v4-stop-interject.jsonl",
+  "messages": [
+    {
+      "id": "h:8114f0b7-1657-4e71-a480-992234e980d9",
+      "entryId": "8114f0b7-1657-4e71-a480-992234e980d9",
+      "role": "user",
+      "timestamp": 1790513904734,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8114f0b7-1657-4e71-a480-992234e980d9:text:0",
+          "text": "Tell me a story."
+        }
+      ]
+    },
+    {
+      "id": "h:43b03256-e654-46b8-96bb-00931acda8b3",
+      "entryId": "43b03256-e654-46b8-96bb-00931acda8b3",
+      "role": "assistant",
+      "timestamp": 1790513904936,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:43b03256-e654-46b8-96bb-00931acda8b3:text:0",
+          "text": "Once upon a time"
+        }
+      ],
+      "incomplete": true,
+      "stopReason": "aborted",
+      "stopCause": "user_stop",
+      "settledAt": 1790513904937
+    },
+    {
+      "id": "h:434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+      "entryId": "434e0387-57f3-4d45-aa1e-e7024d2d14f7",
+      "role": "user",
+      "timestamp": 1790513904938,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:434e0387-57f3-4d45-aa1e-e7024d2d14f7:text:0",
+          "text": "Check the notes, then continue."
+        }
+      ]
+    },
+    {
+      "id": "h:f47953cb-7452-443e-866a-54abda342adc",
+      "entryId": "f47953cb-7452-443e-866a-54abda342adc",
+      "role": "assistant",
+      "timestamp": 1790513905140,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:f47953cb-7452-443e-866a-54abda342adc:text:0",
+          "text": "Checking."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:f47953cb-7452-443e-866a-54abda342adc:tool-call:call-read-stop",
+          "toolCallId": "call-read-stop",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:a3e5533b-b532-4075-99ee-560fbde90441:tool-result:call-read-stop",
+          "toolCallId": "call-read-stop",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "settledAt": 1790513905144,
+      "stopCause": "interjected"
+    },
+    {
+      "id": "h:1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+      "entryId": "1f153a12-d8f3-4dcc-9693-ff76f53f18ee",
+      "role": "user",
+      "timestamp": 1790513905145,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:1f153a12-d8f3-4dcc-9693-ff76f53f18ee:text:0",
+          "text": "Now summarize."
+        }
+      ]
+    },
+    {
+      "id": "h:86f2a93a-eb83-4a85-838f-ec04713c141f",
+      "entryId": "86f2a93a-eb83-4a85-838f-ec04713c141f",
+      "role": "assistant",
+      "timestamp": 1790513905373,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:86f2a93a-eb83-4a85-838f-ec04713c141f:text:0",
+          "text": "Here is the summary you asked for."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": [
+      {
+        "category": "interrupted-reply",
+        "side": "dsh"
+      }
+    ]
+  }
+}

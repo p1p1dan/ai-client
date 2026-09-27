@@ -1,0 +1,167 @@
+{
+  "file": "v4-internal.jsonl",
+  "messages": [
+    {
+      "id": "h:7e1c9cc9-a2e9-4df5-8c3c-091f3663f533",
+      "entryId": "7e1c9cc9-a2e9-4df5-8c3c-091f3663f533",
+      "role": "user",
+      "timestamp": 1790513905526,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:7e1c9cc9-a2e9-4df5-8c3c-091f3663f533:text:0",
+          "text": "Look at src/app.ts."
+        }
+      ]
+    },
+    {
+      "id": "h:4565579c-696c-488b-a7fa-7bd666e428dc",
+      "entryId": "4565579c-696c-488b-a7fa-7bd666e428dc",
+      "role": "assistant",
+      "timestamp": 1790513905526,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:4565579c-696c-488b-a7fa-7bd666e428dc:tool-call:call-read-src",
+          "toolCallId": "call-read-src",
+          "name": "read",
+          "input": {
+            "path": "src/app.ts"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:703924b9-3ce4-4e4b-99af-aed53f0cb68f:tool-result:call-read-src",
+          "toolCallId": "call-read-src",
+          "ok": true,
+          "output": "export const answer = 42;\n"
+        }
+      ],
+      "settledAt": 1790513905530
+    },
+    {
+      "id": "h:52732302-9fe0-48cd-9269-9932757afebb",
+      "entryId": "52732302-9fe0-48cd-9269-9932757afebb",
+      "role": "assistant",
+      "timestamp": 1790513905531,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:52732302-9fe0-48cd-9269-9932757afebb:text:0",
+          "text": "src/app.ts exports answer = 42."
+        }
+      ]
+    },
+    {
+      "id": "h:3f8621c0-f97a-4005-96ac-2b116a15fbee",
+      "entryId": "3f8621c0-f97a-4005-96ac-2b116a15fbee",
+      "role": "user",
+      "timestamp": 1790513905534,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:3f8621c0-f97a-4005-96ac-2b116a15fbee:text:0",
+          "text": "Keep reading until you are stopped."
+        }
+      ]
+    },
+    {
+      "id": "h:d6d12026-14be-4dd0-80bb-ed6ffba53a95",
+      "entryId": "d6d12026-14be-4dd0-80bb-ed6ffba53a95",
+      "role": "assistant",
+      "timestamp": 1790513905535,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:d6d12026-14be-4dd0-80bb-ed6ffba53a95:tool-call:call-ceiling-1",
+          "toolCallId": "call-ceiling-1",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:64a7c7d3-4cf5-4ca2-8011-7df1822883a8:tool-result:call-ceiling-1",
+          "toolCallId": "call-ceiling-1",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "settledAt": 1790513905537
+    },
+    {
+      "id": "h:9d2b1b88-6819-4bc0-b245-ef912760b18b",
+      "entryId": "9d2b1b88-6819-4bc0-b245-ef912760b18b",
+      "role": "assistant",
+      "timestamp": 1790513905537,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:9d2b1b88-6819-4bc0-b245-ef912760b18b:tool-call:call-ceiling-2",
+          "toolCallId": "call-ceiling-2",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:8fb9cd96-6605-4e53-b82f-aded1e227b5b:tool-result:call-ceiling-2",
+          "toolCallId": "call-ceiling-2",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "settledAt": 1790513905539
+    },
+    {
+      "id": "h:dd20ce98-0910-4bf2-90f9-9575548fc99b",
+      "entryId": "dd20ce98-0910-4bf2-90f9-9575548fc99b",
+      "role": "assistant",
+      "timestamp": 1790513905540,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:dd20ce98-0910-4bf2-90f9-9575548fc99b:tool-call:call-ceiling-3",
+          "toolCallId": "call-ceiling-3",
+          "name": "read",
+          "input": {
+            "path": "notes.txt"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:b7526129-50c3-442a-b267-709788153812:tool-result:call-ceiling-3",
+          "toolCallId": "call-ceiling-3",
+          "ok": true,
+          "output": "alpha\nbeta\n"
+        }
+      ],
+      "settledAt": 1790513905541
+    },
+    {
+      "id": "h:752479a4-fb8a-4b2e-92e1-e3fcdb897fa7",
+      "entryId": "752479a4-fb8a-4b2e-92e1-e3fcdb897fa7",
+      "role": "assistant",
+      "timestamp": 1790513905542,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:752479a4-fb8a-4b2e-92e1-e3fcdb897fa7:text:0",
+          "text": "Summary at the turn ceiling: notes.txt read three times."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

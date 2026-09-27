@@ -1,0 +1,85 @@
+{
+  "file": "legacy-pi-v3.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "pi-v3",
+    "bytes": 5045,
+    "sha256": "431d50f13163dba8",
+    "entries": {
+      "model_change": 1,
+      "thinking_level_change": 1,
+      "message:user": 4,
+      "message:assistant": 5,
+      "message:toolResult": 1,
+      "message:bashExecution": 1,
+      "message:custom": 1,
+      "custom:aiclient-session-tier": 1,
+      "custom:legacy:*": 2,
+      "branch_summary": 1,
+      "compaction": 1,
+      "custom:aiclient.permissions": 1
+    },
+    "leaves": 2,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 18
+  },
+  "result": {
+    "events": {
+      "turn/start": 3,
+      "step/start": 4,
+      "system/message": 1,
+      "user/message": 7,
+      "assistant/message": 4,
+      "tool/call": 1,
+      "tool/result": 1,
+      "step/end": 4,
+      "aiclient/pi-label": 1,
+      "turn/end": 3,
+      "aiclient/pi-entry": 2
+    },
+    "turns": 3,
+    "steps": 4,
+    "turnEnds": {
+      "completed": 2,
+      "aborted:legacy": 1
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {
+      "aiclient/pi-label": 1,
+      "aiclient/pi-entry": 2
+    },
+    "checkpoints": {
+      "keptOriginals": 1,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": true
+  },
+  "lossy": {
+    "offBranchEntries": 2,
+    "offBranchLabels": 0,
+    "labels": 1,
+    "bookkeeping": 4,
+    "sessionName": true,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 1,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 0,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

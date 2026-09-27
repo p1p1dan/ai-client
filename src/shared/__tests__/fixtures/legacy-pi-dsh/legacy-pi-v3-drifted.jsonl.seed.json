@@ -1,0 +1,354 @@
+{
+  "file": "legacy-pi-v3-drifted.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "80d2d8b3f92da8fffa350fc4ae1482dc626fcdd9077c22330e2259c74270531f",
+    "sourceBytes": 2568,
+    "sourceSessionId": "01a0e2f2-000c-7f17-ba95-db8af8d63f7b",
+    "sourceCreatedAt": 1790513905676,
+    "sourceFormat": "pi-v3"
+  },
+  "grants": null,
+  "legacyPermissions": null,
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "84a39a4f:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513905676,
+      "data": {
+        "id": "84a39a4f",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "v3: read the notes"
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "2c4234e4",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "reasoning",
+              "text": "Reading first."
+            },
+            {
+              "type": "tool-call",
+              "id": "v3-call-1",
+              "name": "read",
+              "arguments": "{\"path\":\"notes.txt\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "reasoning",
+                  "thinkingSignature": "v3-sig"
+                },
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "v3-call-1",
+        "name": "read",
+        "arguments": "{\"path\":\"notes.txt\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 6,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "8869f0e5",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "alpha\nbeta\n"
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "v3-call-1"
+          },
+          "toolCallId": "v3-call-1",
+          "isError": false
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "step/end",
+      "seq": 7,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 8,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 9,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "ad7ad70d",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The notes say alpha, beta."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 10,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 11,
+      "time": 1790513905676,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 12,
+      "time": 1790513905679,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 13,
+      "time": 1790513905679,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 14,
+      "time": 1790513905679,
+      "data": {
+        "id": "abbbd715",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "v3: written after the copy was made"
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 15,
+      "time": 1790513905679,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "388cc347",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "The copy never saw this."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "anthropic",
+            "model": "claude-legacy",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "anthropic",
+                "model": "claude-legacy",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 40,
+          "outputTokens": 12,
+          "totalTokens": 52
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 16,
+      "time": 1790513905679,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 17,
+      "time": 1790513905679,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

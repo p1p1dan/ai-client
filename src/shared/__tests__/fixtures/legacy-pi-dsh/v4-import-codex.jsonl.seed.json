@@ -1,0 +1,172 @@
+{
+  "file": "v4-import-codex.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "8925391ec4ff26c3714b9479b9b2524b185e9196a1874fccc3c535a4598243ce",
+    "sourceBytes": 2509,
+    "sourceSessionId": "import-codex-0001",
+    "sourceCreatedAt": 1790513905640,
+    "sourceFormat": "native-v4-import"
+  },
+  "grants": null,
+  "legacyPermissions": null,
+  "images": [],
+  "seed": [
+    {
+      "type": "aiclient/legacy-provenance",
+      "seq": 0,
+      "time": 1790513905640,
+      "data": {
+        "version": 1,
+        "sourceKind": "codex",
+        "stableSourceIdentity": "codex:corpus:0001",
+        "sourceSessionId": "codex-rollout-0001",
+        "contentHash": "sha256:0000000000000000000000000000000000000000000000000000000000000011",
+        "schemaVersion": 1,
+        "importerVersion": "b4-legacy-v2",
+        "startedAt": 1785574800000,
+        "endedAt": 1785574830000,
+        "diagnostics": [],
+        "entryId": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "turn/start",
+      "seq": 1,
+      "time": 1790513905641,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 2,
+      "time": 1790513905641,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 3,
+      "time": 1790513905641,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "635e062d-f8ff-462e-9dd6-903ae653a80d:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 4,
+      "time": 1790513905641,
+      "data": {
+        "id": "635e062d-f8ff-462e-9dd6-903ae653a80d",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "List the files."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "aiclient/legacy-display",
+      "seq": 5,
+      "time": 1790513905641,
+      "data": {
+        "version": 1,
+        "displayKind": "tool",
+        "title": "shell",
+        "toolCallId": "call_codex_1",
+        "toolName": "shell",
+        "input": {
+          "command": ["ls"]
+        },
+        "output": "notes.txt\nsrc",
+        "isError": false,
+        "timestamp": 1785574802000,
+        "entryId": "42722ec1-8af8-4882-ab45-43e2a7e44c36"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "aiclient/legacy-display",
+      "seq": 6,
+      "time": 1790513905641,
+      "data": {
+        "version": 1,
+        "displayKind": "custom",
+        "title": "Reasoning summary",
+        "body": "Listed the workspace.",
+        "timestamp": 1785574802500,
+        "entryId": "ebee6c14-0325-441b-94ba-82a8dbc9deab"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "assistant/message",
+      "seq": 7,
+      "time": 1790513905642,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "c56ca1c5-7ef9-4392-ad87-3c31ea8a6f81",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Two entries: notes.txt and src."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "legacy-import",
+            "model": "gpt-codex-legacy"
+          }
+        },
+        "stream": []
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 8,
+      "time": 1790513905642,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 9,
+      "time": 1790513905642,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

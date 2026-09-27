@@ -1,0 +1,8 @@
+{
+  "file": "damaged-empty.jsonl",
+  "ok": false,
+  "failure": {
+    "stage": "decode",
+    "code": "session_invalid"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "file": "damaged-invalid-utf8.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "unknown",
+    "bytes": 6792,
+    "sha256": "889510a4ca2f1b0b",
+    "entries": {}
+  },
+  "failure": {
+    "stage": "read",
+    "code": "source_invalid_utf8"
+  }
+}

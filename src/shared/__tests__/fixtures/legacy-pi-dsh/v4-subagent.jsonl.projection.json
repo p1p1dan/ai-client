@@ -1,0 +1,77 @@
+{
+  "file": "v4-subagent.jsonl",
+  "messages": [
+    {
+      "id": "h:712735ba-f997-4c14-95a8-327e4a5a8354",
+      "entryId": "712735ba-f997-4c14-95a8-327e4a5a8354",
+      "role": "user",
+      "timestamp": 1790513905496,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:712735ba-f997-4c14-95a8-327e4a5a8354:text:0",
+          "text": "Delegate a look at the notes."
+        }
+      ]
+    },
+    {
+      "id": "h:7011591c-7121-40f0-9edf-3232edd49094",
+      "entryId": "7011591c-7121-40f0-9edf-3232edd49094",
+      "role": "assistant",
+      "timestamp": 1790513905497,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:7011591c-7121-40f0-9edf-3232edd49094:tool-call:call-task",
+          "toolCallId": "call-task",
+          "name": "Task",
+          "input": {
+            "agent": "explorer",
+            "task": "Look at notes.txt."
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:ebc72451-fdd9-423a-9585-58719573db12:tool-result:call-task",
+          "toolCallId": "call-task",
+          "ok": true,
+          "output": "Delegation 119d3924-3a27-4fab-b960-0338b5ba0535 started: the explorer subagent is working in the background. Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it."
+        }
+      ],
+      "settledAt": 1790513905504
+    },
+    {
+      "id": "h:b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+      "entryId": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+      "role": "assistant",
+      "timestamp": 1790513905506,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:b0defb9e-1e3e-4ab2-93f3-e79d9672a59b:text:0",
+          "text": "Waiting for the explorer."
+        }
+      ]
+    },
+    {
+      "id": "h:0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+      "entryId": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+      "role": "assistant",
+      "timestamp": 1790513905507,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:0a0d1113-a960-4cd6-a084-8a5a668e90e0:text:0",
+          "text": "Integrated: the explorer found two lines in notes.txt."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

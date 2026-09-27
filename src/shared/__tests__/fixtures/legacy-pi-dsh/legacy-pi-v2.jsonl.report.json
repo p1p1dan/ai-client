@@ -1,0 +1,69 @@
+{
+  "file": "legacy-pi-v2.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "pi-v2",
+    "bytes": 2419,
+    "sha256": "80f0ff88030b0a35",
+    "entries": {
+      "message:user": 3,
+      "message:assistant": 3,
+      "message:custom": 1,
+      "model_change": 1
+    },
+    "leaves": 2,
+    "skippedRows": 0,
+    "tornTail": false,
+    "unfinishedOperations": 0,
+    "branchEntries": 4
+  },
+  "result": {
+    "events": {
+      "turn/start": 2,
+      "step/start": 2,
+      "system/message": 1,
+      "user/message": 2,
+      "assistant/message": 2,
+      "step/end": 2,
+      "turn/end": 2
+    },
+    "turns": 2,
+    "steps": 2,
+    "turnEnds": {
+      "completed": 2
+    },
+    "images": 0,
+    "imageBlocks": 0,
+    "ignorable": {},
+    "checkpoints": {
+      "keptOriginals": 0,
+      "retainedCopies": 0,
+      "summaryOnly": 0,
+      "appended": 0
+    },
+    "grants": 0,
+    "legacyPermissions": false
+  },
+  "lossy": {
+    "offBranchEntries": 4,
+    "offBranchLabels": 0,
+    "labels": 0,
+    "bookkeeping": 0,
+    "sessionName": false,
+    "errorReplyBodies": 0,
+    "interruptedReplies": 0,
+    "strippedToolCalls": 0,
+    "orphanResults": 0,
+    "excludedFromContext": 0,
+    "emptySummaries": 0,
+    "compactionAnchorsMissing": 0,
+    "compactionTailMismatch": 0,
+    "danglingCalls": 0,
+    "droppedBlocks": 0,
+    "replayStateOmitted": 0,
+    "turnsWithoutPrompt": 0,
+    "crashedRuns": 0,
+    "strayStops": 0
+  }
+}

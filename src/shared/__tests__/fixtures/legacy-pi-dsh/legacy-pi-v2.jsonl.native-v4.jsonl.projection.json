@@ -1,0 +1,68 @@
+{
+  "file": "legacy-pi-v2.jsonl.native-v4.jsonl",
+  "messages": [
+    {
+      "id": "h:v2-u1",
+      "entryId": "v2-u1",
+      "role": "user",
+      "timestamp": 1772359860000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:v2-u1:text:0",
+          "text": "v2: hello"
+        }
+      ]
+    },
+    {
+      "id": "h:v2-a1",
+      "entryId": "v2-a1",
+      "role": "assistant",
+      "timestamp": 1772359920000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:v2-a1:thinking:0",
+          "text": "Greet back."
+        },
+        {
+          "type": "text",
+          "id": "h:v2-a1:text:1",
+          "text": "Hello from v2."
+        }
+      ]
+    },
+    {
+      "id": "h:v2-u3",
+      "entryId": "v2-u3",
+      "role": "user",
+      "timestamp": 1772360220000,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:v2-u3:text:0",
+          "text": "v2: a branch off the first answer"
+        }
+      ]
+    },
+    {
+      "id": "h:v2-a3",
+      "entryId": "v2-a3",
+      "role": "assistant",
+      "timestamp": 1772360280000,
+      "model": "anthropic/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:v2-a3:text:0",
+          "text": "Branch answer."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

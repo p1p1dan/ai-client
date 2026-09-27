@@ -1,0 +1,481 @@
+{
+  "file": "v4-subagent.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "7dd55c4f1b504b83ca4eb0f13b221582d20a89904388f069f574a775d513712b",
+    "sourceBytes": 6652,
+    "sourceSessionId": "e9574120-38c1-442f-9ff1-733d0802e474",
+    "sourceCreatedAt": 1790513905479,
+    "sourceFormat": "native-v4"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513905496,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513905496,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513905496,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "712735ba-f997-4c14-95a8-327e4a5a8354:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513905496,
+      "data": {
+        "id": "712735ba-f997-4c14-95a8-327e4a5a8354",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Delegate a look at the notes."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513905497,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "7011591c-7121-40f0-9edf-3232edd49094",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-task",
+              "name": "Task",
+              "arguments": "{\"agent\":\"explorer\",\"task\":\"Look at notes.txt.\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905475:6imeg9sb746",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 2837,
+          "outputTokens": 14,
+          "totalTokens": 2851
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1790513905497,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "call-task",
+        "name": "Task",
+        "arguments": "{\"agent\":\"explorer\",\"task\":\"Look at notes.txt.\"}"
+      }
+    },
+    {
+      "type": "aiclient/pi-subagent",
+      "seq": 6,
+      "time": 1790513905500,
+      "data": {
+        "kind": "started",
+        "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+        "agentName": "explorer",
+        "parentToolCallId": "call-task",
+        "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+        "task": "Look at notes.txt.",
+        "model": {
+          "provider": "faux",
+          "modelId": "faux-corpus"
+        },
+        "startedAt": 1790513905499,
+        "entryId": "664890a1-ee7e-41b1-93ee-d124b6f8bfc7"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "aiclient/pi-subagent",
+      "seq": 7,
+      "time": 1790513905503,
+      "data": {
+        "kind": "message",
+        "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+        "agentName": "explorer",
+        "parentToolCallId": "call-task",
+        "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+        "message": {
+          "role": "user",
+          "content": [
+            {
+              "type": "text",
+              "text": "Look at notes.txt."
+            }
+          ],
+          "timestamp": 1790513905502
+        },
+        "at": 1790513905503,
+        "entryId": "5b9cc76e-4392-4f7e-b638-43e355d60c60"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "tool/result",
+      "seq": 8,
+      "time": 1790513905504,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "ebc72451-fdd9-423a-9585-58719573db12",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "Delegation 119d3924-3a27-4fab-b960-0338b5ba0535 started: the explorer subagent is working in the background. Its report will be delivered to you when it finishes; TaskWait with this delegationId returns it sooner if you cannot continue without it."
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-task"
+          },
+          "toolCallId": "call-task",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+              "agent": "explorer",
+              "status": "running",
+              "startedAt": 1790513905499
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "aiclient/pi-subagent",
+      "seq": 9,
+      "time": 1790513905504,
+      "data": {
+        "kind": "message",
+        "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+        "agentName": "explorer",
+        "parentToolCallId": "call-task",
+        "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Explorer report: notes.txt holds alpha and beta."
+            }
+          ],
+          "api": "faux:1790513905475:6imeg9sb746",
+          "provider": "faux",
+          "model": "faux-corpus",
+          "usage": {
+            "input": 1255,
+            "output": 12,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "totalTokens": 1267,
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "total": 0
+            }
+          },
+          "stopReason": "stop",
+          "timestamp": 1790513905503
+        },
+        "at": 1790513905504,
+        "entryId": "22bd2505-296b-4f16-90d0-6e6739576ba1"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "aiclient/pi-subagent",
+      "seq": 10,
+      "time": 1790513905505,
+      "data": {
+        "kind": "settled",
+        "delegationId": "119d3924-3a27-4fab-b960-0338b5ba0535",
+        "agentName": "explorer",
+        "parentToolCallId": "call-task",
+        "runId": "781a86d0-7e8d-45a8-9eae-e72e6cad7647",
+        "status": "completed",
+        "turns": 1,
+        "toolCalls": 0,
+        "report": "Explorer report: notes.txt holds alpha and beta.",
+        "usage": {
+          "input": 1255,
+          "output": 12,
+          "cacheRead": 0,
+          "cacheWrite": 0,
+          "totalTokens": 1267,
+          "cost": {
+            "input": 0,
+            "output": 0,
+            "cacheRead": 0,
+            "cacheWrite": 0,
+            "total": 0
+          }
+        },
+        "completedAt": 1790513905504,
+        "entryId": "98989a22-07ce-41f4-842d-b45bc5926dbe"
+      },
+      "ignorable": true
+    },
+    {
+      "type": "step/end",
+      "seq": 11,
+      "time": 1790513905505,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 12,
+      "time": 1790513905506,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 13,
+      "time": 1790513905506,
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "id": "b0defb9e-1e3e-4ab2-93f3-e79d9672a59b",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Waiting for the explorer."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905475:6imeg9sb746",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 2919,
+          "outputTokens": 7,
+          "totalTokens": 2926
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 14,
+      "time": 1790513905506,
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 15,
+      "time": 1790513905506,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 16,
+      "time": 1790513905507,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 17,
+      "time": 1790513905507,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 18,
+      "time": 1790513905507,
+      "data": {
+        "id": "f77faa8a-9531-4496-85ce-67cd162cbe03",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "The following subagents have finished; their reports are below and are now delivered to you. Integrate them and continue the user's original task.\n\n## explorer (119d3924-3a27-4fab-b960-0338b5ba0535) — completed\nExplorer report: notes.txt holds alpha and beta."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-internal",
+          "origin": "subagent-report"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 19,
+      "time": 1790513905507,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "0a0d1113-a960-4cd6-a084-8a5a668e90e0",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Integrated: the explorer found two lines in notes.txt."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905475:6imeg9sb746",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 2995,
+          "outputTokens": 14,
+          "totalTokens": 3009
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 20,
+      "time": 1790513905507,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 21,
+      "time": 1790513905507,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

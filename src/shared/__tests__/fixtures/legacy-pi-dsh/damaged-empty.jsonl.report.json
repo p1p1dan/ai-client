@@ -1,0 +1,15 @@
+{
+  "file": "damaged-empty.jsonl",
+  "converterVersion": 1,
+  "source": {
+    "kind": "pi-session",
+    "generation": "unknown",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c14",
+    "entries": {}
+  },
+  "failure": {
+    "stage": "decode",
+    "code": "session_invalid"
+  }
+}

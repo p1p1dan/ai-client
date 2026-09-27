@@ -1,0 +1,116 @@
+{
+  "file": "v4-cli.jsonl",
+  "messages": [
+    {
+      "id": "h:8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+      "entryId": "8bd69ec8-c606-4cbf-976a-0a378b2f163c",
+      "role": "user",
+      "timestamp": 1790513905583,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:8bd69ec8-c606-4cbf-976a-0a378b2f163c:text:0",
+          "text": "A native turn before the terminal opens."
+        }
+      ]
+    },
+    {
+      "id": "h:08288297-2d7f-41fa-bb2f-69dcf124df4a",
+      "entryId": "08288297-2d7f-41fa-bb2f-69dcf124df4a",
+      "role": "assistant",
+      "timestamp": 1790513905584,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:08288297-2d7f-41fa-bb2f-69dcf124df4a:text:0",
+          "text": "Native answer before the terminal."
+        }
+      ]
+    },
+    {
+      "id": "h:fdc45e45",
+      "entryId": "fdc45e45",
+      "role": "user",
+      "timestamp": 1790513905589,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:fdc45e45:text:0",
+          "text": "Typed in the terminal."
+        }
+      ]
+    },
+    {
+      "id": "h:f836aaca",
+      "entryId": "f836aaca",
+      "role": "assistant",
+      "timestamp": 1790513905589,
+      "model": "anthropic/claude-cli",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:f836aaca:text:0",
+          "text": "Answered in the terminal."
+        }
+      ]
+    },
+    {
+      "id": "h:2d6c40f5",
+      "entryId": "2d6c40f5",
+      "role": "system",
+      "timestamp": 1790513905590,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:2d6c40f5:summary:0",
+          "text": "Context summary\n\nTerminal summary of everything so far."
+        }
+      ]
+    },
+    {
+      "id": "h:50d1f080",
+      "entryId": "50d1f080",
+      "role": "user",
+      "timestamp": 1790513905590,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:50d1f080:text:0",
+          "text": "After the terminal compaction."
+        }
+      ]
+    },
+    {
+      "id": "h:dc9eee64-8038-41cd-b197-5def0c36b96d",
+      "entryId": "dc9eee64-8038-41cd-b197-5def0c36b96d",
+      "role": "user",
+      "timestamp": 1790513905620,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:dc9eee64-8038-41cd-b197-5def0c36b96d:text:0",
+          "text": "Back in the GUI."
+        }
+      ]
+    },
+    {
+      "id": "h:70c0efea-afba-4704-9d34-dd19041b934d",
+      "entryId": "70c0efea-afba-4704-9d34-dd19041b934d",
+      "role": "assistant",
+      "timestamp": 1790513905624,
+      "model": "faux/faux-corpus",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:70c0efea-afba-4704-9d34-dd19041b934d:text:0",
+          "text": "GUI answer after the terminal."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [],
+    "context": []
+  }
+}

@@ -1,0 +1,194 @@
+{
+  "file": "v4-crash-dangling.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "d09ed221400b58228d5caad0acef7b4faa56749b7279ba68cb1044374935bcc6",
+    "sourceBytes": 1793,
+    "sourceSessionId": "8c693db7-05c0-43f1-afea-3ae3f4ec7862",
+    "sourceCreatedAt": 1790513905547,
+    "sourceFormat": "native-v4"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "ask"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513905554,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513905554,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513905554,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "107bcdea-08d7-41a3-afff-e902feccd090:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513905554,
+      "data": {
+        "id": "107bcdea-08d7-41a3-afff-e902feccd090",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Write crash.txt."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513905555,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Writing the file."
+            },
+            {
+              "type": "tool-call",
+              "id": "call-crash",
+              "name": "write",
+              "arguments": "{\"path\":\"crash.txt\",\"content\":\"never written\\n\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513905545:9azdi5dci7q",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                },
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 924,
+          "outputTokens": 18,
+          "totalTokens": 942
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 5,
+      "time": 1790513905555,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "call-crash",
+        "name": "write",
+        "arguments": "{\"path\":\"crash.txt\",\"content\":\"never written\\n\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 6,
+      "time": 1790513905555,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "ed01f064-237c-46e3-82c2-7fecaf4b8cd4:unknown-result:call-crash",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly."
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-crash"
+          },
+          "toolCallId": "call-crash",
+          "isError": true
+        },
+        "error": {
+          "name": "ToolOutcomeUnknownError",
+          "code": "TOOL_OUTCOME_UNKNOWN"
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [5]
+    },
+    {
+      "type": "step/end",
+      "seq": 7,
+      "time": 1790513905555,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 8,
+      "time": 1790513905555,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "interrupted"
+        }
+      }
+    }
+  ]
+}

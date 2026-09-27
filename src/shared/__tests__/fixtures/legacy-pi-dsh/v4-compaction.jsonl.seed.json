@@ -1,0 +1,818 @@
+{
+  "file": "v4-compaction.jsonl",
+  "ok": true,
+  "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
+  "origin": {
+    "kind": "pi-session",
+    "converterVersion": 1,
+    "sourceSha256": "972aaad2f9fb9fc74f0e248c23f5a46ad61d39a35cac72e096d2ecd466332333",
+    "sourceBytes": 7908,
+    "sourceSessionId": "aa279a65-5bf6-4ca6-a0c5-12a7c80d0349",
+    "sourceCreatedAt": 1790513904647,
+    "sourceFormat": "native-v4"
+  },
+  "grants": null,
+  "legacyPermissions": {
+    "mode": "agent",
+    "gear": "auto"
+  },
+  "images": [],
+  "seed": [
+    {
+      "type": "turn/start",
+      "seq": 0,
+      "time": 1790513904655,
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 1,
+      "time": 1790513904655,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 2,
+      "time": 1790513904655,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "12dbc7bf-4de2-4807-9498-317f43e8e398:sys0",
+          "role": "system",
+          "content": [],
+          "source": {
+            "kind": "system-prompt"
+          }
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 3,
+      "time": 1790513904655,
+      "data": {
+        "id": "12dbc7bf-4de2-4807-9498-317f43e8e398",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Start the long task."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 4,
+      "time": 1790513904656,
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "id": "a00ff40c-643e-4e38-9510-24b4384cfa7d",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Step one is done."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904645:wgw9crw9xk",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 925,
+          "outputTokens": 5,
+          "totalTokens": 930
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 5,
+      "time": 1790513904656,
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 6,
+      "time": 1790513904656,
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 7,
+      "time": 1790513904658,
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 8,
+      "time": 1790513904658,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 9,
+      "time": 1790513904658,
+      "data": {
+        "id": "380b26c0-e452-4d88-a978-9c6119501495",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Continue, and rotate the context when you need to."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 10,
+      "time": 1790513904659,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "72d3a6f6-334e-4c23-bacf-88fe07d1c1a3",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Rotating context."
+            },
+            {
+              "type": "tool-call",
+              "id": "call-rotate-1",
+              "name": "new_context",
+              "arguments": "{}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904645:wgw9crw9xk",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                },
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 946,
+          "outputTokens": 8,
+          "totalTokens": 954
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 11,
+      "time": 1790513904659,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "call-rotate-1",
+        "name": "new_context",
+        "arguments": "{}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 12,
+      "time": 1790513904660,
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "id": "9226f9b4-eba1-4f88-9f6f-b294e35c17e2",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "A new context window will start with a summary of the conversation history."
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-rotate-1"
+          },
+          "toolCallId": "call-rotate-1",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "queued": true
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [11]
+    },
+    {
+      "type": "step/end",
+      "seq": 13,
+      "time": 1790513904660,
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 14,
+      "time": 1790513904662,
+      "data": {
+        "id": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.\n\n<compacted-summary>"
+          },
+          {
+            "type": "text",
+            "text": "Summary: step one done, step two under way."
+          },
+          {
+            "type": "text",
+            "text": "</compacted-summary>"
+          }
+        ],
+        "source": {
+          "kind": "compact-checkpoint",
+          "compactionId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a"
+        }
+      },
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 3,
+        "endSeq": 12
+      },
+      "sourceEventSeqs": [3, 4, 9, 10, 12]
+    },
+    {
+      "type": "user/message",
+      "seq": 15,
+      "time": 1790513904662,
+      "data": {
+        "id": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a:retained:0",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Continue, and rotate the context when you need to."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-retained",
+          "compactionId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/start",
+      "seq": 16,
+      "time": 1790513904663,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 17,
+      "time": 1790513904663,
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "id": "3ceb229c-e15b-4036-b2f1-b32e527606c2",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Continuing after the checkpoint."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904645:wgw9crw9xk",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 972,
+          "outputTokens": 8,
+          "totalTokens": 980
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 18,
+      "time": 1790513904663,
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 19,
+      "time": 1790513904663,
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 20,
+      "time": 1790513904675,
+      "data": {
+        "turn": 3
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 21,
+      "time": 1790513904675,
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 22,
+      "time": 1790513904675,
+      "data": {
+        "id": "4bd14315-b29f-4427-ac68-e42e4a9ded48",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Rotate again and keep going."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 23,
+      "time": 1790513904677,
+      "data": {
+        "turn": 3,
+        "step": 1,
+        "message": {
+          "id": "45f9a7c6-9375-4b6d-95b4-f667df83a800",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "call-rotate-2",
+              "name": "new_context",
+              "arguments": "{}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904666:wq86a9cn39q",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 991,
+          "outputTokens": 4,
+          "totalTokens": 995
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 24,
+      "time": 1790513904677,
+      "data": {
+        "turn": 3,
+        "step": 1,
+        "callId": "call-rotate-2",
+        "name": "new_context",
+        "arguments": "{}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 25,
+      "time": 1790513904678,
+      "data": {
+        "turn": 3,
+        "step": 1,
+        "message": {
+          "id": "26fcac8b-0ce1-467a-b349-d6fe50a7726e",
+          "role": "tool",
+          "content": [
+            {
+              "type": "text",
+              "text": "A new context window will start without summarizing conversation history."
+            }
+          ],
+          "source": {
+            "kind": "tool",
+            "callId": "call-rotate-2"
+          },
+          "toolCallId": "call-rotate-2",
+          "isError": false
+        },
+        "meta": {
+          "aiclient": {
+            "piDetails": {
+              "queued": true
+            }
+          }
+        }
+      },
+      "surfaceOp": "append",
+      "sourceEventSeqs": [24]
+    },
+    {
+      "type": "step/end",
+      "seq": 26,
+      "time": 1790513904678,
+      "data": {
+        "turn": 3,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 27,
+      "time": 1790513904679,
+      "data": {
+        "id": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.\n\n<compacted-summary>"
+          },
+          {
+            "type": "text",
+            "text": "[context rollover: a new context window was started without summarizing conversation history]\n\nEarlier messages in this session are not part of this request. The complete transcript is still available to the user, and the environment is unchanged.\n\nAsk before assuming anything about work that is not visible here."
+          },
+          {
+            "type": "text",
+            "text": "</compacted-summary>"
+          }
+        ],
+        "source": {
+          "kind": "compact-checkpoint",
+          "compactionId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6"
+        }
+      },
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 14,
+        "endSeq": 25
+      },
+      "sourceEventSeqs": [14, 15, 17, 22, 23, 25]
+    },
+    {
+      "type": "user/message",
+      "seq": 28,
+      "time": 1790513904679,
+      "data": {
+        "id": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6:retained:0",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Rotate again and keep going."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-pi-retained",
+          "compactionId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/start",
+      "seq": 29,
+      "time": 1790513904680,
+      "data": {
+        "turn": 3,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 30,
+      "time": 1790513904680,
+      "data": {
+        "turn": 3,
+        "step": 2,
+        "message": {
+          "id": "e97ddb0b-47fa-418f-8296-e44ba10a7f30",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Fresh window, carrying on."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904666:wq86a9cn39q",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 1034,
+          "outputTokens": 7,
+          "totalTokens": 1041
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 31,
+      "time": 1790513904680,
+      "data": {
+        "turn": 3,
+        "step": 2
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 32,
+      "time": 1790513904680,
+      "data": {
+        "turn": 3,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 33,
+      "time": 1790513904680,
+      "data": {
+        "id": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "This is an automatically generated checkpoint condensing an earlier span of the conversation to free up context. Treat the captured context as established background and build on it without restating it. Continue the task directly from the messages that follow, without acknowledging this checkpoint.\n\n<compacted-summary>"
+          },
+          {
+            "type": "text",
+            "text": "Checkpoint that retained nothing."
+          },
+          {
+            "type": "text",
+            "text": "</compacted-summary>"
+          }
+        ],
+        "source": {
+          "kind": "compact-checkpoint",
+          "compactionId": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa"
+        }
+      },
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 27,
+        "endSeq": 30
+      },
+      "sourceEventSeqs": [27, 28, 30]
+    },
+    {
+      "type": "turn/start",
+      "seq": 34,
+      "time": 1790513904681,
+      "data": {
+        "turn": 4
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 35,
+      "time": 1790513904681,
+      "data": {
+        "turn": 4,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 36,
+      "time": 1790513904681,
+      "data": {
+        "id": "823c2f12-9124-4a70-bc94-1d5130aa72d4",
+        "role": "user",
+        "content": [
+          {
+            "type": "text",
+            "text": "Wrap it up."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 37,
+      "time": 1790513904682,
+      "data": {
+        "turn": 4,
+        "step": 1,
+        "message": {
+          "id": "fa9ccc9f-cc6a-45bb-8c86-526bc65da8e0",
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "All steps done."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "faux",
+            "model": "faux-corpus",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "faux:1790513904666:wq86a9cn39q",
+                "provider": "faux",
+                "model": "faux-corpus",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          }
+        },
+        "stream": [],
+        "usage": {
+          "inputTokens": 959,
+          "outputTokens": 4,
+          "totalTokens": 963
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 38,
+      "time": 1790513904682,
+      "data": {
+        "turn": 4,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 39,
+      "time": 1790513904682,
+      "data": {
+        "turn": 4,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

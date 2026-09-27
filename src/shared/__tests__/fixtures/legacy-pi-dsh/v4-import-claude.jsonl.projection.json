@@ -1,0 +1,162 @@
+{
+  "file": "v4-import-claude.jsonl",
+  "messages": [
+    {
+      "id": "h:aiclient-legacy-provenance-0",
+      "entryId": "aiclient-legacy-provenance-0",
+      "role": "system",
+      "timestamp": 1790513905630,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:aiclient-legacy-provenance-0:provenance:0",
+          "text": "This history was imported from a claude-code session (claude-session-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
+          "notice": {
+            "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
+            "params": {
+              "sourceKind": "claude-code",
+              "sourceSessionId": "claude-session-0001"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "h:9194ca33-86f7-4a41-9df1-8989bc722a56",
+      "entryId": "9194ca33-86f7-4a41-9df1-8989bc722a56",
+      "role": "user",
+      "timestamp": 1790513905632,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:9194ca33-86f7-4a41-9df1-8989bc722a56:text:0",
+          "text": "Please check the build."
+        }
+      ]
+    },
+    {
+      "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186",
+      "entryId": "726562c5-c1c0-4541-88f3-64bacac1a186",
+      "role": "assistant",
+      "timestamp": 1790513905633,
+      "model": "legacy-import/claude-legacy",
+      "blocks": [
+        {
+          "type": "thinking",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:thinking:0",
+          "text": "Run the build first."
+        },
+        {
+          "type": "text",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:text:1",
+          "text": "Running the build."
+        },
+        {
+          "type": "tool_call",
+          "id": "h:726562c5-c1c0-4541-88f3-64bacac1a186:tool-call:toolu_01",
+          "toolCallId": "toolu_01",
+          "name": "Bash",
+          "input": {
+            "command": "npm run build"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:28f931c9-0e07-43f4-9352-6b667c57c43b:tool-result:toolu_01",
+          "toolCallId": "toolu_01",
+          "ok": true,
+          "output": "build ok"
+        }
+      ]
+    },
+    {
+      "id": "h:aiclient-legacy-display-8",
+      "entryId": "aiclient-legacy-display-8",
+      "role": "assistant",
+      "timestamp": 1790513905633,
+      "blocks": [
+        {
+          "type": "tool_call",
+          "id": "h:aiclient-legacy-display-8:legacy-tool-call:0",
+          "toolCallId": "toolu_02",
+          "name": "Read",
+          "input": {
+            "file_path": "README.md"
+          }
+        },
+        {
+          "type": "tool_result",
+          "id": "h:aiclient-legacy-display-8:legacy-tool-result:0",
+          "toolCallId": "toolu_02",
+          "ok": true,
+          "output": "# Readme"
+        }
+      ]
+    },
+    {
+      "id": "h:aiclient-legacy-display-9",
+      "entryId": "aiclient-legacy-display-9",
+      "role": "system",
+      "timestamp": 1790513905633,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:aiclient-legacy-display-9:legacy-display:0",
+          "text": "screenshot.png\n\nImage attachment was not imported."
+        }
+      ]
+    },
+    {
+      "id": "h:aiclient-legacy-display-10",
+      "entryId": "aiclient-legacy-display-10",
+      "role": "system",
+      "timestamp": 1790513905634,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:aiclient-legacy-display-10:legacy-display:0",
+          "text": "Skipped entries\n\n1 unsupported entry was skipped."
+        }
+      ]
+    },
+    {
+      "id": "h:cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+      "entryId": "cac5d55c-c399-4b26-ade3-27ce1bbfaba4",
+      "role": "assistant",
+      "timestamp": 1790513905634,
+      "model": "legacy-import/claude-legacy",
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:cac5d55c-c399-4b26-ade3-27ce1bbfaba4:text:0",
+          "text": "The build passed."
+        }
+      ]
+    }
+  ],
+  "e4": {
+    "history": [
+      {
+        "category": "legacy-row-id",
+        "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+        "field": "id"
+      },
+      {
+        "category": "legacy-row-id",
+        "id": "h:9723296f-2745-418f-a994-4f35faa208d3",
+        "field": "id"
+      },
+      {
+        "category": "legacy-row-id",
+        "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2",
+        "field": "id"
+      },
+      {
+        "category": "legacy-row-id",
+        "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+        "field": "id"
+      }
+    ],
+    "context": []
+  }
+}
