@@ -1,34 +1,45 @@
 /**
- * Headless bridge smoke: the DSH host in bridge mode, driven exactly as Main's
- * WorkerSlot drives a worker (Node IPC, worker RPC), with no Electron.
+ * Headless bridge smoke: the DSH host driven the way Main's DshHostSupervisor
+ * and its WorkerSlots drive it (Node IPC, one channel envelope per session
+ * around our worker RPC, src/shared/types/dshHostProtocol.ts), with no Electron.
  *
- *   (cd src/dsh-host && ../../out-node-runtime/node tools/bridge-smoke.ts [--keep] [--out file.json])
+ *   (cd src/dsh-host && ../../out-node-runtime/node tools/bridge-smoke.ts [--keep] [--out file.json]
+ *      [--systemd-scope])
  *
  * Every model reply comes from the local fake gateway (plan dsh-p0-2). Hosts,
  * in order — at most two alive at once:
  *
- *   A  new session S1. Before any turn: the DSH log and the identity stub are
- *      both on disk (P1-1, decision 007). Then the P0-3 turns:
+ *   A  new session S1 on channel 1, bootstrapped before the host reports ready
+ *      (the host buffers it). Before any turn: the DSH log and the identity
+ *      stub are both on disk (P1-1, decision 007). The shared-host protocol
+ *      (P1-3a): ready over IPC with the host's own pid; a request for a channel
+ *      the host never opened is answered WORKER_CHANNEL_UNKNOWN; ping answers
+ *      pong; closing an unknown channel answers closed. Then the P0-3 turns:
  *        STREAM         paced text in 20 deltas
  *        TOOL           one bash call, then text
  *        APPROVE-ALLOW  write outside the workspace -> sandbox denial ->
  *                       escalation -> permission.requested -> allow
  *        APPROVE-DENY   the same, answered deny
- *      then worker.dispose.
+ *      two P1-3a experiments, ENV (no .env file reaches a tool, decision 023)
+ *      and FDS (the descriptors a tool inherits, decision 034's precondition),
+ *      then worker.dispose right after the last turn (ACK, then closed; the
+ *      host lives on), and shutdown (stopped, exit 0).
  *   B  new session S2, SIGKILLed right after bootstrap: a header-only log whose
  *      writer died holding the lock — the crash decision 007 exists for.
  *   C  resumes S2 from its stub: a header-only session reopens, the first page
  *      is a legal empty `initialHistory`, and a STREAM turn runs on it.
  *   D  while C holds S2: resuming it again answers `session_locked`.
  *      C is then SIGKILLed mid-session.
- *   E  resumes S2 after that SIGKILL and recalls C's turn.
+ *   E  resumes S2 after that SIGKILL and recalls C's turn; meanwhile a second
+ *      channel on the same host creates S3, and both stream at once without
+ *      either channel seeing the other's events.
  *   F  resumes S1 in yet another host and recalls A's turns.
  *   G  asks to CREATE S2 again, as a retry does when an earlier create reached
  *      the disk but never became Main's identity: the bridge reopens the log
  *      with the deterministic id instead of failing on it, and recalls C's turn.
  *
- * Prints the RuntimeEvent sequence per turn, per-host facts and a verdict.
- * SIGKILL only ever goes to the exact pid of a host this script spawned.
+ * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
+ * and a verdict. Signals only ever go to a ChildProcess this script spawned.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
@@ -37,6 +48,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  readlinkSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -44,7 +56,15 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { baseEnv, captureStderr, exitOf, sandbox, stopWithin, waitQuiet } from './lib/kit.ts';
+import {
+  baseEnv,
+  captureStderr,
+  exitOf,
+  sandbox,
+  sleep,
+  stopWithin,
+  waitQuiet,
+} from './lib/kit.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const hostDir = resolve(here, '..');
@@ -57,20 +77,20 @@ const argv = process.argv.slice(2);
 const keep = argv.includes('--keep');
 const outIndex = argv.indexOf('--out');
 const outFile = outIndex >= 0 ? argv[outIndex + 1] : '';
-const scratchRoot = join('/var/tmp', `aiclient-dsh-p1-1-smoke-${Date.now()}`);
+// --systemd-scope hands the host the two variables Main's environment carries
+// (decision 022), so tools launch through DSH's systemd scope path.
+const systemdScope = argv.includes('--systemd-scope');
+const scratchRoot = join('/var/tmp', `aiclient-dsh-p1-3a-smoke-${Date.now()}`);
 const GENERATION = 1;
 const SESSION = 'bridge-smoke';
 const EMPTY_SESSION = 'bridge-smoke-empty';
+const SIDE_SESSION = 'bridge-smoke-side';
+const CHANNEL_UNKNOWN = 'WORKER_CHANNEL_UNKNOWN';
 
 type Message = Record<string, unknown>;
 
-// ---- safety: signal one exact pid ---------------------------------------------
-
-function killPid(pid: number | undefined, signal: NodeJS.Signals): void {
-  if (!Number.isSafeInteger(pid) || (pid as number) <= 1 || pid === process.pid) {
-    throw new Error(`refusing to signal pid ${String(pid)}`);
-  }
-  process.kill(pid as number, signal);
+function isRecord(value: unknown): value is Message {
+  return typeof value === 'object' && value !== null;
 }
 
 async function startGateway(root: string) {
@@ -99,68 +119,127 @@ async function startGateway(root: string) {
   return { child, port };
 }
 
-class WorkerClient {
-  private seq = 0;
-  readonly events: Message[] = [];
+/**
+ * One host process as the supervisor sees it: channel envelopes in both
+ * directions, host control messages beside them.
+ */
+class HostClient {
+  private requestSeq = 0;
+  private channelSeq = 0;
+  private readonly eventsByChannel = new Map<string, Message[]>();
+  /** Messages that are not channel envelopes: ready, pong, closed, stopped, fatal. */
+  readonly controls: Message[] = [];
+  /** `response:<requestId>` and `closed` per channel, in arrival order. */
+  readonly arrivals: Array<{ ch: string; what: string }> = [];
   private readonly waiters = new Set<() => void>();
   private readonly child: ChildProcess;
 
   constructor(child: ChildProcess) {
     this.child = child;
     child.on('message', (message: unknown) => {
-      const record = message as Message;
-      if (record?.kind === 'event' && record.type === 'runtime.event') {
-        this.events.push(record.payload as Message);
+      if (!isRecord(message)) return;
+      if (typeof message.ch === 'string' && isRecord(message.rpc)) {
+        const rpc = message.rpc;
+        if (rpc.kind === 'event' && rpc.type === 'runtime.event') {
+          this.events(message.ch).push(rpc.payload as Message);
+        } else if (rpc.kind === 'response') {
+          this.arrivals.push({ ch: message.ch, what: `response:${String(rpc.requestId)}` });
+        }
+      } else {
+        this.controls.push(message);
+        if (message.host === 'closed')
+          this.arrivals.push({ ch: String(message.ch), what: 'closed' });
       }
       for (const wake of [...this.waiters]) wake();
     });
   }
 
-  /** One RPC, answered with the raw response (ok or not). */
-  call(type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
-    const requestId = `smoke-${++this.seq}`;
+  /** A fresh channel id: `c<host generation>-<sequence>`, never reused. */
+  openChannel(): string {
+    this.channelSeq += 1;
+    return `c1-${this.channelSeq}`;
+  }
+
+  events(ch: string): Message[] {
+    let list = this.eventsByChannel.get(ch);
+    if (!list) {
+      list = [];
+      this.eventsByChannel.set(ch, list);
+    }
+    return list;
+  }
+
+  send(message: Message): void {
+    this.child.send(message);
+  }
+
+  /** One RPC on a channel, answered with the raw worker RPC response (ok or not). */
+  call(ch: string, type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
+    const requestId = `smoke-${++this.requestSeq}`;
     return new Promise((done, fail) => {
-      const timer = setTimeout(() => fail(new Error(`${type} timed out`)), timeoutMs);
+      const timer = setTimeout(() => {
+        this.child.off('message', onMessage);
+        fail(new Error(`${type} on ${ch} timed out`));
+      }, timeoutMs);
       const onMessage = (message: unknown) => {
-        const record = message as Message;
-        if (record?.kind !== 'response' || record.requestId !== requestId) return;
+        if (!isRecord(message) || message.ch !== ch || !isRecord(message.rpc)) return;
+        const rpc = message.rpc;
+        if (rpc.kind !== 'response' || rpc.requestId !== requestId) return;
         clearTimeout(timer);
         this.child.off('message', onMessage);
-        done(record);
+        done(rpc);
       };
       this.child.on('message', onMessage);
       this.child.send({
-        protocolVersion: 1,
-        kind: 'request',
-        generation: GENERATION,
-        requestId,
-        type,
-        payload,
+        ch,
+        rpc: {
+          protocolVersion: 1,
+          kind: 'request',
+          generation: GENERATION,
+          requestId,
+          type,
+          payload,
+        },
       });
     });
   }
 
-  async request(type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
-    const record = await this.call(type, payload, timeoutMs);
+  async request(ch: string, type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
+    const record = await this.call(ch, type, payload, timeoutMs);
     if (record.ok) return record.result as Message;
     throw new Error(`${type}: ${JSON.stringify(record.error)}`);
   }
 
-  /** Resolve once `predicate` holds over the events seen so far. */
-  until(predicate: (events: Message[]) => boolean, timeoutMs: number): Promise<boolean> {
-    if (predicate(this.events)) return Promise.resolve(true);
+  /** Resolve once `predicate` holds over the channel's events so far. */
+  until(
+    ch: string,
+    predicate: (events: Message[]) => boolean,
+    timeoutMs: number
+  ): Promise<boolean> {
+    return this.wait(() => predicate(this.events(ch)), timeoutMs);
+  }
+
+  /** The first control message matching `predicate`, waiting up to `timeoutMs`. */
+  async control(predicate: (message: Message) => boolean, timeoutMs: number) {
+    const found = () => this.controls.find(predicate);
+    await this.wait(() => found() !== undefined, timeoutMs);
+    return found();
+  }
+
+  private wait(check: () => boolean, timeoutMs: number): Promise<boolean> {
+    if (check()) return Promise.resolve(true);
     return new Promise((done) => {
       const timer = setTimeout(() => {
-        this.waiters.delete(check);
+        this.waiters.delete(wake);
         done(false);
       }, timeoutMs);
-      const check = () => {
-        if (!predicate(this.events)) return;
+      const wake = () => {
+        if (!check()) return;
         clearTimeout(timer);
-        this.waiters.delete(check);
+        this.waiters.delete(wake);
         done(true);
       };
-      this.waiters.add(check);
+      this.waiters.add(wake);
     });
   }
 }
@@ -202,7 +281,7 @@ function assistantText(events: Message[]): string {
 interface Host {
   label: string;
   child: ChildProcess;
-  client: WorkerClient;
+  client: HostClient;
   stderr: () => string;
   exited: Promise<{ code: number | null; signal: string | null }>;
   startedAt: number;
@@ -242,38 +321,59 @@ function diskFacts(dshHome: string, dshSessionId: string, stubFile: string | und
   return { logFiles, log, stub, stubMtimeMs };
 }
 
+/** The target of one of a live process's descriptors (Linux), e.g. `socket:[123]`. */
+function fdTarget(pid: number | undefined, fd: number): string | null {
+  try {
+    return readlinkSync(`/proc/${String(pid)}/fd/${fd}`);
+  } catch {
+    return null;
+  }
+}
+
 async function main() {
   await waitQuiet();
   mkdirSync(scratchRoot, { recursive: true, mode: 0o700 });
   const box = sandbox(scratchRoot, 'run');
   const outside = join(box.root, 'outside');
   mkdirSync(outside, { recursive: true, mode: 0o700 });
+  // The host's launch directory is private and empty, as Main makes it (decision 023).
+  const hostCwd = join(box.root, 'host-cwd');
+  mkdirSync(hostCwd, { recursive: true, mode: 0o700 });
+  // Decision 023: neither of these may ever reach a tool.
+  writeFileSync(join(hostCwd, '.env'), 'P0_HOSTCWD_CANARY=leaked-from-host-cwd\n');
+  writeFileSync(join(box.dshHome, '.env'), 'P0_DSHHOME_CANARY=leaked-from-dsh-home\n');
   const gateway = await startGateway(box.root);
   const env = {
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_BRIDGE: '1',
-    AICLIENT_PI_WORKER_GENERATION: String(GENERATION),
     AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
     AICLIENT_DSH_GATEWAY_KEY: 'p1-1-fake-key',
+    ...(systemdScope
+      ? Object.fromEntries(
+          ['XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']
+            .filter((name) => process.env[name] !== undefined)
+            .map((name) => [name, process.env[name] as string])
+        )
+      : {}),
   };
   const report: Record<string, unknown> = { node: nodeBin, scratch: '<scratch>' };
   const turns: Record<string, unknown> = {};
   const hosts: Record<string, Message> = {};
+  const protocol: Record<string, unknown> = {};
+  const experiments: Record<string, unknown> = {};
   const live: Host[] = [];
 
-  // Host cwd is app-private (P0-2: the launch directory's .env reaches tools).
   const startHost = (label: string): Host => {
     const child = spawn(nodeBin, ['--expose-internals', hostEntry], {
-      cwd: box.dshHome,
+      cwd: hostCwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     const host = {
       label,
       child,
-      client: new WorkerClient(child),
+      client: new HostClient(child),
       stderr: captureStderr(child),
       exited: exitOf(child),
       startedAt: performance.now(),
@@ -281,9 +381,23 @@ async function main() {
     live.push(host);
     return host;
   };
-  const bootstrap = async (host: Host, payload: Message) => {
-    // Sent immediately, as Main does: the host must buffer it until the bridge row is up.
-    const response = await host.client.call('worker.bootstrap', payload);
+  const ready = async (host: Host) => {
+    const message = await host.client.control(
+      (m) => m.type === 'ready' || m.type === 'fatal',
+      180_000
+    );
+    hosts[host.label] = {
+      ...(hosts[host.label] ?? {}),
+      pid: host.child.pid,
+      readyMs: Math.round(performance.now() - host.startedAt),
+      ready: message ? { type: message.type, pid: message.pid, message: message.message } : null,
+    };
+    if (message?.type !== 'ready')
+      throw new Error(`${host.label}: no ready (${JSON.stringify(message)})`);
+    return message;
+  };
+  const bootstrap = async (host: Host, ch: string, payload: Message) => {
+    const response = await host.client.call(ch, 'worker.bootstrap', payload);
     hosts[host.label] = {
       ...(hosts[host.label] ?? {}),
       pid: host.child.pid,
@@ -292,22 +406,32 @@ async function main() {
     };
     return response;
   };
-  const dispose = async (host: Host) => {
-    const disposed = await host.client.request('worker.dispose', { reason: 'app-shutdown' });
+  /** worker.dispose on one channel: its ACK, then `closed`; the host lives on. */
+  const closeSession = async (host: Host, ch: string) => {
+    const disposed = await host.client.request(ch, 'worker.dispose', { reason: 'slot-dispose' });
+    const closed = await host.client.control((m) => m.host === 'closed' && m.ch === ch, 10_000);
+    const order = host.client.arrivals.filter((item) => item.ch === ch).map((item) => item.what);
+    return { disposed, closed: closed !== undefined, order };
+  };
+  /** Host-wide shutdown: `stopped`, then a clean exit. */
+  const stopHost = async (host: Host) => {
+    host.client.send({ type: 'shutdown' });
+    const stopped = await host.client.control((m) => m.type === 'stopped', 15_000);
     const graceful = await stopWithin(host.exited, 15_000);
     hosts[host.label] = {
       ...hosts[host.label],
-      dispose: disposed,
+      stopped: stopped !== undefined,
       graceful,
       exit: await host.exited,
     };
   };
   const kill = async (host: Host) => {
-    killPid(host.child.pid, 'SIGKILL');
+    if (host.child.exitCode === null && host.child.signalCode === null) host.child.kill('SIGKILL');
     hosts[host.label] = { ...hosts[host.label], killed: true, exit: await host.exited };
   };
   const runTurn = async (
     host: Host,
+    ch: string,
     logicalSessionId: string,
     label: string,
     text: string,
@@ -315,8 +439,8 @@ async function main() {
   ) => {
     const { client } = host;
     const requestId = `turn-${label}`;
-    const from = client.events.length;
-    await client.request('worker.send', {
+    const from = client.events(ch).length;
+    await client.request(ch, 'worker.send', {
       logicalSessionId,
       requestId,
       attemptId: `attempt-${label}`,
@@ -324,12 +448,16 @@ async function main() {
     });
     if (onPermission) {
       const asked = await client.until(
+        ch,
         (events) => events.slice(from).some((e) => e.type === 'permission.requested'),
         60_000
       );
-      const request = client.events.slice(from).find((e) => e.type === 'permission.requested');
+      const request = client
+        .events(ch)
+        .slice(from)
+        .find((e) => e.type === 'permission.requested');
       if (asked && request) {
-        await client.request('worker.permission.respond', {
+        await client.request(ch, 'worker.permission.respond', {
           logicalSessionId,
           permissionId: payloadOf(request).permissionId,
           decision: onPermission,
@@ -337,6 +465,7 @@ async function main() {
       }
     }
     const idle = await client.until(
+      ch,
       (events) =>
         events
           .slice(from)
@@ -348,7 +477,7 @@ async function main() {
           ),
       90_000
     );
-    const events = client.events.slice(from);
+    const events = client.events(ch).slice(from);
     const deltas = events.filter((e) => e.type === 'message.delta');
     const turn = {
       idle,
@@ -358,10 +487,15 @@ async function main() {
       reply: assistantText(events).slice(0, 200),
       permission: events.find((e) => e.type === 'permission.requested')?.payload,
       tools: events.filter((e) => e.type === 'tool.completed').map((e) => payloadOf(e)),
+      sessionIds: [...new Set(events.map((e) => e.sessionId))],
     };
     turns[label] = turn;
     return turn;
   };
+  const toolOutput = (label: string) =>
+    ((turns[label] as { tools?: Message[] } | undefined)?.tools ?? [])
+      .map((tool) => String(tool.output ?? tool.error ?? ''))
+      .join('\n');
 
   const facts: Record<string, ReturnType<typeof diskFacts>> = {};
   let stubS1: string | undefined;
@@ -371,19 +505,42 @@ async function main() {
   try {
     // ---- A: new session, persisted before its first turn, then the P0-3 turns
     const a = startHost('A');
-    const bootA = await bootstrap(a, { logicalSessionId: SESSION, cwd: box.workspace });
+    const chA = a.client.openChannel();
+    // Sent at once, before ready: the host must buffer it until the bridge row is up.
+    const bootingA = bootstrap(a, chA, { logicalSessionId: SESSION, cwd: box.workspace });
+    const readyA = await ready(a);
+    const bootA = await bootingA;
     if (!bootA.ok) throw new Error(`A bootstrap: ${JSON.stringify(bootA.error)}`);
     report.bootstrapMs = hosts.A.bootstrapMs;
     report.bootstrap = bootA.result;
+    protocol.readyPid = { reported: readyA.pid, spawned: a.child.pid };
+    protocol.readySkippedPlugins = readyA.skippedPlugins;
     stubS1 = String((bootA.result as Message).sessionFile);
     facts.newBeforeFirstTurn = diskFacts(box.dshHome, `aiclient-${SESSION}`, stubS1);
-    report.commands = await a.client.request('worker.commands', { logicalSessionId: SESSION });
+    report.commands = await a.client.request(chA, 'worker.commands', { logicalSessionId: SESSION });
 
-    await runTurn(a, SESSION, 'STREAM', 'P0-STREAM: stream a paragraph back to me.');
-    await runTurn(a, SESSION, 'TOOL', 'P0-TOOL: list the workspace.');
+    // The shared-host protocol around the channel (P1-3a).
+    const unknown = await a.client.call('c1-99', 'worker.history', { logicalSessionId: SESSION });
+    protocol.unknownChannel = {
+      ok: unknown.ok,
+      code: (unknown.error as Message | undefined)?.code,
+      generation: unknown.generation,
+      requestId: unknown.requestId,
+    };
+    a.client.send({ host: 'ping', id: 7 });
+    const pong = await a.client.control((m) => m.host === 'pong' && m.id === 7, 10_000);
+    protocol.pong = pong;
+    a.client.send({ host: 'close', ch: 'c1-98' });
+    protocol.closeUnknown =
+      (await a.client.control((m) => m.host === 'closed' && m.ch === 'c1-98', 10_000)) !==
+      undefined;
+
+    await runTurn(a, chA, SESSION, 'STREAM', 'P0-STREAM: stream a paragraph back to me.');
+    await runTurn(a, chA, SESSION, 'TOOL', 'P0-TOOL: list the workspace.');
     const allowTarget = join(outside, 'allowed.txt');
     await runTurn(
       a,
+      chA,
       SESSION,
       'APPROVE-ALLOW',
       `P0-APPROVAL: write outside, path=${allowTarget}`,
@@ -392,20 +549,68 @@ async function main() {
     const denyTarget = join(outside, 'denied.txt');
     await runTurn(
       a,
+      chA,
       SESSION,
       'APPROVE-DENY',
       `P0-APPROVAL: write outside, path=${denyTarget}`,
       'deny'
     );
     report.files = { allowed: existsSync(allowTarget), denied: existsSync(denyTarget) };
-    report.history = await a.client.request('worker.history', { logicalSessionId: SESSION });
-    await dispose(a);
-    report.dispose = hosts.A.dispose;
+    report.history = await a.client.request(chA, 'worker.history', { logicalSessionId: SESSION });
+
+    // Experiment (decision 023): no .env file reaches a tool.
+    await runTurn(a, chA, SESSION, 'ENV', 'P0-ENV: print the env canaries.');
+    const envLine = toolOutput('ENV').split('\n')[0] ?? '';
+    experiments.dotEnv = {
+      line: envLine.slice(0, 200),
+      warned: (a.stderr().match(/\.env is ignored/g) ?? []).length,
+    };
+    // Experiment (decision 034's precondition): does a tool inherit the host's
+    // IPC channel, inside the sandbox and once escalated out of it?
+    const hostChannelFd = fdTarget(a.child.pid, 3);
+    await runTurn(a, chA, SESSION, 'FDS', 'P0-FDS: list the inherited descriptors.', 'allow');
+    const fdsRuns = ((turns.FDS as { tools?: Message[] } | undefined)?.tools ?? []).map((item) =>
+      String(item.output ?? item.error ?? '')
+    );
+    const fdsView = (output: string | undefined) => ({
+      lines: (output ?? '')
+        .split('\n')
+        .filter((line) => /^fd \d+ -> /.test(line) || line.startsWith('pid='))
+        .slice(0, 24),
+      inherited: hostChannelFd !== null && (output ?? '').includes(hostChannelFd),
+      channelVariable: /channel_fd=(?!unset)/.test(output ?? ''),
+    });
+    experiments.ipcHandle = {
+      systemdScope,
+      hostFd3: hostChannelFd,
+      sandboxed: fdsView(fdsRuns[0]),
+      escalated: fdsView(fdsRuns[1]),
+    };
+
+    // Dispose right after the turn ended (P1-1 left a projection-cache warning
+    // here); the shared host lives on, so a late flush would surface now.
+    const closedA = await closeSession(a, chA);
+    report.dispose = closedA.disposed;
+    protocol.disposeCloses = closedA;
+    await sleep(1500);
+    a.client.send({ host: 'ping', id: 8 });
+    protocol.pongAfterClose = await a.client.control(
+      (m) => m.host === 'pong' && m.id === 8,
+      10_000
+    );
+    experiments.projectionCacheAfterDispose = a
+      .stderr()
+      .split('\n')
+      .filter((line) => /projection cache|closed handle/i.test(line))
+      .slice(0, 6);
+    await stopHost(a);
     report.graceful = hosts.A.graceful;
 
     // ---- B: new session S2, killed before any turn (header-only log, lock held)
     const b = startHost('B');
-    const bootB = await bootstrap(b, { logicalSessionId: EMPTY_SESSION, cwd: box.workspace });
+    await ready(b);
+    const chB = b.client.openChannel();
+    const bootB = await bootstrap(b, chB, { logicalSessionId: EMPTY_SESSION, cwd: box.workspace });
     if (!bootB.ok) throw new Error(`B bootstrap: ${JSON.stringify(bootB.error)}`);
     stubS2 = String((bootB.result as Message).sessionFile);
     facts.headerOnly = diskFacts(box.dshHome, `aiclient-${EMPTY_SESSION}`, stubS2);
@@ -413,18 +618,28 @@ async function main() {
 
     // ---- C: resume the header-only session from its stub and run a turn
     const c = startHost('C');
-    const bootC = await bootstrap(c, {
+    await ready(c);
+    const chC = c.client.openChannel();
+    const bootC = await bootstrap(c, chC, {
       logicalSessionId: EMPTY_SESSION,
       cwd: box.workspace,
       sessionFile: stubS2,
     });
     if (!bootC.ok) throw new Error(`C bootstrap: ${JSON.stringify(bootC.error)}`);
     resumedS2 = bootC.result as Message;
-    await runTurn(c, EMPTY_SESSION, 'RESUMED-STREAM', 'P0-STREAM: stream a paragraph back to me.');
+    await runTurn(
+      c,
+      chC,
+      EMPTY_SESSION,
+      'RESUMED-STREAM',
+      'P0-STREAM: stream a paragraph back to me.'
+    );
 
     // ---- D: a second host cannot open a session C holds
     const d = startHost('D');
-    const bootD = await bootstrap(d, {
+    await ready(d);
+    const chD = d.client.openChannel();
+    const bootD = await bootstrap(d, chD, {
       logicalSessionId: EMPTY_SESSION,
       cwd: box.workspace,
       sessionFile: stubS2,
@@ -432,39 +647,70 @@ async function main() {
       forceTakeover: true,
     });
     lockedCode = bootD.ok ? 'opened' : (bootD.error as Message | undefined)?.code;
-    await dispose(d);
+    await closeSession(d, chD);
+    await stopHost(d);
 
     // ---- C dies mid-session; E reopens S2 and recalls C's turn
     await kill(c);
     facts.afterKill = diskFacts(box.dshHome, `aiclient-${EMPTY_SESSION}`, stubS2);
     const e = startHost('E');
-    const bootE = await bootstrap(e, {
+    await ready(e);
+    const chE = e.client.openChannel();
+    const bootE = await bootstrap(e, chE, {
       logicalSessionId: EMPTY_SESSION,
       cwd: box.workspace,
       sessionFile: stubS2,
     });
     if (!bootE.ok) throw new Error(`E bootstrap: ${JSON.stringify(bootE.error)}`);
-    await runTurn(e, EMPTY_SESSION, 'RECALL-AFTER-KILL', 'P0-RECALL {"markers":["P0-STREAM"]}');
-    await dispose(e);
+    // A second session on the same host, streaming beside the recall.
+    const chSide = e.client.openChannel();
+    const bootSide = await bootstrap(e, chSide, {
+      logicalSessionId: SIDE_SESSION,
+      cwd: box.workspace,
+    });
+    if (!bootSide.ok) throw new Error(`E side bootstrap: ${JSON.stringify(bootSide.error)}`);
+    await Promise.all([
+      runTurn(e, chE, EMPTY_SESSION, 'RECALL-AFTER-KILL', 'P0-RECALL {"markers":["P0-STREAM"]}'),
+      runTurn(e, chSide, SIDE_SESSION, 'SIDE-STREAM', 'P0-STREAM: stream a paragraph back to me.'),
+    ]);
+    protocol.twoChannels = {
+      mainSessions: [...new Set(e.client.events(chE).map((event) => event.sessionId))],
+      sideSessions: [...new Set(e.client.events(chSide).map((event) => event.sessionId))],
+    };
+    await closeSession(e, chE);
+    await closeSession(e, chSide);
+    await stopHost(e);
 
     // ---- F: S1 in yet another host, with A's turns in context
     const f = startHost('F');
-    const bootF = await bootstrap(f, {
+    await ready(f);
+    const chF = f.client.openChannel();
+    const bootF = await bootstrap(f, chF, {
       logicalSessionId: SESSION,
       cwd: box.workspace,
       sessionFile: stubS1,
     });
     if (!bootF.ok) throw new Error(`F bootstrap: ${JSON.stringify(bootF.error)}`);
-    await runTurn(f, SESSION, 'RECALL-OTHER-HOST', 'P0-RECALL {"markers":["P0-STREAM","P0-TOOL"]}');
-    await dispose(f);
+    await runTurn(
+      f,
+      chF,
+      SESSION,
+      'RECALL-OTHER-HOST',
+      'P0-RECALL {"markers":["P0-STREAM","P0-TOOL"]}'
+    );
+    await closeSession(f, chF);
+    await stopHost(f);
 
     // ---- G: a create for a logical session whose DSH log already exists
     const g = startHost('G');
-    const bootG = await bootstrap(g, { logicalSessionId: EMPTY_SESSION, cwd: box.workspace });
+    await ready(g);
+    const chG = g.client.openChannel();
+    const bootG = await bootstrap(g, chG, { logicalSessionId: EMPTY_SESSION, cwd: box.workspace });
     if (!bootG.ok) throw new Error(`G bootstrap: ${JSON.stringify(bootG.error)}`);
     facts.recreated = diskFacts(box.dshHome, `aiclient-${EMPTY_SESSION}`, stubS2);
-    await runTurn(g, EMPTY_SESSION, 'RECALL-RECREATED', 'P0-RECALL {"markers":["P0-STREAM"]}');
-    await dispose(g);
+    await runTurn(g, chG, EMPTY_SESSION, 'RECALL-RECREATED', 'P0-RECALL {"markers":["P0-STREAM"]}');
+    await closeSession(g, chG);
+    await stopHost(g);
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   } finally {
@@ -481,6 +727,8 @@ async function main() {
   report.turns = turns;
   report.hosts = hosts;
   report.disk = facts;
+  report.protocol = protocol;
+  report.experiments = experiments;
 
   const stream = turns.STREAM as { assistantDeltas?: number } | undefined;
   const tool = turns.TOOL as { tools?: Message[] } | undefined;
@@ -491,6 +739,7 @@ async function main() {
   const resumedTurn = turns['RESUMED-STREAM'] as Turn | undefined;
   const recallKill = turns['RECALL-AFTER-KILL'] as Turn | undefined;
   const recallOther = turns['RECALL-OTHER-HOST'] as Turn | undefined;
+  const sideTurn = turns['SIDE-STREAM'] as (Turn & { assistantDeltas?: number }) | undefined;
   const history = resumedS2?.initialHistory as
     | { logicalSessionId?: string; sessionFile?: string; workspacePath?: string; page?: Message }
     | undefined;
@@ -498,6 +747,17 @@ async function main() {
   const stub = fresh?.stub;
   const exitOfHost = (label: string) =>
     (hosts[label]?.exit ?? {}) as { code?: number | null; signal?: string | null };
+  const readyPid = protocol.readyPid as { reported?: unknown; spawned?: unknown } | undefined;
+  const unknownChannel = protocol.unknownChannel as Message | undefined;
+  const pong = protocol.pong as Message | undefined;
+  const pongAfterClose = protocol.pongAfterClose as Message | undefined;
+  const disposeCloses = protocol.disposeCloses as
+    | { closed?: boolean; order?: string[] }
+    | undefined;
+  const twoChannels = protocol.twoChannels as
+    | { mainSessions?: unknown[]; sideSessions?: unknown[] }
+    | undefined;
+  const dotEnv = experiments.dotEnv as { line?: string } | undefined;
   report.verdict = {
     // P0-3, unchanged
     streamedInManyDeltas: (stream?.assistantDeltas ?? 0) >= 10,
@@ -553,6 +813,38 @@ async function main() {
         'present=P0-STREAM missing=-'
       ) === true &&
       exitOfHost('G').code === 0,
+    // P1-3a: the shared-host protocol (src/shared/types/dshHostProtocol.ts)
+    readyOverIpcWithOwnPid:
+      readyPid?.reported !== undefined && readyPid.reported === readyPid.spawned,
+    unknownChannelRefused:
+      unknownChannel?.ok === false &&
+      unknownChannel.code === CHANNEL_UNKNOWN &&
+      unknownChannel.generation === GENERATION &&
+      typeof unknownChannel.requestId === 'string',
+    pongListsChannel:
+      Array.isArray(pong?.channels) &&
+      (pong.channels as Message[]).some((item) => item.ch === 'c1-1' && item.busy === false) &&
+      typeof pong.eldMaxMs === 'number' &&
+      typeof pong.rssMb === 'number' &&
+      (pong.rssMb as number) > 0,
+    closeOfUnknownChannelAnswered: protocol.closeUnknown === true,
+    disposeAckThenClosed:
+      disposeCloses?.closed === true &&
+      (disposeCloses.order ?? []).at(-1) === 'closed' &&
+      (disposeCloses.order ?? []).at(-2)?.startsWith('response:') === true,
+    hostOutlivesChannel:
+      Array.isArray(pongAfterClose?.channels) &&
+      (pongAfterClose.channels as unknown[]).length === 0,
+    stoppedBeforeExit: hosts.A?.stopped === true && hosts.A?.graceful === true,
+    channelsDoNotCross:
+      JSON.stringify(twoChannels?.mainSessions) === JSON.stringify([EMPTY_SESSION]) &&
+      JSON.stringify(twoChannels?.sideSessions) === JSON.stringify([SIDE_SESSION]) &&
+      (sideTurn?.assistantDeltas ?? 0) >= 10 &&
+      sideTurn?.completed === true,
+    // P1-3a: decision 023, no .env file reaches a tool
+    dotEnvNotRead:
+      dotEnv?.line?.includes('hostcwd=unset') === true &&
+      dotEnv.line.includes('dshhome=unset') === true,
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)

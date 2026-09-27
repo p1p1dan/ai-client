@@ -4,25 +4,29 @@
  * Every chat session runs on the DeepSeek Harness host, packaged or not
  * (decisions 004 and 009): there is no engine switch and no native fallback.
  * The host (`src/dsh-host/host.ts`, built to `host.js` for packaging by P1-2)
- * runs on the bundled Node with an IPC channel. One-shot completions and
+ * runs on the bundled Node with an IPC channel, one per app, spawned and
+ * owned by `DshHostSupervisor` (decision 019). One-shot completions and
  * conversation imports keep the native worker (`PiWorkerProcess.ts`) until
  * P1-12.
  *
- * The pieces are separate functions because two launchers share them: the
- * per-slot `forkDshHost` below (one host per WorkerSlot, still the default
- * until P1-3a) and `DshHostSupervisor` (one shared host per app, decision
- * 019). They are the layout (which binary runs which entry), the home
- * (decision 008), the environment (decision 022), the launch directory
+ * The pieces are separate functions so each can be pinned on its own: the
+ * layout (which binary runs which entry), the home (decision 008), the
+ * environment (decision 022, `dshHostEnvironment.ts`), the launch directory
  * (decision 023) and the private directories the launch needs.
  */
 
-import { type ChildProcess, type SpawnOptions, spawn } from 'node:child_process';
+import type { SpawnOptions } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { PI_WORKER_GENERATION_ENV } from '@shared/types/workerRpc';
 import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
-import { createNodeProcessWorkerTransport, type WorkerTransport } from './WorkerTransport';
+import { buildDshHostEnvironment } from './dshHostEnvironment';
+
+export {
+  buildDshHostEnvironment,
+  DSH_SENSITIVE_ENV_PATTERN,
+  isStrippedDshHostEnvName,
+} from './dshHostEnvironment';
 
 /** Thrown when the bundled Node or the host entry is not on disk; never falls back. */
 export const DSH_HOST_MISSING = 'DSH_HOST_MISSING';
@@ -52,38 +56,6 @@ export const DSH_HOST_LAYOUT = {
 
 /** Flags the host needs: its module resolution patches Node internals (see host.ts). */
 export const DSH_HOST_NODE_ARGS = ['--expose-internals'] as const;
-
-/**
- * Credential-shaped names, the same rule DSH applies to every tool it spawns
- * (`SENSITIVE_ENV_PATTERN` in @deepseek-ai/dsh-subprocess). Dropping them from
- * the host too closes pi-ai's fallback of looking up a provider key in the
- * launch environment. A static test pins it to the installed DSH package.
- */
-export const DSH_SENSITIVE_ENV_PATTERN = /KEY|PASSWORD|SECRET|TOKEN/i;
-
-/** Runtime injection: `--require` hooks, debug ports, module resolution outside the host. */
-const STRIPPED_ENV_NAMES = ['NODE_OPTIONS', 'NODE_PATH'];
-
-/**
- * Electron's switches and the app's own: anything the host needs from these
- * families is set explicitly below. Matched case-insensitively, as DSH matches
- * `DSH_*`: Windows names are case-insensitive.
- */
-const STRIPPED_ENV_PREFIXES = ['ELECTRON_', 'AICLIENT_', 'DSH_', 'VITE_'];
-
-/**
- * Package-manager lifecycle variables from a `pnpm dev` launch. Lower-case by
- * npm's convention, so a user's own `NPM_CONFIG_*` keeps reaching tools.
- */
-const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
-
-/**
- * Where the dev gateway route points and the key it sends (the bundle's
- * llm-pi-ai row); absent means the discard port. The key is credential-shaped,
- * so it is added back explicitly. Unpackaged only; removed by P1-5 when routing
- * moves to the real credential path.
- */
-const DEV_GATEWAY_ENV = ['AICLIENT_DSH_GATEWAY_URL', 'AICLIENT_DSH_GATEWAY_KEY'];
 
 /** Owner-only: DSH refuses group-writable roots (spill-local), and the tree holds session logs. */
 const PRIVATE_DIR_MODE = 0o700;
@@ -138,81 +110,6 @@ export function resolveDshHome(input: {
   return override?.trim() || path.join(input.appStateRoot, DSH_HOME_DIR_NAME);
 }
 
-/** Whether an inherited variable stays behind (decision 022). */
-export function isStrippedDshHostEnvName(name: string): boolean {
-  if (DSH_SENSITIVE_ENV_PATTERN.test(name)) return true;
-  const upper = name.toUpperCase();
-  if (STRIPPED_ENV_NAMES.includes(upper)) return true;
-  if (STRIPPED_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix))) return true;
-  return name.startsWith(STRIPPED_LIFECYCLE_PREFIX);
-}
-
-/** Set `name`, first dropping any spelling Windows would treat as the same variable. */
-function setEnvEntry(
-  env: Record<string, string>,
-  name: string,
-  value: string,
-  platform: NodeJS.Platform
-): void {
-  if (platform === 'win32') {
-    const upper = name.toUpperCase();
-    for (const existing of Object.keys(env)) {
-      if (existing.toUpperCase() === upper) delete env[existing];
-    }
-  }
-  env[name] = value;
-}
-
-/**
- * The host's whole environment (decision 022): Main's, minus runtime
- * injection, Electron and app-internal switches, and credential-shaped names;
- * plus the explicit settings below. It is also the base of every tool the host
- * spawns, so it keeps what 1.0.x tools saw (`SSH_AUTH_SOCK`, `JAVA_HOME`,
- * proxies, `XDG_RUNTIME_DIR` and DBus for systemd containment).
- *
- * `bridgeGeneration` is the per-slot bridge mode of `forkDshHost`; the shared
- * host carries the generation in each channel's messages instead. P1-3a
- * removes it together with `forkDshHost`.
- */
-export function buildDshHostEnvironment(input: {
-  dshHome: string;
-  nativeCacheDir: string;
-  isPackaged: boolean;
-  env?: NodeJS.ProcessEnv;
-  platform?: NodeJS.Platform;
-  bridgeGeneration?: number;
-}): Record<string, string> {
-  const source = input.env ?? process.env;
-  const platform = input.platform ?? process.platform;
-  const hostEnv: Record<string, string> = {};
-  for (const [name, value] of Object.entries(source)) {
-    if (value !== undefined && !isStrippedDshHostEnvName(name)) hostEnv[name] = value;
-  }
-  const explicit: Record<string, string> = {
-    DSH_HOME: input.dshHome,
-    DSH_TELEMETRY_DISABLED: '1',
-    NARB_NATIVE_CACHE_DIR: input.nativeCacheDir,
-  };
-  if (!input.isPackaged) {
-    for (const name of DEV_GATEWAY_ENV) {
-      const value = source[name];
-      if (value !== undefined) explicit[name] = value;
-    }
-  }
-  if (input.bridgeGeneration !== undefined) {
-    const generation = input.bridgeGeneration;
-    if (!Number.isSafeInteger(generation) || generation <= 0) {
-      throw new Error(`DSH host generation must be a positive safe integer: ${generation}`);
-    }
-    explicit.AICLIENT_DSH_BRIDGE = '1';
-    explicit[PI_WORKER_GENERATION_ENV] = String(generation);
-  }
-  for (const [name, value] of Object.entries(explicit)) {
-    setEnvEntry(hostEnv, name, value, platform);
-  }
-  return hostEnv;
-}
-
 export interface DshHostLaunch {
   command: string;
   args: string[];
@@ -224,7 +121,7 @@ export interface DshHostLaunch {
 }
 
 export function buildDshHostLaunch(
-  input: DshHostLayoutInput & { appStateRoot: string; bridgeGeneration?: number }
+  input: DshHostLayoutInput & { appStateRoot: string }
 ): DshHostLaunch {
   const layout = resolveDshHostLayout(input);
   const dshHome = resolveDshHome(input);
@@ -240,20 +137,18 @@ export function buildDshHostLaunch(
       isPackaged: input.isPackaged,
       env: input.env,
       platform: input.platform,
-      bridgeGeneration: input.bridgeGeneration,
     }),
     privateDirs: [dshHome, cwd, nativeCacheDir],
   };
 }
 
 /** The launch for this running app. */
-export function currentDshHostLaunch(options: { bridgeGeneration?: number } = {}): DshHostLaunch {
+export function currentDshHostLaunch(): DshHostLaunch {
   return buildDshHostLaunch({
     isPackaged: app.isPackaged,
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
     appStateRoot: getAppStateRoot(),
-    bridgeGeneration: options.bridgeGeneration,
   });
 }
 
@@ -287,22 +182,4 @@ export function dshHostSpawnOptions(launch: DshHostLaunch): SpawnOptions {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   };
-}
-
-/** Spawn the DSH host for one WorkerSlot generation of the session running in `cwd`. */
-export function forkDshHost(options: { generation: number; cwd: string }): {
-  process: ChildProcess;
-  transport: WorkerTransport;
-} {
-  // Same check as the native worker: a spawn into a vanished directory fails
-  // with ENOENT naming the command, which reads as "node is missing".
-  if (!existsSync(options.cwd)) {
-    throw new Error(
-      `WORKER_WORKSPACE_MISSING: DSH session working directory is missing: ${options.cwd}`
-    );
-  }
-  const launch = currentDshHostLaunch({ bridgeGeneration: options.generation });
-  prepareDshHostDirectories(launch);
-  const child = spawn(launch.command, launch.args, dshHostSpawnOptions(launch));
-  return { process: child, transport: createNodeProcessWorkerTransport(child) };
 }

@@ -4,8 +4,8 @@
  * `DshSessionRuntime` implements the same `PiWorkerRuntime` contract as
  * `NativeWorkerRuntime`, so the unmodified `PiWorkerRpcServer` can drive it and
  * Main / the renderer see ordinary worker RPC and RuntimeEvents. It runs inside
- * the DSH host (the `aiclient-bridge` row of @aiclient/dsh-app) and talks to
- * DSH services in-process:
+ * the shared DSH host, one per channel of the `aiclient-bridge` row of
+ * @aiclient/dsh-app (P1-3a), and talks to DSH services in-process:
  *
  *   durable `session/event`        -> message.* / tool.* / session.* events
  *   live `agent/assistant-stream`  -> message.started / message.delta / thinking.delta
@@ -430,6 +430,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.cwd = options.cwd;
     this.home = deps.home ?? process.env.DSH_HOME ?? '';
     this.now = deps.now ?? Date.now;
+  }
+
+  /**
+   * The agent is not idle: a turn this bridge started, one it did not (a goal
+   * round, a job notice), or other agent work. Reported to Main in each pong.
+   */
+  get busy(): boolean {
+    if (this.disposed) return false;
+    return this.turn !== null || (this.handle !== null && this.handle.agent.status !== 'idle');
   }
 
   // ---- lifecycle -------------------------------------------------------------

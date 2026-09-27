@@ -5,7 +5,8 @@
  *   node scripts/build-dsh-host.mjs [--platform <p> --arch <a>] [--out <dir>]
  *
  * Output layout (out-dsh-host/ by default):
- *   host.js                     esbuild transpile of src/dsh-host/host.ts
+ *   host.js                     esbuild bundle of src/dsh-host/host.ts and its lib/
+ *                               (npm packages external)
  *   package.json                the install anchor (@aiclient/dsh-host)
  *   dsh-host-manifest.json      target, versions, git commit, size, file count, natives
  *   THIRD_PARTY_LICENSES.json   one entry per installed package of the final tree
@@ -30,6 +31,7 @@ import {
   bridgeBuildOptions,
   buildManifest,
   checkBridgeMetafile,
+  checkHostMetafile,
   collectLicenses,
   DSH_HOST_BUDGET,
   DSH_HOST_LICENSES,
@@ -107,7 +109,9 @@ async function compile(outDir) {
   } catch {
     throw new Error('esbuild not resolvable from the repo root — run "pnpm install" first');
   }
-  await esbuild.build(hostBuildOptions(sourceDir, outDir));
+  const host = await esbuild.build(hostBuildOptions(sourceDir, outDir));
+  const hostVerdict = checkHostMetafile(host.metafile, repoRoot);
+  if (hostVerdict.failures.length > 0) throw new Error(hostVerdict.failures.join('; '));
   const bridges = [];
   for (const item of BRIDGE_ENTRIES) {
     const result = await esbuild.build(bridgeBuildOptions(sourceDir, outDir, item));

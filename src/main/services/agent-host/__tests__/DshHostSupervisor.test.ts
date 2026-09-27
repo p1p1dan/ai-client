@@ -395,6 +395,22 @@ describe('DshHostSupervisor signalling guards', () => {
     await expect(retry).resolves.toEqual({ generation: 2, pid: FAKE_PID + 1 });
   });
 
+  // P1-3a, found against the real host: Node emits the IPC drop of a killed
+  // child before its exit, so a crash first looks like a disconnect.
+  it('a host that dies after dropping IPC is recorded as crashed, and not signalled', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    child.connected = false;
+    child.emit('disconnect');
+    child.die(null, 'SIGKILL');
+    await flushMicrotasks();
+    expect(child.kill).not.toHaveBeenCalled();
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'idle',
+      lastExit: { reason: 'crashed', signal: 'SIGKILL' },
+    });
+  });
+
   it('a host that drops IPC without exiting is killed after the graceful budget', async () => {
     const h = createFakeHostHarness();
     const child = await startReadyHost(h);
@@ -645,6 +661,18 @@ describe('DshHostSupervisor crash and stderr', () => {
     expect((await next).ch).toBe('c2-3');
     child.post({ host: 'closed', ch: 'c1-1' });
     for (const exit of exits) expect(exit).toHaveBeenCalledTimes(1);
+  });
+
+  // P1-3a: the host answers every close, so a slot's close that crossed the
+  // `closed` its own worker.dispose produced gets a second, expected one.
+  it('[SH-07] a repeated closed for a channel it just closed is expected, not warned', async () => {
+    const { child, exits } = await crashWithChannels();
+    child.post({ host: 'closed', ch: 'c1-2' });
+    child.post({ host: 'closed', ch: 'c1-2' });
+    expect(exits[1]).toHaveBeenCalledTimes(1);
+    expect(consoleWarn).not.toHaveBeenCalled();
+    child.post({ host: 'closed', ch: 'c1-7' });
+    expect(consoleWarn).toHaveBeenCalledWith('[dsh-host] closed for unknown channel c1-7');
   });
 
   it('[SH-07] closed ends only its own channel', async () => {

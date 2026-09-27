@@ -11,11 +11,13 @@ import {
   binaryMatchesTarget,
   bridgeBuildOptions,
   checkBridgeMetafile,
+  checkHostMetafile,
   collectLicenses,
   DSH_HOST_LICENSES,
   DSH_HOST_MANIFEST,
   executablePaths,
   fixExecutableBits,
+  hostBuildOptions,
   isDocumentationMarkdown,
   isLicenseFileName,
   LICENSE_FILE_REQUIRED,
@@ -491,6 +493,11 @@ describe('verifyDshArtifact rejects', () => {
     failsWith(/aiclient-probe/);
   });
 
+  it('a host.js that still loads its TypeScript lib (P1-3a)', () => {
+    write(path.join(tmp, 'host.js'), "import { PRODUCT_BUNDLES } from './lib/hostProfile.ts';\n");
+    failsWith(/host\.js still loads TypeScript sources/);
+  });
+
   it('a bridge that still loads TypeScript sources', () => {
     write(
       path.join(tmp, 'node_modules', '@aiclient', 'dsh-app', 'lib', 'bridge.js'),
@@ -624,6 +631,40 @@ describe('install and staging', () => {
     bundle.peerDependencies['@deepseek-ai/dsh-llm'] = '0.0.1';
     writeJson(path.join(copy, 'bundle', 'package.json'), bundle);
     expect(() => preflightDshHost(copy)).toThrow(/pnpm must be an exact version[\s\S]*bundle peer/);
+  });
+});
+
+describe('the host bundle (P1-3a)', () => {
+  it('takes in host.ts and its lib/ only, and leaves DSH to the artifact', async () => {
+    const outDir = path.join(tmp, 'artifact');
+    const result = await build(hostBuildOptions(sourceDir, outDir));
+    const verdict = checkHostMetafile(result.metafile, repoRoot);
+    expect(verdict.failures).toEqual([]);
+    expect(verdict.inputs.sort()).toEqual([
+      'src/dsh-host/host.ts',
+      'src/dsh-host/lib/hostProfile.ts',
+    ]);
+    expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
+      '@deepseek-ai/dsh-app-boot',
+      '@deepseek-ai/dsh-launch-environment',
+    ]);
+    const text = fs.readFileSync(path.join(outDir, 'host.js'), 'utf8');
+    expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
+    expect(text).toContain('function reconcileProductBundles(');
+  });
+
+  it('flags a host bundle that took in anything else', () => {
+    const { failures } = checkHostMetafile(
+      {
+        inputs: { 'src/dsh-host/host.ts': {}, 'src/shared/types/workerRpc.ts': {} },
+        outputs: { 'host.js': { imports: [{ path: 'zod', external: true }] } },
+      },
+      repoRoot
+    );
+    expect(failures).toEqual([
+      'host bundle took in src/shared/types/workerRpc.ts',
+      'host bundle imports zod at run time',
+    ]);
   });
 });
 

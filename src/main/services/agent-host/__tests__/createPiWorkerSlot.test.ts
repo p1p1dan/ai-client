@@ -1,7 +1,9 @@
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcRequest } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
 import { createPiWorkerSlot } from '../createPiWorkerSlot';
-import { forkDshHost } from '../DshHostProcess';
+import { dshHostSupervisor } from '../DshHostSupervisor';
 import { forkPiWorkerProcess } from '../PiWorkerProcess';
 import type { WorkerTransport, WorkerTransportExit } from '../WorkerTransport';
 
@@ -9,11 +11,12 @@ import type { WorkerTransport, WorkerTransportExit } from '../WorkerTransport';
  * dsh-rebase P1-1: the default transport is the DSH host, in every build. The
  * native worker must not even be reachable from here — a call fails the test.
  * `electron` is stubbed so either `isPackaged` can be set; the choice must not
- * depend on it.
+ * depend on it. P1-3a: the default is a channel on the one shared host, opened
+ * through its supervisor (stubbed: no host is ever started here).
  */
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
-vi.mock('../DshHostProcess', () => ({ forkDshHost: vi.fn() }));
+vi.mock('../DshHostSupervisor', () => ({ dshHostSupervisor: { openChannel: vi.fn() } }));
 vi.mock('../PiWorkerProcess', () => ({
   forkPiWorkerProcess: vi.fn(() => {
     throw new Error('chat sessions must never start the native worker');
@@ -83,32 +86,94 @@ const BOOTSTRAP_ACK = {
   permissionGate: 'bundled',
 };
 
+/** A workspace that exists on every test machine. */
+const WORKSPACE = tmpdir();
+
 describe('createPiWorkerSlot', () => {
   it.each([
     false,
     true,
-  ])('[P1-1] spawns the DSH host, never the native worker (isPackaged=%s)', async (packaged) => {
+  ])('[P1-1] opens a channel on the shared DSH host, never the native worker (isPackaged=%s)', async (packaged) => {
     electronApp.isPackaged = packaged;
     const transport = new LoopbackTransport();
-    vi.mocked(forkDshHost).mockClear();
-    vi.mocked(forkDshHost).mockReturnValue({
-      process: {} as never,
-      transport,
-    });
+    vi.mocked(dshHostSupervisor.openChannel).mockReset();
+    vi.mocked(dshHostSupervisor.openChannel).mockResolvedValue(transport as never);
     const creating = createPiWorkerSlot({
-      slotKey: 'workspace:/repo',
+      slotKey: `workspace:${WORKSPACE}`,
       logicalSessionId: 'logical-1',
-      cwd: '/repo',
+      cwd: WORKSPACE,
       generation: 3,
     });
     await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
-    expect(forkDshHost).toHaveBeenCalledTimes(1);
-    expect(forkDshHost).toHaveBeenCalledWith({ generation: 3, cwd: '/repo' });
+    expect(dshHostSupervisor.openChannel).toHaveBeenCalledTimes(1);
+    // A crash restart is not the user's: it may not revive a failed host.
+    expect(dshHostSupervisor.openChannel).toHaveBeenCalledWith({ userInitiated: false });
     expect(forkPiWorkerProcess).not.toHaveBeenCalled();
+    expect(transport.requests[0]).toMatchObject({
+      type: 'worker.bootstrap',
+      generation: 3,
+      payload: { cwd: WORKSPACE },
+    });
     transport.respond(transport.requests[0], BOOTSTRAP_ACK);
     await expect(creating).resolves.toMatchObject({
       bootstrap: { sessionFile: BOOTSTRAP_ACK.sessionFile },
     });
+  });
+
+  it('[P1-3a] lets a user-initiated open retry a failed host', async () => {
+    const transport = new LoopbackTransport();
+    vi.mocked(dshHostSupervisor.openChannel).mockReset();
+    vi.mocked(dshHostSupervisor.openChannel).mockResolvedValue(transport as never);
+    void createPiWorkerSlot({
+      slotKey: `workspace:${WORKSPACE}`,
+      logicalSessionId: 'logical-1',
+      cwd: WORKSPACE,
+      userInitiated: true,
+    });
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
+    expect(dshHostSupervisor.openChannel).toHaveBeenCalledWith({ userInitiated: true });
+  });
+
+  it('[P1-3a] refuses a vanished workspace before the host is asked for anything', async () => {
+    vi.mocked(dshHostSupervisor.openChannel).mockReset();
+    await expect(
+      createPiWorkerSlot({
+        slotKey: 'workspace:/gone',
+        logicalSessionId: 'logical-1',
+        cwd: join(WORKSPACE, 'aiclient-no-such-workspace-p1-3a'),
+      })
+    ).rejects.toThrow(/WORKER_WORKSPACE_MISSING: .*aiclient-no-such-workspace-p1-3a/);
+    expect(dshHostSupervisor.openChannel).not.toHaveBeenCalled();
+  });
+
+  it('[P1-3a] fails without a slot when the host cannot open a channel', async () => {
+    vi.mocked(dshHostSupervisor.openChannel).mockReset();
+    vi.mocked(dshHostSupervisor.openChannel).mockRejectedValue(
+      new Error('DSH_HOST_START_FAILED: the DSH host exited before ready')
+    );
+    const onSlotCreated = vi.fn();
+    await expect(
+      createPiWorkerSlot({
+        slotKey: `workspace:${WORKSPACE}`,
+        logicalSessionId: 'logical-1',
+        cwd: WORKSPACE,
+        onSlotCreated,
+      })
+    ).rejects.toThrow(/DSH_HOST_START_FAILED/);
+    expect(onSlotCreated).not.toHaveBeenCalled();
+  });
+
+  it('accepts a transport factory that resolves asynchronously', async () => {
+    const transport = new LoopbackTransport();
+    const creating = createPiWorkerSlot({
+      slotKey: 'workspace:/repo',
+      logicalSessionId: 'logical-1',
+      cwd: '/repo',
+      createTransport: async () => transport,
+    });
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
+    transport.respond(transport.requests[0], BOOTSTRAP_ACK);
+    await expect(creating).resolves.toMatchObject({ bootstrap: { bootstrapped: true } });
   });
 
   it('exposes process ownership before bootstrap acknowledgement', async () => {

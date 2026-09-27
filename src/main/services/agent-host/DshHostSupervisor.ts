@@ -82,6 +82,13 @@ export const DSH_HOST_TIMINGS = {
 /** Unacked ping ids kept for round-trip timing. */
 const MAX_TRACKED_PINGS = 8;
 
+/**
+ * Channel ids remembered after their `closed`. The host answers every
+ * `close`, so a channel its own `worker.dispose` already closed can hear a
+ * second `closed` when the slot's close crossed it on the wire.
+ */
+const RECENTLY_CLOSED_KEPT = 64;
+
 export type DshHostSupervisorState =
   | 'idle'
   | 'starting'
@@ -273,6 +280,7 @@ export class DshHostSupervisor {
   private spawnCount = 0;
   private channelSequence = 0;
   private readonly channels = new Map<DshChannelId, DshChannelTransport>();
+  private readonly recentlyClosed = new Set<DshChannelId>();
   private startTask: Promise<DshHostInfo> | null = null;
   private takedownTask: Promise<boolean> | null = null;
   private restartTask: Promise<DshHostInfo> | null = null;
@@ -673,10 +681,17 @@ export class DshHostSupervisor {
   private onChannelClosed(host: HostRecord, ch: DshChannelId): void {
     const channel = this.host === host ? this.channels.get(ch) : undefined;
     if (!channel) {
-      this.warnRateLimited('stale-closed', `[dsh-host] closed for unknown channel ${ch}`);
+      if (!this.recentlyClosed.has(ch)) {
+        this.warnRateLimited('stale-closed', `[dsh-host] closed for unknown channel ${ch}`);
+      }
       return;
     }
     this.channels.delete(ch);
+    this.recentlyClosed.add(ch);
+    if (this.recentlyClosed.size > RECENTLY_CLOSED_KEPT) {
+      const oldest = this.recentlyClosed.values().next().value;
+      if (oldest !== undefined) this.recentlyClosed.delete(oldest);
+    }
     channel.dispatchExit({ code: 0, signal: null, cause: 'channel-closed' });
   }
 
@@ -687,8 +702,13 @@ export class DshHostSupervisor {
     host.exitInfo = { code, signal };
     host.connected = false;
     this.stopHeartbeat(host);
-    const reason: DshHostExitReason =
+    let reason: DshHostExitReason =
       host.stopReason ?? (host.readyAt === undefined ? 'start-failed' : 'crashed');
+    // A host that dies drops its IPC before Node reports the exit (P1-3a, seen
+    // on SIGKILL): an abnormal exit we did not force after that drop is a crash.
+    if (reason === 'disconnected' && !host.sigkillSent && (signal !== null || code !== 0)) {
+      reason = 'crashed';
+    }
     this.lastExit = {
       generation: host.generation,
       ...(host.pid !== undefined ? { pid: host.pid } : {}),

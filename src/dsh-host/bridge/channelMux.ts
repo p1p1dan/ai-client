@@ -1,0 +1,271 @@
+/**
+ * The shared DSH host's channel multiplexer (dsh-rebase P1-3a, decision 019).
+ *
+ * One host serves every chat session over the one Node IPC channel Main's
+ * DshHostSupervisor opened. Each channel is a virtual slot with its own,
+ * unmodified `PiWorkerRpcServer` and session runtime — the pair the P1-1
+ * one-session bridge ran. Protocol: `src/shared/types/dshHostProtocol.ts`.
+ *
+ *   {ch, rpc}           to the channel's server. Only a channel-opening
+ *                       request (`worker.bootstrap`) creates a channel, with
+ *                       the generation it carries; any other request for an
+ *                       unknown or closed channel is answered
+ *                       WORKER_CHANNEL_UNKNOWN with its own generation and
+ *                       requestId.
+ *   {host:'ping', id}   answered at once, from this handler: event-loop delay,
+ *                       RSS and which channels are busy.
+ *   {host:'close', ch}  disposes the channel's runtime through the channel's
+ *                       own request chain, then `closed`. An unknown or closed
+ *                       channel is answered `closed` at once; a disposal that
+ *                       hangs is never answered (Main escalates).
+ *
+ * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
+ * then `closed`, and nothing more for that channel after it. Messages that are
+ * neither (host.ts's lifecycle, probe operations) are not the multiplexer's.
+ */
+
+import {
+  PiWorkerRpcServer,
+  type PiWorkerRuntime,
+  type PiWorkerRuntimeOptions,
+} from '../../agent-host/piWorkerRpcServer.ts';
+import {
+  DSH_CHANNEL_UNKNOWN_CODE,
+  type DshChannelId,
+  type DshHostChannelStatus,
+  type DshHostToMainMessage,
+  dshHostControlKind,
+  isDshChannelEnvelope,
+  isDshHostCloseChannel,
+  isDshHostPing,
+  opensDshChannel,
+} from '../../shared/types/dshHostProtocol.ts';
+import {
+  WORKER_RPC_PROTOCOL_VERSION,
+  type WorkerRpcErrorResponse,
+  type WorkerRpcMessage,
+  type WorkerRpcRequest,
+} from '../../shared/types/workerRpc.ts';
+
+/** A session runtime the multiplexer can report on. */
+export interface ChannelRuntime extends PiWorkerRuntime {
+  /** Not idle: a turn, a goal round or other agent work is under way. */
+  readonly busy?: boolean;
+}
+
+export interface DshChannelMuxOptions {
+  /** Puts one message on the host's IPC channel (a no-op once it is gone). */
+  send(message: DshHostToMainMessage): void;
+  /** The runtime behind a channel's `worker.bootstrap`. */
+  createRuntime(options: PiWorkerRuntimeOptions): ChannelRuntime;
+  /** Event-loop delay since the previous call, and resident memory, for a pong. */
+  sample(): { eldMaxMs: number; rssMb: number };
+  log(...args: unknown[]): void;
+}
+
+/** Closed channel ids remembered so a late opening request cannot revive one. */
+const CLOSED_IDS_KEPT = 4096;
+
+interface Channel {
+  readonly ch: DshChannelId;
+  readonly generation: number;
+  readonly server: PiWorkerRpcServer;
+  runtime: ChannelRuntime | null;
+  closing: boolean;
+  closed: boolean;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isGeneration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
+}
+
+function unsupported(what: string): Error {
+  return Object.assign(new Error(`${what} is not bridged to the DSH engine`), {
+    code: 'WORKER_DSH_UNSUPPORTED',
+  });
+}
+
+/** Request id of the dispose a `close` queues; never one Main mints (`rpc-…`). */
+function closeRequestId(ch: DshChannelId): string {
+  return `dsh-host-close-${ch}`;
+}
+
+export class DshChannelMux {
+  private readonly channels = new Map<DshChannelId, Channel>();
+  private readonly closedIds = new Set<DshChannelId>();
+  private readonly warned = new Set<string>();
+  private readonly options: DshChannelMuxOptions;
+
+  constructor(options: DshChannelMuxOptions) {
+    this.options = options;
+  }
+
+  /** Handles a bridge message; false for anything that is not the multiplexer's. */
+  receive(message: unknown): boolean {
+    if (isDshHostPing(message)) {
+      this.options.send({
+        host: 'pong',
+        id: message.id,
+        ...this.options.sample(),
+        channels: this.status(),
+      });
+      return true;
+    }
+    if (isDshHostCloseChannel(message)) {
+      this.close(message.ch);
+      return true;
+    }
+    if (isDshChannelEnvelope(message)) {
+      this.route(message.ch, message.rpc);
+      return true;
+    }
+    const kind = dshHostControlKind(message);
+    if (kind !== undefined) {
+      this.warnOnce(`control:${kind}`, `dropped host control message "${kind}"`);
+      return true;
+    }
+    if (isRecord(message) && 'ch' in message) {
+      this.warnOnce('malformed-envelope', 'dropped a malformed channel envelope');
+      return true;
+    }
+    return false;
+  }
+
+  /** Live channels and whether each is busy. */
+  status(): DshHostChannelStatus[] {
+    return [...this.channels.values()].map((channel) => ({
+      ch: channel.ch,
+      busy: channel.runtime?.busy === true,
+    }));
+  }
+
+  private route(ch: DshChannelId, rpc: unknown): void {
+    const channel = this.channels.get(ch);
+    if (channel) {
+      channel.server.receive(rpc);
+      return;
+    }
+    if (opensDshChannel(rpc) && !this.closedIds.has(ch)) {
+      const generation = (rpc as { generation?: unknown }).generation;
+      if (!isGeneration(generation)) {
+        this.warnOnce(
+          'bad-generation',
+          `${ch}: dropped a channel-opening request without a valid generation`
+        );
+        return;
+      }
+      this.open(ch, generation).server.receive(rpc);
+      return;
+    }
+    this.refuse(ch, rpc);
+  }
+
+  private open(ch: DshChannelId, generation: number): Channel {
+    const channel: Channel = {
+      ch,
+      generation,
+      runtime: null,
+      closing: false,
+      closed: false,
+      server: new PiWorkerRpcServer({
+        port: { postMessage: (rpc) => this.forward(channel, rpc) },
+        generation,
+        // Same constant the native worker entry passes (decision 009).
+        projectTrusted: true,
+        createRuntime: (runtimeOptions) => {
+          const runtime = this.options.createRuntime(runtimeOptions);
+          channel.runtime = runtime;
+          return runtime;
+        },
+        createImportWriter: () => {
+          throw unsupported('Conversation import');
+        },
+        createUtilityRuntime: () => {
+          throw unsupported('One-shot completion');
+        },
+        log: (...args) => this.options.log(`[${ch}]`, ...args),
+        onDisposed: () => this.onDisposed(channel),
+      }),
+    };
+    this.channels.set(ch, channel);
+    return channel;
+  }
+
+  private forward(channel: Channel, rpc: unknown): void {
+    // After `closed` the channel is gone for Main; the answer to the dispose a
+    // `close` queued was never Main's to begin with.
+    if (channel.closed) return;
+    if (isRecord(rpc) && rpc.requestId === closeRequestId(channel.ch)) return;
+    this.options.send({ ch: channel.ch, rpc: rpc as WorkerRpcMessage });
+  }
+
+  private close(ch: DshChannelId): void {
+    const channel = this.channels.get(ch);
+    if (!channel) {
+      this.options.send({ host: 'closed', ch });
+      return;
+    }
+    if (channel.closing) return;
+    channel.closing = true;
+    // Through the channel's own chain: never beside a request still running,
+    // and a request stuck ahead of it keeps `closed` from going out.
+    const dispose: WorkerRpcRequest = {
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'request',
+      generation: channel.generation,
+      requestId: closeRequestId(ch),
+      type: 'worker.dispose',
+      payload: { reason: 'slot-dispose' },
+    };
+    channel.server.receive(dispose);
+  }
+
+  private onDisposed(channel: Channel): void {
+    if (channel.closed) return;
+    channel.closed = true;
+    if (this.channels.get(channel.ch) === channel) this.channels.delete(channel.ch);
+    this.closedIds.add(channel.ch);
+    if (this.closedIds.size > CLOSED_IDS_KEPT) {
+      const oldest = this.closedIds.values().next().value;
+      if (oldest !== undefined) this.closedIds.delete(oldest);
+    }
+    this.options.send({ host: 'closed', ch: channel.ch });
+  }
+
+  /** A request for a channel this host does not serve: answered, never dropped silently. */
+  private refuse(ch: DshChannelId, rpc: unknown): void {
+    if (
+      !isRecord(rpc) ||
+      rpc.kind !== 'request' ||
+      !isGeneration(rpc.generation) ||
+      typeof rpc.requestId !== 'string' ||
+      rpc.requestId.length === 0
+    ) {
+      this.warnOnce('unknown-channel', `${ch}: dropped a message for a channel that is not open`);
+      return;
+    }
+    const response: WorkerRpcErrorResponse = {
+      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+      kind: 'response',
+      generation: rpc.generation,
+      requestId: rpc.requestId,
+      ok: false,
+      error: {
+        code: DSH_CHANNEL_UNKNOWN_CODE,
+        message: `DSH channel ${ch} is not open on this host`,
+        retryable: false,
+      },
+    };
+    this.options.send({ ch, rpc: response });
+  }
+
+  private warnOnce(key: string, message: string): void {
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.options.log(message);
+  }
+}

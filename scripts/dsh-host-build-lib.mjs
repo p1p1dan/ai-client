@@ -42,13 +42,13 @@ export const STAGED_SOURCE_FILES = ['package.json', 'package-lock.json', '.npmrc
  */
 export const STAGED_BUNDLE_FILES = ['package.json', 'cordis.patch.yml', 'lib/index.js'];
 export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
+/** Our own sources host.js may take in (P1-3a: its pure rules in lib/); everything else stays external. */
+export const HOST_INPUTS = ['src/dsh-host/host.ts', 'src/dsh-host/lib/'];
+/** npm packages host.js imports at run time, from the artifact's node_modules. */
+export const HOST_EXTERNALS = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-launch-environment'];
+/** The product bundle's one row (P1-3a, decision 019: the shared host's only bridge). */
 export const BRIDGE_ENTRIES = [
   { entry: 'bridge/plugin.ts', out: 'bundle/lib/bridge.js', row: 'aiclient-bridge' },
-  {
-    entry: 'bridge/sharedPlugin.js',
-    out: 'bundle/lib/shared-bridge.js',
-    row: 'aiclient-shared-bridge',
-  },
 ];
 
 /** npm packages a bundled bridge may import at run time; everything else must be bundled. */
@@ -184,16 +184,23 @@ export function unknownBundleFiles(sourceDir) {
 
 // ---- esbuild ---------------------------------------------------------------
 
-/** host.ts -> host.js: transpile only; its imports resolve from the artifact's node_modules. */
+/**
+ * host.ts -> host.js: its own `lib/` modules bundled in, every npm package left
+ * to resolve from the artifact's node_modules.
+ */
 export function hostBuildOptions(sourceDir, outDir) {
   return {
+    // Metafile paths are relative to this; checkHostMetafile reads them from the repo root.
+    absWorkingDir: path.resolve(sourceDir, '..', '..'),
     entryPoints: [path.join(sourceDir, HOST_ENTRY.entry)],
     outfile: path.join(outDir, HOST_ENTRY.out),
-    bundle: false,
+    bundle: true,
+    packages: 'external',
     platform: 'node',
     format: 'esm',
     target: 'node24',
     sourcemap: false,
+    metafile: true,
     logLevel: 'warning',
     banner: {
       js: '// Built by scripts/build-dsh-host.mjs from src/dsh-host/host.ts. Do not edit.',
@@ -228,8 +235,22 @@ export function bridgeBuildOptions(sourceDir, outDir, item) {
  * must be Node built-ins or `BRIDGE_EXTERNALS`.
  */
 export function checkBridgeMetafile(metafile, repoRoot) {
+  return checkMetafile(
+    'bridge bundle',
+    metafile,
+    repoRoot,
+    ['src/dsh-host/bridge/', 'src/agent-host/', 'src/shared/'],
+    BRIDGE_EXTERNALS
+  );
+}
+
+/** host.js: host.ts and its lib/ taken in, only `HOST_EXTERNALS` left to npm. */
+export function checkHostMetafile(metafile, repoRoot) {
+  return checkMetafile('host bundle', metafile, repoRoot, HOST_INPUTS, HOST_EXTERNALS);
+}
+
+function checkMetafile(label, metafile, repoRoot, allowedInputs, allowedExternals) {
   const failures = [];
-  const allowedInputs = ['src/dsh-host/bridge/', 'src/agent-host/', 'src/shared/'];
   const inputs = Object.keys(metafile.inputs ?? {}).map((input) =>
     path.relative(repoRoot, path.resolve(repoRoot, input)).split(path.sep).join('/')
   );
@@ -238,7 +259,7 @@ export function checkBridgeMetafile(metafile, repoRoot) {
       input.includes('node_modules/') ||
       !allowedInputs.some((prefix) => input.startsWith(prefix))
     ) {
-      failures.push(`bridge bundle took in ${input}`);
+      failures.push(`${label} took in ${input}`);
     }
   }
   const externals = new Set();
@@ -249,8 +270,8 @@ export function checkBridgeMetafile(metafile, repoRoot) {
   }
   for (const specifier of externals) {
     if (specifier.startsWith('node:')) continue;
-    if (!BRIDGE_EXTERNALS.includes(specifier)) {
-      failures.push(`bridge bundle imports ${specifier} at run time`);
+    if (!allowedExternals.includes(specifier)) {
+      failures.push(`${label} imports ${specifier} at run time`);
     }
   }
   return { failures, inputs, externals: [...externals].sort() };
@@ -726,7 +747,6 @@ export function requiredFiles(target) {
     'node_modules/@aiclient/dsh-app/cordis.patch.yml',
     'node_modules/@aiclient/dsh-app/lib/index.js',
     'node_modules/@aiclient/dsh-app/lib/bridge.js',
-    'node_modules/@aiclient/dsh-app/lib/shared-bridge.js',
     'node_modules/@deepseek-ai/dsh-base/package.json',
     'node_modules/@deepseek-ai/dsh-app-boot/lib/index.js',
     'node_modules/@deepseek-ai/dsh-launch-environment/package.json',
@@ -777,6 +797,14 @@ export function verifyDshArtifact({ outDir, target, requireManifest = false }) {
     failures.push(`missing ${DSH_HOST_MANIFEST}`);
   for (const rel of FORBIDDEN_PATHS) {
     if (fs.existsSync(abs(rel))) failures.push(`must not ship ${rel}`);
+  }
+
+  // host.js carries its own lib/ modules; a TypeScript import would not resolve.
+  if (fs.existsSync(abs(HOST_ENTRY.out))) {
+    const host = fs.readFileSync(abs(HOST_ENTRY.out), 'utf8');
+    if (/(?:from|import)\s*\(?\s*['"]\.{1,2}\/[^'"]*\.ts['"]/.test(host)) {
+      failures.push(`${HOST_ENTRY.out} still loads TypeScript sources (not the esbuild bundle)`);
+    }
   }
 
   const entries = walkTree(outDir);

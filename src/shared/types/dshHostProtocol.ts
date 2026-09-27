@@ -22,8 +22,9 @@
  *   gc                                           P1-3d (decision 024)
  *   seedSession                                  P1-9
  *
- * Shared with the host bridge (P1-3a), which loads this file as source under
- * Node's type stripping: erasable syntax only, and no value imports.
+ * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
+ * which a source checkout loads under Node's type stripping and the packaged
+ * host gets bundled in: erasable syntax only, and no value imports.
  */
 
 import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
@@ -84,7 +85,12 @@ export type DshMainToHostMessage =
 export interface DshHostReady {
   type: 'ready';
   pid: number;
-  /** Boot diagnostics (versions, composition, marks, later plan revision and skipped plugins). */
+  /**
+   * Plugin bundles the profile lists but the host could not load; each only
+   * warned (decision 025 rule 5). A product bundle that fails refuses the boot.
+   */
+  skippedPlugins?: Array<{ packageName: string; reason: string }>;
+  /** Boot diagnostics (versions, composition, marks, later plan revision). */
   [detail: string]: unknown;
 }
 
@@ -118,7 +124,11 @@ export interface DshHostPong {
   channels: DshHostChannelStatus[];
 }
 
-/** The channel's runtime is disposed and its session lock released. */
+/**
+ * The channel's runtime is disposed and its session lock released. Sent after
+ * a `close`, and after the ACK of the channel's own `worker.dispose`; nothing
+ * more is sent for the channel afterwards.
+ */
 export interface DshHostChannelClosed {
   host: 'closed';
   ch: DshChannelId;

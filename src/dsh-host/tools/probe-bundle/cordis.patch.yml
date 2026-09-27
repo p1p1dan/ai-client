@@ -15,7 +15,15 @@
 - insert:
     # IPC probe: sessions, prompts, commands, goal reads, plugin installs, an
     # approval answerer and event capture over the Node IPC channel the parent
-    # opened. Off when a bridge serves the channel.
+    # opened. Drivers that talk to the product bridge themselves (p0-6-probe)
+    # switch it off with AICLIENT_DSH_PROBE_ROW=0: its approval answerer would
+    # otherwise answer their sessions' approvals too.
     - id: aiclient-probe
       name: '@aiclient/dsh-probe'
-      disabled: !!js "process.env.AICLIENT_DSH_BRIDGE === '1' || process.env.AICLIENT_DSH_SHARED_BRIDGE === '1'"
+      disabled: !!js "process.env.AICLIENT_DSH_PROBE_ROW === '0'"
+
+    # P0-6 measurements (event-loop delay, stream latency, memory, stored-log
+    # summaries), moved out of the product bridge in P1-3a (decision 015's
+    # reason: no probe code ships).
+    - id: aiclient-probe-measure
+      name: '@aiclient/dsh-probe/measure'

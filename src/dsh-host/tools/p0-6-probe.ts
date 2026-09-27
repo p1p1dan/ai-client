@@ -1,13 +1,16 @@
 /**
  * P0-6 driver: shared-host follow-up checks (dsh-rebase decision 002, rule 3).
  *
- * One DSH host serves every session through the `aiclient-shared-bridge` row
- * (per-slot PiWorkerRpcServer + DshSessionRuntime over one IPC channel). This
- * driver plays Main: it spawns the host, bootstraps slots, sends turns, kills
- * the host by its exact pid, restarts it and resumes the sessions.
+ * One DSH host serves every session through the product `aiclient-bridge`
+ * row: one channel per session over one IPC link, each with its own
+ * PiWorkerRpcServer + DshSessionRuntime (P1-3a, src/shared/types/
+ * dshHostProtocol.ts). This driver plays Main: it spawns the host, opens a
+ * channel per slot, sends turns, kills the host, restarts it and resumes the
+ * sessions.
  *
  *   (run from src/dsh-host; every DSH_HOME gets the test-only bundle
- *   tools/probe-bundle for its compaction switch, dsh-rebase decision 015)
+ *   tools/probe-bundle for its compaction switch and the measurement row,
+ *   dsh-rebase decision 015)
  *   node tools/p0-6-probe.ts crash        [--runs 3] [--out f.json]
  *   node tools/p0-6-probe.ts latency      [--runs 3] [--levels 1,2,4,8] [--out f.json]
  *   node tools/p0-6-probe.ts history-gen  [--turns 500] [--checkpoints 25,125,500] [--dir d]
@@ -50,9 +53,10 @@
  *          sessionFile, which also projects initialHistory for Main).
  *
  * Safety: every model request goes to the local fake gateway (plan dsh-p0-2);
- * the probe hooks drop any non-loopback connect. Kills go to one exact child
- * pid through `killPid`, which refuses anything but a positive pid other than
- * our own (never -1, never a group). At most two hosts are alive at a time.
+ * the probe hooks drop any non-loopback connect. A host is only ever signalled
+ * through its own ChildProcess; orphaned tool processes go through `killPid`,
+ * which refuses anything but a positive pid other than our own (never -1,
+ * never a group). At most two hosts are alive at a time.
  */
 
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
@@ -220,7 +224,10 @@ function readJsonl(file: string): Message[] {
 
 // ---- the shared host ---------------------------------------------------------
 
-/** What `turn` / `bootstrap` need: the shared host (slots) or one native worker. */
+/**
+ * What `turn` / `bootstrap` need: the shared host (one channel per slot) or one
+ * native worker.
+ */
 interface RpcTarget {
   request(slot: string, type: string, payload: Message, timeoutMs?: number): Promise<Message>;
   until(
@@ -249,7 +256,11 @@ class SharedHost implements RpcTarget {
   ready: Message = {};
   exitedAtMs: number | null = null;
   private seq = 0;
+  private channelSeq = 0;
   private readonly slots = new Map<string, SlotState>();
+  /** The slot's open channel; a new one after each worker.dispose (ids are never reused). */
+  private readonly channelOfSlot = new Map<string, string>();
+  private readonly slotOfChannel = new Map<string, string>();
   private readonly p06Pending = new Map<string, (m: Message) => void>();
   /** Parent-side stamp latency (ms) of message.delta events, while armed. */
   parentLatency: number[] | null = null;
@@ -262,7 +273,8 @@ class SharedHost implements RpcTarget {
       ...baseEnv(box),
       DSH_HOME: box.dshHome,
       DSH_TELEMETRY_DISABLED: '1',
-      AICLIENT_DSH_SHARED_BRIDGE: '1',
+      // The probe bundle's auto-approving row would answer the bridge sessions' approvals.
+      AICLIENT_DSH_PROBE_ROW: '0',
       AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gatewayPort}`,
       AICLIENT_DSH_GATEWAY_KEY: 'p0-6-fake-key',
       ...hostExtraEnv,
@@ -312,14 +324,38 @@ class SharedHost implements RpcTarget {
     return state;
   }
 
+  /** The slot's channel; a bootstrap without an open one mints the next id. */
+  private channelFor(slot: string, type: string): string {
+    const open = this.channelOfSlot.get(slot);
+    if (open !== undefined) return open;
+    const ch = `c1-${++this.channelSeq}`;
+    this.slotOfChannel.set(ch, slot);
+    if (type === 'worker.bootstrap') this.channelOfSlot.set(slot, ch);
+    return ch;
+  }
+
+  /** Signals this host's own ChildProcess, never a pid. */
+  signal(signal: NodeJS.Signals): void {
+    if (this.child.exitCode === null && this.child.signalCode === null) this.child.kill(signal);
+  }
+
   private onMessage(message: Message): void {
     if (typeof message?.p06Reply === 'string') {
       this.p06Pending.get(String(message.requestId))?.(message);
       this.p06Pending.delete(String(message.requestId));
       return;
     }
-    if (typeof message?.slot !== 'string' || typeof message.rpc !== 'object') return;
-    const state = this.slotState(message.slot);
+    if (message?.host === 'closed' && typeof message.ch === 'string') {
+      const slot = this.slotOfChannel.get(message.ch);
+      if (slot !== undefined && this.channelOfSlot.get(slot) === message.ch) {
+        this.channelOfSlot.delete(slot);
+      }
+      return;
+    }
+    if (typeof message?.ch !== 'string' || typeof message.rpc !== 'object') return;
+    const slot = this.slotOfChannel.get(message.ch);
+    if (slot === undefined) return;
+    const state = this.slotState(slot);
     const rpc = message.rpc as Message;
     if (rpc.kind === 'response') {
       const pending = state.pending.get(String(rpc.requestId));
@@ -347,6 +383,9 @@ class SharedHost implements RpcTarget {
     const state = this.slotState(slot);
     const requestId = `${this.label}-${++this.seq}`;
     if (!this.child.connected) return Promise.reject(new Error(`${this.label} is not connected`));
+    const ch = this.channelFor(slot, type);
+    // Its answer still routes through `slotOfChannel`; the next bootstrap gets a new channel.
+    if (type === 'worker.dispose') this.channelOfSlot.delete(slot);
     return new Promise((done, fail) => {
       const timer = setTimeout(() => {
         state.pending.delete(requestId);
@@ -363,7 +402,7 @@ class SharedHost implements RpcTarget {
         },
       });
       this.child.send({
-        slot,
+        ch,
         rpc: { protocolVersion: 1, kind: 'request', generation: 1, requestId, type, payload },
       });
     });
@@ -422,9 +461,7 @@ class SharedHost implements RpcTarget {
     const started = performance.now();
     if (this.child.connected) this.child.send({ type: 'shutdown' });
     const graceful = await stopWithin(this.exited, 15_000);
-    if (!graceful && this.child.exitCode === null && this.child.signalCode === null) {
-      killPid(this.pid, 'SIGKILL');
-    }
+    if (!graceful) this.signal('SIGKILL');
     return { graceful, stopMs: round(performance.now() - started, 0), exit: await this.exited };
   }
 }
@@ -756,7 +793,7 @@ async function crashRun(r: number, gateway: Gateway) {
     );
     const tree = treeOf(host.pid);
     const killedAt = performance.now();
-    killPid(host.pid, 'SIGKILL');
+    host.signal('SIGKILL');
     const exit = await host.exited;
     const exitObservedMs = round((host.exitedAtMs ?? performance.now()) - killedAt, 1);
     await sleep(1000);
@@ -871,7 +908,7 @@ async function crashRun(r: number, gateway: Gateway) {
   {
     const all = [...sessions, s4, s5];
     const killedAt = performance.now();
-    killPid(host.pid, 'SIGKILL');
+    host.signal('SIGKILL');
     await host.exited;
     const exitObservedMs = round((host.exitedAtMs ?? performance.now()) - killedAt, 1);
     const next = new SharedHost(`r${r}-k3-restart`, box, gateway.port, {});
@@ -898,7 +935,7 @@ async function crashRun(r: number, gateway: Gateway) {
   // ---- run 1 only: a wedged (SIGSTOPped) host keeps its sessions ------------------
   if (r === 1) {
     const stopped = host;
-    killPid(stopped.pid, 'SIGSTOP');
+    stopped.signal('SIGSTOP');
     const second = new SharedHost(`r${r}-wedge-second`, box, gateway.port, {});
     await second.waitReady();
     const target = sessions[0];
@@ -907,7 +944,7 @@ async function crashRun(r: number, gateway: Gateway) {
       .then((b) => ({ ok: true, ms: b.ms }))
       .catch((error: Error) => ({ ok: false, error: error.message.slice(0, 400) }));
     const stoppedTree = treeOf(stopped.pid);
-    killPid(stopped.pid, 'SIGKILL');
+    stopped.signal('SIGKILL');
     await stopped.exited;
     await sleep(500);
     reapOrphans(stoppedTree);
@@ -1233,8 +1270,7 @@ async function historyGenMode() {
     }
     report.shutdown = await host.shutdown();
   } finally {
-    if (host.child.exitCode === null && host.child.signalCode === null)
-      killPid(host.pid, 'SIGKILL');
+    host.signal('SIGKILL');
     gateway.child.kill('SIGTERM');
   }
   const gatewayLines = readJsonl(gateway.logFile);
@@ -1357,8 +1393,7 @@ async function historyMode() {
         } catch (error) {
           row.error = error instanceof Error ? error.message : String(error);
           row.stderrTail = host.stderr().slice(-2000);
-          if (host.child.exitCode === null && host.child.signalCode === null)
-            killPid(host.pid, 'SIGKILL');
+          host.signal('SIGKILL');
         }
         log(
           `${label}: resume ${String(row.resumeMs)} ms, dRSS ${String(row.deltaRssMb)} MB, dHeap ${String(row.deltaHeapUsedMb)} MB`
@@ -1472,8 +1507,7 @@ async function historyMultiGenMode() {
     );
     report.shutdown = await host.shutdown();
   } finally {
-    if (host.child.exitCode === null && host.child.signalCode === null)
-      killPid(host.pid, 'SIGKILL');
+    host.signal('SIGKILL');
     gateway.child.kill('SIGTERM');
   }
   report.stubs = stubs;
@@ -1570,8 +1604,7 @@ async function historyMultiMode() {
       } catch (error) {
         run.error = error instanceof Error ? error.message : String(error);
         run.stderrTail = host.stderr().slice(-2000);
-        if (host.child.exitCode === null && host.child.signalCode === null)
-          killPid(host.pid, 'SIGKILL');
+        host.signal('SIGKILL');
       }
       results.push(run);
       if (!keep) rmSync(box.root, { recursive: true, force: true });

@@ -126,7 +126,7 @@
  *                       P0-APPROVAL, for P0-3 P0-STREAM / P0-TOOL / P0-SLOWTOOL, and for P0-4
  *                       P0-FS / P0-RECALL with a JSON parameter object after the marker, and for
  *                       P0-6 P0-CRASH / P0-PACED / P0-SLEEPTOOL / P0-LOAD / P0-HIST, also with a
- *                       JSON parameter object) or a
+ *                       JSON parameter object, and for P1-3a P0-FDS) or a
  *                       DSH `<goal_round>` continuation prompt is the trigger; the number of
  *                       tool calls since the trigger is the step. Goal rounds read their
  *                       round number from the prompt's `Round: N/M` line, update_goal copies
@@ -298,7 +298,7 @@ function logRequest(entry) {
 // ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
 
 const P0_MARKER =
-  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
+  /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -610,6 +610,27 @@ const DSH_P0_2_SCRIPTS = {
       });
     }
     return say('Env canaries printed.');
+  },
+  // dsh-rebase P1-3a (decision 034's precondition): which descriptors and IPC
+  // variables a tool process inherits from the host. Linux /proc only.
+  // Step 0 runs in the sandbox, step 1 escalates out of it (an approval).
+  FDS(_round, step) {
+    const command =
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: shell parameter expansion
+      'echo "pid=$$ ppid=$PPID channel_fd=${NODE_CHANNEL_FD:-unset} channel_mode=${NODE_CHANNEL_SERIALIZATION_MODE:-unset}"; for fd in /proc/$$/fd/*; do echo "fd ${fd##*/} -> $(readlink "$fd")"; done';
+    if (step === 0) {
+      return tool('bash', { command, description: 'List inherited file descriptors' });
+    }
+    if (step === 1) {
+      return tool('bash', {
+        command,
+        description: 'List them again outside the sandbox',
+        sandbox_permissions: 'danger-full-access',
+        justification:
+          'The P1-3a probe compares what a tool inherits inside and outside the sandbox.',
+      });
+    }
+    return say('Inherited file descriptors listed.');
   },
   // dsh-rebase P0-4: file tools and the shell against an encrypted workspace.
   FS(_round, step, _calls, triggerText) {

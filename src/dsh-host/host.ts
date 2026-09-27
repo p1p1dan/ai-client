@@ -8,37 +8,49 @@
  *
  * One file, two forms (decision 011). A source checkout runs it as is:
  * `node --expose-internals src/dsh-host/host.ts`. The packaged app runs
- * `resources/dsh-host/host.js`, its esbuild transpile, beside the artifact's
- * own node_modules and `dsh-host-manifest.json` (scripts/build-dsh-host.mjs).
- * Both need DSH_HOME. The runtime resolution patches Node's internal ESM/CJS
- * resolvers; it reaches them via `--expose-internals` or, failing that, the
+ * `resources/dsh-host/host.js`, its esbuild bundle (this file and `lib/`, npm
+ * packages external), beside the artifact's own node_modules and
+ * `dsh-host-manifest.json` (scripts/build-dsh-host.mjs). Both need DSH_HOME.
+ * The runtime resolution patches Node's internal ESM/CJS resolvers; it reaches
+ * them via `--expose-internals` or, failing that, the
  * `node-addon-require-builtin` addon.
  *
- * IPC (when spawned with an 'ipc' stdio slot):
- *   host -> parent: { type: 'ready', ... } once boot() settles,
- *                   { type: 'stopped', ms } after disposal.
- *   parent -> host: { type: 'shutdown' }. The product composition answers
- *                   nothing else here; probe drivers layer the test-only
- *                   bundle @aiclient/dsh-probe (tools/probe-bundle), whose
- *                   aiclient-probe row serves session requests (decision 015).
+ * One host serves every chat session of the app (decision 019). IPC, when
+ * spawned with an 'ipc' stdio slot (protocol: src/shared/types/dshHostProtocol.ts):
+ *   host -> parent: { type: 'ready', pid, ... } once boot() settles and the
+ *                   aiclient-bridge row holds the channel; { type: 'fatal' }
+ *                   right before exiting on a refused boot; { type: 'stopped' }
+ *                   after disposal, just before disconnecting.
+ *   parent -> host: { type: 'shutdown' }. Everything else is the aiclient-bridge
+ *                   row's (bridge/plugin.ts): every chat session's channel
+ *                   envelopes and the host controls (ping, close). Probe
+ *                   drivers layer the test-only bundle @aiclient/dsh-probe
+ *                   (tools/probe-bundle) on top of it (decision 015).
+ * Every IPC message is buffered from the first line of this file until the
+ * bridge row claims the buffer, so nothing a driver writes before boot
+ * settles is lost.
  *
- * Bridge mode (P0-3, AICLIENT_DSH_BRIDGE=1): the parent is Main's WorkerSlot and
- * the channel carries our worker RPC, served by the aiclient-bridge row. Every
- * IPC message is buffered from the first line of this file until that row
- * claims the buffer, because Node IPC drops messages that arrive with no
- * listener and Main sends worker.bootstrap right after spawning. Nothing but
- * worker RPC goes back over IPC in this mode; ready / stopped go to stderr.
+ * Environment (decision 023): the launch environment snapshot is the process
+ * layer alone. No .env file is read, from the launch directory or from
+ * DSH_HOME, and nothing is written into process.env.
  */
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { format } from 'node:util';
+import {
+  PRODUCT_BUNDLES,
+  partitionSkippedBundles,
+  REQUIRED_DISABLED,
+  reconcileProductBundles,
+  requiredDisabledOverlays,
+  sameBundles,
+} from './lib/hostProfile.ts';
 
 const PROFILE_NAME = 'aiclient';
-const BUNDLES = ['@deepseek-ai/dsh-base', '@aiclient/dsh-app'] as const;
 // Test-only bundle carrying the auto-approving IPC probe (decision 015).
 const PROBE_BUNDLE = '@aiclient/dsh-probe';
 const PROBE_ROW = 'aiclient-probe';
@@ -49,19 +61,6 @@ const FORBIDDEN_PACKAGES = [
   '@deepseek-ai/dsh-host-webserver',
   '@deepseek-ai/dsh-host-frontend-static',
 ];
-// Rows this bundle turns off; checked on the composed list.
-const REQUIRED_DISABLED = [
-  'session-telemetry-otel',
-  'deepseek-account',
-  'llm-deepseek-account',
-  'hmr',
-  // No row may reach the DeepSeek official endpoint.
-  'llm-deepseek',
-  'deepseek-llm-api-extensions',
-  'plugin-package-inventory-deepseek',
-  'session-log-deepseek',
-  'web-search-deepseek',
-];
 
 const marks: Record<string, number> = { entry: performance.now() };
 
@@ -69,10 +68,9 @@ const marks: Record<string, number> = { entry: performance.now() };
 interface BridgeInbox {
   queue: unknown[];
   deliver?: (message: unknown) => void;
-  stop?: (reason: string) => Promise<void>;
 }
-const bridgeMode = process.env.AICLIENT_DSH_BRIDGE === '1';
-const bridgeInbox: BridgeInbox | undefined = bridgeMode ? { queue: [] } : undefined;
+const ipc = typeof process.send === 'function';
+const bridgeInbox: BridgeInbox | undefined = ipc ? { queue: [] } : undefined;
 if (bridgeInbox) {
   (globalThis as Record<symbol, unknown>)[Symbol.for('aiclient.dsh.bridge')] = bridgeInbox;
   process.on('message', (message: unknown) => {
@@ -85,6 +83,10 @@ function fail(message: string): never {
   process.stderr.write(`[dsh-host] ${message}\n`);
   if (process.connected) process.send?.({ type: 'fatal', message });
   process.exit(1);
+}
+
+function warn(message: string): void {
+  process.stderr.write(`[dsh-host] warning: ${message}\n`);
 }
 
 /**
@@ -120,20 +122,38 @@ if (home === undefined || home === '') fail('DSH_HOME must be set; the host neve
 // os.userInfo() reads the account database, so an overridden HOME cannot hide the real one.
 if (resolve(home) === resolve(os.userInfo().homedir, '.dsh'))
   fail('DSH_HOME points at the real ~/.dsh');
+// Decision 023: .env files are never read. Say so when one is lying there.
+for (const file of new Set([resolve(process.cwd(), '.env'), resolve(home, '.env')])) {
+  if (existsSync(file)) warn(`${file} is ignored: the DSH host reads no .env file`);
+}
 
 const appBoot = await import('@deepseek-ai/dsh-app-boot');
-const { DSH_LAUNCH_ENVIRONMENT_KEY } = await import('@deepseek-ai/dsh-launch-environment');
+const { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } = await import(
+  '@deepseek-ai/dsh-launch-environment'
+);
 marks.modulesLoaded = performance.now();
 
 const hostDir = dirname(fileURLToPath(import.meta.url));
 const installAnchor = join(hostDir, 'package.json');
 const artifact = describeArtifact();
 const profileDir = appBoot.resolveProfileDir(PROFILE_NAME, home);
-appBoot.initProfile(profileDir, BUNDLES);
+appBoot.initProfile(profileDir, PRODUCT_BUNDLES);
+// Decision 025 rule 5: `initProfile` writes the bundle list once, so the product
+// bundles are restated at every start; plugin bundles keep their place after them.
+const manifest = appBoot.readProfileManifest(BIN, profileDir);
+const listedBundles: unknown = manifest.dsh?.profile?.bundles;
+const bundles = reconcileProductBundles(listedBundles);
+if (!Array.isArray(listedBundles) || !sameBundles(listedBundles, bundles)) {
+  appBoot.writeProfileBundles(profileDir, manifest, bundles);
+}
 const profile = appBoot.loadProfileDirectory(BIN, profileDir, installAnchor);
-if (profile.skippedBundles.length > 0) {
+const skipped = partitionSkippedBundles(profile.skippedBundles);
+for (const bundle of skipped.plugins) {
+  warn(`plugin bundle ${JSON.stringify(bundle.packageName)} skipped: ${bundle.reason}`);
+}
+if (skipped.product.length > 0) {
   appBoot.reportSkippedBundles(BIN, profile);
-  fail(`bundles skipped: ${JSON.stringify(profile.skippedBundles)}`);
+  fail(`product bundles skipped: ${JSON.stringify(skipped.product)}`);
 }
 // The Loader needs a real include root to anchor baseUrl; the composition is all patches.
 const rootConfig = join(profile.dir, 'cordis.yml');
@@ -141,7 +161,17 @@ writeFileSync(rootConfig, '[]\n');
 const resolution = await appBoot.createRuntimeResolution({ installAnchor, profile, home });
 marks.profileResolved = performance.now();
 
-const environment = appBoot.loadLayeredEnv(BIN);
+const processLayer: Record<string, string> = {};
+for (const [name, value] of Object.entries(process.env)) {
+  if (value !== undefined) processLayer[name] = value;
+}
+const environment = createLaunchEnvironmentSnapshot([{ source: 'process', values: processLayer }]);
+// Decision 023 rule 3: the home layer is still read, but the rows it could turn
+// back on are restated off after it.
+const homePatch = join(home, 'cordis.patch.yml');
+if (existsSync(homePatch)) {
+  warn(`${homePatch} is applied; the privacy and endpoint rows stay off regardless`);
+}
 const profileContext = {
   name: PROFILE_NAME,
   dir: profile.dir,
@@ -150,7 +180,7 @@ const profileContext = {
   startedBundles: profile.layers.map((layer) => layer.packageName),
   cwd: process.cwd(),
   home,
-  overlays: [],
+  overlays: requiredDisabledOverlays(),
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
   // Plugin installs run pnpm's CLI on this same Node binary, from this host's
   // own node_modules (the bundled copy in a packaged app), never a `pnpm` from
@@ -218,9 +248,7 @@ async function stopOnce(reason: string): Promise<void> {
   process.stderr.write(`[dsh-host] stopped (${reason}) in ${ms.toFixed(0)}ms\n`);
   const send = process.send?.bind(process);
   if (process.connected && send !== undefined) {
-    if (!bridgeMode) {
-      await new Promise<void>((done) => send({ type: 'stopped', ms, reason }, () => done()));
-    }
+    await new Promise<void>((done) => send({ type: 'stopped', ms, reason }, () => done()));
     process.disconnect?.();
   }
   // Exit naturally when nothing lingers; otherwise name what does and force it.
@@ -232,7 +260,6 @@ async function stopOnce(reason: string): Promise<void> {
   }, 3000).unref();
 }
 
-if (bridgeInbox) bridgeInbox.stop = stop;
 process.on('SIGTERM', () => void stop('SIGTERM'));
 process.on('SIGINT', () => void stop('SIGINT'));
 process.on('message', (message: unknown) => {
@@ -276,6 +303,12 @@ for (const entry of ctx.get('loader')?.entries() ?? []) {
   else census.inactive.push(`${entry.options.id}: state ${String(entry.fiber?.state)}`);
 }
 
+// A host whose bridge never took the channel would swallow every session's
+// messages until Main's heartbeat gave up on it; refuse it at once instead.
+if (bridgeInbox && !bridgeInbox.deliver) {
+  fail(`the aiclient-bridge row did not take the IPC channel: ${JSON.stringify(census.inactive)}`);
+}
+
 const ready = {
   type: 'ready',
   pid: process.pid,
@@ -285,12 +318,11 @@ const ready = {
   artifact,
   dshRuntimeVersion: appBoot.getDshRuntimeVersion(),
   bundles: profile.layers.map((layer) => layer.packageName),
+  skippedPlugins: skipped.plugins,
   composition,
   census,
   marks,
   memory: process.memoryUsage(),
 };
-if (process.connected && !bridgeMode) process.send?.(ready);
-else if (bridgeMode)
-  process.stderr.write(`[dsh-host] ready ${JSON.stringify({ ...ready, memory: undefined })}\n`);
+if (process.connected) process.send?.(ready);
 else process.stdout.write(`${JSON.stringify(ready)}\n`);

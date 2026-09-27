@@ -1,22 +1,29 @@
 /**
- * Packaged DSH host smoke (dsh-rebase P1-2, decision 017).
+ * Packaged DSH host smoke (dsh-rebase P1-2, decision 017; P1-3a shared host).
  *
  *   node scripts/packaged-dsh-host-smoke.mjs --app-dir <unpacked app>
  *   node scripts/packaged-dsh-host-smoke.mjs --host-dir <dsh-host dir> [--node <node binary>]
- *        [--level 0|1] [--narb default|disabled|dir] [--scratch <dir>] [--report <file>] [--keep]
+ *        [--level 0|1] [--narb dir|default|disabled] [--scratch <dir>] [--report <file>] [--keep]
  *
- * Runs the host exactly as Main does in a packaged app (the bundled node,
- * `--expose-internals`, `<resources>/dsh-host/host.js`, cwd = DSH_HOME, an
- * allowlisted environment), plus `--import` of the repo's probe hooks, which
- * block and record non-loopback connects and record every module, native addon
- * and shared object the host loads.
+ * Runs the host exactly as Main's DshHostSupervisor does in a packaged app: the
+ * bundled node, `--expose-internals`, `<resources>/dsh-host/host.js`, a private
+ * empty launch directory, and Main's own environment rule
+ * (`buildDshHostEnvironment`, decision 022) applied to this process's
+ * environment with HOME and the temp directories sandboxed. On top of that it
+ * `--import`s the repo's probe hooks, which block and record non-loopback
+ * connects and record every module, native addon and shared object the host
+ * loads. `--narb` picks the native cache: `dir` (the default) is Main's
+ * private directory, `default` the loader's own location, `disabled` none.
  *
- *   L0  boot to `ready` (composition audit passed, every row active or
- *       disabled), `shutdown` over IPC, exit code 0.
- *   L1  bridge mode as Main's WorkerSlot drives it: worker.bootstrap, one
- *       P0-FS turn from the local fake gateway (read, edit, write, grep, glob
- *       and three shell calls: bash, or pwsh on Windows), one write outside the
- *       workspace answered through the approval card, worker.dispose, exit 0.
+ *   L0  boot to `ready` over IPC with the host's own pid (composition audit
+ *       passed, every row active or disabled), a ping answered with a pong,
+ *       `shutdown` answered with `stopped`, exit code 0.
+ *   L1  one chat session on a channel of the shared host, driven as Main's
+ *       supervisor and WorkerSlot drive it (src/shared/types/dshHostProtocol.ts):
+ *       worker.bootstrap, one P0-FS turn from the local fake gateway (read,
+ *       edit, write, grep, glob and three shell calls: bash, or pwsh on
+ *       Windows), one write outside the workspace answered through the approval
+ *       card, worker.dispose (its ACK, then `closed`), `shutdown`, exit 0.
  *       Then the load-on-use natives no L1 turn reaches on every platform: the
  *       bundled node loads sharp (with libvips) and runs node-pty (conpty on
  *       Windows, spawn-helper on macOS) straight from the artifact.
@@ -34,38 +41,22 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// Main's rule itself, loaded by Node's type stripping (the module has no imports).
+import { buildDshHostEnvironment } from '../src/main/services/agent-host/dshHostEnvironment.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = path.join(repoRoot, 'src', 'dsh-host', 'tools', 'lib', 'probe-hooks.mjs');
 const GATEWAY = path.join(repoRoot, 'src', 'dsh-host', 'tools', 'fake-gateway.mjs');
 const isWindows = process.platform === 'win32';
 const GENERATION = 1;
+/** The one chat session's channel: `c<host generation>-<sequence>`, as the supervisor mints it. */
+const CHANNEL = 'c1-1';
 const SESSION = 'packaged-smoke';
 const PRODUCT_BUNDLES = ['@deepseek-ai/dsh-base', '@aiclient/dsh-app'];
-// Main's allowlist (DshHostProcess.ts INHERITED_ENV); HOME and the temp dirs are then sandboxed.
-const INHERITED_ENV = [
-  'PATH',
-  'Path',
-  'LANG',
-  'LC_ALL',
-  'HOME',
-  'USER',
-  'LOGNAME',
-  'SHELL',
-  'TMPDIR',
-  'TEMP',
-  'TMP',
-  'USERPROFILE',
-  'APPDATA',
-  'LOCALAPPDATA',
-  'SystemRoot',
-  'windir',
-  'ComSpec',
-];
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
 
 function parseArgs(argv) {
-  const args = { level: 1, narb: 'default', keep: false };
+  const args = { level: 1, narb: 'dir', keep: false };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
     const value = () => {
@@ -152,6 +143,16 @@ function readJsonl(file) {
         return { kind: 'unparsable', line: line.slice(0, 200) };
       }
     });
+}
+
+/** Set `name`, first dropping any spelling Windows would treat as the same variable. */
+function setEnvVar(env, name, value) {
+  if (isWindows) {
+    for (const key of Object.keys(env)) {
+      if (key.toUpperCase() === name.toUpperCase()) delete env[key];
+    }
+  }
+  env[name] = value;
 }
 
 function mkdirPrivate(dir) {
@@ -319,18 +320,16 @@ function startHost(ctx, label, extraEnv) {
       path.join(ctx.hostDir, 'host.js'),
     ],
     {
-      cwd: ctx.dshHome,
+      cwd: ctx.hostCwd,
       env: { ...ctx.env, ...extraEnv },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       windowsHide: true,
     }
   );
   let stderr = '';
-  const stderrWaiters = new Set();
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => {
     stderr = (stderr + chunk).slice(-200_000);
-    for (const wake of [...stderrWaiters]) wake();
   });
   child.stdout.resume();
   const exited = new Promise((done) =>
@@ -343,7 +342,6 @@ function startHost(ctx, label, extraEnv) {
     exited,
     watcher,
     stderr: () => stderr,
-    stderrWaiters,
     started: Date.now(),
   };
 }
@@ -377,30 +375,19 @@ function waitIpc(host, predicate, timeoutMs, what) {
   });
 }
 
-/** Bridge mode prints `[dsh-host] ready {json}` on stderr; IPC carries only worker RPC. */
-function waitStderrReady(host, timeoutMs) {
-  return new Promise((done, fail) => {
-    const check = () => {
-      const match = host.stderr().match(/\[dsh-host\] ready (\{.*\})\n/);
-      if (match) {
-        cleanup();
-        done(JSON.parse(match[1]));
-      } else if (host.child.exitCode !== null || host.child.signalCode !== null) {
-        cleanup();
-        fail(new Error(`${host.label}: exited before ready`));
-      }
-    };
-    const timer = setTimeout(() => {
-      cleanup();
-      fail(new Error(`${host.label}: no ready line in ${timeoutMs} ms`));
-    }, timeoutMs);
-    const cleanup = () => {
-      clearTimeout(timer);
-      host.stderrWaiters.delete(check);
-    };
-    host.stderrWaiters.add(check);
-    check();
-  });
+/** `shutdown`, answered by `stopped` before the host disconnects. */
+function requestShutdown(host, timeoutMs) {
+  const stopped = waitIpc(host, (m) => m?.type === 'stopped', timeoutMs, 'stopped').catch(
+    (error) => ({ error: String(error) })
+  );
+  host.child.send({ type: 'shutdown' });
+  return stopped;
+}
+
+async function ping(host, id) {
+  const answer = waitIpc(host, (m) => m?.host === 'pong' && m.id === id, 15_000, 'pong');
+  host.child.send({ host: 'ping', id });
+  return answer;
 }
 
 async function stopHost(host, timeoutMs) {
@@ -412,19 +399,24 @@ async function stopHost(host, timeoutMs) {
   return exit;
 }
 
+/** One chat session: worker RPC inside `{ch, rpc}` envelopes of one channel. */
 class WorkerClient {
-  constructor(child) {
+  constructor(child, ch) {
     this.child = child;
+    this.ch = ch;
     this.seq = 0;
     this.events = [];
     this.waiters = new Set();
     this.permissions = [];
     this.autoAllow = true;
+    this.closed = false;
     child.on('message', (message) => {
-      if (message?.kind === 'event' && message.type === 'runtime.event') {
-        this.events.push(message.payload);
-        if (message.payload?.type === 'permission.requested' && this.autoAllow) {
-          const payload = message.payload.payload ?? {};
+      if (message?.host === 'closed' && message.ch === ch) this.closed = true;
+      const rpc = message?.ch === ch ? message.rpc : undefined;
+      if (rpc?.kind === 'event' && rpc.type === 'runtime.event') {
+        this.events.push(rpc.payload);
+        if (rpc.payload?.type === 'permission.requested' && this.autoAllow) {
+          const payload = rpc.payload.payload ?? {};
           this.permissions.push({ toolName: payload.toolName, permissionId: payload.permissionId });
           void this.call('worker.permission.respond', {
             logicalSessionId: SESSION,
@@ -445,21 +437,30 @@ class WorkerClient {
         fail(new Error(`${type} timed out`));
       }, timeoutMs);
       const onMessage = (message) => {
-        if (message?.kind !== 'response' || message.requestId !== requestId) return;
+        const rpc = message?.ch === this.ch ? message.rpc : undefined;
+        if (rpc?.kind !== 'response' || rpc.requestId !== requestId) return;
         clearTimeout(timer);
         this.child.off('message', onMessage);
-        done(message);
+        done(rpc);
       };
       this.child.on('message', onMessage);
       this.child.send({
-        protocolVersion: 1,
-        kind: 'request',
-        generation: GENERATION,
-        requestId,
-        type,
-        payload,
+        ch: this.ch,
+        rpc: {
+          protocolVersion: 1,
+          kind: 'request',
+          generation: GENERATION,
+          requestId,
+          type,
+          payload,
+        },
       });
     });
+  }
+
+  /** Resolves once the host has sent `closed` for this channel. */
+  untilClosed(timeoutMs) {
+    return this.until(() => this.closed, timeoutMs);
   }
 
   until(predicate, timeoutMs) {
@@ -553,21 +554,19 @@ async function level0(ctx) {
     host.watcher.tick();
     result.readyMs = Date.now() - host.started;
     result.ready = {
+      pid: ready.pid,
+      spawnedPid: host.child.pid,
       node: ready.node,
       execPath: ready.execPath,
       artifact: ready.artifact,
       bundles: ready.bundles,
+      skippedPlugins: ready.skippedPlugins,
       census: ready.census,
       composition: ready.composition,
       marks: ready.marks,
     };
-    const stopped = waitIpc(host, (m) => m?.type === 'stopped', 30_000, 'stopped').catch(
-      (error) => ({
-        error: String(error),
-      })
-    );
-    host.child.send({ type: 'shutdown' });
-    result.stopped = await stopped;
+    result.pong = await ping(host, 1);
+    result.stopped = await requestShutdown(host, 30_000);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
   }
@@ -578,37 +577,39 @@ async function level0(ctx) {
 }
 
 async function level1(ctx, gateway) {
+  // The packaged app routes through the credential path (P1-5); the smoke points
+  // the bundle's gateway row at the local fake instead.
   const host = startHost(ctx, 'L1', {
-    AICLIENT_DSH_BRIDGE: '1',
-    AICLIENT_PI_WORKER_GENERATION: String(GENERATION),
     AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
     AICLIENT_DSH_GATEWAY_KEY: 'packaged-smoke-fake-key',
   });
-  const client = new WorkerClient(host.child);
+  const client = new WorkerClient(host.child, CHANNEL);
   const result = { label: 'L1' };
   const marker = `P12-MARKER-${randomBytes(4).toString('hex')}`;
   const token = randomBytes(3).toString('hex');
   const shell = isWindows ? 'pwsh' : 'bash';
   const outsideFile = path.join(ctx.outside, 'approved.txt');
   try {
-    // Sent at once, as Main does; the host buffers it until the bridge row is up.
-    const boot = await client.call(
-      'worker.bootstrap',
-      { logicalSessionId: SESSION, cwd: ctx.workspace },
-      180_000
-    );
+    // As the supervisor does: the channel opens once the host is ready.
+    const ready = await waitIpc(host, (m) => m?.type === 'ready', 180_000, 'ready');
     result.readyMs = Date.now() - host.started;
-    result.bootstrap = boot.ok
-      ? { bootstrapped: boot.result?.bootstrapped }
-      : { error: boot.error };
-    const ready = await waitStderrReady(host, 60_000);
     host.watcher.tick();
     result.ready = {
+      pid: ready.pid,
+      spawnedPid: host.child.pid,
       execPath: ready.execPath,
       artifact: ready.artifact,
       bundles: ready.bundles,
       census: ready.census,
     };
+    const boot = await client.call(
+      'worker.bootstrap',
+      { logicalSessionId: SESSION, cwd: ctx.workspace },
+      180_000
+    );
+    result.bootstrap = boot.ok
+      ? { bootstrapped: boot.result?.bootstrapped }
+      : { error: boot.error };
     if (!boot.ok) throw new Error(`worker.bootstrap: ${JSON.stringify(boot.error)}`);
 
     fs.writeFileSync(path.join(ctx.workspace, 'marker.txt'), `${marker} plaintext line\n`);
@@ -640,8 +641,10 @@ async function level1(ctx, gateway) {
     );
     result.approval.fileWritten = fs.existsSync(outsideFile);
     result.autoAnswered = client.permissions;
-    const disposed = await client.call('worker.dispose', { reason: 'app-shutdown' }, 60_000);
+    const disposed = await client.call('worker.dispose', { reason: 'slot-dispose' }, 60_000);
     result.dispose = disposed.ok ? disposed.result : { error: disposed.error };
+    result.channelClosed = await client.untilClosed(15_000);
+    result.stopped = await requestShutdown(host, 30_000);
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
   }
@@ -725,6 +728,21 @@ function narbRoot(ctx) {
   return path.join(ctx.env.TMPDIR, `node-addon-native-custom-loader-${uid}`, 'native-cache');
 }
 
+/**
+ * The program a spawn record runs. With a user systemd session (Main's
+ * environment carries XDG_RUNTIME_DIR and DBus, decision 022) DSH launches a
+ * tool as `systemd-run … -- <runner> -- <tool argv>`: the tool is the first
+ * word after the second `--` (the tool's own argv may hold more).
+ */
+function toolOf(record) {
+  const args = Array.isArray(record.args) ? record.args : [];
+  const first = args.indexOf('--');
+  const second = first < 0 ? -1 : args.indexOf('--', first + 1);
+  return /(^|[\\/])systemd-run$/.test(String(record.file ?? '')) && second >= 0
+    ? args[second + 1]
+    : record.file;
+}
+
 function analyzeHooks(ctx, hostNatives, extraLogs = []) {
   const records = [ctx.hookLog, ...extraLogs].flatMap((file) => readJsonl(file));
   const modules = records.filter((r) => r.kind === 'module').map((r) => r.url);
@@ -771,8 +789,12 @@ function analyzeHooks(ctx, hostNatives, extraLogs = []) {
   ];
   const spawns = records
     .filter((r) => r.kind === 'spawn' || r.kind === 'spawn-sync')
-    .map((r) => ({ file: r.file, args: Array.isArray(r.args) ? r.args.slice(0, 4) : undefined }));
-  const rg = spawns.filter((item) => /(^|[\\/])rg(\.exe)?$/i.test(String(item.file ?? '')));
+    .map((r) => ({
+      file: r.file,
+      target: toolOf(r),
+      args: Array.isArray(r.args) ? r.args.slice(0, 4) : undefined,
+    }));
+  const rg = spawns.filter((item) => /(^|[\\/])rg(\.exe)?$/i.test(String(item.target ?? '')));
   return {
     moduleCount: modules.length,
     outsideModules,
@@ -789,7 +811,7 @@ function analyzeHooks(ctx, hostNatives, extraLogs = []) {
           .filter((h) => !LOOPBACK.has(h))
       ),
     ],
-    ripgrep: rg.map((item) => item.file),
+    ripgrep: rg.map((item) => item.target),
     spawnedExecutables: [...new Set(spawns.map((item) => item.file))].slice(0, 30),
   };
 }
@@ -799,6 +821,7 @@ function verdictFor(ctx, report) {
   const l0 = report.L0;
   if (l0) {
     v.l0Ready = l0.ready !== undefined && !l0.error;
+    v.l0ReadyOwnPid = l0.ready?.pid !== undefined && l0.ready.pid === l0.ready.spawnedPid;
     v.l0Packaged = l0.ready?.artifact?.form === 'packaged';
     v.l0Composition =
       JSON.stringify(l0.ready?.bundles) === JSON.stringify(PRODUCT_BUNDLES) &&
@@ -806,6 +829,12 @@ function verdictFor(ctx, report) {
       l0.ready.census.inactive.length === 0;
     v.l0BundledNode =
       l0.ready?.execPath !== undefined && norm(l0.ready.execPath) === norm(ctx.node);
+    v.l0Pong =
+      l0.pong?.host === 'pong' &&
+      Array.isArray(l0.pong.channels) &&
+      l0.pong.channels.length === 0 &&
+      l0.pong.rssMb > 0;
+    v.l0Stopped = l0.stopped?.type === 'stopped';
     v.l0ExitedZero = l0.exit?.code === 0 && !l0.exit?.forced;
     v.l0NoLeftovers = (l0.leftovers ?? []).length === 0;
   }
@@ -822,6 +851,7 @@ function verdictFor(ctx, report) {
         .map((tool) => tool.text)
         .join('\n');
     v.l1Bootstrapped = l1.bootstrap?.bootstrapped === true && !l1.error;
+    v.l1ReadyOwnPid = l1.ready?.pid !== undefined && l1.ready.pid === l1.ready.spawnedPid;
     v.l1Packaged = l1.ready?.artifact?.form === 'packaged';
     v.l1FsTurnIdle = fsTurn.idle === true && fsTurn.completed === true;
     v.l1FsTools = ['read', 'edit', 'write', 'grep', 'glob', shell].every((name) => used.has(name));
@@ -841,6 +871,8 @@ function verdictFor(ctx, report) {
       l1.approval?.fileWritten === true &&
       l1.approval?.idle === true;
     v.l1Disposed = l1.dispose !== undefined && !l1.dispose.error;
+    v.l1ChannelClosed = l1.channelClosed === true;
+    v.l1Stopped = l1.stopped?.type === 'stopped';
     v.l1ExitedZero = l1.exit?.code === 0 && !l1.exit?.forced;
     v.l1NoLeftovers = (l1.leftovers ?? []).length === 0;
     v.l1RipgrepFromArtifact =
@@ -888,37 +920,45 @@ async function main() {
       'appdata',
       'localappdata',
       'dsh-home',
+      'host-cwd',
       'workspace',
       'outside',
       'logs',
       'narb-cache',
     ].map((name) => [name, mkdirPrivate(path.join(scratch, name))])
   );
-  const env = {};
-  for (const key of INHERITED_ENV) if (process.env[key] !== undefined) env[key] = process.env[key];
-  Object.assign(env, {
+  // Main's rule (decision 022) over this process's environment, with HOME and
+  // the temp directories moved into the scratch tree first.
+  const inherited = { ...process.env };
+  const sandboxed = {
     HOME: dirs.home,
     TMPDIR: dirs.tmp,
     TEMP: dirs.tmp,
     TMP: dirs.tmp,
-    DSH_HOME: dirs['dsh-home'],
-    DSH_TELEMETRY_DISABLED: '1',
+    ...(isWindows
+      ? { USERPROFILE: dirs.home, APPDATA: dirs.appdata, LOCALAPPDATA: dirs.localappdata }
+      : {}),
+  };
+  for (const [name, value] of Object.entries(sandboxed)) setEnvVar(inherited, name, value);
+  const env = buildDshHostEnvironment({
+    dshHome: dirs['dsh-home'],
+    nativeCacheDir: dirs['narb-cache'],
+    isPackaged: true,
+    env: inherited,
+  });
+  // The smoke's own instrumentation: app-internal names, which Main's rule strips.
+  Object.assign(env, {
     AICLIENT_PROBE_HOOK_LOG: path.join(dirs.logs, 'hooks.jsonl'),
     AICLIENT_PROBE_MODULE_LOG: '1',
   });
-  if (isWindows)
-    Object.assign(env, {
-      USERPROFILE: dirs.home,
-      APPDATA: dirs.appdata,
-      LOCALAPPDATA: dirs.localappdata,
-    });
+  if (args.narb !== 'dir') delete env.NARB_NATIVE_CACHE_DIR;
   if (args.narb === 'disabled') env.NARB_DISABLE_NATIVE_CACHE = '1';
-  if (args.narb === 'dir') env.NARB_NATIVE_CACHE_DIR = dirs['narb-cache'];
 
   const ctx = {
     hostDir: args.hostDir,
     node: args.node,
     dshHome: dirs['dsh-home'],
+    hostCwd: dirs['host-cwd'],
     workspace: dirs.workspace,
     outside: dirs.outside,
     hookLog: env.AICLIENT_PROBE_HOOK_LOG,

@@ -41,12 +41,21 @@ describe('shared DSH host signalling (SG-01)', () => {
     const launch = code('DshHostProcess.ts');
     expect(launch).not.toContain('process.kill');
     expect(launch).not.toMatch(/detached/);
+    // P1-3a: the supervisor is the only thing that spawns the DSH host.
+    expect(launch).not.toMatch(/\bspawn\(|\bfork\(/);
+  });
+
+  it('a chat slot reaches the DSH host only through a supervisor channel (P1-3a)', () => {
+    const slot = code('createPiWorkerSlot.ts');
+    expect(slot).toContain('dshHostSupervisor.openChannel(');
+    expect(slot).not.toMatch(/\bspawn\(|\bfork\(|process\.kill|\.kill\(/);
   });
 });
 
 describe('host environment rule (SG-03)', () => {
   const pinned = '/KEY|PASSWORD|SECRET|TOKEN/i';
-  const ours = code('DshHostProcess.ts').match(
+  // Extracted in P1-3a so the packaged smoke builds the host's environment with it.
+  const ours = code('dshHostEnvironment.ts').match(
     /export const DSH_SENSITIVE_ENV_PATTERN = (\/[^\n]+\/[a-z]*);/
   )?.[1];
 

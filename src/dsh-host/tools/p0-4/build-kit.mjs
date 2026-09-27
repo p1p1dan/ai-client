@@ -8,7 +8,8 @@
  *   kit-manifest.json     versions, native binaries (format + sha256), sizes
  *   host/                 src/dsh-host sources + node_modules for the target platform;
  *                         the probe drivers under host/tools/ as in the repo, with the
- *                         test-only probe bundle they layer into the probe DSH_HOME
+ *                         test-only probe bundle they layer into the probe DSH_HOME;
+ *                         the bridge row is its esbuild bundle, as in the packaged host
  *   gateway/              the local fake model gateway
  *
  * The dependency tree comes from `npm ci` against src/dsh-host/package-lock.json
@@ -38,10 +39,11 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const hostSrc = resolve(here, '..', '..');
+const repoRoot = resolve(hostSrc, '..', '..');
 const gatewaySrc = join(hostSrc, 'tools', 'fake-gateway.mjs');
 
 const argv = process.argv.slice(2);
@@ -104,6 +106,7 @@ for (const file of [
   'package.json',
   'package-lock.json',
   'host.ts',
+  'lib/hostProfile.ts',
   'tools/p0-4-probe.ts',
   'tools/p0-4-report.ts',
   'tools/lib/kit.ts',
@@ -117,6 +120,21 @@ for (const dir of ['bundle', 'tools/probe-bundle']) {
     recursive: true,
     filter: (source) => !source.includes('node_modules'),
   });
+}
+// The bridge row (always on since P1-3a) is a shim onto src/dsh-host/bridge in a
+// checkout; the kit has no such sources, so it carries the esbuild bundle the
+// packaged host carries (scripts/build-dsh-host.mjs) in place of the shim.
+{
+  const buildLib = await import(
+    pathToFileURL(join(repoRoot, 'scripts', 'dsh-host-build-lib.mjs')).href
+  );
+  const esbuild = await import('esbuild');
+  for (const item of buildLib.BRIDGE_ENTRIES) {
+    const result = await esbuild.build(buildLib.bridgeBuildOptions(hostSrc, host, item));
+    const verdict = buildLib.checkBridgeMetafile(result.metafile, repoRoot);
+    if (verdict.failures.length > 0) throw new Error(verdict.failures.join('; '));
+    log(`bundled ${item.out} (${verdict.inputs.length} inputs)`);
+  }
 }
 mkdirSync(join(kit, 'gateway'));
 cpSync(gatewaySrc, join(kit, 'gateway', 'fake-gateway.mjs'));

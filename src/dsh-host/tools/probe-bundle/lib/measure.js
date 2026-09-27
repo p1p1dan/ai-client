@@ -1,18 +1,13 @@
 /**
- * aiclient-shared-bridge — P0-6 shared-host bridge prototype.
+ * aiclient-probe-measure — P0-6 measurements of the test-only bundle
+ * `@aiclient/dsh-probe`. They lived in the P0-6 prototype of the shared-host
+ * bridge; P1-3a made that prototype the product bridge and moved them here, so
+ * no probe code ships (dsh-rebase decision 015). Drivers address them beside the bridge's
+ * channel envelopes on the same IPC channel:
  *
- * One DSH host serves many sessions. Every IPC message carries a slot key, and
- * each slot gets its own unmodified `PiWorkerRpcServer` (src/agent-host) with a
- * `DshSessionRuntime` (src/dsh-host/bridge), exactly the pair the P0-3
- * one-session bridge runs. Closing a slot disposes only that session; the host
- * keeps running.
+ *   parent -> host  { p06, requestId, ... }       one operation (below)
+ *   host -> parent  { p06Reply, requestId, ... }  its answer, or `error`
  *
- *   parent -> host  { slot, rpc }                 worker RPC request for one slot
- *                   { p06, requestId, ... }       instrumentation (below)
- *   host -> parent  { slot, rpc }                 worker RPC response / event of one slot
- *                   { p06Reply, requestId, ... }  instrumentation answer
- *
- * Instrumentation (P0-6 measurements, never product surface):
  *   eld-start { resolutionMs }  start a monitorEventLoopDelay histogram and the
  *                               host-side stream latency capture
  *   eld-stop                    stop both; answer the histogram, the latency
@@ -21,42 +16,28 @@
  *   read-session { sessionId, prefix?, find? }
  *                               read the stored log (read access, no lock) and
  *                               summarize it
- *   live                        live agents and their status
+ *   live                        live agents and their status (the bridge's
+ *                               channels are in its pong)
  *
  * Stream latency: the P0-6 fake gateway stamps every text delta with its send
  * time (`‹t<µs of CLOCK_MONOTONIC>›`); this row reads the stamp at the same
  * `agent/assistant-stream` event the bridge translates, so the sample is
- * "gateway wrote the SSE frame -> bridge received the chunk".
- *
- * Enabled only with AICLIENT_DSH_SHARED_BRIDGE=1 (see bundle/cordis.patch.yml);
- * Main never sets it. Kept as the P1-3 starting point (dsh-rebase decision 019).
- * Loaded the same two ways as `plugin.ts`: through the one-line re-export in
- * `bundle/lib/shared-bridge.js` in a source checkout, and as the esbuild bundle
- * scripts/build-dsh-host.mjs writes over it in the packaged host.
- * @module @aiclient/dsh-app/shared-bridge
+ * "gateway wrote the SSE frame -> host received the chunk".
+ * @module @aiclient/dsh-probe/measure
  */
 
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { monitorEventLoopDelay, PerformanceObserver, performance } from 'node:perf_hooks';
 import v8 from 'node:v8';
-import { createUserMessage } from '@deepseek-ai/dsh-llm';
-import { PiWorkerRpcServer } from '../../agent-host/piWorkerRpcServer.ts';
-import { DshSessionRuntime } from './dshSessionRuntime.ts';
 
 /** Stable Cordis plugin name. */
-export const name = 'aiclient-shared-bridge';
+export const name = 'aiclient-probe-measure';
 
-/** The services DshSessionRuntime reads (`sessions`, `agentLoop`: see plugin.ts). */
-export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop'];
+/** `live` lists the agent registry. */
+export const inject = ['agents'];
 
 const STAMP = /‹t(\d+)›/g;
-
-function unsupported(what) {
-  const error = new Error(`${what} is not bridged to the DSH engine (P0-6 shared bridge)`);
-  error.code = 'WORKER_DSH_UNSUPPORTED';
-  return error;
-}
 
 function textOf(content) {
   if (!Array.isArray(content)) return '';
@@ -161,41 +142,13 @@ function summarize(events, options) {
  */
 export function apply(ctx) {
   if (typeof process.send !== 'function') {
-    ctx.logger('aiclient-shared-bridge').warn('no IPC channel; shared bridge is inert');
+    ctx.logger('aiclient-probe-measure').warn('no IPC channel; measurements are inert');
     return;
   }
   const send = (message) => {
     if (process.connected) process.send(message);
   };
 
-  /** @type {Map<string, InstanceType<typeof PiWorkerRpcServer>>} */
-  const slots = new Map();
-  const slotServer = (slot, generation) => {
-    const known = slots.get(slot);
-    if (known) return known;
-    const server = new PiWorkerRpcServer({
-      port: { postMessage: (rpc) => send({ slot, rpc }) },
-      generation,
-      // Same constant the native worker entry passes (decision 009).
-      projectTrusted: true,
-      createRuntime: (options) => new DshSessionRuntime(ctx, options, { createUserMessage }),
-      createImportWriter: () => {
-        throw unsupported('Conversation import');
-      },
-      createUtilityRuntime: () => {
-        throw unsupported('One-shot completion');
-      },
-      log: (...args) => console.error(`[aiclient-shared-bridge ${slot}]`, ...args),
-      // A slot's worker.dispose closes that session only; the host stays up.
-      onDisposed: () => {
-        if (slots.get(slot) === server) slots.delete(slot);
-      },
-    });
-    slots.set(slot, server);
-    return server;
-  };
-
-  // ---- instrumentation --------------------------------------------------------
   const capture = {
     on: false,
     samples: [],
@@ -306,7 +259,6 @@ export function apply(ctx) {
     },
     live() {
       return {
-        slots: [...slots.keys()],
         agents: ctx.agents.list().map((agent) => ({
           id: agent.id,
           status: typeof agent.status === 'object' ? agent.status?.kind : agent.status,
@@ -316,15 +268,7 @@ export function apply(ctx) {
   };
 
   const onMessage = (message) => {
-    if (message === null || typeof message !== 'object') return;
-    if (typeof message.slot === 'string' && message.rpc && typeof message.rpc === 'object') {
-      const generation = Number(message.rpc.generation);
-      slotServer(message.slot, Number.isSafeInteger(generation) ? generation : 1).receive(
-        message.rpc
-      );
-      return;
-    }
-    if (typeof message.p06 !== 'string') return;
+    if (message === null || typeof message !== 'object' || typeof message.p06 !== 'string') return;
     const op = ops[message.p06];
     if (op === undefined) {
       send({ p06Reply: message.p06, requestId: message.requestId, error: 'unknown op' });
@@ -350,5 +294,5 @@ export function apply(ctx) {
       capture.histogram?.disable();
       capture.gcObserver?.disconnect();
     };
-  }, 'aiclient-shared-bridge.ipc');
+  }, 'aiclient-probe-measure.ipc');
 }

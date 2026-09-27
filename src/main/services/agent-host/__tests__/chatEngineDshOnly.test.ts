@@ -15,6 +15,7 @@ import { stripComments } from '../../../../renderer/components/chat/__tests__/st
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.resolve(HERE, '../../../..');
+const REPO = path.resolve(SRC, '..');
 const AGENT_HOST = path.resolve(HERE, '..');
 
 function read(file: string): string {
@@ -35,11 +36,14 @@ function codeFiles(dir: string, out: string[] = []): string[] {
 describe('chat engine is DSH only (P1-1)', () => {
   it('createPiWorkerSlot has no native fork, no dev switch and no packaging gate', () => {
     const source = read(path.join(AGENT_HOST, 'createPiWorkerSlot.ts'));
-    expect(source).toContain("from './DshHostProcess'");
-    expect(source).toContain('forkDshHost(');
+    // P1-3a: a chat session is a channel on the app's one shared DSH host.
+    expect(source).toContain("from './DshHostSupervisor'");
+    expect(source).toContain('dshHostSupervisor.openChannel(');
     for (const banned of [
       'forkPiWorkerProcess',
       'PiWorkerProcess',
+      'forkDshHost',
+      'DshHostProcess',
       'AICLIENT_DEV_ENGINE',
       'isPackaged',
     ]) {
@@ -83,6 +87,37 @@ describe('chat engine is DSH only (P1-1)', () => {
     expect(source.match(/this\.spawnForEntry\(/g)).toHaveLength(4);
     expect(source).not.toContain('PI_AGENT');
     expect(source.match(/agent: DSH_AGENT/g)?.length).toBeGreaterThanOrEqual(7);
+  });
+
+  /**
+   * P1-3a (decision 019): one shared host with one bridge. The per-session host
+   * launch, its environment-borne generation and bridge switch, and the P0-6
+   * prototype bridge are gone from the tree and from the scripts that drive
+   * the host.
+   */
+  it('leaves no trace of the per-session host or the prototype bridge', () => {
+    const banned = [
+      'forkDshHost',
+      'bridgeGeneration',
+      'AICLIENT_DSH_BRIDGE',
+      'AICLIENT_DSH_SHARED_BRIDGE',
+      'aiclient-shared-bridge',
+      'shared-bridge',
+      'sharedPlugin',
+    ];
+    const files = [
+      ...codeFiles(SRC),
+      ...codeFiles(path.join(REPO, 'scripts')),
+      path.join(REPO, '.github', 'workflows', 'build.yml'),
+    ];
+    const offenders: string[] = [];
+    for (const file of files) {
+      const text = read(file);
+      for (const name of banned) {
+        if (text.includes(name)) offenders.push(`${path.relative(REPO, file)}: ${name}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('leaves no trace of the P0-3 dev engine switch in the source tree', () => {

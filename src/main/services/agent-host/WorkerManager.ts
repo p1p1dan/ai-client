@@ -1006,10 +1006,14 @@ export class WorkerManager {
       this.state = 'ready';
 
       try {
-        const created = await this.spawnForEntry(entry, {
-          ...(input.model ? { model: input.model } : {}),
-          ...(input.effort ? { effort: input.effort } : {}),
-        });
+        const created = await this.spawnForEntry(
+          entry,
+          {
+            ...(input.model ? { model: input.model } : {}),
+            ...(input.effort ? { effort: input.effort } : {}),
+          },
+          { userInitiated: true }
+        );
         if (!created.bootstrap.sessionFile) {
           throw new WorkerManagerError(
             'worker_session_file_missing',
@@ -1274,7 +1278,7 @@ export class WorkerManager {
           // property of THIS spawn, where selection is what the session runs
           // on. `spawnForEntry` is also reached from the crash restart and the
           // fork, neither of which may ever inherit it.
-          { ...(input.forceTakeover ? { forceTakeover: true } : {}) }
+          { ...(input.forceTakeover ? { forceTakeover: true } : {}), userInitiated: true }
         );
         const reopenedFile = created.bootstrap.sessionFile
           ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Pi session file')
@@ -1846,9 +1850,11 @@ export class WorkerManager {
         let indexCommitted = false;
 
         try {
-          const created = await this.spawnForEntry(target, {
-            ...(input.model ? { model: input.model } : {}),
-          });
+          const created = await this.spawnForEntry(
+            target,
+            { ...(input.model ? { model: input.model } : {}) },
+            { userInitiated: true }
+          );
           const reopenedFile = created.bootstrap.sessionFile
             ? normalizeWorkerPath(created.bootstrap.sessionFile, 'Fork Pi session file')
             : null;
@@ -2530,10 +2536,14 @@ export class WorkerManager {
      * exactly as it found it so the next restart attempt sees the same state.
      *
      * `forceTakeover` — concurrency-02 — is passed per call and never read off
-     * `entry`: the restart and fork paths below call this with no options, so
+     * `entry`: the restart and fork paths below call this without it, so
      * neither can inherit a takeover the user authorised for one open.
+     *
+     * `userInitiated` — dsh-rebase P1-3a — marks a user's create, resume or
+     * fork: only those may try the shared DSH host again after it failed
+     * (decision 020 rule 6). A crash restart never sets it.
      */
-    options: { fresh?: boolean; forceTakeover?: boolean } = {}
+    options: { fresh?: boolean; forceTakeover?: boolean; userInitiated?: boolean } = {}
   ): Promise<CreatedPiWorkerSlot> {
     let expectedSlot: WorkerSlot | null = null;
     // dsh-rebase P1-1: no model catalog here. Its `auth` half holds plaintext
@@ -2547,6 +2557,7 @@ export class WorkerManager {
       ...(entry.sessionFile && !options.fresh ? { sessionFile: entry.sessionFile } : {}),
       ...(entry.unbound ? { unbound: true } : {}),
       ...(options.forceTakeover ? { forceTakeover: true } : {}),
+      ...(options.userInitiated ? { userInitiated: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
       ...(entry.permissions ? { permissions: entry.permissions } : {}),
       // P5-2-5: read at spawn time, not cached on the entry, so a user who

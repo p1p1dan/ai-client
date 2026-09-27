@@ -1,9 +1,10 @@
+import { existsSync } from 'node:fs';
 import {
   isWorkerBootstrapResult,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
 } from '@shared/types/workerRpc';
-import { forkDshHost } from './DshHostProcess';
+import { dshHostSupervisor } from './DshHostSupervisor';
 import { WorkerSlot, type WorkerSlotOptions } from './WorkerSlot';
 import type { WorkerTransport } from './WorkerTransport';
 
@@ -33,7 +34,16 @@ export interface CreatePiWorkerSlotOptions
   generation?: number;
   /** Cold-start budget for `worker.bootstrap` only; warm RPCs keep `requestTimeoutMs`. */
   bootstrapTimeoutMs?: number;
-  createTransport?: (input: { generation: number; cwd: string }) => WorkerTransport;
+  /**
+   * A user's create / resume / retry, as opposed to a crash restart: the one
+   * kind of spawn allowed to try the shared host again once it has failed
+   * (decision 020 rule 6).
+   */
+  userInitiated?: boolean;
+  createTransport?: (input: {
+    generation: number;
+    cwd: string;
+  }) => WorkerTransport | Promise<WorkerTransport>;
   /** Exposes process ownership before bootstrap awaits, for app-close force kill. */
   onSlotCreated?: (slot: WorkerSlot) => void;
   onEvent?: WorkerSlotOptions['onEvent'];
@@ -66,25 +76,36 @@ export interface CreatedPiWorkerSlot {
 export const BOOTSTRAP_REQUEST_TIMEOUT_MS = 60_000;
 
 /**
- * Spawn and bootstrap one per-slot chat engine process: the DSH host.
+ * The default transport: a fresh channel on the shared host, which starts the
+ * host first when none is running. The workspace is checked before anything
+ * starts: DSH would otherwise open a session whose every tool fails in a
+ * directory that is gone, where the renderer knows this code (`historyError`).
+ */
+async function openDshChannel(cwd: string, userInitiated: boolean): Promise<WorkerTransport> {
+  if (!existsSync(cwd)) {
+    throw new Error(`WORKER_WORKSPACE_MISSING: DSH session working directory is missing: ${cwd}`);
+  }
+  return dshHostSupervisor.openChannel({ userInitiated });
+}
+
+/**
+ * Open and bootstrap one chat session on the DSH engine: a channel of the
+ * app's one shared DSH host (decision 019).
  *
  * dsh-rebase P1-1 (decisions 004, 009): every chat session runs on DSH, in
  * packaged and unpackaged builds alike, with no switch and no native fallback.
  * The name stays until P1-12 renames the whole seam at once (decision 010).
  *
  * A bootstrap failure tears the slot down before the error escapes, so callers
- * never receive a running process without an authoritative session.
+ * never receive a running channel without an authoritative session.
  */
 export async function createPiWorkerSlot(
   options: CreatePiWorkerSlotOptions
 ): Promise<CreatedPiWorkerSlot> {
   const generation = options.generation ?? 1;
-  // P1-3a switches the default to a channel on the shared host
-  // (`dshHostSupervisor.openChannel()`, DshHostSupervisor.ts) once the host
-  // bridge speaks the channel envelope, and deletes the per-slot fork below.
   const transport = options.createTransport
-    ? options.createTransport({ generation, cwd: options.cwd })
-    : forkDshHost({ generation, cwd: options.cwd }).transport;
+    ? await options.createTransport({ generation, cwd: options.cwd })
+    : await openDshChannel(options.cwd, options.userInitiated === true);
   const slot = new WorkerSlot({
     slotKey: options.slotKey,
     cwd: options.cwd,

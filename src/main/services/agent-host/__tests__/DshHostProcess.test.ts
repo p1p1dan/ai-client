@@ -1,16 +1,16 @@
-import { spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   buildDshHostEnvironment,
   buildDshHostLaunch,
+  currentDshHostLaunch,
   DSH_HOST_MISSING,
   DSH_SENSITIVE_ENV_PATTERN,
   dshHostSpawnOptions,
   ensurePrivateDirectory,
-  forkDshHost,
   isStrippedDshHostEnvName,
+  prepareDshHostDirectories,
   resolveDshHome,
   resolveDshHostLayout,
 } from '../DshHostProcess';
@@ -22,10 +22,6 @@ vi.mock('node:fs', () => ({
   existsSync: vi.fn(() => true),
   mkdirSync: vi.fn(),
   chmodSync: vi.fn(),
-}));
-vi.mock('node:child_process', () => ({ spawn: vi.fn(() => ({ pid: 4242 })) }));
-vi.mock('../WorkerTransport', () => ({
-  createNodeProcessWorkerTransport: vi.fn(() => 'transport'),
 }));
 
 const STATE_ROOT = '/home/u/.pilab/profile';
@@ -284,16 +280,19 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     });
   });
 
-  it('adds the per-slot bridge switch and generation only in bridge mode', () => {
-    expect(build({ bridgeGeneration: 3 })).toEqual({
+  // P1-3a: the shared host carries each session's generation in its channel's
+  // messages; no launch ever says which session or generation it serves.
+  it('never passes a session generation or a bridge switch to the shared host', () => {
+    const env = build({
+      isPackaged: false,
+      env: { ...SHELL_ENV, AICLIENT_PI_WORKER_GENERATION: '3', AICLIENT_DSH_PROBE_ROW: '0' },
+    });
+    expect(env).toEqual({
       ...INHERITED,
       ...EXPLICIT,
-      AICLIENT_DSH_BRIDGE: '1',
-      AICLIENT_PI_WORKER_GENERATION: '3',
+      AICLIENT_DSH_GATEWAY_URL: 'http://127.0.0.1:1234',
+      AICLIENT_DSH_GATEWAY_KEY: 'fake-key',
     });
-    expect(build()).not.toHaveProperty('AICLIENT_DSH_BRIDGE');
-    expect(build()).not.toHaveProperty('AICLIENT_PI_WORKER_GENERATION');
-    expect(() => build({ bridgeGeneration: 0 })).toThrow(/positive safe integer/);
   });
 });
 
@@ -369,13 +368,13 @@ describe('ensurePrivateDirectory', () => {
   });
 });
 
-describe('forkDshHost', () => {
+// The one launch DshHostSupervisor spawns (P1-3a: no per-session host any more).
+describe('currentDshHostLaunch', () => {
   const resources = process.resourcesPath;
 
   beforeEach(() => {
     Object.defineProperty(process, 'resourcesPath', { value: '/resources', configurable: true });
     vi.mocked(existsSync).mockReset().mockReturnValue(true);
-    vi.mocked(spawn).mockClear();
     vi.mocked(mkdirSync).mockClear();
     vi.mocked(chmodSync).mockClear();
   });
@@ -385,54 +384,43 @@ describe('forkDshHost', () => {
     electronApp.isPackaged = false;
   });
 
-  it('refuses a vanished workspace before spawning anything', () => {
-    vi.mocked(existsSync).mockImplementation((file) => file !== '/gone');
-    expect(() => forkDshHost({ generation: 1, cwd: '/gone' })).toThrow(
-      /WORKER_WORKSPACE_MISSING: .*\/gone/
-    );
-    expect(spawn).not.toHaveBeenCalled();
-  });
-
   it.each([
     false,
     true,
-  ])('spawns the resolved host in bridge mode from its private directories (isPackaged=%s)', (packaged) => {
+  ])('resolves this app’s host from its private directories (isPackaged=%s)', (packaged) => {
     electronApp.isPackaged = packaged;
-    const forked = forkDshHost({ generation: 2, cwd: '/repo' });
+    const launch = currentDshHostLaunch();
+    const nodeName = process.platform === 'win32' ? 'node.exe' : 'node';
+    expect(launch.command).toBe(
+      packaged
+        ? join('/resources', 'node-runtime', nodeName)
+        : join('/repo', 'out-node-runtime', nodeName)
+    );
+    expect(launch.args).toEqual([
+      '--expose-internals',
+      packaged
+        ? join('/resources', 'dsh-host', 'host.js')
+        : join('/repo', 'src', 'dsh-host', 'host.ts'),
+    ]);
+    expect(launch.cwd).toBe(HOST_CWD);
+    expect(launch.env).toMatchObject({
+      DSH_HOME: HOME_DIR,
+      DSH_TELEMETRY_DISABLED: '1',
+      NARB_NATIVE_CACHE_DIR: NATIVE_CACHE,
+    });
+    expect(
+      Object.keys(launch.env).filter((name) => /^AICLIENT_DSH_BRIDGE$|GENERATION/.test(name))
+    ).toEqual([]);
+    prepareDshHostDirectories(launch);
     for (const dir of [HOME_DIR, HOST_CWD, NATIVE_CACHE]) {
       expect(mkdirSync).toHaveBeenCalledWith(dir, { recursive: true, mode: 0o700 });
       if (process.platform !== 'win32') expect(chmodSync).toHaveBeenCalledWith(dir, 0o700);
     }
-    expect(spawn).toHaveBeenCalledWith(
-      packaged
-        ? join('/resources', 'node-runtime', process.platform === 'win32' ? 'node.exe' : 'node')
-        : join('/repo', 'out-node-runtime', process.platform === 'win32' ? 'node.exe' : 'node'),
-      [
-        '--expose-internals',
-        packaged
-          ? join('/resources', 'dsh-host', 'host.js')
-          : join('/repo', 'src', 'dsh-host', 'host.ts'),
-      ],
-      {
-        cwd: HOST_CWD,
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        windowsHide: true,
-        env: expect.objectContaining({
-          DSH_HOME: HOME_DIR,
-          DSH_TELEMETRY_DISABLED: '1',
-          NARB_NATIVE_CACHE_DIR: NATIVE_CACHE,
-          AICLIENT_DSH_BRIDGE: '1',
-          AICLIENT_PI_WORKER_GENERATION: '2',
-        }),
-      }
-    );
-    expect(forked.transport).toBe('transport');
   });
 
-  it('spawns nothing when the packaged host is missing', () => {
+  it('fails loudly when the packaged host is missing', () => {
     electronApp.isPackaged = true;
     vi.mocked(existsSync).mockImplementation((file) => !String(file).endsWith('host.js'));
-    expect(() => forkDshHost({ generation: 1, cwd: '/repo' })).toThrow(DSH_HOST_MISSING);
-    expect(spawn).not.toHaveBeenCalled();
+    expect(() => currentDshHostLaunch()).toThrow(DSH_HOST_MISSING);
   });
 });
