@@ -1,0 +1,324 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 1,
+  "narb": "default",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/out-dsh-host",
+    "files": 10167,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/out-node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-H52Pvm",
+  "startedAt": "2026-09-27T06:48:04.570Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 700,
+    "ready": {
+      "node": "v24.18.0",
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 76,
+        "disabled": 20,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 95,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh",
+          "aiclient-bridge",
+          "aiclient-shared-bridge"
+        ]
+      },
+      "marks": {
+        "entry": 43.502086,
+        "modulesLoaded": 80.836518,
+        "profileResolved": 124.978091,
+        "bootResolved": 694.633055
+      }
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 17.148016000000098,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 17ms\n"
+  },
+  "L1": {
+    "label": "L1",
+    "readyMs": 745,
+    "bootstrap": {
+      "bootstrapped": true
+    },
+    "ready": {
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 77,
+        "disabled": 19,
+        "inactive": []
+      }
+    },
+    "fs": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/marker.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-c5cdadf5 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-c5cdadf5 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "ok": true,
+          "text": "The file /var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-c5cdadf5 EDITED-5bfb86 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/dsh-written-5bfb86.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/dsh-written-5bfb86.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-c5cdadf5 WRITTEN-5bfb86\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "ok": true,
+          "text": "Found 3 matches\n\nmarker.txt\nLine 1: P12-MARKER-c5cdadf5 plaintext line\n\ndsh-written-5bfb86.txt\nLine 1: P12-MARKER-c5cdadf5 WRITTEN-5bfb86\n\nedit-target.txt\nLine 1: P12-MARKER-c5cdadf5 EDITED-5bfb86 edit target"
+        },
+        {
+          "name": "glob",
+          "ok": true,
+          "text": "marker.txt\nedit-target.txt\ndsh-written-5bfb86.txt"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "P12-MARKER-c5cdadf5 plaintext line\n"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "(no output)"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "e 1218 5bfb86\nspill-line 1219 5bfb86\nspill-line 1220 5bfb86\nspill-line 1221 5bfb86\nspill-line 1222 5bfb86\nspill-line 1223 5bfb86\nspill-line 1224 5bfb86\nspill-line 1225 5bfb86\nspill-line 1226 5bfb86\nspill-line 1227 5bfb86\nspill-line 1228 5bfb86\nspill-line 1229 5bfb86\nspill-line 1230 5bfb86\nspill-line 1231 5bfb86\nspill-line 1232 5bfb86\nspill-line 1233 5bfb86\nspill-line 1234 5bfb86\nspill-line 1235 5bfb86\nspill-line 1236 5bfb86\nspill-line 1237 5bfb86\nspill-line 1238 5bfb86\nspill-line 1239 5bfb86\nspill-line 1240 5bfb86\nspill-line 1241 5bfb86\nspill-line 1242 5bfb86\nspill-line 1243 5bfb86\nspill-line 1244 5bfb86\nspill-line 1245 5bfb86\nspill-line 1246 5bfb86\nspill-line 1247 5bfb86\nspill-line 1248 5bfb86\nspill-line 1249 5bfb86\nspill-line 1250 5bfb86\nspill-line 1251 5bfb86\nspill-line 1252 5bfb86\nspill-line 1253 5bfb86\nspill-line 1254 5bfb86\nspill-line 1255 5bfb86\nspill-line 1256 5bfb86\nspill-line 1257 5bfb86\nspill-line 1258 5bfb86\nspill-line 1259 5bfb86\nspill-line 1260 5bfb86\nspill-line 1261 5bfb86\nspill-line 1262 5bfb86\nspill-line 1263 5bfb86\nspill-line 1264 5bfb86\nspill-line 1265 5bfb86\nspill-line 1266 5bfb86\nspill-line 1267 5bfb86\nspill-line 1268 5bfb86\nspill-line 1269 5bfb86\nspill-line 1270 5bfb86\nspill-line 1271 5bfb86\nspill-line 1272 5bfb86\nspill-line 1273 5bfb86\nspill-line 1274 5bfb86\nspill-line 1275 5bfb86\nspill-line 1276 5bfb86\nspill-line 1277 5bfb86\nspill-line 1278 5bfb86\nspill-line 1279 5bfb86\nspill-line 1280 5bfb86\nspill-line 1281 5bfb86\nspill-line 1282 5bfb86\nspill-line 1283 5bfb86\nspill-line 1284 5bfb86\nspill-line 1285 5bfb86\nspill-line 1286 5bfb86\nspill-line 1287 5bfb86\nspill-line 1288 5bfb86\nspill-line 1289 5bfb86\nspill-line 1290 5bfb86\nspill-line 1291 5bfb86\nspill-line 1292 5bfb86\nspill-line 1293 5bfb86\nspill-line 1294 5bfb86\nspill-line 1295 5bfb86\nspill-line 1296 5bfb86\nspill-line 1297 5bfb86\nspill-line 1298 5bfb86\nspill-line 1299 5bfb86\nspill-line 1300 5bfb86\nspill-line 1301 5bfb86\nspill-line 1302 5bfb86\nspill-line 1303 5bfb86\nspill-line 1304 5bfb86\nspill-line 1305 5bfb86\nspill-line 1306 5bfb86\nspill-line 1307 5bfb86\nspill-line 1308 5bfb86\nspill-line 1309 5bfb86\nspill-line 1310 5bfb86\nspill-line 1311 5bfb86\nspill-line 1312 5bfb86\nspill-line 1313 5bfb86\nspill-line 1314 5bfb86\nspill-line 1315 5bfb86\nspill-line 1316 5bfb86\nspill-line 1317 5bfb86\nspill-line 1318 5bfb86\nspill-line 1319 5bfb86\nspill-line 1320 5bfb86\nspill-line 1321 5bfb86\nspill-line 1322 5bfb86\nspill-line 1323 5bfb86\nspill-line 1324 5bfb86\nspill-line 1325 5bfb86\nspill-line 1326 5bfb86\nspill-line 1327 5bfb86\nspill-line 1328 5bfb86\nspill-line 1329 5bfb86\nspill-line 1330 5bfb86\nspill-line 1331 5bfb86\nspill-line 1332 5bfb86\nspill-line 1333 5bfb86\nspill-line 1334 5bfb86\nspill-line 1335 5bfb86\nspill-line 1336 5bfb86\nspill-line 1337 5bfb86\nspill-line 1338 5bfb86\nspill-line 1339 5bfb86\nspill-line 1340 5bfb86\nspill-line 1341 5bfb86\nspill-line 1342 5bfb86\nspill-line 1343 5bfb86\nspill-line 1344 5bfb86\nspill-line 1345 5bfb86\nspill-line 1346 5bfb86\nspill-line 1347 5bfb86\nspill-line 1348 5bfb86\nspill-line 1349 5bfb86\nspill-line 1350 5bfb86\nspill-line 1351 5bfb86\nspill-line 1352 5bfb86\nspill-line 1353 5bfb86\nspill-line 1354 5bfb86\nspill-line 1355 5bfb86\nspill-line 1356 5bfb86\nspill-line 1357 5bfb86\nspill-line 1358 5bfb86\nspill-line 1359 5bfb86\nspill-line 1360 5bfb86\nspill-line 1361 5bfb86\nspill-line 1362 5bfb86\nspill-line 1363 5bfb86\nspill-line 1364 5bfb86\nspill-line 1365 5bfb86\nspill-line 1366 5bfb86\nspill-line 1367 5bfb86\nspill-line 1368 5bfb86\nspill-line 1369 5bfb86\nspill-line 1370 5bfb86\nspill-line 1371 5bfb86\nspill-line 1372 5bfb86\nspill-line 1373 5bfb86\nspill-line 1374 5bfb86\nspill-line 1375 5bfb86\nspill-line 1376 5bfb86\nspill-line 1377 5bfb86\nspill-line 1378 5bfb86\nspill-line 1379 5bfb86\nspill-line 1380 5bfb86\nspill-line 1381 5bfb86\nspill-line 1382 5bfb86\nspill-line 1383 5bfb86\nspill-line 1384 5bfb86\nspill-line 1385 5bfb86\nspill-line 1386 5bfb86\nspill-line 1387 5bfb86\nspill-line 1388 5bfb86\nspill-line 1389 5bfb86\nspill-line 1390 5bfb86\nspill-line 1391 5bfb86\nspill-line 1392 5bfb86\nspill-line 1393 5bfb86\nspill-line 1394 5bfb86\nspill-line 1395 5bfb86\nspill-line 1396 5bfb86\nspill-line 1397 5bfb86\nspill-line 1398 5bfb86\nspill-line 1399 5bfb86\nspill-line 1400 5bfb86\nspill-line 1401 5bfb86\nspill-line 1402 5bfb86\nspill-line 1403 5bfb86\nspill-line 1404 5bfb86\nspill-line 1405 5bfb86\nspill-line 1406 5bfb86\nspill-line 1407 5bfb86\nspill-line 1408 5bfb86\nspill-line 1409 5bfb86\nspill-line 1410 5bfb86\nspill-line 1411 5bfb86\nspill-line 1412 5bfb86\nspill-line 1413 5bfb86\nspill-line 1414 5bfb86\nspill-line 1415 5bfb86\nspill-line 1416 5bfb86\nspill-line 1417 5bfb86\nspill-line 1418 5bfb86\nspill-line 1419 5bfb86\nspill-line 1420 5bfb86\nspill-line 1421 5bfb86\nspill-line 1422 5bfb86\nspill-line 1423 5bfb86\nspill-line 1424 5bfb86\nspill-line 1425 5bfb86\nspill-line 1426 5bfb86\nspill-line 1427 5bfb86\nspill-line 1428 5bfb86\nspill-line 1429 5bfb86\nspill-line 1430 5bfb86\nspill-line 1431 5bfb86\nspill-line 1432 5bfb86\nspill-line 1433 5bfb86\nspill-line 1434 5bfb86\nspill-line 1435 5bfb86\nspill-line 1436 5bfb86\nspill-line 1437 5bfb86\nspill-line 1438 5bfb86\nspill-line 1439 5bfb86\nspill-line 1440 5bfb86\nspill-line 1441 5bfb86\nspill-line 1442 5bfb86\nspill-line 1443 5bfb86\nspill-line 1444 5bfb86\nspill-line 1445 5bfb86\nspill-line 1446 5bfb86\nspill-line 1447 5bfb86\nspill-line 1448 5bfb86\nspill-line 1449 5bfb86\nspill-line 1450 5bfb86\nspill-line 1451 5bfb86\nspill-line 1452 5bfb86\nspill-line 1453 5bfb86\nspill-line 1454 5bfb86\nspill-line 1455 5bfb86\nspill-line 1456 5bfb86\nspill-line 1457 5bfb86\nspill-line 1458 5bfb86\nspill-line 1459 5bfb86\nspill-line 1460 5bfb86\nspill-line 1461 5bfb86\nspill-line 1462 5bfb86\nspill-line 1463 5bfb86\nspill-line 1464 5bfb86\nspill-line 1465 5bfb86\nspill-line 1466 5bfb86\nspill-line 1467 5bfb86\nspill-line 1468 5bfb86\nspill-line 1469 5bfb86\nspill-line 1470 5bfb86\nspill-line 1471 5bfb86\nspill-line 1472 5bfb86\nspill-line 1473 5bfb86\nspill-line 1474 5bfb86\nspill-line 1475 5bfb86\nspill-line 1476 5bfb86\nspill-line 1477 5bfb86\nspill-line 1478 5bfb86\nspill-line 1479 5bfb86\nspill-line 1480 5bfb86\nspill-line 1481 5bfb86\nspill-line 1482 5bfb86\nspill-line 1483 5bfb86\nspill-line 1484 5bfb86\nspill-line 1485 5bfb86\nspill-line 1486 5bfb86\nspill-line 1487 5bfb86\nspill-line 1488 5bfb86\nspill-line 1489 5bfb86\nspill-line 1490 5bfb86\nspill-line 1491 5bfb86\nspill-line 1492 5bfb86\nspill-line 1493 5bfb86\nspill-line 1494 5bfb86\nspill-line 1495 5bfb86\nspill-line 1496 5bfb86\nspill-line 1497 5bfb86\nspill-line 1498 5bfb86\nspill-line 1499 5bfb86\nspill-line 1500 5bfb86\nspill-line 1501 5bfb86\nspill-line 1502 5bfb86\nspill-line 1503 5bfb86\nspill-line 1504 5bfb86\nspill-line 1505 5bfb86\nspill-line 1506 5bfb86\nspill-line 1507 5bfb86\nspill-line 1508 5bfb86\nspill-line 1509 5bfb86\nspill-line 1510 5bfb86\nspill-line 1511 5bfb86\nspill-line 1512 5bfb86\nspill-line 1513 5bfb86\nspill-line 1514 5bfb86\nspill-line 1515 5bfb86\nspill-line 1516 5bfb86\nspill-line 1517 5bfb86\nspill-line 1518 5bfb86\nspill-line 1519 5bfb86\nspill-line 1520 5bfb86\nspill-line 1521 5bfb86\nspill-line 1522 5bfb86\nspill-line 1523 5bfb86\nspill-line 1524 5bfb86\nspill-line 1525 5bfb86\nspill-line 1526 5bfb86\nspill-line 1527 5bfb86\nspill-line 1528 5bfb86\nspill-line 1529 5bfb86\nspill-line 1530 5bfb86\nspill-line 1531 5bfb86\nspill-line 1532 5bfb86\nspill-line 1533 5bfb86\nspill-line 1534 5bfb86\nspill-line 1535 5bfb86\nspill-line 1536 5bfb86\nspill-line 1537 5bfb86\nspill-line 1538 5bfb86\nspill-line 1539 5bfb86\nspill-line 1540 5bfb86\nspill-line 1541 5bfb86\nspill-line 1542 5bfb86\nspill-line 1543 5bfb86\nspill-line 1544 5bfb86\nspill-line 1545 5bfb86\nspill-line 1546 5bfb86\nspill-line 1547 5bfb86\nspill-line 1548 5bfb86\nspill-line 1549 5bfb86\nspill-line 1550 5bfb86\nspill-line 1551 5bfb86\nspill-line 1552 5bfb86\nspill-line 1553 5bfb86\nspill-line 1554 5bfb86\nspill-line 1555 5bfb86\nspill-line 1556 5bfb86\nspill-line 1557 5bfb86\nspill-line 1558 5bfb86\nspill-line 1559 5bfb86\nspill-line 1560 5bfb86\nspill-line 1561 5bfb86\nspill-line 1562 5bfb86\nspill-line 1563 5bfb86\nspill-line 1564 5bfb86\nspill-line 1565 5bfb86\nspill-line 1566 5bfb86\nspill-line 1567 5bfb86\nspill-line 1568 5bfb86\nspill-line 1569 5bfb86\nspill-line 1570 5bfb86\nspill-line 1571 5bfb86\nspill-line 1572 5bfb86\nspill-line 1573 5bfb86\nspill-line 1574 5bfb86\nspill-line 1575 5bfb86\nspill-line 1576 5bfb86\nspill-line 1577 5bfb86\nspill-line 1578 5bfb86\nspill-line 1579 5bfb86\nspill-line 1580 5bfb86\nspill-line 1581 5bfb86\nspill-line 1582 5bfb86\nspill-line 1583 5bfb86\nspill-line 1584 5bfb86\nspill-line 1585 5bfb86\nspill-line 1586 5bfb86\nspill-line 1587 5bfb86\nspill-line 1588 5bfb86\nspill-line 1589 5bfb86\nspill-line 1590 5bfb86\nspill-line 1591 5bfb86\nspill-line 1592 5bfb86\nspill-line 1593 5bfb86\nspill-line 1594 5bfb86\nspill-line 1595 5bfb86\nspill-line 1596 5bfb86\nspill-line 1597 5bfb86\nspill-line 1598 5bfb86\nspill-line 1599 5bfb86\nspill-line 1600 5bfb86\nspill-line 1601 5bfb86\nspill-line 1602 5bfb86\nspill-line 1603 5bfb86\nspill-line 1604 5bfb86\nspill-line 1605 5bfb86\nspill-line 1606 5bfb86\nspill-line 1607 5bfb86\nspill-line 1608 5bfb86\nspill-line 1609 5bfb86\nspill-line 1610 5bfb86\nspill-line 1611 5bfb86\nspill-line 1612 5bfb86\nspill-line 1613 5bfb86\nspill-line 1614 5bfb86\nspill-line 1615 5bfb86\nspill-line 1616 5bfb86\nspill-line 1617 5bfb86\nspill-line 1618 5bfb86\nspill-line 1619 5bfb86\nspill-line 1620 5bfb86\nspill-line 1621 5bfb86\nspill-line 1622 5bfb86\nspill-line 1623 5bfb86\nspill-line 1624 5bfb86\nspill-line 1625 5bfb86\nspill-line 1626 5bfb86\nspill-line 1627 5bfb86\nspill-line 1628 5bfb86\nspill-line 1629 5bfb86\nspill-line 1630 5bfb86\nspill-line 1631 5bfb86\nspill-line 1632 5bfb86\nspill-line 1633 5bfb86\nspill-line 1634 5bfb86\nspill-line 1635 5bfb86\nspill-line 1636 5bfb86\nspill-line 1637 5bfb86\nspill-line 1638 5bfb86\nspill-line 1639 5bfb86\nspill-line 1640 5bfb86\nspill-line 1641 5bfb86\nspill-line 1642 5bfb86\nspill-line 1643 5bfb86\nspill-line 1644 5bfb86\nspill-line 1645 5bfb86\nspill-line 1646 5bfb86\nspill-line 1647 5bfb86\nspill-line 1648 5bfb86\nspill-line 1649 5bfb86\nspill-line 1650 5bfb86\nspill-line 1651 5bfb86\nspill-line 1652 5bfb86\nspill-line 1653 5bfb86\nspill-line 1654 5bfb86\nspill-line 1655 5bfb86\nspill-line 1656 5bfb86\nspill-line 1657 5bfb86\nspill-line 1658 5bfb86\nspill-line 1659 5bfb86\nspill-line 1660 5bfb86\nspill-line 1661 5bfb86\nspill-line 1662 5bfb86\nspill-line 1663 5bfb86\nspill-line 1664 5bfb86\nspill-line 1665 5bfb86\nspill-line 1666 5bfb86\nspill-line 1667 5bfb86\nspill-line 1668 5bfb86\nspill-line 1669 5bfb86\nspill-line 1670 5bfb86\nspill-line 1671 5bfb86\nspill-line 1672 5bfb86\nspill-line 1673 5bfb86\nspill-line 1674 5bfb86\nspill-line 1675 5bfb86\nspill-line 1676 5bfb86\nspill-line 1677 5bfb86\nspill-line 1678 5bfb86\nspill-line 1679 5bfb86\nspill-line 1680 5bfb86\nspill-line 1681 5bfb86\nspill-line 1682 5bfb86\nspill-line 1683 5bfb86\nspill-line 1684 5bfb86\nspill-line 1685 5bfb86\nspill-line 1686 5bfb86\nspill-line 1687 5bfb86\nspill-line 1688 5bfb86\nspill-line 1689 5bfb86\nspill-line 1690 5bfb86\nspill-line 1691 5bfb86\nspill-line 1692 5bfb86\nspill-line 1693 5bfb86\nspill-line 1694 5bfb86\nspill-line 1695 5bfb86\nspill-line 1696 5bfb86\nspill-line 1697 5bfb86\nspill-line 1698 5bfb86\nspill-line 1699 5bfb86\nspill-line 1700 5bfb86\nspill-line 1701 5bfb86\nspill-line 1702 5bfb86\nspill-line 1703 5bfb86\nspill-line 1704 5bfb86\nspill-line 1705 5bfb86\nspill-line 1706 5bfb86\nspill-line 1707 5bfb86\nspill-line 1708 5bfb86\nspill-line 1709 5bfb86\nspill-line 1710 5bfb86\nspill-line 1711 5bfb86\nspill-line 1712 5bfb86\nspill-line 1713 5bfb86\nspill-line 1714 5bfb86\nspill-line 1715 5bfb86\nspill-line 1716 5bfb86\nspill-line 1717 5bfb86\nspill-line 1718 5bfb86\nspill-line 1719 5bfb86\nspill-line 1720 5bfb86\nspill-line 1721 5bfb86\nspill-line 1722 5bfb86\nspill-line 1723 5bfb86\nspill-line 1724 5bfb86\nspill-line 1725 5bfb86\nspill-line 1726 5bfb86\nspill-line 1727 5bfb86\nspill-line 1728 5bfb86\nspill-line 1729 5bfb86\nspill-line 1730 5bfb86\nspill-line 1731 5bfb86\nspill-line 1732 5bfb86\nspill-line 1733 5bfb86\nspill-line 1734 5bfb86\nspill-line 1735 5bfb86\nspill-line 1736 5bfb86\nspill-line 1737 5bfb86\nspill-line 1738 5bfb86\nspill-line 1739 5bfb86\nspill-line 1740 5bfb86\nspill-line 1741 5bfb86\nspill-line 1742 5bfb86\nspill-line 1743 5bfb86\nspill-line 1744 5bfb86\nspill-line 1745 5bfb86\nspill-line 1746 5bfb86\nspill-line 1747 5bfb86\nspill-line 1748 5bfb86\nspill-line 1749 5bfb86\nspill-line 1750 5bfb86\nspill-line 1751 5bfb86\nspill-line 1752 5bfb86\nspill-line 1753 5bfb86\nspill-line 1754 5bfb86\nspill-line 1755 5bfb86\nspill-line 1756 5bfb86\nspill-line 1757 5bfb86\nspill-line 1758 5bfb86\nspill-line 1759 5bfb86\nspill-line 1760 5bfb86\nspill-line 1761 5bfb86\nspill-line 1762 5bfb86\nspill-line 1763 5bfb86\nspill-line 1764 5bfb86\nspill-line 1765 5bfb86\nspill-line 1766 5bfb86\nspill-line 1767 5bfb86\nspill-line 1768 5bfb86\nspill-line 1769 5bfb86\nspill-line 1770 5bfb86\nspill-line 1771 5bfb86\nspill-line 1772 5bfb86\nspill-line 1773 5bfb86\nspill-line 1774 5bfb86\nspill-line 1775 5bfb86\nspill-line 1776 5bfb86\nspill-line 1777 5bfb86\nspill-line 1778 5bfb86\nspill-line 1779 5bfb86\nspill-line 1780 5bfb86\nspill-line 1781 5bfb86\nspill-line 1782 5bfb86\nspill-line 1783 5bfb86\nspill-line 1784 5bfb86\nspill-line 1785 5bfb86\nspill-line 1786 5bfb86\nspill-line 1787 5bfb86\nspill-line 1788 5bfb86\nspill-line 1789 5bfb86\nspill-line 1790 5bfb86\nspill-line 1791 5bfb86\nspill-line 1792 5bfb86\nspill-line 1793 5bfb86\nspill-line 1794 5bfb86\nspill-line 1795 5bfb86\nspill-line 1796 5bfb86\nspill-line 1797 5bfb86\nspill-line 1798 5bfb86\nspill-line 1799 5bfb86\nspill-line 1800 5bfb86\nspill-line 1801 5bfb86\nspill-line 1802 5bfb86\nspill-line 1803 5bfb86\nspill-line 1804 5bfb86\nspill-line 1805 5bfb86\nspill-line 1806 5bfb86\nspill-line 1807 5bfb86\nspill-line 1808 5bfb86\nspill-line 1809 5bfb86\nspill-line 1810 5bfb86\nspill-line 1811 5bfb86\nspill-line 1812 5bfb86\nspill-line 1813 5bfb86\nspill-line 1814 5bfb86\nspill-line 1815 5bfb86\nspill-line 1816 5bfb86\nspill-line 1817 5bfb86\nspill-line 1818 5bfb86\nspill-line 1819 5bfb86\nspill-line 1820 5bfb86\nspill-line 1821 5bfb86\nspill-line 1822 5bfb86\nspill-line 1823 5bfb86\nspill-line 1824 5bfb86\nspill-line 1825 5bfb86\nspill-line 1826 5bfb86\nspill-line 1827 5bfb86\nspill-line 1828 5bfb86\nspill-line 1829 5bfb86\nspill-line 1830 5bfb86\nspill-line 1831 5bfb86\nspill-line 1832 5bfb86\nspill-line 1833 5bfb86\nspill-line 1834 5bfb86\nspill-line 1835 5bfb86\nspill-line 1836 5bfb86\nspill-line 1837 5bfb86\nspill-line 1838 5bfb86\nspill-line 1839 5bfb86\nspill-line 1840 5bfb86\nspill-line 1841 5bfb86\nspill-line 1842 5bfb86\nspill-line 1843 5bfb86\nspill-line 1844 5bfb86\nspill-line 1845 5bfb86\nspill-line 1846 5bfb86\nspill-line 1847 5bfb86\nspill-line 1848 5bfb86\nspill-line 1849 5bfb86\nspill-line 1850 5bfb86\nspill-line 1851 5bfb86\nspill-line 1852 5bfb86\nspill-line 1853 5bfb86\nspill-line 1854 5bfb86\nspill-line 1855 5bfb86\nspill-line 1856 5bfb86\nspill-line 1857 5bfb86\nspill-line 1858 5bfb86\nspill-line 1859 5bfb86\nspill-line 1860 5bfb86\nspill-line 1861 5bfb86\nspill-line 1862 5bfb86\nspill-line 1863 5bfb86\nspill-line 1864 5bfb86\nspill-line 1865 5bfb86\nspill-line 1866 5bfb86\nspill-line 1867 5bfb86\nspill-line 1868 5bfb86\nspill-line 1869 5bfb86\nspill-line 1870 5bfb86\nspill-line 1871 5bfb86\nspill-line 1872 5bfb86\nspill-line 1873 5bfb86\nspill-line 1874 5bfb86\nspill-line 1875 5bfb86\nspill-line 1876 5bfb86\nspill-line 1877 5bfb86\nspill-line 1878 5bfb86\nspill-line 1879 5bfb86\nspill-line 1880 5bfb86\nspill-line 1881 5bfb86\nspill-line 1882 5bfb86\nspill-line 1883 5bfb86\nspill-line 1884 5bfb86\nspill-line 1885 5bfb86\nspill-line 1886 5bfb86\nspill-line 1887 5bfb86\nspill-line 1888 5bfb86\nspill-line 1889 5bfb86\nspill-line 1890 5bfb86\nspill-line 1891 5bfb86\nspill-line 1892 5bfb86\nspill-line 1893 5bfb86\nspill-line 1894 5bfb86\nspill-line 1895 5bfb86\nspill-line 1896 5bfb86\nspill-line 1897 5bfb86\nspill-line 1898 5bfb86\nspill-line 1899 5bfb86\nspill-line 1900 5bfb86\nspill-line 1901 5bfb86\nspill-line 1902 5bfb86\nspill-line 1903 5bfb86\nspill-line 1904 5bfb86\nspill-line 1905 5bfb86\nspill-line 1906 5bfb86\nspill-line 1907 5bfb86\nspill-line 1908 5bfb86\nspill-line 1909 5bfb86\nspill-line 1910 5bfb86\nspill-line 1911 5bfb86\nspill-line 1912 5bfb86\nspill-line 1913 5bfb86\nspill-line 1914 5bfb86\nspill-line 1915 5bfb86\nspill-line 1916 5bfb86\nspill-line 1917 5bfb86\nspill-line 1918 5bfb86\nspill-line 1919 5bfb86\nspill-line 1920 5bfb86\nspill-line 1921 5bfb86\nspill-line 1922 5bfb86\nspill-line 1923 5bfb86\nspill-line 1924 5bfb86\nspill-line 1925 5bfb86\nspill-line 1926 5bfb86\nspill-line 1927 5bfb86\nspill-line 1928 5bfb86\nspill-line 1929 5bfb86\nspill-line 1930 5bfb86\nspill-line 1931 5bfb86\nspill-line 1932 5bfb86\nspill-line 1933 5bfb86\nspill-line 1934 5bfb86\nspill-line 1935 5bfb86\nspill-line 1936 5bfb86\nspill-line 1937 5bfb86\nspill-line 1938 5bfb86\nspill-line 1939 5bfb86\nspill-line 1940 5bfb86\nspill-line 1941 5bfb86\nspill-line 1942 5bfb86\nspill-line 1943 5bfb86\nspill-line 1944 5bfb86\nspill-line 1945 5bfb86\nspill-line 1946 5bfb86\nspill-line 1947 5bfb86\nspill-line 1948 5bfb86\nspill-line 1949 5bfb86\nspill-line 1950 5bfb86\nspill-line 1951 5bfb86\nspill-line 1952 5bfb86\nspill-line 1953 5bfb86\nspill-line 1954 5bfb86\nspill-line 1955 5bfb86\nspill-line 1956 5bfb86\nspill-line 1957 5bfb86\nspill-line 1958 5bfb86\nspill-line 1959 5bfb86\nspill-line 1960 5bfb86\nspill-line 1961 5bfb86\nspill-line 1962 5bfb86\nspill-line 1963 5bfb86\nspill-line 1964 5bfb86\nspill-line 1965 5bfb86\nspill-line 1966 5bfb86\nspill-line 1967 5bfb86\nspill-line 1968 5bfb86\nspill-line 1969 5bfb86\nspill-line 1970 5bfb86\nspill-line 1971 5bfb86\nspill-line 1972 5bfb86\nspill-line 1973 5bfb86\nspill-line 1974 5bfb86\nspill-line 1975 5bfb86\nspill-line 1976 5bfb86\nspill-line 1977 5bfb86\nspill-line 1978 5bfb86\nspill-line 1979 5bfb86\nspill-line 1980 5bfb86\nspill-line 1981 5bfb86\nspill-line 1982 5bfb86\nspill-line 1983 5bfb86\nspill-line 1984 5bfb86\nspill-line 1985 5bfb86\nspill-line 1986 5bfb86\nspill-line 1987 5bfb86\nspill-line 1988 5bfb86\nspill-line 1989 5bfb86\nspill-line 1990 5bfb86\nspill-line 1991 5bfb86\nspill-line 1992 5bfb86\nspill-line 1993 5bfb86\nspill-line 1994 5bfb86\nspill-line 1995 5bfb86\nspill-line 1996 5bfb86\nspill-line 1997 5bfb86\nspill-line 1998 5bfb86\nspill-line 1999 5bfb86\nspill-line 2000 5bfb86\nspill-line 2001 5bfb86\nspill-line 2002 5bfb86\nspill-line 2003 5bfb86\nspill-line 2004 5bfb86\nspill-line 2005 5bfb86\nspill-line 2006 5bfb86\nspill-line 2007 5bfb86\nspill-line 2008 5bfb86\nspill-line 2009 5bfb86\nspill-line 2010 5bfb86\nspill-line 2011 5bfb86\nspill-line 2012 5bfb86\nspill-line 2013 5bfb86\nspill-line 2014 5bfb86\nspill-line 2015 5bfb86\nspill-line 2016 5bfb86\nspill-line 2017 5bfb86\nspill-line 2018 5bfb86\nspill-line 2019 5bfb86\nspill-line 2020 5bfb86\nspill-line 2021 5bfb86\nspill-line 2022 5bfb86\nspill-line 2023 5bfb86\nspill-line 2024 5bfb86\nspill-line 2025 5bfb86\nspill-line 2026 5bfb86\nspill-line 2027 5bfb86\nspill-line 2028 5bfb86\nspill-line 2029 5bfb86\nspill-line 2030 5bfb86\nspill-line 2031 5bfb86\nspill-line 2032 5bfb86\nspill-line 2033 5bfb86\nspill-line 2034 5bfb86\nspill-line 2035 5bfb86\nspill-line 2036 5bfb86\nspill-line 2037 5bfb86\nspill-line 2038 5bfb86\nspill-line 2039 5bfb86\nspill-line 2040 5bfb86\nspill-line 2041 5bfb86\nspill-line 2042 5bfb86\nspill-line 2043 5bfb86\nspill-line 2044 5bfb86\nspill-line 2045 5bfb86\nspill-line 2046 5bfb86\nspill-line 2047 5bfb86\nspill-line 2048 5bfb86\nspill-line 2049 5bfb86\nspill-line 2050 5bfb86\nspill-line 2051 5bfb86\nspill-line 2052 5bfb86\nspill-line 2053 5bfb86\nspill-line 2054 5bfb86\nspill-line 2055 5bfb86\nspill-line 2056 5bfb86\nspill-line 2057 5bfb86\nspill-line 2058 5bfb86\nspill-line 2059 5bfb86\nspill-line 2060 5bfb86\nspill-line 2061 5bfb86\nspill-line 2062 5bfb86\nspill-line 2063 5bfb86\nspill-line 2064 5bfb86\nspill-line 2065 5bfb86\nspill-line 2066 5bfb86\nspill-line 2067 5bfb86\nspill-line 2068 5bfb86\nspill-line 2069 5bfb86\nspill-line 2070 5bfb86\nspill-line 2071 5bfb86\nspill-line 2072 5bfb86\nspill-line 2073 5bfb86\nspill-line 2074 5bfb86\nspill-line 2075 5bfb86\nspill-line 2076 5bfb86\nspill-line 2077 5bfb86\nspill-line 2078 5bfb86\nspill-line 2079 5bfb86\nspill-line 2080 5bfb86\nspill-line 2081 5bfb86\nspill-line 2082 5bfb86\nspill-line 2083 5bfb86\nspill-line 2084 5bfb86\nspill-line 2085 5bfb86\nspill-line 2086 5bfb86\nspill-line 2087 5bfb86\nspill-line 2088 5bfb86\nspill-line 2089 5bfb86\nspill-line 2090 5bfb86\nspill-line 2091 5bfb86\nspill-line 2092 5bfb86\nspill-line 2093 5bfb86\nspill-line 2094 5bfb86\nspill-line 2095 5bfb86\nspill-line 2096 5bfb86\nspill-line 2097 5bfb86\nspill-line 2098 5bfb86\nspill-line 2099 5bfb86\nspill-line 2100 5bfb86\nspill-line 2101 5bfb86\nspill-line 2102 5bfb86\nspill-line 2103 5bfb86\nspill-line 2104 5bfb86\nspill-line 2105 5bfb86\nspill-line 2106 5bfb86\nspill-line 2107 5bfb86\nspill-line 2108 5bfb86\nspill-line 2109 5bfb86\nspill-line 2110 5bfb86\nspill-line 2111 5bfb86\nspill-line 2112 5bfb86\nspill-line 2113 5bfb86\nspill-line 2114 5bfb86\nspill-line 2115 5bfb86\nspill-line 2116 5bfb86\nspill-line 2117 5bfb86\nspill-line 2118 5bfb86\nspill-line 2119 5bfb86\nspill-line 2120 5bfb86\nspill-line 2121 5bfb86\nspill-line 2122 5bfb86\nspill-line 2123 5bfb86\nspill-line 2124 5bfb86\nspill-line 2125 5bfb86\nspill-line 2126 5bfb86\nspill-line 2127 5bfb86\nspill-line 2128 5bfb86\nspill-line 2129 5bfb86\nspill-line 2130 5bfb86\nspill-line 2131 5bfb86\nspill-line 2132 5bfb86\nspill-line 2133 5bfb86\nspill-line 2134 5bfb86\nspill-line 2135 5bfb86\nspill-line 2136 5bfb86\nspill-line 2137 5bfb86\nspill-line 2138 5bfb86\nspill-line 2139 5bfb86\nspill-line 2140 5bfb86\nspill-line 2141 5bfb86\nspill-line 2142 5bfb86\nspill-line 2143 5bfb86\nspill-line 2144 5bfb86\nspill-line 2145 5bfb86\nspill-line 2146 5bfb86\nspill-line 2147 5bfb86\nspill-line 2148 5bfb86\nspill-line 2149 5bfb86\nspill-line 2150 5bfb86\nspill-line 2151 5bfb86\nspill-line 2152 5bfb86\nspill-line 2153 5bfb86\nspill-line 2154 5bfb86\nspill-line 2155 5bfb86\nspill-line 2156 5bfb86\nspill-line 2157 5bfb86\nspill-line 2158 5bfb86\nspill-line 2159 5bfb86\nspill-line 2160 5bfb86\nspill-line 2161 5bfb86\nspill-line 2162 5bfb86\nspill-line 2163 5bfb86\nspill-line 2164 5bfb86\nspill-line 2165 5bfb86\nspill-line 2166 5bfb86\nspill-line 2167 5bfb86\nspill-line 2168 5bfb86\nspill-line 2169 5bfb86\nspill-line 2170 5bfb86\nspill-line 2171 5bfb86\nspill-line 2172 5bfb86\nspill-line 2173 5bfb86\nspill-line 2174 5bfb86\nspill-line 2175 5bfb86\nspill-line 2176 5bfb86\nspill-line 2177 5bfb86\nspill-line 2178 5bfb86\nspill-line 2179 5bfb86\nspill-line 2180 5bfb86\nspill-line 2181 5bfb86\nspill-line 2182 5bfb86\nspill-line 2183 5bfb86\nspill-line 2184 5bfb86\nspill-line 2185 5bfb86\nspill-line 2186 5bfb86\nspill-line 2187 5bfb86\nspill-line 2188 5bfb86\nspill-line 2189 5bfb86\nspill-line 2190 5bfb86\nspill-line 2191 5bfb86\nspill-line 2192 5bfb86\nspill-line 2193 5bfb86\nspill-line 2194 5bfb86\nspill-line 2195 5bfb86\nspill-line 2196 5bfb86\nspill-line 2197 5bfb86\nspill-line 2198 5bfb86\nspill-line 2199 5bfb86\nspill-line 2200 5bfb86\nspill-line 2201 5bfb86\nspill-line 2202 5bfb86\nspill-line 2203 5bfb86\nspill-line 2204 5bfb86\nspill-line 2205 5bfb86\nspill-line 2206 5bfb86\nspill-line 2207 5bfb86\nspill-line 2208 5bfb86\nspill-line 2209 5bfb86\nspill-line 2210 5bfb86\nspill-line 2211 5bfb86\nspill-line 2212 5bfb86\nspill-line 2213 5bfb86\nspill-line 2214 5bfb86\nspill-line 2215 5bfb86\nspill-line 2216 5bfb86\nspill-line 2217 5bfb86\nspill-line 2218 5bfb86\nspill-line 2219 5bfb86\nspill-line 2220 5bfb86\nspill-line 2221 5bfb86\nspill-line 2222 5bfb86\nspill-line 2223 5bfb86\nspill-line 2224 5bfb86\nspill-line 2225 5bfb86\nspill-line 2226 5bfb86\nspill-line 2227 5bfb86\nspill-line 2228 5bfb86\nspill-line 2229 5bfb86\nspill-line 2230 5bfb86\nspill-line 2231 5bfb86\nspill-line 2232 5bfb86\nspill-line 2233 5bfb86\nspill-line 2234 5bfb86\nspill-line 2235 5bfb86\nspill-line 2236 5bfb86\nspill-line 2237 5bfb86\nspill-line 2238 5bfb86\nspill-line 2239 5bfb86\nspill-line 2240 5bfb86\nspill-line 2241 5bfb86\nspill-line 2242 5bfb86\nspill-line 2243 5bfb86\nspill-line 2244 5bfb86\nspill-line 2245 5bfb86\nspill-line 2246 5bfb86\nspill-line 2247 5bfb86\nspill-line 2248 5bfb86\nspill-line 2249 5bfb86\nspill-line 2250 5bfb86\nspill-line 2251 5bfb86\nspill-line 2252 5bfb86\nspill-line 2253 5bfb86\nspill-line 2254 5bfb86\nspill-line 2255 5bfb86\nspill-line 2256 5bfb86\nspill-line 2257 5bfb86\nspill-line 2258 5bfb86\nspill-line 2259 5bfb86\nspill-line 2260 5bfb86\nspill-line 2261 5bfb86\nspill-line 2262 5bfb86\nspill-line 2263 5bfb86\nspill-line 2264 5bfb86\nspill-line 2265 5bfb86\nspill-line 2266 5bfb86\nspill-line 2267 5bfb86\nspill-line 2268 5bfb86\nspill-line 2269 5bfb86\nspill-line 2270 5bfb86\nspill-line 2271 5bfb86\nspill-line 2272 5bfb86\nspill-line 2273 5bfb86\nspill-line 2274 5bfb86\nspill-line 2275 5bfb86\nspill-line 2276 5bfb86\nspill-line 2277 5bfb86\nspill-line 2278 5bfb86\nspill-line 2279 5bfb86\nspill-line 2280 5bfb86\nspill-line 2281 5bfb86\nspill-line 2282 5bfb86\nspill-line 2283 5bfb86\nspill-line 2284 5bfb86\nspill-line 2285 5bfb86\nspill-line 2286 5bfb86\nspill-line 2287 5bfb86\nspill-line 2288 5bfb86\nspill-line 2289 5bfb86\nspill-line 2290 5bfb86\nspill-line 2291 5bfb86\nspill-line 2292 5bfb86\nspill-line 2293 5bfb86\nspill-line 2294 5bfb86\nspill-line 2295 5bfb86\nspill-line 2296 5bfb86\nspill-line 2297 5bfb86\nspill-line 2298 5bfb8\n\n[...]\n\nfb86\nspill-line 2927 5bfb86\nspill-line 2928 5bfb86\nspill-line 2929 5bfb86\nspill-line 2930 5bfb86\nspill-line 2931 5bfb86\nspill-line 2932 5bfb86\nspill-line 2933 5bfb86\nspill-line 2934 5bfb86\nspill-line 2935 5bfb86\nspill-line 2936 5bfb86\nspill-line 2937 5bfb86\nspill-line 2938 5bfb86\nspill-line 2939 5bfb86\nspill-line 2940 5bfb86\nspill-line 2941 5bfb86\nspill-line 2942 5bfb86\nspill-line 2943 5bfb86\nspill-line 2944 5bfb86\nspill-line 2945 5bfb86\nspill-line 2946 5bfb86\nspill-line 2947 5bfb86\nspill-line 2948 5bfb86\nspill-line 2949 5bfb86\nspill-line 2950 5bfb86\nspill-line 2951 5bfb86\nspill-line 2952 5bfb86\nspill-line 2953 5bfb86\nspill-line 2954 5bfb86\nspill-line 2955 5bfb86\nspill-line 2956 5bfb86\nspill-line 2957 5bfb86\nspill-line 2958 5bfb86\nspill-line 2959 5bfb86\nspill-line 2960 5bfb86\nspill-line 2961 5bfb86\nspill-line 2962 5bfb86\nspill-line 2963 5bfb86\nspill-line 2964 5bfb86\nspill-line 2965 5bfb86\nspill-line 2966 5bfb86\nspill-line 2967 5bfb86\nspill-line 2968 5bfb86\nspill-line 2969 5bfb86\nspill-line 2970 5bfb86\nspill-line 2971 5bfb86\nspill-line 2972 5bfb86\nspill-line 2973 5bfb86\nspill-line 2974 5bfb86\nspill-line 2975 5bfb86\nspill-line 2976 5bfb86\nspill-line 2977 5bfb86\nspill-line 2978 5bfb86\nspill-line 2979 5bfb86\nspill-line 2980 5bfb86\nspill-line 2981 5bfb86\nspill-line 2982 5bfb86\nspill-line 2983 5bfb86\nspill-line 2984 5bfb86\nspill-line 2985 5bfb86\nspill-line 2986 5bfb86\nspill-line 2987 5bfb86\nspill-line 2988 5bfb86\nspill-line 2989 5bfb86\nspill-line 2990 5bfb86\nspill-line 2991 5bfb86\nspill-line 2992 5bfb86\nspill-line 2993 5bfb86\nspill-line 2994 5bfb86\nspill-line 2995 5bfb86\nspill-line 2996 5bfb86\nspill-line 2997 5bfb86\nspill-line 2998 5bfb86\nspill-line 2999 5bfb86\nspill-line 3000 5bfb86\nspill-line 3001 5bfb86\nspill-line 3002 5bfb86\nspill-line 3003 5bfb86\nspill-line 3004 5bfb86\nspill-line 3005 5bfb86\nspill-line 3006 5bfb86\nspill-line 3007 5bfb86\nspill-line 3008 5bfb86\nspill-line 3009 5bfb86\nspill-line 3010 5bfb86\nspill-line 3011 5bfb86\nspill-line 3012 5bfb86\nspill-line 3013 5bfb86\nspill-line 3014 5bfb86\nspill-line 3015 5bfb86\nspill-line 3016 5bfb86\nspill-line 3017 5bfb86\nspill-line 3018 5bfb86\nspill-line 3019 5bfb86\nspill-line 3020 5bfb86\nspill-line 3021 5bfb86\nspill-line 3022 5bfb86\nspill-line 3023 5bfb86\nspill-line 3024 5bfb86\nspill-line 3025 5bfb86\nspill-line 3026 5bfb86\nspill-line 3027 5bfb86\nspill-line 3028 5bfb86\nspill-line 3029 5bfb86\nspill-line 3030 5bfb86\nspill-line 3031 5bfb86\nspill-line 3032 5bfb86\nspill-line 3033 5bfb86\nspill-line 3034 5bfb86\nspill-line 3035 5bfb86\nspill-line 3036 5bfb86\nspill-line 3037 5bfb86\nspill-line 3038 5bfb86\nspill-line 3039 5bfb86\nspill-line 3040 5bfb86\nspill-line 3041 5bfb86\nspill-line 3042 5bfb86\nspill-line 3043 5bfb86\nspill-line 3044 5bfb86\nspill-line 3045 5bfb86\nspill-line 3046 5bfb86\nspill-line 3047 5bfb86\nspill-line 3048 5bfb86\nspill-line 3049 5bfb86\nspill-line 3050 5bfb86\nspill-line 3051 5bfb86\nspill-line 3052 5bfb86\nspill-line 3053 5bfb86\nspill-line 3054 5bfb86\nspill-line 3055 5bfb86\nspill-line 3056 5bfb86\nspill-line 3057 5bfb86\nspill-line 3058 5bfb86\nspill-line 3059 5bfb86\nspill-line 3060 5bfb86\nspill-line 3061 5bfb86\nspill-line 3062 5bfb86\nspill-line 3063 5bfb86\nspill-line 3064 5bfb86\nspill-line 3065 5bfb86\nspill-line 3066 5bfb86\nspill-line 3067 5bfb86\nspill-line 3068 5bfb86\nspill-line 3069 5bfb86\nspill-line 3070 5bfb86\nspill-line 3071 5bfb86\nspill-line 3072 5bfb86\nspill-line 3073 5bfb86\nspill-line 3074 5bfb86\nspill-line 3075 5bfb86\nspill-line 3076 5bfb86\nspill-line 3077 5bfb86\nspill-line 3078 5bfb86\nspill-line 3079 5bfb86\nspill-line 3080 5bfb86\nspill-line 3081 5bfb86\nspill-line 3082 5bfb86\nspill-line 3083 5bfb86\nspill-line 3084 5bfb86\nspill-line 3085 5bfb86\nspill-line 3086 5bfb86\nspill-line 3087 5bfb86\nspill-line 3088 5bfb86\nspill-line 3089 5bfb86\nspill-line 3090 5bfb86\nspill-line 3091 5bfb86\nspill-line 3092 5bfb86\nspill-line 3093 5bfb86\nspill-line 3094 5bfb86\nspill-line 3095 5bfb86\nspill-line 3096 5bfb86\nspill-line 3097 5bfb86\nspill-line 3098 5bfb86\nspill-line 3099 5bfb86\nspill-line 3100 5bfb86\nspill-line 3101 5bfb86\nspill-line 3102 5bfb86\nspill-line 3103 5bfb86\nspill-line 3104 5bfb86\nspill-line 3105 5bfb86\nspill-line 3106 5bfb86\nspill-line 3107 5bfb86\nspill-line 3108 5bfb86\nspill-line 3109 5bfb86\nspill-line 3110 5bfb86\nspill-line 3111 5bfb86\nspill-line 3112 5bfb86\nspill-line 3113 5bfb86\nspill-line 3114 5bfb86\nspill-line 3115 5bfb86\nspill-line 3116 5bfb86\nspill-line 3117 5bfb86\nspill-line 3118 5bfb86\nspill-line 3119 5bfb86\nspill-line 3120 5bfb86\nspill-line 3121 5bfb86\nspill-line 3122 5bfb86\nspill-line 3123 5bfb86\nspill-line 3124 5bfb86\nspill-line 3125 5bfb86\nspill-line 3126 5bfb86\nspill-line 3127 5bfb86\nspill-line 3128 5bfb86\nspill-line 3129 5bfb86\nspill-line 3130 5bfb86\nspill-line 3131 5bfb86\nspill-line 3132 5bfb86\nspill-line 3133 5bfb86\nspill-line 3134 5bfb86\nspill-line 3135 5bfb86\nspill-line 3136 5bfb86\nspill-line 3137 5bfb86\nspill-line 3138 5bfb86\nspill-line 3139 5bfb86\nspill-line 3140 5bfb86\nspill-line 3141 5bfb86\nspill-line 3142 5bfb86\nspill-line 3143 5bfb86\nspill-line 3144 5bfb86\nspill-line 3145 5bfb86\nspill-line 3146 5bfb86\nspill-line 3147 5bfb86\nspill-line 3148 5bfb86\nspill-line 3149 5bfb86\nspill-line 3150 5bfb86\nspill-line 3151 5bfb86\nspill-line 3152 5bfb86\nspill-line 3153 5bfb86\nspill-line 3154 5bfb86\nspill-line 3155 5bfb86\nspill-line 3156 5bfb86\nspill-line 3157 5bfb86\nspill-line 3158 5bfb86\nspill-line 3159 5bfb86\nspill-line 3160 5bfb86\nspill-line 3161 5bfb86\nspill-line 3162 5bfb86\nspill-line 3163 5bfb86\nspill-line 3164 5bfb86\nspill-line 3165 5bfb86\nspill-line 3166 5bfb86\nspill-line 3167 5bfb86\nspill-line 3168 5bfb86\nspill-line 3169 5bfb86\nspill-line 3170 5bfb86\nspill-line 3171 5bfb86\nspill-line 3172 5bfb86\nspill-line 3173 5bfb86\nspill-line 3174 5bfb86\nspill-line 3175 5bfb86\nspill-line 3176 5bfb86\nspill-line 3177 5bfb86\nspill-line 3178 5bfb86\nspill-line 3179 5bfb86\nspill-line 3180 5bfb86\nspill-line 3181 5bfb86\nspill-line 3182 5bfb86\nspill-line 3183 5bfb86\nspill-line 3184 5bfb86\nspill-line 3185 5bfb86\nspill-line 3186 5bfb86\nspill-line 3187 5bfb86\nspill-line 3188 5bfb86\nspill-line 3189 5bfb86\nspill-line 3190 5bfb86\nspill-line 3191 5bfb86\nspill-line 3192 5bfb86\nspill-line 3193 5bfb86\nspill-line 3194 5bfb86\nspill-line 3195 5bfb86\nspill-line 3196 5bfb86\nspill-line 3197 5bfb86\nspill-line 3198 5bfb86\nspill-line 3199 5bfb86\nspill-line 3200 5bfb86\nspill-line 3201 5bfb86\nspill-line 3202 5bfb86\nspill-line 3203 5bfb86\nspill-line 3204 5bfb86\nspill-line 3205 5bfb86\nspill-line 3206 5bfb86\nspill-line 3207 5bfb86\nspill-line 3208 5bfb86\nspill-line 3209 5bfb86\nspill-line 3210 5bfb86\nspill-line 3211 5bfb86\nspill-line 3212 5bfb86\nspill-line 3213 5bfb86\nspill-line 3214 5bfb86\nspill-line 3215 5bfb86\nspill-line 3216 5bfb86\nspill-line 3217 5bfb86\nspill-line 3218 5bfb86\nspill-line 3219 5bfb86\nspill-line 3220 5bfb86\nspill-line 3221 5bfb86\nspill-line 3222 5bfb86\nspill-line 3223 5bfb86\nspill-line 3224 5bfb86\nspill-line 3225 5bfb86\nspill-line 3226 5bfb86\nspill-line 3227 5bfb86\nspill-line 3228 5bfb86\nspill-line 3229 5bfb86\nspill-line 3230 5bfb86\nspill-line 3231 5bfb86\nspill-line 3232 5bfb86\nspill-line 3233 5bfb86\nspill-line 3234 5bfb86\nspill-line 3235 5bfb86\nspill-line 3236 5bfb86\nspill-line 3237 5bfb86\nspill-line 3238 5bfb86\nspill-line 3239 5bfb86\nspill-line 3240 5bfb86\nspill-line 3241 5bfb86\nspill-line 3242 5bfb86\nspill-line 3243 5bfb86\nspill-line 3244 5bfb86\nspill-line 3245 5bfb86\nspill-line 3246 5bfb86\nspill-line 3247 5bfb86\nspill-line 3248 5bfb86\nspill-line 3249 5bfb86\nspill-line 3250 5bfb86\nspill-line 3251 5bfb86\nspill-line 3252 5bfb86\nspill-line 3253 5bfb86\nspill-line 3254 5bfb86\nspill-line 3255 5bfb86\nspill-line 3256 5bfb86\nspill-line 3257 5bfb86\nspill-line 3258 5bfb86\nspill-line 3259 5bfb86\nspill-line 3260 5bfb86\nspill-line 3261 5bfb86\nspill-line 3262 5bfb86\nspill-line 3263 5bfb86\nspill-line 3264 5bfb86\nspill-line 3265 5bfb86\nspill-line 3266 5bfb86\nspill-line 3267 5bfb86\nspill-line 3268 5bfb86\nspill-line 3269 5bfb86\nspill-line 3270 5bfb86\nspill-line 3271 5bfb86\nspill-line 3272 5bfb86\nspill-line 3273 5bfb86\nspill-line 3274 5bfb86\nspill-line 3275 5bfb86\nspill-line 3276 5bfb86\nspill-line 3277 5bfb86\nspill-line 3278 5bfb86\nspill-line 3279 5bfb86\nspill-line 3280 5bfb86\nspill-line 3281 5bfb86\nspill-line 3282 5bfb86\nspill-line 3283 5bfb86\nspill-line 3284 5bfb86\nspill-line 3285 5bfb86\nspill-line 3286 5bfb86\nspill-line 3287 5bfb86\nspill-line 3288 5bfb86\nspill-line 3289 5bfb86\nspill-line 3290 5bfb86\nspill-line 3291 5bfb86\nspill-line 3292 5bfb86\nspill-line 3293 5bfb86\nspill-line 3294 5bfb86\nspill-line 3295 5bfb86\nspill-line 3296 5bfb86\nspill-line 3297 5bfb86\nspill-line 3298 5bfb86\nspill-line 3299 5bfb86\nspill-line 3300 5bfb86\nspill-line 3301 5bfb86\nspill-line 3302 5bfb86\nspill-line 3303 5bfb86\nspill-line 3304 5bfb86\nspill-line 3305 5bfb86\nspill-line 3306 5bfb86\nspill-line 3307 5bfb86\nspill-line 3308 5bfb86\nspill-line 3309 5bfb86\nspill-line 3310 5bfb86\nspill-line 3311 5bfb86\nspill-line 3312 5bfb86\nspill-line 3313 5bfb86\nspill-line 3314 5bfb86\nspill-line 3315 5bfb86\nspill-line 3316 5bfb86\nspill-line 3317 5bfb86\nspill-line 3318 5bfb86\nspill-line 3319 5bfb86\nspill-line 3320 5bfb86\nspill-line 3321 5bfb86\nspill-line 3322 5bfb86\nspill-line 3323 5bfb86\nspill-line 3324 5bfb86\nspill-line 3325 5bfb86\nspill-line 3326 5bfb86\nspill-line 3327 5bfb86\nspill-line 3328 5bfb86\nspill-line 3329 5bfb86\nspill-line 3330 5bfb86\nspill-line 3331 5bfb86\nspill-line 3332 5bfb86\nspill-line 3333 5bfb86\nspill-line 3334 5bfb86\nspill-line 3335 5bfb86\nspill-line 3336 5bfb86\nspill-line 3337 5bfb86\nspill-line 3338 5bfb86\nspill-line 3339 5bfb86\nspill-line 3340 5bfb86\nspill-line 3341 5bfb86\nspill-line 3342 5bfb86\nspill-line 3343 5bfb86\nspill-line 3344 5bfb86\nspill-line 3345 5bfb86\nspill-line 3346 5bfb86\nspill-line 3347 5bfb86\nspill-line 3348 5bfb86\nspill-line 3349 5bfb86\nspill-line 3350 5bfb86\nspill-line 3351 5bfb86\nspill-line 3352 5bfb86\nspill-line 3353 5bfb86\nspill-line 3354 5bfb86\nspill-line 3355 5bfb86\nspill-line 3356 5bfb86\nspill-line 3357 5bfb86\nspill-line 3358 5bfb86\nspill-line 3359 5bfb86\nspill-line 3360 5bfb86\nspill-line 3361 5bfb86\nspill-line 3362 5bfb86\nspill-line 3363 5bfb86\nspill-line 3364 5bfb86\nspill-line 3365 5bfb86\nspill-line 3366 5bfb86\nspill-line 3367 5bfb86\nspill-line 3368 5bfb86\nspill-line 3369 5bfb86\nspill-line 3370 5bfb86\nspill-line 3371 5bfb86\nspill-line 3372 5bfb86\nspill-line 3373 5bfb86\nspill-line 3374 5bfb86\nspill-line 3375 5bfb86\nspill-line 3376 5bfb86\nspill-line 3377 5bfb86\nspill-line 3378 5bfb86\nspill-line 3379 5bfb86\nspill-line 3380 5bfb86\nspill-line 3381 5bfb86\nspill-line 3382 5bfb86\nspill-line 3383 5bfb86\nspill-line 3384 5bfb86\nspill-line 3385 5bfb86\nspill-line 3386 5bfb86\nspill-line 3387 5bfb86\nspill-line 3388 5bfb86\nspill-line 3389 5bfb86\nspill-line 3390 5bfb86\nspill-line 3391 5bfb86\nspill-line 3392 5bfb86\nspill-line 3393 5bfb86\nspill-line 3394 5bfb86\nspill-line 3395 5bfb86\nspill-line 3396 5bfb86\nspill-line 3397 5bfb86\nspill-line 3398 5bfb86\nspill-line 3399 5bfb86\nspill-line 3400 5bfb86\nspill-line 3401 5bfb86\nspill-line 3402 5bfb86\nspill-line 3403 5bfb86\nspill-line 3404 5bfb86\nspill-line 3405 5bfb86\nspill-line 3406 5bfb86\nspill-line 3407 5bfb86\nspill-line 3408 5bfb86\nspill-line 3409 5bfb86\nspill-line 3410 5bfb86\nspill-line 3411 5bfb86\nspill-line 3412 5bfb86\nspill-line 3413 5bfb86\nspill-line 3414 5bfb86\nspill-line 3415 5bfb86\nspill-line 3416 5bfb86\nspill-line 3417 5bfb86\nspill-line 3418 5bfb86\nspill-line 3419 5bfb86\nspill-line 3420 5bfb86\nspill-line 3421 5bfb86\nspill-line 3422 5bfb86\nspill-line 3423 5bfb86\nspill-line 3424 5bfb86\nspill-line 3425 5bfb86\nspill-line 3426 5bfb86\nspill-line 3427 5bfb86\nspill-line 3428 5bfb86\nspill-line 3429 5bfb86\nspill-line 3430 5bfb86\nspill-line 3431 5bfb86\nspill-line 3432 5bfb86\nspill-line 3433 5bfb86\nspill-line 3434 5bfb86\nspill-line 3435 5bfb86\nspill-line 3436 5bfb86\nspill-line 3437 5bfb86\nspill-line 3438 5bfb86\nspill-line 3439 5bfb86\nspill-line 3440 5bfb86\nspill-line 3441 5bfb86\nspill-line 3442 5bfb86\nspill-line 3443 5bfb86\nspill-line 3444 5bfb86\nspill-line 3445 5bfb86\nspill-line 3446 5bfb86\nspill-line 3447 5bfb86\nspill-line 3448 5bfb86\nspill-line 3449 5bfb86\nspill-line 3450 5bfb86\nspill-line 3451 5bfb86\nspill-line 3452 5bfb86\nspill-line 3453 5bfb86\nspill-line 3454 5bfb86\nspill-line 3455 5bfb86\nspill-line 3456 5bfb86\nspill-line 3457 5bfb86\nspill-line 3458 5bfb86\nspill-line 3459 5bfb86\nspill-line 3460 5bfb86\nspill-line 3461 5bfb86\nspill-line 3462 5bfb86\nspill-line 3463 5bfb86\nspill-line 3464 5bfb86\nspill-line 3465 5bfb86\nspill-line 3466 5bfb86\nspill-line 3467 5bfb86\nspill-line 3468 5bfb86\nspill-line 3469 5bfb86\nspill-line 3470 5bfb86\nspill-line 3471 5bfb86\nspill-line 3472 5bfb86\nspill-line 3473 5bfb86\nspill-line 3474 5bfb86\nspill-line 3475 5bfb86\nspill-line 3476 5bfb86\nspill-line 3477 5bfb86\nspill-line 3478 5bfb86\nspill-line 3479 5bfb86\nspill-line 3480 5bfb86\nspill-line 3481 5bfb86\nspill-line 3482 5bfb86\nspill-line 3483 5bfb86\nspill-line 3484 5bfb86\nspill-line 3485 5bfb86\nspill-line 3486 5bfb86\nspill-line 3487 5bfb86\nspill-line 3488 5bfb86\nspill-line 3489 5bfb86\nspill-line 3490 5bfb86\nspill-line 3491 5bfb86\nspill-line 3492 5bfb86\nspill-line 3493 5bfb86\nspill-line 3494 5bfb86\nspill-line 3495 5bfb86\nspill-line 3496 5bfb86\nspill-line 3497 5bfb86\nspill-line 3498 5bfb86\nspill-line 3499 5bfb86\nspill-line 3500 5bfb86\nspill-line 3501 5bfb86\nspill-line 3502 5bfb86\nspill-line 3503 5bfb86\nspill-line 3504 5bfb86\nspill-line 3505 5bfb86\nspill-line 3506 5bfb86\nspill-line 3507 5bfb86\nspill-line 3508 5bfb86\nspill-line 3509 5bfb86\nspill-line 3510 5bfb86\nspill-line 3511 5bfb86\nspill-line 3512 5bfb86\nspill-line 3513 5bfb86\nspill-line 3514 5bfb86\nspill-line 3515 5bfb86\nspill-line 3516 5bfb86\nspill-line 3517 5bfb86\nspill-line 3518 5bfb86\nspill-line 3519 5bfb86\nspill-line 3520 5bfb86\nspill-line 3521 5bfb86\nspill-line 3522 5bfb86\nspill-line 3523 5bfb86\nspill-line 3524 5bfb86\nspill-line 3525 5bfb86\nspill-line 3526 5bfb86\nspill-line 3527 5bfb86\nspill-line 3528 5bfb86\nspill-line 3529 5bfb86\nspill-line 3530 5bfb86\nspill-line 3531 5bfb86\nspill-line 3532 5bfb86\nspill-line 3533 5bfb86\nspill-line 3534 5bfb86\nspill-line 3535 5bfb86\nspill-line 3536 5bfb86\nspill-line 3537 5bfb86\nspill-line 3538 5bfb86\nspill-line 3539 5bfb86\nspill-line 3540 5bfb86\nspill-line 3541 5bfb86\nspill-line 3542 5bfb86\nspill-line 3543 5bfb86\nspill-line 3544 5bfb86\nspill-line 3545 5bfb86\nspill-line 3546 5bfb86\nspill-line 3547 5bfb86\nspill-line 3548 5bfb86\nspill-line 3549 5bfb86\nspill-line 3550 5bfb86\nspill-line 3551 5bfb86\nspill-line 3552 5bfb86\nspill-line 3553 5bfb86\nspill-line 3554 5bfb86\nspill-line 3555 5bfb86\nspill-line 3556 5bfb86\nspill-line 3557 5bfb86\nspill-line 3558 5bfb86\nspill-line 3559 5bfb86\nspill-line 3560 5bfb86\nspill-line 3561 5bfb86\nspill-line 3562 5bfb86\nspill-line 3563 5bfb86\nspill-line 3564 5bfb86\nspill-line 3565 5bfb86\nspill-line 3566 5bfb86\nspill-line 3567 5bfb86\nspill-line 3568 5bfb86\nspill-line 3569 5bfb86\nspill-line 3570 5bfb86\nspill-line 3571 5bfb86\nspill-line 3572 5bfb86\nspill-line 3573 5bfb86\nspill-line 3574 5bfb86\nspill-line 3575 5bfb86\nspill-line 3576 5bfb86\nspill-line 3577 5bfb86\nspill-line 3578 5bfb86\nspill-line 3579 5bfb86\nspill-line 3580 5bfb86\nspill-line 3581 5bfb86\nspill-line 3582 5bfb86\nspill-line 3583 5bfb86\nspill-line 3584 5bfb86\nspill-line 3585 5bfb86\nspill-line 3586 5bfb86\nspill-line 3587 5bfb86\nspill-line 3588 5bfb86\nspill-line 3589 5bfb86\nspill-line 3590 5bfb86\nspill-line 3591 5bfb86\nspill-line 3592 5bfb86\nspill-line 3593 5bfb86\nspill-line 3594 5bfb86\nspill-line 3595 5bfb86\nspill-line 3596 5bfb86\nspill-line 3597 5bfb86\nspill-line 3598 5bfb86\nspill-line 3599 5bfb86\nspill-line 3600 5bfb86\nspill-line 3601 5bfb86\nspill-line 3602 5bfb86\nspill-line 3603 5bfb86\nspill-line 3604 5bfb86\nspill-line 3605 5bfb86\nspill-line 3606 5bfb86\nspill-line 3607 5bfb86\nspill-line 3608 5bfb86\nspill-line 3609 5bfb86\nspill-line 3610 5bfb86\nspill-line 3611 5bfb86\nspill-line 3612 5bfb86\nspill-line 3613 5bfb86\nspill-line 3614 5bfb86\nspill-line 3615 5bfb86\nspill-line 3616 5bfb86\nspill-line 3617 5bfb86\nspill-line 3618 5bfb86\nspill-line 3619 5bfb86\nspill-line 3620 5bfb86\nspill-line 3621 5bfb86\nspill-line 3622 5bfb86\nspill-line 3623 5bfb86\nspill-line 3624 5bfb86\nspill-line 3625 5bfb86\nspill-line 3626 5bfb86\nspill-line 3627 5bfb86\nspill-line 3628 5bfb86\nspill-line 3629 5bfb86\nspill-line 3630 5bfb86\nspill-line 3631 5bfb86\nspill-line 3632 5bfb86\nspill-line 3633 5bfb86\nspill-line 3634 5bfb86\nspill-line 3635 5bfb86\nspill-line 3636 5bfb86\nspill-line 3637 5bfb86\nspill-line 3638 5bfb86\nspill-line 3639 5bfb86\nspill-line 3640 5bfb86\nspill-line 3641 5bfb86\nspill-line 3642 5bfb86\nspill-line 3643 5bfb86\nspill-line 3644 5bfb86\nspill-line 3645 5bfb86\nspill-line 3646 5bfb86\nspill-line 3647 5bfb86\nspill-line 3648 5bfb86\nspill-line 3649 5bfb86\nspill-line 3650 5bfb86\nspill-line 3651 5bfb86\nspill-line 3652 5bfb86\nspill-line 3653 5bfb86\nspill-line 3654 5bfb86\nspill-line 3655 5bfb86\nspill-line 3656 5bfb86\nspill-line 3657 5bfb86\nspill-line 3658 5bfb86\nspill-line 3659 5bfb86\nspill-line 3660 5bfb86\nspill-line 3661 5bfb86\nspill-line 3662 5bfb86\nspill-line 3663 5bfb86\nspill-line 3664 5bfb86\nspill-line 3665 5bfb86\nspill-line 3666 5bfb86\nspill-line 3667 5bfb86\nspill-line 3668 5bfb86\nspill-line 3669 5bfb86\nspill-line 3670 5bfb86\nspill-line 3671 5bfb86\nspill-line 3672 5bfb86\nspill-line 3673 5bfb86\nspill-line 3674 5bfb86\nspill-line 3675 5bfb86\nspill-line 3676 5bfb86\nspill-line 3677 5bfb86\nspill-line 3678 5bfb86\nspill-line 3679 5bfb86\nspill-line 3680 5bfb86\nspill-line 3681 5bfb86\nspill-line 3682 5bfb86\nspill-line 3683 5bfb86\nspill-line 3684 5bfb86\nspill-line 3685 5bfb86\nspill-line 3686 5bfb86\nspill-line 3687 5bfb86\nspill-line 3688 5bfb86\nspill-line 3689 5bfb86\nspill-line 3690 5bfb86\nspill-line 3691 5bfb86\nspill-line 3692 5bfb86\nspill-line 3693 5bfb86\nspill-line 3694 5bfb86\nspill-line 3695 5bfb86\nspill-line 3696 5bfb86\nspill-line 3697 5bfb86\nspill-line 3698 5bfb86\nspill-line 3699 5bfb86\nspill-line 3700 5bfb86\nspill-line 3701 5bfb86\nspill-line 3702 5bfb86\nspill-line 3703 5bfb86\nspill-line 3704 5bfb86\nspill-line 3705 5bfb86\nspill-line 3706 5bfb86\nspill-line 3707 5bfb86\nspill-line 3708 5bfb86\nspill-line 3709 5bfb86\nspill-line 3710 5bfb86\nspill-line 3711 5bfb86\nspill-line 3712 5bfb86\nspill-line 3713 5bfb86\nspill-line 3714 5bfb86\nspill-line 3715 5bfb86\nspill-line 3716 5bfb86\nspill-line 3717 5bfb86\nspill-line 3718 5bfb86\nspill-line 3719 5bfb86\nspill-line 3720 5bfb86\nspill-line 3721 5bfb86\nspill-line 3722 5bfb86\nspill-line 3723 5bfb86\nspill-line 3724 5bfb86\nspill-line 3725 5bfb86\nspill-line 3726 5bfb86\nspill-line 3727 5bfb86\nspill-line 3728 5bfb86\nspill-line 3729 5bfb86\nspill-line 3730 5bfb86\nspill-line 3731 5bfb86\nspill-line 3732 5bfb86\nspill-line 3733 5bfb86\nspill-line 3734 5bfb86\nspill-line 3735 5bfb86\nspill-line 3736 5bfb86\nspill-line 3737 5bfb86\nspill-line 3738 5bfb86\nspill-line 3739 5bfb86\nspill-line 3740 5bfb86\nspill-line 3741 5bfb86\nspill-line 3742 5bfb86\nspill-line 3743 5bfb86\nspill-line 3744 5bfb86\nspill-line 3745 5bfb86\nspill-line 3746 5bfb86\nspill-line 3747 5bfb86\nspill-line 3748 5bfb86\nspill-line 3749 5bfb86\nspill-line 3750 5bfb86\nspill-line 3751 5bfb86\nspill-line 3752 5bfb86\nspill-line 3753 5bfb86\nspill-line 3754 5bfb86\nspill-line 3755 5bfb86\nspill-line 3756 5bfb86\nspill-line 3757 5bfb86\nspill-line 3758 5bfb86\nspill-line 3759 5bfb86\nspill-line 3760 5bfb86\nspill-line 3761 5bfb86\nspill-line 3762 5bfb86\nspill-line 3763 5bfb86\nspill-line 3764 5bfb86\nspill-line 3765 5bfb86\nspill-line 3766 5bfb86\nspill-line 3767 5bfb86\nspill-line 3768 5bfb86\nspill-line 3769 5bfb86\nspill-line 3770 5bfb86\nspill-line 3771 5bfb86\nspill-line 3772 5bfb86\nspill-line 3773 5bfb86\nspill-line 3774 5bfb86\nspill-line 3775 5bfb86\nspill-line 3776 5bfb86\nspill-line 3777 5bfb86\nspill-line 3778 5bfb86\nspill-line 3779 5bfb86\nspill-line 3780 5bfb86\nspill-line 3781 5bfb86\nspill-line 3782 5bfb86\nspill-line 3783 5bfb86\nspill-line 3784 5bfb86\nspill-line 3785 5bfb86\nspill-line 3786 5bfb86\nspill-line 3787 5bfb86\nspill-line 3788 5bfb86\nspill-line 3789 5bfb86\nspill-line 3790 5bfb86\nspill-line 3791 5bfb86\nspill-line 3792 5bfb86\nspill-line 3793 5bfb86\nspill-line 3794 5bfb86\nspill-line 3795 5bfb86\nspill-line 3796 5bfb86\nspill-line 3797 5bfb86\nspill-line 3798 5bfb86\nspill-line 3799 5bfb86\nspill-line 3800 5bfb86\nspill-line 3801 5bfb86\nspill-line 3802 5bfb86\nspill-line 3803 5bfb86\nspill-line 3804 5bfb86\nspill-line 3805 5bfb86\nspill-line 3806 5bfb86\nspill-line 3807 5bfb86\nspill-line 3808 5bfb86\nspill-line 3809 5bfb86\nspill-line 3810 5bfb86\nspill-line 3811 5bfb86\nspill-line 3812 5bfb86\nspill-line 3813 5bfb86\nspill-line 3814 5bfb86\nspill-line 3815 5bfb86\nspill-line 3816 5bfb86\nspill-line 3817 5bfb86\nspill-line 3818 5bfb86\nspill-line 3819 5bfb86\nspill-line 3820 5bfb86\nspill-line 3821 5bfb86\nspill-line 3822 5bfb86\nspill-line 3823 5bfb86\nspill-line 3824 5bfb86\nspill-line 3825 5bfb86\nspill-line 3826 5bfb86\nspill-line 3827 5bfb86\nspill-line 3828 5bfb86\nspill-line 3829 5bfb86\nspill-line 3830 5bfb86\nspill-line 3831 5bfb86\nspill-line 3832 5bfb86\nspill-line 3833 5bfb86\nspill-line 3834 5bfb86\nspill-line 3835 5bfb86\nspill-line 3836 5bfb86\nspill-line 3837 5bfb86\nspill-line 3838 5bfb86\nspill-line 3839 5bfb86\nspill-line 3840 5bfb86\nspill-line 3841 5bfb86\nspill-line 3842 5bfb86\nspill-line 3843 5bfb86\nspill-line 3844 5bfb86\nspill-line 3845 5bfb86\nspill-line 3846 5bfb86\nspill-line 3847 5bfb86\nspill-line 3848 5bfb86\nspill-line 3849 5bfb86\nspill-line 3850 5bfb86\nspill-line 3851 5bfb86\nspill-line 3852 5bfb86\nspill-line 3853 5bfb86\nspill-line 3854 5bfb86\nspill-line 3855 5bfb86\nspill-line 3856 5bfb86\nspill-line 3857 5bfb86\nspill-line 3858 5bfb86\nspill-line 3859 5bfb86\nspill-line 3860 5bfb86\nspill-line 3861 5bfb86\nspill-line 3862 5bfb86\nspill-line 3863 5bfb86\nspill-line 3864 5bfb86\nspill-line 3865 5bfb86\nspill-line 3866 5bfb86\nspill-line 3867 5bfb86\nspill-line 3868 5bfb86\nspill-line 3869 5bfb86\nspill-line 3870 5bfb86\nspill-line 3871 5bfb86\nspill-line 3872 5bfb86\nspill-line 3873 5bfb86\nspill-line 3874 5bfb86\nspill-line 3875 5bfb86\nspill-line 3876 5bfb86\nspill-line 3877 5bfb86\nspill-line 3878 5bfb86\nspill-line 3879 5bfb86\nspill-line 3880 5bfb86\nspill-line 3881 5bfb86\nspill-line 3882 5bfb86\nspill-line 3883 5bfb86\nspill-line 3884 5bfb86\nspill-line 3885 5bfb86\nspill-line 3886 5bfb86\nspill-line 3887 5bfb86\nspill-line 3888 5bfb86\nspill-line 3889 5bfb86\nspill-line 3890 5bfb86\nspill-line 3891 5bfb86\nspill-line 3892 5bfb86\nspill-line 3893 5bfb86\nspill-line 3894 5bfb86\nspill-line 3895 5bfb86\nspill-line 3896 5bfb86\nspill-line 3897 5bfb86\nspill-line 3898 5bfb86\nspill-line 3899 5bfb86\nspill-line 3900 5bfb86\nspill-line 3901 5bfb86\nspill-line 3902 5bfb86\nspill-line 3903 5bfb86\nspill-line 3904 5bfb86\nspill-line 3905 5bfb86\nspill-line 3906 5bfb86\nspill-line 3907 5bfb86\nspill-line 3908 5bfb86\nspill-line 3909 5bfb86\nspill-line 3910 5bfb86\nspill-line 3911 5bfb86\nspill-line 3912 5bfb86\nspill-line 3913 5bfb86\nspill-line 3914 5bfb86\nspill-line 3915 5bfb86\nspill-line 3916 5bfb86\nspill-line 3917 5bfb86\nspill-line 3918 5bfb86\nspill-line 3919 5bfb86\nspill-line 3920 5bfb86\nspill-line 3921 5bfb86\nspill-line 3922 5bfb86\nspill-line 3923 5bfb86\nspill-line 3924 5bfb86\nspill-line 3925 5bfb86\nspill-line 3926 5bfb86\nspill-line 3927 5bfb86\nspill-line 3928 5bfb86\nspill-line 3929 5bfb86\nspill-line 3930 5bfb86\nspill-line 3931 5bfb86\nspill-line 3932 5bfb86\nspill-line 3933 5bfb86\nspill-line 3934 5bfb86\nspill-line 3935 5bfb86\nspill-line 3936 5bfb86\nspill-line 3937 5bfb86\nspill-line 3938 5bfb86\nspill-line 3939 5bfb86\nspill-line 3940 5bfb86\nspill-line 3941 5bfb86\nspill-line 3942 5bfb86\nspill-line 3943 5bfb86\nspill-line 3944 5bfb86\nspill-line 3945 5bfb86\nspill-line 3946 5bfb86\nspill-line 3947 5bfb86\nspill-line 3948 5bfb86\nspill-line 3949 5bfb86\nspill-line 3950 5bfb86\nspill-line 3951 5bfb86\nspill-line 3952 5bfb86\nspill-line 3953 5bfb86\nspill-line 3954 5bfb86\nspill-line 3955 5bfb86\nspill-line 3956 5bfb86\nspill-line 3957 5bfb86\nspill-line 3958 5bfb86\nspill-line 3959 5bfb86\nspill-line 3960 5bfb86\nspill-line 3961 5bfb86\nspill-line 3962 5bfb86\nspill-line 3963 5bfb86\nspill-line 3964 5bfb86\nspill-line 3965 5bfb86\nspill-line 3966 5bfb86\nspill-line 3967 5bfb86\nspill-line 3968 5bfb86\nspill-line 3969 5bfb86\nspill-line 3970 5bfb86\nspill-line 3971 5bfb86\nspill-line 3972 5bfb86\nspill-line 3973 5bfb86\nspill-line 3974 5bfb86\nspill-line 3975 5bfb86\nspill-line 3976 5bfb86\nspill-line 3977 5bfb86\nspill-line 3978 5bfb86\nspill-line 3979 5bfb86\nspill-line 3980 5bfb86\nspill-line 3981 5bfb86\nspill-line 3982 5bfb86\nspill-line 3983 5bfb86\nspill-line 3984 5bfb86\nspill-line 3985 5bfb86\nspill-line 3986 5bfb86\nspill-line 3987 5bfb86\nspill-line 3988 5bfb86\nspill-line 3989 5bfb86\nspill-line 3990 5bfb86\nspill-line 3991 5bfb86\nspill-line 3992 5bfb86\nspill-line 3993 5bfb86\nspill-line 3994 5bfb86\nspill-line 3995 5bfb86\nspill-line 3996 5bfb86\nspill-line 3997 5bfb86\nspill-line 3998 5bfb86\nspill-line 3999 5bfb86\nspill-line 4000 5bfb86\n\n[output truncated; full output: /var/tmp/aiclient-dsh-smoke-H52Pvm/tmp/dsh-subprocess-lmjKEH/dsh-subprocess-78012-1-71085f7d323b-stdout.log]\n\n(Omitted 14441 bytes. Full formatted result stored at: /var/tmp/aiclient-dsh-smoke-H52Pvm/tmp/dsh-spill-JAqu58/session-5c15f1688456/c47150f016eb-bash.txt. Use read with offset/limit, or grep this path to search within it.)"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/workspace/shell-written-5bfb86.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-c5cdadf5 SHELL-5bfb86\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "reply": "P0-FS l1 finished.",
+      "permissions": [],
+      "resolved": [],
+      "errors": [],
+      "files": {
+        "written": "P12-MARKER-c5cdadf5 WRITTEN-5bfb86\n",
+        "shellWritten": "P12-MARKER-c5cdadf5 SHELL-5bfb86\n",
+        "edited": "P12-MARKER-c5cdadf5 EDITED-5bfb86 edit target\n"
+      },
+      "marker": "P12-MARKER-c5cdadf5",
+      "token": "5bfb86",
+      "shell": "bash"
+    },
+    "approval": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "write",
+          "ok": false,
+          "text": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-H52Pvm/outside/approved.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "reply": "Write outside the workspace attempted.",
+      "permissions": ["write"],
+      "resolved": ["allow"],
+      "errors": [],
+      "fileWritten": true
+    },
+    "autoAnswered": [
+      {
+        "toolName": "write",
+        "permissionId": "toolu_fed48eaa-eebe-49a7-89ef-5764b2d22d99"
+      }
+    ],
+    "dispose": {
+      "disposed": true
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] ready {\"type\":\"ready\",\"pid\":78012,\"node\":\"v24.18.0\",\"execPath\":\"<home>/code/ai-client/out-node-runtime/node\",\"execArgv\":[\"--expose-internals\",\"--import\",\"file://<repo>/src/dsh-host/tools/lib/probe-hooks.mjs\"],\"artifact\":{\"form\":\"packaged\",\"version\":\"0.1.0\",\"dsh\":\"0.1.7-rc.2\",\"target\":{\"platform\":\"linux\",\"arch\":\"x64\"},\"gitCommit\":\"d833115fe9413e5de256771f1d51f3af07d30bd5+dirty\",\"builtAt\":\"2026-09-27T06:48:04.023Z\"},\"dshRuntimeVersion\":\"0.1.7-rc.2\",\"bundles\":[\"@deepseek-ai/dsh-base\",\"@aiclient/dsh-app\"],\"composition\":{\"rows\":95,\"disabledLiteral\":[\"tool-plugin-manager\",\"hmr\",\"deepseek-llm-api-extensions\",\"session-log-deepseek\",\"session-title-llm\",\"plugin-package-inventory-deepseek\",\"deepseek-account\",\"session-telemetry-otel\",\"skill-badge\",\"tool-ralph\",\"web\",\"web-search-deepseek\",\"web-fetch-http\",\"tool-web\",\"llm-deepseek\",\"llm-deepseek-account\"],\"disabledByExpression\":[\"plugin-manager\",\"config-editor\",\"settings\",\"bash-sandbox\",\"pwsh-sandbox\",\"tool-bash\",\"tool-pwsh\",\"aiclient-bridge\",\"aiclient-shared-bridge\"]},\"census\":{\"active\":77,\"disabled\":19,\"inactive\":[]},\"marks\":{\"entry\":28.329825,\"modulesLoaded\":60.153053,\"profileResolved\":94.970591,\"bootResolved\":714.043219}}\n[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-packaged-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-packaged-smoke\": flush on a closed handle\n[dsh-host] stopped (worker.dispose) in 20ms\n"
+  },
+  "natives": {
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "hookLog": "/var/tmp/aiclient-dsh-smoke-H52Pvm/logs/natives-hooks.jsonl",
+    "sharp": {
+      "pngBytes": 96,
+      "libvips": "8.18.6"
+    },
+    "pty": {
+      "text": "pty-ok\r\n",
+      "exitCode": 0
+    },
+    "leftovers": []
+  },
+  "hooks": {
+    "moduleCount": 1682,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "/var/tmp/aiclient-dsh-smoke-H52Pvm/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+        "where": "narb-cache"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/node-pty/prebuilds/linux-x64/pty.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg"
+    ],
+    "spawnedExecutables": [
+      "systemd-run",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "bwrap"
+    ]
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "l1Bootstrapped": true,
+    "l1Packaged": true,
+    "l1FsTurnIdle": true,
+    "l1FsTools": true,
+    "l1FsToolsOk": true,
+    "l1ReadSawMarker": true,
+    "l1GrepSawMarker": true,
+    "l1ShellSawMarker": true,
+    "l1FilesWritten": true,
+    "l1FsReplied": true,
+    "l1ApprovalRoundTrip": true,
+    "l1Disposed": true,
+    "l1ExitedZero": true,
+    "l1NoLeftovers": true,
+    "l1RipgrepFromArtifact": true,
+    "nativesSharpLoaded": true,
+    "nativesPtyRan": true,
+    "nativesExitedZero": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T06:48:07.011Z"
+}

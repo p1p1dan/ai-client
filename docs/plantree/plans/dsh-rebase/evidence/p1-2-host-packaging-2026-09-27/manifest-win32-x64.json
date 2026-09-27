@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "artifact": "@aiclient/dsh-host",
+  "version": "0.1.0",
+  "dsh": "0.1.7-rc.2",
+  "appVersion": "1.0.3",
+  "gitCommit": "c79596ae34c797a54f52e59a08c1e37b2d2ad7a1+dirty",
+  "target": {
+    "platform": "win32",
+    "arch": "x64"
+  },
+  "builtOn": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.2",
+    "npm": "10.9.8"
+  },
+  "builtAt": "2026-09-27T06:30:50.184Z",
+  "lockSha256": "2650c29b423bcee619def2cfd7e4e447173e705ed72a46dc5f9df9b5b50fe40a",
+  "files": 10167,
+  "bytes": 103915153,
+  "longestRelativePath": 158,
+  "budget": {
+    "maxBytes": 134217728,
+    "maxFiles": 12000,
+    "targetBytes": 115343360
+  },
+  "packages": 360,
+  "pruned": {
+    "files": 11962,
+    "bytes": 101042821,
+    "directories": [
+      {
+        "rel": "node_modules/.bin",
+        "reason": "npm bin links",
+        "files": 11,
+        "bytes": 259
+      },
+      {
+        "rel": "node_modules/@emnapi",
+        "reason": "wasm32 runtime",
+        "files": 17,
+        "bytes": 436901
+      },
+      {
+        "rel": "node_modules/@img/sharp-wasm32",
+        "reason": "sharp variant wasm32",
+        "files": 7,
+        "bytes": 9167141
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/darwin-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 2,
+        "bytes": 137384
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/darwin-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 2,
+        "bytes": 67824
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/linux-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 1,
+        "bytes": 69112
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/linux-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 1,
+        "bytes": 75976
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/win32-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 6,
+        "bytes": 11768384
+      },
+      {
+        "rel": "node_modules/node-pty/src",
+        "reason": "node-pty native sources",
+        "files": 7,
+        "bytes": 50948
+      },
+      {
+        "rel": "node_modules/node-pty/third_party/conpty/1.25.260303002/win10-arm64",
+        "reason": "node-pty conpty payload for another architecture",
+        "files": 2,
+        "bytes": 1217088
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-arm64",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 404581
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-x64",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 417779
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-arm64-msvc",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 333212
+      }
+    ]
+  },
+  "materialized": [
+    {
+      "name": "@aiclient/dsh-app",
+      "from": "bundle"
+    }
+  ],
+  "natives": [
+    {
+      "path": "node_modules/@img/sharp-win32-x64/lib/libvips-42.dll",
+      "format": "PE32+ x64",
+      "bytes": 18614784,
+      "sha256": "e6cc51bbc763e7deda536c6f56ce96b4c51ea769690ce4f4ed07607527b81dae"
+    },
+    {
+      "path": "node_modules/@img/sharp-win32-x64/lib/libvips-cpp-8.18.6.dll",
+      "format": "PE32+ x64",
+      "bytes": 333312,
+      "sha256": "4f458afdb7b8a4290dbda3f287d7db037b239b8a9d21f0b87333f92192cdee76"
+    },
+    {
+      "path": "node_modules/@img/sharp-win32-x64/lib/sharp-win32-x64-0.35.4.node",
+      "format": "PE32+ x64",
+      "bytes": 442368,
+      "sha256": "d5347c1c88194ea56164e5e420de4628da5f07ce0f220795c875147630e0657c"
+    },
+    {
+      "path": "node_modules/@koromix/koffi-win32-x64/win32_x64/koffi.node",
+      "format": "PE32+ x64",
+      "bytes": 1047552,
+      "sha256": "072efa48190587a6181be48f99f28d52db106c4d2137fe237de0d49b892a00f6"
+    },
+    {
+      "path": "node_modules/@vscode/ripgrep-win32-x64/bin/rg.exe",
+      "format": "PE32+ x64",
+      "bytes": 5429760,
+      "sha256": "f9dde63498b3193f098355dbec97af99dc4f6b8fa0df5ed04114a03012c042cb"
+    },
+    {
+      "path": "node_modules/node-addon-require-builtin-win32-x64-msvc/prebuilt/win32-x64-msvc-napi-v9.node",
+      "format": "PE32+ x64",
+      "bytes": 343552,
+      "sha256": "e23ba1b0c33c63940625aa954011b53c66d855f7dfac75b29c829b25e06f20df"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/win32-x64/conpty/OpenConsole.exe",
+      "format": "PE32+ x64",
+      "bytes": 1062472,
+      "sha256": "7f68c840226505004215c0b82d4e502c24b5bc3f4b93c4baaaa19bd679c0def8"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/win32-x64/conpty/conpty.dll",
+      "format": "PE32+ x64",
+      "bytes": 110152,
+      "sha256": "3319b484b80bb53d1f4d0a9eb0ea60fd0f61da69db7280ca43b84215f19245ff"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/win32-x64/conpty.node",
+      "format": "PE32+ x64",
+      "bytes": 291328,
+      "sha256": "ec2fd8545c30e051ee3fa17d26127f7e615919814879c7f746cf4c80845226e0"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/win32-x64/conpty_console_list.node",
+      "format": "PE32+ x64",
+      "bytes": 134656,
+      "sha256": "d46800643f90fc56b9fd67398f04a04a871521de0e825211c8382d187859d3ed"
+    },
+    {
+      "path": "node_modules/node-pty/third_party/conpty/1.25.260303002/win10-x64/OpenConsole.exe",
+      "format": "PE32+ x64",
+      "bytes": 1062472,
+      "sha256": "7f68c840226505004215c0b82d4e502c24b5bc3f4b93c4baaaa19bd679c0def8"
+    },
+    {
+      "path": "node_modules/node-pty/third_party/conpty/1.25.260303002/win10-x64/conpty.dll",
+      "format": "PE32+ x64",
+      "bytes": 110152,
+      "sha256": "3319b484b80bb53d1f4d0a9eb0ea60fd0f61da69db7280ca43b84215f19245ff"
+    },
+    {
+      "path": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-x64-msvc/reflink.win32-x64-msvc.node",
+      "format": "PE32+ x64",
+      "bytes": 361472,
+      "sha256": "370cdee825881d1f0c3e87a85df5589ee51f1a7eec3bca3c252255b6521224dc"
+    },
+    {
+      "path": "node_modules/pnpm/dist/vendor/fastlist-0.3.0-x64.exe",
+      "format": "PE32+ x64",
+      "bytes": 271872,
+      "sha256": "d1a71f9ac1728082c1b276392725c3e010b98714888579b99152e401abedbf11"
+    }
+  ]
+}

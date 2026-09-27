@@ -1,0 +1,14 @@
+{
+  "appDir": "<repo>/dist/linux-unpacked",
+  "reports": [
+    {
+      "dshSmoke": {
+        "ok": true,
+        "failed": [],
+        "report": "/var/tmp/p12-smoke-v9.json"
+      },
+      "report": "/var/tmp/p12-smoke-v9.json"
+    }
+  ],
+  "failures": []
+}

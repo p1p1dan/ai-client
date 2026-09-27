@@ -1,0 +1,324 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 1,
+  "narb": "default",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/dist/linux-unpacked/resources/dsh-host",
+    "files": 10167,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/dist/linux-unpacked/resources/node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-Ud6NeL",
+  "startedAt": "2026-09-27T06:51:17.540Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 695,
+    "ready": {
+      "node": "v24.18.0",
+      "execPath": "<repo>/dist/linux-unpacked/resources/node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 76,
+        "disabled": 20,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 95,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh",
+          "aiclient-bridge",
+          "aiclient-shared-bridge"
+        ]
+      },
+      "marks": {
+        "entry": 27.7794,
+        "modulesLoaded": 64.123522,
+        "profileResolved": 108.104723,
+        "bootResolved": 687.060572
+      }
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 18.354202999999984,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 18ms\n"
+  },
+  "L1": {
+    "label": "L1",
+    "readyMs": 686,
+    "bootstrap": {
+      "bootstrapped": true
+    },
+    "ready": {
+      "execPath": "<repo>/dist/linux-unpacked/resources/node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 77,
+        "disabled": 19,
+        "inactive": []
+      }
+    },
+    "fs": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/marker.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-36c46066 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-36c46066 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "ok": true,
+          "text": "The file /var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-36c46066 EDITED-90205d edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/dsh-written-90205d.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/dsh-written-90205d.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-36c46066 WRITTEN-90205d\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "ok": true,
+          "text": "Found 3 matches\n\nmarker.txt\nLine 1: P12-MARKER-36c46066 plaintext line\n\ndsh-written-90205d.txt\nLine 1: P12-MARKER-36c46066 WRITTEN-90205d\n\nedit-target.txt\nLine 1: P12-MARKER-36c46066 EDITED-90205d edit target"
+        },
+        {
+          "name": "glob",
+          "ok": true,
+          "text": "marker.txt\nedit-target.txt\ndsh-written-90205d.txt"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "P12-MARKER-36c46066 plaintext line\n"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "(no output)"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "e 1218 90205d\nspill-line 1219 90205d\nspill-line 1220 90205d\nspill-line 1221 90205d\nspill-line 1222 90205d\nspill-line 1223 90205d\nspill-line 1224 90205d\nspill-line 1225 90205d\nspill-line 1226 90205d\nspill-line 1227 90205d\nspill-line 1228 90205d\nspill-line 1229 90205d\nspill-line 1230 90205d\nspill-line 1231 90205d\nspill-line 1232 90205d\nspill-line 1233 90205d\nspill-line 1234 90205d\nspill-line 1235 90205d\nspill-line 1236 90205d\nspill-line 1237 90205d\nspill-line 1238 90205d\nspill-line 1239 90205d\nspill-line 1240 90205d\nspill-line 1241 90205d\nspill-line 1242 90205d\nspill-line 1243 90205d\nspill-line 1244 90205d\nspill-line 1245 90205d\nspill-line 1246 90205d\nspill-line 1247 90205d\nspill-line 1248 90205d\nspill-line 1249 90205d\nspill-line 1250 90205d\nspill-line 1251 90205d\nspill-line 1252 90205d\nspill-line 1253 90205d\nspill-line 1254 90205d\nspill-line 1255 90205d\nspill-line 1256 90205d\nspill-line 1257 90205d\nspill-line 1258 90205d\nspill-line 1259 90205d\nspill-line 1260 90205d\nspill-line 1261 90205d\nspill-line 1262 90205d\nspill-line 1263 90205d\nspill-line 1264 90205d\nspill-line 1265 90205d\nspill-line 1266 90205d\nspill-line 1267 90205d\nspill-line 1268 90205d\nspill-line 1269 90205d\nspill-line 1270 90205d\nspill-line 1271 90205d\nspill-line 1272 90205d\nspill-line 1273 90205d\nspill-line 1274 90205d\nspill-line 1275 90205d\nspill-line 1276 90205d\nspill-line 1277 90205d\nspill-line 1278 90205d\nspill-line 1279 90205d\nspill-line 1280 90205d\nspill-line 1281 90205d\nspill-line 1282 90205d\nspill-line 1283 90205d\nspill-line 1284 90205d\nspill-line 1285 90205d\nspill-line 1286 90205d\nspill-line 1287 90205d\nspill-line 1288 90205d\nspill-line 1289 90205d\nspill-line 1290 90205d\nspill-line 1291 90205d\nspill-line 1292 90205d\nspill-line 1293 90205d\nspill-line 1294 90205d\nspill-line 1295 90205d\nspill-line 1296 90205d\nspill-line 1297 90205d\nspill-line 1298 90205d\nspill-line 1299 90205d\nspill-line 1300 90205d\nspill-line 1301 90205d\nspill-line 1302 90205d\nspill-line 1303 90205d\nspill-line 1304 90205d\nspill-line 1305 90205d\nspill-line 1306 90205d\nspill-line 1307 90205d\nspill-line 1308 90205d\nspill-line 1309 90205d\nspill-line 1310 90205d\nspill-line 1311 90205d\nspill-line 1312 90205d\nspill-line 1313 90205d\nspill-line 1314 90205d\nspill-line 1315 90205d\nspill-line 1316 90205d\nspill-line 1317 90205d\nspill-line 1318 90205d\nspill-line 1319 90205d\nspill-line 1320 90205d\nspill-line 1321 90205d\nspill-line 1322 90205d\nspill-line 1323 90205d\nspill-line 1324 90205d\nspill-line 1325 90205d\nspill-line 1326 90205d\nspill-line 1327 90205d\nspill-line 1328 90205d\nspill-line 1329 90205d\nspill-line 1330 90205d\nspill-line 1331 90205d\nspill-line 1332 90205d\nspill-line 1333 90205d\nspill-line 1334 90205d\nspill-line 1335 90205d\nspill-line 1336 90205d\nspill-line 1337 90205d\nspill-line 1338 90205d\nspill-line 1339 90205d\nspill-line 1340 90205d\nspill-line 1341 90205d\nspill-line 1342 90205d\nspill-line 1343 90205d\nspill-line 1344 90205d\nspill-line 1345 90205d\nspill-line 1346 90205d\nspill-line 1347 90205d\nspill-line 1348 90205d\nspill-line 1349 90205d\nspill-line 1350 90205d\nspill-line 1351 90205d\nspill-line 1352 90205d\nspill-line 1353 90205d\nspill-line 1354 90205d\nspill-line 1355 90205d\nspill-line 1356 90205d\nspill-line 1357 90205d\nspill-line 1358 90205d\nspill-line 1359 90205d\nspill-line 1360 90205d\nspill-line 1361 90205d\nspill-line 1362 90205d\nspill-line 1363 90205d\nspill-line 1364 90205d\nspill-line 1365 90205d\nspill-line 1366 90205d\nspill-line 1367 90205d\nspill-line 1368 90205d\nspill-line 1369 90205d\nspill-line 1370 90205d\nspill-line 1371 90205d\nspill-line 1372 90205d\nspill-line 1373 90205d\nspill-line 1374 90205d\nspill-line 1375 90205d\nspill-line 1376 90205d\nspill-line 1377 90205d\nspill-line 1378 90205d\nspill-line 1379 90205d\nspill-line 1380 90205d\nspill-line 1381 90205d\nspill-line 1382 90205d\nspill-line 1383 90205d\nspill-line 1384 90205d\nspill-line 1385 90205d\nspill-line 1386 90205d\nspill-line 1387 90205d\nspill-line 1388 90205d\nspill-line 1389 90205d\nspill-line 1390 90205d\nspill-line 1391 90205d\nspill-line 1392 90205d\nspill-line 1393 90205d\nspill-line 1394 90205d\nspill-line 1395 90205d\nspill-line 1396 90205d\nspill-line 1397 90205d\nspill-line 1398 90205d\nspill-line 1399 90205d\nspill-line 1400 90205d\nspill-line 1401 90205d\nspill-line 1402 90205d\nspill-line 1403 90205d\nspill-line 1404 90205d\nspill-line 1405 90205d\nspill-line 1406 90205d\nspill-line 1407 90205d\nspill-line 1408 90205d\nspill-line 1409 90205d\nspill-line 1410 90205d\nspill-line 1411 90205d\nspill-line 1412 90205d\nspill-line 1413 90205d\nspill-line 1414 90205d\nspill-line 1415 90205d\nspill-line 1416 90205d\nspill-line 1417 90205d\nspill-line 1418 90205d\nspill-line 1419 90205d\nspill-line 1420 90205d\nspill-line 1421 90205d\nspill-line 1422 90205d\nspill-line 1423 90205d\nspill-line 1424 90205d\nspill-line 1425 90205d\nspill-line 1426 90205d\nspill-line 1427 90205d\nspill-line 1428 90205d\nspill-line 1429 90205d\nspill-line 1430 90205d\nspill-line 1431 90205d\nspill-line 1432 90205d\nspill-line 1433 90205d\nspill-line 1434 90205d\nspill-line 1435 90205d\nspill-line 1436 90205d\nspill-line 1437 90205d\nspill-line 1438 90205d\nspill-line 1439 90205d\nspill-line 1440 90205d\nspill-line 1441 90205d\nspill-line 1442 90205d\nspill-line 1443 90205d\nspill-line 1444 90205d\nspill-line 1445 90205d\nspill-line 1446 90205d\nspill-line 1447 90205d\nspill-line 1448 90205d\nspill-line 1449 90205d\nspill-line 1450 90205d\nspill-line 1451 90205d\nspill-line 1452 90205d\nspill-line 1453 90205d\nspill-line 1454 90205d\nspill-line 1455 90205d\nspill-line 1456 90205d\nspill-line 1457 90205d\nspill-line 1458 90205d\nspill-line 1459 90205d\nspill-line 1460 90205d\nspill-line 1461 90205d\nspill-line 1462 90205d\nspill-line 1463 90205d\nspill-line 1464 90205d\nspill-line 1465 90205d\nspill-line 1466 90205d\nspill-line 1467 90205d\nspill-line 1468 90205d\nspill-line 1469 90205d\nspill-line 1470 90205d\nspill-line 1471 90205d\nspill-line 1472 90205d\nspill-line 1473 90205d\nspill-line 1474 90205d\nspill-line 1475 90205d\nspill-line 1476 90205d\nspill-line 1477 90205d\nspill-line 1478 90205d\nspill-line 1479 90205d\nspill-line 1480 90205d\nspill-line 1481 90205d\nspill-line 1482 90205d\nspill-line 1483 90205d\nspill-line 1484 90205d\nspill-line 1485 90205d\nspill-line 1486 90205d\nspill-line 1487 90205d\nspill-line 1488 90205d\nspill-line 1489 90205d\nspill-line 1490 90205d\nspill-line 1491 90205d\nspill-line 1492 90205d\nspill-line 1493 90205d\nspill-line 1494 90205d\nspill-line 1495 90205d\nspill-line 1496 90205d\nspill-line 1497 90205d\nspill-line 1498 90205d\nspill-line 1499 90205d\nspill-line 1500 90205d\nspill-line 1501 90205d\nspill-line 1502 90205d\nspill-line 1503 90205d\nspill-line 1504 90205d\nspill-line 1505 90205d\nspill-line 1506 90205d\nspill-line 1507 90205d\nspill-line 1508 90205d\nspill-line 1509 90205d\nspill-line 1510 90205d\nspill-line 1511 90205d\nspill-line 1512 90205d\nspill-line 1513 90205d\nspill-line 1514 90205d\nspill-line 1515 90205d\nspill-line 1516 90205d\nspill-line 1517 90205d\nspill-line 1518 90205d\nspill-line 1519 90205d\nspill-line 1520 90205d\nspill-line 1521 90205d\nspill-line 1522 90205d\nspill-line 1523 90205d\nspill-line 1524 90205d\nspill-line 1525 90205d\nspill-line 1526 90205d\nspill-line 1527 90205d\nspill-line 1528 90205d\nspill-line 1529 90205d\nspill-line 1530 90205d\nspill-line 1531 90205d\nspill-line 1532 90205d\nspill-line 1533 90205d\nspill-line 1534 90205d\nspill-line 1535 90205d\nspill-line 1536 90205d\nspill-line 1537 90205d\nspill-line 1538 90205d\nspill-line 1539 90205d\nspill-line 1540 90205d\nspill-line 1541 90205d\nspill-line 1542 90205d\nspill-line 1543 90205d\nspill-line 1544 90205d\nspill-line 1545 90205d\nspill-line 1546 90205d\nspill-line 1547 90205d\nspill-line 1548 90205d\nspill-line 1549 90205d\nspill-line 1550 90205d\nspill-line 1551 90205d\nspill-line 1552 90205d\nspill-line 1553 90205d\nspill-line 1554 90205d\nspill-line 1555 90205d\nspill-line 1556 90205d\nspill-line 1557 90205d\nspill-line 1558 90205d\nspill-line 1559 90205d\nspill-line 1560 90205d\nspill-line 1561 90205d\nspill-line 1562 90205d\nspill-line 1563 90205d\nspill-line 1564 90205d\nspill-line 1565 90205d\nspill-line 1566 90205d\nspill-line 1567 90205d\nspill-line 1568 90205d\nspill-line 1569 90205d\nspill-line 1570 90205d\nspill-line 1571 90205d\nspill-line 1572 90205d\nspill-line 1573 90205d\nspill-line 1574 90205d\nspill-line 1575 90205d\nspill-line 1576 90205d\nspill-line 1577 90205d\nspill-line 1578 90205d\nspill-line 1579 90205d\nspill-line 1580 90205d\nspill-line 1581 90205d\nspill-line 1582 90205d\nspill-line 1583 90205d\nspill-line 1584 90205d\nspill-line 1585 90205d\nspill-line 1586 90205d\nspill-line 1587 90205d\nspill-line 1588 90205d\nspill-line 1589 90205d\nspill-line 1590 90205d\nspill-line 1591 90205d\nspill-line 1592 90205d\nspill-line 1593 90205d\nspill-line 1594 90205d\nspill-line 1595 90205d\nspill-line 1596 90205d\nspill-line 1597 90205d\nspill-line 1598 90205d\nspill-line 1599 90205d\nspill-line 1600 90205d\nspill-line 1601 90205d\nspill-line 1602 90205d\nspill-line 1603 90205d\nspill-line 1604 90205d\nspill-line 1605 90205d\nspill-line 1606 90205d\nspill-line 1607 90205d\nspill-line 1608 90205d\nspill-line 1609 90205d\nspill-line 1610 90205d\nspill-line 1611 90205d\nspill-line 1612 90205d\nspill-line 1613 90205d\nspill-line 1614 90205d\nspill-line 1615 90205d\nspill-line 1616 90205d\nspill-line 1617 90205d\nspill-line 1618 90205d\nspill-line 1619 90205d\nspill-line 1620 90205d\nspill-line 1621 90205d\nspill-line 1622 90205d\nspill-line 1623 90205d\nspill-line 1624 90205d\nspill-line 1625 90205d\nspill-line 1626 90205d\nspill-line 1627 90205d\nspill-line 1628 90205d\nspill-line 1629 90205d\nspill-line 1630 90205d\nspill-line 1631 90205d\nspill-line 1632 90205d\nspill-line 1633 90205d\nspill-line 1634 90205d\nspill-line 1635 90205d\nspill-line 1636 90205d\nspill-line 1637 90205d\nspill-line 1638 90205d\nspill-line 1639 90205d\nspill-line 1640 90205d\nspill-line 1641 90205d\nspill-line 1642 90205d\nspill-line 1643 90205d\nspill-line 1644 90205d\nspill-line 1645 90205d\nspill-line 1646 90205d\nspill-line 1647 90205d\nspill-line 1648 90205d\nspill-line 1649 90205d\nspill-line 1650 90205d\nspill-line 1651 90205d\nspill-line 1652 90205d\nspill-line 1653 90205d\nspill-line 1654 90205d\nspill-line 1655 90205d\nspill-line 1656 90205d\nspill-line 1657 90205d\nspill-line 1658 90205d\nspill-line 1659 90205d\nspill-line 1660 90205d\nspill-line 1661 90205d\nspill-line 1662 90205d\nspill-line 1663 90205d\nspill-line 1664 90205d\nspill-line 1665 90205d\nspill-line 1666 90205d\nspill-line 1667 90205d\nspill-line 1668 90205d\nspill-line 1669 90205d\nspill-line 1670 90205d\nspill-line 1671 90205d\nspill-line 1672 90205d\nspill-line 1673 90205d\nspill-line 1674 90205d\nspill-line 1675 90205d\nspill-line 1676 90205d\nspill-line 1677 90205d\nspill-line 1678 90205d\nspill-line 1679 90205d\nspill-line 1680 90205d\nspill-line 1681 90205d\nspill-line 1682 90205d\nspill-line 1683 90205d\nspill-line 1684 90205d\nspill-line 1685 90205d\nspill-line 1686 90205d\nspill-line 1687 90205d\nspill-line 1688 90205d\nspill-line 1689 90205d\nspill-line 1690 90205d\nspill-line 1691 90205d\nspill-line 1692 90205d\nspill-line 1693 90205d\nspill-line 1694 90205d\nspill-line 1695 90205d\nspill-line 1696 90205d\nspill-line 1697 90205d\nspill-line 1698 90205d\nspill-line 1699 90205d\nspill-line 1700 90205d\nspill-line 1701 90205d\nspill-line 1702 90205d\nspill-line 1703 90205d\nspill-line 1704 90205d\nspill-line 1705 90205d\nspill-line 1706 90205d\nspill-line 1707 90205d\nspill-line 1708 90205d\nspill-line 1709 90205d\nspill-line 1710 90205d\nspill-line 1711 90205d\nspill-line 1712 90205d\nspill-line 1713 90205d\nspill-line 1714 90205d\nspill-line 1715 90205d\nspill-line 1716 90205d\nspill-line 1717 90205d\nspill-line 1718 90205d\nspill-line 1719 90205d\nspill-line 1720 90205d\nspill-line 1721 90205d\nspill-line 1722 90205d\nspill-line 1723 90205d\nspill-line 1724 90205d\nspill-line 1725 90205d\nspill-line 1726 90205d\nspill-line 1727 90205d\nspill-line 1728 90205d\nspill-line 1729 90205d\nspill-line 1730 90205d\nspill-line 1731 90205d\nspill-line 1732 90205d\nspill-line 1733 90205d\nspill-line 1734 90205d\nspill-line 1735 90205d\nspill-line 1736 90205d\nspill-line 1737 90205d\nspill-line 1738 90205d\nspill-line 1739 90205d\nspill-line 1740 90205d\nspill-line 1741 90205d\nspill-line 1742 90205d\nspill-line 1743 90205d\nspill-line 1744 90205d\nspill-line 1745 90205d\nspill-line 1746 90205d\nspill-line 1747 90205d\nspill-line 1748 90205d\nspill-line 1749 90205d\nspill-line 1750 90205d\nspill-line 1751 90205d\nspill-line 1752 90205d\nspill-line 1753 90205d\nspill-line 1754 90205d\nspill-line 1755 90205d\nspill-line 1756 90205d\nspill-line 1757 90205d\nspill-line 1758 90205d\nspill-line 1759 90205d\nspill-line 1760 90205d\nspill-line 1761 90205d\nspill-line 1762 90205d\nspill-line 1763 90205d\nspill-line 1764 90205d\nspill-line 1765 90205d\nspill-line 1766 90205d\nspill-line 1767 90205d\nspill-line 1768 90205d\nspill-line 1769 90205d\nspill-line 1770 90205d\nspill-line 1771 90205d\nspill-line 1772 90205d\nspill-line 1773 90205d\nspill-line 1774 90205d\nspill-line 1775 90205d\nspill-line 1776 90205d\nspill-line 1777 90205d\nspill-line 1778 90205d\nspill-line 1779 90205d\nspill-line 1780 90205d\nspill-line 1781 90205d\nspill-line 1782 90205d\nspill-line 1783 90205d\nspill-line 1784 90205d\nspill-line 1785 90205d\nspill-line 1786 90205d\nspill-line 1787 90205d\nspill-line 1788 90205d\nspill-line 1789 90205d\nspill-line 1790 90205d\nspill-line 1791 90205d\nspill-line 1792 90205d\nspill-line 1793 90205d\nspill-line 1794 90205d\nspill-line 1795 90205d\nspill-line 1796 90205d\nspill-line 1797 90205d\nspill-line 1798 90205d\nspill-line 1799 90205d\nspill-line 1800 90205d\nspill-line 1801 90205d\nspill-line 1802 90205d\nspill-line 1803 90205d\nspill-line 1804 90205d\nspill-line 1805 90205d\nspill-line 1806 90205d\nspill-line 1807 90205d\nspill-line 1808 90205d\nspill-line 1809 90205d\nspill-line 1810 90205d\nspill-line 1811 90205d\nspill-line 1812 90205d\nspill-line 1813 90205d\nspill-line 1814 90205d\nspill-line 1815 90205d\nspill-line 1816 90205d\nspill-line 1817 90205d\nspill-line 1818 90205d\nspill-line 1819 90205d\nspill-line 1820 90205d\nspill-line 1821 90205d\nspill-line 1822 90205d\nspill-line 1823 90205d\nspill-line 1824 90205d\nspill-line 1825 90205d\nspill-line 1826 90205d\nspill-line 1827 90205d\nspill-line 1828 90205d\nspill-line 1829 90205d\nspill-line 1830 90205d\nspill-line 1831 90205d\nspill-line 1832 90205d\nspill-line 1833 90205d\nspill-line 1834 90205d\nspill-line 1835 90205d\nspill-line 1836 90205d\nspill-line 1837 90205d\nspill-line 1838 90205d\nspill-line 1839 90205d\nspill-line 1840 90205d\nspill-line 1841 90205d\nspill-line 1842 90205d\nspill-line 1843 90205d\nspill-line 1844 90205d\nspill-line 1845 90205d\nspill-line 1846 90205d\nspill-line 1847 90205d\nspill-line 1848 90205d\nspill-line 1849 90205d\nspill-line 1850 90205d\nspill-line 1851 90205d\nspill-line 1852 90205d\nspill-line 1853 90205d\nspill-line 1854 90205d\nspill-line 1855 90205d\nspill-line 1856 90205d\nspill-line 1857 90205d\nspill-line 1858 90205d\nspill-line 1859 90205d\nspill-line 1860 90205d\nspill-line 1861 90205d\nspill-line 1862 90205d\nspill-line 1863 90205d\nspill-line 1864 90205d\nspill-line 1865 90205d\nspill-line 1866 90205d\nspill-line 1867 90205d\nspill-line 1868 90205d\nspill-line 1869 90205d\nspill-line 1870 90205d\nspill-line 1871 90205d\nspill-line 1872 90205d\nspill-line 1873 90205d\nspill-line 1874 90205d\nspill-line 1875 90205d\nspill-line 1876 90205d\nspill-line 1877 90205d\nspill-line 1878 90205d\nspill-line 1879 90205d\nspill-line 1880 90205d\nspill-line 1881 90205d\nspill-line 1882 90205d\nspill-line 1883 90205d\nspill-line 1884 90205d\nspill-line 1885 90205d\nspill-line 1886 90205d\nspill-line 1887 90205d\nspill-line 1888 90205d\nspill-line 1889 90205d\nspill-line 1890 90205d\nspill-line 1891 90205d\nspill-line 1892 90205d\nspill-line 1893 90205d\nspill-line 1894 90205d\nspill-line 1895 90205d\nspill-line 1896 90205d\nspill-line 1897 90205d\nspill-line 1898 90205d\nspill-line 1899 90205d\nspill-line 1900 90205d\nspill-line 1901 90205d\nspill-line 1902 90205d\nspill-line 1903 90205d\nspill-line 1904 90205d\nspill-line 1905 90205d\nspill-line 1906 90205d\nspill-line 1907 90205d\nspill-line 1908 90205d\nspill-line 1909 90205d\nspill-line 1910 90205d\nspill-line 1911 90205d\nspill-line 1912 90205d\nspill-line 1913 90205d\nspill-line 1914 90205d\nspill-line 1915 90205d\nspill-line 1916 90205d\nspill-line 1917 90205d\nspill-line 1918 90205d\nspill-line 1919 90205d\nspill-line 1920 90205d\nspill-line 1921 90205d\nspill-line 1922 90205d\nspill-line 1923 90205d\nspill-line 1924 90205d\nspill-line 1925 90205d\nspill-line 1926 90205d\nspill-line 1927 90205d\nspill-line 1928 90205d\nspill-line 1929 90205d\nspill-line 1930 90205d\nspill-line 1931 90205d\nspill-line 1932 90205d\nspill-line 1933 90205d\nspill-line 1934 90205d\nspill-line 1935 90205d\nspill-line 1936 90205d\nspill-line 1937 90205d\nspill-line 1938 90205d\nspill-line 1939 90205d\nspill-line 1940 90205d\nspill-line 1941 90205d\nspill-line 1942 90205d\nspill-line 1943 90205d\nspill-line 1944 90205d\nspill-line 1945 90205d\nspill-line 1946 90205d\nspill-line 1947 90205d\nspill-line 1948 90205d\nspill-line 1949 90205d\nspill-line 1950 90205d\nspill-line 1951 90205d\nspill-line 1952 90205d\nspill-line 1953 90205d\nspill-line 1954 90205d\nspill-line 1955 90205d\nspill-line 1956 90205d\nspill-line 1957 90205d\nspill-line 1958 90205d\nspill-line 1959 90205d\nspill-line 1960 90205d\nspill-line 1961 90205d\nspill-line 1962 90205d\nspill-line 1963 90205d\nspill-line 1964 90205d\nspill-line 1965 90205d\nspill-line 1966 90205d\nspill-line 1967 90205d\nspill-line 1968 90205d\nspill-line 1969 90205d\nspill-line 1970 90205d\nspill-line 1971 90205d\nspill-line 1972 90205d\nspill-line 1973 90205d\nspill-line 1974 90205d\nspill-line 1975 90205d\nspill-line 1976 90205d\nspill-line 1977 90205d\nspill-line 1978 90205d\nspill-line 1979 90205d\nspill-line 1980 90205d\nspill-line 1981 90205d\nspill-line 1982 90205d\nspill-line 1983 90205d\nspill-line 1984 90205d\nspill-line 1985 90205d\nspill-line 1986 90205d\nspill-line 1987 90205d\nspill-line 1988 90205d\nspill-line 1989 90205d\nspill-line 1990 90205d\nspill-line 1991 90205d\nspill-line 1992 90205d\nspill-line 1993 90205d\nspill-line 1994 90205d\nspill-line 1995 90205d\nspill-line 1996 90205d\nspill-line 1997 90205d\nspill-line 1998 90205d\nspill-line 1999 90205d\nspill-line 2000 90205d\nspill-line 2001 90205d\nspill-line 2002 90205d\nspill-line 2003 90205d\nspill-line 2004 90205d\nspill-line 2005 90205d\nspill-line 2006 90205d\nspill-line 2007 90205d\nspill-line 2008 90205d\nspill-line 2009 90205d\nspill-line 2010 90205d\nspill-line 2011 90205d\nspill-line 2012 90205d\nspill-line 2013 90205d\nspill-line 2014 90205d\nspill-line 2015 90205d\nspill-line 2016 90205d\nspill-line 2017 90205d\nspill-line 2018 90205d\nspill-line 2019 90205d\nspill-line 2020 90205d\nspill-line 2021 90205d\nspill-line 2022 90205d\nspill-line 2023 90205d\nspill-line 2024 90205d\nspill-line 2025 90205d\nspill-line 2026 90205d\nspill-line 2027 90205d\nspill-line 2028 90205d\nspill-line 2029 90205d\nspill-line 2030 90205d\nspill-line 2031 90205d\nspill-line 2032 90205d\nspill-line 2033 90205d\nspill-line 2034 90205d\nspill-line 2035 90205d\nspill-line 2036 90205d\nspill-line 2037 90205d\nspill-line 2038 90205d\nspill-line 2039 90205d\nspill-line 2040 90205d\nspill-line 2041 90205d\nspill-line 2042 90205d\nspill-line 2043 90205d\nspill-line 2044 90205d\nspill-line 2045 90205d\nspill-line 2046 90205d\nspill-line 2047 90205d\nspill-line 2048 90205d\nspill-line 2049 90205d\nspill-line 2050 90205d\nspill-line 2051 90205d\nspill-line 2052 90205d\nspill-line 2053 90205d\nspill-line 2054 90205d\nspill-line 2055 90205d\nspill-line 2056 90205d\nspill-line 2057 90205d\nspill-line 2058 90205d\nspill-line 2059 90205d\nspill-line 2060 90205d\nspill-line 2061 90205d\nspill-line 2062 90205d\nspill-line 2063 90205d\nspill-line 2064 90205d\nspill-line 2065 90205d\nspill-line 2066 90205d\nspill-line 2067 90205d\nspill-line 2068 90205d\nspill-line 2069 90205d\nspill-line 2070 90205d\nspill-line 2071 90205d\nspill-line 2072 90205d\nspill-line 2073 90205d\nspill-line 2074 90205d\nspill-line 2075 90205d\nspill-line 2076 90205d\nspill-line 2077 90205d\nspill-line 2078 90205d\nspill-line 2079 90205d\nspill-line 2080 90205d\nspill-line 2081 90205d\nspill-line 2082 90205d\nspill-line 2083 90205d\nspill-line 2084 90205d\nspill-line 2085 90205d\nspill-line 2086 90205d\nspill-line 2087 90205d\nspill-line 2088 90205d\nspill-line 2089 90205d\nspill-line 2090 90205d\nspill-line 2091 90205d\nspill-line 2092 90205d\nspill-line 2093 90205d\nspill-line 2094 90205d\nspill-line 2095 90205d\nspill-line 2096 90205d\nspill-line 2097 90205d\nspill-line 2098 90205d\nspill-line 2099 90205d\nspill-line 2100 90205d\nspill-line 2101 90205d\nspill-line 2102 90205d\nspill-line 2103 90205d\nspill-line 2104 90205d\nspill-line 2105 90205d\nspill-line 2106 90205d\nspill-line 2107 90205d\nspill-line 2108 90205d\nspill-line 2109 90205d\nspill-line 2110 90205d\nspill-line 2111 90205d\nspill-line 2112 90205d\nspill-line 2113 90205d\nspill-line 2114 90205d\nspill-line 2115 90205d\nspill-line 2116 90205d\nspill-line 2117 90205d\nspill-line 2118 90205d\nspill-line 2119 90205d\nspill-line 2120 90205d\nspill-line 2121 90205d\nspill-line 2122 90205d\nspill-line 2123 90205d\nspill-line 2124 90205d\nspill-line 2125 90205d\nspill-line 2126 90205d\nspill-line 2127 90205d\nspill-line 2128 90205d\nspill-line 2129 90205d\nspill-line 2130 90205d\nspill-line 2131 90205d\nspill-line 2132 90205d\nspill-line 2133 90205d\nspill-line 2134 90205d\nspill-line 2135 90205d\nspill-line 2136 90205d\nspill-line 2137 90205d\nspill-line 2138 90205d\nspill-line 2139 90205d\nspill-line 2140 90205d\nspill-line 2141 90205d\nspill-line 2142 90205d\nspill-line 2143 90205d\nspill-line 2144 90205d\nspill-line 2145 90205d\nspill-line 2146 90205d\nspill-line 2147 90205d\nspill-line 2148 90205d\nspill-line 2149 90205d\nspill-line 2150 90205d\nspill-line 2151 90205d\nspill-line 2152 90205d\nspill-line 2153 90205d\nspill-line 2154 90205d\nspill-line 2155 90205d\nspill-line 2156 90205d\nspill-line 2157 90205d\nspill-line 2158 90205d\nspill-line 2159 90205d\nspill-line 2160 90205d\nspill-line 2161 90205d\nspill-line 2162 90205d\nspill-line 2163 90205d\nspill-line 2164 90205d\nspill-line 2165 90205d\nspill-line 2166 90205d\nspill-line 2167 90205d\nspill-line 2168 90205d\nspill-line 2169 90205d\nspill-line 2170 90205d\nspill-line 2171 90205d\nspill-line 2172 90205d\nspill-line 2173 90205d\nspill-line 2174 90205d\nspill-line 2175 90205d\nspill-line 2176 90205d\nspill-line 2177 90205d\nspill-line 2178 90205d\nspill-line 2179 90205d\nspill-line 2180 90205d\nspill-line 2181 90205d\nspill-line 2182 90205d\nspill-line 2183 90205d\nspill-line 2184 90205d\nspill-line 2185 90205d\nspill-line 2186 90205d\nspill-line 2187 90205d\nspill-line 2188 90205d\nspill-line 2189 90205d\nspill-line 2190 90205d\nspill-line 2191 90205d\nspill-line 2192 90205d\nspill-line 2193 90205d\nspill-line 2194 90205d\nspill-line 2195 90205d\nspill-line 2196 90205d\nspill-line 2197 90205d\nspill-line 2198 90205d\nspill-line 2199 90205d\nspill-line 2200 90205d\nspill-line 2201 90205d\nspill-line 2202 90205d\nspill-line 2203 90205d\nspill-line 2204 90205d\nspill-line 2205 90205d\nspill-line 2206 90205d\nspill-line 2207 90205d\nspill-line 2208 90205d\nspill-line 2209 90205d\nspill-line 2210 90205d\nspill-line 2211 90205d\nspill-line 2212 90205d\nspill-line 2213 90205d\nspill-line 2214 90205d\nspill-line 2215 90205d\nspill-line 2216 90205d\nspill-line 2217 90205d\nspill-line 2218 90205d\nspill-line 2219 90205d\nspill-line 2220 90205d\nspill-line 2221 90205d\nspill-line 2222 90205d\nspill-line 2223 90205d\nspill-line 2224 90205d\nspill-line 2225 90205d\nspill-line 2226 90205d\nspill-line 2227 90205d\nspill-line 2228 90205d\nspill-line 2229 90205d\nspill-line 2230 90205d\nspill-line 2231 90205d\nspill-line 2232 90205d\nspill-line 2233 90205d\nspill-line 2234 90205d\nspill-line 2235 90205d\nspill-line 2236 90205d\nspill-line 2237 90205d\nspill-line 2238 90205d\nspill-line 2239 90205d\nspill-line 2240 90205d\nspill-line 2241 90205d\nspill-line 2242 90205d\nspill-line 2243 90205d\nspill-line 2244 90205d\nspill-line 2245 90205d\nspill-line 2246 90205d\nspill-line 2247 90205d\nspill-line 2248 90205d\nspill-line 2249 90205d\nspill-line 2250 90205d\nspill-line 2251 90205d\nspill-line 2252 90205d\nspill-line 2253 90205d\nspill-line 2254 90205d\nspill-line 2255 90205d\nspill-line 2256 90205d\nspill-line 2257 90205d\nspill-line 2258 90205d\nspill-line 2259 90205d\nspill-line 2260 90205d\nspill-line 2261 90205d\nspill-line 2262 90205d\nspill-line 2263 90205d\nspill-line 2264 90205d\nspill-line 2265 90205d\nspill-line 2266 90205d\nspill-line 2267 90205d\nspill-line 2268 90205d\nspill-line 2269 90205d\nspill-line 2270 90205d\nspill-line 2271 90205d\nspill-line 2272 90205d\nspill-line 2273 90205d\nspill-line 2274 90205d\nspill-line 2275 90205d\nspill-line 2276 90205d\nspill-line 2277 90205d\nspill-line 2278 90205d\nspill-line 2279 90205d\nspill-line 2280 90205d\nspill-line 2281 90205d\nspill-line 2282 90205d\nspill-line 2283 90205d\nspill-line 2284 90205d\nspill-line 2285 90205d\nspill-line 2286 90205d\nspill-line 2287 90205d\nspill-line 2288 90205d\nspill-line 2289 90205d\nspill-line 2290 90205d\nspill-line 2291 90205d\nspill-line 2292 90205d\nspill-line 2293 90205d\nspill-line 2294 90205d\nspill-line 2295 90205d\nspill-line 2296 90205d\nspill-line 2297 90205d\nspill-line 2298 90205\n\n[...]\n\n205d\nspill-line 2927 90205d\nspill-line 2928 90205d\nspill-line 2929 90205d\nspill-line 2930 90205d\nspill-line 2931 90205d\nspill-line 2932 90205d\nspill-line 2933 90205d\nspill-line 2934 90205d\nspill-line 2935 90205d\nspill-line 2936 90205d\nspill-line 2937 90205d\nspill-line 2938 90205d\nspill-line 2939 90205d\nspill-line 2940 90205d\nspill-line 2941 90205d\nspill-line 2942 90205d\nspill-line 2943 90205d\nspill-line 2944 90205d\nspill-line 2945 90205d\nspill-line 2946 90205d\nspill-line 2947 90205d\nspill-line 2948 90205d\nspill-line 2949 90205d\nspill-line 2950 90205d\nspill-line 2951 90205d\nspill-line 2952 90205d\nspill-line 2953 90205d\nspill-line 2954 90205d\nspill-line 2955 90205d\nspill-line 2956 90205d\nspill-line 2957 90205d\nspill-line 2958 90205d\nspill-line 2959 90205d\nspill-line 2960 90205d\nspill-line 2961 90205d\nspill-line 2962 90205d\nspill-line 2963 90205d\nspill-line 2964 90205d\nspill-line 2965 90205d\nspill-line 2966 90205d\nspill-line 2967 90205d\nspill-line 2968 90205d\nspill-line 2969 90205d\nspill-line 2970 90205d\nspill-line 2971 90205d\nspill-line 2972 90205d\nspill-line 2973 90205d\nspill-line 2974 90205d\nspill-line 2975 90205d\nspill-line 2976 90205d\nspill-line 2977 90205d\nspill-line 2978 90205d\nspill-line 2979 90205d\nspill-line 2980 90205d\nspill-line 2981 90205d\nspill-line 2982 90205d\nspill-line 2983 90205d\nspill-line 2984 90205d\nspill-line 2985 90205d\nspill-line 2986 90205d\nspill-line 2987 90205d\nspill-line 2988 90205d\nspill-line 2989 90205d\nspill-line 2990 90205d\nspill-line 2991 90205d\nspill-line 2992 90205d\nspill-line 2993 90205d\nspill-line 2994 90205d\nspill-line 2995 90205d\nspill-line 2996 90205d\nspill-line 2997 90205d\nspill-line 2998 90205d\nspill-line 2999 90205d\nspill-line 3000 90205d\nspill-line 3001 90205d\nspill-line 3002 90205d\nspill-line 3003 90205d\nspill-line 3004 90205d\nspill-line 3005 90205d\nspill-line 3006 90205d\nspill-line 3007 90205d\nspill-line 3008 90205d\nspill-line 3009 90205d\nspill-line 3010 90205d\nspill-line 3011 90205d\nspill-line 3012 90205d\nspill-line 3013 90205d\nspill-line 3014 90205d\nspill-line 3015 90205d\nspill-line 3016 90205d\nspill-line 3017 90205d\nspill-line 3018 90205d\nspill-line 3019 90205d\nspill-line 3020 90205d\nspill-line 3021 90205d\nspill-line 3022 90205d\nspill-line 3023 90205d\nspill-line 3024 90205d\nspill-line 3025 90205d\nspill-line 3026 90205d\nspill-line 3027 90205d\nspill-line 3028 90205d\nspill-line 3029 90205d\nspill-line 3030 90205d\nspill-line 3031 90205d\nspill-line 3032 90205d\nspill-line 3033 90205d\nspill-line 3034 90205d\nspill-line 3035 90205d\nspill-line 3036 90205d\nspill-line 3037 90205d\nspill-line 3038 90205d\nspill-line 3039 90205d\nspill-line 3040 90205d\nspill-line 3041 90205d\nspill-line 3042 90205d\nspill-line 3043 90205d\nspill-line 3044 90205d\nspill-line 3045 90205d\nspill-line 3046 90205d\nspill-line 3047 90205d\nspill-line 3048 90205d\nspill-line 3049 90205d\nspill-line 3050 90205d\nspill-line 3051 90205d\nspill-line 3052 90205d\nspill-line 3053 90205d\nspill-line 3054 90205d\nspill-line 3055 90205d\nspill-line 3056 90205d\nspill-line 3057 90205d\nspill-line 3058 90205d\nspill-line 3059 90205d\nspill-line 3060 90205d\nspill-line 3061 90205d\nspill-line 3062 90205d\nspill-line 3063 90205d\nspill-line 3064 90205d\nspill-line 3065 90205d\nspill-line 3066 90205d\nspill-line 3067 90205d\nspill-line 3068 90205d\nspill-line 3069 90205d\nspill-line 3070 90205d\nspill-line 3071 90205d\nspill-line 3072 90205d\nspill-line 3073 90205d\nspill-line 3074 90205d\nspill-line 3075 90205d\nspill-line 3076 90205d\nspill-line 3077 90205d\nspill-line 3078 90205d\nspill-line 3079 90205d\nspill-line 3080 90205d\nspill-line 3081 90205d\nspill-line 3082 90205d\nspill-line 3083 90205d\nspill-line 3084 90205d\nspill-line 3085 90205d\nspill-line 3086 90205d\nspill-line 3087 90205d\nspill-line 3088 90205d\nspill-line 3089 90205d\nspill-line 3090 90205d\nspill-line 3091 90205d\nspill-line 3092 90205d\nspill-line 3093 90205d\nspill-line 3094 90205d\nspill-line 3095 90205d\nspill-line 3096 90205d\nspill-line 3097 90205d\nspill-line 3098 90205d\nspill-line 3099 90205d\nspill-line 3100 90205d\nspill-line 3101 90205d\nspill-line 3102 90205d\nspill-line 3103 90205d\nspill-line 3104 90205d\nspill-line 3105 90205d\nspill-line 3106 90205d\nspill-line 3107 90205d\nspill-line 3108 90205d\nspill-line 3109 90205d\nspill-line 3110 90205d\nspill-line 3111 90205d\nspill-line 3112 90205d\nspill-line 3113 90205d\nspill-line 3114 90205d\nspill-line 3115 90205d\nspill-line 3116 90205d\nspill-line 3117 90205d\nspill-line 3118 90205d\nspill-line 3119 90205d\nspill-line 3120 90205d\nspill-line 3121 90205d\nspill-line 3122 90205d\nspill-line 3123 90205d\nspill-line 3124 90205d\nspill-line 3125 90205d\nspill-line 3126 90205d\nspill-line 3127 90205d\nspill-line 3128 90205d\nspill-line 3129 90205d\nspill-line 3130 90205d\nspill-line 3131 90205d\nspill-line 3132 90205d\nspill-line 3133 90205d\nspill-line 3134 90205d\nspill-line 3135 90205d\nspill-line 3136 90205d\nspill-line 3137 90205d\nspill-line 3138 90205d\nspill-line 3139 90205d\nspill-line 3140 90205d\nspill-line 3141 90205d\nspill-line 3142 90205d\nspill-line 3143 90205d\nspill-line 3144 90205d\nspill-line 3145 90205d\nspill-line 3146 90205d\nspill-line 3147 90205d\nspill-line 3148 90205d\nspill-line 3149 90205d\nspill-line 3150 90205d\nspill-line 3151 90205d\nspill-line 3152 90205d\nspill-line 3153 90205d\nspill-line 3154 90205d\nspill-line 3155 90205d\nspill-line 3156 90205d\nspill-line 3157 90205d\nspill-line 3158 90205d\nspill-line 3159 90205d\nspill-line 3160 90205d\nspill-line 3161 90205d\nspill-line 3162 90205d\nspill-line 3163 90205d\nspill-line 3164 90205d\nspill-line 3165 90205d\nspill-line 3166 90205d\nspill-line 3167 90205d\nspill-line 3168 90205d\nspill-line 3169 90205d\nspill-line 3170 90205d\nspill-line 3171 90205d\nspill-line 3172 90205d\nspill-line 3173 90205d\nspill-line 3174 90205d\nspill-line 3175 90205d\nspill-line 3176 90205d\nspill-line 3177 90205d\nspill-line 3178 90205d\nspill-line 3179 90205d\nspill-line 3180 90205d\nspill-line 3181 90205d\nspill-line 3182 90205d\nspill-line 3183 90205d\nspill-line 3184 90205d\nspill-line 3185 90205d\nspill-line 3186 90205d\nspill-line 3187 90205d\nspill-line 3188 90205d\nspill-line 3189 90205d\nspill-line 3190 90205d\nspill-line 3191 90205d\nspill-line 3192 90205d\nspill-line 3193 90205d\nspill-line 3194 90205d\nspill-line 3195 90205d\nspill-line 3196 90205d\nspill-line 3197 90205d\nspill-line 3198 90205d\nspill-line 3199 90205d\nspill-line 3200 90205d\nspill-line 3201 90205d\nspill-line 3202 90205d\nspill-line 3203 90205d\nspill-line 3204 90205d\nspill-line 3205 90205d\nspill-line 3206 90205d\nspill-line 3207 90205d\nspill-line 3208 90205d\nspill-line 3209 90205d\nspill-line 3210 90205d\nspill-line 3211 90205d\nspill-line 3212 90205d\nspill-line 3213 90205d\nspill-line 3214 90205d\nspill-line 3215 90205d\nspill-line 3216 90205d\nspill-line 3217 90205d\nspill-line 3218 90205d\nspill-line 3219 90205d\nspill-line 3220 90205d\nspill-line 3221 90205d\nspill-line 3222 90205d\nspill-line 3223 90205d\nspill-line 3224 90205d\nspill-line 3225 90205d\nspill-line 3226 90205d\nspill-line 3227 90205d\nspill-line 3228 90205d\nspill-line 3229 90205d\nspill-line 3230 90205d\nspill-line 3231 90205d\nspill-line 3232 90205d\nspill-line 3233 90205d\nspill-line 3234 90205d\nspill-line 3235 90205d\nspill-line 3236 90205d\nspill-line 3237 90205d\nspill-line 3238 90205d\nspill-line 3239 90205d\nspill-line 3240 90205d\nspill-line 3241 90205d\nspill-line 3242 90205d\nspill-line 3243 90205d\nspill-line 3244 90205d\nspill-line 3245 90205d\nspill-line 3246 90205d\nspill-line 3247 90205d\nspill-line 3248 90205d\nspill-line 3249 90205d\nspill-line 3250 90205d\nspill-line 3251 90205d\nspill-line 3252 90205d\nspill-line 3253 90205d\nspill-line 3254 90205d\nspill-line 3255 90205d\nspill-line 3256 90205d\nspill-line 3257 90205d\nspill-line 3258 90205d\nspill-line 3259 90205d\nspill-line 3260 90205d\nspill-line 3261 90205d\nspill-line 3262 90205d\nspill-line 3263 90205d\nspill-line 3264 90205d\nspill-line 3265 90205d\nspill-line 3266 90205d\nspill-line 3267 90205d\nspill-line 3268 90205d\nspill-line 3269 90205d\nspill-line 3270 90205d\nspill-line 3271 90205d\nspill-line 3272 90205d\nspill-line 3273 90205d\nspill-line 3274 90205d\nspill-line 3275 90205d\nspill-line 3276 90205d\nspill-line 3277 90205d\nspill-line 3278 90205d\nspill-line 3279 90205d\nspill-line 3280 90205d\nspill-line 3281 90205d\nspill-line 3282 90205d\nspill-line 3283 90205d\nspill-line 3284 90205d\nspill-line 3285 90205d\nspill-line 3286 90205d\nspill-line 3287 90205d\nspill-line 3288 90205d\nspill-line 3289 90205d\nspill-line 3290 90205d\nspill-line 3291 90205d\nspill-line 3292 90205d\nspill-line 3293 90205d\nspill-line 3294 90205d\nspill-line 3295 90205d\nspill-line 3296 90205d\nspill-line 3297 90205d\nspill-line 3298 90205d\nspill-line 3299 90205d\nspill-line 3300 90205d\nspill-line 3301 90205d\nspill-line 3302 90205d\nspill-line 3303 90205d\nspill-line 3304 90205d\nspill-line 3305 90205d\nspill-line 3306 90205d\nspill-line 3307 90205d\nspill-line 3308 90205d\nspill-line 3309 90205d\nspill-line 3310 90205d\nspill-line 3311 90205d\nspill-line 3312 90205d\nspill-line 3313 90205d\nspill-line 3314 90205d\nspill-line 3315 90205d\nspill-line 3316 90205d\nspill-line 3317 90205d\nspill-line 3318 90205d\nspill-line 3319 90205d\nspill-line 3320 90205d\nspill-line 3321 90205d\nspill-line 3322 90205d\nspill-line 3323 90205d\nspill-line 3324 90205d\nspill-line 3325 90205d\nspill-line 3326 90205d\nspill-line 3327 90205d\nspill-line 3328 90205d\nspill-line 3329 90205d\nspill-line 3330 90205d\nspill-line 3331 90205d\nspill-line 3332 90205d\nspill-line 3333 90205d\nspill-line 3334 90205d\nspill-line 3335 90205d\nspill-line 3336 90205d\nspill-line 3337 90205d\nspill-line 3338 90205d\nspill-line 3339 90205d\nspill-line 3340 90205d\nspill-line 3341 90205d\nspill-line 3342 90205d\nspill-line 3343 90205d\nspill-line 3344 90205d\nspill-line 3345 90205d\nspill-line 3346 90205d\nspill-line 3347 90205d\nspill-line 3348 90205d\nspill-line 3349 90205d\nspill-line 3350 90205d\nspill-line 3351 90205d\nspill-line 3352 90205d\nspill-line 3353 90205d\nspill-line 3354 90205d\nspill-line 3355 90205d\nspill-line 3356 90205d\nspill-line 3357 90205d\nspill-line 3358 90205d\nspill-line 3359 90205d\nspill-line 3360 90205d\nspill-line 3361 90205d\nspill-line 3362 90205d\nspill-line 3363 90205d\nspill-line 3364 90205d\nspill-line 3365 90205d\nspill-line 3366 90205d\nspill-line 3367 90205d\nspill-line 3368 90205d\nspill-line 3369 90205d\nspill-line 3370 90205d\nspill-line 3371 90205d\nspill-line 3372 90205d\nspill-line 3373 90205d\nspill-line 3374 90205d\nspill-line 3375 90205d\nspill-line 3376 90205d\nspill-line 3377 90205d\nspill-line 3378 90205d\nspill-line 3379 90205d\nspill-line 3380 90205d\nspill-line 3381 90205d\nspill-line 3382 90205d\nspill-line 3383 90205d\nspill-line 3384 90205d\nspill-line 3385 90205d\nspill-line 3386 90205d\nspill-line 3387 90205d\nspill-line 3388 90205d\nspill-line 3389 90205d\nspill-line 3390 90205d\nspill-line 3391 90205d\nspill-line 3392 90205d\nspill-line 3393 90205d\nspill-line 3394 90205d\nspill-line 3395 90205d\nspill-line 3396 90205d\nspill-line 3397 90205d\nspill-line 3398 90205d\nspill-line 3399 90205d\nspill-line 3400 90205d\nspill-line 3401 90205d\nspill-line 3402 90205d\nspill-line 3403 90205d\nspill-line 3404 90205d\nspill-line 3405 90205d\nspill-line 3406 90205d\nspill-line 3407 90205d\nspill-line 3408 90205d\nspill-line 3409 90205d\nspill-line 3410 90205d\nspill-line 3411 90205d\nspill-line 3412 90205d\nspill-line 3413 90205d\nspill-line 3414 90205d\nspill-line 3415 90205d\nspill-line 3416 90205d\nspill-line 3417 90205d\nspill-line 3418 90205d\nspill-line 3419 90205d\nspill-line 3420 90205d\nspill-line 3421 90205d\nspill-line 3422 90205d\nspill-line 3423 90205d\nspill-line 3424 90205d\nspill-line 3425 90205d\nspill-line 3426 90205d\nspill-line 3427 90205d\nspill-line 3428 90205d\nspill-line 3429 90205d\nspill-line 3430 90205d\nspill-line 3431 90205d\nspill-line 3432 90205d\nspill-line 3433 90205d\nspill-line 3434 90205d\nspill-line 3435 90205d\nspill-line 3436 90205d\nspill-line 3437 90205d\nspill-line 3438 90205d\nspill-line 3439 90205d\nspill-line 3440 90205d\nspill-line 3441 90205d\nspill-line 3442 90205d\nspill-line 3443 90205d\nspill-line 3444 90205d\nspill-line 3445 90205d\nspill-line 3446 90205d\nspill-line 3447 90205d\nspill-line 3448 90205d\nspill-line 3449 90205d\nspill-line 3450 90205d\nspill-line 3451 90205d\nspill-line 3452 90205d\nspill-line 3453 90205d\nspill-line 3454 90205d\nspill-line 3455 90205d\nspill-line 3456 90205d\nspill-line 3457 90205d\nspill-line 3458 90205d\nspill-line 3459 90205d\nspill-line 3460 90205d\nspill-line 3461 90205d\nspill-line 3462 90205d\nspill-line 3463 90205d\nspill-line 3464 90205d\nspill-line 3465 90205d\nspill-line 3466 90205d\nspill-line 3467 90205d\nspill-line 3468 90205d\nspill-line 3469 90205d\nspill-line 3470 90205d\nspill-line 3471 90205d\nspill-line 3472 90205d\nspill-line 3473 90205d\nspill-line 3474 90205d\nspill-line 3475 90205d\nspill-line 3476 90205d\nspill-line 3477 90205d\nspill-line 3478 90205d\nspill-line 3479 90205d\nspill-line 3480 90205d\nspill-line 3481 90205d\nspill-line 3482 90205d\nspill-line 3483 90205d\nspill-line 3484 90205d\nspill-line 3485 90205d\nspill-line 3486 90205d\nspill-line 3487 90205d\nspill-line 3488 90205d\nspill-line 3489 90205d\nspill-line 3490 90205d\nspill-line 3491 90205d\nspill-line 3492 90205d\nspill-line 3493 90205d\nspill-line 3494 90205d\nspill-line 3495 90205d\nspill-line 3496 90205d\nspill-line 3497 90205d\nspill-line 3498 90205d\nspill-line 3499 90205d\nspill-line 3500 90205d\nspill-line 3501 90205d\nspill-line 3502 90205d\nspill-line 3503 90205d\nspill-line 3504 90205d\nspill-line 3505 90205d\nspill-line 3506 90205d\nspill-line 3507 90205d\nspill-line 3508 90205d\nspill-line 3509 90205d\nspill-line 3510 90205d\nspill-line 3511 90205d\nspill-line 3512 90205d\nspill-line 3513 90205d\nspill-line 3514 90205d\nspill-line 3515 90205d\nspill-line 3516 90205d\nspill-line 3517 90205d\nspill-line 3518 90205d\nspill-line 3519 90205d\nspill-line 3520 90205d\nspill-line 3521 90205d\nspill-line 3522 90205d\nspill-line 3523 90205d\nspill-line 3524 90205d\nspill-line 3525 90205d\nspill-line 3526 90205d\nspill-line 3527 90205d\nspill-line 3528 90205d\nspill-line 3529 90205d\nspill-line 3530 90205d\nspill-line 3531 90205d\nspill-line 3532 90205d\nspill-line 3533 90205d\nspill-line 3534 90205d\nspill-line 3535 90205d\nspill-line 3536 90205d\nspill-line 3537 90205d\nspill-line 3538 90205d\nspill-line 3539 90205d\nspill-line 3540 90205d\nspill-line 3541 90205d\nspill-line 3542 90205d\nspill-line 3543 90205d\nspill-line 3544 90205d\nspill-line 3545 90205d\nspill-line 3546 90205d\nspill-line 3547 90205d\nspill-line 3548 90205d\nspill-line 3549 90205d\nspill-line 3550 90205d\nspill-line 3551 90205d\nspill-line 3552 90205d\nspill-line 3553 90205d\nspill-line 3554 90205d\nspill-line 3555 90205d\nspill-line 3556 90205d\nspill-line 3557 90205d\nspill-line 3558 90205d\nspill-line 3559 90205d\nspill-line 3560 90205d\nspill-line 3561 90205d\nspill-line 3562 90205d\nspill-line 3563 90205d\nspill-line 3564 90205d\nspill-line 3565 90205d\nspill-line 3566 90205d\nspill-line 3567 90205d\nspill-line 3568 90205d\nspill-line 3569 90205d\nspill-line 3570 90205d\nspill-line 3571 90205d\nspill-line 3572 90205d\nspill-line 3573 90205d\nspill-line 3574 90205d\nspill-line 3575 90205d\nspill-line 3576 90205d\nspill-line 3577 90205d\nspill-line 3578 90205d\nspill-line 3579 90205d\nspill-line 3580 90205d\nspill-line 3581 90205d\nspill-line 3582 90205d\nspill-line 3583 90205d\nspill-line 3584 90205d\nspill-line 3585 90205d\nspill-line 3586 90205d\nspill-line 3587 90205d\nspill-line 3588 90205d\nspill-line 3589 90205d\nspill-line 3590 90205d\nspill-line 3591 90205d\nspill-line 3592 90205d\nspill-line 3593 90205d\nspill-line 3594 90205d\nspill-line 3595 90205d\nspill-line 3596 90205d\nspill-line 3597 90205d\nspill-line 3598 90205d\nspill-line 3599 90205d\nspill-line 3600 90205d\nspill-line 3601 90205d\nspill-line 3602 90205d\nspill-line 3603 90205d\nspill-line 3604 90205d\nspill-line 3605 90205d\nspill-line 3606 90205d\nspill-line 3607 90205d\nspill-line 3608 90205d\nspill-line 3609 90205d\nspill-line 3610 90205d\nspill-line 3611 90205d\nspill-line 3612 90205d\nspill-line 3613 90205d\nspill-line 3614 90205d\nspill-line 3615 90205d\nspill-line 3616 90205d\nspill-line 3617 90205d\nspill-line 3618 90205d\nspill-line 3619 90205d\nspill-line 3620 90205d\nspill-line 3621 90205d\nspill-line 3622 90205d\nspill-line 3623 90205d\nspill-line 3624 90205d\nspill-line 3625 90205d\nspill-line 3626 90205d\nspill-line 3627 90205d\nspill-line 3628 90205d\nspill-line 3629 90205d\nspill-line 3630 90205d\nspill-line 3631 90205d\nspill-line 3632 90205d\nspill-line 3633 90205d\nspill-line 3634 90205d\nspill-line 3635 90205d\nspill-line 3636 90205d\nspill-line 3637 90205d\nspill-line 3638 90205d\nspill-line 3639 90205d\nspill-line 3640 90205d\nspill-line 3641 90205d\nspill-line 3642 90205d\nspill-line 3643 90205d\nspill-line 3644 90205d\nspill-line 3645 90205d\nspill-line 3646 90205d\nspill-line 3647 90205d\nspill-line 3648 90205d\nspill-line 3649 90205d\nspill-line 3650 90205d\nspill-line 3651 90205d\nspill-line 3652 90205d\nspill-line 3653 90205d\nspill-line 3654 90205d\nspill-line 3655 90205d\nspill-line 3656 90205d\nspill-line 3657 90205d\nspill-line 3658 90205d\nspill-line 3659 90205d\nspill-line 3660 90205d\nspill-line 3661 90205d\nspill-line 3662 90205d\nspill-line 3663 90205d\nspill-line 3664 90205d\nspill-line 3665 90205d\nspill-line 3666 90205d\nspill-line 3667 90205d\nspill-line 3668 90205d\nspill-line 3669 90205d\nspill-line 3670 90205d\nspill-line 3671 90205d\nspill-line 3672 90205d\nspill-line 3673 90205d\nspill-line 3674 90205d\nspill-line 3675 90205d\nspill-line 3676 90205d\nspill-line 3677 90205d\nspill-line 3678 90205d\nspill-line 3679 90205d\nspill-line 3680 90205d\nspill-line 3681 90205d\nspill-line 3682 90205d\nspill-line 3683 90205d\nspill-line 3684 90205d\nspill-line 3685 90205d\nspill-line 3686 90205d\nspill-line 3687 90205d\nspill-line 3688 90205d\nspill-line 3689 90205d\nspill-line 3690 90205d\nspill-line 3691 90205d\nspill-line 3692 90205d\nspill-line 3693 90205d\nspill-line 3694 90205d\nspill-line 3695 90205d\nspill-line 3696 90205d\nspill-line 3697 90205d\nspill-line 3698 90205d\nspill-line 3699 90205d\nspill-line 3700 90205d\nspill-line 3701 90205d\nspill-line 3702 90205d\nspill-line 3703 90205d\nspill-line 3704 90205d\nspill-line 3705 90205d\nspill-line 3706 90205d\nspill-line 3707 90205d\nspill-line 3708 90205d\nspill-line 3709 90205d\nspill-line 3710 90205d\nspill-line 3711 90205d\nspill-line 3712 90205d\nspill-line 3713 90205d\nspill-line 3714 90205d\nspill-line 3715 90205d\nspill-line 3716 90205d\nspill-line 3717 90205d\nspill-line 3718 90205d\nspill-line 3719 90205d\nspill-line 3720 90205d\nspill-line 3721 90205d\nspill-line 3722 90205d\nspill-line 3723 90205d\nspill-line 3724 90205d\nspill-line 3725 90205d\nspill-line 3726 90205d\nspill-line 3727 90205d\nspill-line 3728 90205d\nspill-line 3729 90205d\nspill-line 3730 90205d\nspill-line 3731 90205d\nspill-line 3732 90205d\nspill-line 3733 90205d\nspill-line 3734 90205d\nspill-line 3735 90205d\nspill-line 3736 90205d\nspill-line 3737 90205d\nspill-line 3738 90205d\nspill-line 3739 90205d\nspill-line 3740 90205d\nspill-line 3741 90205d\nspill-line 3742 90205d\nspill-line 3743 90205d\nspill-line 3744 90205d\nspill-line 3745 90205d\nspill-line 3746 90205d\nspill-line 3747 90205d\nspill-line 3748 90205d\nspill-line 3749 90205d\nspill-line 3750 90205d\nspill-line 3751 90205d\nspill-line 3752 90205d\nspill-line 3753 90205d\nspill-line 3754 90205d\nspill-line 3755 90205d\nspill-line 3756 90205d\nspill-line 3757 90205d\nspill-line 3758 90205d\nspill-line 3759 90205d\nspill-line 3760 90205d\nspill-line 3761 90205d\nspill-line 3762 90205d\nspill-line 3763 90205d\nspill-line 3764 90205d\nspill-line 3765 90205d\nspill-line 3766 90205d\nspill-line 3767 90205d\nspill-line 3768 90205d\nspill-line 3769 90205d\nspill-line 3770 90205d\nspill-line 3771 90205d\nspill-line 3772 90205d\nspill-line 3773 90205d\nspill-line 3774 90205d\nspill-line 3775 90205d\nspill-line 3776 90205d\nspill-line 3777 90205d\nspill-line 3778 90205d\nspill-line 3779 90205d\nspill-line 3780 90205d\nspill-line 3781 90205d\nspill-line 3782 90205d\nspill-line 3783 90205d\nspill-line 3784 90205d\nspill-line 3785 90205d\nspill-line 3786 90205d\nspill-line 3787 90205d\nspill-line 3788 90205d\nspill-line 3789 90205d\nspill-line 3790 90205d\nspill-line 3791 90205d\nspill-line 3792 90205d\nspill-line 3793 90205d\nspill-line 3794 90205d\nspill-line 3795 90205d\nspill-line 3796 90205d\nspill-line 3797 90205d\nspill-line 3798 90205d\nspill-line 3799 90205d\nspill-line 3800 90205d\nspill-line 3801 90205d\nspill-line 3802 90205d\nspill-line 3803 90205d\nspill-line 3804 90205d\nspill-line 3805 90205d\nspill-line 3806 90205d\nspill-line 3807 90205d\nspill-line 3808 90205d\nspill-line 3809 90205d\nspill-line 3810 90205d\nspill-line 3811 90205d\nspill-line 3812 90205d\nspill-line 3813 90205d\nspill-line 3814 90205d\nspill-line 3815 90205d\nspill-line 3816 90205d\nspill-line 3817 90205d\nspill-line 3818 90205d\nspill-line 3819 90205d\nspill-line 3820 90205d\nspill-line 3821 90205d\nspill-line 3822 90205d\nspill-line 3823 90205d\nspill-line 3824 90205d\nspill-line 3825 90205d\nspill-line 3826 90205d\nspill-line 3827 90205d\nspill-line 3828 90205d\nspill-line 3829 90205d\nspill-line 3830 90205d\nspill-line 3831 90205d\nspill-line 3832 90205d\nspill-line 3833 90205d\nspill-line 3834 90205d\nspill-line 3835 90205d\nspill-line 3836 90205d\nspill-line 3837 90205d\nspill-line 3838 90205d\nspill-line 3839 90205d\nspill-line 3840 90205d\nspill-line 3841 90205d\nspill-line 3842 90205d\nspill-line 3843 90205d\nspill-line 3844 90205d\nspill-line 3845 90205d\nspill-line 3846 90205d\nspill-line 3847 90205d\nspill-line 3848 90205d\nspill-line 3849 90205d\nspill-line 3850 90205d\nspill-line 3851 90205d\nspill-line 3852 90205d\nspill-line 3853 90205d\nspill-line 3854 90205d\nspill-line 3855 90205d\nspill-line 3856 90205d\nspill-line 3857 90205d\nspill-line 3858 90205d\nspill-line 3859 90205d\nspill-line 3860 90205d\nspill-line 3861 90205d\nspill-line 3862 90205d\nspill-line 3863 90205d\nspill-line 3864 90205d\nspill-line 3865 90205d\nspill-line 3866 90205d\nspill-line 3867 90205d\nspill-line 3868 90205d\nspill-line 3869 90205d\nspill-line 3870 90205d\nspill-line 3871 90205d\nspill-line 3872 90205d\nspill-line 3873 90205d\nspill-line 3874 90205d\nspill-line 3875 90205d\nspill-line 3876 90205d\nspill-line 3877 90205d\nspill-line 3878 90205d\nspill-line 3879 90205d\nspill-line 3880 90205d\nspill-line 3881 90205d\nspill-line 3882 90205d\nspill-line 3883 90205d\nspill-line 3884 90205d\nspill-line 3885 90205d\nspill-line 3886 90205d\nspill-line 3887 90205d\nspill-line 3888 90205d\nspill-line 3889 90205d\nspill-line 3890 90205d\nspill-line 3891 90205d\nspill-line 3892 90205d\nspill-line 3893 90205d\nspill-line 3894 90205d\nspill-line 3895 90205d\nspill-line 3896 90205d\nspill-line 3897 90205d\nspill-line 3898 90205d\nspill-line 3899 90205d\nspill-line 3900 90205d\nspill-line 3901 90205d\nspill-line 3902 90205d\nspill-line 3903 90205d\nspill-line 3904 90205d\nspill-line 3905 90205d\nspill-line 3906 90205d\nspill-line 3907 90205d\nspill-line 3908 90205d\nspill-line 3909 90205d\nspill-line 3910 90205d\nspill-line 3911 90205d\nspill-line 3912 90205d\nspill-line 3913 90205d\nspill-line 3914 90205d\nspill-line 3915 90205d\nspill-line 3916 90205d\nspill-line 3917 90205d\nspill-line 3918 90205d\nspill-line 3919 90205d\nspill-line 3920 90205d\nspill-line 3921 90205d\nspill-line 3922 90205d\nspill-line 3923 90205d\nspill-line 3924 90205d\nspill-line 3925 90205d\nspill-line 3926 90205d\nspill-line 3927 90205d\nspill-line 3928 90205d\nspill-line 3929 90205d\nspill-line 3930 90205d\nspill-line 3931 90205d\nspill-line 3932 90205d\nspill-line 3933 90205d\nspill-line 3934 90205d\nspill-line 3935 90205d\nspill-line 3936 90205d\nspill-line 3937 90205d\nspill-line 3938 90205d\nspill-line 3939 90205d\nspill-line 3940 90205d\nspill-line 3941 90205d\nspill-line 3942 90205d\nspill-line 3943 90205d\nspill-line 3944 90205d\nspill-line 3945 90205d\nspill-line 3946 90205d\nspill-line 3947 90205d\nspill-line 3948 90205d\nspill-line 3949 90205d\nspill-line 3950 90205d\nspill-line 3951 90205d\nspill-line 3952 90205d\nspill-line 3953 90205d\nspill-line 3954 90205d\nspill-line 3955 90205d\nspill-line 3956 90205d\nspill-line 3957 90205d\nspill-line 3958 90205d\nspill-line 3959 90205d\nspill-line 3960 90205d\nspill-line 3961 90205d\nspill-line 3962 90205d\nspill-line 3963 90205d\nspill-line 3964 90205d\nspill-line 3965 90205d\nspill-line 3966 90205d\nspill-line 3967 90205d\nspill-line 3968 90205d\nspill-line 3969 90205d\nspill-line 3970 90205d\nspill-line 3971 90205d\nspill-line 3972 90205d\nspill-line 3973 90205d\nspill-line 3974 90205d\nspill-line 3975 90205d\nspill-line 3976 90205d\nspill-line 3977 90205d\nspill-line 3978 90205d\nspill-line 3979 90205d\nspill-line 3980 90205d\nspill-line 3981 90205d\nspill-line 3982 90205d\nspill-line 3983 90205d\nspill-line 3984 90205d\nspill-line 3985 90205d\nspill-line 3986 90205d\nspill-line 3987 90205d\nspill-line 3988 90205d\nspill-line 3989 90205d\nspill-line 3990 90205d\nspill-line 3991 90205d\nspill-line 3992 90205d\nspill-line 3993 90205d\nspill-line 3994 90205d\nspill-line 3995 90205d\nspill-line 3996 90205d\nspill-line 3997 90205d\nspill-line 3998 90205d\nspill-line 3999 90205d\nspill-line 4000 90205d\n\n[output truncated; full output: /var/tmp/aiclient-dsh-smoke-Ud6NeL/tmp/dsh-subprocess-77l4LF/dsh-subprocess-78272-1-a45b942bff7f-stdout.log]\n\n(Omitted 14441 bytes. Full formatted result stored at: /var/tmp/aiclient-dsh-smoke-Ud6NeL/tmp/dsh-spill-JfZDvp/session-5c15f1688456/61eb5481d325-bash.txt. Use read with offset/limit, or grep this path to search within it.)"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/workspace/shell-written-90205d.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-36c46066 SHELL-90205d\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "reply": "P0-FS l1 finished.",
+      "permissions": [],
+      "resolved": [],
+      "errors": [],
+      "files": {
+        "written": "P12-MARKER-36c46066 WRITTEN-90205d\n",
+        "shellWritten": "P12-MARKER-36c46066 SHELL-90205d\n",
+        "edited": "P12-MARKER-36c46066 EDITED-90205d edit target\n"
+      },
+      "marker": "P12-MARKER-36c46066",
+      "token": "90205d",
+      "shell": "bash"
+    },
+    "approval": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "write",
+          "ok": false,
+          "text": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-Ud6NeL/outside/approved.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "reply": "Write outside the workspace attempted.",
+      "permissions": ["write"],
+      "resolved": ["allow"],
+      "errors": [],
+      "fileWritten": true
+    },
+    "autoAnswered": [
+      {
+        "toolName": "write",
+        "permissionId": "toolu_93b3f0b6-1ba0-4aa5-8d7e-8ee299df5266"
+      }
+    ],
+    "dispose": {
+      "disposed": true
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] ready {\"type\":\"ready\",\"pid\":78272,\"node\":\"v24.18.0\",\"execPath\":\"<repo>/dist/linux-unpacked/resources/node-runtime/node\",\"execArgv\":[\"--expose-internals\",\"--import\",\"file://<repo>/src/dsh-host/tools/lib/probe-hooks.mjs\"],\"artifact\":{\"form\":\"packaged\",\"version\":\"0.1.0\",\"dsh\":\"0.1.7-rc.2\",\"target\":{\"platform\":\"linux\",\"arch\":\"x64\"},\"gitCommit\":\"d833115fe9413e5de256771f1d51f3af07d30bd5+dirty\",\"builtAt\":\"2026-09-27T06:48:04.023Z\"},\"dshRuntimeVersion\":\"0.1.7-rc.2\",\"bundles\":[\"@deepseek-ai/dsh-base\",\"@aiclient/dsh-app\"],\"composition\":{\"rows\":95,\"disabledLiteral\":[\"tool-plugin-manager\",\"hmr\",\"deepseek-llm-api-extensions\",\"session-log-deepseek\",\"session-title-llm\",\"plugin-package-inventory-deepseek\",\"deepseek-account\",\"session-telemetry-otel\",\"skill-badge\",\"tool-ralph\",\"web\",\"web-search-deepseek\",\"web-fetch-http\",\"tool-web\",\"llm-deepseek\",\"llm-deepseek-account\"],\"disabledByExpression\":[\"plugin-manager\",\"config-editor\",\"settings\",\"bash-sandbox\",\"pwsh-sandbox\",\"tool-bash\",\"tool-pwsh\",\"aiclient-bridge\",\"aiclient-shared-bridge\"]},\"census\":{\"active\":77,\"disabled\":19,\"inactive\":[]},\"marks\":{\"entry\":32.744967,\"modulesLoaded\":65.447894,\"profileResolved\":102.586994,\"bootResolved\":669.136618}}\n[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-packaged-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-packaged-smoke\": flush on a closed handle\n[dsh-host] stopped (worker.dispose) in 23ms\n"
+  },
+  "natives": {
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "hookLog": "/var/tmp/aiclient-dsh-smoke-Ud6NeL/logs/natives-hooks.jsonl",
+    "sharp": {
+      "pngBytes": 96,
+      "libvips": "8.18.6"
+    },
+    "pty": {
+      "text": "pty-ok\r\n",
+      "exitCode": 0
+    },
+    "leftovers": []
+  },
+  "hooks": {
+    "moduleCount": 1682,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "/var/tmp/aiclient-dsh-smoke-Ud6NeL/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+        "where": "narb-cache"
+      },
+      {
+        "file": "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/node-pty/prebuilds/linux-x64/pty.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [
+      "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg"
+    ],
+    "spawnedExecutables": [
+      "systemd-run",
+      "<repo>/dist/linux-unpacked/resources/dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "bwrap"
+    ]
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "l1Bootstrapped": true,
+    "l1Packaged": true,
+    "l1FsTurnIdle": true,
+    "l1FsTools": true,
+    "l1FsToolsOk": true,
+    "l1ReadSawMarker": true,
+    "l1GrepSawMarker": true,
+    "l1ShellSawMarker": true,
+    "l1FilesWritten": true,
+    "l1FsReplied": true,
+    "l1ApprovalRoundTrip": true,
+    "l1Disposed": true,
+    "l1ExitedZero": true,
+    "l1NoLeftovers": true,
+    "l1RipgrepFromArtifact": true,
+    "nativesSharpLoaded": true,
+    "nativesPtyRan": true,
+    "nativesExitedZero": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T06:51:19.924Z"
+}

@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "artifact": "@aiclient/dsh-host",
+  "version": "0.1.0",
+  "dsh": "0.1.7-rc.2",
+  "appVersion": "1.0.3",
+  "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+  "target": {
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "builtOn": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.2",
+    "npm": "10.9.8"
+  },
+  "builtAt": "2026-09-27T06:48:04.023Z",
+  "lockSha256": "2650c29b423bcee619def2cfd7e4e447173e705ed72a46dc5f9df9b5b50fe40a",
+  "files": 10166,
+  "bytes": 100672732,
+  "longestRelativePath": 158,
+  "budget": {
+    "maxBytes": 134217728,
+    "maxFiles": 12000,
+    "targetBytes": 115343360
+  },
+  "packages": 361,
+  "pruned": {
+    "files": 11986,
+    "bytes": 124787657,
+    "directories": [
+      {
+        "rel": "node_modules/.bin",
+        "reason": "npm bin links",
+        "files": 11,
+        "bytes": 259
+      },
+      {
+        "rel": "node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/musl",
+        "reason": "node-addon-system musl build",
+        "files": 1,
+        "bytes": 17960
+      },
+      {
+        "rel": "node_modules/@emnapi",
+        "reason": "wasm32 runtime",
+        "files": 17,
+        "bytes": 436901
+      },
+      {
+        "rel": "node_modules/@img/sharp-libvips-linuxmusl-x64",
+        "reason": "sharp variant linuxmusl-x64",
+        "files": 6,
+        "bytes": 18861559
+      },
+      {
+        "rel": "node_modules/@img/sharp-linuxmusl-x64",
+        "reason": "sharp variant linuxmusl-x64",
+        "files": 5,
+        "bytes": 309279
+      },
+      {
+        "rel": "node_modules/@img/sharp-wasm32",
+        "reason": "sharp variant wasm32",
+        "files": 7,
+        "bytes": 9167141
+      },
+      {
+        "rel": "node_modules/@koromix/koffi-linux-x64/musl_x64",
+        "reason": "koffi musl build",
+        "files": 1,
+        "bytes": 1221512
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/darwin-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 2,
+        "bytes": 137384
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/darwin-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 2,
+        "bytes": 67824
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/linux-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 1,
+        "bytes": 69112
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/win32-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 6,
+        "bytes": 11768384
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/win32-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 6,
+        "bytes": 12231824
+      },
+      {
+        "rel": "node_modules/node-pty/src",
+        "reason": "node-pty native sources",
+        "files": 7,
+        "bytes": 50948
+      },
+      {
+        "rel": "node_modules/node-pty/third_party",
+        "reason": "node-pty conpty payload (Windows only)",
+        "files": 4,
+        "bytes": 2389712
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-arm64",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 404581
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-x64",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 417779
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-arm64-msvc",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 333212
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-x64-msvc",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 361874
+      },
+      {
+        "rel": "node_modules/pnpm/dist/vendor",
+        "reason": "pnpm Windows helpers",
+        "files": 2,
+        "bytes": 486912
+      }
+    ]
+  },
+  "materialized": [
+    {
+      "name": "@aiclient/dsh-app",
+      "from": "bundle"
+    }
+  ],
+  "natives": [
+    {
+      "path": "node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+      "format": "ELF64 x64",
+      "bytes": 17360,
+      "sha256": "54a9c25c05186c17520f6b7a5ced5f005752c08044c3eb76524cd517287600bc"
+    },
+    {
+      "path": "node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/landlock-run",
+      "format": "ELF64 x64",
+      "bytes": 38552,
+      "sha256": "a752bc72f111fcc573c3e61fb90fa544541dac0ca498d2e279e1630d7c659b31"
+    },
+    {
+      "path": "node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.8.18.6",
+      "format": "ELF64 x64",
+      "bytes": 18621496,
+      "sha256": "536cee19ab906cb5185ad519bf87647693f5d7b55e608c92eb28607f89ca5125"
+    },
+    {
+      "path": "node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+      "format": "ELF64 x64",
+      "bytes": 415112,
+      "sha256": "649fd3c3f98401061963aa496976c21b120a67c382657d9a26a60df251a317e2"
+    },
+    {
+      "path": "node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+      "format": "ELF64 x64",
+      "bytes": 1158552,
+      "sha256": "b250fd1c3e4b8959477f3182421884261624b73910351d8b8528b6dcbcb31d72"
+    },
+    {
+      "path": "node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "format": "ELF64 x64",
+      "bytes": 5728032,
+      "sha256": "193906679498de4d939345b937fa24e0e69a03c244bd70c859f5e41232713f21"
+    },
+    {
+      "path": "node_modules/node-addon-require-builtin-linux-x64-gnu/prebuilt/linux-x64-gnu-napi-v9.node",
+      "format": "ELF64 x64",
+      "bytes": 305392,
+      "sha256": "ec78b442caffcce311c6a6cbbc4fead6d59a4b8cae5b5206c6c84994d68d5667"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/linux-x64/pty.node",
+      "format": "ELF64 x64",
+      "bytes": 75976,
+      "sha256": "123792d8f22f36d519b21dfb6f4b716f9b18b9e579085ea2840d0773d88d35fd"
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 0,
+  "narb": "disabled",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/out-dsh-host",
+    "files": 10167,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/out-node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-rFpaAG",
+  "startedAt": "2026-09-27T06:44:09.222Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 649,
+    "ready": {
+      "node": "v24.18.0",
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "e3ce1691b60ca462c905c66f5f0010f4828e728b+dirty",
+        "builtAt": "2026-09-27T06:27:35.916Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 76,
+        "disabled": 20,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 95,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh",
+          "aiclient-bridge",
+          "aiclient-shared-bridge"
+        ]
+      },
+      "marks": {
+        "entry": 27.921941,
+        "modulesLoaded": 59.845425,
+        "profileResolved": 97.740887,
+        "bootResolved": 644.843869
+      }
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 22.419572000000016,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 22ms\n"
+  },
+  "hooks": {
+    "moduleCount": 727,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "<repo>/out-dsh-host/node_modules/node-addon-require-builtin-linux-x64-gnu/prebuilt/linux-x64-gnu-napi-v9.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [],
+    "spawnedExecutables": []
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T06:44:09.996Z"
+}

@@ -1,0 +1,324 @@
+{
+  "smoke": "packaged-dsh-host",
+  "level": 1,
+  "narb": "default",
+  "platform": "linux-x64",
+  "hostDir": {
+    "path": "<repo>/out-dsh-host",
+    "files": 10167,
+    "added": [],
+    "removed": []
+  },
+  "node": {
+    "path": "<repo>/out-node-runtime/node",
+    "version": "v24.18.0"
+  },
+  "scratch": "/var/tmp/aiclient-dsh-smoke-tEqG3Y",
+  "startedAt": "2026-09-27T06:59:36.768Z",
+  "L0": {
+    "label": "L0",
+    "readyMs": 941,
+    "ready": {
+      "node": "v24.18.0",
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 76,
+        "disabled": 20,
+        "inactive": []
+      },
+      "composition": {
+        "rows": 95,
+        "disabledLiteral": [
+          "tool-plugin-manager",
+          "hmr",
+          "deepseek-llm-api-extensions",
+          "session-log-deepseek",
+          "session-title-llm",
+          "plugin-package-inventory-deepseek",
+          "deepseek-account",
+          "session-telemetry-otel",
+          "skill-badge",
+          "tool-ralph",
+          "web",
+          "web-search-deepseek",
+          "web-fetch-http",
+          "tool-web",
+          "llm-deepseek",
+          "llm-deepseek-account"
+        ],
+        "disabledByExpression": [
+          "plugin-manager",
+          "config-editor",
+          "settings",
+          "bash-sandbox",
+          "pwsh-sandbox",
+          "tool-bash",
+          "tool-pwsh",
+          "aiclient-bridge",
+          "aiclient-shared-bridge"
+        ]
+      },
+      "marks": {
+        "entry": 32.783538,
+        "modulesLoaded": 92.086233,
+        "profileResolved": 182.852897,
+        "bootResolved": 934.426314
+      }
+    },
+    "stopped": {
+      "type": "stopped",
+      "ms": 25.451547000000005,
+      "reason": "ipc"
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] stopped (ipc) in 25ms\n"
+  },
+  "L1": {
+    "label": "L1",
+    "readyMs": 801,
+    "bootstrap": {
+      "bootstrapped": true
+    },
+    "ready": {
+      "execPath": "<home>/code/ai-client/out-node-runtime/node",
+      "artifact": {
+        "form": "packaged",
+        "version": "0.1.0",
+        "dsh": "0.1.7-rc.2",
+        "target": {
+          "platform": "linux",
+          "arch": "x64"
+        },
+        "gitCommit": "d833115fe9413e5de256771f1d51f3af07d30bd5+dirty",
+        "builtAt": "2026-09-27T06:48:04.023Z"
+      },
+      "bundles": ["@deepseek-ai/dsh-base", "@aiclient/dsh-app"],
+      "census": {
+        "active": 77,
+        "disabled": 19,
+        "inactive": []
+      }
+    },
+    "fs": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/marker.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-a06dd067 plaintext line\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-a06dd067 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "edit",
+          "ok": true,
+          "text": "The file /var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/edit-target.txt has been updated successfully."
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/edit-target.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-a06dd067 EDITED-2189d1 edit target\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/dsh-written-2189d1.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/dsh-written-2189d1.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-a06dd067 WRITTEN-2189d1\n\n(End of file - total 1 lines)\n</content>"
+        },
+        {
+          "name": "grep",
+          "ok": true,
+          "text": "Found 3 matches\n\ndsh-written-2189d1.txt\nLine 1: P12-MARKER-a06dd067 WRITTEN-2189d1\n\nedit-target.txt\nLine 1: P12-MARKER-a06dd067 EDITED-2189d1 edit target\n\nmarker.txt\nLine 1: P12-MARKER-a06dd067 plaintext line"
+        },
+        {
+          "name": "glob",
+          "ok": true,
+          "text": "marker.txt\nedit-target.txt\ndsh-written-2189d1.txt"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "P12-MARKER-a06dd067 plaintext line\n"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "(no output)"
+        },
+        {
+          "name": "bash",
+          "ok": true,
+          "text": "e 1218 2189d1\nspill-line 1219 2189d1\nspill-line 1220 2189d1\nspill-line 1221 2189d1\nspill-line 1222 2189d1\nspill-line 1223 2189d1\nspill-line 1224 2189d1\nspill-line 1225 2189d1\nspill-line 1226 2189d1\nspill-line 1227 2189d1\nspill-line 1228 2189d1\nspill-line 1229 2189d1\nspill-line 1230 2189d1\nspill-line 1231 2189d1\nspill-line 1232 2189d1\nspill-line 1233 2189d1\nspill-line 1234 2189d1\nspill-line 1235 2189d1\nspill-line 1236 2189d1\nspill-line 1237 2189d1\nspill-line 1238 2189d1\nspill-line 1239 2189d1\nspill-line 1240 2189d1\nspill-line 1241 2189d1\nspill-line 1242 2189d1\nspill-line 1243 2189d1\nspill-line 1244 2189d1\nspill-line 1245 2189d1\nspill-line 1246 2189d1\nspill-line 1247 2189d1\nspill-line 1248 2189d1\nspill-line 1249 2189d1\nspill-line 1250 2189d1\nspill-line 1251 2189d1\nspill-line 1252 2189d1\nspill-line 1253 2189d1\nspill-line 1254 2189d1\nspill-line 1255 2189d1\nspill-line 1256 2189d1\nspill-line 1257 2189d1\nspill-line 1258 2189d1\nspill-line 1259 2189d1\nspill-line 1260 2189d1\nspill-line 1261 2189d1\nspill-line 1262 2189d1\nspill-line 1263 2189d1\nspill-line 1264 2189d1\nspill-line 1265 2189d1\nspill-line 1266 2189d1\nspill-line 1267 2189d1\nspill-line 1268 2189d1\nspill-line 1269 2189d1\nspill-line 1270 2189d1\nspill-line 1271 2189d1\nspill-line 1272 2189d1\nspill-line 1273 2189d1\nspill-line 1274 2189d1\nspill-line 1275 2189d1\nspill-line 1276 2189d1\nspill-line 1277 2189d1\nspill-line 1278 2189d1\nspill-line 1279 2189d1\nspill-line 1280 2189d1\nspill-line 1281 2189d1\nspill-line 1282 2189d1\nspill-line 1283 2189d1\nspill-line 1284 2189d1\nspill-line 1285 2189d1\nspill-line 1286 2189d1\nspill-line 1287 2189d1\nspill-line 1288 2189d1\nspill-line 1289 2189d1\nspill-line 1290 2189d1\nspill-line 1291 2189d1\nspill-line 1292 2189d1\nspill-line 1293 2189d1\nspill-line 1294 2189d1\nspill-line 1295 2189d1\nspill-line 1296 2189d1\nspill-line 1297 2189d1\nspill-line 1298 2189d1\nspill-line 1299 2189d1\nspill-line 1300 2189d1\nspill-line 1301 2189d1\nspill-line 1302 2189d1\nspill-line 1303 2189d1\nspill-line 1304 2189d1\nspill-line 1305 2189d1\nspill-line 1306 2189d1\nspill-line 1307 2189d1\nspill-line 1308 2189d1\nspill-line 1309 2189d1\nspill-line 1310 2189d1\nspill-line 1311 2189d1\nspill-line 1312 2189d1\nspill-line 1313 2189d1\nspill-line 1314 2189d1\nspill-line 1315 2189d1\nspill-line 1316 2189d1\nspill-line 1317 2189d1\nspill-line 1318 2189d1\nspill-line 1319 2189d1\nspill-line 1320 2189d1\nspill-line 1321 2189d1\nspill-line 1322 2189d1\nspill-line 1323 2189d1\nspill-line 1324 2189d1\nspill-line 1325 2189d1\nspill-line 1326 2189d1\nspill-line 1327 2189d1\nspill-line 1328 2189d1\nspill-line 1329 2189d1\nspill-line 1330 2189d1\nspill-line 1331 2189d1\nspill-line 1332 2189d1\nspill-line 1333 2189d1\nspill-line 1334 2189d1\nspill-line 1335 2189d1\nspill-line 1336 2189d1\nspill-line 1337 2189d1\nspill-line 1338 2189d1\nspill-line 1339 2189d1\nspill-line 1340 2189d1\nspill-line 1341 2189d1\nspill-line 1342 2189d1\nspill-line 1343 2189d1\nspill-line 1344 2189d1\nspill-line 1345 2189d1\nspill-line 1346 2189d1\nspill-line 1347 2189d1\nspill-line 1348 2189d1\nspill-line 1349 2189d1\nspill-line 1350 2189d1\nspill-line 1351 2189d1\nspill-line 1352 2189d1\nspill-line 1353 2189d1\nspill-line 1354 2189d1\nspill-line 1355 2189d1\nspill-line 1356 2189d1\nspill-line 1357 2189d1\nspill-line 1358 2189d1\nspill-line 1359 2189d1\nspill-line 1360 2189d1\nspill-line 1361 2189d1\nspill-line 1362 2189d1\nspill-line 1363 2189d1\nspill-line 1364 2189d1\nspill-line 1365 2189d1\nspill-line 1366 2189d1\nspill-line 1367 2189d1\nspill-line 1368 2189d1\nspill-line 1369 2189d1\nspill-line 1370 2189d1\nspill-line 1371 2189d1\nspill-line 1372 2189d1\nspill-line 1373 2189d1\nspill-line 1374 2189d1\nspill-line 1375 2189d1\nspill-line 1376 2189d1\nspill-line 1377 2189d1\nspill-line 1378 2189d1\nspill-line 1379 2189d1\nspill-line 1380 2189d1\nspill-line 1381 2189d1\nspill-line 1382 2189d1\nspill-line 1383 2189d1\nspill-line 1384 2189d1\nspill-line 1385 2189d1\nspill-line 1386 2189d1\nspill-line 1387 2189d1\nspill-line 1388 2189d1\nspill-line 1389 2189d1\nspill-line 1390 2189d1\nspill-line 1391 2189d1\nspill-line 1392 2189d1\nspill-line 1393 2189d1\nspill-line 1394 2189d1\nspill-line 1395 2189d1\nspill-line 1396 2189d1\nspill-line 1397 2189d1\nspill-line 1398 2189d1\nspill-line 1399 2189d1\nspill-line 1400 2189d1\nspill-line 1401 2189d1\nspill-line 1402 2189d1\nspill-line 1403 2189d1\nspill-line 1404 2189d1\nspill-line 1405 2189d1\nspill-line 1406 2189d1\nspill-line 1407 2189d1\nspill-line 1408 2189d1\nspill-line 1409 2189d1\nspill-line 1410 2189d1\nspill-line 1411 2189d1\nspill-line 1412 2189d1\nspill-line 1413 2189d1\nspill-line 1414 2189d1\nspill-line 1415 2189d1\nspill-line 1416 2189d1\nspill-line 1417 2189d1\nspill-line 1418 2189d1\nspill-line 1419 2189d1\nspill-line 1420 2189d1\nspill-line 1421 2189d1\nspill-line 1422 2189d1\nspill-line 1423 2189d1\nspill-line 1424 2189d1\nspill-line 1425 2189d1\nspill-line 1426 2189d1\nspill-line 1427 2189d1\nspill-line 1428 2189d1\nspill-line 1429 2189d1\nspill-line 1430 2189d1\nspill-line 1431 2189d1\nspill-line 1432 2189d1\nspill-line 1433 2189d1\nspill-line 1434 2189d1\nspill-line 1435 2189d1\nspill-line 1436 2189d1\nspill-line 1437 2189d1\nspill-line 1438 2189d1\nspill-line 1439 2189d1\nspill-line 1440 2189d1\nspill-line 1441 2189d1\nspill-line 1442 2189d1\nspill-line 1443 2189d1\nspill-line 1444 2189d1\nspill-line 1445 2189d1\nspill-line 1446 2189d1\nspill-line 1447 2189d1\nspill-line 1448 2189d1\nspill-line 1449 2189d1\nspill-line 1450 2189d1\nspill-line 1451 2189d1\nspill-line 1452 2189d1\nspill-line 1453 2189d1\nspill-line 1454 2189d1\nspill-line 1455 2189d1\nspill-line 1456 2189d1\nspill-line 1457 2189d1\nspill-line 1458 2189d1\nspill-line 1459 2189d1\nspill-line 1460 2189d1\nspill-line 1461 2189d1\nspill-line 1462 2189d1\nspill-line 1463 2189d1\nspill-line 1464 2189d1\nspill-line 1465 2189d1\nspill-line 1466 2189d1\nspill-line 1467 2189d1\nspill-line 1468 2189d1\nspill-line 1469 2189d1\nspill-line 1470 2189d1\nspill-line 1471 2189d1\nspill-line 1472 2189d1\nspill-line 1473 2189d1\nspill-line 1474 2189d1\nspill-line 1475 2189d1\nspill-line 1476 2189d1\nspill-line 1477 2189d1\nspill-line 1478 2189d1\nspill-line 1479 2189d1\nspill-line 1480 2189d1\nspill-line 1481 2189d1\nspill-line 1482 2189d1\nspill-line 1483 2189d1\nspill-line 1484 2189d1\nspill-line 1485 2189d1\nspill-line 1486 2189d1\nspill-line 1487 2189d1\nspill-line 1488 2189d1\nspill-line 1489 2189d1\nspill-line 1490 2189d1\nspill-line 1491 2189d1\nspill-line 1492 2189d1\nspill-line 1493 2189d1\nspill-line 1494 2189d1\nspill-line 1495 2189d1\nspill-line 1496 2189d1\nspill-line 1497 2189d1\nspill-line 1498 2189d1\nspill-line 1499 2189d1\nspill-line 1500 2189d1\nspill-line 1501 2189d1\nspill-line 1502 2189d1\nspill-line 1503 2189d1\nspill-line 1504 2189d1\nspill-line 1505 2189d1\nspill-line 1506 2189d1\nspill-line 1507 2189d1\nspill-line 1508 2189d1\nspill-line 1509 2189d1\nspill-line 1510 2189d1\nspill-line 1511 2189d1\nspill-line 1512 2189d1\nspill-line 1513 2189d1\nspill-line 1514 2189d1\nspill-line 1515 2189d1\nspill-line 1516 2189d1\nspill-line 1517 2189d1\nspill-line 1518 2189d1\nspill-line 1519 2189d1\nspill-line 1520 2189d1\nspill-line 1521 2189d1\nspill-line 1522 2189d1\nspill-line 1523 2189d1\nspill-line 1524 2189d1\nspill-line 1525 2189d1\nspill-line 1526 2189d1\nspill-line 1527 2189d1\nspill-line 1528 2189d1\nspill-line 1529 2189d1\nspill-line 1530 2189d1\nspill-line 1531 2189d1\nspill-line 1532 2189d1\nspill-line 1533 2189d1\nspill-line 1534 2189d1\nspill-line 1535 2189d1\nspill-line 1536 2189d1\nspill-line 1537 2189d1\nspill-line 1538 2189d1\nspill-line 1539 2189d1\nspill-line 1540 2189d1\nspill-line 1541 2189d1\nspill-line 1542 2189d1\nspill-line 1543 2189d1\nspill-line 1544 2189d1\nspill-line 1545 2189d1\nspill-line 1546 2189d1\nspill-line 1547 2189d1\nspill-line 1548 2189d1\nspill-line 1549 2189d1\nspill-line 1550 2189d1\nspill-line 1551 2189d1\nspill-line 1552 2189d1\nspill-line 1553 2189d1\nspill-line 1554 2189d1\nspill-line 1555 2189d1\nspill-line 1556 2189d1\nspill-line 1557 2189d1\nspill-line 1558 2189d1\nspill-line 1559 2189d1\nspill-line 1560 2189d1\nspill-line 1561 2189d1\nspill-line 1562 2189d1\nspill-line 1563 2189d1\nspill-line 1564 2189d1\nspill-line 1565 2189d1\nspill-line 1566 2189d1\nspill-line 1567 2189d1\nspill-line 1568 2189d1\nspill-line 1569 2189d1\nspill-line 1570 2189d1\nspill-line 1571 2189d1\nspill-line 1572 2189d1\nspill-line 1573 2189d1\nspill-line 1574 2189d1\nspill-line 1575 2189d1\nspill-line 1576 2189d1\nspill-line 1577 2189d1\nspill-line 1578 2189d1\nspill-line 1579 2189d1\nspill-line 1580 2189d1\nspill-line 1581 2189d1\nspill-line 1582 2189d1\nspill-line 1583 2189d1\nspill-line 1584 2189d1\nspill-line 1585 2189d1\nspill-line 1586 2189d1\nspill-line 1587 2189d1\nspill-line 1588 2189d1\nspill-line 1589 2189d1\nspill-line 1590 2189d1\nspill-line 1591 2189d1\nspill-line 1592 2189d1\nspill-line 1593 2189d1\nspill-line 1594 2189d1\nspill-line 1595 2189d1\nspill-line 1596 2189d1\nspill-line 1597 2189d1\nspill-line 1598 2189d1\nspill-line 1599 2189d1\nspill-line 1600 2189d1\nspill-line 1601 2189d1\nspill-line 1602 2189d1\nspill-line 1603 2189d1\nspill-line 1604 2189d1\nspill-line 1605 2189d1\nspill-line 1606 2189d1\nspill-line 1607 2189d1\nspill-line 1608 2189d1\nspill-line 1609 2189d1\nspill-line 1610 2189d1\nspill-line 1611 2189d1\nspill-line 1612 2189d1\nspill-line 1613 2189d1\nspill-line 1614 2189d1\nspill-line 1615 2189d1\nspill-line 1616 2189d1\nspill-line 1617 2189d1\nspill-line 1618 2189d1\nspill-line 1619 2189d1\nspill-line 1620 2189d1\nspill-line 1621 2189d1\nspill-line 1622 2189d1\nspill-line 1623 2189d1\nspill-line 1624 2189d1\nspill-line 1625 2189d1\nspill-line 1626 2189d1\nspill-line 1627 2189d1\nspill-line 1628 2189d1\nspill-line 1629 2189d1\nspill-line 1630 2189d1\nspill-line 1631 2189d1\nspill-line 1632 2189d1\nspill-line 1633 2189d1\nspill-line 1634 2189d1\nspill-line 1635 2189d1\nspill-line 1636 2189d1\nspill-line 1637 2189d1\nspill-line 1638 2189d1\nspill-line 1639 2189d1\nspill-line 1640 2189d1\nspill-line 1641 2189d1\nspill-line 1642 2189d1\nspill-line 1643 2189d1\nspill-line 1644 2189d1\nspill-line 1645 2189d1\nspill-line 1646 2189d1\nspill-line 1647 2189d1\nspill-line 1648 2189d1\nspill-line 1649 2189d1\nspill-line 1650 2189d1\nspill-line 1651 2189d1\nspill-line 1652 2189d1\nspill-line 1653 2189d1\nspill-line 1654 2189d1\nspill-line 1655 2189d1\nspill-line 1656 2189d1\nspill-line 1657 2189d1\nspill-line 1658 2189d1\nspill-line 1659 2189d1\nspill-line 1660 2189d1\nspill-line 1661 2189d1\nspill-line 1662 2189d1\nspill-line 1663 2189d1\nspill-line 1664 2189d1\nspill-line 1665 2189d1\nspill-line 1666 2189d1\nspill-line 1667 2189d1\nspill-line 1668 2189d1\nspill-line 1669 2189d1\nspill-line 1670 2189d1\nspill-line 1671 2189d1\nspill-line 1672 2189d1\nspill-line 1673 2189d1\nspill-line 1674 2189d1\nspill-line 1675 2189d1\nspill-line 1676 2189d1\nspill-line 1677 2189d1\nspill-line 1678 2189d1\nspill-line 1679 2189d1\nspill-line 1680 2189d1\nspill-line 1681 2189d1\nspill-line 1682 2189d1\nspill-line 1683 2189d1\nspill-line 1684 2189d1\nspill-line 1685 2189d1\nspill-line 1686 2189d1\nspill-line 1687 2189d1\nspill-line 1688 2189d1\nspill-line 1689 2189d1\nspill-line 1690 2189d1\nspill-line 1691 2189d1\nspill-line 1692 2189d1\nspill-line 1693 2189d1\nspill-line 1694 2189d1\nspill-line 1695 2189d1\nspill-line 1696 2189d1\nspill-line 1697 2189d1\nspill-line 1698 2189d1\nspill-line 1699 2189d1\nspill-line 1700 2189d1\nspill-line 1701 2189d1\nspill-line 1702 2189d1\nspill-line 1703 2189d1\nspill-line 1704 2189d1\nspill-line 1705 2189d1\nspill-line 1706 2189d1\nspill-line 1707 2189d1\nspill-line 1708 2189d1\nspill-line 1709 2189d1\nspill-line 1710 2189d1\nspill-line 1711 2189d1\nspill-line 1712 2189d1\nspill-line 1713 2189d1\nspill-line 1714 2189d1\nspill-line 1715 2189d1\nspill-line 1716 2189d1\nspill-line 1717 2189d1\nspill-line 1718 2189d1\nspill-line 1719 2189d1\nspill-line 1720 2189d1\nspill-line 1721 2189d1\nspill-line 1722 2189d1\nspill-line 1723 2189d1\nspill-line 1724 2189d1\nspill-line 1725 2189d1\nspill-line 1726 2189d1\nspill-line 1727 2189d1\nspill-line 1728 2189d1\nspill-line 1729 2189d1\nspill-line 1730 2189d1\nspill-line 1731 2189d1\nspill-line 1732 2189d1\nspill-line 1733 2189d1\nspill-line 1734 2189d1\nspill-line 1735 2189d1\nspill-line 1736 2189d1\nspill-line 1737 2189d1\nspill-line 1738 2189d1\nspill-line 1739 2189d1\nspill-line 1740 2189d1\nspill-line 1741 2189d1\nspill-line 1742 2189d1\nspill-line 1743 2189d1\nspill-line 1744 2189d1\nspill-line 1745 2189d1\nspill-line 1746 2189d1\nspill-line 1747 2189d1\nspill-line 1748 2189d1\nspill-line 1749 2189d1\nspill-line 1750 2189d1\nspill-line 1751 2189d1\nspill-line 1752 2189d1\nspill-line 1753 2189d1\nspill-line 1754 2189d1\nspill-line 1755 2189d1\nspill-line 1756 2189d1\nspill-line 1757 2189d1\nspill-line 1758 2189d1\nspill-line 1759 2189d1\nspill-line 1760 2189d1\nspill-line 1761 2189d1\nspill-line 1762 2189d1\nspill-line 1763 2189d1\nspill-line 1764 2189d1\nspill-line 1765 2189d1\nspill-line 1766 2189d1\nspill-line 1767 2189d1\nspill-line 1768 2189d1\nspill-line 1769 2189d1\nspill-line 1770 2189d1\nspill-line 1771 2189d1\nspill-line 1772 2189d1\nspill-line 1773 2189d1\nspill-line 1774 2189d1\nspill-line 1775 2189d1\nspill-line 1776 2189d1\nspill-line 1777 2189d1\nspill-line 1778 2189d1\nspill-line 1779 2189d1\nspill-line 1780 2189d1\nspill-line 1781 2189d1\nspill-line 1782 2189d1\nspill-line 1783 2189d1\nspill-line 1784 2189d1\nspill-line 1785 2189d1\nspill-line 1786 2189d1\nspill-line 1787 2189d1\nspill-line 1788 2189d1\nspill-line 1789 2189d1\nspill-line 1790 2189d1\nspill-line 1791 2189d1\nspill-line 1792 2189d1\nspill-line 1793 2189d1\nspill-line 1794 2189d1\nspill-line 1795 2189d1\nspill-line 1796 2189d1\nspill-line 1797 2189d1\nspill-line 1798 2189d1\nspill-line 1799 2189d1\nspill-line 1800 2189d1\nspill-line 1801 2189d1\nspill-line 1802 2189d1\nspill-line 1803 2189d1\nspill-line 1804 2189d1\nspill-line 1805 2189d1\nspill-line 1806 2189d1\nspill-line 1807 2189d1\nspill-line 1808 2189d1\nspill-line 1809 2189d1\nspill-line 1810 2189d1\nspill-line 1811 2189d1\nspill-line 1812 2189d1\nspill-line 1813 2189d1\nspill-line 1814 2189d1\nspill-line 1815 2189d1\nspill-line 1816 2189d1\nspill-line 1817 2189d1\nspill-line 1818 2189d1\nspill-line 1819 2189d1\nspill-line 1820 2189d1\nspill-line 1821 2189d1\nspill-line 1822 2189d1\nspill-line 1823 2189d1\nspill-line 1824 2189d1\nspill-line 1825 2189d1\nspill-line 1826 2189d1\nspill-line 1827 2189d1\nspill-line 1828 2189d1\nspill-line 1829 2189d1\nspill-line 1830 2189d1\nspill-line 1831 2189d1\nspill-line 1832 2189d1\nspill-line 1833 2189d1\nspill-line 1834 2189d1\nspill-line 1835 2189d1\nspill-line 1836 2189d1\nspill-line 1837 2189d1\nspill-line 1838 2189d1\nspill-line 1839 2189d1\nspill-line 1840 2189d1\nspill-line 1841 2189d1\nspill-line 1842 2189d1\nspill-line 1843 2189d1\nspill-line 1844 2189d1\nspill-line 1845 2189d1\nspill-line 1846 2189d1\nspill-line 1847 2189d1\nspill-line 1848 2189d1\nspill-line 1849 2189d1\nspill-line 1850 2189d1\nspill-line 1851 2189d1\nspill-line 1852 2189d1\nspill-line 1853 2189d1\nspill-line 1854 2189d1\nspill-line 1855 2189d1\nspill-line 1856 2189d1\nspill-line 1857 2189d1\nspill-line 1858 2189d1\nspill-line 1859 2189d1\nspill-line 1860 2189d1\nspill-line 1861 2189d1\nspill-line 1862 2189d1\nspill-line 1863 2189d1\nspill-line 1864 2189d1\nspill-line 1865 2189d1\nspill-line 1866 2189d1\nspill-line 1867 2189d1\nspill-line 1868 2189d1\nspill-line 1869 2189d1\nspill-line 1870 2189d1\nspill-line 1871 2189d1\nspill-line 1872 2189d1\nspill-line 1873 2189d1\nspill-line 1874 2189d1\nspill-line 1875 2189d1\nspill-line 1876 2189d1\nspill-line 1877 2189d1\nspill-line 1878 2189d1\nspill-line 1879 2189d1\nspill-line 1880 2189d1\nspill-line 1881 2189d1\nspill-line 1882 2189d1\nspill-line 1883 2189d1\nspill-line 1884 2189d1\nspill-line 1885 2189d1\nspill-line 1886 2189d1\nspill-line 1887 2189d1\nspill-line 1888 2189d1\nspill-line 1889 2189d1\nspill-line 1890 2189d1\nspill-line 1891 2189d1\nspill-line 1892 2189d1\nspill-line 1893 2189d1\nspill-line 1894 2189d1\nspill-line 1895 2189d1\nspill-line 1896 2189d1\nspill-line 1897 2189d1\nspill-line 1898 2189d1\nspill-line 1899 2189d1\nspill-line 1900 2189d1\nspill-line 1901 2189d1\nspill-line 1902 2189d1\nspill-line 1903 2189d1\nspill-line 1904 2189d1\nspill-line 1905 2189d1\nspill-line 1906 2189d1\nspill-line 1907 2189d1\nspill-line 1908 2189d1\nspill-line 1909 2189d1\nspill-line 1910 2189d1\nspill-line 1911 2189d1\nspill-line 1912 2189d1\nspill-line 1913 2189d1\nspill-line 1914 2189d1\nspill-line 1915 2189d1\nspill-line 1916 2189d1\nspill-line 1917 2189d1\nspill-line 1918 2189d1\nspill-line 1919 2189d1\nspill-line 1920 2189d1\nspill-line 1921 2189d1\nspill-line 1922 2189d1\nspill-line 1923 2189d1\nspill-line 1924 2189d1\nspill-line 1925 2189d1\nspill-line 1926 2189d1\nspill-line 1927 2189d1\nspill-line 1928 2189d1\nspill-line 1929 2189d1\nspill-line 1930 2189d1\nspill-line 1931 2189d1\nspill-line 1932 2189d1\nspill-line 1933 2189d1\nspill-line 1934 2189d1\nspill-line 1935 2189d1\nspill-line 1936 2189d1\nspill-line 1937 2189d1\nspill-line 1938 2189d1\nspill-line 1939 2189d1\nspill-line 1940 2189d1\nspill-line 1941 2189d1\nspill-line 1942 2189d1\nspill-line 1943 2189d1\nspill-line 1944 2189d1\nspill-line 1945 2189d1\nspill-line 1946 2189d1\nspill-line 1947 2189d1\nspill-line 1948 2189d1\nspill-line 1949 2189d1\nspill-line 1950 2189d1\nspill-line 1951 2189d1\nspill-line 1952 2189d1\nspill-line 1953 2189d1\nspill-line 1954 2189d1\nspill-line 1955 2189d1\nspill-line 1956 2189d1\nspill-line 1957 2189d1\nspill-line 1958 2189d1\nspill-line 1959 2189d1\nspill-line 1960 2189d1\nspill-line 1961 2189d1\nspill-line 1962 2189d1\nspill-line 1963 2189d1\nspill-line 1964 2189d1\nspill-line 1965 2189d1\nspill-line 1966 2189d1\nspill-line 1967 2189d1\nspill-line 1968 2189d1\nspill-line 1969 2189d1\nspill-line 1970 2189d1\nspill-line 1971 2189d1\nspill-line 1972 2189d1\nspill-line 1973 2189d1\nspill-line 1974 2189d1\nspill-line 1975 2189d1\nspill-line 1976 2189d1\nspill-line 1977 2189d1\nspill-line 1978 2189d1\nspill-line 1979 2189d1\nspill-line 1980 2189d1\nspill-line 1981 2189d1\nspill-line 1982 2189d1\nspill-line 1983 2189d1\nspill-line 1984 2189d1\nspill-line 1985 2189d1\nspill-line 1986 2189d1\nspill-line 1987 2189d1\nspill-line 1988 2189d1\nspill-line 1989 2189d1\nspill-line 1990 2189d1\nspill-line 1991 2189d1\nspill-line 1992 2189d1\nspill-line 1993 2189d1\nspill-line 1994 2189d1\nspill-line 1995 2189d1\nspill-line 1996 2189d1\nspill-line 1997 2189d1\nspill-line 1998 2189d1\nspill-line 1999 2189d1\nspill-line 2000 2189d1\nspill-line 2001 2189d1\nspill-line 2002 2189d1\nspill-line 2003 2189d1\nspill-line 2004 2189d1\nspill-line 2005 2189d1\nspill-line 2006 2189d1\nspill-line 2007 2189d1\nspill-line 2008 2189d1\nspill-line 2009 2189d1\nspill-line 2010 2189d1\nspill-line 2011 2189d1\nspill-line 2012 2189d1\nspill-line 2013 2189d1\nspill-line 2014 2189d1\nspill-line 2015 2189d1\nspill-line 2016 2189d1\nspill-line 2017 2189d1\nspill-line 2018 2189d1\nspill-line 2019 2189d1\nspill-line 2020 2189d1\nspill-line 2021 2189d1\nspill-line 2022 2189d1\nspill-line 2023 2189d1\nspill-line 2024 2189d1\nspill-line 2025 2189d1\nspill-line 2026 2189d1\nspill-line 2027 2189d1\nspill-line 2028 2189d1\nspill-line 2029 2189d1\nspill-line 2030 2189d1\nspill-line 2031 2189d1\nspill-line 2032 2189d1\nspill-line 2033 2189d1\nspill-line 2034 2189d1\nspill-line 2035 2189d1\nspill-line 2036 2189d1\nspill-line 2037 2189d1\nspill-line 2038 2189d1\nspill-line 2039 2189d1\nspill-line 2040 2189d1\nspill-line 2041 2189d1\nspill-line 2042 2189d1\nspill-line 2043 2189d1\nspill-line 2044 2189d1\nspill-line 2045 2189d1\nspill-line 2046 2189d1\nspill-line 2047 2189d1\nspill-line 2048 2189d1\nspill-line 2049 2189d1\nspill-line 2050 2189d1\nspill-line 2051 2189d1\nspill-line 2052 2189d1\nspill-line 2053 2189d1\nspill-line 2054 2189d1\nspill-line 2055 2189d1\nspill-line 2056 2189d1\nspill-line 2057 2189d1\nspill-line 2058 2189d1\nspill-line 2059 2189d1\nspill-line 2060 2189d1\nspill-line 2061 2189d1\nspill-line 2062 2189d1\nspill-line 2063 2189d1\nspill-line 2064 2189d1\nspill-line 2065 2189d1\nspill-line 2066 2189d1\nspill-line 2067 2189d1\nspill-line 2068 2189d1\nspill-line 2069 2189d1\nspill-line 2070 2189d1\nspill-line 2071 2189d1\nspill-line 2072 2189d1\nspill-line 2073 2189d1\nspill-line 2074 2189d1\nspill-line 2075 2189d1\nspill-line 2076 2189d1\nspill-line 2077 2189d1\nspill-line 2078 2189d1\nspill-line 2079 2189d1\nspill-line 2080 2189d1\nspill-line 2081 2189d1\nspill-line 2082 2189d1\nspill-line 2083 2189d1\nspill-line 2084 2189d1\nspill-line 2085 2189d1\nspill-line 2086 2189d1\nspill-line 2087 2189d1\nspill-line 2088 2189d1\nspill-line 2089 2189d1\nspill-line 2090 2189d1\nspill-line 2091 2189d1\nspill-line 2092 2189d1\nspill-line 2093 2189d1\nspill-line 2094 2189d1\nspill-line 2095 2189d1\nspill-line 2096 2189d1\nspill-line 2097 2189d1\nspill-line 2098 2189d1\nspill-line 2099 2189d1\nspill-line 2100 2189d1\nspill-line 2101 2189d1\nspill-line 2102 2189d1\nspill-line 2103 2189d1\nspill-line 2104 2189d1\nspill-line 2105 2189d1\nspill-line 2106 2189d1\nspill-line 2107 2189d1\nspill-line 2108 2189d1\nspill-line 2109 2189d1\nspill-line 2110 2189d1\nspill-line 2111 2189d1\nspill-line 2112 2189d1\nspill-line 2113 2189d1\nspill-line 2114 2189d1\nspill-line 2115 2189d1\nspill-line 2116 2189d1\nspill-line 2117 2189d1\nspill-line 2118 2189d1\nspill-line 2119 2189d1\nspill-line 2120 2189d1\nspill-line 2121 2189d1\nspill-line 2122 2189d1\nspill-line 2123 2189d1\nspill-line 2124 2189d1\nspill-line 2125 2189d1\nspill-line 2126 2189d1\nspill-line 2127 2189d1\nspill-line 2128 2189d1\nspill-line 2129 2189d1\nspill-line 2130 2189d1\nspill-line 2131 2189d1\nspill-line 2132 2189d1\nspill-line 2133 2189d1\nspill-line 2134 2189d1\nspill-line 2135 2189d1\nspill-line 2136 2189d1\nspill-line 2137 2189d1\nspill-line 2138 2189d1\nspill-line 2139 2189d1\nspill-line 2140 2189d1\nspill-line 2141 2189d1\nspill-line 2142 2189d1\nspill-line 2143 2189d1\nspill-line 2144 2189d1\nspill-line 2145 2189d1\nspill-line 2146 2189d1\nspill-line 2147 2189d1\nspill-line 2148 2189d1\nspill-line 2149 2189d1\nspill-line 2150 2189d1\nspill-line 2151 2189d1\nspill-line 2152 2189d1\nspill-line 2153 2189d1\nspill-line 2154 2189d1\nspill-line 2155 2189d1\nspill-line 2156 2189d1\nspill-line 2157 2189d1\nspill-line 2158 2189d1\nspill-line 2159 2189d1\nspill-line 2160 2189d1\nspill-line 2161 2189d1\nspill-line 2162 2189d1\nspill-line 2163 2189d1\nspill-line 2164 2189d1\nspill-line 2165 2189d1\nspill-line 2166 2189d1\nspill-line 2167 2189d1\nspill-line 2168 2189d1\nspill-line 2169 2189d1\nspill-line 2170 2189d1\nspill-line 2171 2189d1\nspill-line 2172 2189d1\nspill-line 2173 2189d1\nspill-line 2174 2189d1\nspill-line 2175 2189d1\nspill-line 2176 2189d1\nspill-line 2177 2189d1\nspill-line 2178 2189d1\nspill-line 2179 2189d1\nspill-line 2180 2189d1\nspill-line 2181 2189d1\nspill-line 2182 2189d1\nspill-line 2183 2189d1\nspill-line 2184 2189d1\nspill-line 2185 2189d1\nspill-line 2186 2189d1\nspill-line 2187 2189d1\nspill-line 2188 2189d1\nspill-line 2189 2189d1\nspill-line 2190 2189d1\nspill-line 2191 2189d1\nspill-line 2192 2189d1\nspill-line 2193 2189d1\nspill-line 2194 2189d1\nspill-line 2195 2189d1\nspill-line 2196 2189d1\nspill-line 2197 2189d1\nspill-line 2198 2189d1\nspill-line 2199 2189d1\nspill-line 2200 2189d1\nspill-line 2201 2189d1\nspill-line 2202 2189d1\nspill-line 2203 2189d1\nspill-line 2204 2189d1\nspill-line 2205 2189d1\nspill-line 2206 2189d1\nspill-line 2207 2189d1\nspill-line 2208 2189d1\nspill-line 2209 2189d1\nspill-line 2210 2189d1\nspill-line 2211 2189d1\nspill-line 2212 2189d1\nspill-line 2213 2189d1\nspill-line 2214 2189d1\nspill-line 2215 2189d1\nspill-line 2216 2189d1\nspill-line 2217 2189d1\nspill-line 2218 2189d1\nspill-line 2219 2189d1\nspill-line 2220 2189d1\nspill-line 2221 2189d1\nspill-line 2222 2189d1\nspill-line 2223 2189d1\nspill-line 2224 2189d1\nspill-line 2225 2189d1\nspill-line 2226 2189d1\nspill-line 2227 2189d1\nspill-line 2228 2189d1\nspill-line 2229 2189d1\nspill-line 2230 2189d1\nspill-line 2231 2189d1\nspill-line 2232 2189d1\nspill-line 2233 2189d1\nspill-line 2234 2189d1\nspill-line 2235 2189d1\nspill-line 2236 2189d1\nspill-line 2237 2189d1\nspill-line 2238 2189d1\nspill-line 2239 2189d1\nspill-line 2240 2189d1\nspill-line 2241 2189d1\nspill-line 2242 2189d1\nspill-line 2243 2189d1\nspill-line 2244 2189d1\nspill-line 2245 2189d1\nspill-line 2246 2189d1\nspill-line 2247 2189d1\nspill-line 2248 2189d1\nspill-line 2249 2189d1\nspill-line 2250 2189d1\nspill-line 2251 2189d1\nspill-line 2252 2189d1\nspill-line 2253 2189d1\nspill-line 2254 2189d1\nspill-line 2255 2189d1\nspill-line 2256 2189d1\nspill-line 2257 2189d1\nspill-line 2258 2189d1\nspill-line 2259 2189d1\nspill-line 2260 2189d1\nspill-line 2261 2189d1\nspill-line 2262 2189d1\nspill-line 2263 2189d1\nspill-line 2264 2189d1\nspill-line 2265 2189d1\nspill-line 2266 2189d1\nspill-line 2267 2189d1\nspill-line 2268 2189d1\nspill-line 2269 2189d1\nspill-line 2270 2189d1\nspill-line 2271 2189d1\nspill-line 2272 2189d1\nspill-line 2273 2189d1\nspill-line 2274 2189d1\nspill-line 2275 2189d1\nspill-line 2276 2189d1\nspill-line 2277 2189d1\nspill-line 2278 2189d1\nspill-line 2279 2189d1\nspill-line 2280 2189d1\nspill-line 2281 2189d1\nspill-line 2282 2189d1\nspill-line 2283 2189d1\nspill-line 2284 2189d1\nspill-line 2285 2189d1\nspill-line 2286 2189d1\nspill-line 2287 2189d1\nspill-line 2288 2189d1\nspill-line 2289 2189d1\nspill-line 2290 2189d1\nspill-line 2291 2189d1\nspill-line 2292 2189d1\nspill-line 2293 2189d1\nspill-line 2294 2189d1\nspill-line 2295 2189d1\nspill-line 2296 2189d1\nspill-line 2297 2189d1\nspill-line 2298 2189d\n\n[...]\n\n89d1\nspill-line 2927 2189d1\nspill-line 2928 2189d1\nspill-line 2929 2189d1\nspill-line 2930 2189d1\nspill-line 2931 2189d1\nspill-line 2932 2189d1\nspill-line 2933 2189d1\nspill-line 2934 2189d1\nspill-line 2935 2189d1\nspill-line 2936 2189d1\nspill-line 2937 2189d1\nspill-line 2938 2189d1\nspill-line 2939 2189d1\nspill-line 2940 2189d1\nspill-line 2941 2189d1\nspill-line 2942 2189d1\nspill-line 2943 2189d1\nspill-line 2944 2189d1\nspill-line 2945 2189d1\nspill-line 2946 2189d1\nspill-line 2947 2189d1\nspill-line 2948 2189d1\nspill-line 2949 2189d1\nspill-line 2950 2189d1\nspill-line 2951 2189d1\nspill-line 2952 2189d1\nspill-line 2953 2189d1\nspill-line 2954 2189d1\nspill-line 2955 2189d1\nspill-line 2956 2189d1\nspill-line 2957 2189d1\nspill-line 2958 2189d1\nspill-line 2959 2189d1\nspill-line 2960 2189d1\nspill-line 2961 2189d1\nspill-line 2962 2189d1\nspill-line 2963 2189d1\nspill-line 2964 2189d1\nspill-line 2965 2189d1\nspill-line 2966 2189d1\nspill-line 2967 2189d1\nspill-line 2968 2189d1\nspill-line 2969 2189d1\nspill-line 2970 2189d1\nspill-line 2971 2189d1\nspill-line 2972 2189d1\nspill-line 2973 2189d1\nspill-line 2974 2189d1\nspill-line 2975 2189d1\nspill-line 2976 2189d1\nspill-line 2977 2189d1\nspill-line 2978 2189d1\nspill-line 2979 2189d1\nspill-line 2980 2189d1\nspill-line 2981 2189d1\nspill-line 2982 2189d1\nspill-line 2983 2189d1\nspill-line 2984 2189d1\nspill-line 2985 2189d1\nspill-line 2986 2189d1\nspill-line 2987 2189d1\nspill-line 2988 2189d1\nspill-line 2989 2189d1\nspill-line 2990 2189d1\nspill-line 2991 2189d1\nspill-line 2992 2189d1\nspill-line 2993 2189d1\nspill-line 2994 2189d1\nspill-line 2995 2189d1\nspill-line 2996 2189d1\nspill-line 2997 2189d1\nspill-line 2998 2189d1\nspill-line 2999 2189d1\nspill-line 3000 2189d1\nspill-line 3001 2189d1\nspill-line 3002 2189d1\nspill-line 3003 2189d1\nspill-line 3004 2189d1\nspill-line 3005 2189d1\nspill-line 3006 2189d1\nspill-line 3007 2189d1\nspill-line 3008 2189d1\nspill-line 3009 2189d1\nspill-line 3010 2189d1\nspill-line 3011 2189d1\nspill-line 3012 2189d1\nspill-line 3013 2189d1\nspill-line 3014 2189d1\nspill-line 3015 2189d1\nspill-line 3016 2189d1\nspill-line 3017 2189d1\nspill-line 3018 2189d1\nspill-line 3019 2189d1\nspill-line 3020 2189d1\nspill-line 3021 2189d1\nspill-line 3022 2189d1\nspill-line 3023 2189d1\nspill-line 3024 2189d1\nspill-line 3025 2189d1\nspill-line 3026 2189d1\nspill-line 3027 2189d1\nspill-line 3028 2189d1\nspill-line 3029 2189d1\nspill-line 3030 2189d1\nspill-line 3031 2189d1\nspill-line 3032 2189d1\nspill-line 3033 2189d1\nspill-line 3034 2189d1\nspill-line 3035 2189d1\nspill-line 3036 2189d1\nspill-line 3037 2189d1\nspill-line 3038 2189d1\nspill-line 3039 2189d1\nspill-line 3040 2189d1\nspill-line 3041 2189d1\nspill-line 3042 2189d1\nspill-line 3043 2189d1\nspill-line 3044 2189d1\nspill-line 3045 2189d1\nspill-line 3046 2189d1\nspill-line 3047 2189d1\nspill-line 3048 2189d1\nspill-line 3049 2189d1\nspill-line 3050 2189d1\nspill-line 3051 2189d1\nspill-line 3052 2189d1\nspill-line 3053 2189d1\nspill-line 3054 2189d1\nspill-line 3055 2189d1\nspill-line 3056 2189d1\nspill-line 3057 2189d1\nspill-line 3058 2189d1\nspill-line 3059 2189d1\nspill-line 3060 2189d1\nspill-line 3061 2189d1\nspill-line 3062 2189d1\nspill-line 3063 2189d1\nspill-line 3064 2189d1\nspill-line 3065 2189d1\nspill-line 3066 2189d1\nspill-line 3067 2189d1\nspill-line 3068 2189d1\nspill-line 3069 2189d1\nspill-line 3070 2189d1\nspill-line 3071 2189d1\nspill-line 3072 2189d1\nspill-line 3073 2189d1\nspill-line 3074 2189d1\nspill-line 3075 2189d1\nspill-line 3076 2189d1\nspill-line 3077 2189d1\nspill-line 3078 2189d1\nspill-line 3079 2189d1\nspill-line 3080 2189d1\nspill-line 3081 2189d1\nspill-line 3082 2189d1\nspill-line 3083 2189d1\nspill-line 3084 2189d1\nspill-line 3085 2189d1\nspill-line 3086 2189d1\nspill-line 3087 2189d1\nspill-line 3088 2189d1\nspill-line 3089 2189d1\nspill-line 3090 2189d1\nspill-line 3091 2189d1\nspill-line 3092 2189d1\nspill-line 3093 2189d1\nspill-line 3094 2189d1\nspill-line 3095 2189d1\nspill-line 3096 2189d1\nspill-line 3097 2189d1\nspill-line 3098 2189d1\nspill-line 3099 2189d1\nspill-line 3100 2189d1\nspill-line 3101 2189d1\nspill-line 3102 2189d1\nspill-line 3103 2189d1\nspill-line 3104 2189d1\nspill-line 3105 2189d1\nspill-line 3106 2189d1\nspill-line 3107 2189d1\nspill-line 3108 2189d1\nspill-line 3109 2189d1\nspill-line 3110 2189d1\nspill-line 3111 2189d1\nspill-line 3112 2189d1\nspill-line 3113 2189d1\nspill-line 3114 2189d1\nspill-line 3115 2189d1\nspill-line 3116 2189d1\nspill-line 3117 2189d1\nspill-line 3118 2189d1\nspill-line 3119 2189d1\nspill-line 3120 2189d1\nspill-line 3121 2189d1\nspill-line 3122 2189d1\nspill-line 3123 2189d1\nspill-line 3124 2189d1\nspill-line 3125 2189d1\nspill-line 3126 2189d1\nspill-line 3127 2189d1\nspill-line 3128 2189d1\nspill-line 3129 2189d1\nspill-line 3130 2189d1\nspill-line 3131 2189d1\nspill-line 3132 2189d1\nspill-line 3133 2189d1\nspill-line 3134 2189d1\nspill-line 3135 2189d1\nspill-line 3136 2189d1\nspill-line 3137 2189d1\nspill-line 3138 2189d1\nspill-line 3139 2189d1\nspill-line 3140 2189d1\nspill-line 3141 2189d1\nspill-line 3142 2189d1\nspill-line 3143 2189d1\nspill-line 3144 2189d1\nspill-line 3145 2189d1\nspill-line 3146 2189d1\nspill-line 3147 2189d1\nspill-line 3148 2189d1\nspill-line 3149 2189d1\nspill-line 3150 2189d1\nspill-line 3151 2189d1\nspill-line 3152 2189d1\nspill-line 3153 2189d1\nspill-line 3154 2189d1\nspill-line 3155 2189d1\nspill-line 3156 2189d1\nspill-line 3157 2189d1\nspill-line 3158 2189d1\nspill-line 3159 2189d1\nspill-line 3160 2189d1\nspill-line 3161 2189d1\nspill-line 3162 2189d1\nspill-line 3163 2189d1\nspill-line 3164 2189d1\nspill-line 3165 2189d1\nspill-line 3166 2189d1\nspill-line 3167 2189d1\nspill-line 3168 2189d1\nspill-line 3169 2189d1\nspill-line 3170 2189d1\nspill-line 3171 2189d1\nspill-line 3172 2189d1\nspill-line 3173 2189d1\nspill-line 3174 2189d1\nspill-line 3175 2189d1\nspill-line 3176 2189d1\nspill-line 3177 2189d1\nspill-line 3178 2189d1\nspill-line 3179 2189d1\nspill-line 3180 2189d1\nspill-line 3181 2189d1\nspill-line 3182 2189d1\nspill-line 3183 2189d1\nspill-line 3184 2189d1\nspill-line 3185 2189d1\nspill-line 3186 2189d1\nspill-line 3187 2189d1\nspill-line 3188 2189d1\nspill-line 3189 2189d1\nspill-line 3190 2189d1\nspill-line 3191 2189d1\nspill-line 3192 2189d1\nspill-line 3193 2189d1\nspill-line 3194 2189d1\nspill-line 3195 2189d1\nspill-line 3196 2189d1\nspill-line 3197 2189d1\nspill-line 3198 2189d1\nspill-line 3199 2189d1\nspill-line 3200 2189d1\nspill-line 3201 2189d1\nspill-line 3202 2189d1\nspill-line 3203 2189d1\nspill-line 3204 2189d1\nspill-line 3205 2189d1\nspill-line 3206 2189d1\nspill-line 3207 2189d1\nspill-line 3208 2189d1\nspill-line 3209 2189d1\nspill-line 3210 2189d1\nspill-line 3211 2189d1\nspill-line 3212 2189d1\nspill-line 3213 2189d1\nspill-line 3214 2189d1\nspill-line 3215 2189d1\nspill-line 3216 2189d1\nspill-line 3217 2189d1\nspill-line 3218 2189d1\nspill-line 3219 2189d1\nspill-line 3220 2189d1\nspill-line 3221 2189d1\nspill-line 3222 2189d1\nspill-line 3223 2189d1\nspill-line 3224 2189d1\nspill-line 3225 2189d1\nspill-line 3226 2189d1\nspill-line 3227 2189d1\nspill-line 3228 2189d1\nspill-line 3229 2189d1\nspill-line 3230 2189d1\nspill-line 3231 2189d1\nspill-line 3232 2189d1\nspill-line 3233 2189d1\nspill-line 3234 2189d1\nspill-line 3235 2189d1\nspill-line 3236 2189d1\nspill-line 3237 2189d1\nspill-line 3238 2189d1\nspill-line 3239 2189d1\nspill-line 3240 2189d1\nspill-line 3241 2189d1\nspill-line 3242 2189d1\nspill-line 3243 2189d1\nspill-line 3244 2189d1\nspill-line 3245 2189d1\nspill-line 3246 2189d1\nspill-line 3247 2189d1\nspill-line 3248 2189d1\nspill-line 3249 2189d1\nspill-line 3250 2189d1\nspill-line 3251 2189d1\nspill-line 3252 2189d1\nspill-line 3253 2189d1\nspill-line 3254 2189d1\nspill-line 3255 2189d1\nspill-line 3256 2189d1\nspill-line 3257 2189d1\nspill-line 3258 2189d1\nspill-line 3259 2189d1\nspill-line 3260 2189d1\nspill-line 3261 2189d1\nspill-line 3262 2189d1\nspill-line 3263 2189d1\nspill-line 3264 2189d1\nspill-line 3265 2189d1\nspill-line 3266 2189d1\nspill-line 3267 2189d1\nspill-line 3268 2189d1\nspill-line 3269 2189d1\nspill-line 3270 2189d1\nspill-line 3271 2189d1\nspill-line 3272 2189d1\nspill-line 3273 2189d1\nspill-line 3274 2189d1\nspill-line 3275 2189d1\nspill-line 3276 2189d1\nspill-line 3277 2189d1\nspill-line 3278 2189d1\nspill-line 3279 2189d1\nspill-line 3280 2189d1\nspill-line 3281 2189d1\nspill-line 3282 2189d1\nspill-line 3283 2189d1\nspill-line 3284 2189d1\nspill-line 3285 2189d1\nspill-line 3286 2189d1\nspill-line 3287 2189d1\nspill-line 3288 2189d1\nspill-line 3289 2189d1\nspill-line 3290 2189d1\nspill-line 3291 2189d1\nspill-line 3292 2189d1\nspill-line 3293 2189d1\nspill-line 3294 2189d1\nspill-line 3295 2189d1\nspill-line 3296 2189d1\nspill-line 3297 2189d1\nspill-line 3298 2189d1\nspill-line 3299 2189d1\nspill-line 3300 2189d1\nspill-line 3301 2189d1\nspill-line 3302 2189d1\nspill-line 3303 2189d1\nspill-line 3304 2189d1\nspill-line 3305 2189d1\nspill-line 3306 2189d1\nspill-line 3307 2189d1\nspill-line 3308 2189d1\nspill-line 3309 2189d1\nspill-line 3310 2189d1\nspill-line 3311 2189d1\nspill-line 3312 2189d1\nspill-line 3313 2189d1\nspill-line 3314 2189d1\nspill-line 3315 2189d1\nspill-line 3316 2189d1\nspill-line 3317 2189d1\nspill-line 3318 2189d1\nspill-line 3319 2189d1\nspill-line 3320 2189d1\nspill-line 3321 2189d1\nspill-line 3322 2189d1\nspill-line 3323 2189d1\nspill-line 3324 2189d1\nspill-line 3325 2189d1\nspill-line 3326 2189d1\nspill-line 3327 2189d1\nspill-line 3328 2189d1\nspill-line 3329 2189d1\nspill-line 3330 2189d1\nspill-line 3331 2189d1\nspill-line 3332 2189d1\nspill-line 3333 2189d1\nspill-line 3334 2189d1\nspill-line 3335 2189d1\nspill-line 3336 2189d1\nspill-line 3337 2189d1\nspill-line 3338 2189d1\nspill-line 3339 2189d1\nspill-line 3340 2189d1\nspill-line 3341 2189d1\nspill-line 3342 2189d1\nspill-line 3343 2189d1\nspill-line 3344 2189d1\nspill-line 3345 2189d1\nspill-line 3346 2189d1\nspill-line 3347 2189d1\nspill-line 3348 2189d1\nspill-line 3349 2189d1\nspill-line 3350 2189d1\nspill-line 3351 2189d1\nspill-line 3352 2189d1\nspill-line 3353 2189d1\nspill-line 3354 2189d1\nspill-line 3355 2189d1\nspill-line 3356 2189d1\nspill-line 3357 2189d1\nspill-line 3358 2189d1\nspill-line 3359 2189d1\nspill-line 3360 2189d1\nspill-line 3361 2189d1\nspill-line 3362 2189d1\nspill-line 3363 2189d1\nspill-line 3364 2189d1\nspill-line 3365 2189d1\nspill-line 3366 2189d1\nspill-line 3367 2189d1\nspill-line 3368 2189d1\nspill-line 3369 2189d1\nspill-line 3370 2189d1\nspill-line 3371 2189d1\nspill-line 3372 2189d1\nspill-line 3373 2189d1\nspill-line 3374 2189d1\nspill-line 3375 2189d1\nspill-line 3376 2189d1\nspill-line 3377 2189d1\nspill-line 3378 2189d1\nspill-line 3379 2189d1\nspill-line 3380 2189d1\nspill-line 3381 2189d1\nspill-line 3382 2189d1\nspill-line 3383 2189d1\nspill-line 3384 2189d1\nspill-line 3385 2189d1\nspill-line 3386 2189d1\nspill-line 3387 2189d1\nspill-line 3388 2189d1\nspill-line 3389 2189d1\nspill-line 3390 2189d1\nspill-line 3391 2189d1\nspill-line 3392 2189d1\nspill-line 3393 2189d1\nspill-line 3394 2189d1\nspill-line 3395 2189d1\nspill-line 3396 2189d1\nspill-line 3397 2189d1\nspill-line 3398 2189d1\nspill-line 3399 2189d1\nspill-line 3400 2189d1\nspill-line 3401 2189d1\nspill-line 3402 2189d1\nspill-line 3403 2189d1\nspill-line 3404 2189d1\nspill-line 3405 2189d1\nspill-line 3406 2189d1\nspill-line 3407 2189d1\nspill-line 3408 2189d1\nspill-line 3409 2189d1\nspill-line 3410 2189d1\nspill-line 3411 2189d1\nspill-line 3412 2189d1\nspill-line 3413 2189d1\nspill-line 3414 2189d1\nspill-line 3415 2189d1\nspill-line 3416 2189d1\nspill-line 3417 2189d1\nspill-line 3418 2189d1\nspill-line 3419 2189d1\nspill-line 3420 2189d1\nspill-line 3421 2189d1\nspill-line 3422 2189d1\nspill-line 3423 2189d1\nspill-line 3424 2189d1\nspill-line 3425 2189d1\nspill-line 3426 2189d1\nspill-line 3427 2189d1\nspill-line 3428 2189d1\nspill-line 3429 2189d1\nspill-line 3430 2189d1\nspill-line 3431 2189d1\nspill-line 3432 2189d1\nspill-line 3433 2189d1\nspill-line 3434 2189d1\nspill-line 3435 2189d1\nspill-line 3436 2189d1\nspill-line 3437 2189d1\nspill-line 3438 2189d1\nspill-line 3439 2189d1\nspill-line 3440 2189d1\nspill-line 3441 2189d1\nspill-line 3442 2189d1\nspill-line 3443 2189d1\nspill-line 3444 2189d1\nspill-line 3445 2189d1\nspill-line 3446 2189d1\nspill-line 3447 2189d1\nspill-line 3448 2189d1\nspill-line 3449 2189d1\nspill-line 3450 2189d1\nspill-line 3451 2189d1\nspill-line 3452 2189d1\nspill-line 3453 2189d1\nspill-line 3454 2189d1\nspill-line 3455 2189d1\nspill-line 3456 2189d1\nspill-line 3457 2189d1\nspill-line 3458 2189d1\nspill-line 3459 2189d1\nspill-line 3460 2189d1\nspill-line 3461 2189d1\nspill-line 3462 2189d1\nspill-line 3463 2189d1\nspill-line 3464 2189d1\nspill-line 3465 2189d1\nspill-line 3466 2189d1\nspill-line 3467 2189d1\nspill-line 3468 2189d1\nspill-line 3469 2189d1\nspill-line 3470 2189d1\nspill-line 3471 2189d1\nspill-line 3472 2189d1\nspill-line 3473 2189d1\nspill-line 3474 2189d1\nspill-line 3475 2189d1\nspill-line 3476 2189d1\nspill-line 3477 2189d1\nspill-line 3478 2189d1\nspill-line 3479 2189d1\nspill-line 3480 2189d1\nspill-line 3481 2189d1\nspill-line 3482 2189d1\nspill-line 3483 2189d1\nspill-line 3484 2189d1\nspill-line 3485 2189d1\nspill-line 3486 2189d1\nspill-line 3487 2189d1\nspill-line 3488 2189d1\nspill-line 3489 2189d1\nspill-line 3490 2189d1\nspill-line 3491 2189d1\nspill-line 3492 2189d1\nspill-line 3493 2189d1\nspill-line 3494 2189d1\nspill-line 3495 2189d1\nspill-line 3496 2189d1\nspill-line 3497 2189d1\nspill-line 3498 2189d1\nspill-line 3499 2189d1\nspill-line 3500 2189d1\nspill-line 3501 2189d1\nspill-line 3502 2189d1\nspill-line 3503 2189d1\nspill-line 3504 2189d1\nspill-line 3505 2189d1\nspill-line 3506 2189d1\nspill-line 3507 2189d1\nspill-line 3508 2189d1\nspill-line 3509 2189d1\nspill-line 3510 2189d1\nspill-line 3511 2189d1\nspill-line 3512 2189d1\nspill-line 3513 2189d1\nspill-line 3514 2189d1\nspill-line 3515 2189d1\nspill-line 3516 2189d1\nspill-line 3517 2189d1\nspill-line 3518 2189d1\nspill-line 3519 2189d1\nspill-line 3520 2189d1\nspill-line 3521 2189d1\nspill-line 3522 2189d1\nspill-line 3523 2189d1\nspill-line 3524 2189d1\nspill-line 3525 2189d1\nspill-line 3526 2189d1\nspill-line 3527 2189d1\nspill-line 3528 2189d1\nspill-line 3529 2189d1\nspill-line 3530 2189d1\nspill-line 3531 2189d1\nspill-line 3532 2189d1\nspill-line 3533 2189d1\nspill-line 3534 2189d1\nspill-line 3535 2189d1\nspill-line 3536 2189d1\nspill-line 3537 2189d1\nspill-line 3538 2189d1\nspill-line 3539 2189d1\nspill-line 3540 2189d1\nspill-line 3541 2189d1\nspill-line 3542 2189d1\nspill-line 3543 2189d1\nspill-line 3544 2189d1\nspill-line 3545 2189d1\nspill-line 3546 2189d1\nspill-line 3547 2189d1\nspill-line 3548 2189d1\nspill-line 3549 2189d1\nspill-line 3550 2189d1\nspill-line 3551 2189d1\nspill-line 3552 2189d1\nspill-line 3553 2189d1\nspill-line 3554 2189d1\nspill-line 3555 2189d1\nspill-line 3556 2189d1\nspill-line 3557 2189d1\nspill-line 3558 2189d1\nspill-line 3559 2189d1\nspill-line 3560 2189d1\nspill-line 3561 2189d1\nspill-line 3562 2189d1\nspill-line 3563 2189d1\nspill-line 3564 2189d1\nspill-line 3565 2189d1\nspill-line 3566 2189d1\nspill-line 3567 2189d1\nspill-line 3568 2189d1\nspill-line 3569 2189d1\nspill-line 3570 2189d1\nspill-line 3571 2189d1\nspill-line 3572 2189d1\nspill-line 3573 2189d1\nspill-line 3574 2189d1\nspill-line 3575 2189d1\nspill-line 3576 2189d1\nspill-line 3577 2189d1\nspill-line 3578 2189d1\nspill-line 3579 2189d1\nspill-line 3580 2189d1\nspill-line 3581 2189d1\nspill-line 3582 2189d1\nspill-line 3583 2189d1\nspill-line 3584 2189d1\nspill-line 3585 2189d1\nspill-line 3586 2189d1\nspill-line 3587 2189d1\nspill-line 3588 2189d1\nspill-line 3589 2189d1\nspill-line 3590 2189d1\nspill-line 3591 2189d1\nspill-line 3592 2189d1\nspill-line 3593 2189d1\nspill-line 3594 2189d1\nspill-line 3595 2189d1\nspill-line 3596 2189d1\nspill-line 3597 2189d1\nspill-line 3598 2189d1\nspill-line 3599 2189d1\nspill-line 3600 2189d1\nspill-line 3601 2189d1\nspill-line 3602 2189d1\nspill-line 3603 2189d1\nspill-line 3604 2189d1\nspill-line 3605 2189d1\nspill-line 3606 2189d1\nspill-line 3607 2189d1\nspill-line 3608 2189d1\nspill-line 3609 2189d1\nspill-line 3610 2189d1\nspill-line 3611 2189d1\nspill-line 3612 2189d1\nspill-line 3613 2189d1\nspill-line 3614 2189d1\nspill-line 3615 2189d1\nspill-line 3616 2189d1\nspill-line 3617 2189d1\nspill-line 3618 2189d1\nspill-line 3619 2189d1\nspill-line 3620 2189d1\nspill-line 3621 2189d1\nspill-line 3622 2189d1\nspill-line 3623 2189d1\nspill-line 3624 2189d1\nspill-line 3625 2189d1\nspill-line 3626 2189d1\nspill-line 3627 2189d1\nspill-line 3628 2189d1\nspill-line 3629 2189d1\nspill-line 3630 2189d1\nspill-line 3631 2189d1\nspill-line 3632 2189d1\nspill-line 3633 2189d1\nspill-line 3634 2189d1\nspill-line 3635 2189d1\nspill-line 3636 2189d1\nspill-line 3637 2189d1\nspill-line 3638 2189d1\nspill-line 3639 2189d1\nspill-line 3640 2189d1\nspill-line 3641 2189d1\nspill-line 3642 2189d1\nspill-line 3643 2189d1\nspill-line 3644 2189d1\nspill-line 3645 2189d1\nspill-line 3646 2189d1\nspill-line 3647 2189d1\nspill-line 3648 2189d1\nspill-line 3649 2189d1\nspill-line 3650 2189d1\nspill-line 3651 2189d1\nspill-line 3652 2189d1\nspill-line 3653 2189d1\nspill-line 3654 2189d1\nspill-line 3655 2189d1\nspill-line 3656 2189d1\nspill-line 3657 2189d1\nspill-line 3658 2189d1\nspill-line 3659 2189d1\nspill-line 3660 2189d1\nspill-line 3661 2189d1\nspill-line 3662 2189d1\nspill-line 3663 2189d1\nspill-line 3664 2189d1\nspill-line 3665 2189d1\nspill-line 3666 2189d1\nspill-line 3667 2189d1\nspill-line 3668 2189d1\nspill-line 3669 2189d1\nspill-line 3670 2189d1\nspill-line 3671 2189d1\nspill-line 3672 2189d1\nspill-line 3673 2189d1\nspill-line 3674 2189d1\nspill-line 3675 2189d1\nspill-line 3676 2189d1\nspill-line 3677 2189d1\nspill-line 3678 2189d1\nspill-line 3679 2189d1\nspill-line 3680 2189d1\nspill-line 3681 2189d1\nspill-line 3682 2189d1\nspill-line 3683 2189d1\nspill-line 3684 2189d1\nspill-line 3685 2189d1\nspill-line 3686 2189d1\nspill-line 3687 2189d1\nspill-line 3688 2189d1\nspill-line 3689 2189d1\nspill-line 3690 2189d1\nspill-line 3691 2189d1\nspill-line 3692 2189d1\nspill-line 3693 2189d1\nspill-line 3694 2189d1\nspill-line 3695 2189d1\nspill-line 3696 2189d1\nspill-line 3697 2189d1\nspill-line 3698 2189d1\nspill-line 3699 2189d1\nspill-line 3700 2189d1\nspill-line 3701 2189d1\nspill-line 3702 2189d1\nspill-line 3703 2189d1\nspill-line 3704 2189d1\nspill-line 3705 2189d1\nspill-line 3706 2189d1\nspill-line 3707 2189d1\nspill-line 3708 2189d1\nspill-line 3709 2189d1\nspill-line 3710 2189d1\nspill-line 3711 2189d1\nspill-line 3712 2189d1\nspill-line 3713 2189d1\nspill-line 3714 2189d1\nspill-line 3715 2189d1\nspill-line 3716 2189d1\nspill-line 3717 2189d1\nspill-line 3718 2189d1\nspill-line 3719 2189d1\nspill-line 3720 2189d1\nspill-line 3721 2189d1\nspill-line 3722 2189d1\nspill-line 3723 2189d1\nspill-line 3724 2189d1\nspill-line 3725 2189d1\nspill-line 3726 2189d1\nspill-line 3727 2189d1\nspill-line 3728 2189d1\nspill-line 3729 2189d1\nspill-line 3730 2189d1\nspill-line 3731 2189d1\nspill-line 3732 2189d1\nspill-line 3733 2189d1\nspill-line 3734 2189d1\nspill-line 3735 2189d1\nspill-line 3736 2189d1\nspill-line 3737 2189d1\nspill-line 3738 2189d1\nspill-line 3739 2189d1\nspill-line 3740 2189d1\nspill-line 3741 2189d1\nspill-line 3742 2189d1\nspill-line 3743 2189d1\nspill-line 3744 2189d1\nspill-line 3745 2189d1\nspill-line 3746 2189d1\nspill-line 3747 2189d1\nspill-line 3748 2189d1\nspill-line 3749 2189d1\nspill-line 3750 2189d1\nspill-line 3751 2189d1\nspill-line 3752 2189d1\nspill-line 3753 2189d1\nspill-line 3754 2189d1\nspill-line 3755 2189d1\nspill-line 3756 2189d1\nspill-line 3757 2189d1\nspill-line 3758 2189d1\nspill-line 3759 2189d1\nspill-line 3760 2189d1\nspill-line 3761 2189d1\nspill-line 3762 2189d1\nspill-line 3763 2189d1\nspill-line 3764 2189d1\nspill-line 3765 2189d1\nspill-line 3766 2189d1\nspill-line 3767 2189d1\nspill-line 3768 2189d1\nspill-line 3769 2189d1\nspill-line 3770 2189d1\nspill-line 3771 2189d1\nspill-line 3772 2189d1\nspill-line 3773 2189d1\nspill-line 3774 2189d1\nspill-line 3775 2189d1\nspill-line 3776 2189d1\nspill-line 3777 2189d1\nspill-line 3778 2189d1\nspill-line 3779 2189d1\nspill-line 3780 2189d1\nspill-line 3781 2189d1\nspill-line 3782 2189d1\nspill-line 3783 2189d1\nspill-line 3784 2189d1\nspill-line 3785 2189d1\nspill-line 3786 2189d1\nspill-line 3787 2189d1\nspill-line 3788 2189d1\nspill-line 3789 2189d1\nspill-line 3790 2189d1\nspill-line 3791 2189d1\nspill-line 3792 2189d1\nspill-line 3793 2189d1\nspill-line 3794 2189d1\nspill-line 3795 2189d1\nspill-line 3796 2189d1\nspill-line 3797 2189d1\nspill-line 3798 2189d1\nspill-line 3799 2189d1\nspill-line 3800 2189d1\nspill-line 3801 2189d1\nspill-line 3802 2189d1\nspill-line 3803 2189d1\nspill-line 3804 2189d1\nspill-line 3805 2189d1\nspill-line 3806 2189d1\nspill-line 3807 2189d1\nspill-line 3808 2189d1\nspill-line 3809 2189d1\nspill-line 3810 2189d1\nspill-line 3811 2189d1\nspill-line 3812 2189d1\nspill-line 3813 2189d1\nspill-line 3814 2189d1\nspill-line 3815 2189d1\nspill-line 3816 2189d1\nspill-line 3817 2189d1\nspill-line 3818 2189d1\nspill-line 3819 2189d1\nspill-line 3820 2189d1\nspill-line 3821 2189d1\nspill-line 3822 2189d1\nspill-line 3823 2189d1\nspill-line 3824 2189d1\nspill-line 3825 2189d1\nspill-line 3826 2189d1\nspill-line 3827 2189d1\nspill-line 3828 2189d1\nspill-line 3829 2189d1\nspill-line 3830 2189d1\nspill-line 3831 2189d1\nspill-line 3832 2189d1\nspill-line 3833 2189d1\nspill-line 3834 2189d1\nspill-line 3835 2189d1\nspill-line 3836 2189d1\nspill-line 3837 2189d1\nspill-line 3838 2189d1\nspill-line 3839 2189d1\nspill-line 3840 2189d1\nspill-line 3841 2189d1\nspill-line 3842 2189d1\nspill-line 3843 2189d1\nspill-line 3844 2189d1\nspill-line 3845 2189d1\nspill-line 3846 2189d1\nspill-line 3847 2189d1\nspill-line 3848 2189d1\nspill-line 3849 2189d1\nspill-line 3850 2189d1\nspill-line 3851 2189d1\nspill-line 3852 2189d1\nspill-line 3853 2189d1\nspill-line 3854 2189d1\nspill-line 3855 2189d1\nspill-line 3856 2189d1\nspill-line 3857 2189d1\nspill-line 3858 2189d1\nspill-line 3859 2189d1\nspill-line 3860 2189d1\nspill-line 3861 2189d1\nspill-line 3862 2189d1\nspill-line 3863 2189d1\nspill-line 3864 2189d1\nspill-line 3865 2189d1\nspill-line 3866 2189d1\nspill-line 3867 2189d1\nspill-line 3868 2189d1\nspill-line 3869 2189d1\nspill-line 3870 2189d1\nspill-line 3871 2189d1\nspill-line 3872 2189d1\nspill-line 3873 2189d1\nspill-line 3874 2189d1\nspill-line 3875 2189d1\nspill-line 3876 2189d1\nspill-line 3877 2189d1\nspill-line 3878 2189d1\nspill-line 3879 2189d1\nspill-line 3880 2189d1\nspill-line 3881 2189d1\nspill-line 3882 2189d1\nspill-line 3883 2189d1\nspill-line 3884 2189d1\nspill-line 3885 2189d1\nspill-line 3886 2189d1\nspill-line 3887 2189d1\nspill-line 3888 2189d1\nspill-line 3889 2189d1\nspill-line 3890 2189d1\nspill-line 3891 2189d1\nspill-line 3892 2189d1\nspill-line 3893 2189d1\nspill-line 3894 2189d1\nspill-line 3895 2189d1\nspill-line 3896 2189d1\nspill-line 3897 2189d1\nspill-line 3898 2189d1\nspill-line 3899 2189d1\nspill-line 3900 2189d1\nspill-line 3901 2189d1\nspill-line 3902 2189d1\nspill-line 3903 2189d1\nspill-line 3904 2189d1\nspill-line 3905 2189d1\nspill-line 3906 2189d1\nspill-line 3907 2189d1\nspill-line 3908 2189d1\nspill-line 3909 2189d1\nspill-line 3910 2189d1\nspill-line 3911 2189d1\nspill-line 3912 2189d1\nspill-line 3913 2189d1\nspill-line 3914 2189d1\nspill-line 3915 2189d1\nspill-line 3916 2189d1\nspill-line 3917 2189d1\nspill-line 3918 2189d1\nspill-line 3919 2189d1\nspill-line 3920 2189d1\nspill-line 3921 2189d1\nspill-line 3922 2189d1\nspill-line 3923 2189d1\nspill-line 3924 2189d1\nspill-line 3925 2189d1\nspill-line 3926 2189d1\nspill-line 3927 2189d1\nspill-line 3928 2189d1\nspill-line 3929 2189d1\nspill-line 3930 2189d1\nspill-line 3931 2189d1\nspill-line 3932 2189d1\nspill-line 3933 2189d1\nspill-line 3934 2189d1\nspill-line 3935 2189d1\nspill-line 3936 2189d1\nspill-line 3937 2189d1\nspill-line 3938 2189d1\nspill-line 3939 2189d1\nspill-line 3940 2189d1\nspill-line 3941 2189d1\nspill-line 3942 2189d1\nspill-line 3943 2189d1\nspill-line 3944 2189d1\nspill-line 3945 2189d1\nspill-line 3946 2189d1\nspill-line 3947 2189d1\nspill-line 3948 2189d1\nspill-line 3949 2189d1\nspill-line 3950 2189d1\nspill-line 3951 2189d1\nspill-line 3952 2189d1\nspill-line 3953 2189d1\nspill-line 3954 2189d1\nspill-line 3955 2189d1\nspill-line 3956 2189d1\nspill-line 3957 2189d1\nspill-line 3958 2189d1\nspill-line 3959 2189d1\nspill-line 3960 2189d1\nspill-line 3961 2189d1\nspill-line 3962 2189d1\nspill-line 3963 2189d1\nspill-line 3964 2189d1\nspill-line 3965 2189d1\nspill-line 3966 2189d1\nspill-line 3967 2189d1\nspill-line 3968 2189d1\nspill-line 3969 2189d1\nspill-line 3970 2189d1\nspill-line 3971 2189d1\nspill-line 3972 2189d1\nspill-line 3973 2189d1\nspill-line 3974 2189d1\nspill-line 3975 2189d1\nspill-line 3976 2189d1\nspill-line 3977 2189d1\nspill-line 3978 2189d1\nspill-line 3979 2189d1\nspill-line 3980 2189d1\nspill-line 3981 2189d1\nspill-line 3982 2189d1\nspill-line 3983 2189d1\nspill-line 3984 2189d1\nspill-line 3985 2189d1\nspill-line 3986 2189d1\nspill-line 3987 2189d1\nspill-line 3988 2189d1\nspill-line 3989 2189d1\nspill-line 3990 2189d1\nspill-line 3991 2189d1\nspill-line 3992 2189d1\nspill-line 3993 2189d1\nspill-line 3994 2189d1\nspill-line 3995 2189d1\nspill-line 3996 2189d1\nspill-line 3997 2189d1\nspill-line 3998 2189d1\nspill-line 3999 2189d1\nspill-line 4000 2189d1\n\n[output truncated; full output: /var/tmp/aiclient-dsh-smoke-tEqG3Y/tmp/dsh-subprocess-Ksa4tw/dsh-subprocess-79681-1-3c14d47cfe49-stdout.log]\n\n(Omitted 14441 bytes. Full formatted result stored at: /var/tmp/aiclient-dsh-smoke-tEqG3Y/tmp/dsh-spill-6uERQ3/session-5c15f1688456/49a541c2d7f9-bash.txt. Use read with offset/limit, or grep this path to search within it.)"
+        },
+        {
+          "name": "read",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/workspace/shell-written-2189d1.txt</path>\n<type>file</type>\n<content>\n1: P12-MARKER-a06dd067 SHELL-2189d1\n\n(End of file - total 1 lines)\n</content>"
+        }
+      ],
+      "reply": "P0-FS l1 finished.",
+      "permissions": [],
+      "resolved": [],
+      "errors": [],
+      "files": {
+        "written": "P12-MARKER-a06dd067 WRITTEN-2189d1\n",
+        "shellWritten": "P12-MARKER-a06dd067 SHELL-2189d1\n",
+        "edited": "P12-MARKER-a06dd067 EDITED-2189d1 edit target\n"
+      },
+      "marker": "P12-MARKER-a06dd067",
+      "token": "2189d1",
+      "shell": "bash"
+    },
+    "approval": {
+      "idle": true,
+      "completed": true,
+      "tools": [
+        {
+          "name": "write",
+          "ok": false,
+          "text": "Error: [sandbox: file access denied under workspace-write mode]\n[sandbox: escalation available — retry this exact operation once with sandbox_permissions (the narrowest wider mode that suffices) + justification; the approval prompt asks the user]"
+        },
+        {
+          "name": "write",
+          "ok": true,
+          "text": "<path>/var/tmp/aiclient-dsh-smoke-tEqG3Y/outside/approved.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+        }
+      ],
+      "reply": "Write outside the workspace attempted.",
+      "permissions": ["write"],
+      "resolved": ["allow"],
+      "errors": [],
+      "fileWritten": true
+    },
+    "autoAnswered": [
+      {
+        "toolName": "write",
+        "permissionId": "toolu_d9bcd31c-6d0f-4169-99f8-d5602cae4baa"
+      }
+    ],
+    "dispose": {
+      "disposed": true
+    },
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "leftovers": [],
+    "stderrTail": "[dsh-host] ready {\"type\":\"ready\",\"pid\":79681,\"node\":\"v24.18.0\",\"execPath\":\"<home>/code/ai-client/out-node-runtime/node\",\"execArgv\":[\"--expose-internals\",\"--import\",\"file://<repo>/src/dsh-host/tools/lib/probe-hooks.mjs\"],\"artifact\":{\"form\":\"packaged\",\"version\":\"0.1.0\",\"dsh\":\"0.1.7-rc.2\",\"target\":{\"platform\":\"linux\",\"arch\":\"x64\"},\"gitCommit\":\"d833115fe9413e5de256771f1d51f3af07d30bd5+dirty\",\"builtAt\":\"2026-09-27T06:48:04.023Z\"},\"dshRuntimeVersion\":\"0.1.7-rc.2\",\"bundles\":[\"@deepseek-ai/dsh-base\",\"@aiclient/dsh-app\"],\"composition\":{\"rows\":95,\"disabledLiteral\":[\"tool-plugin-manager\",\"hmr\",\"deepseek-llm-api-extensions\",\"session-log-deepseek\",\"session-title-llm\",\"plugin-package-inventory-deepseek\",\"deepseek-account\",\"session-telemetry-otel\",\"skill-badge\",\"tool-ralph\",\"web\",\"web-search-deepseek\",\"web-fetch-http\",\"tool-web\",\"llm-deepseek\",\"llm-deepseek-account\"],\"disabledByExpression\":[\"plugin-manager\",\"config-editor\",\"settings\",\"bash-sandbox\",\"pwsh-sandbox\",\"tool-bash\",\"tool-pwsh\",\"aiclient-bridge\",\"aiclient-shared-bridge\"]},\"census\":{\"active\":77,\"disabled\":19,\"inactive\":[]},\"marks\":{\"entry\":58.263049,\"modulesLoaded\":99.584015,\"profileResolved\":151.247175,\"bootResolved\":783.019172}}\n[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\n[dsh-host] warn session-projection-cache: session projection cache: turn/end write for \"aiclient-packaged-smoke\" failed (cache stays stale): SessionHandleClosedError: session \"aiclient-packaged-smoke\": flush on a closed handle\n[dsh-host] stopped (worker.dispose) in 23ms\n"
+  },
+  "natives": {
+    "exit": {
+      "code": 0,
+      "signal": null
+    },
+    "hookLog": "/var/tmp/aiclient-dsh-smoke-tEqG3Y/logs/natives-hooks.jsonl",
+    "sharp": {
+      "pngBytes": 96,
+      "libvips": "8.18.6"
+    },
+    "pty": {
+      "text": "pty-ok\r\n",
+      "exitCode": 0
+    },
+    "leftovers": []
+  },
+  "hooks": {
+    "moduleCount": 1682,
+    "outsideModules": [],
+    "otherSchemes": [],
+    "moduleHooks": true,
+    "natives": [
+      {
+        "file": "/var/tmp/aiclient-dsh-smoke-tEqG3Y/tmp/node-addon-native-custom-loader-1000/native-cache/node-addon-require-builtin-linux-x64-gnu/0.1.6/linux-x64-gnu/linux-x64-gnu-napi-v9.node",
+        "where": "narb-cache"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@deepseek-ai/node-addon-system-linux-x64/bin/glibc/system.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@koromix/koffi-linux-x64/linux_x64/koffi.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64-0.35.4.node",
+        "where": "host"
+      },
+      {
+        "file": "<repo>/out-dsh-host/node_modules/node-pty/prebuilds/linux-x64/pty.node",
+        "where": "host"
+      }
+    ],
+    "sharedObjectsOutside": [],
+    "netBlocked": [],
+    "dnsLookups": [],
+    "ripgrep": [
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg"
+    ],
+    "spawnedExecutables": [
+      "systemd-run",
+      "<repo>/out-dsh-host/node_modules/@vscode/ripgrep-linux-x64/bin/rg",
+      "bwrap"
+    ]
+  },
+  "verdict": {
+    "l0Ready": true,
+    "l0Packaged": true,
+    "l0Composition": true,
+    "l0BundledNode": true,
+    "l0ExitedZero": true,
+    "l0NoLeftovers": true,
+    "l1Bootstrapped": true,
+    "l1Packaged": true,
+    "l1FsTurnIdle": true,
+    "l1FsTools": true,
+    "l1FsToolsOk": true,
+    "l1ReadSawMarker": true,
+    "l1GrepSawMarker": true,
+    "l1ShellSawMarker": true,
+    "l1FilesWritten": true,
+    "l1FsReplied": true,
+    "l1ApprovalRoundTrip": true,
+    "l1Disposed": true,
+    "l1ExitedZero": true,
+    "l1NoLeftovers": true,
+    "l1RipgrepFromArtifact": true,
+    "nativesSharpLoaded": true,
+    "nativesPtyRan": true,
+    "nativesExitedZero": true,
+    "moduleHooksActive": true,
+    "modulesInsideHost": true,
+    "nativesInsideHost": true,
+    "sharedObjectsInsideHost": true,
+    "noNetwork": true,
+    "hostDirUnchanged": true,
+    "narbForm": true
+  },
+  "ok": true,
+  "finishedAt": "2026-09-27T06:59:39.624Z"
+}

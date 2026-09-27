@@ -1,0 +1,181 @@
+{
+  "schema": 1,
+  "artifact": "@aiclient/dsh-host",
+  "version": "0.1.0",
+  "dsh": "0.1.7-rc.2",
+  "appVersion": "1.0.3",
+  "gitCommit": "c79596ae34c797a54f52e59a08c1e37b2d2ad7a1+dirty",
+  "target": {
+    "platform": "darwin",
+    "arch": "arm64"
+  },
+  "builtOn": {
+    "platform": "linux",
+    "arch": "x64",
+    "node": "v22.23.2",
+    "npm": "10.9.8"
+  },
+  "builtAt": "2026-09-27T06:31:20.367Z",
+  "lockSha256": "2650c29b423bcee619def2cfd7e4e447173e705ed72a46dc5f9df9b5b50fe40a",
+  "files": 10168,
+  "bytes": 99326733,
+  "longestRelativePath": 158,
+  "budget": {
+    "maxBytes": 134217728,
+    "maxFiles": 12000,
+    "targetBytes": 115343360
+  },
+  "packages": 362,
+  "pruned": {
+    "files": 11970,
+    "bytes": 103909738,
+    "directories": [
+      {
+        "rel": "node_modules/.bin",
+        "reason": "npm bin links",
+        "files": 11,
+        "bytes": 259
+      },
+      {
+        "rel": "node_modules/@emnapi",
+        "reason": "wasm32 runtime",
+        "files": 17,
+        "bytes": 436901
+      },
+      {
+        "rel": "node_modules/@img/sharp-wasm32",
+        "reason": "sharp variant wasm32",
+        "files": 7,
+        "bytes": 9167141
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/darwin-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 2,
+        "bytes": 67824
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/linux-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 1,
+        "bytes": 69112
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/linux-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 1,
+        "bytes": 75976
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/win32-arm64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 6,
+        "bytes": 11768384
+      },
+      {
+        "rel": "node_modules/node-pty/prebuilds/win32-x64",
+        "reason": "node-pty prebuild for another platform",
+        "files": 6,
+        "bytes": 12231824
+      },
+      {
+        "rel": "node_modules/node-pty/src",
+        "reason": "node-pty native sources",
+        "files": 7,
+        "bytes": 50948
+      },
+      {
+        "rel": "node_modules/node-pty/third_party",
+        "reason": "node-pty conpty payload (Windows only)",
+        "files": 4,
+        "bytes": 2389712
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-x64",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 417779
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-arm64-msvc",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 333212
+      },
+      {
+        "rel": "node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-x64-msvc",
+        "reason": "pnpm reflink binding for another platform",
+        "files": 2,
+        "bytes": 361874
+      },
+      {
+        "rel": "node_modules/pnpm/dist/vendor",
+        "reason": "pnpm Windows helpers",
+        "files": 2,
+        "bytes": 486912
+      }
+    ]
+  },
+  "materialized": [
+    {
+      "name": "@aiclient/dsh-app",
+      "from": "bundle"
+    }
+  ],
+  "natives": [
+    {
+      "path": "node_modules/@deepseek-ai/node-addon-system-darwin-arm64/bin/system.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 52232,
+      "sha256": "9534cde445a865250eb7bc8cfe5e231f3f91d0fda3f4aaa694e81f3531ad1130"
+    },
+    {
+      "path": "node_modules/@img/sharp-darwin-arm64/lib/sharp-darwin-arm64-0.35.4.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 280256,
+      "sha256": "389121ae6516bd89e92fa81b68d94b09e0b084cc53d57919e2140a73d9e3ca4c"
+    },
+    {
+      "path": "node_modules/@img/sharp-libvips-darwin-arm64/lib/libvips-cpp.8.18.6.dylib",
+      "format": "Mach-O 64 arm64",
+      "bytes": 18164536,
+      "sha256": "bba7a98f1c4b10f4c31f92e12264e5d41a7ab484b864feae535ac8919c548d01"
+    },
+    {
+      "path": "node_modules/@koromix/koffi-darwin-arm64/darwin_arm64/koffi.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 1223832,
+      "sha256": "01bc6a2830e1e98dd4d1cc3a8b33bb34a87c862bebea6b03b7c049ef8bd282e7"
+    },
+    {
+      "path": "node_modules/@vscode/ripgrep-darwin-arm64/bin/rg",
+      "format": "Mach-O 64 arm64",
+      "bytes": 4528512,
+      "sha256": "6ef40346bf31fcce79d9614c7745c198542925a0c7d4911e1ffe794c53392ac1"
+    },
+    {
+      "path": "node_modules/node-addon-require-builtin-darwin-arm64/prebuilt/darwin-arm64-napi-v9.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 229848,
+      "sha256": "4cee5efeea5911d1e2acab3f3d6148d0ba6e4a5148e9e9ec21075cb1133eb11f"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/darwin-arm64/pty.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 86904,
+      "sha256": "0aae85518beb134a666f8e415f78bf528b2e9d40b47498af97433dc459661366"
+    },
+    {
+      "path": "node_modules/node-pty/prebuilds/darwin-arm64/spawn-helper",
+      "format": "Mach-O 64 arm64",
+      "bytes": 50480,
+      "sha256": "08bc83a084651d095645010d34783f94b9af443614747e953e66d6578027e999"
+    },
+    {
+      "path": "node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-arm64/reflink.darwin-arm64.node",
+      "format": "Mach-O 64 arm64",
+      "bytes": 404184,
+      "sha256": "0cf6caf1b125009161c98e7fb39d996da26548b09e7b17d7688357f9c3b97a02"
+    }
+  ]
+}
