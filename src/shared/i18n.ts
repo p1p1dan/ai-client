@@ -3489,3 +3489,9 @@ Object.assign(zhTranslations, {
   'The engine restarted, but the chat is still locked: a program outside this app may be holding it.':
     '引擎已重启，但会话仍被锁定：可能是本应用以外的程序占着它。',
 });
+
+// dsh-rebase P1-5a (decision 036): model menu footer for models the DSH engine cannot serve.
+Object.assign(zhTranslations, {
+  '1 model is unavailable with the current engine': '1 个模型在当前引擎下不可用',
+  '{{count}} models are unavailable with the current engine': '{{count}} 个模型在当前引擎下不可用',
+});

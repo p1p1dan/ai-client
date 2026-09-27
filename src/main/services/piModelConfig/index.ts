@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { applyDshPlanToCatalog, type DshModelPlan } from '@shared/dshModelPlan';
 import {
   MANAGED_CREDENTIALS_DISABLED_ERROR,
   MANAGED_CREDENTIALS_UNAVAILABLE_ERROR,
@@ -21,12 +22,15 @@ import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
 import { nativeFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
 import { nativeSubagentSettings } from '../agent-host/nativeSubagentSettings';
+import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
+import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
 import { readUserProviderGroupForRuntime, readUserProvidersForRuntime } from '../userProviders';
+import { resolveDshModelPlanWith } from './dshModelPlan';
 import { type NativeModelCatalog, resolveNativeModelCatalogWith } from './nativeCatalog';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -160,6 +164,25 @@ export function resolveNativeModelCatalog(): NativeModelCatalog | undefined {
     readUserProviderGroup: readUserProviderGroupForRuntime,
     buildCatalog: (input) => serviceFor(getAppPiAgentDir()).buildNativeModelCatalog(input),
     warn: (...args) => console.warn(...args),
+  });
+}
+
+/**
+ * dsh-rebase P1-5a — the model plan the DSH host is configured with (decision
+ * 033): routes without keys, the default model, and the index the menu and the
+ * bridge resolve against. Built from the same in-memory catalog as the menu.
+ */
+export function resolveDshModelPlan(): DshModelPlan {
+  return dshModelPlanFor(resolveNativeModelCatalog());
+}
+
+function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
+  const { promptCacheTtl } = promptCacheTtlSettings();
+  return resolveDshModelPlanWith({
+    native,
+    env: process.env,
+    settings: { ...(promptCacheTtl ? { promptCacheTtl } : {}), ...providerTimeoutSettings() },
+    log: (...args) => console.info(...args),
   });
 }
 
@@ -299,7 +322,13 @@ export function readPiModelCatalog(): AgentModelCatalog {
   // `undefined` is passed straight through: that is exactly the case where the
   // worker falls back to reading the directory (`nativeCatalog.ts`), so the
   // file is the right answer for both sides then.
-  return service.readCatalog(managed ? undefined : 'local', resolveNativeModelCatalog());
+  //
+  // dsh-rebase P1-5a (decision 033): the menu then keeps only what the DSH
+  // model plan routes, and the plan is built from this SAME assembly, so a
+  // listed model is one the host can serve, with the efforts it accepts.
+  const native = resolveNativeModelCatalog();
+  const menu = service.readCatalog(managed ? undefined : 'local', native);
+  return applyDshPlanToCatalog(menu, dshModelPlanFor(native));
 }
 
 export function clearManagedPiCredential(): void {

@@ -255,6 +255,40 @@ describe('T25 model-level effort capability', () => {
 });
 
 /**
+ * dsh-rebase P1-5a (decision 033): a catalog row carrying `efforts` came from
+ * the DSH model plan, and the host accepts exactly those levels. The map-based
+ * rules above are the fallback for rows without it.
+ */
+describe('P1-5a plan efforts win over the map', () => {
+  it('offers exactly the planned levels, in catalog order', () => {
+    const model = {
+      reasoning: true,
+      thinkingLevelMap: { off: 'none', minimal: 'minimal' },
+      efforts: ['max', 'low', 'high'] as const,
+    };
+    expect(effortsForModel({ ...model, efforts: [...model.efforts] }).map((e) => e.id)).toEqual([
+      'low',
+      'high',
+      'max',
+    ]);
+  });
+
+  it('offers nothing for an empty plan list, even where the map would offer three', () => {
+    expect(effortsForModel({ reasoning: true, efforts: [] })).toEqual([]);
+    expect(effortsForModel({ efforts: [] })).toEqual([]);
+  });
+
+  it('reconciles against the planned levels', () => {
+    const model = { reasoning: true, efforts: ['high' as const] };
+    expect(reconcileEffortForModel('high', model)).toBe('high');
+    expect(reconcileEffortForModel('medium', model)).toBe(EFFORT_DEFAULT_ID);
+    expect(reconcileEffortForModel('low', { reasoning: true, efforts: [] })).toBe(
+      EFFORT_DEFAULT_ID
+    );
+  });
+});
+
+/**
  * U08-2 acceptance ②/③, per evidence-q06: the two vocabularies overlap on
  * `low..max`, so widening is a pure superset and every stored preference keeps
  * its exact meaning. There is nothing to translate and therefore nothing that

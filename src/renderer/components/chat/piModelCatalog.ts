@@ -28,6 +28,7 @@
  * (`shared/types/agentCatalog.ts` says the same thing from the other side).
  */
 
+import type { Translate } from '@shared/i18n';
 import type {
   AgentModelCatalog,
   AgentModelCatalogError,
@@ -254,4 +255,26 @@ const AUTHORITATIVE_CATALOG_SOURCES: ReadonlySet<AgentModelCatalog['source']> = 
 export function isCatalogAuthoritative(catalog: AgentModelCatalog | null): boolean {
   if (!catalog || catalog.error === 'host-not-ready') return false;
   return AUTHORITATIVE_CATALOG_SOURCES.has(catalog.source);
+}
+
+/**
+ * dsh-rebase P1-5a (decision 036): the menu footer for catalog models the DSH
+ * engine cannot serve — a wire protocol it does not speak, a provider without
+ * a key. `null` when every catalog model is offered. `title` names them, so
+ * the count can be traced to the rows it stands for.
+ */
+export function unavailableModelsNotice(
+  catalog: AgentModelCatalog | null,
+  t: Translate
+): { message: string; title: string } | null {
+  const unavailable = catalog?.unavailable ?? [];
+  if (unavailable.length === 0) return null;
+  const count = unavailable.length;
+  return {
+    message:
+      count === 1
+        ? t('1 model is unavailable with the current engine')
+        : t('{{count}} models are unavailable with the current engine', { count }),
+    title: unavailable.map((entry) => entry.label).join(', '),
+  };
 }

@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,6 +16,7 @@ import {
   STALE_CATALOG_NOTICE,
   shouldRequestCatalog,
   UNAVAILABLE_CATALOG_NOTICE,
+  unavailableModelsNotice,
 } from '../piModelCatalog';
 
 const NOW = 1_700_000_000_000;
@@ -179,5 +181,42 @@ describe('F07 authoritative catalog', () => {
     expect(isCatalogLoaded(stale)).toBe(true);
     expect(isCatalogAuthoritative(unavailable)).toBe(false);
     expect(isCatalogAuthoritative(stale)).toBe(false);
+  });
+});
+
+/** dsh-rebase P1-5a (decision 036): the footer for models the engine cannot serve. */
+describe('unavailable models notice', () => {
+  const en = (key: string, params?: Record<string, string | number>) =>
+    translate('en', key, params);
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+
+  it('says nothing when every model is offered, or before a catalog arrives', () => {
+    expect(unavailableModelsNotice(catalog(), en)).toBeNull();
+    expect(unavailableModelsNotice(catalog({ unavailable: [] }), en)).toBeNull();
+    expect(unavailableModelsNotice(null, en)).toBeNull();
+  });
+
+  it('counts the models left out and names them in the title', () => {
+    const three = catalog({
+      unavailable: [
+        { label: 'Gemini', reason: 'unsupported_api' },
+        { label: 'Mistral', reason: 'unsupported_api' },
+        { label: 'Own', reason: 'no_api_key' },
+      ],
+    });
+    expect(unavailableModelsNotice(three, en)).toEqual({
+      message: '3 models are unavailable with the current engine',
+      title: 'Gemini, Mistral, Own',
+    });
+    expect(unavailableModelsNotice(three, zh)?.message).toBe('3 个模型在当前引擎下不可用');
+  });
+
+  it('uses the singular sentence for one', () => {
+    const one = catalog({ unavailable: [{ label: 'Gemini', reason: 'unsupported_api' }] });
+    expect(unavailableModelsNotice(one, en)?.message).toBe(
+      '1 model is unavailable with the current engine'
+    );
+    expect(unavailableModelsNotice(one, zh)?.message).toBe('1 个模型在当前引擎下不可用');
   });
 });

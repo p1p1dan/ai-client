@@ -146,9 +146,14 @@ describe('the model picker and the worker are handed the same catalog', () => {
   );
 
   it('[T062-D3] readPiModelCatalog passes the native catalog into readCatalog', () => {
-    expect(WIRING).toContain(
-      "service.readCatalog(managed ? undefined : 'local', resolveNativeModelCatalog())"
-    );
+    expect(WIRING).toContain('const native = resolveNativeModelCatalog();');
+    expect(WIRING).toContain("service.readCatalog(managed ? undefined : 'local', native)");
+  });
+
+  it('[P1-5a] the menu is filtered by a plan built from that same assembly', () => {
+    // decision 033: menu and host routes come out of one computation.
+    expect(WIRING).toContain('return applyDshPlanToCatalog(menu, dshModelPlanFor(native));');
+    expect(WIRING).toContain('return dshModelPlanFor(resolveNativeModelCatalog());');
   });
 
   it('[T062-D3] the worker side still reads the same assembler', () => {

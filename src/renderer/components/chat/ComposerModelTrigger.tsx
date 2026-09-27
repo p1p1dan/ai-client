@@ -52,7 +52,7 @@ import {
   resolveModelSelection,
   unverifiedModelLabel,
 } from './models';
-import { catalogModels } from './piModelCatalog';
+import { catalogModels, unavailableModelsNotice } from './piModelCatalog';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
 import { usePiModelCatalog } from './usePiModelCatalog';
 import { useSessionEffort } from './useSessionEffort';
@@ -232,6 +232,7 @@ function SessionModelTrigger({
 
   const { catalog, authoritative, loading, status, refresh, retry } = usePiModelCatalog(hostState);
   const catalogOptions = catalogModels(catalog);
+  const unavailableNotice = unavailableModelsNotice(catalog, t);
 
   useEffect(() => {
     if (sessionId && settingsHydrated) {
@@ -494,6 +495,18 @@ function SessionModelTrigger({
                   Retry
                 </button>
               )}
+            </div>
+          </>
+        )}
+        {/* dsh-rebase P1-5a (decision 036): models the engine cannot serve are
+            left out of the list above, and counted here instead of vanishing. */}
+        {unavailableNotice && (
+          <>
+            <MenuSeparator />
+            <div className="flex items-center gap-2 px-2 py-1.5 text-meta text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate" title={unavailableNotice.title}>
+                {unavailableNotice.message}
+              </span>
             </div>
           </>
         )}

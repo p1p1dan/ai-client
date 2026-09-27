@@ -17,6 +17,7 @@
  * ids, labels and provenance (§0.1-2). Every field below is safe to log.
  */
 
+import type { DshModelDropReason } from '../dshModelPlan/types';
 import type { SessionEffortLevel } from './agentHost';
 
 /** One selectable model. `label` is UI copy only and is never compared against. */
@@ -48,6 +49,21 @@ export interface AgentModelOption {
    * so the composer can say so before the user sends a picture.
    */
   input?: ('text' | 'image')[];
+  /**
+   * dsh-rebase P1-5a (decision 033): the levels the DSH host accepts for this
+   * model, from the same model plan the host is configured with. When present
+   * it is the whole answer for the effort selector, `[]` included.
+   */
+  efforts?: SessionEffortLevel[];
+}
+
+/** Why a catalog model is left out of the menu under the DSH engine. */
+export type AgentModelUnavailableReason = DshModelDropReason | 'not_in_plan';
+
+/** A model the menu does not offer, for the footer notice. No key, no address. */
+export interface AgentModelUnavailable {
+  label: string;
+  reason: AgentModelUnavailableReason;
 }
 
 /**
@@ -101,6 +117,11 @@ export interface AgentModelCatalog {
   /** When the underlying answer was fetched; `null` when there never was one. */
   fetchedAt: number | null;
   error?: AgentModelCatalogError;
+  /**
+   * dsh-rebase P1-5a: catalog models the DSH model plan cannot route (for
+   * example an unsupported wire protocol, decision 036). Absent when none.
+   */
+  unavailable?: AgentModelUnavailable[];
 }
 
 /** Pi-only catalog request. `force` skips the TTL, never the single-flight. */

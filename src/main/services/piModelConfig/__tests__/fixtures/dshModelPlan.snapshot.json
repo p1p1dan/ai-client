@@ -1,0 +1,337 @@
+{
+  "revision": "05c59899d407a6c296995573431f60708d10a0420ae78d08fd60430f78cdff64",
+  "routes": {
+    "claude": {
+      "api": "anthropic-messages",
+      "baseURL": "https://gateway.example.test",
+      "apiKeyEnv": "AICLIENT_KEY_CLAUDE_C857",
+      "compat": {
+        "forceAdaptiveThinking": true
+      },
+      "defaultContextWindow": 128000,
+      "defaultMaxTokens": 8192,
+      "cacheRetention": "long",
+      "streamIdleTimeoutMs": 120000,
+      "retryPolicy": {
+        "mode": "normal",
+        "maxRetries": 3,
+        "backoff": {
+          "initialDelayMs": 3000,
+          "maxDelayMs": 30000
+        }
+      },
+      "models": [
+        {
+          "id": "claude-sonnet-5",
+          "name": "Claude Sonnet 5",
+          "contextWindow": 1000000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          }
+        },
+        {
+          "id": "claude-opus-4-6",
+          "name": "Claude Opus 4.6",
+          "contextWindow": 1000000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "max": "max"
+          }
+        },
+        {
+          "id": "claude-opus-5",
+          "name": "Claude Opus 5",
+          "contextWindow": 1000000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          }
+        }
+      ]
+    },
+    "gpt": {
+      "api": "openai-responses",
+      "baseURL": "https://gateway.example.test/v1",
+      "apiKeyEnv": "AICLIENT_KEY_GPT_053E",
+      "compat": {
+        "supportsDeveloperRole": true
+      },
+      "defaultContextWindow": 128000,
+      "defaultMaxTokens": 8192,
+      "cacheRetention": "long",
+      "streamIdleTimeoutMs": 120000,
+      "retryPolicy": {
+        "mode": "normal",
+        "maxRetries": 3,
+        "backoff": {
+          "initialDelayMs": 3000,
+          "maxDelayMs": 30000
+        }
+      },
+      "models": [
+        {
+          "id": "gpt-5.6-luna",
+          "name": "GPT 5.6 Luna",
+          "contextWindow": 1050000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "off": "none",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          }
+        },
+        {
+          "id": "gpt-5.6-terra",
+          "name": "GPT 5.6 Terra",
+          "contextWindow": 1050000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "off": "none",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          }
+        },
+        {
+          "id": "gpt-5.6-sol",
+          "name": "GPT 5.6 Sol",
+          "contextWindow": 1050000,
+          "maxTokens": 128000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "off": "none",
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh",
+            "max": "max"
+          }
+        }
+      ]
+    },
+    "grok": {
+      "api": "openai-completions",
+      "baseURL": "https://gateway.example.test/v1",
+      "apiKeyEnv": "AICLIENT_KEY_GROK_ADD9",
+      "compat": {
+        "supportsDeveloperRole": true,
+        "supportsReasoningEffort": true
+      },
+      "defaultContextWindow": 128000,
+      "defaultMaxTokens": 8192,
+      "cacheRetention": "long",
+      "streamIdleTimeoutMs": 120000,
+      "retryPolicy": {
+        "mode": "normal",
+        "maxRetries": 3,
+        "backoff": {
+          "initialDelayMs": 3000,
+          "maxDelayMs": 30000
+        }
+      },
+      "models": [
+        {
+          "id": "grok-4.6",
+          "name": "Grok 4.6",
+          "contextWindow": 500000,
+          "maxTokens": 500000,
+          "input": ["text", "image"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "xhigh": "xhigh"
+          }
+        }
+      ]
+    },
+    "china": {
+      "api": "openai-completions",
+      "baseURL": "https://gateway.example.test/v1",
+      "apiKeyEnv": "AICLIENT_KEY_CHINA_50C0",
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true
+      },
+      "defaultContextWindow": 128000,
+      "defaultMaxTokens": 8192,
+      "cacheRetention": "long",
+      "streamIdleTimeoutMs": 120000,
+      "retryPolicy": {
+        "mode": "normal",
+        "maxRetries": 3,
+        "backoff": {
+          "initialDelayMs": 3000,
+          "maxDelayMs": 30000
+        }
+      },
+      "models": [
+        {
+          "id": "deepseek-v4-flash-0731",
+          "name": "DeepSeek V4 Flash",
+          "contextWindow": 1000000,
+          "maxTokens": 384000,
+          "input": ["text"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "max": "max"
+          }
+        },
+        {
+          "id": "deepseek-v4-pro-0813",
+          "name": "DeepSeek V4 Pro",
+          "contextWindow": 1000000,
+          "maxTokens": 384000,
+          "input": ["text"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "max": "max"
+          }
+        },
+        {
+          "id": "glm-5.2",
+          "name": "GLM 5.2",
+          "contextWindow": 1000000,
+          "maxTokens": 131072,
+          "input": ["text"],
+          "reasoningEfforts": {
+            "low": "low",
+            "medium": "medium",
+            "high": "high",
+            "max": "max"
+          }
+        }
+      ]
+    }
+  },
+  "defaultModel": {
+    "provider": "claude",
+    "model": "claude-sonnet-5"
+  },
+  "index": {
+    "claude/claude-sonnet-5": {
+      "route": "claude",
+      "model": "claude-sonnet-5",
+      "efforts": ["low", "medium", "high", "xhigh", "max"],
+      "image": true
+    },
+    "claude/claude-opus-4-6": {
+      "route": "claude",
+      "model": "claude-opus-4-6",
+      "efforts": ["low", "medium", "high", "max"],
+      "image": true
+    },
+    "claude/claude-opus-5": {
+      "route": "claude",
+      "model": "claude-opus-5",
+      "efforts": ["low", "medium", "high", "xhigh", "max"],
+      "image": true
+    },
+    "gpt/gpt-5.6-luna": {
+      "route": "gpt",
+      "model": "gpt-5.6-luna",
+      "efforts": ["off", "low", "medium", "high", "xhigh", "max"],
+      "image": true
+    },
+    "gpt/gpt-5.6-terra": {
+      "route": "gpt",
+      "model": "gpt-5.6-terra",
+      "efforts": ["off", "low", "medium", "high", "xhigh", "max"],
+      "image": true
+    },
+    "gpt/gpt-5.6-sol": {
+      "route": "gpt",
+      "model": "gpt-5.6-sol",
+      "efforts": ["off", "low", "medium", "high", "xhigh", "max"],
+      "image": true
+    },
+    "grok/grok-4.6": {
+      "route": "grok",
+      "model": "grok-4.6",
+      "efforts": ["low", "medium", "high", "xhigh"],
+      "image": true
+    },
+    "china/deepseek-v4-flash-0731": {
+      "route": "china",
+      "model": "deepseek-v4-flash-0731",
+      "efforts": ["low", "medium", "high", "max"],
+      "image": false
+    },
+    "china/deepseek-v4-pro-0813": {
+      "route": "china",
+      "model": "deepseek-v4-pro-0813",
+      "efforts": ["low", "medium", "high", "max"],
+      "image": false
+    },
+    "china/glm-5.2": {
+      "route": "china",
+      "model": "glm-5.2",
+      "efforts": ["low", "medium", "high", "max"],
+      "image": false
+    }
+  },
+  "refs": {
+    "AICLIENT_KEY_CLAUDE_C857": "claude",
+    "AICLIENT_KEY_GPT_053E": "gpt",
+    "AICLIENT_KEY_GROK_ADD9": "grok",
+    "AICLIENT_KEY_CHINA_50C0": "china"
+  },
+  "dropped": [
+    {
+      "kind": "field",
+      "providerId": "claude",
+      "field": "headers.User-Agent",
+      "reason": "reserved_header"
+    },
+    {
+      "kind": "field",
+      "providerId": "claude",
+      "field": "compat.supportsToolReferences",
+      "reason": "compat_not_offered"
+    },
+    {
+      "kind": "field",
+      "providerId": "gpt",
+      "field": "headers.User-Agent",
+      "reason": "reserved_header"
+    },
+    {
+      "kind": "field",
+      "providerId": "grok",
+      "field": "headers.User-Agent",
+      "reason": "reserved_header"
+    },
+    {
+      "kind": "field",
+      "providerId": "china",
+      "field": "headers.User-Agent",
+      "reason": "reserved_header"
+    }
+  ]
+}

@@ -151,6 +151,11 @@ const ASSUMED_EFFORT_IDS = new Set<SessionEffortLevel>(['low', 'medium', 'high']
 /**
  * T25 model capability projection, tightened by the `minimal` 502 above.
  *
+ * dsh-rebase P1-5a (decision 033): a catalog row that carries `efforts` came
+ * from the DSH model plan, and that list is the whole answer — it is what the
+ * host was configured to accept, so offering anything else would fail the
+ * turn. The rules below are the fallback for rows without it.
+ *
  * Three outcomes:
  *   - `reasoning === false` — no levels at all; the selector hides itself.
  *   - a level mapped to `null` — explicitly unsupported, dropped even if it is
@@ -164,8 +169,10 @@ const ASSUMED_EFFORT_IDS = new Set<SessionEffortLevel>(['low', 'medium', 'high']
  * the common case rather than the exception it reads as.
  */
 export function effortsForModel(
-  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap'> | undefined
+  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap' | 'efforts'> | undefined
 ): ChatEffort[] {
+  const planned = model?.efforts;
+  if (planned) return CHAT_EFFORTS.filter((effort) => planned.includes(effort.id));
   if (model?.reasoning === false) return [];
   const map = model?.thinkingLevelMap;
   return CHAT_EFFORTS.filter((effort) => {
@@ -187,7 +194,7 @@ export function effortsForModel(
  */
 export function reconcileEffortForModel(
   selection: string | null | undefined,
-  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap'> | undefined
+  model: Pick<AgentModelOption, 'reasoning' | 'thinkingLevelMap' | 'efforts'> | undefined
 ): EffortSelection {
   if (!selection || selection === EFFORT_DEFAULT_ID) return EFFORT_DEFAULT_ID;
   if (!model) return isEffortLevel(selection) ? selection : EFFORT_DEFAULT_ID;
