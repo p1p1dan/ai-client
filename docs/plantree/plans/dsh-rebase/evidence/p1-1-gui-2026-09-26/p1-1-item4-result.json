@@ -1,0 +1,1240 @@
+{
+  "step": "item4",
+  "startedAt": "2026-09-27T03:37:08.087Z",
+  "recorders": "already",
+  "session": {
+    "id": "session-live-1790479932213-jgzozpl",
+    "status": "idle",
+    "title": "P0-STREAM: 请用流式方式回复一段文字",
+    "agent": "dsh",
+    "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+    "workspaceId": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+    "unbound": false,
+    "messages": 5
+  },
+  "slowTool": {
+    "running": {
+      "callId": "toolu_627c2e14-f1d4-4f74-a8a7-e0cc1932adb9",
+      "command": "echo slow tool started; sleep 5; echo slow tool done",
+      "settled": false,
+      "ok": null,
+      "output": null
+    },
+    "domRunning": true,
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790479932213-jgzozpl",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 8,
+      "lastError": null,
+      "statuses": [
+        {
+          "t": 1790480230148,
+          "status": "running"
+        },
+        {
+          "t": 1790480233670,
+          "status": "idle"
+        }
+      ]
+    },
+    "settled": {
+      "callId": "toolu_627c2e14-f1d4-4f74-a8a7-e0cc1932adb9",
+      "command": "echo slow tool started; sleep 5; echo slow tool done",
+      "settled": true,
+      "ok": true,
+      "output": "\"slow tool started\\nslow tool done\\n\""
+    },
+    "expanded": {
+      "summaries": 2,
+      "clicked": ["已工作 5 秒"]
+    }
+  },
+  "fork": {
+    "opened": {
+      "ok": true
+    },
+    "dialog": {
+      "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 0 个节点，显示 0 个\n刷新\n\n这个会话还没有落盘的树节点。\n\n关闭",
+      "forkButtons": 0,
+      "forkEnabled": 0,
+      "buttons": ["刷新", "关闭", "Close"]
+    },
+    "uiFork": null,
+    "tree": {
+      "ok": true,
+      "totalNodes": 0,
+      "returnedNodes": 0,
+      "sessionKey": "session-live-1790479932213-jgzozpl:session:/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json"
+    },
+    "api": {
+      "ok": false,
+      "error": "Error invoking remote method 'chat:forkSession': WorkerSlotError: WORKER_DSH_UNSUPPORTED: fork is not bridged to the DSH engine yet"
+    }
+  },
+  "attachment": {
+    "paste": {
+      "bytes": 627,
+      "dispatched": false,
+      "defaultPrevented": true
+    },
+    "draftsAfterPaste": ["Remove p1-1-probe.png"],
+    "composerBeforeSend": {
+      "value": "P1-1 带图发送点验：这条消息带一张图片，预期被明确拒绝。",
+      "textareaDisabled": false,
+      "sendDisabled": false,
+      "placeholder": "继续输入…"
+    },
+    "clicked": 1790480240895,
+    "trace": [
+      {
+        "t": 1790480240986,
+        "status": "idle",
+        "lastError": null,
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480241290,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480241594,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480241898,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480242202,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480242506,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480242810,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480243114,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480243418,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480243722,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480244026,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480244330,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480244634,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480244938,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480245241,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480245545,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480245849,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480246153,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480246457,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480246761,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480247066,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480247370,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480247674,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480247981,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480248285,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480248589,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480248893,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480249197,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480249500,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480249804,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480250108,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480250412,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480250716,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480251020,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480251324,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480251629,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480251932,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480252236,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480252541,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      },
+      {
+        "t": 1790480252845,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet",
+        "messages": 8,
+        "composer": "",
+        "drafts": []
+      }
+    ],
+    "toasts": [],
+    "events": {
+      "counts": {},
+      "events": []
+    },
+    "composerAfter": {
+      "value": "",
+      "textareaDisabled": false,
+      "sendDisabled": true,
+      "placeholder": "继续输入…"
+    },
+    "draftsAfter": [],
+    "gatewayRequestsDuringAttempt": 0,
+    "newProcesses": [],
+    "bodyHasUnsupported": {
+      "attachments": true,
+      "unsupported": true
+    }
+  },
+  "tui": {
+    "stubPath": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+    "support": {
+      "supported": false,
+      "reason": "This chat runs on the DSH engine, which the Pi terminal cannot open."
+    },
+    "clicked": true,
+    "before": {
+      "gui": "true",
+      "tui": "false",
+      "xterm": false
+    },
+    "after": {
+      "gui": "true",
+      "tui": "false",
+      "xterm": false
+    },
+    "toasts": [
+      {
+        "t": 1790480253891,
+        "title": "Pi 终端无法打开这个对话",
+        "description": "这个对话运行在 DSH 引擎上，Pi 终端打不开它。"
+      }
+    ],
+    "newProcesses": [],
+    "stubAfter": {
+      "engine": "dsh",
+      "version": 1,
+      "dshSessionId": "aiclient-session-live-1790479932213-jgzozpl",
+      "logicalSessionId": "session-live-1790479932213-jgzozpl",
+      "cwd": "/var/tmp/aiclient-p1-1/workspace",
+      "createdAt": 1790480091909
+    }
+  },
+  "failure": {
+    "gatewayStopped": [55133],
+    "prompt": "P0-STREAM: 网关已停止，这一轮预期失败。",
+    "failed": {
+      "turn": {
+        "settled": true,
+        "sid": "session-live-1790479932213-jgzozpl",
+        "status": "failed",
+        "pendingPermissions": 0,
+        "messages": 10,
+        "lastError": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"Connection error.\",\"code\":\"TRANSPORT\"}}",
+        "statuses": [
+          {
+            "t": 1790480256588,
+            "status": "idle"
+          },
+          {
+            "t": 1790480257091,
+            "status": "failed"
+          }
+        ]
+      },
+      "card": {
+        "text": "这一轮停下了\n\n本应用不认识这一轮的结束原因。\n\nDSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"Connection error.\",\"code\":\"TRANSPORT\"}}\n\n继续",
+        "continueDisabled": false,
+        "continueTitle": "从失败的地方重试上一轮"
+      },
+      "composer": {
+        "value": "P0-STREAM: 网关已停止，这一轮预期失败。",
+        "textareaDisabled": false,
+        "sendDisabled": false,
+        "placeholder": "继续输入…"
+      },
+      "store": {
+        "active": "session-live-1790479932213-jgzozpl",
+        "lastError": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"Connection error.\",\"code\":\"TRANSPORT\"}}",
+        "workspaces": [
+          {
+            "id": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+            "path": "/var/tmp/aiclient-p1-1/workspace",
+            "name": "Main"
+          }
+        ],
+        "sessions": [
+          {
+            "id": "session-live-1790479932213-jgzozpl",
+            "status": "failed",
+            "title": "P0-STREAM: 请用流式方式回复一段文字",
+            "agent": "dsh",
+            "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+            "workspaceId": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+            "unbound": false,
+            "messages": 10
+          }
+        ]
+      },
+      "events": {
+        "counts": {
+          "session.resumed": 1,
+          "session.history": 1,
+          "session.status": 3,
+          "message.started": 2,
+          "message.delta": 1,
+          "message.completed": 2,
+          "session.failed": 1
+        },
+        "events": [
+          {
+            "t": 1790480256588,
+            "type": "session.resumed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480256580-7",
+            "payload": "{\"agent\":\"dsh\",\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"permissionGate\":\"bundled\"}"
+          },
+          {
+            "t": 1790480256644,
+            "type": "session.history",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480256580-7",
+            "payload": "{\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"workspacePath\":\"/var/tmp/aiclient-p1-1/workspace\",\"mode\":\"initial\",\"messages\":[],\"offset\":0,\"limit\":80,\"totalCount\":0,\"hasMore\":false,\"branchRevision\":0,\"truncated\":false,\"omittedCount\":0}"
+          },
+          {
+            "t": 1790480256644,
+            "type": "session.status",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480256580-7",
+            "payload": "{\"status\":\"idle\"}"
+          },
+          {
+            "t": 1790480256710,
+            "type": "session.status",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"status\":\"running\"}"
+          },
+          {
+            "t": 1790480256711,
+            "type": "message.started",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"messageId\":\"dsh-user-46\",\"role\":\"user\",\"attemptId\":\"session-live-1790479932213-jgzozpl:5\"}"
+          },
+          {
+            "t": 1790480256732,
+            "type": "message.completed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"messageId\":\"dsh-user-46\"}"
+          },
+          {
+            "t": 1790480256732,
+            "type": "message.started",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t4-s1\",\"role\":\"assistant\",\"model\":\"aiclient-gateway/fake-1\"}"
+          },
+          {
+            "t": 1790480256732,
+            "type": "message.completed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t4-s1\"}"
+          },
+          {
+            "t": 1790480256732,
+            "type": "session.failed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"error\":\"DSH turn ended: {\\\"kind\\\":\\\"error\\\",\\\"error\\\":{\\\"message\\\":\\\"Connection error.\\\",\\\"code\\\":\\\"TRANSPORT\\\"}}\"}"
+          },
+          {
+            "t": 1790480256732,
+            "type": "session.status",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "send-1790480256589-8",
+            "payload": "{\"status\":\"idle\"}"
+          }
+        ]
+      }
+    },
+    "failureToasts": [
+      {
+        "t": 1790480260257,
+        "title": "没有可重试的上一轮",
+        "description": "上一轮没有留下可以重跑的记录 —— 可能根本没被记录下来，或者历史已被压缩。请在输入框中重新发送。"
+      }
+    ],
+    "gatewayRestarted": {
+      "ok": true,
+      "plan": "dsh-p0-2",
+      "count": 5
+    },
+    "afterContinue": {
+      "clicked": {
+        "ok": true
+      },
+      "trace": [
+        {
+          "t": 1790480260175,
+          "status": "failed",
+          "lastError": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"Connection error.\",\"code\":\"TRANSPORT\"}}",
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480260479,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480260783,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480261087,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480261391,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480261694,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480261999,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480262303,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480262607,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480262911,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480263215,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480263519,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480263823,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480264127,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480264430,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480264734,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480265038,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480265343,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480265647,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        },
+        {
+          "t": 1790480265951,
+          "status": "idle",
+          "lastError": null,
+          "messages": 10,
+          "composer": "P0-STREAM: 网关已停止，这一轮预期失败。",
+          "drafts": []
+        }
+      ],
+      "toasts": [
+        {
+          "t": 1790480260257,
+          "title": "没有可重试的上一轮",
+          "description": "上一轮没有留下可以重跑的记录 —— 可能根本没被记录下来，或者历史已被压缩。请在输入框中重新发送。"
+        }
+      ],
+      "composer": {
+        "value": "P0-STREAM: 网关已停止，这一轮预期失败。",
+        "textareaDisabled": false,
+        "sendDisabled": false,
+        "placeholder": "继续输入…"
+      },
+      "card": null,
+      "events": {
+        "counts": {
+          "session.resumed": 1,
+          "session.history": 1,
+          "session.status": 1
+        },
+        "events": [
+          {
+            "t": 1790480260013,
+            "type": "session.resumed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480260006-9",
+            "payload": "{\"agent\":\"dsh\",\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"permissionGate\":\"bundled\"}"
+          },
+          {
+            "t": 1790480260054,
+            "type": "session.history",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480260006-9",
+            "payload": "{\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"workspacePath\":\"/var/tmp/aiclient-p1-1/workspace\",\"mode\":\"initial\",\"messages\":[],\"offset\":0,\"limit\":80,\"totalCount\":0,\"hasMore\":false,\"branchRevision\":0,\"truncated\":false,\"omittedCount\":0}"
+          },
+          {
+            "t": 1790480260054,
+            "type": "session.status",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790480260006-9",
+            "payload": "{\"status\":\"idle\"}"
+          }
+        ]
+      },
+      "gatewayRequestsDuringRetry": 0
+    },
+    "nextTurn": {
+      "turn": {
+        "settled": true,
+        "sid": "session-live-1790479932213-jgzozpl",
+        "status": "idle",
+        "pendingPermissions": 0,
+        "messages": 12,
+        "lastError": null,
+        "statuses": [
+          {
+            "t": 1790480266442,
+            "status": "idle"
+          },
+          {
+            "t": 1790480266946,
+            "status": "running"
+          },
+          {
+            "t": 1790480269465,
+            "status": "idle"
+          }
+        ]
+      },
+      "reply": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+    }
+  },
+  "procs": {
+    "electronMain": [
+      {
+        "pid": 55209,
+        "ppid": 55176,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      }
+    ],
+    "nativeWorkers": [],
+    "dshHosts": [
+      {
+        "pid": 55746,
+        "ppid": 55209,
+        "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/src/dsh-host/host.ts",
+        "cwd": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home"
+      }
+    ],
+    "dshHostChildren": [],
+    "all": [
+      {
+        "pid": 55155,
+        "ppid": 1827,
+        "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/scripts/dev.js --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 55991,
+        "ppid": 55960,
+        "cmd": "/home/<user>/.nvm/versions/node/v22.23.2/bin/node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/docs/plantree/plans/runtime-hardening/evidence/b"
+      },
+      {
+        "pid": 55163,
+        "ppid": 55155,
+        "cmd": "npm exec electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 55175,
+        "ppid": 55163,
+        "cmd": "sh -c electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 55176,
+        "ppid": 55175,
+        "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/node_modules/.bin/electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/wo"
+      },
+      {
+        "pid": 55184,
+        "ppid": 55176,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping"
+      },
+      {
+        "pid": 55194,
+        "ppid": 55176,
+        "cmd": "/home/<user>/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping"
+      },
+      {
+        "pid": 55209,
+        "ppid": 55176,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 55211,
+        "ppid": 55209,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+      },
+      {
+        "pid": 55212,
+        "ppid": 55209,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox"
+      },
+      {
+        "pid": 55246,
+        "ppid": 55211,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+      },
+      {
+        "pid": 55252,
+        "ppid": 55209,
+        "cmd": "/proc/self/exe --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --no-sandbox --enable-crash-reporter=43f9"
+      },
+      {
+        "pid": 55267,
+        "ppid": 55209,
+        "cmd": "/proc/self/exe --type=renderer --enable-crash-reporter=43f90672-9d05-4282-94b3-7b97b175d8b2,no_channel --user-data-dir=/var/tmp/aiclient-p1-1/home/.config/jyw-a"
+      },
+      {
+        "pid": 55746,
+        "ppid": 55209,
+        "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7"
+      }
+    ]
+  },
+  "store": {
+    "sessionId": "session-live-1790479932213-jgzozpl",
+    "activeSessionId": "session-live-1790479932213-jgzozpl",
+    "status": "idle",
+    "title": "P0-STREAM: 请用流式方式回复一段文字",
+    "messageCount": 12,
+    "blockTypeCounts": {
+      "text": 9,
+      "tool_call": 2,
+      "tool_result": 2
+    },
+    "messages": [
+      {
+        "id": "dsh-user-8",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-8-text",
+            "type": "text",
+            "textLen": 24,
+            "textHead": "P0-STREAM: 请用流式方式回复一段文字。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t1-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t1-s1-b0",
+            "type": "text",
+            "textLen": 85,
+            "textHead": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-20",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-20-text",
+            "type": "text",
+            "textLen": 23,
+            "textHead": "P0-TOOL: 列一下工作区（点验工具行）。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t2-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_afce48c5-b6b4-4619-9e19-e713d42b2593",
+            "type": "tool_call",
+            "toolName": "bash",
+            "toolInputHead": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+          },
+          {
+            "id": "toolu_afce48c5-b6b4-4619-9e19-e713d42b2593-result",
+            "type": "tool_result",
+            "toolOk": true,
+            "toolOutputHead": "\"bridge tool row ok\\n/var/tmp/aiclient-p1-1/workspace\\n.\\n..\\nREADME.md\\n\""
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t2-s2",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t2-s2-b0",
+            "type": "text",
+            "textLen": 50,
+            "textHead": "Tool row finished: the workspace listing is above."
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-33",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-33-text",
+            "type": "text",
+            "textLen": 31,
+            "textHead": "P0-SLOWTOOL: 跑一个慢命令（点验运行中的工具行）。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t3-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "toolu_627c2e14-f1d4-4f74-a8a7-e0cc1932adb9",
+            "type": "tool_call",
+            "toolName": "bash",
+            "toolInputHead": "{\"command\":\"echo slow tool started; sleep 5; echo slow tool done\",\"description\":\"Run a slow command\"}"
+          },
+          {
+            "id": "toolu_627c2e14-f1d4-4f74-a8a7-e0cc1932adb9-result",
+            "type": "tool_result",
+            "toolOk": true,
+            "toolOutputHead": "\"slow tool started\\nslow tool done\\n\""
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t3-s2",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t3-s2-b0",
+            "type": "text",
+            "textLen": 26,
+            "textHead": "The slow command finished."
+          }
+        ]
+      },
+      {
+        "id": "dsh-user-46",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-46-text",
+            "type": "text",
+            "textLen": 25,
+            "textHead": "P0-STREAM: 网关已停止，这一轮预期失败。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t4-s1",
+        "role": "assistant",
+        "blocks": []
+      },
+      {
+        "id": "dsh-user-54",
+        "role": "user",
+        "blocks": [
+          {
+            "id": "dsh-user-54-text",
+            "type": "text",
+            "textLen": 29,
+            "textHead": "P0-STREAM: 失败之后再来一轮（确认会话仍可用）。"
+          }
+        ]
+      },
+      {
+        "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t5-s1",
+        "role": "assistant",
+        "blocks": [
+          {
+            "id": "dsh-aiclient-session-live-1790479932213-jgzozpl-t5-s1-b0",
+            "type": "text",
+            "textLen": 85,
+            "textHead": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+          }
+        ]
+      }
+    ],
+    "pendingQuestions": [],
+    "pendingPermissions": [],
+    "sessions": [
+      {
+        "id": "session-live-1790479932213-jgzozpl",
+        "title": "P0-STREAM: 请用流式方式回复一段文字",
+        "status": "idle"
+      }
+    ]
+  },
+  "problems": [
+    {
+      "kind": "console.error",
+      "text": "23:37:08.251 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:08.252 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:08.375 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:08.378 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:13.342 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:13.343 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:13.423 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:13.424 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:19.036 › Error occurred in handler for 'chat:forkSession': WorkerSlotError: WORKER_DSH_UNSUPPORTED: fork is not bridged to the DSH engine yet\n    at WorkerSlot.handleMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:6469:7)\n    at ChildProcess.onMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.j"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:19.036 › Error occurred in handler for 'chat:forkSession': WorkerSlotError: WORKER_DSH_UNSUPPORTED: fork is not bridged to the DSH engine yet\n    at WorkerSlot.handleMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:6469:7)\n    at ChildProcess.onMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.j"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:20.899 › Error occurred in handler for 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet\n    at WorkerSlot.handleMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:6469:7)\n    at ChildProcess.onMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:20.899 › Error occurred in handler for 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet\n    at WorkerSlot.handleMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:6469:7)\n    at ChildProcess.onMessage (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:36.707 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:36.707 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:36.879 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:36.879 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.148 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.149 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.253 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.253 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.016 › Error occurred in handler for 'chat:retryLastTurn': Error: retry_unavailable: Retrying the last turn is not bridged to the DSH engine yet\n    at withWorkerErrorCode (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125252:48)\n    at file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125456:15\n    at pr"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:40.016 › Error occurred in handler for 'chat:retryLastTurn': Error: retry_unavailable: Retrying the last turn is not bridged to the DSH engine yet\n    at withWorkerErrorCode (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125252:48)\n    at file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125456:15\n    at pr"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:46.531 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:46.531 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:46.727 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:46.727 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:49.141 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:49.141 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:49.245 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "23:37:49.245 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

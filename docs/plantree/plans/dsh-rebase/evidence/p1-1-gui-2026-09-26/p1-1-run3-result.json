@@ -1,0 +1,718 @@
+{
+  "step": "run3",
+  "startedAt": "2026-09-27T05:43:55.225Z",
+  "entered": {
+    "entered": "使用本机已有配置",
+    "dismissed": "知道了",
+    "dialogs": ["Close"]
+  },
+  "recorders": "installed",
+  "start": {
+    "store": {
+      "active": "session-live-1790487843400-yv94yua",
+      "lastError": null,
+      "workspaces": [
+        {
+          "id": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+          "path": "/var/tmp/aiclient-p1-1/workspace",
+          "name": "Main"
+        }
+      ],
+      "sessions": [
+        {
+          "id": "session-live-1790479932213-jgzozpl",
+          "status": "idle",
+          "title": "P0-STREAM: 请用流式方式回复一段文字",
+          "agent": "dsh",
+          "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+          "workspaceId": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+          "unbound": false,
+          "messages": 0
+        },
+        {
+          "id": "def893e5-c069-451d-9464-d1897c8779fa",
+          "status": "idle",
+          "title": "旧 pi 会话（P1-1 只读点验）",
+          "agent": "pi",
+          "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl",
+          "workspaceId": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+          "unbound": false,
+          "messages": 0
+        },
+        {
+          "id": "session-live-1790487843400-yv94yua",
+          "status": "idle",
+          "title": "Live Agent Host",
+          "agent": null,
+          "runtimeIdentity": null,
+          "workspaceId": "ws:main:/var/tmp/aiclient-p1-1/workspace",
+          "unbound": false,
+          "messages": 0
+        }
+      ]
+    },
+    "procs": {
+      "electronMain": [
+        {
+          "pid": 59311,
+          "ppid": 59278,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+        }
+      ],
+      "nativeWorkers": [],
+      "dshHosts": [],
+      "dshHostChildren": [],
+      "all": [
+        {
+          "pid": 56266,
+          "ppid": 1827,
+          "cmd": "/home/<user>/.nvm/versions/node/v22.23.2/bin/node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/docs/plantree/plans/runtime-hardening/evidence/b"
+        },
+        {
+          "pid": 59256,
+          "ppid": 1827,
+          "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/scripts/dev.js --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+        },
+        {
+          "pid": 59265,
+          "ppid": 59256,
+          "cmd": "npm exec electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+        },
+        {
+          "pid": 59277,
+          "ppid": 59265,
+          "cmd": "sh -c electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+        },
+        {
+          "pid": 59278,
+          "ppid": 59277,
+          "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/node_modules/.bin/electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/wo"
+        },
+        {
+          "pid": 59286,
+          "ppid": 59278,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping"
+        },
+        {
+          "pid": 59296,
+          "ppid": 59278,
+          "cmd": "/home/<user>/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping"
+        },
+        {
+          "pid": 59311,
+          "ppid": 59278,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+        },
+        {
+          "pid": 59313,
+          "ppid": 59311,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+        },
+        {
+          "pid": 59314,
+          "ppid": 59311,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox"
+        },
+        {
+          "pid": 59349,
+          "ppid": 59313,
+          "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+        },
+        {
+          "pid": 59355,
+          "ppid": 59311,
+          "cmd": "/proc/self/exe --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --no-sandbox --enable-crash-reporter=43f9"
+        },
+        {
+          "pid": 59368,
+          "ppid": 59311,
+          "cmd": "/proc/self/exe --type=renderer --enable-crash-reporter=43f90672-9d05-4282-94b3-7b97b175d8b2,no_channel --user-data-dir=/var/tmp/aiclient-p1-1/home/.config/jyw-a"
+        }
+      ]
+    }
+  },
+  "legacy": {
+    "sessionId": "def893e5-c069-451d-9464-d1897c8779fa",
+    "opened": {
+      "ok": true,
+      "matches": 2,
+      "activeSessionId": "def893e5-c069-451d-9464-d1897c8779fa"
+    },
+    "trace": [
+      {
+        "t": 1790487847914,
+        "status": "idle",
+        "lastError": null,
+        "messages": 2,
+        "composer": "",
+        "drafts": []
+      }
+    ],
+    "preview": [
+      {
+        "role": "user",
+        "text": "devD30 第一轮 GUI：回一句话"
+      },
+      {
+        "role": "assistant",
+        "text": "fake gateway ok"
+      }
+    ],
+    "factsBefore": {
+      "readonlyCard": false,
+      "readonlyCardText": null,
+      "errorBox": [],
+      "composerButtons": [
+        "Attach files",
+        "执行 · 每次询问",
+        "p0fake/fake-1 · unverified",
+        "发送消息 [disabled]"
+      ]
+    },
+    "eventsBefore": {
+      "counts": {
+        "session.history": 1
+      },
+      "events": [
+        {
+          "t": 1790487847632,
+          "type": "session.history",
+          "sessionId": "def893e5-c069-451d-9464-d1897c8779fa",
+          "requestId": "replay-def893e5-c069-451d-9464-d1897c8779fa-1",
+          "payload": "{\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl\",\"workspacePath\":\"/var/tmp/aiclient-p1-1/workspace\",\"agent\":\"pi\",\"mode\":\"branch\",\"messages\":[{\"id\":\"h:a575f7cc-8020-4424-b2ea-1464fbea61be\",\"entryId\":\"a575f7cc-8020-4424-b2ea-1464fbea61be\",\"role\":\"user\",\"timestamp\":1789647375947,\"blocks\":[{\"type\":\"text\",\"id\":\"h:a575f7cc-8020-4424-b2ea-1464fbea61be:text:0\",\"text\":\"devD30 第一轮 GUI：回一句话\"}]},{\"id\":\"h:740c758b-e377-43d2-aaca-53b1c09b8c90\",\"ent…"
+        }
+      ]
+    },
+    "sent": 1790487854204,
+    "trace2": [
+      {
+        "t": 1790487854595,
+        "status": "idle",
+        "lastError": "Error invoking remote method 'chat:resumeSession': Error: legacy_session_readonly: Session def893e5-c069-451d-9464-d1897c8779fa was written by the previous chat engine and is read-only until it is migrated",
+        "messages": 2,
+        "composer": "",
+        "drafts": []
+      }
+    ],
+    "factsAfter": {
+      "readonlyCard": true,
+      "readonlyCardText": "迁移前只能查看\n\n这个对话由之前的聊天引擎创建。迁移完成之前，这里只能查看，不能继续对话。\n\n要继续工作请新建一个对话；这个对话会原样保留。\n\n详情\n\ndevD30 第一轮 GUI：回一句话\n\n已工作 1 秒\n最终输出\n\nfake gateway ok\n\n✻ 完成于 08:16",
+      "errorBox": [
+        "Error: Error invoking remote method 'chat:resumeSession': Error: legacy_session_readonly: Session def893e5-c069-451d-9464-d1897c8779fa was written by the previous chat engine and is read-only until it is migrated"
+      ],
+      "composerButtons": [
+        "Attach files",
+        "执行 · 每次询问",
+        "p0fake/fake-1 · unverified",
+        "重试上一条消息",
+        "发送消息 [disabled]"
+      ]
+    },
+    "composerAfter": {
+      "value": "",
+      "textareaDisabled": false,
+      "sendDisabled": true,
+      "placeholder": "继续输入…"
+    },
+    "textBackInComposer": false,
+    "toasts": [],
+    "eventsAfter": {
+      "counts": {},
+      "events": []
+    },
+    "gatewayRequests": 0,
+    "newProcesses": [],
+    "fileLines": 6,
+    "indexRow": {
+      "sessionId": "def893e5-c069-451d-9464-d1897c8779fa",
+      "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl",
+      "agent": "pi",
+      "workspacePath": "/var/tmp/aiclient-p1-1/workspace",
+      "title": "旧 pi 会话（P1-1 只读点验）",
+      "model": "p0fake/fake-1",
+      "updatedAt": 1790480790869,
+      "archived": false
+    }
+  },
+  "restartClick": {
+    "resumed": {
+      "opened": {
+        "ok": true,
+        "matches": 2,
+        "activeSessionId": "session-live-1790479932213-jgzozpl"
+      },
+      "trace": [
+        {
+          "t": 1790487862795,
+          "status": "idle",
+          "lastError": null,
+          "messages": 0,
+          "composer": "",
+          "drafts": []
+        }
+      ],
+      "facts": {
+        "readonlyCard": false,
+        "readonlyCardText": null,
+        "errorBox": [],
+        "composerButtons": ["Attach files", "执行 · 每次询问", "Automatic", "发送消息 [disabled]"]
+      },
+      "events": {
+        "counts": {
+          "session.stderr": 1,
+          "session.resumed": 1,
+          "session.history": 1,
+          "session.status": 1
+        },
+        "events": [
+          {
+            "t": 1790487863751,
+            "type": "session.stderr",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "payload": "{\"line\":\"[dsh-host] ready {\\\"type\\\":\\\"ready\\\",\\\"pid\\\":59629,\\\"node\\\":\\\"v24.18.0\\\",\\\"execPath\\\":\\\"~/code/ai-client/out-node-runtime/node\\\",\\\"execArgv\\\":[\\\"--expose-internals\\\"],\\\"dshRuntimeVersion\\\":\\\"0.1.7-rc.2\\\",\\\"bundles\\\":[\\\"@deepseek-ai/dsh-base\\\",\\\"@aiclient/dsh-app\\\"],\\\"composition\\\":{\\\"rows\\\":96,\\\"disabledLiteral\\\":[\\\"tool-plugin-manager\\\",\\\"hmr\\\",\\\"deepseek-llm-api-extensions\\\",\\\"session-log-deepseek\\\",\\\"session-title-llm\\\",\\\"plugin-package-inventory-deepseek\\\",\\\"deepseek-account\\\",\\\"ses…"
+          },
+          {
+            "t": 1790487863793,
+            "type": "session.resumed",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790487862740-1",
+            "payload": "{\"agent\":\"dsh\",\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"permissionGate\":\"bundled\"}"
+          },
+          {
+            "t": 1790487863795,
+            "type": "session.history",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790487862740-1",
+            "payload": "{\"runtimeIdentity\":\"/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json\",\"workspacePath\":\"/var/tmp/aiclient-p1-1/workspace\",\"mode\":\"initial\",\"messages\":[],\"offset\":0,\"limit\":80,\"totalCount\":0,\"hasMore\":false,\"branchRevision\":0,\"truncated\":false,\"omittedCount\":0}"
+          },
+          {
+            "t": 1790487863795,
+            "type": "session.status",
+            "sessionId": "session-live-1790479932213-jgzozpl",
+            "requestId": "resume-1790487862740-1",
+            "payload": "{\"status\":\"idle\"}"
+          }
+        ]
+      },
+      "newProcesses": [
+        {
+          "pid": 59629,
+          "ppid": 59311,
+          "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/src/dsh-host/host.ts"
+        }
+      ],
+      "timelineMessages": 0
+    },
+    "turn": {
+      "settled": true,
+      "sid": "session-live-1790479932213-jgzozpl",
+      "status": "idle",
+      "pendingPermissions": 0,
+      "messages": 3,
+      "lastError": null,
+      "statuses": [
+        {
+          "t": 1790487873396,
+          "status": "running"
+        },
+        {
+          "t": 1790487873898,
+          "status": "idle"
+        }
+      ]
+    },
+    "reply": "Tool row finished: the workspace listing is above.",
+    "tool": {
+      "callId": "toolu_c6d1a716-c3e8-43da-8923-f00dbbd3ecd7",
+      "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+      "settled": true,
+      "ok": true,
+      "output": "\"bridge tool row ok\\n/var/tmp/aiclient-p1-1/workspace\\n.\\n..\\nREADME.md\\n\""
+    },
+    "events": {
+      "counts": {
+        "session.status": 2,
+        "message.started": 3,
+        "message.delta": 2,
+        "message.completed": 3,
+        "tool.started": 1,
+        "tool.updated": 1,
+        "session.stderr": 1,
+        "tool.completed": 1,
+        "session.completed": 1
+      },
+      "events": [
+        {
+          "t": 1790487872992,
+          "type": "session.status",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"status\":\"running\"}"
+        },
+        {
+          "t": 1790487873131,
+          "type": "message.started",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-user-101\",\"role\":\"user\",\"attemptId\":\"session-live-1790479932213-jgzozpl:2\"}"
+        },
+        {
+          "t": 1790487873232,
+          "type": "message.completed",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-user-101\"}"
+        },
+        {
+          "t": 1790487873232,
+          "type": "message.started",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s1\",\"role\":\"assistant\",\"model\":\"aiclient-gateway/fake-1\"}"
+        },
+        {
+          "t": 1790487873391,
+          "type": "tool.started",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s1\",\"toolCallId\":\"toolu_c6d1a716-c3e8-43da-8923-f00dbbd3ecd7\",\"name\":\"bash\",\"input\":{\"__streaming\":{\"bytes\":0,\"lines\":0}}}"
+        },
+        {
+          "t": 1790487873438,
+          "type": "tool.updated",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s1\",\"toolCallId\":\"toolu_c6d1a716-c3e8-43da-8923-f00dbbd3ecd7\",\"input\":{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}}"
+        },
+        {
+          "t": 1790487873684,
+          "type": "session.stderr",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "payload": "{\"line\":\"[dsh-host] warn local-subprocess-runtime: subprocess-local is using weaker process-tree containment because the current user-systemd scope or private bootstrap is unavailable; descendants that escape the process group or direct-parent tree are not guaranteed to terminate or delay waitForExit()\"}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "tool.completed",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s1\",\"toolCallId\":\"toolu_c6d1a716-c3e8-43da-8923-f00dbbd3ecd7\",\"ok\":true,\"output\":\"bridge tool row ok\\n/var/tmp/aiclient-p1-1/workspace\\n.\\n..\\nREADME.md\\n\"}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "message.completed",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s1\"}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "message.started",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s2\",\"role\":\"assistant\",\"model\":\"aiclient-gateway/fake-1\"}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "message.completed",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"messageId\":\"dsh-aiclient-session-live-1790479932213-jgzozpl-t10-s2\"}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "session.completed",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{}"
+        },
+        {
+          "t": 1790487873687,
+          "type": "session.status",
+          "sessionId": "session-live-1790479932213-jgzozpl",
+          "requestId": "send-1790487872984-2",
+          "payload": "{\"status\":\"idle\"}"
+        }
+      ]
+    },
+    "hosts": [
+      {
+        "pid": 59629,
+        "ppid": 59311
+      }
+    ],
+    "nativeWorkers": []
+  },
+  "procs": {
+    "electronMain": [
+      {
+        "pid": 59311,
+        "ppid": 59278,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      }
+    ],
+    "nativeWorkers": [],
+    "dshHosts": [
+      {
+        "pid": 59629,
+        "ppid": 59311,
+        "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/src/dsh-host/host.ts",
+        "cwd": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home"
+      }
+    ],
+    "dshHostChildren": [],
+    "all": [
+      {
+        "pid": 56266,
+        "ppid": 1827,
+        "cmd": "/home/<user>/.nvm/versions/node/v22.23.2/bin/node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/docs/plantree/plans/runtime-hardening/evidence/b"
+      },
+      {
+        "pid": 59256,
+        "ppid": 1827,
+        "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/scripts/dev.js --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 59265,
+        "ppid": 59256,
+        "cmd": "npm exec electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 59277,
+        "ppid": 59265,
+        "cmd": "sh -c electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 59278,
+        "ppid": 59277,
+        "cmd": "node /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/node_modules/.bin/electron-vite dev -- --no-sandbox --open-path=/var/tmp/aiclient-p1-1/wo"
+      },
+      {
+        "pid": 59286,
+        "ppid": 59278,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron-vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.25.12 --ping"
+      },
+      {
+        "pid": 59296,
+        "ppid": 59278,
+        "cmd": "/home/<user>/code/ai-client/node_modules/vite/node_modules/@esbuild/linux-x64/bin/esbuild --service=0.27.2 --ping"
+      },
+      {
+        "pid": 59311,
+        "ppid": 59278,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      },
+      {
+        "pid": 59313,
+        "ppid": 59311,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+      },
+      {
+        "pid": 59314,
+        "ppid": 59311,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-sandbox"
+      },
+      {
+        "pid": 59349,
+        "ppid": 59313,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron --type=zygote --no-zygote-sandbox --no-sandbox"
+      },
+      {
+        "pid": 59355,
+        "ppid": 59311,
+        "cmd": "/proc/self/exe --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --no-sandbox --enable-crash-reporter=43f9"
+      },
+      {
+        "pid": 59368,
+        "ppid": 59311,
+        "cmd": "/proc/self/exe --type=renderer --enable-crash-reporter=43f90672-9d05-4282-94b3-7b97b175d8b2,no_channel --user-data-dir=/var/tmp/aiclient-p1-1/home/.config/jyw-a"
+      },
+      {
+        "pid": 59629,
+        "ppid": 59311,
+        "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7"
+      }
+    ]
+  },
+  "problems": [
+    {
+      "kind": "console.error",
+      "text": "01:43:56.737 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:43:56.737 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.399 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.417 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.552 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.652 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.731 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.880 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.926 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.977 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:04.001 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:04.038 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:04.077 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.595 › Error occurred in handler for 'worktree:list': Error: fatal: not a git repository (or any of the parent directories): .git\n\n    at Object.action (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11259:25)\n    at PluginStore.exec (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11295:25)\n    at file:"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.595 › Error occurred in handler for 'worktree:list': Error: fatal: not a git repository (or any of the parent directories): .git\n\n    at Object.action (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11259:25)\n    at PluginStore.exec (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11295:25)\n    at file:"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.603 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.603 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.605 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:03.605 › Error occurred in handler for 'legacy-import:listProjects': Error: OS-backed encryption is unavailable for the legacy import manifest\n    at LegacyImportManifest.ensureIntegrityKey (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:129692:13)\n    at async LegacyImportManifest.ensureLoaded (file:///home/<user>/code/ai-client/.claude/worktrees/agen"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:04.959 › Error occurred in handler for 'worktree:list': Error: fatal: not a git repository (or any of the parent directories): .git\n\n    at Object.action (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11259:25)\n    at PluginStore.exec (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11295:25)\n    at file:"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:04.959 › Error occurred in handler for 'worktree:list': Error: fatal: not a git repository (or any of the parent directories): .git\n\n    at Object.action (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11259:25)\n    at PluginStore.exec (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:11295:25)\n    at file:"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:05.028 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:05.029 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:06.297 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:06.297 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:07.616 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:07.616 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:07.747 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:07.748 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:14.256 › Error occurred in handler for 'chat:resumeSession': Error: legacy_session_readonly: Session def893e5-c069-451d-9464-d1897c8779fa was written by the previous chat engine and is read-only until it is migrated\n    at legacyReadonly (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125192:10)\n    at file:///home/<user>/code/ai-client/.claude/worktre"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:14.256 › Error occurred in handler for 'chat:resumeSession': Error: legacy_session_readonly: Session def893e5-c069-451d-9464-d1897c8779fa was written by the previous chat engine and is read-only until it is migrated\n    at legacyReadonly (file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125192:10)\n    at file:///home/<user>/code/ai-client/.claude/worktre"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:22.723 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:22.723 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:22.648 › Error occurred in handler for 'chat:readSessionPage': Error: session_replay_unavailable: Session session-live-1790479932213-jgzozpl runs on DSH, which has no main-process replay yet\n    at file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125640:15\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:22.648 › Error occurred in handler for 'chat:readSessionPage': Error: session_replay_unavailable: Session session-live-1790479932213-jgzozpl runs on DSH, which has no main-process replay yet\n    at file:///home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out/main/index.js:125640:15\n    at async Session.<anonymous> (node:electron/js2c/browser_init:2:107280)"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:23.871 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:23.871 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.115 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.115 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.375 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.376 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.680 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.681 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.730 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "01:44:33.730 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

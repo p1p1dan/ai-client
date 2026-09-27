@@ -9,7 +9,7 @@ Role: implementation-status。更新日期：2026-09-26。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替方案已定（[方案](topics/p1-1-engine-cutover.md)，决策 005～010 待用户审批），代码已落地（`100ebcf1`），开发机 GUI 点验进行中。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。P1-5 模型目录与凭据方案已定（[方案](topics/p1-5-models-and-credentials.md)，决策 033～040 待用户审批，其中 036、037、038 请重点审批）。P1-6 权限移植方案已定（[方案](topics/p1-6-permissions.md)，决策 041～049 待用户审批，其中 044、045 请重点审批）。
+P1 分支内 DSH 替换。P1-0 已完成（2026-09-26）。P1-1 引擎直替已完成（`100ebcf1`，GUI 点验通过，[证据](evidence/p1-1-gui-2026-09-26.md)），决策 005～010 待用户审批。点验查出的 D1 / D2（被拒后草稿丢失）作为收尾马上修。P1-2 打包方案已定（[方案](topics/p1-2-host-packaging.md)，决策 011～018 待用户审批），等 P1-1 落地后施工。P1-3 共享宿主方案已定（[方案](topics/p1-3-shared-host.md)，决策 019～025 待用户审批），P1-3b 可与 P1-2 并行。P1-4 bridge 对等方案已定（[方案](topics/p1-4-bridge-parity.md)，决策 026～032 待用户审批，其中 028 重试请重点审批），排在 P1-3 之后。P1-5 模型目录与凭据方案已定（[方案](topics/p1-5-models-and-credentials.md)，决策 033～040 待用户审批，其中 036、037、038 请重点审批）。P1-6 权限移植方案已定（[方案](topics/p1-6-permissions.md)，决策 041～049 待用户审批，其中 044、045 请重点审批）。
 
 ## Next Target
 
@@ -22,7 +22,7 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Active TODO
 
-1. P1-1 开发机 GUI 点验（opus 代理，临时 HOME + 假网关），通过后标 ✅。
+1. P1-1 收尾：修点验缺陷 D1 / D2（渲染层），同批修安全缺口，即停止向 DSH 宿主下发含明文 key 的 `modelCatalog`。
 2. P1-2 施工，排在 P1-1 落地之后（两者都改 bridge 入口）。
 3. P1-1 落地后并行施工 P1-2 与 P1-3b；P1-3a 排在 P1-2 搬 bridge 之后。
 4. 安全缺口先修：停止向 DSH 宿主下发含明文 key 的 `modelCatalog`（P1-5 方案 §1 第 3 条），等 GUI 点验结束后派工。
@@ -36,5 +36,6 @@ P1-1 实现：Main 直替、身份与索引、bridge 最小补丁、单测与 br
 
 ## Last Verified
 
+- 2026-09-27 P1-1 GUI 点验（Linux 开发机，`100ebcf1`，临时 HOME、本地假网关，11 次请求都带假 key）：新建会话走 DSH ✅，恢复与崩溃重启 ✅，旧会话只读 ⚠️（草稿丢失），拒绝路径 ✅ / ⚠️（带图时草稿丢失），`session_locked` 未能取证。
 - 2026-09-26 P1-1（Linux 开发机，内容同 `100ebcf1`）：四套 tsc 全部退出 0；相关单测 65 个文件、1043 例，加上渲染层 165 个文件、3201 例，全部通过；bridge-smoke 18 项判定全部为真。全量 Vitest 与 GUI 未跑，GUI 点验进行中。
 - 2026-09-26 P1-0（Linux 开发机，`30a0c257`）：四套 tsc 全部退出 0；`src/main/services/agent-host/` 与 worker RPC 类型相关单测 19 个文件、314 例全过；`bridge-smoke.ts` 6 项判定全部为真。全量 Vitest 与 GUI 未跑。

@@ -1,0 +1,112 @@
+{
+  "askedAt": 1790487784052,
+  "goneAfterMs": 1088,
+  "before": {
+    "electronMain": [
+      {
+        "pid": 56740,
+        "ppid": 56696,
+        "cmd": "/home/<user>/code/ai-client/node_modules/electron/dist/electron . --no-sandbox --open-path=/var/tmp/aiclient-p1-1/workspace --remote-debugging-port=9222"
+      }
+    ],
+    "dshHosts": [
+      {
+        "pid": 56915,
+        "ppid": 56740,
+        "cmd": "/home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/out-node-runtime/node --expose-internals /home/<user>/code/ai-client/.claude/worktrees/agent-a84b7bf3214a2affd/src/dsh-host/host.ts",
+        "cwd": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home"
+      }
+    ],
+    "nativeWorkers": []
+  },
+  "left": [],
+  "strayHosts": [],
+  "gatewayStillUp": true,
+  "dshHome": {
+    "home": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home",
+    "files": [
+      {
+        "path": "aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+        "size": 238,
+        "birthtimeMs": 1790480091908,
+        "mtimeMs": 1790480091908,
+        "mode": "600"
+      },
+      {
+        "path": "profiles/aiclient/cordis.patch.yml",
+        "size": 217,
+        "birthtimeMs": 1790480090795,
+        "mtimeMs": 1790480090795,
+        "mode": "664"
+      },
+      {
+        "path": "profiles/aiclient/cordis.yml",
+        "size": 3,
+        "birthtimeMs": 1790480090808,
+        "mtimeMs": 1790480916494,
+        "mode": "664"
+      },
+      {
+        "path": "profiles/aiclient/package.json",
+        "size": 205,
+        "birthtimeMs": 1790480090795,
+        "mtimeMs": 1790480090795,
+        "mode": "664"
+      },
+      {
+        "path": "profiles/aiclient/pnpm-workspace.yaml",
+        "size": 61,
+        "birthtimeMs": 1790480090795,
+        "mtimeMs": 1790480090795,
+        "mode": "664"
+      },
+      {
+        "path": "sessions/--var-tmp-aiclient-p1-1-workspace--/aiclient-session-live-1790479932213-jgzozpl/session.lock",
+        "size": 0,
+        "birthtimeMs": 1790480091858,
+        "mtimeMs": 1790480917089,
+        "mode": "664"
+      },
+      {
+        "path": "sessions/--var-tmp-aiclient-p1-1-workspace--/aiclient-session-live-1790479932213-jgzozpl/session.v4.jsonl.zstd",
+        "size": 33016,
+        "birthtimeMs": 1790480091905,
+        "mtimeMs": 1790480950033,
+        "mode": "600"
+      },
+      {
+        "path": "storages/session_projcache/sessions/aiclient-session-live-1790479932213-jgzozpl.json",
+        "size": 6250,
+        "birthtimeMs": 1790487784195,
+        "mtimeMs": 1790487784195,
+        "mode": "600"
+      }
+    ]
+  },
+  "index": [
+    {
+      "sessionId": "session-live-1790479932213-jgzozpl",
+      "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-live-1790479932213-jgzozpl.dsh.json",
+      "piLeaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "agent": "dsh",
+      "workspacePath": "/var/tmp/aiclient-p1-1/workspace",
+      "title": "P0-STREAM: 请用流式方式回复一段文字",
+      "updatedAt": 1790480950030,
+      "archived": false
+    },
+    {
+      "sessionId": "def893e5-c069-451d-9464-d1897c8779fa",
+      "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl",
+      "agent": "pi",
+      "workspacePath": "/var/tmp/aiclient-p1-1/workspace",
+      "title": "旧 pi 会话（P1-1 只读点验）",
+      "model": "p0fake/fake-1",
+      "updatedAt": 1790480790869,
+      "archived": false
+    }
+  ],
+  "eventMarkAtQuit": 52
+}

@@ -1,0 +1,28 @@
+{
+  "turn": {
+    "settled": true,
+    "sid": "session-live-1790479932213-jgzozpl",
+    "status": "failed",
+    "pendingPermissions": 0,
+    "messages": 14,
+    "lastError": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"Connection error.\",\"code\":\"TRANSPORT\"}}",
+    "statuses": [
+      {
+        "t": 1790480507701,
+        "status": "idle"
+      },
+      {
+        "t": 1790480508207,
+        "status": "failed"
+      }
+    ]
+  },
+  "clicked": true,
+  "toasts": [],
+  "composer": {
+    "value": "P0-STREAM: 网关又停了，这一轮也预期失败（为「继续」截图）。",
+    "textareaDisabled": false,
+    "sendDisabled": false,
+    "placeholder": "继续输入…"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "legacyId": "def893e5-c069-451d-9464-d1897c8779fa",
+  "fixture": "docs/plantree/plans/runtime-hardening/evidence/batch-e-devbox-2026-09-17/dev-D/dev-30-sessionA-before-tui.jsonl",
+  "target": "/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl",
+  "headerBefore": {
+    "kind": "header",
+    "version": 4,
+    "id": "cb56fa8c-ebc4-41e8-ba8d-d332988aa0c6",
+    "createdAt": 1789647375645,
+    "cwd": "/home/<user>/code/ai-client",
+    "type": "session",
+    "timestamp": "2026-09-17T12:16:15.645Z"
+  },
+  "headerAfter": {
+    "kind": "header",
+    "version": 4,
+    "id": "cb56fa8c-ebc4-41e8-ba8d-d332988aa0c6",
+    "createdAt": 1789647375645,
+    "cwd": "/var/tmp/aiclient-p1-1/workspace",
+    "type": "session",
+    "timestamp": "2026-09-17T12:16:15.645Z"
+  },
+  "entries": 6,
+  "row": {
+    "sessionId": "def893e5-c069-451d-9464-d1897c8779fa",
+    "runtimeIdentity": "/var/tmp/aiclient-p1-1/home/.pi/agent/sessions/def893e5-c069-451d-9464-d1897c8779fa.jsonl",
+    "agent": "pi",
+    "workspacePath": "/var/tmp/aiclient-p1-1/workspace",
+    "title": "旧 pi 会话（P1-1 只读点验）",
+    "model": "p0fake/fake-1",
+    "updatedAt": 1790480790869,
+    "archived": false
+  }
+}
