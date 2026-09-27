@@ -15,3 +15,7 @@
 - 不选「放弃，只留 DSH 通用 `subagent`」：自定义代理会全部失效。
 - 代价：约 1 人周。
 - 开工前做实验 E7：插件调 `ctx.subagents.start` 时，`persona` 与 `toolFilter` 能否生效。
+
+## 补记（2026-09-27）
+
+工具形态由[决策 070](070-delegate-tool-finalized.md)（待审批）定稿为单个 `delegate {agent, description, prompt, run_in_background?}`。
