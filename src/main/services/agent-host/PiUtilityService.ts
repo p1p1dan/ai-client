@@ -59,11 +59,14 @@ export interface PiUtilityServiceOptions {
   /**
    * P5-5 — assemble the model catalog to hand the one-shot worker.
    *
-   * Injected rather than called inside the class for the same reason
-   * `WorkerManager` injects it: production reads the user's keyring, and a test
-   * must not have to. Returning `undefined` leaves the worker reading the agent
-   * directory, which is the pre-P5-5 behaviour and what a locked keyring still
-   * falls back to.
+   * Injected rather than called inside the class: production reads the user's
+   * keyring, and a test must not have to. Returning `undefined` leaves the
+   * worker reading the agent directory, which is the pre-P5-5 behaviour and
+   * what a locked keyring still falls back to.
+   *
+   * dsh-rebase P1-1: this native one-shot worker is now the only process Main
+   * hands a catalog to. Chat sessions run on the DSH host and get none (see
+   * `ChatSlotBootstrapPayload` in createPiWorkerSlot.ts).
    */
   readModelCatalog?: () => WorkerModelCatalog | undefined;
   createSlot?: (input: {

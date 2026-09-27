@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseSendDispatchErrorCode } from '../sendDispatchError';
+import { isEngineUnsupportedSendError, parseSendDispatchErrorCode } from '../sendDispatchError';
 
 /**
  * The strings here are the real wire shape, not simplified: `chat.ts`
@@ -55,5 +55,38 @@ describe('parseSendDispatchErrorCode', () => {
     expect(parseSendDispatchErrorCode('session_not_found: gone')).toBe('session_not_found');
     expect(parseSendDispatchErrorCode(undefined)).toBeNull();
     expect(parseSendDispatchErrorCode(null)).toBeNull();
+  });
+});
+
+/**
+ * dsh-rebase P1-1, GUI point-check D2. The exact sentence the 2026-09-26 run
+ * photographed: `WorkerManager` lets the bridge's `WorkerSlotError` through
+ * unrenamed, so the code sits after the class name, inside Electron's wrapper.
+ */
+describe('isEngineUnsupportedSendError', () => {
+  const REFUSED = new Error(
+    "Error invoking remote method 'chat:send': WorkerSlotError: WORKER_DSH_UNSUPPORTED: Sending attachments is not bridged to the DSH engine yet"
+  );
+
+  it('recognises the bridge refusal as it reaches the composer', () => {
+    expect(isEngineUnsupportedSendError(REFUSED)).toBe(true);
+    expect(isEngineUnsupportedSendError('WORKER_DSH_UNSUPPORTED: x')).toBe(true);
+  });
+
+  it('is not a recoverable code: nothing retries it', () => {
+    expect(parseSendDispatchErrorCode(REFUSED)).toBeNull();
+  });
+
+  it('reverse: other failures, and look-alike codes, are not it', () => {
+    for (const other of [
+      electronWrapped('session_busy: Session s1 already has active turn send-4'),
+      electronWrapped('worker transport closed'),
+      new Error('WORKER_DSH_UNSUPPORTED_V2: something else'),
+      new Error('XWORKER_DSH_UNSUPPORTED: something else'),
+      undefined,
+      null,
+    ]) {
+      expect(isEngineUnsupportedSendError(other), String(other)).toBe(false);
+    }
   });
 });

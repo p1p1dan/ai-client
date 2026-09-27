@@ -21,6 +21,7 @@ import {
   HISTORY_TAKEOVER_BUSY_HINT,
   HISTORY_TAKEOVER_FAILED_HINT,
   type HistoryErrorCode,
+  isReadOnlyResumeRefusal,
   parseHistoryError,
   parseSessionLockOwner,
   selectHistoryError,
@@ -282,6 +283,7 @@ describe('encodePiResumeError (T32 / ah-lib-03)', () => {
     ['WORKER_REQUEST_FAILED: Pi model not found: maxapi/grok-4.6', 'model_missing'],
   ])('maps %s to %s', (message, code) => {
     expect(encodePiResumeError(new Error(message))).toEqual({
+      code,
       message,
       encoded: `${code}: ${message}`,
     });
@@ -947,6 +949,28 @@ describe('DSH resume refusals (P1-1)', () => {
       expect(key && zhTranslations[key], key).toBeDefined();
     }
     expect(zhTranslations['Read-only until migration']).toBe('迁移前只能查看');
+  });
+
+  /**
+   * GUI point-check D1 (2026-09-26). The card rendered, and under it a raw red
+   * box with Main's English sentence; the send's text was parked behind a
+   * Retry that could only be refused again. The resume call sites read this
+   * one predicate for both decisions.
+   */
+  it('names the read-only refusal for the resume call sites, and nothing else', () => {
+    const encoded = encodePiResumeError(new Error(LEGACY));
+    expect(encoded.code).toBe('legacy_session_readonly');
+    expect(isReadOnlyResumeRefusal(encoded.code)).toBe(true);
+    for (const other of [
+      'session_locked: held',
+      'dsh_session_missing: gone',
+      'WORKER_WORKSPACE_MISSING: gone',
+      'WORKER_RPC_TIMEOUT: slow',
+    ]) {
+      expect(isReadOnlyResumeRefusal(encodePiResumeError(new Error(other)).code), other).toBe(
+        false
+      );
+    }
   });
 
   it('files a missing DSH session under the dead-session card', () => {

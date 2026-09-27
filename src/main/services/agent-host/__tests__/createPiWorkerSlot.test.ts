@@ -181,38 +181,30 @@ describe('createPiWorkerSlot', () => {
   });
 
   /**
-   * P5-5. The catalog travels in the bootstrap payload rather than being read
-   * off disk by the worker, and it is omitted entirely when Main has nothing to
-   * hand over — an absent field is what keeps a pre-P5-5 install's payload
-   * byte-identical to what it was, and what leaves the smoke lanes reading
-   * their fixture directory.
+   * dsh-rebase P1-1 (P1-5 WM-01). A chat slot is a DSH host, which never reads
+   * a model catalog, and the host's RPC server keeps the whole bootstrap
+   * payload for the life of the session — so a catalog here would park the
+   * user's plaintext provider keys in that process for nothing. The options
+   * type no longer admits the field; this pins the payload even for a caller
+   * that gets one past the type.
    */
-  it('carries the model catalog when one is supplied, and omits the field otherwise', async () => {
-    const withCatalog = new LoopbackTransport();
-    void createPiWorkerSlot({
+  it('never sends a model catalog in the bootstrap, even when a caller supplies one', async () => {
+    const transport = new LoopbackTransport();
+    const smuggled = {
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
       modelCatalog: {
         models: { providers: { gw: { api: 'anthropic-messages', models: [{ id: 'm' }] } } },
-        auth: { gw: { type: 'api_key', key: 'sk' } },
+        auth: { gw: { type: 'api_key', key: 'sk-canary' } },
       },
-      createTransport: () => withCatalog,
-    });
-    await vi.waitFor(() => expect(withCatalog.requests).toHaveLength(1));
-    expect(withCatalog.requests[0].payload).toMatchObject({
-      modelCatalog: { auth: { gw: { type: 'api_key', key: 'sk' } } },
-    });
-
-    const without = new LoopbackTransport();
-    void createPiWorkerSlot({
-      slotKey: 'workspace:/repo',
-      logicalSessionId: 'logical-1',
-      cwd: '/repo',
-      createTransport: () => without,
-    });
-    await vi.waitFor(() => expect(without.requests).toHaveLength(1));
-    expect(without.requests[0].payload).not.toHaveProperty('modelCatalog');
+      createTransport: () => transport,
+    } as Parameters<typeof createPiWorkerSlot>[0];
+    void createPiWorkerSlot(smuggled);
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
+    expect(transport.requests[0].type).toBe('worker.bootstrap');
+    expect(transport.requests[0].payload).not.toHaveProperty('modelCatalog');
+    expect(JSON.stringify(transport.requests[0])).not.toContain('sk-canary');
   });
 
   /**

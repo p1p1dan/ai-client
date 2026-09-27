@@ -88,6 +88,12 @@ export interface ComposerAttachments {
   clearDrafts: () => void;
   dismissNotice: () => void;
   /**
+   * dsh-rebase P1-1 (GUI point-check D2): a notice that did not come from a
+   * paste — the engine refused a send's attachments. Same slot, and the same
+   * clear triggers (next attach / Send / x), as a skip notice.
+   */
+  showNotice: (notice: AttachmentNotice) => void;
+  /**
    * F4 (round-4 Codex NEEDS-FIX #3): synchronous read of the CURRENT draft
    * count off `draftsRef` (the same live ref `applyDrafts` already keeps in
    * sync on every mutation), not the `drafts` state array — which lags a
@@ -378,6 +384,8 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
 
   const dismissNotice = useCallback(() => setNotice(null), []);
 
+  const showNotice = useCallback((next: AttachmentNotice) => setNotice(next), []);
+
   const getLiveDraftCount = useCallback(() => draftsRef.current.length, []);
 
   const totalBytes = useMemo(() => totalAttachmentBytes(drafts), [drafts]);
@@ -394,6 +402,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     addDrafts,
     clearDrafts,
     dismissNotice,
+    showNotice,
     getLiveDraftCount,
   };
 }

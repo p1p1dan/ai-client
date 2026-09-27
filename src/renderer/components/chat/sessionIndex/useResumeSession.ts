@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { encodePiResumeError } from '../historyError';
+import { encodePiResumeError, isReadOnlyResumeRefusal } from '../historyError';
 import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
 import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
@@ -75,7 +75,9 @@ export function useResumeSession(): UseResumeSessionResult {
       } catch (error) {
         const encodedError = encodePiResumeError(error);
         useChatSessionsStore.setState((current) => ({
-          lastError: encodedError.message,
+          // dsh-rebase P1-1 (D1): a read-only legacy chat's history card is the
+          // whole report; no raw copy of Main's sentence above the composer.
+          lastError: isReadOnlyResumeRefusal(encodedError.code) ? null : encodedError.message,
           historyErrors: {
             ...current.historyErrors,
             [sessionId]: encodedError.encoded,

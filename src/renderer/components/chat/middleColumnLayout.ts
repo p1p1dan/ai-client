@@ -1093,6 +1093,10 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
 /** T-05: pending-question follow-up copy (A07 screen 6 group E — same lifecycle as the collapsed dock strip). */
 export const PENDING_QUESTION_PLACEHOLDER = 'Add more optional details…';
 
+/** dsh-rebase P1-1 (D1): a legacy chat is viewable only, until it is migrated. */
+export const READ_ONLY_SESSION_PLACEHOLDER =
+  'Read-only until migration — start a new chat to continue';
+
 /**
  * Composer placeholder text. Sending/busy/no-session/no-workspace states are
  * identical in both modes; only the default "ready to type" copy differs —
@@ -1145,6 +1149,13 @@ export function composerPlaceholder(
      * doesn't read like an ordinary follow-up sitting in flight.
      */
     isCreatingSession?: boolean;
+    /**
+     * dsh-rebase P1-1 (GUI point-check D1): a chat the previous engine wrote,
+     * read-only until it is migrated (`isLegacyReadOnlySession`). Said before
+     * the user types rather than after Main refuses the send; the box stays
+     * enabled, since Main is the one that decides.
+     */
+    readOnly?: boolean;
   },
   t: Translate = englishTranslate
 ): string {
@@ -1172,6 +1183,12 @@ export function composerPlaceholder(
         : t('Sending {{count}} attachments to Agent Host…', { count: input.attachmentCount });
     }
     return t('Sending to Agent Host…');
+  }
+  // After `sending` (the handshake that ends in the refusal is still true to
+  // report) and ahead of everything else: none of the rungs below can apply
+  // to a chat that cannot run a turn at all.
+  if (input.readOnly) {
+    return t(READ_ONLY_SESSION_PLACEHOLDER);
   }
   if (input.pendingQuestion) {
     return t(PENDING_QUESTION_PLACEHOLDER);

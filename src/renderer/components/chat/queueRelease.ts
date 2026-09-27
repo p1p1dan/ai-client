@@ -353,6 +353,17 @@ export type FailureAffordance = 'resend' | 'restore-draft' | 'none';
  */
 export interface FailureAffordanceContext {
   sessionNeverCreated?: boolean;
+  /**
+   * dsh-rebase P1-1 (GUI point-check D1/D2) — the engine refused this attempt
+   * by rule before admitting anything: Main will not resume a chat the
+   * previous engine wrote (`legacy_session_readonly`, decision 005), or the DSH
+   * bridge cannot carry attachments yet (decision 010). Sending the same
+   * payload again is refused the same way every time, so the one-click Retry
+   * the old answer armed was a button that cannot work, next to an empty
+   * composer. The payload goes back to the composer, where the user can edit
+   * it (drop the image) or take it to a new chat.
+   */
+  refusedByRule?: boolean;
 }
 
 export function decideFailureAffordance(
@@ -379,7 +390,10 @@ export function decideFailureAffordance(
   // never conjure one where the previous answer was `'none'`: `'release'` keeps
   // its queue-owned recovery untouched, so no payload can end up in two places
   // at once.
-  if (outcome === 'rejected' && context.sessionNeverCreated) {
+  //
+  // P1-1 `refusedByRule` takes the same row for the same reason: nothing was
+  // admitted, and the composer is where the payload can still be edited.
+  if (outcome === 'rejected' && (context.sessionNeverCreated || context.refusedByRule)) {
     return origin === 'release' ? 'none' : 'restore-draft';
   }
   return shouldArmRetryable(outcome, origin) ? 'resend' : 'none';
@@ -407,13 +421,20 @@ export function decideFailureAffordance(
  *    echoed that user message into the timeline, so a declined restore costs
  *    visibility rather than data, and arming a resend there would re-introduce
  *    exactly the double send A1 removed.
+ *
+ * P1-1 `refusedByRule` falls back the same way. That Retry can only be refused
+ * again, but it is the one surface left holding the payload, and pressing it
+ * once the composer is empty puts the payload back there — losing the text
+ * would be worse than a button that cannot send it.
  */
 export function decideDeclinedRestore(
   outcome: RunEntryOutcome,
   origin: RunSendOrigin,
   context: FailureAffordanceContext = {}
 ): 'resend' | 'none' {
-  if (outcome !== 'rejected' || !context.sessionNeverCreated) return 'none';
+  if (outcome !== 'rejected' || !(context.sessionNeverCreated || context.refusedByRule)) {
+    return 'none';
+  }
   // `'release'` never reaches a restore in the first place (the queue still
   // owns that entry); spelled out so a future caller cannot make it.
   return origin === 'release' ? 'none' : 'resend';

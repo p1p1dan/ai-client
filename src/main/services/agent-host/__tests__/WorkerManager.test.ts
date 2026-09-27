@@ -3803,6 +3803,38 @@ describe('WorkerManager P1-1: every spawn path runs on DSH', () => {
     }
   });
 
+  /**
+   * P1-5 WM-01, done early: no spawn path hands the slot a model catalog. Its
+   * `auth` half is plaintext provider keys the DSH host never reads, and the
+   * host keeps the bootstrap payload for the life of the session. The static
+   * half (no catalog reader left in WorkerManager) is in chatEngineDshOnly.
+   */
+  it('[P1-1-no-catalog] create, cold resume and crash restart spawn without a model catalog', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 's1');
+    await h.manager.resumeSession({
+      sessionId: 's2',
+      sessionFile: stubFor('s2'),
+      workspacePath: '/repo',
+      ownerWebContentsId: 11,
+    });
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      h.records[0].crash('host exited');
+      await vi.waitFor(() =>
+        expect(
+          h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === 's1')
+        ).toMatchObject({ state: 'ready', generation: 2 })
+      );
+    } finally {
+      error.mockRestore();
+    }
+    expect(h.createSlot).toHaveBeenCalledTimes(3);
+    for (const [options] of h.createSlot.mock.calls) {
+      expect(options).not.toHaveProperty('modelCatalog');
+    }
+  });
+
   it('[P1-1-stop-watchdog] a stop the DSH host never settles restarts it from the same stub', async () => {
     vi.useFakeTimers();
     const h = createHarness({ bootstrapFile: dshBootstrap });

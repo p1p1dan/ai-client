@@ -2786,6 +2786,8 @@ export const zhTranslations: Record<string, string> = {
   'Send follow-up…': '继续输入…',
   'Message Pi…': '给 Pi 发消息…',
   'Cannot send right now…': '现在无法发送…',
+  // dsh-rebase P1-1 (D1): a chat the previous engine wrote, before any send.
+  'Read-only until migration — start a new chat to continue': '迁移前只能查看，要继续请新建对话',
   'Move queued message up': '把排队消息上移',
   'Move queued message down': '把排队消息下移',
   'Edit queued message': '编辑排队消息',
@@ -3290,6 +3292,9 @@ export const zhTranslations: Record<string, string> = {
   '"{{name}}" is not a file — skipped.': '「{{name}}」不是文件，已跳过。',
   '"{{name}}" looks like binary data — skipped.': '「{{name}}」看起来是二进制数据，已跳过。',
   '{{count}} attachments skipped: {{reasons}}': '已跳过 {{count}} 个附件：{{reasons}}',
+  // dsh-rebase P1-1 (D2): the DSH bridge refused a send's attachments.
+  'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.':
+    '当前引擎暂不支持附件，后续版本恢复。移除附件后即可发送。',
 
   // D9 — the import refusal. The main process has no locale, so it now sends a
   // code plus the ceiling it enforced; these two sentences are where that

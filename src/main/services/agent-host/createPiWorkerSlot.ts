@@ -7,6 +7,15 @@ import { forkDshHost } from './DshHostProcess';
 import { WorkerSlot, type WorkerSlotOptions } from './WorkerSlot';
 import type { WorkerTransport } from './WorkerTransport';
 
+/**
+ * dsh-rebase P1-1: a chat slot's bootstrap never carries `modelCatalog`. Its
+ * `auth` half holds plaintext provider keys, the DSH host never reads it, and
+ * the host's RPC server keeps the whole bootstrap payload in memory for the
+ * life of the session. The key reaches the host per request instead (P1-5,
+ * decision 034). Omitted from the type so a caller cannot hand one over.
+ */
+export type ChatSlotBootstrapPayload = Omit<WorkerBootstrapPayload, 'modelCatalog'>;
+
 export interface CreatePiWorkerSlotOptions
   extends Omit<
       WorkerSlotOptions,
@@ -19,7 +28,7 @@ export interface CreatePiWorkerSlotOptions
       | 'onLifecycle'
       | 'onStderr'
     >,
-    WorkerBootstrapPayload {
+    ChatSlotBootstrapPayload {
   slotKey: string;
   generation?: number;
   /** Cold-start budget for `worker.bootstrap` only; warm RPCs keep `requestTimeoutMs`. */
@@ -89,7 +98,9 @@ export async function createPiWorkerSlot(
   options.onSlotCreated?.(slot);
 
   try {
-    const result = await slot.request<WorkerBootstrapResult, WorkerBootstrapPayload>(
+    // Built field by field on purpose: spreading `options` would forward
+    // whatever else a caller put on it, `modelCatalog` included.
+    const result = await slot.request<WorkerBootstrapResult, ChatSlotBootstrapPayload>(
       'worker.bootstrap',
       {
         logicalSessionId: options.logicalSessionId,
@@ -129,10 +140,7 @@ export async function createPiWorkerSlot(
         ...(options.providerIdleTimeoutMs !== undefined
           ? { providerIdleTimeoutMs: options.providerIdleTimeoutMs }
           : {}),
-        // P5-5: present only when Main could assemble one. Absent leaves the
-        // native worker reading the agent directory, which is what every
-        // pre-P5-5 build did and what the smoke lanes still do.
-        ...(options.modelCatalog ? { modelCatalog: options.modelCatalog } : {}),
+        // No `modelCatalog`: see `ChatSlotBootstrapPayload`.
       },
       { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );

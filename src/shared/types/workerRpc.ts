@@ -207,6 +207,10 @@ export interface WorkerBootstrapPayload {
    * same parser and cannot drift. Absent means "read the directory", which is
    * what the smoke and probe lanes do — they point at a fixture directory and
    * have no Main to assemble anything.
+   *
+   * dsh-rebase P1-1: Main no longer sends this to chat sessions. They run on
+   * the DSH host, which never reads it (`ChatSlotBootstrapPayload` in
+   * createPiWorkerSlot.ts); the field stays for the native worker's contract.
    */
   modelCatalog?: WorkerModelCatalog;
 }

@@ -3,6 +3,7 @@ import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
+  isLegacyReadOnlySession,
   isSessionBusy,
   resumeDisplayTitle,
   shouldApplyResumeResult,
@@ -212,6 +213,32 @@ describe('shouldResumeSession (T-03)', () => {
         ).reason
       ).toBe('busy:running');
     });
+  });
+});
+
+/**
+ * dsh-rebase P1-1, GUI point-check D1: a legacy chat's composer looked fully
+ * usable until its first send was refused. This is the composer's prediction
+ * of that refusal — Main's own rule (`assertCreatableIndexRow`), read off the
+ * row the store already has.
+ */
+describe('isLegacyReadOnlySession (P1-1 D1)', () => {
+  it('is a pi binding that names a transcript', () => {
+    expect(
+      isLegacyReadOnlySession(session({ agent: PI_AGENT, runtimeIdentity: '/sessions/pi.jsonl' }))
+    ).toBe(true);
+  });
+
+  it('reverse: a DSH chat, an unset binding, or a pi row that never ran can still run', () => {
+    const stub = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+    expect(isLegacyReadOnlySession(session({ agent: DSH_AGENT, runtimeIdentity: stub }))).toBe(
+      false
+    );
+    // No binding yet: a chat this build created, which is DSH.
+    expect(isLegacyReadOnlySession(session({ runtimeIdentity: stub }))).toBe(false);
+    // Main turns this one into a DSH session on its first send.
+    expect(isLegacyReadOnlySession(session({ agent: PI_AGENT }))).toBe(false);
+    expect(isLegacyReadOnlySession(undefined)).toBe(false);
   });
 });
 

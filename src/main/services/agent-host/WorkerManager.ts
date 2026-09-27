@@ -65,7 +65,6 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
-  type WorkerModelCatalog,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondPayload,
@@ -98,7 +97,6 @@ import {
   inspectPiImport,
   reconcilePiImport,
 } from '../legacyImport/PiImportProcess';
-import { resolveNativeModelCatalog } from '../piModelConfig';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
 import {
   BOOTSTRAP_REQUEST_TIMEOUT_MS,
@@ -311,17 +309,8 @@ export interface WorkerManagerOptions {
    */
   readSubagentSettings?: () => NativeSubagentSettings;
   /**
-   * P5-5 — assemble the model catalog for a native worker, or return
-   * `undefined` to let it read the agent directory as before.
-   *
-   * Injected for the same reason as the reader above: the real implementation
-   * reaches the credential vault and Electron's paths, which a unit test of
-   * slot lifecycle has no business starting.
-   */
-  readModelCatalog?: () => WorkerModelCatalog | undefined;
-  /**
    * The prompt-cache TTLs the settings page holds, or `{}` when the user has
-   * chosen neither. Injected for the same reason as the two readers above: the
+   * chosen neither. Injected for the same reason as the reader above: the
    * real one unwraps the renderer's persist layer out of the shared settings
    * file, which needs Electron's `app` paths.
    */
@@ -502,7 +491,6 @@ function attemptDurationSuffix(retry: SessionRetryInfo): string {
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
   private readonly readSubagentSettings: () => NativeSubagentSettings;
-  private readonly readModelCatalog: () => WorkerModelCatalog | undefined;
   private readonly readPromptCacheTtls: () => PromptCacheTtlSettings;
   private readonly readProviderTimeout: () => ProviderTimeoutSettings;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
@@ -553,10 +541,6 @@ export class WorkerManager {
     // unit test in this file — would then fail on something unrelated to what
     // it is testing. The production singleton below injects the real reader.
     this.readSubagentSettings = options.readSubagentSettings ?? (() => ({ enabled: true }));
-    // P5-5: the default hands nothing over, so a manager built without a
-    // host behaves exactly as it did before this node — the worker reads the
-    // agent directory. The production singleton below injects the assembler.
-    this.readModelCatalog = options.readModelCatalog ?? (() => undefined);
     // Same rule again: an empty object means "the user chose neither", which
     // leaves the worker on the shipped defaults (1h main / 5m delegate).
     this.readPromptCacheTtls = options.readPromptCacheTtls ?? (() => ({}));
@@ -2552,7 +2536,9 @@ export class WorkerManager {
     options: { fresh?: boolean; forceTakeover?: boolean } = {}
   ): Promise<CreatedPiWorkerSlot> {
     let expectedSlot: WorkerSlot | null = null;
-    const modelCatalog = this.readModelCatalog();
+    // dsh-rebase P1-1: no model catalog here. Its `auth` half holds plaintext
+    // provider keys and the DSH host never reads it; keys reach the host per
+    // request instead (P1-5, decision 034). See `ChatSlotBootstrapPayload`.
     const created = await this.createSlot({
       slotKey: entry.key,
       logicalSessionId: entry.logicalSessionId,
@@ -2573,10 +2559,6 @@ export class WorkerManager {
       // T093, read at spawn time for the same reason: a timeout the user just
       // changed reaches the next worker without an app restart.
       ...this.readProviderTimeout(),
-      // P5-5: read at spawn time for the same reason as the line above — a key
-      // the user just added, or a sync that just landed, reaches the next
-      // worker without waiting for a restart.
-      ...(modelCatalog ? { modelCatalog } : {}),
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -3536,8 +3518,6 @@ export const workerManager = new WorkerManager({
   // P5-2-5: the real settings read, injected here rather than defaulted inside
   // the class. See the constructor note.
   readSubagentSettings: () => nativeSubagentSettings(),
-  // P5-5: the real assembler, injected for the same reason.
-  readModelCatalog: () => resolveNativeModelCatalog(),
   // The real settings-page read, injected for the same reason.
   readPromptCacheTtls: () => promptCacheTtlSettings(),
   // T093: the real settings-page read, injected for the same reason.

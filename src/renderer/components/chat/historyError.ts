@@ -95,7 +95,11 @@ function carriedCode(error: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
-export function encodePiResumeError(error: unknown): { message: string; encoded: string } {
+export function encodePiResumeError(error: unknown): {
+  code: HistoryErrorCode;
+  message: string;
+  encoded: string;
+} {
   const message = error instanceof Error ? error.message : String(error);
   const carried = carriedCode(error);
   const byField = carried ? RESUME_ERROR_CODES[carried] : undefined;
@@ -107,7 +111,26 @@ export function encodePiResumeError(error: unknown): { message: string; encoded:
     // fallback, which would otherwise call this a failed history read — it is
     // not, and the fix is nowhere near retrying.
     (isModelMissingError(message) ? 'model_missing' : 'read_failed');
-  return { message, encoded: `${code}: ${message}` };
+  return { code, message, encoded: `${code}: ${message}` };
+}
+
+/**
+ * dsh-rebase P1-1 (GUI point-check D1) — Main refused the resume because the
+ * chat is read-only until it is migrated (decision 005).
+ *
+ * Not a fault, and every resume call site treats it the same two ways:
+ *  - the history card is the whole report. It says, translated, that the chat
+ *    can be viewed and how to carry on, and keeps Main's English sentence under
+ *    Details; copying that sentence into `lastError` as well put a second, raw
+ *    box above the composer;
+ *  - a send it cut short was refused by rule, so its payload goes back to the
+ *    composer instead of behind a Retry that can only be refused again
+ *    (`refusedByRule` in `queueRelease.ts`).
+ *
+ * Every other code keeps its old route.
+ */
+export function isReadOnlyResumeRefusal(code: HistoryErrorCode): boolean {
+  return code === 'legacy_session_readonly';
 }
 
 export interface HistoryErrorView {

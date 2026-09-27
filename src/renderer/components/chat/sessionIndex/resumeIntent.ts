@@ -1,4 +1,4 @@
-import { isAgentWireName, sessionAgent } from '@shared/types/agentWire';
+import { isAgentWireName, PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { RuntimePermissionSettings } from '@shared/types/runtimePermission';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
@@ -140,6 +140,24 @@ export function shouldResumeSession(
       ...(options.forceTakeover ? { forceTakeover: true as const } : {}),
     },
   };
+}
+
+/**
+ * dsh-rebase P1-1 (GUI point-check D1) — a chat the previous engine wrote,
+ * which Main keeps read-only until P1-9 migrates it (decision 005).
+ *
+ * The same rule Main applies (`assertCreatableIndexRow`): a `pi` binding that
+ * names a transcript. It is a prediction, for the composer to say so BEFORE a
+ * send is refused: Main alone can tell a transcript that was never written,
+ * and repairs that row into a DSH session on its first resume — at which point
+ * `session.created` rebinds the row here and this turns false.
+ */
+export function isLegacyReadOnlySession(
+  session: Pick<ChatSession, 'agent' | 'runtimeIdentity'> | undefined
+): boolean {
+  return (
+    session !== undefined && sessionAgent(session) === PI_AGENT && Boolean(session.runtimeIdentity)
+  );
 }
 
 /**

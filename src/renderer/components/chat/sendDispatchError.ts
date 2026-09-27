@@ -34,3 +34,24 @@ export function parseSendDispatchErrorCode(error: unknown): RecoverableSendError
   const match = CODE_PATTERN.exec(message);
   return match ? (match[1] as RecoverableSendErrorCode) : null;
 }
+
+/**
+ * dsh-rebase P1-1 (GUI point-check D2) — the DSH bridge refused the send
+ * because it does not carry something yet (decision 010).
+ *
+ * On the `chat.send` path that is attachments and nothing else: the bridge
+ * checks them before it starts a turn, so nothing was admitted. The code
+ * arrives as `WorkerSlotError: WORKER_DSH_UNSUPPORTED: …` inside Electron's own
+ * wrapper — `WorkerManager` passes this one through unrenamed — and is matched
+ * with the same word guards as the codes above.
+ *
+ * Deliberately NOT one of the recoverable codes: resending the same payload is
+ * refused the same way every time, so the composer hands the payload back
+ * instead of retrying it (`refusedByRule` in `queueRelease.ts`).
+ */
+const ENGINE_UNSUPPORTED_PATTERN = /(?:^|[^A-Za-z0-9_])WORKER_DSH_UNSUPPORTED(?![A-Za-z0-9_])/;
+
+export function isEngineUnsupportedSendError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '');
+  return ENGINE_UNSUPPORTED_PATTERN.test(message);
+}

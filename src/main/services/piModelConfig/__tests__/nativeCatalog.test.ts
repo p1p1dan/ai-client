@@ -136,7 +136,7 @@ describe('resolveNativeModelCatalogWith (P5-5 / import-catalog-12)', () => {
  * A source scan, for the reason `index.ts` has no unit test at all: it reaches
  * for `electron`, the app state root and the credential vault at import time.
  * What is claimed here is only the wiring — that the picker's Main-side entry
- * point hands `readCatalog` the same assembly `WorkerManager` hands a worker.
+ * point hands `readCatalog` the same assembly Main hands a native worker.
  * What the two documents CONTAIN is covered in `PiModelConfigService.test.ts`.
  */
 describe('the model picker and the worker are handed the same catalog', () => {
@@ -152,18 +152,21 @@ describe('the model picker and the worker are handed the same catalog', () => {
   });
 
   it('[T062-D3] the worker side still reads the same assembler', () => {
-    // If this name ever stops being the one `WorkerManager` injects, the line
+    // If this name ever stops being the one the worker side injects, the line
     // above is wiring the picker to a different catalog than the worker's.
-    const manager = readFileSync(
+    // dsh-rebase P1-1: chat sessions run on the DSH host and get no catalog
+    // (`ChatSlotBootstrapPayload`), so the one-shot utility worker is the
+    // native process left that is handed one.
+    const utility = readFileSync(
       path.join(
         path.dirname(fileURLToPath(import.meta.url)),
         '..',
         '..',
         'agent-host',
-        'WorkerManager.ts'
+        'PiUtilityService.ts'
       ),
       'utf8'
     );
-    expect(manager).toContain('readModelCatalog: () => resolveNativeModelCatalog()');
+    expect(utility).toContain('readModelCatalog: () => resolveNativeModelCatalog()');
   });
 });

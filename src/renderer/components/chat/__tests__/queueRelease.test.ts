@@ -986,6 +986,51 @@ describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
     });
   });
 
+  /**
+   * dsh-rebase P1-1, GUI point-check D1/D2. A legacy chat's resume refusal
+   * (`legacy_session_readonly`) and the DSH bridge's attachment refusal
+   * (`WORKER_DSH_UNSUPPORTED`) both left an empty composer and a round Retry
+   * that could only be refused again — the user's text (and image) out of
+   * sight. Refused by rule means: back to the composer, never a Retry.
+   */
+  describe('P1-1 — refused by rule before admission', () => {
+    const REFUSED = { refusedByRule: true } as const;
+
+    it('hands a direct/Retry payload back to the composer instead of arming Retry', () => {
+      expect(decideFailureAffordance('rejected', 'direct', REFUSED)).toBe('restore-draft');
+      expect(decideFailureAffordance('rejected', 'retry', REFUSED)).toBe('restore-draft');
+    });
+
+    it("leaves 'release' to the queue, which still holds the entry", () => {
+      expect(decideFailureAffordance('rejected', 'release', REFUSED)).toBe('none');
+    });
+
+    it('never widens past `rejected`', () => {
+      for (const origin of ORIGINS) {
+        expect(decideFailureAffordance('committed', origin, REFUSED)).toBe('restore-draft');
+        expect(decideFailureAffordance('skipped', origin, REFUSED)).toBe('resend');
+        expect(decideFailureAffordance('pending', origin, REFUSED)).toBe('none');
+      }
+    });
+
+    it('reverse: without the fact, the old one-click Retry stays', () => {
+      expect(decideFailureAffordance('rejected', 'direct', { refusedByRule: false })).toBe(
+        'resend'
+      );
+    });
+
+    it('a restore the user typed over still leaves the payload somewhere', () => {
+      // The composer is not overwritten, so the Retry snapshot is the only
+      // surface left; pressing it with the composer empty restores the draft.
+      expect(decideDeclinedRestore('rejected', 'direct', REFUSED)).toBe('resend');
+      expect(decideDeclinedRestore('rejected', 'retry', REFUSED)).toBe('resend');
+      expect(decideDeclinedRestore('rejected', 'release', REFUSED)).toBe('none');
+      for (const origin of ORIGINS) {
+        expect(decideDeclinedRestore('committed', origin, REFUSED)).toBe('none');
+      }
+    });
+  });
+
   it('full matrix over every outcome/origin pair', () => {
     const expected: Record<RunEntryOutcome, Record<RunSendOrigin, FailureAffordance>> = {
       committed: { direct: 'restore-draft', retry: 'restore-draft', release: 'restore-draft' },

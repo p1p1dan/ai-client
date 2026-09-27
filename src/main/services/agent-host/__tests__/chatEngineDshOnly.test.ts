@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { stripComments } from '../../../../renderer/components/chat/__tests__/stripComments';
 
 /**
  * dsh-rebase P1-1 (decisions 004 and 009) — chat sessions run on DSH only.
@@ -44,6 +45,36 @@ describe('chat engine is DSH only (P1-1)', () => {
     ]) {
       expect(source, banned).not.toContain(banned);
     }
+  });
+
+  /**
+   * The chat bootstrap carries no model catalog: its `auth` half is plaintext
+   * provider keys, the DSH host never reads it, and the host's RPC server keeps
+   * the whole bootstrap payload for the life of the session. Keys reach the
+   * host per request instead (P1-5, decision 034). One-shot completions still
+   * hand a catalog to the native utility worker, which is untouched here.
+   * Comments are stripped: both files explain the ban by naming the field.
+   */
+  it('chat bootstraps carry no model catalog; the one-shot utility path keeps its own', () => {
+    const code = (name: string) => {
+      const file = path.join(AGENT_HOST, name);
+      return stripComments(read(file), file);
+    };
+    const manager = code('WorkerManager.ts');
+    for (const banned of [
+      'modelCatalog',
+      'readModelCatalog',
+      'resolveNativeModelCatalog',
+      'WorkerModelCatalog',
+    ]) {
+      expect(manager, banned).not.toContain(banned);
+    }
+    const slot = code('createPiWorkerSlot.ts');
+    expect(slot).toContain("Omit<WorkerBootstrapPayload, 'modelCatalog'>");
+    expect(slot).not.toContain('options.modelCatalog');
+    expect(slot).not.toMatch(/\bmodelCatalog\s*:/);
+    const utility = code('PiUtilityService.ts');
+    expect(utility).toContain('readModelCatalog: () => resolveNativeModelCatalog()');
   });
 
   it('WorkerManager spawns through exactly four paths and never binds a session to pi', () => {

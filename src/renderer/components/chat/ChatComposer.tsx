@@ -86,7 +86,7 @@ import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
-import { encodePiResumeError } from './historyError';
+import { encodePiResumeError, isReadOnlyResumeRefusal } from './historyError';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
 import {
@@ -139,11 +139,12 @@ import { ReadingColumn } from './ReadingColumn';
 import { isRetryUnavailableError, retryRunningRequestId } from './retryLastTurn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
-import { parseSendDispatchErrorCode } from './sendDispatchError';
+import { isEngineUnsupportedSendError, parseSendDispatchErrorCode } from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { onSessionEnded } from './sessionEndSignal';
 import { failureCardOwnsError } from './sessionFailure';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
+import { isLegacyReadOnlySession } from './sessionIndex/resumeIntent';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { readDefaultPermissions, readSessionPermissions } from './sessionPreferenceStore';
@@ -1865,6 +1866,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const retryRunningIds = new Set<string>();
     // The worker found no cut-short turn to re-run (`retry_unavailable`).
     let retryUnavailable = false;
+    // P1-1 D2: the DSH bridge refused this send's attachments
+    // (`WORKER_DSH_UNSUPPORTED`). Nothing was admitted, and the same payload
+    // is refused the same way every time.
+    let attachmentsRefused = false;
     const acceptRetry = () => {
       if (sawUserEcho) return;
       // Stands in for the echo everywhere below — the terminal gating, the
@@ -2168,6 +2173,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             retryUnavailable = true;
             return null;
           }
+          // P1-1 D2: refused by rule, before admission — the same shape as
+          // the line above. Only a send that carried attachments can be it;
+          // any other `WORKER_DSH_UNSUPPORTED` keeps the generic path.
+          if (!retryLastTurn && wireAttachments && isEngineUnsupportedSendError(error)) {
+            attachmentsRefused = true;
+            return null;
+          }
           // The WorkerManager can refuse a send outright — an idle-evicted
           // slot answers `session_not_found`, a slot still tearing down the
           // previous turn answers `session_busy`. Both arrive as an IPC
@@ -2426,8 +2438,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             fatalHostError ??
             'Pi session resume timed out before history hydration completed.';
           const encodedError = encodePiResumeError(message);
+          // P1-1 D1: a read-only legacy chat. Its history card is the whole
+          // report (no raw copy above the composer), and the refused payload
+          // goes back to the composer rather than behind a Retry.
+          const readOnly = isReadOnlyResumeRefusal(encodedError.code);
           useChatSessionsStore.setState((state) => ({
-            lastError: encodedError.message,
+            lastError: readOnly ? null : encodedError.message,
             historyErrors: {
               ...state.historyErrors,
               [sessionId]: encodedError.encoded,
@@ -2435,7 +2451,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           }));
           unbindHost();
           return finalizeOutcome(
-            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+            decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+            { refusedByRule: readOnly }
           );
         } else {
           useChatSessionsStore.setState((state) => ({
@@ -2564,15 +2581,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 fatalHostError ??
                 'Pi session resume timed out before history hydration completed.'
             );
+            // P1-1 D1, same as the resume branch above.
+            const readOnly = isReadOnlyResumeRefusal(encodedError.code);
             useChatSessionsStore.setState((state) => ({
-              lastError: encodedError.message,
+              lastError: readOnly ? null : encodedError.message,
               historyErrors: {
                 ...state.historyErrors,
                 [sessionId]: encodedError.encoded,
               },
             }));
             return finalizeOutcome(
-              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho })
+              decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+              { refusedByRule: readOnly }
             );
           }
           useChatSessionsStore.setState((state) => ({
@@ -2636,6 +2656,25 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
               ),
         });
         return 'skipped';
+      }
+
+      // P1-1 D2 — the engine cannot carry attachments yet (decision 010).
+      // Nothing was admitted and nothing is broken: no raw error box, no
+      // `unbindHost()` (the slot that answered is healthy), and no Retry — the
+      // same payload is refused the same way every time. The text and its
+      // attachments go back to the composer (`refusedByRule`), where the user
+      // can drop the attachments and send; the notice says why, next to them.
+      if (attachmentsRefused) {
+        attachments.showNotice({
+          tone: 'warning',
+          message: t(
+            'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.'
+          ),
+        });
+        return finalizeOutcome(
+          decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
+          { refusedByRule: true }
+        );
       }
 
       // R3: no `useChatSessionsStore.getState().lastError` read here — see
@@ -3501,6 +3540,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           pendingQuestion: pendingQuestionHere,
           queuedCount,
           isCreatingSession,
+          // P1-1 D1: say so before a send is refused; the box stays usable.
+          readOnly: isLegacyReadOnlySession(activeSession),
         },
         t
       )}

@@ -1,3 +1,4 @@
+import { zhTranslations } from '@shared/i18n';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
@@ -33,6 +34,7 @@ import {
   mentionPopupPlacementClass,
   middleColumnHostClass,
   queueStripWrapperClass,
+  READ_ONLY_SESSION_PLACEHOLDER,
   rememberSendAttempt,
   resolveComposerPopupPlacement,
   resolveIdleStatusText,
@@ -1596,5 +1598,57 @@ describe('composerPlaceholder', () => {
         isCreatingSession: true,
       })
     ).not.toMatch(/Creating session/);
+  });
+
+  /**
+   * dsh-rebase P1-1 (GUI point-check D1): a legacy chat said nothing until its
+   * first send was refused — the box looked fully usable. The copy now says so
+   * up front, in both modes and whatever else the ladder would have picked.
+   */
+  describe('read-only legacy chat (P1-1 D1)', () => {
+    const idle = {
+      canSend: true,
+      busy: false,
+      sending: false,
+      hasSession: true,
+      hasWorkspace: true,
+      hasCwd: true,
+      attachmentCount: 0,
+    };
+
+    it('says the chat is read-only instead of asking for a message', () => {
+      for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+        expect(composerPlaceholder({ ...idle, mode, readOnly: true })).toBe(
+          READ_ONLY_SESSION_PLACEHOLDER
+        );
+      }
+      // Ahead of the setup rungs, which cannot help a chat that cannot run.
+      expect(
+        composerPlaceholder({
+          ...idle,
+          mode: 'session',
+          canSend: false,
+          hasWorkspace: false,
+          readOnly: true,
+        })
+      ).toBe(READ_ONLY_SESSION_PLACEHOLDER);
+    });
+
+    it('still reports the send while it is in flight', () => {
+      expect(composerPlaceholder({ ...idle, mode: 'session', sending: true, readOnly: true })).toBe(
+        'Sending to Agent Host…'
+      );
+    });
+
+    it('reverse: an ordinary chat keeps its prompt', () => {
+      expect(composerPlaceholder({ ...idle, mode: 'session', readOnly: false })).toBe(
+        'Send follow-up…'
+      );
+      expect(composerPlaceholder({ ...idle, mode: 'session' })).toBe('Send follow-up…');
+    });
+
+    it('ships the copy in the dictionary', () => {
+      expect(zhTranslations[READ_ONLY_SESSION_PLACEHOLDER]).toBeDefined();
+    });
   });
 });
