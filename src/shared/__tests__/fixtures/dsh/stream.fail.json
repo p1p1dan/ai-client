@@ -1,0 +1,72 @@
+[
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "role": "user",
+      "attemptId": "attempt-FAIL"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "blockId": "dsh-user-8-text",
+      "text": "P1-FAIL: this request fails upstream."
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-8"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "session.failed",
+    "payload": {
+      "error": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"500 {\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"overloaded_error\\\",\\\"message\\\":\\\"P1-FAIL: the fake upstream failed this request\\\"}}\",\"code\":\"SERVER\"}}"
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

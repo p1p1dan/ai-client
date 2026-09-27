@@ -1,0 +1,104 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-stop-stream",
+      "piSessionId": "aiclient-rec-stop-stream",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-stream.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-stop-stream#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-stop-stream",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-stream.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-PACED {\"token\":\"stop-stream\",\"chunks\":30,\"chunkMs\":400} stream slowly; I will stop you."
+            }
+          ]
+        },
+        {
+          "id": "h:id-4",
+          "entryId": "id-4",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-4:text:0",
+              "text": "STREAMED-stop-stream 〔2〕流式正文片段。〔3〕流式正文片段。〔4〕流式正文片段。〔5〕流式正文片段"
+            }
+          ],
+          "incomplete": true,
+          "stopReason": "aborted",
+          "stopCause": "user_stop"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-stop-stream",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-stream.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-4",
+        "fileTailEntryId": "aiclient-rec-stop-stream#15"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-PACED {\"token\":\"stop-stream\",\"chunks\":30,\"chunkMs\":400} stream slowly; I will stop you.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-4",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "STREAMED-stop-stream 〔2〕流式正文片段。〔3〕流式正文片段。〔4〕流式正文片段。〔5〕流式正文片段",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  }
+}

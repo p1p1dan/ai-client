@@ -32,8 +32,10 @@
  *      C is then SIGKILLed mid-session.
  *   E  resumes S2 after that SIGKILL and recalls C's turn; meanwhile a second
  *      channel on the same host creates S3, and both stream at once without
- *      either channel seeing the other's events.
- *   F  resumes S1 in yet another host and recalls A's turns.
+ *      either channel seeing the other's events. Its first page
+ *      (`initialHistory`, P1-4a) is the history C answered before it died.
+ *   F  resumes S1 in yet another host and recalls A's turns; its first page is
+ *      the history A answered before it shut down.
  *   G  asks to CREATE S2 again, as a retry does when an earlier create reached
  *      the disk but never became Main's identity: the bridge reopens the log
  *      with the deterministic id instead of failing on it, and recalls C's turn.
@@ -56,6 +58,7 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { HostClient, type Message } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -87,12 +90,6 @@ const EMPTY_SESSION = 'bridge-smoke-empty';
 const SIDE_SESSION = 'bridge-smoke-side';
 const CHANNEL_UNKNOWN = 'WORKER_CHANNEL_UNKNOWN';
 
-type Message = Record<string, unknown>;
-
-function isRecord(value: unknown): value is Message {
-  return typeof value === 'object' && value !== null;
-}
-
 async function startGateway(root: string) {
   const child = spawn(
     nodeBin,
@@ -117,131 +114,6 @@ async function startGateway(root: string) {
     setTimeout(() => fail(new Error('fake gateway did not start')), 15_000);
   });
   return { child, port };
-}
-
-/**
- * One host process as the supervisor sees it: channel envelopes in both
- * directions, host control messages beside them.
- */
-class HostClient {
-  private requestSeq = 0;
-  private channelSeq = 0;
-  private readonly eventsByChannel = new Map<string, Message[]>();
-  /** Messages that are not channel envelopes: ready, pong, closed, stopped, fatal. */
-  readonly controls: Message[] = [];
-  /** `response:<requestId>` and `closed` per channel, in arrival order. */
-  readonly arrivals: Array<{ ch: string; what: string }> = [];
-  private readonly waiters = new Set<() => void>();
-  private readonly child: ChildProcess;
-
-  constructor(child: ChildProcess) {
-    this.child = child;
-    child.on('message', (message: unknown) => {
-      if (!isRecord(message)) return;
-      if (typeof message.ch === 'string' && isRecord(message.rpc)) {
-        const rpc = message.rpc;
-        if (rpc.kind === 'event' && rpc.type === 'runtime.event') {
-          this.events(message.ch).push(rpc.payload as Message);
-        } else if (rpc.kind === 'response') {
-          this.arrivals.push({ ch: message.ch, what: `response:${String(rpc.requestId)}` });
-        }
-      } else {
-        this.controls.push(message);
-        if (message.host === 'closed')
-          this.arrivals.push({ ch: String(message.ch), what: 'closed' });
-      }
-      for (const wake of [...this.waiters]) wake();
-    });
-  }
-
-  /** A fresh channel id: `c<host generation>-<sequence>`, never reused. */
-  openChannel(): string {
-    this.channelSeq += 1;
-    return `c1-${this.channelSeq}`;
-  }
-
-  events(ch: string): Message[] {
-    let list = this.eventsByChannel.get(ch);
-    if (!list) {
-      list = [];
-      this.eventsByChannel.set(ch, list);
-    }
-    return list;
-  }
-
-  send(message: Message): void {
-    this.child.send(message);
-  }
-
-  /** One RPC on a channel, answered with the raw worker RPC response (ok or not). */
-  call(ch: string, type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
-    const requestId = `smoke-${++this.requestSeq}`;
-    return new Promise((done, fail) => {
-      const timer = setTimeout(() => {
-        this.child.off('message', onMessage);
-        fail(new Error(`${type} on ${ch} timed out`));
-      }, timeoutMs);
-      const onMessage = (message: unknown) => {
-        if (!isRecord(message) || message.ch !== ch || !isRecord(message.rpc)) return;
-        const rpc = message.rpc;
-        if (rpc.kind !== 'response' || rpc.requestId !== requestId) return;
-        clearTimeout(timer);
-        this.child.off('message', onMessage);
-        done(rpc);
-      };
-      this.child.on('message', onMessage);
-      this.child.send({
-        ch,
-        rpc: {
-          protocolVersion: 1,
-          kind: 'request',
-          generation: GENERATION,
-          requestId,
-          type,
-          payload,
-        },
-      });
-    });
-  }
-
-  async request(ch: string, type: string, payload: Message, timeoutMs = 60_000): Promise<Message> {
-    const record = await this.call(ch, type, payload, timeoutMs);
-    if (record.ok) return record.result as Message;
-    throw new Error(`${type}: ${JSON.stringify(record.error)}`);
-  }
-
-  /** Resolve once `predicate` holds over the channel's events so far. */
-  until(
-    ch: string,
-    predicate: (events: Message[]) => boolean,
-    timeoutMs: number
-  ): Promise<boolean> {
-    return this.wait(() => predicate(this.events(ch)), timeoutMs);
-  }
-
-  /** The first control message matching `predicate`, waiting up to `timeoutMs`. */
-  async control(predicate: (message: Message) => boolean, timeoutMs: number) {
-    const found = () => this.controls.find(predicate);
-    await this.wait(() => found() !== undefined, timeoutMs);
-    return found();
-  }
-
-  private wait(check: () => boolean, timeoutMs: number): Promise<boolean> {
-    if (check()) return Promise.resolve(true);
-    return new Promise((done) => {
-      const timer = setTimeout(() => {
-        this.waiters.delete(wake);
-        done(false);
-      }, timeoutMs);
-      const wake = () => {
-        if (!check()) return;
-        clearTimeout(timer);
-        this.waiters.delete(wake);
-        done(true);
-      };
-      this.waiters.add(wake);
-    });
-  }
 }
 
 const payloadOf = (event: Message) => (event.payload ?? {}) as Message;
@@ -501,6 +373,8 @@ async function main() {
   let stubS1: string | undefined;
   let stubS2: string | undefined;
   let resumedS2: Message | undefined;
+  /** E's own bootstrap: the side session's bootstrap on the same host overwrites `hosts.E`. */
+  let resumedAfterKill: Message | undefined;
   let lockedCode: unknown;
   try {
     // ---- A: new session, persisted before its first turn, then the P0-3 turns
@@ -587,6 +461,10 @@ async function main() {
       escalated: fdsView(fdsRuns[1]),
     };
 
+    // P1-4a: what F's first page must repeat after the host restarts.
+    report.historyBeforeClose = await a.client.request(chA, 'worker.history', {
+      logicalSessionId: SESSION,
+    });
     // Dispose right after the turn ended (P1-1 left a projection-cache warning
     // here); the shared host lives on, so a late flush would surface now.
     const closedA = await closeSession(a, chA);
@@ -651,6 +529,10 @@ async function main() {
     await stopHost(d);
 
     // ---- C dies mid-session; E reopens S2 and recalls C's turn
+    // P1-4a: what E's first page must repeat after the crash restart.
+    report.historyBeforeKill = await c.client.request(chC, 'worker.history', {
+      logicalSessionId: EMPTY_SESSION,
+    });
     await kill(c);
     facts.afterKill = diskFacts(box.dshHome, `aiclient-${EMPTY_SESSION}`, stubS2);
     const e = startHost('E');
@@ -662,6 +544,7 @@ async function main() {
       sessionFile: stubS2,
     });
     if (!bootE.ok) throw new Error(`E bootstrap: ${JSON.stringify(bootE.error)}`);
+    resumedAfterKill = bootE.result as Message;
     // A second session on the same host, streaming beside the recall.
     const chSide = e.client.openChannel();
     const bootSide = await bootstrap(e, chSide, {
@@ -758,6 +641,17 @@ async function main() {
     | { mainSessions?: unknown[]; sideSessions?: unknown[] }
     | undefined;
   const dotEnv = experiments.dotEnv as { line?: string } | undefined;
+  /** A reopened session's first page is non-empty and repeats what the session answered before. */
+  const samePage = (reopened: unknown, before: unknown) => {
+    const page = (reopened as { page?: { messages?: unknown[] } } | undefined)?.page;
+    const earlier = (before as { page?: unknown } | undefined)?.page;
+    return (
+      Array.isArray(page?.messages) &&
+      page.messages.length > 0 &&
+      earlier !== undefined &&
+      JSON.stringify(page) === JSON.stringify(earlier)
+    );
+  };
   report.verdict = {
     // P0-3, unchanged
     streamedInManyDeltas: (stream?.assistantDeltas ?? 0) >= 10,
@@ -804,6 +698,15 @@ async function main() {
     resumedInOtherHostRecalled:
       recallOther?.reply?.includes('present=P0-STREAM,P0-TOOL missing=-') === true,
     exitedCleanlyAfterResume: exitOfHost('E').code === 0 && exitOfHost('F').code === 0,
+    // P1-4a: the first page after a restart is the projected log, the same as before it
+    initialHistoryMatchesBeforeResume: samePage(
+      (hosts.F?.bootstrap as Message | undefined)?.initialHistory,
+      report.historyBeforeClose
+    ),
+    initialHistoryMatchesBeforeCrash: samePage(
+      resumedAfterKill?.initialHistory,
+      report.historyBeforeKill
+    ),
     // P1-1: a repeated create reopens the existing log (deterministic id) and rewrites its stub
     recreateReopenedExistingLog:
       (hosts.G?.bootstrap as Message | undefined)?.sessionFile === stubS2 &&

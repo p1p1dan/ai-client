@@ -1,0 +1,139 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-tool",
+      "piSessionId": "aiclient-rec-tool",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-tool#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-tool",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "bridge tool row ok\n<workspace>\n.\n..\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-9:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 3,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-tool",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-9",
+        "fileTailEntryId": "aiclient-rec-tool#20"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-TOOL: list the workspace.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Tool row finished: the workspace listing is above.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 3,
+      "returnedNodes": 3,
+      "truncated": false
+    }
+  }
+}

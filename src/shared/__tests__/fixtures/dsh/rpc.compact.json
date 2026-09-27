@@ -1,0 +1,223 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-compact",
+      "piSessionId": "aiclient-rec-compact",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-compact#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-compact",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ]
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P0-TOOL: list the workspace."
+            }
+          ]
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-9:tool-call:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "name": "bash",
+              "input": {
+                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+                "description": "List the workspace"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-10:tool-result:toolu_id-7",
+              "toolCallId": "toolu_id-7",
+              "ok": true,
+              "output": "bridge tool row ok\n<workspace>\n.\n..\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "Tool row finished: the workspace listing is above."
+            }
+          ]
+        },
+        {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:summary:0",
+              "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)"
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 6,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-compact",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-15",
+        "fileTailEntryId": "aiclient-rec-compact#34"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-TOOL: list the workspace.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-9",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Tool row finished: the workspace listing is above.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "id-12",
+          "depth": 5,
+          "entryType": "compaction",
+          "role": "system",
+          "preview": "Context summary ## Primary Request and Intent - P1-COMPACT: stream a paragraph, then list the w…",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 6,
+      "returnedNodes": 6,
+      "truncated": false
+    }
+  },
+  "compact": {
+    "kind": "success",
+    "text": "Compacted 6 history items (~255 tokens).",
+    "sourceEventSeq": 31
+  }
+}

@@ -1,0 +1,360 @@
+{
+  "header": {
+    "version": 4,
+    "id": "aiclient-rec-stream",
+    "createdAt": "<ms>",
+    "cwd": "<workspace>",
+    "isSeeded": false
+  },
+  "inheritedEventCount": 0,
+  "cursor": 15,
+  "events": [
+    {
+      "type": "permission/preset",
+      "seq": 0,
+      "time": "<ms>",
+      "data": {
+        "preset": "workspace-write"
+      }
+    },
+    {
+      "type": "sandbox/mode",
+      "seq": 1,
+      "time": "<ms>",
+      "data": {
+        "mode": "workspace-write"
+      }
+    },
+    {
+      "type": "approval/policy",
+      "seq": 2,
+      "time": "<ms>",
+      "data": {
+        "policy": "ask"
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 3,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "P0-STREAM: stream a paragraph back to me."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-1"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 4,
+      "time": "<ms>",
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 5,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 6,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 7,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-prompt>"
+            }
+          ],
+          "source": {
+            "kind": "system-prompt"
+          },
+          "id": "id-2"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 8,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "P0-STREAM: stream a paragraph back to me."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-1"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 9,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"<workspace>\". Some platform temporary areas may also be writable."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-3"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 10,
+      "time": "<ms>",
+      "data": {
+        "header": {
+          "config": {
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "maxTokens": 8192
+          },
+          "adapterDefaults": {
+            "maxTokens": true
+          },
+          "tools": [
+            "bash",
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "initial"
+      }
+    },
+    {
+      "type": "request/context",
+      "seq": 11,
+      "time": "<ms>",
+      "data": {
+        "provider": "aiclient-gateway",
+        "model": "fake-1",
+        "contextWindow": 200000
+      }
+    },
+    {
+      "type": "session/title",
+      "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "title": "P0-STREAM: stream a paragraph back",
+        "messageSeqs": [8],
+        "source": {
+          "kind": "fallback"
+        }
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 13,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-4",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-5"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": [
+              "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            ]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-4",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 14,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 15,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

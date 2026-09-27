@@ -1,0 +1,216 @@
+[
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "role": "user",
+      "attemptId": "attempt-STREAM"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "blockId": "dsh-user-8-text",
+      "text": "P0-STREAM: stream a paragraph back to me."
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-8"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t1-s1",
+      "blockId": "dsh-aiclient-rec-compact-t1-s1-b0",
+      "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "role": "user",
+      "attemptId": "attempt-TOOL"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "blockId": "dsh-user-20-text",
+      "text": "P0-TOOL: list the workspace."
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-20"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "input": {
+        "command": "echo \"bridge tool row ok\"; pwd; ls -a",
+        "description": "List the workspace"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "ok": true,
+      "output": "bridge tool row ok\n<workspace>\n.\n..\n"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s2",
+      "blockId": "dsh-aiclient-rec-compact-t2-s2-b0",
+      "text": "Tool row finished: the workspace listing is above."
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

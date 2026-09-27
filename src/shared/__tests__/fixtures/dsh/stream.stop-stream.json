@@ -1,0 +1,88 @@
+[
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "role": "user",
+      "attemptId": "attempt-STOP-STREAM"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "blockId": "dsh-user-8-text",
+      "text": "P0-PACED {\"token\":\"stop-stream\",\"chunks\":30,\"chunkMs\":400} stream slowly; I will stop you."
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-8"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-stop-stream-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-stop-stream-t1-s1",
+      "blockId": "dsh-aiclient-rec-stop-stream-t1-s1-b0",
+      "text": "STREAMED-stop-stream 〔2〕流式正文片段。〔3〕流式正文片段。〔4〕流式正文片段。〔5〕流式正文片段"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "stopping"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-stop-stream-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "session.stopped",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

@@ -12,9 +12,10 @@
  *   `approval/request` waterfall   -> permission.requested, answered by
  *                                     worker.permission.respond
  *
- * Mapped: text, tool rows, approvals, stop, and the session identity (create,
- * resume, crash restart). History and tree answer a legal empty page, and
- * fork, rewind, compact, retry and attachments refuse; P1-4 fills those in
+ * Mapped: text, tool rows, approvals, stop, the session identity (create,
+ * resume, crash restart), and the history, tree and leaf, projected from the
+ * DSH log (P1-4a, decision 026; `historyCache.ts`). Fork, rewind, compact,
+ * retry and attachments refuse until the rest of P1-4 fills them in
  * (dsh-rebase decision 010).
  *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
@@ -40,6 +41,7 @@ import type {
   PiWorkerRuntime,
   PiWorkerRuntimeOptions,
 } from '../../agent-host/piWorkerRpcServer.ts';
+import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
 import type {
   PermissionDecisionId,
   PermissionRequestAction,
@@ -65,6 +67,7 @@ import {
   type WorkerStopResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
+import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
 
 // ---- the slice of the DSH host this bridge uses ----------------------------
 
@@ -147,6 +150,8 @@ export interface DshBridgeContext {
   agentDefaultModel: { currentSelection(): { provider: string; model: string } };
   /** `ctx.sessions` (dsh-session): `flush` is the one official durability barrier. */
   sessions: { flush(session: DshSession): Promise<boolean> };
+  /** `ctx.sessionQuery` (dsh-session-query): the lock-free exact read the history cache folds. */
+  sessionQuery: DshSessionQuery;
 }
 
 /** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
@@ -203,7 +208,6 @@ export function stubPathFor(home: string, dshSessionId: string): string {
   return join(home, DSH_STUB_DIR, `${dshSessionId}${DSH_STUB_SUFFIX}`);
 }
 
-const EMPTY_LEAF = { activeEntryId: null, fileTailEntryId: null };
 const DECISIONS: PermissionDecisionId[] = ['allow', 'deny'];
 /** The id becomes a file name, so nothing that could leave the stub directory. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -320,15 +324,6 @@ function textOf(content: unknown): string {
     .join('');
 }
 
-function parseArguments(raw: unknown): unknown {
-  if (typeof raw !== 'string') return raw;
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return { raw };
-  }
-}
-
 function kindOf(tool: string): PermissionRequestKind {
   if (tool === 'bash' || tool === 'pwsh') return 'exec';
   if (tool === 'write' || tool === 'edit') return 'file_change';
@@ -341,16 +336,6 @@ function actionOf(tool: string): PermissionRequestAction | undefined {
   if (tool === 'edit') return 'edit_file';
   if (tool === 'read') return 'read_file';
   return undefined;
-}
-
-/**
- * DSH names the file argument `file_path`; our timeline rows and cards read
- * `path`. The alias is added, nothing is removed, so the raw call is intact.
- */
-function rowInput(args: Record<string, unknown>): Record<string, unknown> {
-  return typeof args.file_path === 'string' && args.path === undefined
-    ? { ...args, path: args.file_path }
-    : args;
 }
 
 /** The card body native requests carry (`permissionPrompt.ts` detailOf). */
@@ -420,6 +405,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly startedTools = new Set<string>();
   private readonly pendingApprovals = new Map<string, (decision: PermissionDecisionId) => void>();
   private readonly disposers: Dispose[] = [];
+  private readonly historyCache: DshHistoryCache;
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
@@ -430,6 +416,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.cwd = options.cwd;
     this.home = deps.home ?? process.env.DSH_HOME ?? '';
     this.now = deps.now ?? Date.now;
+    // Looked up per read: the service belongs to the Cordis context, not to this runtime.
+    this.historyCache = new DshHistoryCache(
+      {
+        observeSession: (sessionId, query) =>
+          this.ctx.sessionQuery.observeSession(sessionId, query),
+      },
+      options.log
+    );
   }
 
   /**
@@ -472,6 +466,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       await handle?.dispose().catch(() => undefined);
       throw error;
     }
+    // Folded once from the open session, then kept current from session/event.
+    // A failed read leaves an empty, legal page and is retried by the next one.
+    this.historyCache.reset(this.dshSessionId);
+    await this.historyCache.load();
     this.result = {
       bootstrapped: true,
       logicalSessionId: this.logicalSessionId,
@@ -479,12 +477,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       cwd: this.cwd,
       agentDir: this.home,
       sessionFile: stubFile,
-      leaf: EMPTY_LEAF,
-      // Main requires the first page of a reopened session (resume, crash
-      // restart). Empty and legal until P1-4 projects the log; the renderer
-      // keeps what it already shows when a page is empty.
+      leaf: this.historyCache.leaf(),
+      // Main requires the first page of a reopened session (resume, crash restart).
       ...(requested
-        ? { initialHistory: this.emptyHistory(stubFile, 0, INITIAL_HISTORY_LIMIT) }
+        ? { initialHistory: this.historyResult(stubFile, 0, INITIAL_HISTORY_LIMIT) }
         : {}),
       ...(this.options.model ? { model: this.options.model } : {}),
       projectTrusted: this.options.projectTrusted,
@@ -655,36 +651,33 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   setPermissionGear(): void {}
   setPermissionTier(): void {}
 
-  // ---- reads that answer empty -------------------------------------------------
+  // ---- reads (the projected log, historyCache.ts) ---------------------------------
 
   async history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult> {
     const boot = await this.bootstrap();
-    return this.emptyHistory(boot.sessionFile ?? '', input.offset ?? 0, input.limit ?? 100);
+    await this.historyCache.ready();
+    return this.historyResult(boot.sessionFile ?? '', input.offset, input.limit);
   }
 
-  /** A legal empty page for this session; P1-4 replaces it with the projected log. */
-  private emptyHistory(sessionFile: string, offset: number, limit: number): WorkerHistoryResult {
+  /** One page counted back from the newest message, as the pi projection pages. */
+  private historyResult(sessionFile: string, offset?: number, limit?: number): WorkerHistoryResult {
     return {
       logicalSessionId: this.logicalSessionId,
       sessionFile,
       workspacePath: this.cwd,
-      page: { messages: [], offset, limit, totalCount: 0, hasMore: false },
+      page: this.historyCache.page(offset, limit),
     };
   }
 
   async tree(): Promise<WorkerTreeResult> {
     const boot = await this.bootstrap();
+    await this.historyCache.ready();
     return {
-      snapshot: {
+      snapshot: this.historyCache.tree({
         logicalSessionId: this.logicalSessionId,
         sessionFile: boot.sessionFile ?? '',
         workspacePath: this.cwd,
-        leaf: EMPTY_LEAF,
-        nodes: [],
-        totalNodes: 0,
-        returnedNodes: 0,
-        truncated: false,
-      },
+      }),
     };
   }
 
@@ -733,6 +726,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.disposers.push(
       this.ctx.on('session/event', (session, event) => {
         if (session?.id !== this.dshSessionId || this.disposed) return;
+        try {
+          this.historyCache.push(event);
+        } catch (error) {
+          this.options.log?.('[dsh-bridge] history fold failed', event.type, error);
+        }
         try {
           this.onSessionEvent(event);
         } catch (error) {
@@ -882,7 +880,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       case 'tool/call': {
         const callId = String(data.callId);
         const name = String(data.name);
-        const args = parseArguments(data.arguments) as Record<string, unknown>;
+        const args = parseToolArguments(data.arguments) as Record<string, unknown>;
         this.toolArgs.set(callId, args);
         const messageId = this.stepMessage(Number(data.turn), Number(data.step)).messageId;
         this.toolStep.set(callId, messageId);
@@ -890,12 +888,12 @@ export class DshSessionRuntime implements PiWorkerRuntime {
           this.startedTools.add(callId);
           this.emit({
             type: 'tool.started',
-            payload: { messageId, toolCallId: callId, name, input: rowInput(args) },
+            payload: { messageId, toolCallId: callId, name, input: toolRowInput(args) },
           });
         } else {
           this.emit({
             type: 'tool.updated',
-            payload: { messageId, toolCallId: callId, input: rowInput(args) },
+            payload: { messageId, toolCallId: callId, input: toolRowInput(args) },
           });
         }
         return;

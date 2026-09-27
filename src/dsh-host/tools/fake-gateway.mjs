@@ -133,6 +133,10 @@
  *                       the id/revision from the latest get_goal result, and a
  *                       `<goal_complete>` / `<goal_blocked>` wrap-up is answered with text.
  *                       Scripts are listed in `DSH_P0_2_SCRIPTS` below.
+ *                       dsh-rebase P1-4e adds P1-FAIL (HTTP 500 for the whole turn) and
+ *                       answers DSH's compaction instruction (`/compact`) with a short
+ *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
+ *                       replay both deterministically.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -299,6 +303,19 @@ function logRequest(entry) {
 
 const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
+/** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
+const P1_MARKER = /P1-(FAIL)/;
+
+/** DSH's compaction request ends with this instruction (dsh-compaction-basic `COMPACTION_INSTRUCTION`). */
+const COMPACTION_INSTRUCTION = /You are now acting as a compaction engine/;
+/** Short on purpose: DSH rejects a checkpoint that does not shrink what it replaces. */
+const COMPACTION_SUMMARY = [
+  '## Primary Request and Intent',
+  '- P1-COMPACT: stream a paragraph, then list the workspace.',
+  '',
+  '## Current Work',
+  '- (none)',
+].join('\n');
 
 /** Text of a message's own text blocks (tool results excluded). */
 function ownText(message) {
@@ -673,6 +690,14 @@ const DSH_P0_2_SCRIPTS = {
       tag: present ? 'present' : 'missing',
     };
   },
+  // dsh-rebase P1-4e: every request of the turn fails upstream (no retry in this route).
+  'P1-FAIL'() {
+    return {
+      kind: 'error',
+      status: 500,
+      message: 'P1-FAIL: the fake upstream failed this request',
+    };
+  },
   // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
   CRASH(_round, step, _calls, triggerText) {
     const p = p04Params(triggerText);
@@ -785,18 +810,22 @@ function decideDshP02(parsed) {
   if (/<goal_(complete|blocked)>/.test(lastText)) {
     return { ...say('Wrapping up the goal for the user.'), label: 'wrap-up' };
   }
+  if (COMPACTION_INSTRUCTION.test(lastText)) {
+    return { ...say(COMPACTION_SUMMARY), label: 'compaction' };
+  }
   let trigger = -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role !== 'user') continue;
     const text = ownText(messages[i]);
-    if (/<goal_round>/.test(text) || P0_MARKER.test(text)) {
+    if (/<goal_round>/.test(text) || P0_MARKER.test(text) || P1_MARKER.test(text)) {
       trigger = i;
       break;
     }
   }
   if (trigger < 0) return { ...say('fake gateway: no P0 scenario marker'), label: 'no-marker' };
   const triggerText = ownText(messages[trigger]);
-  const scenario = triggerText.match(P0_MARKER)?.[1];
+  const p1 = triggerText.match(P1_MARKER)?.[1];
+  const scenario = triggerText.match(P0_MARKER)?.[1] ?? (p1 ? `P1-${p1}` : undefined);
   const roundMatch = triggerText.match(/<goal_round>[\s\S]*?Round: (\d+)\//);
   const round = roundMatch ? Number(roundMatch[1]) : 0;
   const calls = [];

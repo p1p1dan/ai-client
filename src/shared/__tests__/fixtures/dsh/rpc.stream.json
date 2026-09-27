@@ -1,0 +1,101 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-stream",
+      "piSessionId": "aiclient-rec-stream",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stream.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-stream#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-stream",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stream.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-STREAM: stream a paragraph back to me."
+            }
+          ]
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-stream",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stream.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-5",
+        "fileTailEntryId": "aiclient-rec-stream#15"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-STREAM: stream a paragraph back to me.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  }
+}

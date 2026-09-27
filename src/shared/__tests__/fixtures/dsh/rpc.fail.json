@@ -1,0 +1,95 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-fail",
+      "piSessionId": "aiclient-rec-fail",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-fail#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-fail",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-FAIL: this request fails upstream."
+            }
+          ]
+        },
+        {
+          "id": "h:id-1:end",
+          "entryId": "id-1:end",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "blocks": [],
+          "incomplete": true,
+          "stopReason": "error"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-fail",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-1:end",
+        "fileTailEntryId": "aiclient-rec-fail#15"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-FAIL: this request fails upstream.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-1:end",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  }
+}

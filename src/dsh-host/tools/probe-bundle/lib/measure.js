@@ -18,6 +18,13 @@
  *                               summarize it
  *   live                        live agents and their status (the bridge's
  *                               channels are in its pong)
+ *   observe { sessionId }       P1-4e: the whole log exactly as the bridge's
+ *                               history cache reads it (`sessionQuery.
+ *                               observeSession`: live snapshot or cold read,
+ *                               never a lock or a write)
+ *   compact { sessionId }       P1-4e: `/compact` on a live agent, as DSH's
+ *                               command adapter runs it (the bridge does not
+ *                               bridge compaction yet)
  *
  * Stream latency: the P0-6 fake gateway stamps every text delta with its send
  * time (`‹t<µs of CLOCK_MONOTONIC>›`); this row reads the stamp at the same
@@ -264,6 +271,31 @@ export function apply(ctx) {
           status: typeof agent.status === 'object' ? agent.status?.kind : agent.status,
         })),
       };
+    },
+    async observe(message) {
+      const query = ctx.get('sessionQuery');
+      if (query === undefined) throw new Error('no sessionQuery service');
+      const observation = await query.observeSession(message.sessionId, { projectionMode: 'none' });
+      try {
+        return {
+          source: observation.source,
+          header: observation.header,
+          inheritedEventCount: observation.inheritedEventCount,
+          cursor: observation.cursor,
+          // Copied out before the lease is released below.
+          events: [...observation.events],
+        };
+      } finally {
+        observation[Symbol.dispose]?.();
+      }
+    },
+    async compact(message) {
+      const commands = ctx.get('commands');
+      if (commands === undefined) throw new Error('no commands service');
+      const agent = ctx.agents.list().find((item) => item.id === message.sessionId);
+      if (agent === undefined) throw new Error(`no live agent ${message.sessionId}`);
+      const execution = await commands.execute(agent, '/compact', [], new AbortController().signal);
+      return { result: JSON.parse(JSON.stringify(execution?.result ?? null)) };
     },
   };
 

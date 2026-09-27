@@ -1,0 +1,232 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-crash-resume",
+      "piSessionId": "aiclient-rec-crash-resume",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-crash-resume#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    },
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-crash-resume",
+      "piSessionId": "aiclient-rec-crash-resume",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
+      "leaf": {
+        "activeEntryId": "id-1:interrupted",
+        "fileTailEntryId": "aiclient-rec-crash-resume#18"
+      },
+      "initialHistory": {
+        "logicalSessionId": "rec-crash-resume",
+        "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
+        "workspacePath": "<workspace>",
+        "page": {
+          "messages": [
+            {
+              "id": "h:id-1",
+              "entryId": "id-1",
+              "role": "user",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-1:text:0",
+                  "text": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command."
+                }
+              ]
+            },
+            {
+              "id": "h:id-6",
+              "entryId": "id-6",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "tool_call",
+                  "id": "h:id-6:tool-call:toolu_id-4",
+                  "toolCallId": "toolu_id-4",
+                  "name": "bash",
+                  "input": {
+                    "command": "echo \"sleep-tool crash-resume started\"; sleep 10; echo \"sleep-tool done\"",
+                    "description": "Run a long command"
+                  }
+                },
+                {
+                  "type": "tool_result",
+                  "id": "h:interrupted-tool-result-toolu_id-4-15:tool-result:toolu_id-4",
+                  "toolCallId": "toolu_id-4",
+                  "ok": false,
+                  "output": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+                  "error": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+                  "outcomeUnknown": true
+                }
+              ],
+              "incomplete": true,
+              "stopReason": "interrupted"
+            },
+            {
+              "id": "h:id-1:interrupted",
+              "entryId": "id-1:interrupted",
+              "role": "system",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-1:interrupted:interrupted:0",
+                  "text": "This turn was interrupted when the engine stopped unexpectedly.",
+                  "notice": {
+                    "key": "This turn was interrupted when the engine stopped unexpectedly."
+                  }
+                }
+              ]
+            }
+          ],
+          "offset": 0,
+          "limit": 80,
+          "totalCount": 3,
+          "hasMore": false
+        }
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-crash-resume",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "echo \"sleep-tool crash-resume started\"; sleep 10; echo \"sleep-tool done\"",
+                "description": "Run a long command"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:interrupted-tool-result-toolu_id-4-15:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": false,
+              "output": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+              "error": "The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: retry only if the operation is read-only or idempotent; if it may have side effects, first verify external state or ask the user. Do not retry blindly.",
+              "outcomeUnknown": true
+            }
+          ],
+          "incomplete": true,
+          "stopReason": "interrupted"
+        },
+        {
+          "id": "h:id-1:interrupted",
+          "entryId": "id-1:interrupted",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:interrupted:interrupted:0",
+              "text": "This turn was interrupted when the engine stopped unexpectedly.",
+              "notice": {
+                "key": "This turn was interrupted when the engine stopped unexpectedly."
+              }
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 3,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-crash-resume",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-crash-resume.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-1:interrupted",
+        "fileTailEntryId": "aiclient-rec-crash-resume#18"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-1:interrupted",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "This turn was interrupted when the engine stopped unexpectedly.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 3,
+      "returnedNodes": 3,
+      "truncated": false
+    }
+  }
+}

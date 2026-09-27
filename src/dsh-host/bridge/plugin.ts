@@ -30,8 +30,9 @@ export const name = 'aiclient-bridge';
  * needs; without it the first worker.bootstrap can reach the registry before
  * the loop row starts and fail with "no agent factory registered" (P1-2: the
  * dynamic imports this row used to await had been hiding that race).
+ * `sessionQuery` is the lock-free read the history cache folds (P1-4a).
  */
-export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop'];
+export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'];
 
 /** Shared with host.ts through a global symbol; filled from the host's first line. */
 interface BridgeInbox {

@@ -14,9 +14,12 @@ import {
   PiWorkerRpcServer,
   type PiWorkerRuntimeOptions,
 } from '../../../agent-host/piWorkerRpcServer.ts';
+import { INTERRUPTED_TURN_NOTICE_KEY } from '../../../shared/dshHistory/projection.ts';
+import type { DshLogEvent } from '../../../shared/dshHistory/types.ts';
 import {
   isWorkerBootstrapResult,
   isWorkerHistoryResult,
+  isWorkerTreeResult,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../../../shared/types/workerRpc.ts';
@@ -61,6 +64,9 @@ interface FakeOptions {
   resumeError?: unknown;
   /** The cwd a resumed session's header carries. */
   headerCwd?: string;
+  /** The log `sessionQuery.observeSession` answers with. */
+  events?: DshLogEvent[];
+  observeError?: unknown;
 }
 
 /** A Cordis context narrowed to what the bridge reads, recording the order of calls. */
@@ -68,6 +74,7 @@ function fakeDsh(options: FakeOptions = {}) {
   const calls: string[] = [];
   const disposed: string[] = [];
   const followups: unknown[] = [];
+  const listeners = new Map<string, (...args: unknown[]) => unknown>();
   const stubFile = stubPathFor(home, DSH_ID);
   const handle = (id: string, cwd: string | undefined) => ({
     agent: {
@@ -82,7 +89,10 @@ function fakeDsh(options: FakeOptions = {}) {
     },
   });
   const ctx = {
-    on: () => () => undefined,
+    on: (name: string, listener: (...args: unknown[]) => unknown) => {
+      listeners.set(name, listener);
+      return () => listeners.delete(name);
+    },
     agents: {
       create: vi.fn(async (input: { sessionId: string; meta: { cwd: string } }) => {
         calls.push(`create ${input.sessionId} stub=${existsSync(stubFile)}`);
@@ -105,8 +115,17 @@ function fakeDsh(options: FakeOptions = {}) {
         return true;
       }),
     },
+    sessionQuery: {
+      observeSession: vi.fn(async () => {
+        if (options.observeError) throw options.observeError;
+        const events = options.events ?? [];
+        return { events, cursor: events.at(-1)?.seq ?? -1, [Symbol.dispose]: () => undefined };
+      }),
+    },
   } as unknown as DshBridgeContext;
-  return { ctx, calls, disposed, followups, stubFile };
+  /** One durable event of this session, as DSH's `session/event` delivers it. */
+  const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);
+  return { ctx, calls, disposed, followups, stubFile, append };
 }
 
 const deps: DshBridgeDeps = {
@@ -372,6 +391,155 @@ describe('DshSessionRuntime — safe refusals until P1-4 (decision 010)', () => 
     const { bridge } = await ready();
     const error = await refusal((bridge[method] as () => Promise<unknown>)());
     expect(error.code).toBe('WORKER_DSH_UNSUPPORTED');
+  });
+});
+
+describe('DshSessionRuntime — history, tree and leaf (P1-4a, decision 026)', () => {
+  const T = 1_790_000_000_000;
+  const at = (seq: number, type: string, data: unknown): DshLogEvent => ({
+    type,
+    seq,
+    time: T + seq,
+    data,
+  });
+  const prompt = (seq: number, id: string, text: string) =>
+    at(seq, 'user/message', {
+      id,
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind: 'user' },
+    });
+
+  it('[bridge-history-resume] hands Main the projected first page and leaf of a reopened log', async () => {
+    const stubFile = writeStub();
+    const dsh = fakeDsh({
+      events: [
+        at(0, 'turn/start', { turn: 1 }),
+        prompt(1, 'u1', 'run it'),
+        at(2, 'assistant/message', {
+          turn: 1,
+          step: 1,
+          message: {
+            id: 'a1',
+            role: 'assistant',
+            content: [
+              { type: 'tool-call', id: 'c1', name: 'bash', arguments: '{"command":"sleep 9"}' },
+            ],
+            source: { kind: 'model', provider: 'aiclient-gateway', model: 'fake-1' },
+          },
+        }),
+        at(3, 'tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}' }),
+        at(4, 'tool/result', {
+          turn: 1,
+          step: 1,
+          message: {
+            id: 'interrupted-tool-result-c1-4',
+            role: 'tool',
+            toolCallId: 'c1',
+            isError: true,
+            source: { kind: 'tool', callId: 'c1' },
+            content: [{ type: 'text', text: 'outcome unknown' }],
+          },
+          error: { name: 'ToolOutcomeUnknownError', code: 'TOOL_OUTCOME_UNKNOWN' },
+        }),
+        at(5, 'step/end', { turn: 1, step: 1 }),
+        at(6, 'turn/end', { turn: 1, reason: { kind: 'interrupted' } }),
+        at(7, 'session/end-seed', {}),
+      ],
+    });
+
+    const result = await runtime(dsh.ctx, { sessionFile: stubFile }).bootstrap();
+
+    expect(dsh.ctx.sessionQuery.observeSession).toHaveBeenCalledWith(DSH_ID, {
+      projectionMode: 'none',
+    });
+    expect(isWorkerBootstrapResult(result)).toBe(true);
+    expect(result.leaf).toEqual({
+      activeEntryId: 'u1:interrupted',
+      fileTailEntryId: `${DSH_ID}#7`,
+    });
+    const page = result.initialHistory?.page;
+    expect(page).toMatchObject({
+      offset: 0,
+      limit: INITIAL_HISTORY_LIMIT,
+      totalCount: 3,
+      hasMore: false,
+    });
+    expect(page?.messages.map((message) => message.id)).toEqual([
+      'h:u1',
+      'h:a1',
+      'h:u1:interrupted',
+    ]);
+    expect(page?.messages[1]?.blocks.at(-1)).toMatchObject({ ok: false, outcomeUnknown: true });
+    expect(page?.messages[2]?.blocks[0]).toMatchObject({
+      notice: { key: INTERRUPTED_TURN_NOTICE_KEY },
+    });
+  });
+
+  it('[bridge-history-live] keeps history, tree and leaf current from session/event', async () => {
+    const dsh = fakeDsh({ events: [at(0, 'permission/preset', { preset: 'workspace-write' })] });
+    const bridge = runtime(dsh.ctx);
+    const boot = await bridge.bootstrap();
+    expect(boot.leaf).toEqual({ activeEntryId: null, fileTailEntryId: `${DSH_ID}#0` });
+
+    dsh.append(at(1, 'turn/start', { turn: 1 }));
+    dsh.append(prompt(2, 'u1', 'hello'));
+    dsh.append(
+      at(3, 'assistant/message', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: 'a1',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'hi there' }],
+          source: { kind: 'model', provider: 'aiclient-gateway', model: 'fake-1' },
+        },
+      })
+    );
+    dsh.append(at(4, 'turn/end', { turn: 1, reason: { kind: 'completed' } }));
+
+    const history = await bridge.history({ logicalSessionId: LOGICAL });
+    expect(isWorkerHistoryResult(history)).toBe(true);
+    expect(history.page.messages.map((message) => message.id)).toEqual(['h:u1', 'h:a1']);
+    const tree = await bridge.tree();
+    expect(isWorkerTreeResult(tree)).toBe(true);
+    expect(tree.snapshot).toMatchObject({
+      logicalSessionId: LOGICAL,
+      sessionFile: dsh.stubFile,
+      workspacePath: CWD,
+      leaf: { activeEntryId: 'a1', fileTailEntryId: `${DSH_ID}#4` },
+      totalNodes: 2,
+    });
+    expect(tree.snapshot.nodes.map((node) => [node.id, node.leaf])).toEqual([
+      ['u1', false],
+      ['a1', true],
+    ]);
+    // Folded one event at a time: the log was read once, at bootstrap.
+    expect(dsh.ctx.sessionQuery.observeSession).toHaveBeenCalledTimes(1);
+  });
+
+  it('[bridge-history-read-failure] still opens the session, with a legal page, and reads again later', async () => {
+    const stubFile = writeStub();
+    const log = vi.fn();
+    const options: FakeOptions = { observeError: new Error('query unavailable') };
+    const dsh = fakeDsh(options);
+    const bridge = runtime(dsh.ctx, { sessionFile: stubFile, log });
+
+    const result = await bridge.bootstrap();
+
+    expect(result.initialHistory?.page).toEqual({
+      messages: [],
+      offset: 0,
+      limit: INITIAL_HISTORY_LIMIT,
+      totalCount: 0,
+      hasMore: false,
+    });
+    expect(log).toHaveBeenCalledWith('[dsh-bridge] history read failed', DSH_ID, expect.any(Error));
+    options.observeError = undefined;
+    options.events = [prompt(0, 'u1', 'still here')];
+    const history = await bridge.history({ logicalSessionId: LOGICAL });
+    expect(history.page.messages.map((message) => message.id)).toEqual(['h:u1']);
+    expect(dsh.ctx.sessionQuery.observeSession).toHaveBeenCalledTimes(2);
   });
 });
 

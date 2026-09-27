@@ -1,0 +1,115 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-stop-tool",
+      "piSessionId": "aiclient-rec-stop-tool",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-tool.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-stop-tool#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-stop-tool",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-tool.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P0-SLEEPTOOL {\"token\":\"stop-tool\",\"seconds\":30} run a long command; I will stop you."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "echo \"sleep-tool stop-tool started\"; sleep 30; echo \"sleep-tool done\"",
+                "description": "Run a long command"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": false,
+              "output": "Error: tool call aborted",
+              "error": "Error: tool call aborted",
+              "stopped": true
+            }
+          ],
+          "stopCause": "user_stop"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-stop-tool",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-tool.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-6",
+        "fileTailEntryId": "aiclient-rec-stop-tool#17"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-SLEEPTOOL {\"token\":\"stop-tool\",\"seconds\":30} run a long command; I will stop you.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  }
+}

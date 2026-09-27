@@ -719,7 +719,13 @@ describe('bridge bundles (decision 011)', () => {
       expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
       const row = await import(pathToFileURL(options.outfile).href);
       expect(row.name).toBe(item.row);
-      expect(row.inject).toEqual(['agents', 'agentDefaultModel', 'sessions', 'agentLoop']);
+      expect(row.inject).toEqual([
+        'agents',
+        'agentDefaultModel',
+        'sessions',
+        'agentLoop',
+        'sessionQuery',
+      ]);
       expect(typeof row.apply).toBe('function');
     });
   }
