@@ -3,9 +3,17 @@ import type { Readable } from 'node:stream';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
 import type { UtilityProcess } from 'electron';
 
+/**
+ * Why a shared-host channel ended (DshChannelTransport only; process transports
+ * leave it unset): the host confirmed the channel closed, or the whole host
+ * process exited and took every channel with it.
+ */
+export type WorkerTransportExitCause = 'channel-closed' | 'host-exit';
+
 export interface WorkerTransportExit {
   code: number | null;
   signal: string | null;
+  cause?: WorkerTransportExitCause;
 }
 
 export interface WorkerTransport {

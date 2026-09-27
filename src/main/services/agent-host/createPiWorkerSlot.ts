@@ -79,6 +79,9 @@ export async function createPiWorkerSlot(
   options: CreatePiWorkerSlotOptions
 ): Promise<CreatedPiWorkerSlot> {
   const generation = options.generation ?? 1;
+  // P1-3a switches the default to a channel on the shared host
+  // (`dshHostSupervisor.openChannel()`, DshHostSupervisor.ts) once the host
+  // bridge speaks the channel envelope, and deletes the per-slot fork below.
   const transport = options.createTransport
     ? options.createTransport({ generation, cwd: options.cwd })
     : forkDshHost({ generation, cwd: options.cwd }).transport;

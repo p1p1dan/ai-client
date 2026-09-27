@@ -19,6 +19,13 @@ vi.mock('../../services/agent-host/ScratchWorkspaceService', () => ({
   scratchWorkspaceService: { wipeAll: wipeScratchWorkspaces },
 }));
 
+const shutdownHost = vi.fn(async (_reason: string) => undefined);
+const forceKillHost = vi.fn(() => true);
+
+vi.mock('../../services/agent-host/DshHostSupervisor', () => ({
+  dshHostSupervisor: { shutdown: shutdownHost, forceKillNow: forceKillHost },
+}));
+
 describe('WorkerManager cleanup ownership', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -27,6 +34,22 @@ describe('WorkerManager cleanup ownership', () => {
     await cleanupWorkerManager();
     expect(disposeAll).toHaveBeenCalledWith('app-shutdown');
     expect(disposeUtilities).toHaveBeenCalledTimes(1);
+  });
+
+  // P1-3b (decision 025): the shared DSH host goes down after the sessions on
+  // it, and even when disposing them failed.
+  it('stops the shared DSH host after the chat sessions, even if their disposal fails', async () => {
+    const order: string[] = [];
+    disposeAll.mockImplementationOnce(async () => {
+      order.push('sessions');
+      throw new Error('ack timeout');
+    });
+    shutdownHost.mockImplementationOnce(async (reason) => {
+      order.push(`host:${reason}`);
+    });
+    const { cleanupWorkerManager } = await import('../workerManager');
+    await expect(cleanupWorkerManager()).rejects.toThrow('ack timeout');
+    expect(order).toEqual(['sessions', 'host:app-quit']);
   });
 
   // U05-a — the app-exit half of the scratch-directory lifetime. Its sibling
@@ -61,5 +84,11 @@ describe('WorkerManager cleanup ownership', () => {
     cleanupWorkerManagerSync();
     expect(forceKillAllNow).toHaveBeenCalledTimes(1);
     expect(forceKillUtilities).toHaveBeenCalledTimes(1);
+    // The shared DSH host is SIGKILLed on the same path, after its slots detached.
+    expect(forceKillHost).toHaveBeenCalledTimes(1);
+    expect(forceKillAllNow.mock.invocationCallOrder[0]).toBeLessThan(
+      forceKillHost.mock.invocationCallOrder[0]
+    );
+    expect(shutdownHost).not.toHaveBeenCalled();
   });
 });
