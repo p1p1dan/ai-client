@@ -10,7 +10,7 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 ## Current Phase
 
 P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～089 已于 2026-09-28 由用户裁决，见[决策 090](decisions/090-user-rulings-2026-09-28.md)）。
-- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-8、P1-9a / 9b / 9g、P1-10a（含收尾）、P1-10b、P1-16a，以及 P1-12 / P1-16 的前置搬迁。
+- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-8、P1-9a / 9b / 9g、P1-10a（含收尾）、P1-10b、P1-16a，以及 P1-12 / P1-16 的前置搬迁。
 - **现在分支上能做到**：用界面选的模型聊天，key 每次请求时从 Main 拉取；每次工具调用都经我方审批，「本会话允许」在宿主重启后仍有效，换档立即作用到闸门。
 - **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
 - **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
@@ -33,7 +33,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 4. **第二波已完成**：P1-4d1、P1-16a、P1-10b（见 Last Landed）。
 5. **第二批决策已裁决**（[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)）。**下一步**（本机一次只派一个代理，见下方「本机限制」）：
    1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
-   2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → P1-4d2 → P1-4d3（联网装 `dsh-tool-ask-user`）→ P1-4e；
+   2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → P1-4d3（联网装 `dsh-tool-ask-user`）→ P1-4e；
    3. P1-10d 试点插件（联网装 `dsh-office-tools`）；P1-16e 旧资产提示；
    4. P1-7a～d 与 P1-11（终端在右列，开工前补示意）；之后 P1-9c～f、P1-15、P1-6d。
 
@@ -41,6 +41,14 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-28 P1-4d2 命令与状态 `f8c7b2b5`（决策 099 第 9～12 条、101；取舍见[决策 113](decisions/113-p1-4d2-commands-and-projection-choices.md)，待审批，**第 18、19 条需用户拍板**：带附件的 `/goal …` 当提示词发出；命令和它的回答只在直播里出现，重开会话后看不到）：
+  - 斜杠菜单列 DSH 命令（隐藏 `/plan`、`/permission`、`/feedback`）与用户可调技能；已知命令经 `ctx.commands.execute`，不开模型回合，未知 `/xxx` 照常当提示词。
+  - `worker.compact` 执行 DSH 的 `/compact`，带附加说明时拒绝并在输入框保留原文。
+  - `session.projection` 转发 `todos`、`goal`、`subagentCatalog`。首次快照推迟到第一个事件之前发出：Main 在 slot 就绪前会丢掉 slot 发来的事件，bootstrap 时发会永远到不了渲染层。
+  - 能力清单只报技能数；弹窗去掉 MCP、模板、子代理三行归 P1-16e。
+  - 编排器复跑：四套 tsc 通过；相关单测 272 个文件、4992 例通过；真宿主集成 27/27；bridge-smoke 46 项。
+  - 金样本 25 个场景全部重录。重录前编排者把新录制与原样本逐场景比对：去掉投影快照、`capabilities` 与 compact 的命令回合后，stream、rpc、log 全部一致。重录后 `--check` 无差异，读样本的测试 219 例通过。
+  - 遗留：崩溃重启、恢复会话后没有新事件时快照不发，渲染层补水靠 P1-7 的 `worker.panels`；命令不进历史，暖 resume 时这两行直播会被排到最后（P1-7a 把命令投进历史）。
 - 2026-09-28 P1-4c2 发图、读图与文本附件 `20285c58`（决策 096、097；取舍见[决策 112](decisions/112-p1-4c2-attachment-choices.md)，待审批）：
   - 开工前实验（[证据](evidence/p1-4c2-attachment-experiment-2026-09-28.md)）：DSH 这一侧成立，文件块句柄路径 `read` 可直接读到。基线跑 18 项里有 2 项不过：我方权限闸对附件读取仍出卡，原因是 `isTrustedPath` 只认 spill，且 `gate.ts` 在读取的最后一步会把路径表 `~/.pilab/*: ask` 与 `external_directory: ask` 算回来。两处补上后 18/18。缺口在我方代码，编排者判定实验成立，不退回 1.0.x 做法。
   - 附件入库统一走 `bridge/attachments.ts`，发送与插话共用；拒绝在发任何事件之前抛 `WORKER_ATTACHMENT_REJECTED`。
