@@ -5,9 +5,11 @@
  *   node.exe tools/p0-4-report.ts --node <node-report.json> --ps <ps-side.json>
  *            --out <p0-4-report.json> --summary <p0-4-summary.txt>
  *
- * The PowerShell side (run-p0-4.ps1) is the non-whitelisted observer: it wrote
- * the marker files, read their first 16 bytes before the run (the premise),
- * head-checked every file the probe listed in `inspect[]`, and cleaned up.
+ * The PowerShell side (run-p0-4.ps1) wrote the marker files, read their first
+ * 16 bytes before the run (the automatic premise), head-checked every file the
+ * probe listed in `inspect[]`, and cleaned up. Those heads are PowerShell's read
+ * view: encryption software may decrypt it transparently (P1-13 round one), so
+ * `premise.manualConfirmed` records the human confirmation separately.
  * Its JSON may carry a UTF-8 BOM (Windows PowerShell 5.1 writes one).
  */
 
@@ -52,7 +54,13 @@ const node = readJson(option('node'));
 const ps = readJson(option('ps'));
 const checks = (Array.isArray(node.checks) ? node.checks : []) as Check[];
 const heads = (Array.isArray(ps.heads) ? ps.heads : []) as Head[];
-const premise = (ps.premise ?? {}) as { allTsd?: boolean; psRead?: string; files?: Head[] };
+const premise = (ps.premise ?? {}) as {
+  allTsd?: boolean;
+  psRead?: string;
+  files?: Head[];
+  manualConfirmed?: boolean;
+  manualConfirmedAt?: string;
+};
 const machine = (ps.machine ?? {}) as Record<string, unknown>;
 const cleanupResult = (ps.cleanup ?? {}) as { failed?: unknown[]; kept?: boolean };
 
@@ -94,8 +102,19 @@ lines.push(
 lines.push(
   premiseOk
     ? '前提：成立。PowerShell 写的标记文件在盘上是 TSD 容器，下面「明文」的结论有效。'
-    : '前提：不成立！PowerShell 写的标记文件在盘上不是 TSD 容器（目录没被策略覆盖，或 PowerShell 也在白名单里）。下面所有「明文」结论都不能签收。'
+    : '自动前提：未成立。PowerShell 未观察到 TSD 头；其读取可能被透明解密，不能据此认定文件未加密，也不能单靠本项签收加密能力。'
 );
+if (premise.manualConfirmed) {
+  lines.push(
+    `人工确认：现场用户确认初始测试文件已加密；记录时间 ${premise.manualConfirmedAt}。这是人工证据，不替代自动前提。`
+  );
+  lines.push(
+    '范围：人工确认仅覆盖运行前列出的输入文件；编辑后的文件、新建文件、缓存和日志的加密状态尚未人工确认。'
+  );
+}
+if (machine.administrator === true) {
+  lines.push('权限限制：本轮以管理员权限运行，不能替代普通权限下的 ACL 沙箱验收。');
+}
 if (premise.psRead !== undefined) {
   lines.push(`PowerShell 自己读标记文件看到：${premise.psRead}`);
 }
@@ -124,13 +143,13 @@ for (const item of other) {
   );
 }
 
-lines.push('== 盘上形态（PowerShell 读文件头 16 字节）');
+lines.push('== PowerShell 读取视图（文件头 16 字节，可能已被透明解密）');
 for (const head of heads) {
   const state = !head.exists
     ? '已不存在'
     : head.isTsd
       ? 'TSD 容器'
-      : `非 TSD（${head.ascii ?? ''}）`;
+      : `未观察到 TSD 头（${head.ascii ?? ''}）`;
   lines.push(`${state}  ${head.role ?? ''}  ${head.path}`);
 }
 lines.push('');
@@ -147,7 +166,7 @@ lines.push('请把整个 report-* 目录发回（p0-4-report.json、p0-4-summary
 const merged = {
   ...node,
   powershell: ps,
-  summary: { counts, premiseOk },
+  summary: { counts, premiseOk, manualConfirmed: premise.manualConfirmed === true },
 };
 writeFileSync(option('out'), `${JSON.stringify(merged, null, 2)}\n`);
 writeFileSync(option('summary'), `\uFEFF${lines.join('\r\n')}\r\n`);

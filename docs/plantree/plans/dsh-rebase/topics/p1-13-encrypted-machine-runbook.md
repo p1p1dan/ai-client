@@ -137,7 +137,10 @@ Set-ExecutionPolicy -Scope Process Bypass
    & 'C:\p04\aiclient-p0-4-kit\run-p0-4.ps1' -EncDir 'D:\Encrypted' -ControlGroup
    ```
 
-   脚本会临时改写 `%USERPROFILE%\.dsh\cordis.patch.yml` 和 `.env`，把 DSH Desktop 的模型指向本地假网关。原文件先备份，结束时还原。
+   脚本会临时改写 DSH Desktop 的 DSH_HOME（默认 `%APPDATA%\dsh-desktop\harness`，可用 `-DshDesktopHome` 指定）下的 `cordis.patch.yml` 和 `.env`，把 DSH Desktop 的模型指向本地假网关。原文件先在同一目录改名为 `*.p0-4-backup-<时间>`，结束时改回。
+   - 2026-09-28 修正：第一轮脚本写的是 `%USERPROFILE%\.dsh`，不是 DSH Desktop 实际的 DSH_HOME（桌面日志可证），现场改为在界面里手动添加提供商。
+   - 随包 node.exe 读这份临时配置看到 TSD 头时，脚本会提示 DSH Desktop 可能读不到它，并给出界面手动添加的参数。
+   - 建议加 `-ManualEncryption`：标记文件写好后暂停，人工加密并在报告目录的 `manual-encryption-confirmed.txt` 写 `CONFIRMED` 再继续。
 3. 窗口出现「假网关已在 http://127.0.0.1:18484 就绪」后：
    - 启动 DSH Desktop；
    - 把工作区设为窗口里打印的 `...\ws-ctrl` 目录；
@@ -190,7 +193,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 - 不需要管理员权限。
 - 不写注册表。
 - 在 `%TEMP%`、`%LOCALAPPDATA%` 里只删它自己新建的目录。
-- 对照组只动 `.dsh` 下那两个文件，结束就还原。
+- 对照组只动 DSH Desktop 的 DSH_HOME 下那两个文件，结束就还原。
 - 除了 pnpm 那一项会访问 npm 官方源，不联网。
 
 ## 4. 已知限制

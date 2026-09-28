@@ -1,0 +1,595 @@
+﻿P1-13b 加密矩阵上机结果  2026-09-28T04:48:29.025Z
+模式：Linux 预演（rehearsal）。数据来自本机临时目录与人为伪造的 TSD 头，不是加密机结果，不能当结论。
+
+== 机器
+系统：Linux 7.0.0-34-generic；PowerShell 无（Linux 预演）
+管理员：否；EnableLUA=不适用
+随包 node.exe：/home/ai/.nvm/versions/node/v22.23.2/bin/node（v22.23.2）
+应用版本：rehearsal；应用目录：不适用（Linux 预演）
+Electron 主程序：未用（Linux 预演没有 Electron 主程序）
+改名副本：/tmp/p113b-rehearsal-KceSHx/p113b-20260928-004823/p113b-raw（与 node.exe 的 sha256 相同）
+加密目录：/tmp/p113b-rehearsal-KceSHx/enc；工作目录：/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823
+标记：P113B-MARKER-a4557563；延迟复读间隔：3 秒
+人工加密确认：已确认（2026-09-28T04:48:24.534Z）；用户备注：rehearsal：txt、yml、docx、session.v4.jsonl.zstd 被替换成伪造的 TSD 头文件，其余保持明文
+
+== 读者
+R-node      可用  /home/ai/.nvm/versions/node/v22.23.2/bin/node
+R-electron  跳过：Linux 预演没有这个读者
+R-renamed   可用  /tmp/p113b-rehearsal-KceSHx/p113b-20260928-004823/p113b-raw
+R-ps51      跳过：Linux 预演没有这个读者
+R-pwsh7     跳过：Linux 预演没有这个读者
+R-certutil  跳过：Linux 预演没有这个读者
+R-bash      跳过：Linux 预演没有这个读者
+
+== 输入矩阵：文件类型 × 读者（输入由 PowerShell 创建，随后人工加密）
+图例：P 读到明文标记；C 读到 TSD 头；O 其他内容；M 文件不存在；E 读取出错；- 该读者未测
+type                   node  electron  renamed  ps51  pwsh7  certutil  bash
+txt                    C     -         C        -     -      -         -
+md                     P     -         P        -     -      -         -
+json                   P     -         P        -     -      -         -
+jsonl                  P     -         P        -     -      -         -
+yml                    C     -         C        -     -      -         -
+yaml                   P     -         P        -     -      -         -
+toml                   P     -         P        -     -      -         -
+ini                    P     -         P        -     -      -         -
+cfg                    P     -         P        -     -      -         -
+conf                   P     -         P        -     -      -         -
+ts                     P     -         P        -     -      -         -
+tsx                    P     -         P        -     -      -         -
+js                     P     -         P        -     -      -         -
+mjs                    P     -         P        -     -      -         -
+cjs                    P     -         P        -     -      -         -
+py                     P     -         P        -     -      -         -
+java                   P     -         P        -     -      -         -
+go                     P     -         P        -     -      -         -
+rs                     P     -         P        -     -      -         -
+c                      P     -         P        -     -      -         -
+cpp                    P     -         P        -     -      -         -
+h                      P     -         P        -     -      -         -
+hpp                    P     -         P        -     -      -         -
+cs                     P     -         P        -     -      -         -
+kt                     P     -         P        -     -      -         -
+rb                     P     -         P        -     -      -         -
+php                    P     -         P        -     -      -         -
+sh                     P     -         P        -     -      -         -
+ps1                    P     -         P        -     -      -         -
+bat                    P     -         P        -     -      -         -
+cmd                    P     -         P        -     -      -         -
+sql                    P     -         P        -     -      -         -
+xml                    P     -         P        -     -      -         -
+html                   P     -         P        -     -      -         -
+css                    P     -         P        -     -      -         -
+scss                   P     -         P        -     -      -         -
+vue                    P     -         P        -     -      -         -
+csv                    P     -         P        -     -      -         -
+log                    P     -         P        -     -      -         -
+patch                  P     -         P        -     -      -         -
+diff                   P     -         P        -     -      -         -
+lock                   P     -         P        -     -      -         -
+docx                   C     -         C        -     -      -         -
+xlsx                   P     -         P        -     -      -         -
+pptx                   P     -         P        -     -      -         -
+pdf                    P     -         P        -     -      -         -
+Makefile               P     -         P        -     -      -         -
+Dockerfile             P     -         P        -     -      -         -
+README                 P     -         P        -     -      -         -
+.env                   P     -         P        -     -      -         -
+session.v4.jsonl.zstd  C     -         C        -     -      -         -
+
+== 有效观察者（对人工确认已加密的输入读到 TSD 头的读者）
+txt                    R-node, R-renamed
+yml                    R-node, R-renamed
+docx                   R-node, R-renamed
+session.v4.jsonl.zstd  R-node, R-renamed
+覆盖：4 / 51 个类型有有效观察者。
+没有有效观察者（只能靠人工确认）：md, json, jsonl, yaml, toml, ini, cfg, conf, ts, tsx, js, mjs, cjs, py, java, go, rs, c, cpp, h, hpp, cs, kt, rb, php, sh, ps1, bat, cmd, sql, xml, html, css, scss, vue, csv, log, patch, diff, lock, xlsx, pptx, pdf, Makefile, Dockerfile, README, .env
+
+== 输出矩阵：文件类型 × 写者（有效观察者眼里；每格「立即/延迟」）
+图例：C 有效观察者都读到 TSD 头；P 都读到明文标记；X 观察者之间不一致；O 都读到其他内容；E 观察者都读不了；? 该类型没有有效观察者（只能靠人工确认）；F 写入失败；- 写者或该次复读没跑
+create   = W-node-create：node.exe writeFileSync 直接新建（与 1.0.x 写文件工具同一写法）。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.8～3.9 秒
+dshlink  = W-node-dsh-create：node.exe 仿 DSH write 新建：隐藏暂存目录里写 <名>.tmp，再硬链接成目标名。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.8 秒
+rename   = W-node-rename：node.exe 暂存目录里写 <名>.tmp，再 rename 成目标名。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.8 秒
+copy     = W-node-copy：node.exe copyFileSync 复制同类型的已加密输入，不改内容。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.7 秒
+copy+w   = W-node-copy-then-write：node.exe 先 copyFileSync 同类型的已加密输入，再 writeFileSync 覆盖内容。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.7 秒
+edit     = W-node-edit-existing：node.exe 复制已加密输入后读出、替换一段文字、原路径写回（1.0.x 编辑工具的写法）。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.6～3.7 秒
+e-create = W-electron-create：Electron（ELECTRON_RUN_AS_NODE=1）writeFileSync 新建。没跑：Linux 预演没有这个写者
+r-create = W-renamed-create：node.exe 改名副本 writeFileSync 新建。立即复读 写完后约 0～0.1 秒；延迟复读 写完后约 3.6 秒
+ps51     = W-ps51：Windows PowerShell 5.1 Set-Content 新建。没跑：Linux 预演没有这个写者
+type                   create  dshlink  rename  copy  copy+w  edit  e-create  r-create  ps51
+txt                    P/C     P/P      P/P     C/C   P/P     C/C   -/-       P/P       -/-
+md                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+json                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+jsonl                  ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+yml                    P/P     P/P      P/P     C/C   P/P     C/C   -/-       P/P       -/-
+yaml                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+toml                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+ini                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+cfg                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+conf                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+ts                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+tsx                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+js                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+mjs                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+cjs                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+py                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+java                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+go                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+rs                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+c                      ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+cpp                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+h                      ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+hpp                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+cs                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+kt                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+rb                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+php                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+sh                     ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+ps1                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+bat                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+cmd                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+sql                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+xml                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+html                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+css                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+scss                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+vue                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+csv                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+log                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+patch                  ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+diff                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+lock                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+docx                   P/P     P/P      P/P     C/C   P/P     C/C   -/-       P/P       -/-
+xlsx                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+pptx                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+pdf                    ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+Makefile               ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+Dockerfile             ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+README                 ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+.env                   ?/?     ?/?      ?/?     ?/?   ?/?     ?/?   -/-       ?/?       -/-
+session.v4.jsonl.zstd  P/P     P/P      P/P     C/C   P/P     C/C   -/-       P/P       -/-
+
+== 结论（只陈述观察到的事实，不做推断）
+1. 人工加密确认：已确认，时间 2026-09-28T04:48:24.534Z。
+2. 各读者读输入（共 51 个类型）：
+   - R-node：明文 47（md, json, jsonl, yaml, toml, ini, cfg, conf, ts, tsx, js, mjs, cjs, py, java, go, rs, c, cpp, h, hpp, cs, kt, rb, php, sh, ps1, bat, cmd, sql, xml, html, css, scss, vue, csv, log, patch, diff, lock, xlsx, pptx, pdf, Makefile, Dockerfile, README, .env）；TSD 头 4（txt, yml, docx, session.v4.jsonl.zstd）；其他 0（无）；不存在 0；出错 0（无）；未测 0
+   - R-electron：跳过（Linux 预演没有这个读者）
+   - R-renamed：明文 47（md, json, jsonl, yaml, toml, ini, cfg, conf, ts, tsx, js, mjs, cjs, py, java, go, rs, c, cpp, h, hpp, cs, kt, rb, php, sh, ps1, bat, cmd, sql, xml, html, css, scss, vue, csv, log, patch, diff, lock, xlsx, pptx, pdf, Makefile, Dockerfile, README, .env）；TSD 头 4（txt, yml, docx, session.v4.jsonl.zstd）；其他 0（无）；不存在 0；出错 0（无）；未测 0
+   - R-ps51：跳过（Linux 预演没有这个读者）
+   - R-pwsh7：跳过（Linux 预演没有这个读者）
+   - R-certutil：跳过（Linux 预演没有这个读者）
+   - R-bash：跳过（Linux 预演没有这个读者）
+3. 读者对照（输入）：
+   - R-node 与 R-renamed：51 个类型中 51 个结果相同；不同：无
+   - R-node 与 R-electron：没法对照（至少一方没读输入）。
+4. 有效观察者覆盖 4 / 51 个类型；没有有效观察者的类型：md, json, jsonl, yaml, toml, ini, cfg, conf, ts, tsx, js, mjs, cjs, py, java, go, rs, c, cpp, h, hpp, cs, kt, rb, php, sh, ps1, bat, cmd, sql, xml, html, css, scss, vue, csv, log, patch, diff, lock, xlsx, pptx, pdf, Makefile, Dockerfile, README, .env
+5. 各写者的输出（有效观察者眼里）：
+   - W-node-create：
+     立即：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：C（TSD 头） 1（txt）；P（明文） 3（yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：txt（P→C）
+   - W-node-dsh-create：
+     立即：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+   - W-node-rename：
+     立即：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+   - W-node-copy：
+     立即：C（TSD 头） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：C（TSD 头） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+   - W-node-copy-then-write：
+     立即：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+   - W-node-edit-existing：
+     立即：C（TSD 头） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：C（TSD 头） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+     读出的内容里没有「plaintext line」、没有改写的类型：txt, yml, docx, session.v4.jsonl.zstd
+   - W-electron-create：没跑（Linux 预演没有这个写者）
+   - W-renamed-create：
+     立即：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     延迟：P（明文） 4（txt, yml, docx, session.v4.jsonl.zstd）；?（无观察者） 47
+     立即与延迟不同：无
+   - W-ps51：没跑（Linux 预演没有这个写者）
+6. 写入失败：无
+
+== 需要人工确认
+- 下面 47 个类型没有有效观察者，脚本判断不了输出是否加密。请用加密客户端（文件图标、右键属性或客户端自带的查看功能）查看：
+  文件名：p113b.md, p113b.json, p113b.jsonl, p113b.yaml, p113b.toml, p113b.ini, p113b.cfg, p113b.conf, p113b.ts, p113b.tsx, p113b.js, p113b.mjs, p113b.cjs, p113b.py, p113b.java, p113b.go, p113b.rs, p113b.c, p113b.cpp, p113b.h, p113b.hpp, p113b.cs, p113b.kt, p113b.rb, p113b.php, p113b.sh, p113b.ps1, p113b.bat, p113b.cmd, p113b.sql, p113b.xml, p113b.html, p113b.css, p113b.scss, p113b.vue, p113b.csv, p113b.log, p113b.patch, p113b.diff, p113b.lock, p113b.xlsx, p113b.pptx, p113b.pdf, Makefile, Dockerfile, README, .env
+  目录（每个目录下都有这些同名文件）：
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-create
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-dsh-create
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-rename
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-copy
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-copy-then-write
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-edit-existing
+    /tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-renamed-create
+  逐个看不过来时，至少看这几个类型：md, json, ts, py, .env
+  回报时按「目录 → 哪些文件未加密」记下即可。
+
+== 明细：每个输出文件在各读者眼里（立即 | 延迟）
+读者顺序：node electron renamed ps51 pwsh7 certutil bash；代码同输入矩阵
+-- W-node-create（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-create）
+type                   immediate  delayed  write
+txt                    P-P----    C-C----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    P-P----    P-P----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   P-P----    P-P----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  P-P----    P-P----  ok
+-- W-node-dsh-create（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-dsh-create）
+type                   immediate  delayed  write
+txt                    P-P----    P-P----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    P-P----    P-P----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   P-P----    P-P----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  P-P----    P-P----  ok
+-- W-node-rename（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-rename）
+type                   immediate  delayed  write
+txt                    P-P----    P-P----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    P-P----    P-P----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   P-P----    P-P----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  P-P----    P-P----  ok
+-- W-node-copy（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-copy）
+type                   immediate  delayed  write
+txt                    C-C----    C-C----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    C-C----    C-C----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   C-C----    C-C----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  C-C----    C-C----  ok
+-- W-node-copy-then-write（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-copy-then-write）
+type                   immediate  delayed  write
+txt                    P-P----    P-P----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    P-P----    P-P----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   P-P----    P-P----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  P-P----    P-P----  ok
+-- W-node-edit-existing（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-node-edit-existing）
+type                   immediate  delayed  write
+txt                    C-C----    C-C----  编辑未生效
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    C-C----    C-C----  编辑未生效
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   C-C----    C-C----  编辑未生效
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  C-C----    C-C----  编辑未生效
+-- W-renamed-create（/tmp/p113b-rehearsal-KceSHx/enc/p113b-20260928-004823/out-W-renamed-create）
+type                   immediate  delayed  write
+txt                    P-P----    P-P----  ok
+md                     P-P----    P-P----  ok
+json                   P-P----    P-P----  ok
+jsonl                  P-P----    P-P----  ok
+yml                    P-P----    P-P----  ok
+yaml                   P-P----    P-P----  ok
+toml                   P-P----    P-P----  ok
+ini                    P-P----    P-P----  ok
+cfg                    P-P----    P-P----  ok
+conf                   P-P----    P-P----  ok
+ts                     P-P----    P-P----  ok
+tsx                    P-P----    P-P----  ok
+js                     P-P----    P-P----  ok
+mjs                    P-P----    P-P----  ok
+cjs                    P-P----    P-P----  ok
+py                     P-P----    P-P----  ok
+java                   P-P----    P-P----  ok
+go                     P-P----    P-P----  ok
+rs                     P-P----    P-P----  ok
+c                      P-P----    P-P----  ok
+cpp                    P-P----    P-P----  ok
+h                      P-P----    P-P----  ok
+hpp                    P-P----    P-P----  ok
+cs                     P-P----    P-P----  ok
+kt                     P-P----    P-P----  ok
+rb                     P-P----    P-P----  ok
+php                    P-P----    P-P----  ok
+sh                     P-P----    P-P----  ok
+ps1                    P-P----    P-P----  ok
+bat                    P-P----    P-P----  ok
+cmd                    P-P----    P-P----  ok
+sql                    P-P----    P-P----  ok
+xml                    P-P----    P-P----  ok
+html                   P-P----    P-P----  ok
+css                    P-P----    P-P----  ok
+scss                   P-P----    P-P----  ok
+vue                    P-P----    P-P----  ok
+csv                    P-P----    P-P----  ok
+log                    P-P----    P-P----  ok
+patch                  P-P----    P-P----  ok
+diff                   P-P----    P-P----  ok
+lock                   P-P----    P-P----  ok
+docx                   P-P----    P-P----  ok
+xlsx                   P-P----    P-P----  ok
+pptx                   P-P----    P-P----  ok
+pdf                    P-P----    P-P----  ok
+Makefile               P-P----    P-P----  ok
+Dockerfile             P-P----    P-P----  ok
+README                 P-P----    P-P----  ok
+.env                   P-P----    P-P----  ok
+session.v4.jsonl.zstd  P-P----    P-P----  ok
+
+== 输入里读到其他内容或出错的（前 32 字节预览）
+无
+
+== 清理
+改名副本：已删除
+%TEMP% 下的临时目录：已删除
+工作目录：已删除（预演）
+
+请把整个 report-p113b-<时间> 目录发回（matrix.json、summary.txt、probe.log，以及 manual-encryption-*）。
