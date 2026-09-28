@@ -17,6 +17,7 @@
  * package, no runtime — the static guard in `__tests__` holds it to that.
  */
 
+import type { SessionFileChange } from '../sessionFileChange.ts';
 import type {
   HistoryAttachment,
   HistoryBlock,
@@ -27,6 +28,7 @@ import { parseToolArguments, toolRowInput } from './toolInput.ts';
 import {
   AICLIENT_INTERJECT_REASON,
   DSH_FORM_NOTICE,
+  DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY,
   DSH_SOURCE_AICLIENT_RETRY,
   DSH_SOURCE_COMPACT_CHECKPOINT,
   DSH_SOURCE_USER,
@@ -37,6 +39,9 @@ import {
   type DshHistoryEntryType,
   type DshLogEvent,
   type DshToolResultBlock,
+  PI_BRANCH_SUMMARY_PREFIX,
+  PI_BRANCH_SUMMARY_SUFFIX,
+  REVIEW_PATCH_MAX_LENGTH,
 } from './types.ts';
 
 /** Same bound as the pi projection (`legacyPiSession/timeline.ts`). */
@@ -167,6 +172,64 @@ function checkpointSummary(content: unknown): string {
   return (
     open >= 0 && close > open ? text.slice(open + SUMMARY_OPEN_TAG.length, close) : text
   ).trim();
+}
+
+/**
+ * The summary inside a migrated pi branch summary, without pi's framing: the
+ * text 1.0.x showed under "Context summary".
+ */
+function piBranchSummary(content: unknown): string {
+  const text = textOf(content);
+  if (
+    text.startsWith(PI_BRANCH_SUMMARY_PREFIX) &&
+    text.endsWith(PI_BRANCH_SUMMARY_SUFFIX) &&
+    text.length >= PI_BRANCH_SUMMARY_PREFIX.length + PI_BRANCH_SUMMARY_SUFFIX.length
+  ) {
+    return text.slice(PI_BRANCH_SUMMARY_PREFIX.length, -PI_BRANCH_SUMMARY_SUFFIX.length);
+  }
+  const open = text.indexOf('<summary>');
+  const close = text.lastIndexOf(PI_BRANCH_SUMMARY_SUFFIX);
+  return (open >= 0 && close > open ? text.slice(open + '<summary>'.length, close) : text).trim();
+}
+
+/**
+ * `tool/result.meta.aiclient.piDetails`: the `details` of a migrated pi tool
+ * result (P1-9, decision 076), the flags a 1.0.x row was read by.
+ */
+// Indexed by a constant: a `.aiclient` member access reads as the legacy
+// app-state dir to the defaultPaths guard.
+const AICLIENT_META_KEY = 'aiclient';
+
+function piDetailsOf(meta: unknown): Row | null {
+  return recordOf(recordOf(recordOf(meta)?.[AICLIENT_META_KEY])?.piDetails);
+}
+
+const REVIEW_STATUSES: ReadonlySet<unknown> = new Set(['added', 'modified', 'unknown']);
+const REVIEW_UNAVAILABLE: ReadonlySet<unknown> = new Set(['too-large', 'binary', 'unreadable']);
+
+/**
+ * A recorded file change, validated as `parseSessionFileChange` does (without
+ * zod, which this library may not load): anything off-shape is no review at
+ * all, and unknown keys are dropped.
+ */
+function reviewOf(value: unknown): SessionFileChange | undefined {
+  const review = recordOf(value);
+  if (!review || review.version !== 1) return undefined;
+  const { path, status, patch, unavailable } = review;
+  if (typeof path !== 'string' || path.length === 0 || !REVIEW_STATUSES.has(status))
+    return undefined;
+  if (patch !== undefined && (typeof patch !== 'string' || patch.length > REVIEW_PATCH_MAX_LENGTH))
+    return undefined;
+  if (unavailable !== undefined && !REVIEW_UNAVAILABLE.has(unavailable)) return undefined;
+  return {
+    version: 1,
+    path,
+    status: status as SessionFileChange['status'],
+    ...(patch !== undefined ? { patch } : {}),
+    ...(unavailable !== undefined
+      ? { unavailable: unavailable as NonNullable<SessionFileChange['unavailable']> }
+      : {}),
+  };
 }
 
 /** The user's own reasons for an `aborted` turn; every other cause carries none. */
@@ -440,6 +503,25 @@ export class DshHistoryFold {
       });
       return;
     }
+    if (kind === DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY) {
+      // 1.0.x showed a branch summary as a context summary, and skipped an empty one.
+      const summary = piBranchSummary(message.content);
+      if (!summary) return;
+      this.append({
+        id,
+        entryId: rawId,
+        role: 'system',
+        ...(time !== undefined ? { timestamp: time } : {}),
+        blocks: [
+          {
+            type: 'text',
+            id: partId(id, SUMMARY_PART, 0),
+            text: `${CONTEXT_SUMMARY_TITLE}\n\n${summary}`,
+          },
+        ],
+      });
+      return;
+    }
     if (source?.form === DSH_FORM_NOTICE) {
       // A background job or goal account, one line (`source.summary`, at most 120 chars).
       const text = stringOf(source.summary) ?? textOf(message.content);
@@ -521,18 +603,26 @@ export class DshHistoryFold {
     const code = stringOf(recordOf(data.error)?.code);
     const failed = message.isError === true;
     const output = toolOutputOf(message.content);
+    // A migrated pi result keeps the flags 1.0.x read off its `details`.
+    const details = piDetailsOf(data.meta);
+    const review = failed ? undefined : reviewOf(details?.review);
     const result: DshToolResultBlock = {
       type: 'tool_result',
       id: partId(id, 'tool-result', callId),
       toolCallId: callId,
       ok: !failed,
       ...(output ? { output } : {}),
+      ...(review ? { review } : {}),
+      ...(!failed && typeof details?.patch === 'string' ? { patch: details.patch } : {}),
       ...(failed ? { error: output || 'Tool call failed' } : {}),
+      ...(details?.refused === true ? { refused: true as const } : {}),
       ...(code === DSH_TOOL_ABORTED_BEFORE_DISPATCH || code === DSH_TOOL_NOT_STARTED
         ? { notStarted: true as const }
         : {}),
       ...(code === DSH_TOOL_OUTCOME_UNKNOWN ? { outcomeUnknown: true as const } : {}),
-      ...(code === DSH_TOOL_ABORTED || recordOf(data.meta)?.aborted === true
+      ...(code === DSH_TOOL_ABORTED ||
+      recordOf(data.meta)?.aborted === true ||
+      details?.stopped === true
         ? { stopped: true as const }
         : {}),
     };
@@ -566,7 +656,9 @@ export class DshHistoryFold {
 
   private onAiclientEvent(name: string, event: DshLogEvent): void {
     const data = recordOf(event.data);
-    const rawId = `aiclient-${name}-${event.seq}`;
+    // The pi entry id the seed carries (decision 076 rule 3), so the row keeps
+    // the id the preview gave it; a row without one is keyed by its seq.
+    const rawId = stringOf(data?.entryId) ?? `aiclient-${name}-${event.seq}`;
     const id = historyId(rawId);
     const time = timeOf(event);
     const stamp = time !== undefined ? { timestamp: time } : {};

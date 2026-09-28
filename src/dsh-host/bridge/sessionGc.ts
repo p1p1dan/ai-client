@@ -33,12 +33,8 @@
 import { lstat, readdir, readFile, rm, stat, unlink } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DshHostGcResult, DshHostGcSkipReason } from '../../shared/types/dshHostProtocol.ts';
-import {
-  DSH_SESSION_ID_PREFIX,
-  DSH_STUB_DIR,
-  DSH_STUB_SUFFIX,
-  hasNamedError,
-} from './dshSessionRuntime.ts';
+import { DSH_SESSION_ID_PREFIX, hasNamedError } from './dshSessionRuntime.ts';
+import { DSH_STUB_DIR, DSH_STUB_SUFFIX } from './stub.ts';
 
 /** Events DSH appends when it creates an agent, before anything is said (measured, P1-3d). */
 export const DSH_SESSION_SETUP_EVENTS: ReadonlySet<string> = new Set([

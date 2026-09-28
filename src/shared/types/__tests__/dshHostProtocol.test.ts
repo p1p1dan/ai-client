@@ -10,8 +10,10 @@ import {
   isDshHostFatal,
   isDshHostGcRequest,
   isDshHostGcResult,
+  isDshHostPage,
   isDshHostPing,
   isDshHostPong,
+  isDshHostReadPageRequest,
   isDshHostReady,
   isDshHostShutdown,
   isDshHostStopped,
@@ -144,5 +146,78 @@ describe('dshHostProtocol gc (P1-3d, decision 024)', () => {
     expect(isDshHostGcResult({ ...result, error: 42 })).toBe(false);
     expect(isDshHostGcResult({ ...result, id: undefined })).toBe(false);
     expect(dshHostControlKind(result)).toBe('gc-result');
+  });
+});
+
+describe('dshHostProtocol readPage (P1-4a, decision 030)', () => {
+  const request = {
+    host: 'readPage',
+    id: 4,
+    stubFile: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+    logicalSessionId: 's1',
+  };
+
+  it('accepts a read with an id, a stub and a logical id; offset and limit as worker.history bounds them', () => {
+    expect(isDshHostReadPageRequest(request)).toBe(true);
+    expect(isDshHostReadPageRequest({ ...request, offset: 80, limit: 40 })).toBe(true);
+    expect(isDshHostReadPageRequest({ ...request, offset: 0, limit: 500 })).toBe(true);
+    for (const bad of [
+      { ...request, id: 0 },
+      { ...request, id: undefined },
+      { ...request, stubFile: '' },
+      { ...request, stubFile: 7 },
+      { ...request, logicalSessionId: '' },
+      { ...request, offset: -1 },
+      { ...request, offset: 1.5 },
+      { ...request, limit: 0 },
+      { ...request, limit: 501 },
+      { ...request, host: 'readpage' },
+    ]) {
+      expect(isDshHostReadPageRequest(bad), JSON.stringify(bad)).toBe(false);
+    }
+    expect(dshHostControlKind(request)).toBe('readPage');
+  });
+
+  const page = {
+    messages: [
+      { id: 'h:u1', role: 'user', blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'hi' }] },
+    ],
+    offset: 0,
+    limit: 80,
+    totalCount: 1,
+    hasMore: false,
+  };
+
+  it('accepts a page answer: ok with a page, or not ok with a coded error, never both', () => {
+    expect(isDshHostPage({ host: 'page', id: 4, ok: true, page, ms: 3.2 })).toBe(true);
+    expect(
+      isDshHostPage({
+        host: 'page',
+        id: 4,
+        ok: false,
+        error: { code: 'dsh_session_missing', message: 'gone' },
+        ms: 0,
+      })
+    ).toBe(true);
+    for (const bad of [
+      { host: 'page', id: 4, ok: true, ms: 1 },
+      { host: 'page', id: 4, ok: true, page, error: { code: 'x', message: '' }, ms: 1 },
+      { host: 'page', id: 4, ok: false, page, error: { code: 'x', message: '' }, ms: 1 },
+      { host: 'page', id: 4, ok: false, error: { code: '', message: 'm' }, ms: 1 },
+      { host: 'page', id: 4, ok: false, error: 'dsh_session_missing', ms: 1 },
+      { host: 'page', id: 4, ok: true, page, ms: -1 },
+      { host: 'page', ok: true, page, ms: 1 },
+      { host: 'page', id: 4, ok: true, page: { ...page, limit: 501 }, ms: 1 },
+      { host: 'page', id: 4, ok: true, page: { ...page, hasMore: 'no' }, ms: 1 },
+      {
+        host: 'page',
+        id: 4,
+        ok: true,
+        page: { ...page, messages: [{ id: 'u1', role: 'user', blocks: [] }] },
+        ms: 1,
+      },
+    ]) {
+      expect(isDshHostPage(bad), JSON.stringify(bad)).toBe(false);
+    }
   });
 });

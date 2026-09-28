@@ -36,6 +36,22 @@ export const DSH_SOURCE_COMPACT_CHECKPOINT = 'compact-checkpoint';
  * the failed turn it continues loses its placeholder.
  */
 export const DSH_SOURCE_AICLIENT_RETRY = 'aiclient-retry';
+/**
+ * `MessageSource.kind` of a pi branch summary a migration seed carries (P1-9,
+ * `SEED_SOURCE_KIND.piBranchSummary`): model context wrapped in pi's framing,
+ * shown as "Context summary" the way 1.0.x showed its `branch_summary` entry.
+ */
+export const DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY = 'aiclient-pi-branch-summary';
+/**
+ * pi's framing around a branch summary (`BRANCH_SUMMARY_PREFIX` / `_SUFFIX`
+ * of `legacyPiSession/convert/llmText.ts`, which this library may not load);
+ * `projection.test.ts` pins the copies together.
+ */
+export const PI_BRANCH_SUMMARY_PREFIX = `The following is a summary of a branch that this conversation came back from:
+
+<summary>
+`;
+export const PI_BRANCH_SUMMARY_SUFFIX = '</summary>';
 /** `ContextForm` of a one-off account of something that happened (`dsh-llm`). */
 export const DSH_FORM_NOTICE = 'notice';
 /**
@@ -53,15 +69,15 @@ export const DSH_TOOL_NOT_STARTED = 'TOOL_NOT_STARTED';
 /** `tool/result.error.code` of a crash or fork closer: started, result never recorded. */
 export const DSH_TOOL_OUTCOME_UNKNOWN = 'TOOL_OUTCOME_UNKNOWN';
 
+/** A `tool_result` history block. */
+export type DshToolResultBlock = Extract<HistoryBlock, { type: 'tool_result' }>;
+
 /**
- * A `tool_result` history block with the P1-4 flag `sessionHistory.ts` does not
- * carry yet: the call started, the engine died, and its outcome was never
- * recorded (`TOOL_OUTCOME_UNKNOWN`, decision 032). It rides the wire as an
- * extra optional field until the shared type and the renderer adopt it.
+ * `SessionFileChange.patch` bound (`REVIEW_PATCH_BYTES` of
+ * `sessionFileChange.ts`, which loads zod and so is out of this library's
+ * reach); `projection.test.ts` pins the copy.
  */
-export type DshToolResultBlock = Extract<HistoryBlock, { type: 'tool_result' }> & {
-  outcomeUnknown?: true;
-};
+export const REVIEW_PATCH_MAX_LENGTH = 64 * 1024;
 
 /** What a tree node is, beyond its role (`SessionTreeNode.entryType`). */
 export type DshHistoryEntryType = 'message' | 'compaction' | 'notice';

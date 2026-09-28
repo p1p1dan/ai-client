@@ -21,6 +21,11 @@
  *   {host:'gc', id, …}  collects orphaned empty sessions (decision 024,
  *                       `sessionGc.ts`), one pass at a time, answered
  *                       `gc-result` with the same id; never rejects.
+ *   {host:'readPage', id, …}
+ *                       one page of a session's history for Main's preview
+ *                       (decision 030, `readPage.ts`): no channel, no lock,
+ *                       no write. Reads run side by side, each answered
+ *                       `page` with its id, the page or the error's code.
  *
  * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
  * then `closed`, and nothing more for that channel after it. Messages that are
@@ -38,14 +43,18 @@ import {
   type DshHostChannelStatus,
   type DshHostGcRequest,
   type DshHostGcResult,
+  type DshHostPage,
+  type DshHostReadPageRequest,
   type DshHostToMainMessage,
   dshHostControlKind,
   isDshChannelEnvelope,
   isDshHostCloseChannel,
   isDshHostGcRequest,
   isDshHostPing,
+  isDshHostReadPageRequest,
   opensDshChannel,
 } from '../../shared/types/dshHostProtocol.ts';
+import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerRpcErrorResponse,
@@ -71,8 +80,18 @@ export interface DshChannelMuxOptions {
     claimed: readonly string[];
     graceMs: number;
   }): Promise<Omit<DshHostGcResult, 'host' | 'id'>>;
+  /** Decision 030's read-only page; without it a `readPage` is answered `ok: false`. */
+  readPage?(request: {
+    stubFile: string;
+    logicalSessionId: string;
+    offset?: number;
+    limit?: number;
+  }): Promise<SessionHistoryPage>;
   log(...args: unknown[]): void;
 }
+
+/** The code of a `page` answer whose read failed without one of its own. */
+export const DSH_READ_FAILED = 'dsh_read_failed';
 
 /** Closed channel ids remembered so a late opening request cannot revive one. */
 const CLOSED_IDS_KEPT = 4096;
@@ -140,11 +159,17 @@ export class DshChannelMux {
       this.gc(message);
       return true;
     }
+    if (isDshHostReadPageRequest(message)) {
+      this.readPage(message);
+      return true;
+    }
     const kind = dshHostControlKind(message);
     if (kind !== undefined) {
       this.warnOnce(
         `control:${kind}`,
-        kind === 'gc' ? 'dropped a malformed gc request' : `dropped host control message "${kind}"`
+        kind === 'gc' || kind === 'readPage'
+          ? `dropped a malformed ${kind} request`
+          : `dropped host control message "${kind}"`
       );
       return true;
     }
@@ -286,6 +311,53 @@ export class DshChannelMux {
       .then(run)
       .then((result) => this.options.send(result))
       .catch((error: unknown) => this.options.log('gc answer failed', error));
+  }
+
+  /**
+   * Not queued behind anything: a read takes no lock and writes nothing, so
+   * it may run beside a session's turn, a gc pass or another read. Never
+   * rejects, for the same reason `gc` never does.
+   */
+  private readPage(request: DshHostReadPageRequest): void {
+    const started = performance.now();
+    const answer = (outcome: Pick<DshHostPage, 'ok' | 'page' | 'error'>): void =>
+      this.options.send({
+        host: 'page',
+        id: request.id,
+        ...outcome,
+        ms: Math.round((performance.now() - started) * 10) / 10,
+      });
+    const read = this.options.readPage;
+    if (!read) {
+      answer({
+        ok: false,
+        error: { code: DSH_READ_FAILED, message: 'history reads are not available on this host' },
+      });
+      return;
+    }
+    Promise.resolve()
+      .then(() =>
+        read({
+          stubFile: request.stubFile,
+          logicalSessionId: request.logicalSessionId,
+          ...(request.offset !== undefined ? { offset: request.offset } : {}),
+          ...(request.limit !== undefined ? { limit: request.limit } : {}),
+        })
+      )
+      .then(
+        (page) => answer({ ok: true, page }),
+        (error: unknown) => {
+          const code = (error as { code?: unknown } | null)?.code;
+          answer({
+            ok: false,
+            error: {
+              code: typeof code === 'string' && code.length > 0 ? code : DSH_READ_FAILED,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          });
+        }
+      )
+      .catch((error: unknown) => this.options.log('readPage answer failed', error));
   }
 
   /** A request for a channel this host does not serve: answered, never dropped silently. */

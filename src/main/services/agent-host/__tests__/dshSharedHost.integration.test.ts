@@ -1,5 +1,14 @@
 import type { ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+} from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
@@ -23,7 +32,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * Two phases, each with its own supervisor, because the host restart budget
  * (decision 020: 3 per 5 min) is per supervisor: the app's singleton takes
  * three SIGKILLs inside a minute, and a fresh one takes the SIGSTOP hang and
- * Stop ladder B. They never overlap: one DSH home, one host at a time.
+ * Stop ladder B. They never overlap: one DSH home, one host at a time. Later
+ * phases add a close that never lands and the idle stop (P1-3d), and Main's
+ * read-only preview (`readPage`, P1-4a, decision 030).
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -914,5 +925,176 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       });
       expect(liveHosts()).toHaveLength(1);
     }, 120_000);
+  });
+
+  /**
+   * Phase four (P1-4a, decision 030): Main's preview of a DSH session is read
+   * by the host — no channel, no lock, no write — and shows what the same
+   * session's resume then answers as its first page.
+   */
+  describe('a fourth supervisor: the read-only preview (P1-4a, decision 030)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    let successor: Supervisor | undefined;
+    let successorManager: Manager | undefined;
+
+    /** Every file of one session's log directory, and its stub: size, digest and mtime. */
+    function onDisk(dshSessionId: string, stubFile: string) {
+      const dir = sessionDirs(join(shared.stateRoot, 'dsh-home')).get(dshSessionId);
+      expect(dir, dshSessionId).toBeDefined();
+      const files = [
+        ...readdirSync(dir as string).map((name) => join(dir as string, name)),
+        stubFile,
+      ];
+      return files.sort().map((file) => {
+        const stat = statSync(file);
+        return {
+          file: file.slice(shared.stateRoot.length),
+          bytes: stat.size,
+          mtimeMs: stat.mtimeMs,
+          sha256: createHash('sha256').update(readFileSync(file)).digest('hex'),
+        };
+      });
+    }
+
+    /** The page a resume published as its first `session.history`. */
+    function resumedPage(id: string, from: number) {
+      const payload: Record<string, unknown> =
+        forSession(id, from).find((e) => e.type === 'session.history')?.payload ?? {};
+      const { messages, offset, limit, totalCount, hasMore } = payload;
+      return { messages, offset, limit, totalCount, hasMore };
+    }
+
+    const stubOf = (owner: Manager, id: string) =>
+      String(owner.getSlotSnapshots().find((slot) => slot.logicalSessionId === id)?.sessionFile);
+
+    /** Epoch stamps and `settledAt` out: a closer DSH writes on resume is stamped then. */
+    function stampless(value: unknown): unknown {
+      if (typeof value === 'number') return value >= 1e12 && value < 1e13 ? '<ms>' : value;
+      if (Array.isArray(value)) return value.map(stampless);
+      if (typeof value === 'object' && value !== null)
+        return Object.fromEntries(
+          Object.entries(value)
+            .filter(([key]) => key !== 'settledAt')
+            .map(([key, item]) => [key, stampless(item)])
+        );
+      return value;
+    }
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0 });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await successorManager?.disposeAll('app-shutdown');
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('reads a closed session without opening or writing it: the page its resume then answers', async () => {
+      await manager.createSession({
+        sessionId: 'r1',
+        workspacePath: workspace,
+        ownerWebContentsId: 40,
+      });
+      for (const text of [
+        'P0-STREAM: stream a paragraph back to me.',
+        'P0-TOOL: list the workspace.',
+      ]) {
+        expect(await turn(manager, 'r1', text, 40)).toMatchObject({
+          settled: true,
+          completed: true,
+        });
+      }
+      const stubFile = stubOf(manager, 'r1');
+      await manager.closeSession('r1');
+      const before = onDisk('aiclient-r1', stubFile);
+      const started = Date.now();
+      const page = await supervisor.readPage({ stubFile, logicalSessionId: 'r1', limit: 80 });
+      const tookMs = Date.now() - started;
+      expect(onDisk('aiclient-r1', stubFile)).toEqual(before);
+      expect(supervisor.status()).toMatchObject({ state: 'ready', channels: 0 });
+      expect(page.messages.length).toBeGreaterThanOrEqual(4);
+
+      const from = events.length;
+      await manager.resumeSession({
+        sessionId: 'r1',
+        sessionFile: stubFile,
+        workspacePath: workspace,
+        ownerWebContentsId: 40,
+      });
+      expect(resumedPage('r1', from)).toEqual(page);
+      const resumeWrote =
+        JSON.stringify(onDisk('aiclient-r1', stubFile)) !== JSON.stringify(before);
+      console.log(
+        `[p1-4a] preview of a closed session: ${page.messages.length} of ${page.totalCount} rows ` +
+          `in ${tookMs} ms, log untouched; the resume that followed ${resumeWrote ? 'did' : 'did not'} write`
+      );
+      await manager.closeSession('r1');
+    }, 180_000);
+
+    it('reads a session whose host died mid-call: the turn closes in memory only, as its resume shows it', async () => {
+      await manager.createSession({
+        sessionId: 'r2',
+        workspacePath: workspace,
+        ownerWebContentsId: 41,
+      });
+      const stubFile = stubOf(manager, 'r2');
+      const sleeper = `P14ASLEEP${Date.now() % 100_000}`;
+      const from = events.length;
+      attempt += 1;
+      await manager.send({
+        sessionId: 'r2',
+        attemptId: `attempt-${attempt}`,
+        text: `P0-SLEEPTOOL {"token":"${sleeper}","seconds":8} 跑一个慢命令。`,
+        ownerWebContentsId: 41,
+      });
+      expect(
+        await until(() => forSession('r2', from).some((e) => e.type === 'tool.started'), 60_000)
+      ).toBe(true);
+      expect(await until(() => processesWith(`sleep-tool ${sleeper}`).length > 0, 15_000)).toBe(
+        true
+      );
+      // Terminal for this supervisor, so nothing resumes r2 behind the preview's back.
+      supervisor.forceKillNow();
+      expect(await until(() => liveHosts().length === 0, 15_000)).toBe(true);
+
+      successor = new DshHostSupervisor({ idleStopMs: 0 });
+      successorManager = newManager(successor, true);
+      const before = onDisk('aiclient-r2', stubFile);
+      const page = await successor.readPage({ stubFile, logicalSessionId: 'r2', limit: 80 });
+      expect(onDisk('aiclient-r2', stubFile)).toEqual(before);
+      expect(successor.status()).toMatchObject({ state: 'ready', channels: 0 });
+      const results = page.messages
+        .flatMap((message) => message.blocks)
+        .filter((block) => block.type === 'tool_result');
+      expect(results.at(-1)).toMatchObject({ ok: false, outcomeUnknown: true });
+      expect(page.messages.at(-1)).toMatchObject({
+        role: 'system',
+        blocks: [
+          { notice: { key: 'This turn was interrupted when the engine stopped unexpectedly.' } },
+        ],
+      });
+
+      const resumedFrom = events.length;
+      await successorManager.resumeSession({
+        sessionId: 'r2',
+        sessionFile: stubFile,
+        workspacePath: workspace,
+        ownerWebContentsId: 41,
+      });
+      const resumed = resumedPage('r2', resumedFrom);
+      expect(stampless(resumed)).toEqual(stampless(page));
+      const resumeWrote =
+        JSON.stringify(onDisk('aiclient-r2', stubFile)) !== JSON.stringify(before);
+      console.log(
+        `[p1-4a] preview after a SIGKILL mid-call: ${page.messages.length} rows, the interrupted ` +
+          `turn closed in memory, log untouched; the resume ${resumeWrote ? 'wrote' : 'did not write'} ` +
+          `its closer; pages equal ${JSON.stringify(resumed) === JSON.stringify(page) ? 'exactly' : 'but for stamps'}`
+      );
+      expect(resumeWrote).toBe(true);
+      await successorManager.closeSession('r2');
+    }, 180_000);
   });
 });

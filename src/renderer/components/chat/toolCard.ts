@@ -595,9 +595,14 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
 
   // A never-started call has no output of its own — only the runtime's English
-  // note, which `outcome` already says in the reader's language. A refusal
-  // keeps its body: the runtime's reason is the only account of why.
-  const showOutputBody = !running && outcome !== 'notStarted' && (failed || Boolean(run.output));
+  // note, which `outcome` already says in the reader's language; so has one
+  // whose outcome the engine never recorded (decision 032). A refusal keeps
+  // its body: the runtime's reason is the only account of why.
+  const showOutputBody =
+    !running &&
+    outcome !== 'notStarted' &&
+    outcome !== 'outcomeUnknown' &&
+    (failed || Boolean(run.output));
   // 2026-09-23 (user report: a running command could not be expanded and its
   // full text was nowhere to be seen): a running call's input is now
   // expandable as a live preview. `tool.updated` rewrites
@@ -1084,6 +1089,10 @@ export function toolRunWasRefused(run: Pick<ToolRun, 'permission'>): boolean {
  * - `stopped` (T130) — the call DID run and Stop cut it short (a `bash` whose
  *   command was aborted). Unlike the two above it keeps the done-form verb —
  *   the command really ran — and its partial output.
+ * - `outcomeUnknown` (dsh-rebase decision 032) — the call started and the
+ *   engine died before its result was recorded: it may or may not have done
+ *   its work. Done-form verb, since it did start; no body, since the only
+ *   text is the engine's note to the model.
  *
  * Read ONLY off the structured `details` the result carries
  * (`ToolOutcomeDetails`: the projector copies `refused` / `stopped` from the
@@ -1096,7 +1105,7 @@ export function toolRunWasRefused(run: Pick<ToolRun, 'permission'>): boolean {
  * A call refused by its AUTHORIZATION is `toolRunWasRefused`'s case, not this
  * one: it carries a decision word of its own.
  */
-export type ToolRunOutcome = 'refused' | 'notStarted' | 'stopped';
+export type ToolRunOutcome = 'refused' | 'notStarted' | 'stopped' | 'outcomeUnknown';
 
 export function toolRunOutcome(run: Pick<ToolRun, 'result'>): ToolRunOutcome | null {
   const result = run.result;
@@ -1105,6 +1114,7 @@ export function toolRunOutcome(run: Pick<ToolRun, 'result'>): ToolRunOutcome | n
   if (!details || typeof details !== 'object') return null;
   const flags = details as ToolOutcomeDetails;
   if (flags.notStarted === true) return 'notStarted';
+  if (flags.outcomeUnknown === true) return 'outcomeUnknown';
   if (flags.refused === true) return 'refused';
   if (flags.stopped === true) return 'stopped';
   return null;
@@ -1118,6 +1128,7 @@ export const TOOL_RUN_OUTCOME_LABEL: Readonly<Record<ToolRunOutcome, string>> = 
   refused: 'Refused',
   notStarted: 'Not run',
   stopped: 'Stopped',
+  outcomeUnknown: 'Outcome unknown',
 };
 
 /**

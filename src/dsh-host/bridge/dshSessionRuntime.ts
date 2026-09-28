@@ -24,18 +24,7 @@
  * stub is written, so a committed identity always names a log that exists.
  */
 
-import { randomUUID } from 'node:crypto';
-import {
-  closeSync,
-  fsyncSync,
-  mkdirSync,
-  openSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeSync,
-} from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
   PiWorkerRuntime,
@@ -68,6 +57,24 @@ import {
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
+import {
+  DSH_SESSION_MISSING,
+  readStub,
+  SAFE_SESSION_ID,
+  stubPathFor,
+  writeStubAtomically,
+} from './stub.ts';
+
+// The stub moved to `stub.ts` (P1-4a, shared with the host's `readPage`); its
+// names stay reachable from here, where the bridge's error codes are listed.
+export {
+  DSH_SESSION_MISSING,
+  DSH_STUB_DIR,
+  DSH_STUB_SUFFIX,
+  SESSION_INVALID,
+  type SessionStub,
+  stubPathFor,
+} from './stub.ts';
 
 // ---- the slice of the DSH host this bridge uses ----------------------------
 
@@ -182,26 +189,12 @@ type BridgeDraft = RuntimeEventDraft extends infer E
     : never
   : never;
 
-/** The file Main keeps as this session's durable identity (`sessionFile`, decision 006). */
-export interface SessionStub {
-  engine: 'dsh';
-  version: 1;
-  dshSessionId: string;
-  logicalSessionId: string;
-  cwd: string;
-  /** Epoch milliseconds. */
-  createdAt: number;
-}
-
-/** Directory under `$DSH_HOME` holding the identity stubs, and their suffix. */
-export const DSH_STUB_DIR = 'aiclient-sessions';
-export const DSH_STUB_SUFFIX = '.dsh.json';
-
-/** Error codes this bridge answers with; Main and the renderer match on them. */
-export const DSH_SESSION_MISSING = 'dsh_session_missing';
+/**
+ * Error codes this bridge answers with, besides the stub's own
+ * (`dsh_session_missing`, `session_invalid`); Main and the renderer match on them.
+ */
 export const SESSION_LOCKED = 'session_locked';
 export const SESSION_CWD_MISMATCH = 'session_cwd_mismatch';
-export const SESSION_INVALID = 'session_invalid';
 
 /** The page size Main asks for when it reads a resumed session (`readHistory(entry, 0, 80)`). */
 export const INITIAL_HISTORY_LIMIT = 80;
@@ -214,13 +207,7 @@ export function dshSessionIdFor(logicalSessionId: string): string {
   return `${DSH_SESSION_ID_PREFIX}${logicalSessionId}`;
 }
 
-export function stubPathFor(home: string, dshSessionId: string): string {
-  return join(home, DSH_STUB_DIR, `${dshSessionId}${DSH_STUB_SUFFIX}`);
-}
-
 const DECISIONS: PermissionDecisionId[] = ['allow', 'deny'];
-/** The id becomes a file name, so nothing that could leave the stub directory. */
-const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
 function unsupported(operation: string): never {
   throw new PiWorkerSessionError(
@@ -244,7 +231,7 @@ export function hasNamedError(error: unknown, name: string, depth = 0): boolean 
 }
 
 /** decision 010: DSH's refusals in our vocabulary. The kernel lock has no forced takeover. */
-function mapOpenError(error: unknown, dshSessionId: string): unknown {
+export function mapOpenError(error: unknown, dshSessionId: string): unknown {
   if (hasNamedError(error, 'SessionPersistenceNotFoundError')) {
     return new PiWorkerSessionError(
       DSH_SESSION_MISSING,
@@ -265,65 +252,6 @@ function sameCwd(a: string, b: string): boolean {
   const left = resolve(a);
   const right = resolve(b);
   return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
-}
-
-function isSessionStub(value: unknown): value is SessionStub {
-  const stub = value as Partial<SessionStub> | null;
-  return (
-    typeof stub === 'object' &&
-    stub !== null &&
-    stub.engine === 'dsh' &&
-    stub.version === 1 &&
-    typeof stub.dshSessionId === 'string' &&
-    SAFE_ID.test(stub.dshSessionId) &&
-    typeof stub.logicalSessionId === 'string' &&
-    typeof stub.cwd === 'string' &&
-    stub.cwd.length > 0
-  );
-}
-
-function readStub(file: string): SessionStub {
-  let raw: string;
-  try {
-    raw = readFileSync(file, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      throw new PiWorkerSessionError(
-        DSH_SESSION_MISSING,
-        `DSH session identity is missing: ${file}`
-      );
-    }
-    throw error;
-  }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    parsed = undefined;
-  }
-  if (!isSessionStub(parsed)) {
-    throw new PiWorkerSessionError(SESSION_INVALID, `Not a DSH session identity: ${file}`);
-  }
-  return parsed;
-}
-
-/** Temp file + fsync + rename: a reader sees the old stub or the whole new one, never half. */
-function writeStubAtomically(file: string, stub: SessionStub): void {
-  mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
-  const temp = `${file}.${randomUUID()}.tmp`;
-  try {
-    const fd = openSync(temp, 'wx', 0o600);
-    try {
-      writeSync(fd, `${JSON.stringify(stub, null, 2)}\n`);
-      fsyncSync(fd);
-    } finally {
-      closeSync(fd);
-    }
-    renameSync(temp, file);
-  } catch (error) {
-    rmSync(temp, { force: true });
-    throw error;
-  }
 }
 
 function textOf(content: unknown): string {
@@ -532,7 +460,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    */
   private async createSession(selection: { provider: string; model: string }): Promise<string> {
     this.dshSessionId = dshSessionIdFor(this.logicalSessionId);
-    if (!SAFE_ID.test(this.dshSessionId)) {
+    if (!SAFE_SESSION_ID.test(this.dshSessionId)) {
       throw new PiWorkerSessionError(
         'WORKER_INVALID_PAYLOAD',
         `Logical session id cannot name a DSH session: ${this.logicalSessionId}`

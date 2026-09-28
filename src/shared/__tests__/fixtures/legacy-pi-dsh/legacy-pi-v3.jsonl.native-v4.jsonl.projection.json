@@ -59,6 +59,19 @@
       ]
     },
     {
+      "id": "h:bda3d570",
+      "entryId": "bda3d570",
+      "role": "system",
+      "timestamp": 1790513905660,
+      "blocks": [
+        {
+          "type": "text",
+          "id": "h:bda3d570:summary:0",
+          "text": "Context summary\n\nTried an idea and came back."
+        }
+      ]
+    },
+    {
       "id": "h:58950f76",
       "entryId": "58950f76",
       "role": "user",
@@ -156,13 +169,7 @@
     }
   ],
   "e4": {
-    "history": [
-      {
-        "category": "branch-summary-row",
-        "id": "h:bda3d570",
-        "field": "message"
-      }
-    ],
+    "history": [],
     "context": [
       {
         "category": "interrupted-reply",

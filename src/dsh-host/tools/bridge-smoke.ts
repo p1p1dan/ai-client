@@ -34,8 +34,14 @@
  *      channel on the same host creates S3, and both stream at once without
  *      either channel seeing the other's events. Its first page
  *      (`initialHistory`, P1-4a) is the history C answered before it died.
+ *      Before it opens S2, Main's preview reads S2 cold (`readPage`, decision
+ *      030): the page the resume then answers, and not a byte or an mtime of
+ *      the log changed; a stub for another session and a missing stub are
+ *      refused. With S2 open, the preview reads the live session: the page
+ *      `worker.history` answers.
  *   F  resumes S1 in yet another host and recalls A's turns; its first page is
- *      the history A answered before it shut down.
+ *      the history A answered before it shut down, and the page a cold
+ *      `readPage` gave just before, again without touching the log.
  *   G  asks to CREATE S2 again, as a retry does when an earlier create reached
  *      the disk but never became Main's identity: the bridge reopens the log
  *      with the deterministic id instead of failing on it, and recalls C's turn.
@@ -234,6 +240,13 @@ async function main() {
   const hosts: Record<string, Message> = {};
   const protocol: Record<string, unknown> = {};
   const experiments: Record<string, unknown> = {};
+  /** P1-4a (decision 030): what the host's read-only page answered, and the disk around it. */
+  const readPages: Record<string, unknown> = {};
+  /** The session's log directory and stub, byte for byte and mtime for mtime. */
+  const untouched = (dshSessionId: string, stubFile: string | undefined) => {
+    const disk = diskFacts(box.dshHome, dshSessionId, stubFile);
+    return JSON.stringify({ log: disk.logFiles, stub: disk.stub, stubMtimeMs: disk.stubMtimeMs });
+  };
   const live: Host[] = [];
 
   const startHost = (label: string): Host => {
@@ -537,6 +550,22 @@ async function main() {
     facts.afterKill = diskFacts(box.dshHome, `aiclient-${EMPTY_SESSION}`, stubS2);
     const e = startHost('E');
     await ready(e);
+    // P1-4a (decision 030): Main's preview of S2, cold, before anything opens it.
+    const diskBeforeRead = untouched(`aiclient-${EMPTY_SESSION}`, stubS2);
+    readPages.coldAfterKill = await e.client.readPage({
+      stubFile: String(stubS2),
+      logicalSessionId: EMPTY_SESSION,
+    });
+    readPages.coldAfterKillWroteNothing =
+      untouched(`aiclient-${EMPTY_SESSION}`, stubS2) === diskBeforeRead;
+    readPages.foreignStub = await e.client.readPage({
+      stubFile: String(stubS2),
+      logicalSessionId: SESSION,
+    });
+    readPages.missingStub = await e.client.readPage({
+      stubFile: join(box.dshHome, 'aiclient-sessions', 'aiclient-bridge-smoke-none.dsh.json'),
+      logicalSessionId: 'bridge-smoke-none',
+    });
     const chE = e.client.openChannel();
     const bootE = await bootstrap(e, chE, {
       logicalSessionId: EMPTY_SESSION,
@@ -560,6 +589,14 @@ async function main() {
       mainSessions: [...new Set(e.client.events(chE).map((event) => event.sessionId))],
       sideSessions: [...new Set(e.client.events(chSide).map((event) => event.sessionId))],
     };
+    // With S2 open on this host, the preview reads the live session.
+    readPages.live = await e.client.readPage({
+      stubFile: String(stubS2),
+      logicalSessionId: EMPTY_SESSION,
+    });
+    readPages.liveHistory = await e.client.request(chE, 'worker.history', {
+      logicalSessionId: EMPTY_SESSION,
+    });
     await closeSession(e, chE);
     await closeSession(e, chSide);
     await stopHost(e);
@@ -567,6 +604,13 @@ async function main() {
     // ---- F: S1 in yet another host, with A's turns in context
     const f = startHost('F');
     await ready(f);
+    const diskBeforeReadF = untouched(`aiclient-${SESSION}`, stubS1);
+    readPages.coldOtherHost = await f.client.readPage({
+      stubFile: String(stubS1),
+      logicalSessionId: SESSION,
+    });
+    readPages.coldOtherHostWroteNothing =
+      untouched(`aiclient-${SESSION}`, stubS1) === diskBeforeReadF;
     const chF = f.client.openChannel();
     const bootF = await bootstrap(f, chF, {
       logicalSessionId: SESSION,
@@ -612,6 +656,7 @@ async function main() {
   report.disk = facts;
   report.protocol = protocol;
   report.experiments = experiments;
+  report.readPages = readPages;
 
   const stream = turns.STREAM as { assistantDeltas?: number } | undefined;
   const tool = turns.TOOL as { tools?: Message[] } | undefined;
@@ -707,6 +752,27 @@ async function main() {
       resumedAfterKill?.initialHistory,
       report.historyBeforeKill
     ),
+    // P1-4a (decision 030): Main's preview, read by the host without opening the session
+    readPageColdMatchesResume:
+      (readPages.coldAfterKill as Message | undefined)?.ok === true &&
+      samePage(resumedAfterKill?.initialHistory, readPages.coldAfterKill) &&
+      (readPages.coldOtherHost as Message | undefined)?.ok === true &&
+      samePage(
+        (hosts.F?.bootstrap as Message | undefined)?.initialHistory,
+        readPages.coldOtherHost
+      ),
+    readPageWroteNothing:
+      readPages.coldAfterKillWroteNothing === true && readPages.coldOtherHostWroteNothing === true,
+    readPageLiveMatchesHistory:
+      (readPages.live as Message | undefined)?.ok === true &&
+      samePage(readPages.live, readPages.liveHistory),
+    readPageRefusesForeignAndMissingStubs:
+      (readPages.foreignStub as Message | undefined)?.ok === false &&
+      ((readPages.foreignStub as Message).error as Message | undefined)?.code ===
+        'session_invalid' &&
+      (readPages.missingStub as Message | undefined)?.ok === false &&
+      ((readPages.missingStub as Message).error as Message | undefined)?.code ===
+        'dsh_session_missing',
     // P1-1: a repeated create reopens the existing log (deterministic id) and rewrites its stub
     recreateReopenedExistingLog:
       (hosts.G?.bootstrap as Message | undefined)?.sessionFile === stubS2 &&

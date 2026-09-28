@@ -8,7 +8,8 @@
  *                                      message (workerRpc.ts), `ch` names the
  *                                      virtual slot it belongs to
  *   host control   {host: <kind>, ...} ping / pong, close / closed,
- *                                      gc / gc-result (P1-3d, decision 024)
+ *                                      gc / gc-result (P1-3d, decision 024),
+ *                                      readPage / page (P1-4a, decision 030)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -19,7 +20,6 @@
  * Reserved control kinds, added by the tasks that need them and dropped with a
  * diagnostic by whichever side does not know them yet:
  *   configure / credential / credential-result   P1-5 (decisions 033, 034)
- *   readPage / page                              P1-4 (decision 030)
  *   seedSession                                  P1-9
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
@@ -27,6 +27,7 @@
  * host gets bundled in: erasable syntax only, and no value imports.
  */
 
+import type { SessionHistoryPage } from './sessionHistory';
 import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
 
 /** `c<host generation>-<sequence>`; the sequence never restarts, so an id is never reused. */
@@ -90,12 +91,32 @@ export interface DshHostGcRequest {
   graceMs: number;
 }
 
+/**
+ * Decision 030: one page of a session's history, read without opening the
+ * session — no channel, no agent, no lock, no write. The host reads the stub,
+ * checks it names `logicalSessionId`, observes the DSH session (the live
+ * snapshot, or a cold read that closes an interrupted turn in memory only)
+ * and pages its projection as `worker.history` would. Answered with `page`.
+ */
+export interface DshHostReadPageRequest {
+  host: 'readPage';
+  id: number;
+  /** The identity stub the session index names (`runtimeIdentity`). */
+  stubFile: string;
+  logicalSessionId: string;
+  /** Newer messages to skip, counted back from the newest; 0 when absent. */
+  offset?: number;
+  /** At most `HISTORY_PAGE_MAX_LIMIT`; the default page when absent. */
+  limit?: number;
+}
+
 export type DshMainToHostMessage =
   | DshChannelEnvelope<WorkerRpcRequest>
   | DshHostPing
   | DshHostCloseChannel
   | DshHostShutdown
-  | DshHostGcRequest;
+  | DshHostGcRequest
+  | DshHostReadPageRequest;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -197,6 +218,19 @@ export interface DshHostGcResult {
   error?: string;
 }
 
+/** Answer to `readPage`, echoing its id: the page, or why there is none. */
+export interface DshHostPage {
+  host: 'page';
+  id: number;
+  ok: boolean;
+  /** Present exactly when `ok`. */
+  page?: SessionHistoryPage;
+  /** Present exactly when not `ok`; `code` is the bridge's (`dsh_session_missing`, …). */
+  error?: { code: string; message: string };
+  /** Time the host spent on the read. */
+  ms: number;
+}
+
 export type DshHostToMainMessage =
   | DshHostReady
   | DshHostFatal
@@ -204,7 +238,8 @@ export type DshHostToMainMessage =
   | DshChannelEnvelope<WorkerRpcMessage>
   | DshHostPong
   | DshHostChannelClosed
-  | DshHostGcResult;
+  | DshHostGcResult
+  | DshHostPage;
 
 // ---- guards -------------------------------------------------------------------
 
@@ -331,5 +366,71 @@ export function isDshHostGcResult(value: unknown): value is DshHostGcResult {
     (reason) =>
       (DSH_HOST_GC_SKIP_REASONS as readonly string[]).includes(reason) &&
       isNonNegativeFinite(skipped[reason])
+  );
+}
+
+/** `worker.history`'s bounds (`isWorkerHistoryPayload`). */
+const PAGE_MAX_LIMIT = 500;
+
+function isCount(value: unknown, min: number, max: number): boolean {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= min && value <= max;
+}
+
+function isOptionalCount(value: unknown, min: number, max: number): boolean {
+  return value === undefined || isCount(value, min, max);
+}
+
+export function isDshHostReadPageRequest(value: unknown): value is DshHostReadPageRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'readPage' &&
+    isPositiveSafeInteger(value.id) &&
+    typeof value.stubFile === 'string' &&
+    value.stubFile.length > 0 &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.length > 0 &&
+    isOptionalCount(value.offset, 0, Number.MAX_SAFE_INTEGER) &&
+    isOptionalCount(value.limit, 1, PAGE_MAX_LIMIT)
+  );
+}
+
+/** The shape `isWorkerHistoryResult` accepts for a page, restated: no value imports here. */
+function isHistoryPage(value: unknown): value is SessionHistoryPage {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.messages) &&
+    isCount(value.offset, 0, Number.MAX_SAFE_INTEGER) &&
+    isCount(value.limit, 1, PAGE_MAX_LIMIT) &&
+    isCount(value.totalCount, 0, Number.MAX_SAFE_INTEGER) &&
+    typeof value.hasMore === 'boolean' &&
+    value.messages.every(
+      (message) =>
+        isRecord(message) &&
+        typeof message.id === 'string' &&
+        message.id.startsWith('h:') &&
+        (message.role === 'user' || message.role === 'assistant' || message.role === 'system') &&
+        Array.isArray(message.blocks)
+    )
+  );
+}
+
+export function isDshHostPage(value: unknown): value is DshHostPage {
+  if (
+    !isRecord(value) ||
+    value.host !== 'page' ||
+    !isPositiveSafeInteger(value.id) ||
+    typeof value.ok !== 'boolean' ||
+    !isNonNegativeFinite(value.ms)
+  ) {
+    return false;
+  }
+  if (value.ok) return isHistoryPage(value.page) && value.error === undefined;
+  const error = value.error;
+  return (
+    value.page === undefined &&
+    isRecord(error) &&
+    typeof error.code === 'string' &&
+    error.code.length > 0 &&
+    typeof error.message === 'string'
   );
 }

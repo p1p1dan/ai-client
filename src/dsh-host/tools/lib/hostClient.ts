@@ -120,6 +120,25 @@ export class HostClient {
     return reply;
   }
 
+  /**
+   * Decision 030's read-only page (`{host:'readPage'}`), answered with the
+   * host's `page` message as it came (ok or not), plus the round trip.
+   */
+  async readPage(
+    payload: { stubFile: string; logicalSessionId: string; offset?: number; limit?: number },
+    timeoutMs = 60_000
+  ): Promise<Message & { roundTripMs: number }> {
+    const id = 1_000_000 + ++this.requestSeq;
+    const started = performance.now();
+    this.child.send({ host: 'readPage', id, ...payload });
+    const reply = await this.control(
+      (message) => message.host === 'page' && message.id === id,
+      timeoutMs
+    );
+    if (!reply) throw new Error(`readPage ${id} timed out`);
+    return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
+  }
+
   /** Resolve once `predicate` holds over the channel's events so far. */
   until(
     ch: string,

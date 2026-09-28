@@ -19,6 +19,7 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
 import { DshChannelMux } from './channelMux.ts';
 import { type DshBridgeContext, type DshJobsView, DshSessionRuntime } from './dshSessionRuntime.ts';
+import { readSessionPage } from './readPage.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 
 /** Stable Cordis plugin name. */
@@ -31,7 +32,8 @@ export const name = 'aiclient-bridge';
  * needs; without it the first worker.bootstrap can reach the registry before
  * the loop row starts and fail with "no agent factory registered" (P1-2: the
  * dynamic imports this row used to await had been hiding that race).
- * `sessionQuery` is the lock-free read the history cache folds (P1-4a).
+ * `sessionQuery` is the lock-free read the history cache folds, and Main's
+ * preview reads through `readPage` (P1-4a, decision 030).
  */
 export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'];
 
@@ -102,6 +104,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
         request
       );
     },
+    // Decision 030: Main's preview, read without a channel.
+    readPage: (request) => readSessionPage(ctx.sessionQuery, request),
     log: (...args) => console.error('[aiclient-bridge]', ...args),
   });
   ctx.effect(() => {

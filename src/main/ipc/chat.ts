@@ -17,6 +17,7 @@ import {
   resolveAgentWireName,
 } from '@shared/types/agentWire';
 import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
+import type { SessionHistoryPage } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
   isSessionPermissionTier,
@@ -24,6 +25,7 @@ import {
 } from '@shared/types/sessionPermissionTier';
 import type { WorkerCapabilityInventory } from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
+import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
@@ -282,6 +284,34 @@ function spawnForceTakeover(value: unknown): { forceTakeover?: true } {
  */
 function withWorkerErrorCode(error: unknown): unknown {
   return error instanceof WorkerManagerError ? new Error(`${error.code}: ${error.message}`) : error;
+}
+
+/**
+ * dsh-rebase decision 030 (P1-4a): a DSH session's preview page, read by the
+ * shared host without opening the session — no worker slot, no lock, no
+ * write; a host is started for it if none is up. Every failure (no host to
+ * be had, a missing or foreign stub, a log that will not read) is the one
+ * code the renderer answers by falling back to a resume.
+ */
+async function readDshReplayPage(
+  sessionId: string,
+  stubFile: string,
+  range: { offset?: number; limit?: number }
+): Promise<SessionHistoryPage> {
+  try {
+    return await dshHostSupervisor.readPage({
+      stubFile,
+      logicalSessionId: sessionId,
+      ...(range.offset !== undefined ? { offset: range.offset } : {}),
+      ...(range.limit !== undefined ? { limit: range.limit } : {}),
+    });
+  } catch (error) {
+    throw new Error(
+      `${SESSION_REPLAY_UNAVAILABLE}: Session ${sessionId} could not be read through the DSH host: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
 }
 
 /** A row with a durable identity and a binding this build understands, live or legacy. */
@@ -960,14 +990,6 @@ export function registerChatHandlers(): void {
       payload: { sessionId: string; offset?: number; limit?: number }
     ): Promise<{ requestId: string }> => {
       const { row, agent } = await requireIndexedSession(payload.sessionId);
-      // P1-1: this reader decodes the legacy format only. A DSH log has no
-      // main-process reader until P1-4, so the renderer falls back to resume,
-      // which is exactly what it does for any other replay refusal.
-      if (agent === DSH_AGENT) {
-        throw new Error(
-          `${SESSION_REPLAY_UNAVAILABLE}: Session ${payload.sessionId} runs on DSH, which has no main-process replay yet`
-        );
-      }
       // A live worker owns the writer lock and holds the authoritative branch
       // in memory, so its file may legitimately lag. Refuse rather than answer
       // from a stale read; `worker_active` tells the renderer to ask the
@@ -984,12 +1006,18 @@ export function registerChatHandlers(): void {
       // No `claimSessionForSender` on purpose: claiming marks a worker slot as
       // foreground, and this path has no slot to mark. Reading history must
       // never be the reason a session is treated as held by a window.
-      const page = await readSessionReplayPage({
-        sessionFile: row.runtimeIdentity,
-        ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
-        ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
-        ...(row.workspacePath ? { workspacePath: row.workspacePath } : {}),
-      });
+      // A DSH log is read by the host (decision 030); `SessionReplayReader`
+      // decodes the legacy pi format only, which keeps pre-switch sessions
+      // viewable (decision 005).
+      const page =
+        agent === DSH_AGENT
+          ? await readDshReplayPage(payload.sessionId, row.runtimeIdentity, payload)
+          : await readSessionReplayPage({
+              sessionFile: row.runtimeIdentity,
+              ...(payload.offset !== undefined ? { offset: payload.offset } : {}),
+              ...(payload.limit !== undefined ? { limit: payload.limit } : {}),
+              ...(row.workspacePath ? { workspacePath: row.workspacePath } : {}),
+            });
       const seq = nextReplaySequence();
       const requestId = `replay-${payload.sessionId}-${seq}`;
       broadcastRuntimeEvent({

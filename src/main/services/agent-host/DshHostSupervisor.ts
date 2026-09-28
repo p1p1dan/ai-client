@@ -33,6 +33,9 @@
  *   - A host that died abnormally after it was ready may leave its tools
  *     running in systemd scopes; they are stopped before the next host starts
  *     (decision 075, `dshHostScopes.ts`).
+ *   - A history read (`readPage`, decision 030) starts a host on demand like a
+ *     channel does, and holds off the idle stop while it runs; it opens no
+ *     channel, so the host it started stops once idle.
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -44,6 +47,7 @@ import {
   type DshChannelId,
   type DshHostChannelStatus,
   type DshHostGcResult,
+  type DshHostPage,
   type DshHostPong,
   type DshMainToHostMessage,
   dshHostControlKind,
@@ -52,10 +56,12 @@ import {
   isDshHostChannelClosed,
   isDshHostFatal,
   isDshHostGcResult,
+  isDshHostPage,
   isDshHostPong,
   isDshHostReady,
   isDshHostStopped,
 } from '@shared/types/dshHostProtocol';
+import type { SessionHistoryPage } from '@shared/types/sessionHistory';
 import { powerMonitor as electronPowerMonitor } from 'electron';
 import { sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { type DshChannelLink, DshChannelTransport } from './DshChannelTransport';
@@ -95,6 +101,12 @@ export const DSH_HOST_TIMINGS = {
   scopeStopWaitMs: 6_000,
   /** A `gc` pass (decision 024) not answered in this long is given up on. */
   gcTimeoutMs: 120_000,
+  /**
+   * A history read (decision 030) not answered in this long is given up on;
+   * the preview then falls back to a resume. A 2000-message log reads in well
+   * under a second (P1-4a); the rest covers a busy 2-core box.
+   */
+  readPageTimeoutMs: 20_000,
 } as const;
 
 /**
@@ -130,7 +142,9 @@ export type DshHostSupervisorErrorCode =
   | 'DSH_HOST_EXIT_UNCONFIRMED'
   | 'DSH_HOST_STOPPED'
   | 'DSH_HOST_DISPOSED'
-  | 'DSH_HOST_UNAVAILABLE';
+  | 'DSH_HOST_UNAVAILABLE'
+  /** The host answered a history read with an error; its code leads the message. */
+  | 'DSH_HOST_READ_FAILED';
 
 export class DshHostSupervisorError extends Error {
   constructor(
@@ -277,6 +291,21 @@ interface PendingGc {
   readonly timer: NodeJS.Timeout;
 }
 
+/** What `readPage` asks the host for; see `DshHostReadPageRequest`. */
+export interface DshHostReadPageInput {
+  stubFile: string;
+  logicalSessionId: string;
+  offset?: number;
+  limit?: number;
+}
+
+interface PendingRead {
+  readonly host: HostRecord;
+  readonly resolve: (page: SessionHistoryPage) => void;
+  readonly reject: (error: Error) => void;
+  readonly timer: NodeJS.Timeout;
+}
+
 interface HostRecord {
   readonly generation: number;
   readonly child: ChildProcess;
@@ -372,6 +401,10 @@ export class DshHostSupervisor {
   private scopeCleanup: Promise<void> | null = null;
   private gcSequence = 0;
   private readonly pendingGc = new Map<number, PendingGc>();
+  private readSequence = 0;
+  private readonly pendingReadPages = new Map<number, PendingRead>();
+  /** `readPage` calls in flight, host start included: a host about to be read is not idle. */
+  private pendingReads = 0;
 
   private readonly channelLink: DshChannelLink = {
     send: (ch, rpc, onError) => {
@@ -526,6 +559,76 @@ export class DshHostSupervisor {
       if (!sent) {
         this.settleGc(id)?.reject(
           new DshHostSupervisorError('DSH_HOST_UNAVAILABLE', 'the gc request could not be sent')
+        );
+      }
+    });
+  }
+
+  /**
+   * Decision 030: one page of a session's history, read by the host without a
+   * channel (Main's preview of a DSH session). A host is started when none is
+   * up, but never out of `failed`: a preview is not a user's create or resume,
+   * and the resume it falls back to is. Resolves with the page; rejects when
+   * no host can be had, when it goes away or does not answer within
+   * `readPageTimeoutMs`, and with `DSH_HOST_READ_FAILED` (the host's code
+   * leading the message) when the read itself failed.
+   */
+  async readPage(request: DshHostReadPageInput): Promise<SessionHistoryPage> {
+    this.pendingReads += 1;
+    this.disarmIdleStop();
+    try {
+      const info = await this.ensureHost();
+      const host = this.host;
+      if (
+        this.state !== 'ready' ||
+        !host ||
+        host.generation !== info.generation ||
+        host.exitInfo ||
+        !host.connected
+      ) {
+        throw new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          'the DSH host went away before the history read'
+        );
+      }
+      return await this.sendReadPage(host, request);
+    } finally {
+      this.pendingReads -= 1;
+      this.armIdleStop();
+    }
+  }
+
+  private sendReadPage(
+    host: HostRecord,
+    request: DshHostReadPageInput
+  ): Promise<SessionHistoryPage> {
+    const id = ++this.readSequence;
+    return new Promise<SessionHistoryPage>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingReadPages.delete(id);
+        reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            `readPage ${id} was not answered within ${DSH_HOST_TIMINGS.readPageTimeoutMs}ms`
+          )
+        );
+      }, DSH_HOST_TIMINGS.readPageTimeoutMs);
+      timer.unref?.();
+      this.pendingReadPages.set(id, { host, resolve, reject, timer });
+      const sent = this.sendControl(host, {
+        host: 'readPage',
+        id,
+        stubFile: request.stubFile,
+        logicalSessionId: request.logicalSessionId,
+        ...(request.offset !== undefined ? { offset: request.offset } : {}),
+        ...(request.limit !== undefined ? { limit: request.limit } : {}),
+      });
+      if (!sent) {
+        this.settleRead(id)?.reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            'the readPage request could not be sent'
+          )
         );
       }
     });
@@ -797,6 +900,10 @@ export class DshHostSupervisor {
       else this.warnRateLimited('stale-gc', `[dsh-host] dropped gc-result ${message.id}`);
       return;
     }
+    if (isDshHostPage(message)) {
+      this.onPage(host, message);
+      return;
+    }
     const record =
       typeof message === 'object' && message !== null ? (message as Record<string, unknown>) : null;
     if (record?.type === 'ready') {
@@ -910,6 +1017,7 @@ export class DshHostSupervisor {
       this.scopeCleanup = this.stopScopesOf(this.stopOrphanScopes, host.pid);
     }
     this.rejectGc(host);
+    this.rejectReads(host);
     host.resolveExited();
     const channels = this.host === host ? this.takeChannels() : [];
     if (!host.readySettled) {
@@ -1196,7 +1304,8 @@ export class DshHostSupervisor {
       this.state === 'ready' &&
       this.host !== null &&
       this.channels.size === 0 &&
-      this.pendingOpens === 0
+      this.pendingOpens === 0 &&
+      this.pendingReads === 0
     );
   }
 
@@ -1245,6 +1354,48 @@ export class DshHostSupervisor {
       if (pending.host !== host) continue;
       this.settleGc(id)?.reject(
         new DshHostSupervisorError('DSH_HOST_UNAVAILABLE', `the DSH host exited during gc ${id}`)
+      );
+    }
+  }
+
+  // ---- readPage (decision 030) ------------------------------------------------------------
+
+  private onPage(host: HostRecord, message: DshHostPage): void {
+    const pending = this.pendingReadPages.get(message.id);
+    if (pending?.host !== host) {
+      this.warnRateLimited('stale-page', `[dsh-host] dropped page ${message.id}`);
+      return;
+    }
+    const settled = this.settleRead(message.id);
+    if (message.ok && message.page) {
+      settled?.resolve(message.page);
+      return;
+    }
+    settled?.reject(
+      new DshHostSupervisorError(
+        'DSH_HOST_READ_FAILED',
+        `${message.error?.code ?? 'unknown'}: ${message.error?.message ?? 'no reason given'}`
+      )
+    );
+  }
+
+  /** Takes a pending read out of the table, its timer with it. */
+  private settleRead(id: number): PendingRead | undefined {
+    const pending = this.pendingReadPages.get(id);
+    if (!pending) return undefined;
+    this.pendingReadPages.delete(id);
+    clearTimeout(pending.timer);
+    return pending;
+  }
+
+  private rejectReads(host: HostRecord): void {
+    for (const [id, pending] of [...this.pendingReadPages]) {
+      if (pending.host !== host) continue;
+      this.settleRead(id)?.reject(
+        new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          `the DSH host exited during readPage ${id}`
+        )
       );
     }
   }

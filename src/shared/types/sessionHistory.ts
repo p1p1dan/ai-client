@@ -73,6 +73,13 @@ export type HistoryBlock =
        * result's own `details.stopped` (a `bash` whose exec ended aborted).
        */
       stopped?: true;
+      /**
+       * dsh-rebase decision 032: the call started, the engine died, and its
+       * result was never recorded (`TOOL_OUTCOME_UNKNOWN`, the closer DSH
+       * writes when it resumes or cold-reads such a log). It may or may not
+       * have done its work.
+       */
+      outcomeUnknown?: true;
     };
 
 /**

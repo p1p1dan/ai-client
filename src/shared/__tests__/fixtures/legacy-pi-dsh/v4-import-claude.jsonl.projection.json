@@ -2,14 +2,14 @@
   "file": "v4-import-claude.jsonl",
   "messages": [
     {
-      "id": "h:aiclient-legacy-provenance-0",
-      "entryId": "aiclient-legacy-provenance-0",
+      "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96",
+      "entryId": "3b1a9058-dab3-4475-a3c5-a24abbd32e96",
       "role": "system",
       "timestamp": 1790513905630,
       "blocks": [
         {
           "type": "text",
-          "id": "h:aiclient-legacy-provenance-0:provenance:0",
+          "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96:provenance:0",
           "text": "This history was imported from a claude-code session (claude-session-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
           "notice": {
             "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
@@ -70,14 +70,14 @@
       ]
     },
     {
-      "id": "h:aiclient-legacy-display-8",
-      "entryId": "aiclient-legacy-display-8",
+      "id": "h:9723296f-2745-418f-a994-4f35faa208d3",
+      "entryId": "9723296f-2745-418f-a994-4f35faa208d3",
       "role": "assistant",
       "timestamp": 1790513905633,
       "blocks": [
         {
           "type": "tool_call",
-          "id": "h:aiclient-legacy-display-8:legacy-tool-call:0",
+          "id": "h:9723296f-2745-418f-a994-4f35faa208d3:legacy-tool-call:0",
           "toolCallId": "toolu_02",
           "name": "Read",
           "input": {
@@ -86,7 +86,7 @@
         },
         {
           "type": "tool_result",
-          "id": "h:aiclient-legacy-display-8:legacy-tool-result:0",
+          "id": "h:9723296f-2745-418f-a994-4f35faa208d3:legacy-tool-result:0",
           "toolCallId": "toolu_02",
           "ok": true,
           "output": "# Readme"
@@ -94,27 +94,27 @@
       ]
     },
     {
-      "id": "h:aiclient-legacy-display-9",
-      "entryId": "aiclient-legacy-display-9",
+      "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2",
+      "entryId": "bf22836e-1d88-4996-8bcc-bdb7239983e2",
       "role": "system",
       "timestamp": 1790513905633,
       "blocks": [
         {
           "type": "text",
-          "id": "h:aiclient-legacy-display-9:legacy-display:0",
+          "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2:legacy-display:0",
           "text": "screenshot.png\n\nImage attachment was not imported."
         }
       ]
     },
     {
-      "id": "h:aiclient-legacy-display-10",
-      "entryId": "aiclient-legacy-display-10",
+      "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a",
+      "entryId": "824c6d3b-7216-4489-ac19-e6222c8c2b3a",
       "role": "system",
       "timestamp": 1790513905634,
       "blocks": [
         {
           "type": "text",
-          "id": "h:aiclient-legacy-display-10:legacy-display:0",
+          "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a:legacy-display:0",
           "text": "Skipped entries\n\n1 unsupported entry was skipped."
         }
       ]
@@ -135,28 +135,7 @@
     }
   ],
   "e4": {
-    "history": [
-      {
-        "category": "legacy-row-id",
-        "id": "h:3b1a9058-dab3-4475-a3c5-a24abbd32e96",
-        "field": "id"
-      },
-      {
-        "category": "legacy-row-id",
-        "id": "h:9723296f-2745-418f-a994-4f35faa208d3",
-        "field": "id"
-      },
-      {
-        "category": "legacy-row-id",
-        "id": "h:bf22836e-1d88-4996-8bcc-bdb7239983e2",
-        "field": "id"
-      },
-      {
-        "category": "legacy-row-id",
-        "id": "h:824c6d3b-7216-4489-ac19-e6222c8c2b3a",
-        "field": "id"
-      }
-    ],
+    "history": [],
     "context": []
   }
 }

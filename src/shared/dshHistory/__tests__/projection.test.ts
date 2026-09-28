@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { translate } from '../../i18n.ts';
+import {
+  BRANCH_SUMMARY_PREFIX,
+  BRANCH_SUMMARY_SUFFIX,
+} from '../../legacyPiSession/convert/llmText.ts';
 import { projectPiSessionHistory } from '../../legacyPiSession/timeline.ts';
+import { REVIEW_PATCH_BYTES } from '../../sessionFileChange.ts';
 import type { HistoryMessage } from '../../types/sessionHistory.ts';
 import {
   aiclientEventName,
@@ -9,7 +15,12 @@ import {
   INTERRUPTED_TURN_NOTICE_KEY,
   projectDshHistory,
 } from '../projection.ts';
-import type { DshLogEvent } from '../types.ts';
+import {
+  type DshLogEvent,
+  PI_BRANCH_SUMMARY_PREFIX,
+  PI_BRANCH_SUMMARY_SUFFIX,
+  REVIEW_PATCH_MAX_LENGTH,
+} from '../types.ts';
 
 /**
  * dsh-rebase P1-4a — one rule of the DSH history projection per case (plan
@@ -454,6 +465,11 @@ describe('projectDshHistory — how a turn ended', () => {
     expect(rows[2] && dshHistoryEntryType(rows[2])).toBe('notice');
   });
 
+  it('has the note translated: the renderer runs its key through the dictionary', () => {
+    expect(translate('zh', INTERRUPTED_TURN_NOTICE_KEY)).not.toBe(INTERRUPTED_TURN_NOTICE_KEY);
+    expect(translate('en', INTERRUPTED_TURN_NOTICE_KEY)).toBe(INTERRUPTED_TURN_NOTICE_KEY);
+  });
+
   it('keeps the stop reason an interrupted step already had', () => {
     const { events } = log()
       .turn(1)
@@ -634,6 +650,234 @@ describe('projectDshHistory — migration seeds (decision 053)', () => {
     });
     const block = pi?.blocks[0];
     expect(block?.type === 'text' && block.notice?.key).toBe(IMPORTED_HISTORY_NOTICE_KEY);
+  });
+});
+
+/**
+ * The three rules P1-9b left to P1-4a (decision 076): a migrated session
+ * renders as its 1.0.x preview did, row ids included, so the renderer's merge
+ * sees one timeline before and after the migration.
+ */
+describe('projectDshHistory — migrated pi sessions (P1-9b rules)', () => {
+  it('keys display and provenance rows by the pi entry id they carry', () => {
+    const events: DshLogEvent[] = [
+      {
+        type: 'aiclient/legacy-provenance',
+        seq: 0,
+        time: T0,
+        data: { version: 1, sourceKind: 'codex', sourceSessionId: 'abc', entryId: 'e-prov' },
+        ignorable: true,
+      },
+      {
+        type: 'plugin:aiclient/legacy-display',
+        seq: 1,
+        time: T0 + 1,
+        data: {
+          version: 1,
+          displayKind: 'tool',
+          title: 'Shell',
+          output: 'a',
+          entryId: 'e-tool',
+        },
+        ignorable: true,
+      },
+      {
+        type: 'aiclient/legacy-display',
+        seq: 2,
+        time: T0 + 2,
+        data: { version: 1, displayKind: 'text', title: 'Plan', entryId: 'e-text' },
+        ignorable: true,
+      },
+    ];
+    const rows = projectDshHistory(events);
+    expect(rows.map((row) => [row.id, row.entryId])).toEqual([
+      ['h:e-prov', 'e-prov'],
+      ['h:e-tool', 'e-tool'],
+      ['h:e-text', 'e-text'],
+    ]);
+    expect(rows[0]?.blocks[0]?.id).toBe('h:e-prov:provenance:0');
+    // The fallback call id is the pi projection's `<entry id>-display`.
+    expect(
+      rows[1]?.blocks.map((block) => [block.id, block.type === 'tool_call' && block.toolCallId])
+    ).toEqual([
+      ['h:e-tool:legacy-tool-call:0', 'e-tool-display'],
+      ['h:e-tool:legacy-tool-result:0', false],
+    ]);
+    expect(rows[2]?.blocks[0]).toMatchObject({ id: 'h:e-text:legacy-display:0', text: 'Plan' });
+  });
+
+  it('renders the same provenance and display rows as the pi preview of the same entries', () => {
+    const data = {
+      provenance: { version: 1, sourceKind: 'claude-code', sourceSessionId: 's-9' },
+      display: {
+        version: 1,
+        displayKind: 'tool',
+        title: 'Bash',
+        toolName: 'bash',
+        toolCallId: 'c-1',
+        input: { command: 'ls' },
+        output: 'boom',
+        isError: true,
+      },
+    };
+    const pi = projectPiSessionHistory({
+      getBranch: () => [
+        {
+          type: 'custom',
+          id: 'p1',
+          timestamp: new Date(T0).toISOString(),
+          customType: 'aiclient.legacy-import.provenance',
+          data: data.provenance,
+        },
+        {
+          type: 'custom',
+          id: 'p2',
+          timestamp: new Date(T0 + 1).toISOString(),
+          customType: 'aiclient.legacy-import.display',
+          data: data.display,
+        },
+      ],
+    });
+    const dsh = projectDshHistory([
+      {
+        type: 'aiclient/legacy-provenance',
+        seq: 0,
+        time: T0,
+        data: { ...data.provenance, entryId: 'p1' },
+        ignorable: true,
+      },
+      {
+        type: 'aiclient/legacy-display',
+        seq: 1,
+        time: T0 + 1,
+        data: { ...data.display, entryId: 'p2' },
+        ignorable: true,
+      },
+    ]);
+    expect(dsh).toEqual(pi);
+  });
+
+  it('shows a migrated branch summary as a Context summary row, as 1.0.x did', () => {
+    const summary = 'Tried an idea and came back.';
+    const { events } = log()
+      .turn(1)
+      .user('b1', `${PI_BRANCH_SUMMARY_PREFIX}${summary}${PI_BRANCH_SUMMARY_SUFFIX}`, {
+        kind: 'aiclient-pi-branch-summary',
+      })
+      .user('u1', 'next question');
+    const rows = projectDshHistory(events);
+    expect(ids(rows)).toEqual(['h:b1', 'h:u1']);
+    const [pi] = projectPiSessionHistory({
+      getBranch: () => [
+        { type: 'branch_summary', id: 'b1', timestamp: new Date(T0 + 1000).toISOString(), summary },
+      ],
+    });
+    expect(rows[0]).toEqual(pi);
+    expect(dshHistoryEntryType(rows[0] as HistoryMessage)).toBe('compaction');
+  });
+
+  it('skips an empty branch summary and reads one whose framing drifted', () => {
+    const rows = projectDshHistory(
+      log()
+        .turn(1)
+        .user('b0', `${PI_BRANCH_SUMMARY_PREFIX}${PI_BRANCH_SUMMARY_SUFFIX}`, {
+          kind: 'aiclient-pi-branch-summary',
+        })
+        .user('b1', 'Earlier:\n<summary>\n  kept  \n</summary>\n', {
+          kind: 'aiclient-pi-branch-summary',
+        })
+        .user('b2', 'no tags at all', { kind: 'aiclient-pi-branch-summary' }).events
+    );
+    expect(rows.map((row) => row.blocks[0]?.type === 'text' && row.blocks[0].text)).toEqual([
+      'Context summary\n\nkept',
+      'Context summary\n\nno tags at all',
+    ]);
+  });
+
+  it('restores the tool row flags 1.0.x read off the result details', () => {
+    const review = {
+      version: 1,
+      path: '/repo/a.txt',
+      status: 'modified',
+      patch: '@@ -1 +1 @@\n-a\n+b\n',
+      extra: 'dropped',
+    };
+    const details = {
+      write: { review, patch: 'diff --git a b' },
+      refused: { refused: true },
+      stopped: { stopped: true },
+      failed: { review, patch: 'kept only on success' },
+      list: { stopped: ['d1'] },
+      badReview: { review: { version: 2, path: '/repo/a.txt', status: 'modified' } },
+    };
+    const calls = Object.keys(details);
+    const failed = new Set(['failed']);
+    const piEntries: unknown[] = [
+      {
+        type: 'message',
+        id: 'a1',
+        timestamp: new Date(T0).toISOString(),
+        message: {
+          role: 'assistant',
+          content: calls.map((name) => ({
+            type: 'toolCall',
+            id: name,
+            name: 'tool',
+            arguments: {},
+          })),
+          stopReason: 'toolUse',
+        },
+      },
+      ...calls.map((name, index) => ({
+        type: 'message',
+        id: `r-${name}`,
+        timestamp: new Date(T0 + index + 1).toISOString(),
+        message: {
+          role: 'toolResult',
+          toolCallId: name,
+          toolName: 'tool',
+          content: [{ type: 'text', text: `out ${name}` }],
+          details: details[name as keyof typeof details],
+          isError: failed.has(name),
+        },
+      })),
+    ];
+    const dsh = log()
+      .turn(1)
+      .user('u1', 'go')
+      .assistant(
+        1,
+        1,
+        'a1',
+        calls.map((name) => toolCall(name, 'tool', {}))
+      );
+    for (const name of calls) {
+      dsh.result(1, 1, `r-${name}`, name, `out ${name}`, {
+        isError: failed.has(name),
+        meta: { aiclient: { piDetails: details[name as keyof typeof details] } },
+      });
+    }
+    const results = (messages: readonly HistoryMessage[]) =>
+      messages.flatMap((message) => message.blocks).filter((block) => block.type === 'tool_result');
+    const ours = results(projectDshHistory(dsh.events));
+    expect(ours).toEqual(results(projectPiSessionHistory({ getBranch: () => piEntries })));
+    expect(ours.map((block) => Object.keys(block).filter((key) => key !== 'id'))).toEqual([
+      ['type', 'toolCallId', 'ok', 'output', 'review', 'patch'],
+      ['type', 'toolCallId', 'ok', 'output', 'refused'],
+      ['type', 'toolCallId', 'ok', 'output', 'stopped'],
+      ['type', 'toolCallId', 'ok', 'output', 'error'],
+      ['type', 'toolCallId', 'ok', 'output'],
+      ['type', 'toolCallId', 'ok', 'output'],
+    ]);
+    // Validated as `parseSessionFileChange` does: unknown keys go.
+    const { extra: _extra, ...kept } = review;
+    expect(ours[0]?.type === 'tool_result' && ours[0].review).toEqual(kept);
+  });
+
+  it('keeps its copies of pi’s framing and the review bound in step with the originals', () => {
+    expect(PI_BRANCH_SUMMARY_PREFIX).toBe(BRANCH_SUMMARY_PREFIX);
+    expect(PI_BRANCH_SUMMARY_SUFFIX).toBe(BRANCH_SUMMARY_SUFFIX);
+    expect(REVIEW_PATCH_MAX_LENGTH).toBe(REVIEW_PATCH_BYTES);
   });
 });
 

@@ -1059,3 +1059,130 @@ describe('DshHostSupervisor gc (P1-3d, decision 024)', () => {
     expect(slow.value()).toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
   });
 });
+
+describe('DshHostSupervisor readPage (P1-4a, decision 030)', () => {
+  const page = {
+    messages: [
+      { id: 'h:u1', role: 'user', blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'hi' }] },
+    ],
+    offset: 0,
+    limit: 80,
+    totalCount: 1,
+    hasMore: false,
+  };
+  const stubFile = '/fake/state/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+  const answer = (id: number, extra: Record<string, unknown> = { ok: true, page }) => ({
+    host: 'page',
+    id,
+    ms: 2.5,
+    ...extra,
+  });
+  const reads = (child: FakeChild) =>
+    child
+      .controls()
+      .filter((message) => (message as { host?: unknown }).host === 'readPage') as Array<{
+      id: number;
+    }>;
+
+  it('starts a host when none is up, sends one readPage and resolves with the matching page', async () => {
+    const h = createFakeHostHarness();
+    const read = h.supervisor.readPage({ stubFile, logicalSessionId: 's1', offset: 80, limit: 40 });
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    expect(reads(child)).toEqual([
+      { host: 'readPage', id: 1, stubFile, logicalSessionId: 's1', offset: 80, limit: 40 },
+    ]);
+    // Another id, or a malformed answer, is not this read's.
+    child.post(answer(9));
+    child.post({ host: 'page', id: 1, ok: true, ms: 1 });
+    await flushMicrotasks();
+    child.post(answer(1));
+    await expect(read).resolves.toEqual(page);
+    // No channel was opened for it: the host it started is idle.
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready', channels: 0 });
+  });
+
+  it('rejects with the host’s code when the read failed there', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const read = h.supervisor.readPage({ stubFile, logicalSessionId: 's1' });
+    await flushMicrotasks();
+    const [sent] = reads(child);
+    child.post(
+      answer(sent?.id ?? 0, {
+        ok: false,
+        error: { code: 'dsh_session_missing', message: 'DSH session aiclient-s1 is not on disk' },
+      })
+    );
+    await expect(read).rejects.toMatchObject({
+      code: 'DSH_HOST_READ_FAILED',
+      message: expect.stringContaining('dsh_session_missing'),
+    });
+  });
+
+  it('rejects when the host exits during the read, and when it never answers', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const dying = h.supervisor.readPage({ stubFile, logicalSessionId: 's1' });
+    await flushMicrotasks();
+    child.die(null, 'SIGKILL');
+    await expect(dying).rejects.toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+
+    const next = startReadyHost(h);
+    const replacement = await next;
+    const slow = settlement(h.supervisor.readPage({ stubFile, logicalSessionId: 's1' }));
+    for (let at = 0; at < T.readPageTimeoutMs; at += T.heartbeatIntervalMs) {
+      replacement.post(pong(replacement.pings().length));
+      await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+    }
+    await flushMicrotasks();
+    expect(slow.value()).toMatchObject({ code: 'DSH_HOST_UNAVAILABLE' });
+    expect(String((slow.value() as Error).message)).toContain('not answered');
+  });
+
+  it('never starts a host out of failed: the resume it falls back to is the user’s action', async () => {
+    const h = createFakeHostHarness();
+    await startReadyHost(h);
+    for (let fault = 1; fault <= DSH_HOST_RESTART_BUDGET.restarts; fault += 1) {
+      h.child().die(null, 'SIGKILL');
+      const next = h.supervisor.ensureHost();
+      h.child().ready();
+      await next;
+    }
+    h.child().die(null, 'SIGKILL');
+    const spawned = h.spawn.mock.calls.length;
+    await expect(h.supervisor.readPage({ stubFile, logicalSessionId: 's1' })).rejects.toMatchObject(
+      {
+        code: 'DSH_HOST_UNAVAILABLE',
+      }
+    );
+    expect(h.spawn).toHaveBeenCalledTimes(spawned);
+  });
+
+  it('holds off the idle stop while a read runs, and arms it once the read is answered', async () => {
+    // Shorter than the read's own timeout, so a pending read outlives it.
+    const IDLE = T.readPageTimeoutMs / 2;
+    const h = createFakeHostHarness({ idleStopMs: IDLE });
+    const read = h.supervisor.readPage({ stubFile, logicalSessionId: 's1' });
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    const advance = async (ms: number) => {
+      for (let at = 0; at < ms; at += T.heartbeatIntervalMs) {
+        child.post(pong(child.pings().length || 1));
+        await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+      }
+    };
+    await advance(IDLE + T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    const [sent] = reads(child);
+    child.post(answer(sent?.id ?? 0));
+    await expect(read).resolves.toEqual(page);
+    await advance(IDLE - T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    await advance(T.heartbeatIntervalMs);
+    expect(child.controls()).toContainEqual({ type: 'shutdown' });
+  });
+});

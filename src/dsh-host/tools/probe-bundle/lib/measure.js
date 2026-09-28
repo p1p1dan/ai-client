@@ -25,6 +25,13 @@
  *   compact { sessionId }       P1-4e: `/compact` on a live agent, as DSH's
  *                               command adapter runs it (the bridge does not
  *                               bridge compaction yet)
+ *   seed { sessionId, cwd, events }
+ *                               P1-4a: a new session admitted with `events` as
+ *                               its seed (`agents.create`, the path P1-9's
+ *                               migration takes), flushed, then released, so
+ *                               it is on disk and closed
+ *   observe-stat { sessionId }  P1-4a: time one `observeSession` (no projection
+ *                               state) and answer its size, not its events
  *
  * Stream latency: the P0-6 fake gateway stamps every text delta with its send
  * time (`‹t<µs of CLOCK_MONOTONIC>›`); this row reads the stamp at the same
@@ -284,6 +291,41 @@ export function apply(ctx) {
           cursor: observation.cursor,
           // Copied out before the lease is released below.
           events: [...observation.events],
+        };
+      } finally {
+        observation[Symbol.dispose]?.();
+      }
+    },
+    async seed(message) {
+      const sessions = ctx.get('sessions');
+      if (sessions === undefined) throw new Error('no sessions service');
+      const started = performance.now();
+      const handle = await ctx.agents.create({
+        sessionId: message.sessionId,
+        seed: message.events,
+        meta: { cwd: message.cwd },
+      });
+      try {
+        await sessions.flush(handle.agent.session);
+      } finally {
+        await handle.dispose();
+      }
+      return { ms: Math.round(performance.now() - started) };
+    },
+    async 'observe-stat'(message) {
+      const query = ctx.get('sessionQuery');
+      if (query === undefined) throw new Error('no sessionQuery service');
+      const heapBefore = process.memoryUsage().heapUsed;
+      const started = performance.now();
+      const observation = await query.observeSession(message.sessionId, { projectionMode: 'none' });
+      const ms = Math.round((performance.now() - started) * 10) / 10;
+      try {
+        return {
+          ms,
+          source: observation.source,
+          cursor: observation.cursor,
+          events: observation.events.length,
+          heapGrowthBytes: process.memoryUsage().heapUsed - heapBefore,
         };
       } finally {
         observation[Symbol.dispose]?.();

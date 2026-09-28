@@ -12,9 +12,11 @@
  *   surface, message by message.
  *
  * Every difference is given a category naming why it is expected (a
- * decision, or a projection rule P1-4 still has to add); one this file
- * cannot name is returned with `category: undefined`, and the corpus test
- * fails on it.
+ * decision); one this file cannot name is returned with `category:
+ * undefined`, and the corpus test fails on it. The three projection rules
+ * P1-9b left to P1-4a (branch summaries, `piDetails` flags, `h:<entry id>` on
+ * display and provenance rows) have landed, so their differences are no
+ * longer named here: one coming back is a regression.
  */
 
 import { INTERRUPTED_TURN_NOTICE_KEY } from '../../../dshHistory/projection.ts';
@@ -44,33 +46,6 @@ function recordOf(value: unknown): Row | undefined {
 
 const FAILURE_REASONS = new Set(['aborted', 'error', 'interrupted', 'length']);
 
-/** Ignorable rows the DSH projection keys by seq; their data carries the pi entry id. */
-function legacyRowAliases(seed: readonly DshSeedEvent[]): Map<string, string> {
-  const aliases = new Map<string, string>();
-  for (const event of seed) {
-    const entryId = recordOf(event.data)?.entryId;
-    if (event.ignorable && typeof entryId === 'string')
-      aliases.set(
-        `h:aiclient-${event.type.slice('aiclient/'.length)}-${event.seq}`,
-        `h:${entryId}`
-      );
-  }
-  return aliases;
-}
-
-function realias(message: HistoryMessage, aliases: Map<string, string>): HistoryMessage {
-  const alias = aliases.get(message.id);
-  if (!alias) return message;
-  const swap = (id: string) =>
-    id.startsWith(message.id) ? alias + id.slice(message.id.length) : id;
-  return {
-    ...message,
-    id: alias as HistoryMessage['id'],
-    entryId: alias.slice(2),
-    blocks: message.blocks.map((block) => ({ ...block, id: swap(block.id) })) as HistoryBlock[],
-  };
-}
-
 function hasBody(message: HistoryMessage): boolean {
   return message.blocks.some(
     (block) => (block.type === 'text' || block.type === 'thinking') && Boolean(block.text.trim())
@@ -82,7 +57,6 @@ function classifyOnlyPi(message: HistoryMessage, piKinds: Map<string, string>): 
   if (message.role === 'assistant' && message.stopReason === 'error') return 'failed-reply-body';
   if (message.role === 'assistant' && message.stopReason === 'aborted' && !hasBody(message))
     return 'stopped-reply-without-text';
-  if (kind === 'branch_summary') return 'branch-summary-row';
   if (kind === 'message:toolResult') return 'orphan-result';
   return undefined;
 }
@@ -119,8 +93,6 @@ function classifyBlock(
     return 'stripped-call';
   if (!pi && dsh?.type === 'tool_result' && dsh.outcomeUnknown === true) return 'outcome-unknown';
   if (!pi || !dsh) return undefined;
-  if (['review', 'patch', 'refused', 'stopped'].includes(field) && dsh[field] === undefined)
-    return 'tool-result-details';
   if (field === 'outcomeUnknown' && dsh.outcomeUnknown === true) return 'outcome-unknown';
   if (field === 'text' && typeof pi.text === 'string' && pi.text.trim() === String(dsh.text).trim())
     return 'summary-trim';
@@ -179,18 +151,9 @@ export function compareHistories(
   seed: readonly DshSeedEvent[],
   piKinds: PiEntryKinds
 ): E4Diff[] {
-  const aliases = legacyRowAliases(seed);
   const turnEnds = turnEndsByMessage(seed);
   const diffs: E4Diff[] = [];
-  const dsh = dshRows.map((message) => realias(message, aliases));
-  for (const message of dshRows)
-    if (aliases.has(message.id))
-      diffs.push({
-        category: 'legacy-row-id',
-        id: aliases.get(message.id) as string,
-        field: 'id',
-        dsh: message.id,
-      });
+  const dsh = dshRows;
   const dshById = new Map(dsh.map((message) => [message.id, message]));
   const piById = new Map(piRows.map((message) => [message.id, message]));
   // Order: the rows both sides have must come in the same order.

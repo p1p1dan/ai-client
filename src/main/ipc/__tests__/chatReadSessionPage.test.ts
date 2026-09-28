@@ -51,6 +51,29 @@ const readSessionReplayPage = vi.fn(
   })
 );
 
+/** The shared DSH host's read-only page (decision 030); the default answers one message. */
+const dshReadPage = vi.fn(
+  async (_request: unknown): Promise<SessionHistoryPage> => ({
+    messages: [
+      {
+        id: 'h:m1',
+        entryId: 'm1',
+        role: 'user',
+        timestamp: 1,
+        blocks: [{ type: 'text', id: 'h:m1:text:0', text: 'from the DSH log' }],
+      },
+    ],
+    offset: 0,
+    limit: 80,
+    totalCount: 1,
+    hasMore: false,
+  })
+);
+
+vi.mock('../../services/agent-host/DshHostSupervisor', () => ({
+  dshHostSupervisor: { readPage: (request: unknown) => dshReadPage(request) },
+}));
+
 vi.mock('electron', () => ({
   app: { isPackaged: false, getPath: vi.fn(() => '/tmp'), getAppPath: vi.fn(() => '/app') },
   BrowserWindow: { getAllWindows: vi.fn(() => fakeWindows) },
@@ -215,31 +238,6 @@ describe('chat:readSessionPage — read-only history (T102)', () => {
     expect(published[0]).toMatchObject({ payload: { mode: 'older' } });
   });
 
-  /**
-   * dsh-rebase P1-1: this reader decodes the legacy (pi) format only, which is
-   * exactly what keeps pre-switch sessions viewable (decision 005). A DSH log
-   * has no main-process reader until P1-4, so its preview refuses with the code
-   * the renderer already answers by falling back to resume.
-   */
-  it('[P1-1] refuses a DSH session with session_replay_unavailable and reads nothing', async () => {
-    const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
-    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
-      sessionId: 's1',
-      agent: 'dsh',
-      workspacePath: '/repo',
-      runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
-      title: 'Today',
-      updatedAt: 1,
-      archived: false,
-    });
-
-    await expect(invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1' })).rejects.toThrow(
-      /^session_replay_unavailable: /
-    );
-    expect(readSessionReplayPage).not.toHaveBeenCalled();
-    expect(published).toEqual([]);
-  });
-
   it('lets a replay refusal through with its code', async () => {
     readSessionReplayPage.mockRejectedValueOnce(
       new Error('session_replay_unavailable: cannot decode /repo/.sessions/s1.jsonl')
@@ -248,5 +246,90 @@ describe('chat:readSessionPage — read-only history (T102)', () => {
       /session_replay_unavailable/
     );
     expect(published).toEqual([]);
+  });
+
+  /**
+   * dsh-rebase P1-4a (decision 030): a DSH row is read by the shared host,
+   * which neither opens the session nor writes its log; the legacy reader,
+   * which decodes the pi format only, is never asked (decision 005).
+   */
+  describe('a DSH row (P1-4a, decision 030)', () => {
+    const STUB = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+
+    beforeEach(async () => {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      // Once: every case reads the row exactly once, and nothing leaks past it.
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'dsh',
+        workspacePath: '/repo',
+        runtimeIdentity: STUB,
+        title: 'Today',
+        updatedAt: 1,
+        archived: false,
+      });
+    });
+
+    it('reads its page through the host and publishes it as session.history, branch mode', async () => {
+      const { requestId } = await invoke<{ requestId: string }>(
+        IPC_CHANNELS.CHAT_READ_SESSION_PAGE,
+        { sessionId: 's1', limit: 80 }
+      );
+      expect(dshReadPage).toHaveBeenCalledWith({
+        stubFile: STUB,
+        logicalSessionId: 's1',
+        limit: 80,
+      });
+      expect(readSessionReplayPage).not.toHaveBeenCalled();
+      expect(published).toHaveLength(1);
+      expect(published[0]).toMatchObject({
+        type: 'session.history',
+        sessionId: 's1',
+        requestId,
+        payload: {
+          runtimeIdentity: STUB,
+          workspacePath: '/repo',
+          agent: 'dsh',
+          mode: 'branch',
+          messages: [{ id: 'h:m1' }],
+          totalCount: 1,
+          hasMore: false,
+          truncated: false,
+          omittedCount: 0,
+        },
+      });
+      expect(published.map((item) => item.type)).not.toContain('session.resumed');
+      expect(claimSession).not.toHaveBeenCalled();
+    });
+
+    it('pages an older window in older mode', async () => {
+      await invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1', offset: 80, limit: 40 });
+      expect(dshReadPage).toHaveBeenCalledWith({
+        stubFile: STUB,
+        logicalSessionId: 's1',
+        offset: 80,
+        limit: 40,
+      });
+      expect(published[0]).toMatchObject({ payload: { mode: 'older', agent: 'dsh' } });
+    });
+
+    it('still refuses a session with a live worker, before asking the host', async () => {
+      slots = [{ logicalSessionId: 's1', state: 'ready' }];
+      await expect(
+        invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1' })
+      ).rejects.toThrow(/worker_active/);
+      expect(dshReadPage).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no host to be had', 'DSH_HOST_UNAVAILABLE: the DSH host went down 4 times'],
+      ['a failed read', 'DSH_HOST_READ_FAILED: dsh_session_missing: not on disk'],
+    ])('answers %s with session_replay_unavailable, so the renderer resumes instead', async (_case, reason) => {
+      dshReadPage.mockRejectedValueOnce(new Error(reason));
+      await expect(
+        invoke(IPC_CHANNELS.CHAT_READ_SESSION_PAGE, { sessionId: 's1' })
+      ).rejects.toThrow(/^session_replay_unavailable: .*could not be read through the DSH host/);
+      expect(published).toEqual([]);
+    });
   });
 });

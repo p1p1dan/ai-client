@@ -133,7 +133,13 @@
           "id": "h:9d3e50d5-3c7e-4bcf-8340-abcba290ea05:tool-result:call-write-1",
           "toolCallId": "call-write-1",
           "ok": true,
-          "output": "Wrote 23 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/out/summary.md"
+          "output": "Wrote 23 bytes to /tmp/aiclient-legacy-pi-corpus/workspace/out/summary.md",
+          "review": {
+            "version": 1,
+            "path": "/tmp/aiclient-legacy-pi-corpus/workspace/out/summary.md",
+            "status": "added",
+            "patch": "@@ -0,0 +1,3 @@\n+# Summary\n+\n+alpha, beta"
+          }
         }
       ],
       "settledAt": 1790513904635
@@ -154,13 +160,7 @@
     }
   ],
   "e4": {
-    "history": [
-      {
-        "category": "tool-result-details",
-        "id": "h:edf9ea6e-cf7e-4142-be16-0106169fb985",
-        "field": "block tool_result:call-write-1.review"
-      }
-    ],
+    "history": [],
     "context": []
   }
 }

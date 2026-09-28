@@ -391,6 +391,12 @@ export interface ToolOutcomeDetails {
    * `details.stopped`.
    */
   stopped?: true;
+  /**
+   * dsh-rebase decision 032: the call started and the engine died before its
+   * result was recorded (`TOOL_OUTCOME_UNKNOWN`). Whether it did its work is
+   * unknown; the row says so instead of painting a failure.
+   */
+  outcomeUnknown?: true;
 }
 
 export interface ToolCompletedEvent extends RuntimeEventBase {

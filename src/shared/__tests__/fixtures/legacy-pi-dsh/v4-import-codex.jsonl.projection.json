@@ -2,14 +2,14 @@
   "file": "v4-import-codex.jsonl",
   "messages": [
     {
-      "id": "h:aiclient-legacy-provenance-0",
-      "entryId": "aiclient-legacy-provenance-0",
+      "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
+      "entryId": "c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
       "role": "system",
       "timestamp": 1790513905640,
       "blocks": [
         {
           "type": "text",
-          "id": "h:aiclient-legacy-provenance-0:provenance:0",
+          "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360:provenance:0",
           "text": "This history was imported from a codex session (codex-rollout-0001). You can keep talking here; the original run state — tools, permissions — did not come across.",
           "notice": {
             "key": "This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.",
@@ -35,14 +35,14 @@
       ]
     },
     {
-      "id": "h:aiclient-legacy-display-5",
-      "entryId": "aiclient-legacy-display-5",
+      "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36",
+      "entryId": "42722ec1-8af8-4882-ab45-43e2a7e44c36",
       "role": "assistant",
       "timestamp": 1790513905641,
       "blocks": [
         {
           "type": "tool_call",
-          "id": "h:aiclient-legacy-display-5:legacy-tool-call:0",
+          "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36:legacy-tool-call:0",
           "toolCallId": "call_codex_1",
           "name": "shell",
           "input": {
@@ -51,7 +51,7 @@
         },
         {
           "type": "tool_result",
-          "id": "h:aiclient-legacy-display-5:legacy-tool-result:0",
+          "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36:legacy-tool-result:0",
           "toolCallId": "call_codex_1",
           "ok": true,
           "output": "notes.txt\nsrc"
@@ -59,14 +59,14 @@
       ]
     },
     {
-      "id": "h:aiclient-legacy-display-6",
-      "entryId": "aiclient-legacy-display-6",
+      "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab",
+      "entryId": "ebee6c14-0325-441b-94ba-82a8dbc9deab",
       "role": "system",
       "timestamp": 1790513905641,
       "blocks": [
         {
           "type": "text",
-          "id": "h:aiclient-legacy-display-6:legacy-display:0",
+          "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab:legacy-display:0",
           "text": "Reasoning summary\n\nListed the workspace."
         }
       ]
@@ -87,23 +87,7 @@
     }
   ],
   "e4": {
-    "history": [
-      {
-        "category": "legacy-row-id",
-        "id": "h:c8cc64b8-c062-4f01-b60b-7c7fa24c0360",
-        "field": "id"
-      },
-      {
-        "category": "legacy-row-id",
-        "id": "h:42722ec1-8af8-4882-ab45-43e2a7e44c36",
-        "field": "id"
-      },
-      {
-        "category": "legacy-row-id",
-        "id": "h:ebee6c14-0325-441b-94ba-82a8dbc9deab",
-        "field": "id"
-      }
-    ],
+    "history": [],
     "context": []
   }
 }

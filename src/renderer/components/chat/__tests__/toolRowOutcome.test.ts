@@ -149,3 +149,32 @@ it('[BASH-STOP-8] a bash Stop cut short reads 「终端 … · 已停止」, not
   await act(async () => trigger?.click());
   expect(container.textContent).toContain('[exit=null; aborted]');
 });
+
+it('[P1-4a-UNKNOWN-3] a call whose outcome the engine never recorded reads 「… · 结果未知」, not red, with nothing to open', async () => {
+  // dsh-rebase decision 032: DSH's closer for a call cut off by a crash.
+  const note =
+    'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown.';
+  const blocks: ChatBlock[] = [
+    call('u1', 'bash', { command: 'npm test' }),
+    {
+      id: 'u1-result',
+      type: 'tool_result',
+      toolCallId: 'u1',
+      toolOk: false,
+      toolOutput: { content: [{ type: 'text', text: note }], details: { outcomeUnknown: true } },
+      text: note,
+    },
+  ];
+  const rows = deriveToolGroupRows(
+    pairToolBlocks(blocks).map((run) => ({ kind: 'run' as const, run })),
+    { t: zh }
+  );
+  await act(async () => root.render(createElement(ToolGroup, { rows, sessionId: 's' })));
+  const row = container.querySelector<HTMLElement>('.group\\/row');
+  expect(row?.textContent).toContain('npm test');
+  expect(row?.querySelector('[data-slot="tool-row-outcome"]')?.textContent).toContain('· 结果未知');
+  expect(row?.outerHTML, 'nobody knows it failed').not.toContain('destructive');
+  expect(container.textContent, 'the engine’s note to the model is not painted').not.toContain(
+    'durably recorded'
+  );
+});

@@ -2651,6 +2651,8 @@ export const zhTranslations: Record<string, string> = {
   // refused it, or the run ended before it started (`TOOL_RUN_OUTCOME_LABEL`).
   Refused: '已拒绝',
   'Not run': '未执行',
+  // dsh-rebase decision 032: the call started and the engine died before its result was recorded.
+  'Outcome unknown': '结果未知',
   Called: '调用',
   Calling: '调用中',
   Call: '调用',
@@ -3185,6 +3187,9 @@ export const zhTranslations: Record<string, string> = {
   'Read file contents': '读取文件内容',
   'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.':
     '这段历史从 {{sourceKind}} 会话 {{sourceSessionId}} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。',
+  // dsh-rebase decision 032: the system note of a turn the DSH engine never closed itself.
+  'This turn was interrupted when the engine stopped unexpectedly.':
+    '引擎意外停止，这一轮没有完成。',
 
   // T067 — copy that was never routed through `t()` at all. All four groups
   // below were photographed on 2026-09-17 sitting inside an otherwise Chinese

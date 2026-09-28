@@ -497,8 +497,14 @@ describe('context pi rendered as user text', () => {
       },
     ]);
     expect(converted.report.lossy).toMatchObject({ excludedFromContext: 1, emptySummaries: 1 });
-    // None of them is a bubble, as in 1.0.x.
-    expect(projectDshHistory(converted.seed).map((row) => row.id)).toEqual(['h:u1', 'h:a1']);
+    // None of them is a bubble, as in 1.0.x; the branch summary reads as the
+    // "Context summary" row 1.0.x showed for it (P1-4a projection rule).
+    const rows = projectDshHistory(converted.seed);
+    expect(rows.map((row) => row.id)).toEqual(['h:u1', 'h:a1', 'h:s1']);
+    expect(rows[2]).toMatchObject({
+      role: 'system',
+      blocks: [{ type: 'text', text: 'Context summary\n\nwent elsewhere' }],
+    });
   });
 });
 

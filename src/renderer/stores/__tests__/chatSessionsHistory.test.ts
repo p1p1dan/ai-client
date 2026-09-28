@@ -834,6 +834,43 @@ describe('applyRuntimeEvent — session.history (C-06)', () => {
     expect(toolRunOutcome(run as NonNullable<typeof run>)).toBe('stopped');
     expect(run?.output).toBe(text);
   });
+
+  /**
+   * dsh-rebase decision 032: a DSH session reopened after the engine died
+   * mid-call replays that call as "outcome unknown", in the same `details`
+   * shape a live row would carry it in.
+   */
+  it('[P1-4a-UNKNOWN-2] maps an outcome-unknown result into details.outcomeUnknown', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const note = 'The tool call was interrupted after it was recorded. Its outcome is unknown.';
+    const message: HistoryMessage = {
+      id: 'h:step-1',
+      role: 'assistant',
+      incomplete: true,
+      stopReason: 'interrupted',
+      blocks: [
+        { id: 'c1:call', type: 'tool_call', toolCallId: 'c1', name: 'bash', input: {} },
+        {
+          id: 'c1:result',
+          type: 'tool_result',
+          toolCallId: 'c1',
+          ok: false,
+          output: note,
+          error: note,
+          outcomeUnknown: true,
+        },
+      ],
+    };
+
+    const patch = applyRuntimeEvent(state, makeHistoryEvent({ messages: [message] }));
+    const blocks = patch.messages?.[SESSION_ID]?.[0]?.blocks ?? [];
+    expect(blocks.find((block) => block.type === 'tool_result')?.toolOutput).toEqual({
+      content: [{ type: 'text', text: note }],
+      details: { outcomeUnknown: true },
+    });
+    const [run] = pairToolBlocks(blocks);
+    expect(toolRunOutcome(run as NonNullable<typeof run>)).toBe('outcomeUnknown');
+  });
 });
 
 /**

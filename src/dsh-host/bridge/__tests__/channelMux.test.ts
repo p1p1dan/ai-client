@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
-import type { DshHostToMainMessage } from '../../../shared/types/dshHostProtocol.ts';
+import { type DshHostToMainMessage, isDshHostPage } from '../../../shared/types/dshHostProtocol.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
-import { type ChannelRuntime, DshChannelMux } from '../channelMux.ts';
+import {
+  type ChannelRuntime,
+  DSH_READ_FAILED,
+  DshChannelMux,
+  type DshChannelMuxOptions,
+} from '../channelMux.ts';
 
 /**
  * dsh-rebase P1-3a — the shared host's bridge multiplexer (BR cases of the
@@ -263,6 +268,140 @@ describe('DshChannelMux — gc (P1-3d, decision 024)', () => {
       ok: false,
       error: 'list failed',
     });
+  });
+});
+
+describe('DshChannelMux — readPage (P1-4a, decision 030)', () => {
+  const page = {
+    messages: [
+      { id: 'h:u1', role: 'user', blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'hi' }] },
+    ],
+    offset: 0,
+    limit: 80,
+    totalCount: 1,
+    hasMore: false,
+  } as const;
+  const request = {
+    host: 'readPage',
+    id: 5,
+    stubFile: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+    logicalSessionId: 's1',
+  };
+
+  function reader(readPage: NonNullable<DshChannelMuxOptions['readPage']> | undefined) {
+    const sent: DshHostToMainMessage[] = [];
+    const log = vi.fn();
+    const createRuntime = vi.fn(() => {
+      throw new Error('a read opens no channel');
+    });
+    const mux = new DshChannelMux({
+      send: (message) => sent.push(message),
+      createRuntime,
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      ...(readPage ? { readPage } : {}),
+      log,
+    });
+    return { mux, sent, log, createRuntime };
+  }
+
+  it('hands the read over and answers page with its id, the page and the time it took', async () => {
+    const readPage = vi.fn(async () => structuredClone(page) as never);
+    const h = reader(readPage);
+    expect(h.mux.receive({ ...request, offset: 80, limit: 40 })).toBe(true);
+    await settle();
+    expect(readPage).toHaveBeenCalledWith({
+      stubFile: request.stubFile,
+      logicalSessionId: 's1',
+      offset: 80,
+      limit: 40,
+    });
+    expect(h.sent).toEqual([{ host: 'page', id: 5, ok: true, page, ms: expect.any(Number) }]);
+    expect(isDshHostPage(h.sent[0])).toBe(true);
+    // No channel, no runtime: nothing for Main to close afterwards.
+    expect(h.createRuntime).not.toHaveBeenCalled();
+    expect(h.mux.status()).toEqual([]);
+  });
+
+  it('answers ok: false with the failure’s own code, dsh_read_failed without one, and never throws', async () => {
+    const readPage = vi
+      .fn<NonNullable<DshChannelMuxOptions['readPage']>>()
+      .mockRejectedValueOnce(Object.assign(new Error('gone'), { code: 'dsh_session_missing' }))
+      .mockImplementationOnce(() => {
+        throw new Error('sync failure');
+      });
+    const h = reader(readPage);
+    h.mux.receive({ ...request, id: 1 });
+    h.mux.receive({ ...request, id: 2 });
+    await settle();
+    // Side by side: in whichever order they finish.
+    const byId = [...h.sent].sort(
+      (a, b) => Number((a as { id?: number }).id) - Number((b as { id?: number }).id)
+    );
+    expect(byId).toEqual([
+      {
+        host: 'page',
+        id: 1,
+        ok: false,
+        error: { code: 'dsh_session_missing', message: 'gone' },
+        ms: expect.any(Number),
+      },
+      {
+        host: 'page',
+        id: 2,
+        ok: false,
+        error: { code: DSH_READ_FAILED, message: 'sync failure' },
+        ms: expect.any(Number),
+      },
+    ]);
+    expect(h.sent.every(isDshHostPage)).toBe(true);
+
+    const none = reader(undefined);
+    none.mux.receive(request);
+    await settle();
+    expect(none.sent).toEqual([
+      expect.objectContaining({
+        host: 'page',
+        id: 5,
+        ok: false,
+        error: expect.objectContaining({ code: DSH_READ_FAILED }),
+      }),
+    ]);
+  });
+
+  it('runs reads side by side: a slow one holds up neither a later read nor a ping', async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((done) => {
+      release = done;
+    });
+    const readPage = vi.fn(async (input: { logicalSessionId: string }) => {
+      if (input.logicalSessionId === 'slow') await slow;
+      return structuredClone(page) as never;
+    });
+    const h = reader(readPage);
+    h.mux.receive({ ...request, id: 1, logicalSessionId: 'slow' });
+    h.mux.receive({ ...request, id: 2 });
+    h.mux.receive({ host: 'ping', id: 3 });
+    await settle();
+    expect(
+      h.sent.map(
+        (message) =>
+          `${String((message as { host?: string }).host)}:${String((message as { id?: number }).id)}`
+      )
+    ).toEqual(['pong:3', 'page:2']);
+    release();
+    await settle();
+    expect((h.sent.at(-1) as { id?: number }).id).toBe(1);
+  });
+
+  it('drops a readPage it could not answer with one diagnostic', () => {
+    const readPage = vi.fn();
+    const h = reader(readPage);
+    expect(h.mux.receive({ host: 'readPage', stubFile: 'x', logicalSessionId: 's1' })).toBe(true);
+    expect(h.mux.receive({ ...request, limit: 501 })).toBe(true);
+    expect(readPage).not.toHaveBeenCalled();
+    expect(h.sent).toEqual([]);
+    expect(h.log).toHaveBeenCalledTimes(1);
+    expect(h.log).toHaveBeenCalledWith('dropped a malformed readPage request');
   });
 });
 

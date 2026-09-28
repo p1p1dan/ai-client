@@ -362,6 +362,28 @@ describe('a call that never did its work', () => {
     expect(view.output).toBeUndefined();
   });
 
+  it.each([
+    [RUNTIME_TOOL_NAMES.bash, 'Ran'],
+    [RUNTIME_TOOL_NAMES.read, 'Read'],
+  ])('[P1-4a-UNKNOWN-1] a %s whose outcome the engine never recorded reads 「结果未知」, done form, not red', (tool, verb) => {
+    // dsh-rebase decision 032: the engine's note is prose for the model.
+    const note =
+      'The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown.';
+    const view = deriveToolRowView(
+      run(tool, PROBES[tool]?.input ?? {}, {
+        status: 'failed',
+        output: note,
+        errorText: note,
+        result: { content: [{ type: 'text', text: note }], details: { outcomeUnknown: true } },
+      })
+    );
+    expect(view.outcome).toBe('outcomeUnknown');
+    expect(view.verb, 'it did start').toBe(verb);
+    expect(view.failed, 'nobody knows it failed').toBe(false);
+    expect(view.body).toBeUndefined();
+    expect(zh(TOOL_RUN_OUTCOME_LABEL.outcomeUnknown)).toBe('结果未知');
+  });
+
   it('[N5-STRUCT-1] the words alone decide nothing — only the structured flag does', () => {
     // The live payload before the projector forwarded the flag: text only.
     const textOnly = deriveToolRowView(
