@@ -29,3 +29,20 @@
 
 - 实测：去掉 pnpm 后，linux-x64 产物从 97.9 MiB、10,194 个文件、365 个包，降到 82.1 MiB、9,760 个文件、342 个包。
 - 上机包探针里的 G-pnpm-install 检查（`tools/goal-probe.ts`、`tools/p0-4-probe.ts`）已经失效，[P1-13 手册](../topics/p1-13-encrypted-machine-runbook.md)里的对应项也要改成「预装插件由随包 node.exe 读回明文」。与收尾一起做。
+
+## 实施补记（2026-09-28，收尾 `fc6061c6`）
+
+第 6 条的第二步已经做完：
+- bundle 补丁里把 `plugin-manager` 设成 disabled，并删掉了它的 registry 配置；
+- `plugin-manager`、`tool-plugin-manager` 进了 `REQUIRED_DISABLED`；
+- `host.ts` 删掉了 `packageManager` 和 `AICLIENT_DSH_PNPM_CLI`；
+- 构建校验新增一条：产物里的 `plugin-manager` 行必须是 disabled，并且不能残留 registry 配置。
+
+施工中另外改了三处，都跟着上面这些改动走：
+1. **探针 bundle 的 `pluginManager` 改为可选获取**。Cordis 的 `inject` 依赖一旦满足不了，整条行就会一直挂起、不执行。plugin-manager 关掉以后，`aiclient-probe` 行会连带卡死，p0-4-probe、goal-probe、bridge-record 都会停在第一步。
+2. **goal-probe 的 OFFICE 场景改名为 PLUGIN-OFF**。原来它经 plugin-manager 装 `dsh-office-tools` 再重启宿主，现在改为断言两行都没加载、`install-bundle` 会被拒绝。
+3. **上机包的 G-pnpm-install 拆成两项**：
+   - G-no-plugin-install：安装入口已关，产物里没有 pnpm；
+   - G-preinstalled-plugin-readback：用随包 node.exe 逐个读回白名单插件，白名单为空时记为「无预装插件」。
+
+   Linux 预演结果：44 项，通过 40、跳过 1（本机没有 PowerShell）、记录 3，失败 0。
