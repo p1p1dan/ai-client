@@ -55,8 +55,8 @@
       "name": "glob",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 6,
+          "lines": 1
         }
       }
     }
@@ -70,6 +70,48 @@
       "toolCallId": "toolu_id-4",
       "input": {
         "pattern": "**/*"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -112,8 +154,8 @@
       "name": "grep",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 9,
+          "lines": 1
         }
       }
     }
@@ -127,6 +169,48 @@
       "toolCallId": "toolu_id-8",
       "input": {
         "pattern": "PERM-SECRET"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -167,6 +251,48 @@
       "messageId": "dsh-aiclient-rec-perm-search-t1-s3",
       "blockId": "dsh-aiclient-rec-perm-search-t1-s3-b0",
       "text": "P1-PERM-SEARCH finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

@@ -43,7 +43,8 @@
                   "id": "h:id-1:text:0",
                   "text": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command."
                 }
-              ]
+              ],
+              "liveMessageId": "dsh-user-5"
             },
             {
               "id": "h:id-6",
@@ -72,6 +73,7 @@
                   "outcomeUnknown": true
                 }
               ],
+              "liveMessageId": "dsh-aiclient-rec-crash-resume-t1-s1",
               "incomplete": true,
               "stopReason": "interrupted"
             },
@@ -120,7 +122,8 @@
               "id": "h:id-1:text:0",
               "text": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-6",
@@ -149,6 +152,7 @@
               "outcomeUnknown": true
             }
           ],
+          "liveMessageId": "dsh-aiclient-rec-crash-resume-t1-s1",
           "incomplete": true,
           "stopReason": "interrupted"
         },

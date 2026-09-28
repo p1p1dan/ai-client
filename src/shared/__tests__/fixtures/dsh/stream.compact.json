@@ -58,6 +58,48 @@
   {
     "sessionId": "rec-compact",
     "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
     "type": "message.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-compact-t1-s1"
@@ -133,8 +175,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 30,
+          "lines": 1
         }
       }
     }
@@ -149,6 +191,48 @@
       "input": {
         "command": "echo \"bridge tool row ok\"; pwd; ls -a",
         "description": "List the workspace"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -189,6 +273,48 @@
       "messageId": "dsh-aiclient-rec-compact-t2-s2",
       "blockId": "dsh-aiclient-rec-compact-t2-s2-b0",
       "text": "Tool row finished: the workspace listing is above."
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

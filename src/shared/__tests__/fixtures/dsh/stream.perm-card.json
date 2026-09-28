@@ -55,8 +55,8 @@
       "name": "write",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 20,
+          "lines": 1
         }
       }
     }
@@ -72,6 +72,48 @@
         "file_path": "perm-allowed.txt",
         "content": "first write\n",
         "path": "perm-allowed.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -127,7 +169,22 @@
       "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": true,
-      "output": "<path><workspace>/perm-card/perm-allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<path><workspace>/perm-card/perm-allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+          }
+        ],
+        "details": {
+          "review": {
+            "version": 1,
+            "path": "perm-allowed.txt",
+            "status": "added",
+            "patch": "@@ -0,0 +1,1 @@\n+first write"
+          }
+        }
+      }
     }
   },
   {
@@ -158,8 +215,8 @@
       "name": "write",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 20,
+          "lines": 1
         }
       }
     }
@@ -175,6 +232,48 @@
         "file_path": "perm-denied.txt",
         "content": "second write\n",
         "path": "perm-denied.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -230,6 +329,17 @@
       "messageId": "dsh-aiclient-rec-perm-card-t1-s2",
       "toolCallId": "toolu_id-8",
       "ok": false,
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: permission denied"
+          }
+        ],
+        "details": {
+          "refused": true
+        }
+      },
       "error": "Error: permission denied"
     }
   },
@@ -259,6 +369,48 @@
       "messageId": "dsh-aiclient-rec-perm-card-t1-s3",
       "blockId": "dsh-aiclient-rec-perm-card-t1-s3-b0",
       "text": "P1-PERM-WRITES finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

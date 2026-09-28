@@ -17,7 +17,8 @@
               "id": "h:id-1:text:0",
               "text": "gamma FORK-BASE-1, no scenario."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-5",
@@ -31,7 +32,8 @@
               "id": "h:id-5:text:0",
               "text": "fake gateway: no P0 scenario marker"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-fork-child-t1-s1"
         },
         {
           "id": "h:id-6",
@@ -44,7 +46,8 @@
               "id": "h:id-6:text:0",
               "text": "P0-RECALL {\"markers\":[\"FORK-BASE-1\",\"FORK-AFTER-2\"]} which markers do you see?"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-18"
         },
         {
           "id": "h:id-8",
@@ -58,7 +61,8 @@
               "id": "h:id-8:text:0",
               "text": "P0-RECALL present=FORK-BASE-1 missing=FORK-AFTER-2"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-fork-child-t2-s1"
         }
       ],
       "offset": 0,
@@ -178,7 +182,8 @@
                 "id": "h:id-1:text:0",
                 "text": "gamma FORK-BASE-1, no scenario."
               }
-            ]
+            ],
+            "liveMessageId": "dsh-user-5"
           },
           {
             "id": "h:id-5",
@@ -192,7 +197,8 @@
                 "id": "h:id-5:text:0",
                 "text": "fake gateway: no P0 scenario marker"
               }
-            ]
+            ],
+            "liveMessageId": "dsh-aiclient-rec-fork-child-t1-s1"
           }
         ],
         "offset": 0,

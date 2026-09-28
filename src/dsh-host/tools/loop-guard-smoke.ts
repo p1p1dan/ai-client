@@ -711,6 +711,16 @@ async function main(): Promise<number> {
     }
   } finally {
     gateway.child.kill('SIGTERM');
+    // The gateway saves its state on SIGTERM: removing the scratch root before
+    // it exits races that write (ENOTEMPTY).
+    await new Promise<void>((resolve) => {
+      if (gateway.child.exitCode !== null || gateway.child.signalCode !== null) return resolve();
+      const timer = setTimeout(resolve, 5_000);
+      gateway.child.once('exit', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
   }
   report.verdict = verdictOf(report);
   const failed = Object.entries(report.verdict as Record<string, boolean>)

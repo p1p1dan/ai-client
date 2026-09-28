@@ -55,8 +55,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 22,
+          "lines": 1
         }
       }
     }
@@ -71,6 +71,48 @@
       "input": {
         "command": "echo P1-PERM-HOLD",
         "description": "Held at the gate"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -130,6 +172,17 @@
       "messageId": "dsh-aiclient-rec-perm-stop-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": false,
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: tool call aborted before dispatch"
+          }
+        ],
+        "details": {
+          "notStarted": true
+        }
+      },
       "error": "Error: tool call aborted before dispatch"
     }
   },

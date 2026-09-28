@@ -2,11 +2,11 @@
   "bootstrap": [
     {
       "bootstrapped": true,
-      "logicalSessionId": "rec-perm-card",
-      "piSessionId": "aiclient-rec-perm-card",
-      "cwd": "<workspace>/perm-card",
+      "logicalSessionId": "rec-job-notice",
+      "piSessionId": "aiclient-rec-job-notice",
+      "cwd": "<workspace>",
       "agentDir": "<dsh-home>",
-      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-job-notice.dsh.json",
       "leaf": {
         "activeEntryId": null,
         "fileTailEntryId": null
@@ -17,9 +17,9 @@
     }
   ],
   "history": {
-    "logicalSessionId": "rec-perm-card",
-    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
-    "workspacePath": "<workspace>/perm-card",
+    "logicalSessionId": "rec-job-notice",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-job-notice.dsh.json",
+    "workspacePath": "<workspace>",
     "page": {
       "messages": [
         {
@@ -31,7 +31,7 @@
             {
               "type": "text",
               "id": "h:id-1:text:0",
-              "text": "P1-PERM-WRITES: write two files."
+              "text": "P1-JOBNOTICE: start a background job, then wait for its notice."
             }
           ],
           "liveMessageId": "dsh-user-5"
@@ -47,11 +47,11 @@
               "type": "tool_call",
               "id": "h:id-6:tool-call:toolu_id-4",
               "toolCallId": "toolu_id-4",
-              "name": "write",
+              "name": "bash",
               "input": {
-                "file_path": "perm-allowed.txt",
-                "content": "first write\n",
-                "path": "perm-allowed.txt"
+                "command": "sleep 3; echo job-notice-done",
+                "description": "Background sleeper",
+                "run_in_background": true
               }
             },
             {
@@ -59,77 +59,73 @@
               "id": "h:id-7:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
               "ok": true,
-              "output": "<path><workspace>/perm-card/perm-allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>",
-              "review": {
-                "version": 1,
-                "path": "perm-allowed.txt",
-                "status": "added",
-                "patch": "@@ -0,0 +1,1 @@\n+first write"
-              }
+              "output": "started background job bash-2"
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-perm-card-t1-s1"
+          "liveMessageId": "dsh-aiclient-rec-job-notice-t1-s1"
         },
         {
-          "id": "h:id-10",
-          "entryId": "id-10",
-          "role": "assistant",
-          "timestamp": "<ms>",
-          "model": "aiclient-gateway/fake-1",
-          "blocks": [
-            {
-              "type": "tool_call",
-              "id": "h:id-10:tool-call:toolu_id-8",
-              "toolCallId": "toolu_id-8",
-              "name": "write",
-              "input": {
-                "file_path": "perm-denied.txt",
-                "content": "second write\n",
-                "path": "perm-denied.txt"
-              }
-            },
-            {
-              "type": "tool_result",
-              "id": "h:id-11:tool-result:toolu_id-8",
-              "toolCallId": "toolu_id-8",
-              "ok": false,
-              "output": "Error: permission denied",
-              "error": "Error: permission denied",
-              "refused": true
-            }
-          ],
-          "liveMessageId": "dsh-aiclient-rec-perm-card-t1-s2"
-        },
-        {
-          "id": "h:id-13",
-          "entryId": "id-13",
+          "id": "h:id-9",
+          "entryId": "id-9",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-13:text:0",
-              "text": "P1-PERM-WRITES finished."
+              "id": "h:id-9:text:0",
+              "text": "Started a background job; its notice will wake me."
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-perm-card-t1-s3"
+          "liveMessageId": "dsh-aiclient-rec-job-notice-t1-s2"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]"
+            }
+          ],
+          "origin": {
+            "kind": "job"
+          },
+          "liveMessageId": "dsh-user-22"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "The background job reported back: done."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-job-notice-t2-s1"
         }
       ],
       "offset": 0,
       "limit": 80,
-      "totalCount": 4,
+      "totalCount": 5,
       "hasMore": false
     }
   },
   "tree": {
     "snapshot": {
-      "logicalSessionId": "rec-perm-card",
-      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
-      "workspacePath": "<workspace>/perm-card",
+      "logicalSessionId": "rec-job-notice",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-job-notice.dsh.json",
+      "workspacePath": "<workspace>",
       "leaf": {
-        "activeEntryId": "id-13",
-        "fileTailEntryId": "aiclient-rec-perm-card#22"
+        "activeEntryId": "id-12",
+        "fileTailEntryId": "aiclient-rec-job-notice#25"
       },
       "nodes": [
         {
@@ -138,7 +134,7 @@
           "depth": 0,
           "entryType": "message",
           "role": "user",
-          "preview": "P1-PERM-WRITES: write two files.",
+          "preview": "P1-JOBNOTICE: start a background job, then wait for its notice.",
           "timestamp": "<ms>",
           "childCount": 1,
           "forkable": false,
@@ -158,11 +154,12 @@
           "leaf": false
         },
         {
-          "id": "id-10",
+          "id": "id-9",
           "parentId": "id-6",
           "depth": 2,
           "entryType": "message",
           "role": "assistant",
+          "preview": "Started a background job; its notice will wake me.",
           "timestamp": "<ms>",
           "childCount": 1,
           "forkable": true,
@@ -170,12 +167,25 @@
           "leaf": false
         },
         {
-          "id": "id-13",
-          "parentId": "id-10",
+          "id": "id-10",
+          "parentId": "id-9",
           "depth": 3,
           "entryType": "message",
+          "role": "user",
+          "preview": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-10",
+          "depth": 4,
+          "entryType": "message",
           "role": "assistant",
-          "preview": "P1-PERM-WRITES finished.",
+          "preview": "The background job reported back: done.",
           "timestamp": "<ms>",
           "childCount": 0,
           "forkable": true,
@@ -183,14 +193,9 @@
           "leaf": true
         }
       ],
-      "totalNodes": 4,
-      "returnedNodes": 4,
+      "totalNodes": 5,
+      "returnedNodes": 5,
       "truncated": false
     }
-  },
-  "files": {
-    "allowed": true,
-    "denied": false
-  },
-  "grants": null
+  }
 }

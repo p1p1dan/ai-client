@@ -55,8 +55,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 20,
+          "lines": 1
         }
       }
     }
@@ -71,6 +71,48 @@
       "input": {
         "command": "echo perm-grant-a",
         "description": "First echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -152,8 +194,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 20,
+          "lines": 1
         }
       }
     }
@@ -168,6 +210,48 @@
       "input": {
         "command": "echo perm-grant-b",
         "description": "Second echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -210,8 +294,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 35,
+          "lines": 1
         }
       }
     }
@@ -226,6 +310,48 @@
       "input": {
         "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
         "description": "Echo, then remove a file"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   },
@@ -276,6 +402,17 @@
       "messageId": "dsh-aiclient-rec-perm-grants-t1-s3",
       "toolCallId": "toolu_id-12",
       "ok": false,
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: permission denied"
+          }
+        ],
+        "details": {
+          "refused": true
+        }
+      },
       "error": "Error: permission denied"
     }
   },
@@ -305,6 +442,48 @@
       "messageId": "dsh-aiclient-rec-perm-grants-t1-s4",
       "blockId": "dsh-aiclient-rec-perm-grants-t1-s4-b0",
       "text": "P1-PERM-GRANTS finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

@@ -55,8 +55,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 42,
+          "lines": 1
         }
       }
     }
@@ -71,6 +71,48 @@
       "input": {
         "command": "echo \"sleep-tool crash-resume started\"; sleep 10; echo \"sleep-tool done\"",
         "description": "Run a long command"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
       }
     }
   }

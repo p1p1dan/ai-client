@@ -1,0 +1,150 @@
+[
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-THINK"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-THINK: think it through, then answer."
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "thinking.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1",
+      "blockId": "dsh-aiclient-rec-think-t1-s1-r0"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "thinking.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1",
+      "blockId": "dsh-aiclient-rec-think-t1-s1-r0",
+      "text": "First the question, then the arithmetic.\nSix times seven is forty-two."
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "thinking.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1",
+      "blockId": "dsh-aiclient-rec-think-t1-s1-r0"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1",
+      "blockId": "dsh-aiclient-rec-think-t1-s1-b1",
+      "text": "Thought it through: the answer is 42."
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-think-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P1-PERM-GRANTS: echo three times."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-6",
@@ -59,7 +60,8 @@
               "ok": true,
               "output": "perm-grant-a\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-grants-t1-s1"
         },
         {
           "id": "h:id-10",
@@ -85,7 +87,8 @@
               "ok": true,
               "output": "perm-grant-b\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-grants-t1-s2"
         },
         {
           "id": "h:id-14",
@@ -110,9 +113,11 @@
               "toolCallId": "toolu_id-12",
               "ok": false,
               "output": "Error: permission denied",
-              "error": "Error: permission denied"
+              "error": "Error: permission denied",
+              "refused": true
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-grants-t1-s3"
         },
         {
           "id": "h:id-17",
@@ -126,7 +131,8 @@
               "id": "h:id-17:text:0",
               "text": "P1-PERM-GRANTS finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-grants-t1-s4"
         }
       ],
       "offset": 0,

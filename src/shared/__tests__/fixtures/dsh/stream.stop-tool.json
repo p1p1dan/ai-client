@@ -55,8 +55,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 41,
+          "lines": 1
         }
       }
     }
@@ -77,6 +77,48 @@
   {
     "sessionId": "rec-stop-tool",
     "requestId": "turn-STOP-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-stop-tool",
+    "requestId": "turn-STOP-TOOL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-stop-tool",
+    "requestId": "turn-STOP-TOOL",
     "type": "session.status",
     "payload": {
       "status": "stopping"
@@ -90,6 +132,17 @@
       "messageId": "dsh-aiclient-rec-stop-tool-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": false,
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: tool call aborted"
+          }
+        ],
+        "details": {
+          "stopped": true
+        }
+      },
       "error": "Error: tool call aborted"
     }
   },

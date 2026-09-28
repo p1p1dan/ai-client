@@ -1,83 +1,82 @@
 [
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "session.status",
     "payload": {
       "status": "running"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.started",
     "payload": {
       "messageId": "dsh-user-5",
       "role": "user",
-      "attemptId": "attempt-PERM-PLAN"
+      "attemptId": "attempt-USAGE"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.delta",
     "payload": {
       "messageId": "dsh-user-5",
       "blockId": "dsh-user-5-text",
-      "text": "P1-PERM-PLAN: write, then read."
+      "text": "P1-USAGE: one tool step, then an answer."
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.completed",
     "payload": {
       "messageId": "dsh-user-5"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "messageId": "dsh-aiclient-rec-usage-t1-s1",
       "role": "assistant",
       "model": "aiclient-gateway/fake-1"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "tool.started",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "messageId": "dsh-aiclient-rec-usage-t1-s1",
       "toolCallId": "toolu_id-4",
-      "name": "write",
+      "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 22,
+          "bytes": 21,
           "lines": 1
         }
       }
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "tool.updated",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "messageId": "dsh-aiclient-rec-usage-t1-s1",
       "toolCallId": "toolu_id-4",
       "input": {
-        "file_path": "perm-plan.txt",
-        "content": "written in plan mode\n",
-        "path": "perm-plan.txt"
+        "command": "echo usage-probe",
+        "description": "Print a marker"
       }
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "usage.updated",
     "payload": {
       "input": 0,
@@ -90,8 +89,8 @@
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "usage.updated",
     "payload": {
       "input": 0,
@@ -118,158 +117,47 @@
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "tool.completed",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "messageId": "dsh-aiclient-rec-usage-t1-s1",
       "toolCallId": "toolu_id-4",
-      "ok": false,
-      "output": {
-        "content": [
-          {
-            "type": "text",
-            "text": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt"
-          }
-        ],
-        "details": {
-          "refused": true
-        }
-      },
-      "error": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt"
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "message.completed",
-    "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1"
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "message.started",
-    "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
-      "role": "assistant",
-      "model": "aiclient-gateway/fake-1"
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "tool.started",
-    "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
-      "toolCallId": "toolu_id-8",
-      "name": "read",
-      "input": {
-        "__streaming": {
-          "bytes": 12,
-          "lines": 1
-        }
-      }
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "tool.updated",
-    "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
-      "toolCallId": "toolu_id-8",
-      "input": {
-        "file_path": "perm-plan-notes.txt",
-        "path": "perm-plan-notes.txt"
-      }
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "usage.updated",
-    "payload": {
-      "input": 0,
-      "output": 0,
-      "cacheRead": 0,
-      "cacheWrite": 0,
-      "totalTokens": 0,
-      "costUsd": 0,
-      "pending": true
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "usage.updated",
-    "payload": {
-      "input": 0,
-      "output": 0,
-      "cacheRead": 0,
-      "cacheWrite": 0,
-      "totalTokens": 0,
-      "costUsd": 0,
-      "context": {
-        "tokens": 0,
-        "contextWindow": 0,
-        "percent": 0
-      },
-      "session": {
-        "turns": 0,
-        "toolResults": 0,
-        "input": 0,
-        "output": 0,
-        "cacheRead": 0,
-        "cacheWrite": 0,
-        "totalTokens": 0,
-        "costUsd": 0
-      }
-    }
-  },
-  {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
-    "type": "tool.completed",
-    "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
-      "toolCallId": "toolu_id-8",
       "ok": true,
-      "output": "<path><workspace>/perm-plan/perm-plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
+      "output": "usage-probe\n"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2"
+      "messageId": "dsh-aiclient-rec-usage-t1-s1"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3",
+      "messageId": "dsh-aiclient-rec-usage-t1-s2",
       "role": "assistant",
       "model": "aiclient-gateway/fake-1"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3",
-      "blockId": "dsh-aiclient-rec-perm-plan-t1-s3-b0",
-      "text": "P1-PERM-PLAN finished."
+      "messageId": "dsh-aiclient-rec-usage-t1-s2",
+      "blockId": "dsh-aiclient-rec-usage-t1-s2-b0",
+      "text": "Usage recorded for both steps."
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "usage.updated",
     "payload": {
       "input": 0,
@@ -282,8 +170,8 @@
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "usage.updated",
     "payload": {
       "input": 0,
@@ -310,22 +198,142 @@
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3"
+      "messageId": "dsh-aiclient-rec-usage-t1-s2"
     }
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "session.completed",
     "payload": {}
   },
   {
-    "sessionId": "rec-perm-plan",
-    "requestId": "turn-PERM-PLAN",
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "role": "user",
+      "attemptId": "attempt-USAGE-2"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "blockId": "dsh-user-22-text",
+      "text": "epsilon, no scenario."
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-22"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-usage-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-usage-t2-s1",
+      "blockId": "dsh-aiclient-rec-usage-t2-s1-b0",
+      "text": "Usage recorded for both steps."
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-usage-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE-2",
     "type": "session.status",
     "payload": {
       "status": "idle"

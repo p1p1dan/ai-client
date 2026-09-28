@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P1-FAIL: this request fails upstream."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-1:end",

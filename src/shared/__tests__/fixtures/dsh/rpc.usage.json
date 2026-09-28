@@ -2,11 +2,11 @@
   "bootstrap": [
     {
       "bootstrapped": true,
-      "logicalSessionId": "rec-tool",
-      "piSessionId": "aiclient-rec-tool",
+      "logicalSessionId": "rec-usage",
+      "piSessionId": "aiclient-rec-usage",
       "cwd": "<workspace>",
       "agentDir": "<dsh-home>",
-      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-usage.dsh.json",
       "leaf": {
         "activeEntryId": null,
         "fileTailEntryId": null
@@ -17,8 +17,8 @@
     }
   ],
   "history": {
-    "logicalSessionId": "rec-tool",
-    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+    "logicalSessionId": "rec-usage",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-usage.dsh.json",
     "workspacePath": "<workspace>",
     "page": {
       "messages": [
@@ -31,7 +31,7 @@
             {
               "type": "text",
               "id": "h:id-1:text:0",
-              "text": "P0-TOOL: list the workspace."
+              "text": "P1-USAGE: one tool step, then an answer."
             }
           ],
           "liveMessageId": "dsh-user-5"
@@ -49,8 +49,8 @@
               "toolCallId": "toolu_id-4",
               "name": "bash",
               "input": {
-                "command": "echo \"bridge tool row ok\"; pwd; ls -a",
-                "description": "List the workspace"
+                "command": "echo usage-probe",
+                "description": "Print a marker"
               }
             },
             {
@@ -58,10 +58,10 @@
               "id": "h:id-7:tool-result:toolu_id-4",
               "toolCallId": "toolu_id-4",
               "ok": true,
-              "output": "bridge tool row ok\n<workspace>\n.\n..\n"
+              "output": "usage-probe\n"
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-tool-t1-s1"
+          "liveMessageId": "dsh-aiclient-rec-usage-t1-s1"
         },
         {
           "id": "h:id-9",
@@ -73,26 +73,55 @@
             {
               "type": "text",
               "id": "h:id-9:text:0",
-              "text": "Tool row finished: the workspace listing is above."
+              "text": "Usage recorded for both steps."
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-tool-t1-s2"
+          "liveMessageId": "dsh-aiclient-rec-usage-t1-s2"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "epsilon, no scenario."
+            }
+          ],
+          "liveMessageId": "dsh-user-22"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "Usage recorded for both steps."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-usage-t2-s1"
         }
       ],
       "offset": 0,
       "limit": 80,
-      "totalCount": 3,
+      "totalCount": 5,
       "hasMore": false
     }
   },
   "tree": {
     "snapshot": {
-      "logicalSessionId": "rec-tool",
-      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-tool.dsh.json",
+      "logicalSessionId": "rec-usage",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-usage.dsh.json",
       "workspacePath": "<workspace>",
       "leaf": {
-        "activeEntryId": "id-9",
-        "fileTailEntryId": "aiclient-rec-tool#17"
+        "activeEntryId": "id-12",
+        "fileTailEntryId": "aiclient-rec-usage#25"
       },
       "nodes": [
         {
@@ -101,7 +130,7 @@
           "depth": 0,
           "entryType": "message",
           "role": "user",
-          "preview": "P0-TOOL: list the workspace.",
+          "preview": "P1-USAGE: one tool step, then an answer.",
           "timestamp": "<ms>",
           "childCount": 1,
           "forkable": false,
@@ -126,7 +155,33 @@
           "depth": 2,
           "entryType": "message",
           "role": "assistant",
-          "preview": "Tool row finished: the workspace listing is above.",
+          "preview": "Usage recorded for both steps.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-9",
+          "depth": 3,
+          "entryType": "message",
+          "role": "user",
+          "preview": "epsilon, no scenario.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-10",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Usage recorded for both steps.",
           "timestamp": "<ms>",
           "childCount": 0,
           "forkable": true,
@@ -134,8 +189,8 @@
           "leaf": true
         }
       ],
-      "totalNodes": 3,
-      "returnedNodes": 3,
+      "totalNodes": 5,
+      "returnedNodes": 5,
       "truncated": false
     }
   }

@@ -82,16 +82,22 @@ const scenarios = readdirSync(FIXTURES)
   .map((file) => file.slice('log.'.length, -'.json'.length))
   .sort();
 
-function projectLog(log: LogSample): HistoryMessage[] {
+/**
+ * `live`: the log of the session the bridge had open, whose cache names the
+ * live copy of each row (P1-4d1, `liveMessageId`); a retired session's
+ * timeline is read without.
+ */
+function projectLog(log: LogSample, live = false): HistoryMessage[] {
   return projectDshHistory(
-    log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent)
+    log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent),
+    live ? { liveSessionId: log.header.id } : {}
   );
 }
 
 function project(name: string) {
   const log = read<LogSample>(`log.${name}.json`);
   const rpc = read<RpcSample>(`rpc.${name}.json`);
-  return { log, rpc, messages: projectLog(log) };
+  return { log, rpc, messages: projectLog(log, true) };
 }
 
 function blocksOf(messages: readonly HistoryMessage[]) {
@@ -104,6 +110,7 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'crash-resume',
     'fail',
     'fork',
+    'job-notice',
     'perm-card',
     'perm-deny',
     'perm-gear',
@@ -117,7 +124,9 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'stop-stream',
     'stop-tool',
     'stream',
+    'think',
     'tool',
+    'usage',
   ]);
   for (const name of scenarios) {
     expect(readdirSync(FIXTURES)).toContain(`rpc.${name}.json`);

@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P0-STREAM: stream a paragraph back to me."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-5",
@@ -47,7 +48,8 @@
               "id": "h:id-5:text:0",
               "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-t1-s1"
         },
         {
           "id": "h:id-6",
@@ -60,7 +62,8 @@
               "id": "h:id-6:text:0",
               "text": "P0-TOOL: list the workspace."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-17"
         },
         {
           "id": "h:id-9",
@@ -86,7 +89,8 @@
               "ok": true,
               "output": "bridge tool row ok\n<workspace>\n.\n..\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-t2-s1"
         },
         {
           "id": "h:id-12",
@@ -100,7 +104,8 @@
               "id": "h:id-12:text:0",
               "text": "Tool row finished: the workspace listing is above."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-compact-t2-s2"
         },
         {
           "id": "h:id-15",

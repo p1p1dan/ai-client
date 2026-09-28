@@ -66,6 +66,25 @@
   {
     "sessionId": "rec-stop-stream",
     "requestId": "turn-STOP-STREAM",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": null,
+        "contextWindow": 0,
+        "percent": null
+      },
+      "unreported": true
+    }
+  },
+  {
+    "sessionId": "rec-stop-stream",
+    "requestId": "turn-STOP-STREAM",
     "type": "message.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-stop-stream-t1-s1"

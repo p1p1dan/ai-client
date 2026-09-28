@@ -58,6 +58,48 @@
   {
     "sessionId": "rec-fork",
     "requestId": "turn-BASE",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
     "type": "message.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-fork-t1-s1"
@@ -131,6 +173,48 @@
       "messageId": "dsh-aiclient-rec-fork-t2-s1",
       "blockId": "dsh-aiclient-rec-fork-t2-s1-b0",
       "text": "fake gateway: no P0 scenario marker"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {
@@ -214,6 +298,48 @@
   {
     "sessionId": "rec-fork-child",
     "requestId": "turn-CHILD-RECALL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
     "type": "message.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-fork-child-t2-s1"
@@ -287,6 +413,48 @@
       "messageId": "dsh-aiclient-rec-fork-t3-s1",
       "blockId": "dsh-aiclient-rec-fork-t3-s1-b0",
       "text": "P0-RECALL present=FORK-BASE-1,FORK-AFTER-2 missing=-"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

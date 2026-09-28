@@ -55,8 +55,8 @@
       "name": "bash",
       "input": {
         "__streaming": {
-          "bytes": 0,
-          "lines": 0
+          "bytes": 19,
+          "lines": 1
         }
       }
     }
@@ -77,11 +77,64 @@
   {
     "sessionId": "rec-perm-deny",
     "requestId": "turn-PERM-DENY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-deny-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": false,
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "Error: shell operand is denied: <workspace>/perm-deny/.env"
+          }
+        ],
+        "details": {
+          "refused": true
+        }
+      },
       "error": "Error: shell operand is denied: <workspace>/perm-deny/.env"
     }
   },
@@ -111,6 +164,48 @@
       "messageId": "dsh-aiclient-rec-perm-deny-t1-s2",
       "blockId": "dsh-aiclient-rec-perm-deny-t1-s2-b0",
       "text": "P1-PERM-DENY finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
     }
   },
   {

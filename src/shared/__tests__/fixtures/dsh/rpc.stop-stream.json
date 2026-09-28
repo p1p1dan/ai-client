@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P0-PACED {\"token\":\"stop-stream\",\"chunks\":30,\"chunkMs\":400} stream slowly; I will stop you."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-4",
@@ -50,6 +51,7 @@
           ],
           "incomplete": true,
           "stopReason": "aborted",
+          "liveMessageId": "dsh-aiclient-rec-stop-stream-t1-s1",
           "stopCause": "user_stop"
         }
       ],

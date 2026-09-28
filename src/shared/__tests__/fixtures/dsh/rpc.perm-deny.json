@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P1-PERM-DENY: print the env file."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-6",
@@ -58,9 +59,11 @@
               "toolCallId": "toolu_id-4",
               "ok": false,
               "output": "Error: shell operand is denied: <workspace>/perm-deny/.env",
-              "error": "Error: shell operand is denied: <workspace>/perm-deny/.env"
+              "error": "Error: shell operand is denied: <workspace>/perm-deny/.env",
+              "refused": true
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-deny-t1-s1"
         },
         {
           "id": "h:id-9",
@@ -74,7 +77,8 @@
               "id": "h:id-9:text:0",
               "text": "P1-PERM-DENY finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-deny-t1-s2"
         }
       ],
       "offset": 0,

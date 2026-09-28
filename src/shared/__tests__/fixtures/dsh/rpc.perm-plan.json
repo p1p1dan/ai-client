@@ -33,7 +33,8 @@
               "id": "h:id-1:text:0",
               "text": "P1-PERM-PLAN: write, then read."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-6",
@@ -59,9 +60,11 @@
               "toolCallId": "toolu_id-4",
               "ok": false,
               "output": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt",
-              "error": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt"
+              "error": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt",
+              "refused": true
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-plan-t1-s1"
         },
         {
           "id": "h:id-10",
@@ -87,7 +90,8 @@
               "ok": true,
               "output": "<path><workspace>/perm-plan/perm-plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-plan-t1-s2"
         },
         {
           "id": "h:id-13",
@@ -101,7 +105,8 @@
               "id": "h:id-13:text:0",
               "text": "P1-PERM-PLAN finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-plan-t1-s3"
         }
       ],
       "offset": 0,

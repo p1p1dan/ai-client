@@ -43,7 +43,8 @@
                   "id": "h:id-1:text:0",
                   "text": "P1-PERM-SESSION: echo twice."
                 }
-              ]
+              ],
+              "liveMessageId": "dsh-user-5"
             },
             {
               "id": "h:id-6",
@@ -69,7 +70,8 @@
                   "ok": true,
                   "output": "perm-session-first\n"
                 }
-              ]
+              ],
+              "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s1"
             },
             {
               "id": "h:id-10",
@@ -96,6 +98,7 @@
                   "output": "perm-session-second\n"
                 }
               ],
+              "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2",
               "incomplete": true,
               "stopReason": "interrupted"
             },
@@ -144,7 +147,8 @@
               "id": "h:id-1:text:0",
               "text": "P1-PERM-SESSION: echo twice."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-5"
         },
         {
           "id": "h:id-6",
@@ -170,7 +174,8 @@
               "ok": true,
               "output": "perm-session-first\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s1"
         },
         {
           "id": "h:id-10",
@@ -197,6 +202,7 @@
               "output": "perm-session-second\n"
             }
           ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2",
           "incomplete": true,
           "stopReason": "interrupted"
         },
@@ -227,7 +233,8 @@
               "id": "h:id-12:text:0",
               "text": "P1-PERM-SESSION: echo twice."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-27"
         },
         {
           "id": "h:id-15",
@@ -253,7 +260,8 @@
               "ok": true,
               "output": "perm-session-first\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s1"
         },
         {
           "id": "h:id-19",
@@ -279,7 +287,8 @@
               "ok": true,
               "output": "perm-session-second\n"
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s2"
         },
         {
           "id": "h:id-22",
@@ -293,7 +302,8 @@
               "id": "h:id-22:text:0",
               "text": "P1-PERM-SESSION finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s3"
         },
         {
           "id": "h:id-23",
@@ -306,7 +316,8 @@
               "id": "h:id-23:text:0",
               "text": "P1-PERM-SESSION: echo twice."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-user-46"
         },
         {
           "id": "h:id-26",
@@ -331,9 +342,11 @@
               "toolCallId": "toolu_id-24",
               "ok": false,
               "output": "Error: permission denied",
-              "error": "Error: permission denied"
+              "error": "Error: permission denied",
+              "refused": true
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t3-s1"
         },
         {
           "id": "h:id-30",
@@ -358,9 +371,11 @@
               "toolCallId": "toolu_id-28",
               "ok": false,
               "output": "Error: permission denied",
-              "error": "Error: permission denied"
+              "error": "Error: permission denied",
+              "refused": true
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t3-s2"
         },
         {
           "id": "h:id-33",
@@ -374,7 +389,8 @@
               "id": "h:id-33:text:0",
               "text": "P1-PERM-SESSION finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t3-s3"
         }
       ],
       "offset": 0,
