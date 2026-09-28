@@ -1,6 +1,6 @@
 # 决策 082：P1-10a 白名单与构建期审计的实现取舍
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：P1-10a 实现（`ad999a0f`）与实验 E2、[决策 058](058-plugins-preinstalled-no-pnpm.md)、[059](059-allowlist-verification-and-audits.md)、[060](060-first-allowlist-pilot-office-tools.md)。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-10a 实现（`ad999a0f`）与实验 E2、[决策 058](058-plugins-preinstalled-no-pnpm.md)、[059](059-allowlist-verification-and-audits.md)、[060](060-first-allowlist-pilot-office-tools.md)。
 
 ## 规则
 

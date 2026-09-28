@@ -1,6 +1,6 @@
 # 决策 076：P1-9b 转换器的六处实现取舍
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：P1-9b 实现（纯转换器 `src/shared/legacyPiSession/convert/`）、[P1-9 方案 §4.2](../topics/p1-9-migration.md#4-方案)、决策 052～056。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-9b 实现（纯转换器 `src/shared/legacyPiSession/convert/`）、[P1-9 方案 §4.2](../topics/p1-9-migration.md#4-方案)、决策 052～056。
 
 ## 规则
 

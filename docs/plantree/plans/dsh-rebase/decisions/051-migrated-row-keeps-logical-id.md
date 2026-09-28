@@ -1,6 +1,6 @@
 # 决策 051：迁移后逻辑 id 归 DSH 会话，旧 pi 行搬到新键下原样保留（请重点审批）
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-9 方案 §5 D2](../topics/p1-9-migration.md#5-需要拍板的决策点)、[分片 04](../topics/p1-9-migration/04-index-rollback.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-9 方案 §5 D2](../topics/p1-9-migration.md#5-需要拍板的决策点)、[分片 04](../topics/p1-9-migration/04-index-rollback.md)。
 
 ## 规则
 

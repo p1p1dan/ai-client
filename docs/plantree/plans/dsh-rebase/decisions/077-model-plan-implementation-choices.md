@@ -1,6 +1,6 @@
 # 决策 077：P1-5a 模型计划的实现取舍（目录拼不出来时菜单清空；每个模型显式写上下文窗口等值）
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：P1-5a 实现（`src/shared/dshModelPlan/`）、[P1-5 方案](../topics/p1-5-models-and-credentials.md)、决策 033～036、040。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-5a 实现（`src/shared/dshModelPlan/`）、[P1-5 方案](../topics/p1-5-models-and-credentials.md)、决策 033～036、040。
 
 ## 规则
 

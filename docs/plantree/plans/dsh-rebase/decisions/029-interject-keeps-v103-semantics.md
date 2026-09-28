@@ -1,6 +1,6 @@
 # 决策 029：DSH 下插话保持 v1.0.3 语义：在步边界收尾，不用 DSH 的 `steer`
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-4 方案 §5 D4](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、runtime-hardening 决策 046（`turnActive`）。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-4 方案 §5 D4](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、runtime-hardening 决策 046（`turnActive`）。
 
 ## 规则
 

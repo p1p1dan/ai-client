@@ -1,6 +1,6 @@
 # 决策 053：只在种子里写 `ignorable` 的 `aiclient/*` 事件，运行期仍然禁止（修订决策 026 第 5 条的适用范围，请重点审批）
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-9 方案 §5 D4](../topics/p1-9-migration.md#5-需要拍板的决策点)、[决策 026](026-history-per-message-tree-across-lineage.md) 第 5 条、[分片 03](../topics/p1-9-migration/03-dsh-facts.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-9 方案 §5 D4](../topics/p1-9-migration.md#5-需要拍板的决策点)、[决策 026](026-history-per-message-tree-across-lineage.md) 第 5 条、[分片 03](../topics/p1-9-migration/03-dsh-facts.md)。
 
 ## 规则
 

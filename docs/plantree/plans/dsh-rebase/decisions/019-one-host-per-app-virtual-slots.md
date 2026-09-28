@@ -1,6 +1,6 @@
 # 决策 019：每个应用实例一个 DSH 宿主，会话以虚拟 slot 复用一条 IPC
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-3 方案 §4 D1、D2](../topics/p1-3-shared-host.md#4-需要拍板的决策点)、[决策 002](002-defer-encrypted-machine-and-shared-host.md) 第 3 条。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-3 方案 §4 D1、D2](../topics/p1-3-shared-host.md#4-需要拍板的决策点)、[决策 002](002-defer-encrypted-machine-and-shared-host.md) 第 3 条。
 
 ## 规则
 

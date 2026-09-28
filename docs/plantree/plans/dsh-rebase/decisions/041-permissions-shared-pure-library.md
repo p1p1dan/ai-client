@@ -1,6 +1,6 @@
 # 决策 041：权限逻辑抽成 `src/shared/permissions/` 纯库，1.0.x runtime 改成薄封装
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-6 方案 §5 D1](../topics/p1-6-permissions.md#5-需要拍板的决策点)、[分片 05](../topics/p1-6-permissions/05-changes.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-6 方案 §5 D1](../topics/p1-6-permissions.md#5-需要拍板的决策点)、[分片 05](../topics/p1-6-permissions/05-changes.md)。
 
 ## 规则
 

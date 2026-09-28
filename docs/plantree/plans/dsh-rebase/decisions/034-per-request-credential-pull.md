@@ -1,6 +1,6 @@
 # 决策 034：key 由宿主每次请求时向 Main 拉取，宿主不缓存；关掉 dsh-base 的明文凭据行
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-5 方案 §5 D2](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03](../topics/p1-5-models-and-credentials/03-design.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-5 方案 §5 D2](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03](../topics/p1-5-models-and-credentials/03-design.md)。
 
 ## 规则
 

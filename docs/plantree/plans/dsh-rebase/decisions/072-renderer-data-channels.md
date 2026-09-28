@@ -1,6 +1,6 @@
 # 决策 072：渲染层的数据通路：jobs 与目标 armed 经 `session.projection`，目标控制走新 RPC `worker.command`，自主回合带 `origin` 轮次头
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-7 方案 §5 D1～D7](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[决策 031](031-session-projection-event.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-7 方案 §5 D1～D7](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[决策 031](031-session-projection-event.md)。
 
 ## 规则
 

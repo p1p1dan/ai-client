@@ -1,6 +1,6 @@
 # 决策 087：子代理目录规则搬进 `src/shared`，MCP 真实 stdio 夹具移出 runtime
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：`fe089adf`；[决策 086](086-shared-skills-mcp-move-choices.md)「留给后续」第 1、2 条；[P1-10 / P1-16 方案](../topics/p1-10-p1-16-extensions.md)的分片 03（`runtime/plugins/subagent/catalog.ts` 搬 shared 那句）、分片 04（P1-16d 表格、E5 实验）。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：`fe089adf`；[决策 086](086-shared-skills-mcp-move-choices.md)「留给后续」第 1、2 条；[P1-10 / P1-16 方案](../topics/p1-10-p1-16-extensions.md)的分片 03（`runtime/plugins/subagent/catalog.ts` 搬 shared 那句）、分片 04（P1-16d 表格、E5 实验）。
 
 ## 规则
 

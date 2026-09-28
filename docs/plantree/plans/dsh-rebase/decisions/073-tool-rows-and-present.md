@@ -1,6 +1,6 @@
 # 决策 073：工具行：插件行优先用 `presentCall` 的标题与类别，shell 行显示命令摘要；`present` 与计划审阅 P1 不做
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-7 方案 §5 D8～D10](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[分片 04](../topics/p1-7-renderer/04-tool-rows-windows.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-7 方案 §5 D8～D10](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[分片 04](../topics/p1-7-renderer/04-tool-rows-windows.md)。
 
 ## 规则
 

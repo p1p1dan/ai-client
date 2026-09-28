@@ -1,6 +1,6 @@
 # 决策 033：Main 生成不含 key 的「模型计划」，宿主启动时经控制通道以内存 overlay 注入
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-5 方案 §5 D1](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03](../topics/p1-5-models-and-credentials/03-design.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-5 方案 §5 D1](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03](../topics/p1-5-models-and-credentials/03-design.md)。
 
 ## 规则
 

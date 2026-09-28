@@ -1,6 +1,6 @@
 # 决策 008：`DSH_HOME` 用应用私有目录，不与官方 DSH 共用 `~/.dsh`
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-1 方案 §5 D4](../topics/p1-1-engine-cutover.md#5-需要拍板的决策点)、[决策 001](001-route-b-and-scope.md) 第 2 条、[可行性调研](../../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)第 108、216 行（B 路线的 L3 验收口径是「会话格式」）。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-1 方案 §5 D4](../topics/p1-1-engine-cutover.md#5-需要拍板的决策点)、[决策 001](001-route-b-and-scope.md) 第 2 条、[可行性调研](../../../../plans/2026-09-24-dsh-rebase-feasibility-study.md)第 108、216 行（B 路线的 L3 验收口径是「会话格式」）。
 
 ## 规则
 

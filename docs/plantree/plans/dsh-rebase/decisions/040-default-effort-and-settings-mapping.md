@@ -1,6 +1,6 @@
 # 决策 040：没选档位时会话补发 medium；设置映射到 DSH 的路由级参数
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-5 方案 §5 D8、D9](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03 §2、§5](../topics/p1-5-models-and-credentials/03-design.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-5 方案 §5 D8、D9](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 03 §2、§5](../topics/p1-5-models-and-credentials/03-design.md)。
 
 ## 规则
 

@@ -1,6 +1,6 @@
 # 决策 066：500 轮上限按每个 agent 的 step 计，触顶时收尾一步再停
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-8 / P1-11 方案 §4 D7、D8、D9](../topics/p1-8-p1-11-guards-and-terminal.md#4-需要拍板的决策点)、runtime-hardening 决策 040。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-8 / P1-11 方案 §4 D7、D8、D9](../topics/p1-8-p1-11-guards-and-terminal.md#4-需要拍板的决策点)、runtime-hardening 决策 040。
 
 ## 规则
 

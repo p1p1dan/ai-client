@@ -1,6 +1,6 @@
 # 决策 059：白名单由仓库清单 + 锁文件双键校验，加构建期与启动期审计；启用按宿主级
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：[P1-10 / P1-16 方案 §5 D4、D6](../topics/p1-10-p1-16-extensions.md#5-需要拍板的决策点)、[决策 023](023-no-dotenv-private-cwd-home-patch-overlay.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-10 / P1-16 方案 §5 D4、D6](../topics/p1-10-p1-16-extensions.md#5-需要拍板的决策点)、[决策 023](023-no-dotenv-private-cwd-home-patch-overlay.md)。
 
 ## 规则
 

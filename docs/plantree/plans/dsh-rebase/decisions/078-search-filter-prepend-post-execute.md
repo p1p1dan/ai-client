@@ -1,6 +1,6 @@
 # 决策 078：搜索结果过滤挂在 prepend 的 post-execute 上，过滤到内容时直接返回（修订决策 048 第 2 条）
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：P1-6b 实验 3（`src/dsh-host/tools/perm-experiments.ts`）、[决策 048](048-filter-search-results.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-6b 实验 3（`src/dsh-host/tools/perm-experiments.ts`）、[决策 048](048-filter-search-results.md)。
 
 ## 事实
 

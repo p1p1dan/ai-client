@@ -1,6 +1,6 @@
 # 决策 012：三个平台的 DSH 宿主都跑在随包 node 上（偏离 ARD D11 载体表）
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-2 方案 §4 D2](../topics/p1-2-host-packaging.md#4-需要拍板的决策点)、ARD D11（`docs/plans/2026-09-08-runtime-evolution-ard.md:233-234`：`bundled-node` 只用于 Windows 安装版，其余平台与开发模式用 `electron-utility`）。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-2 方案 §4 D2](../topics/p1-2-host-packaging.md#4-需要拍板的决策点)、ARD D11（`docs/plans/2026-09-08-runtime-evolution-ard.md:233-234`：`bundled-node` 只用于 Windows 安装版，其余平台与开发模式用 `electron-utility`）。
 
 ## 规则
 

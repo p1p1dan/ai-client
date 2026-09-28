@@ -1,6 +1,6 @@
 # 决策 074：`session_locked` 卡片上的「强制接管」改为「重启引擎」，并总是提供（请重点审批）
 
-日期：2026-09-27。**状态：自主决定，待用户审批。** 依据：P1-3c 实现（`613d0568`）、[P1-1 证据](../evidence/p1-1-engine-cutover-2026-09-26.md)「遗留与后续」、[决策 020](020-host-fault-handling-and-budgets.md)、[021](021-stop-escalation-ladder.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-3c 实现（`613d0568`）、[P1-1 证据](../evidence/p1-1-engine-cutover-2026-09-26.md)「遗留与后续」、[决策 020](020-host-fault-handling-and-budgets.md)、[021](021-stop-escalation-ladder.md)。
 
 ## 规则
 

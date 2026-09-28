@@ -1,6 +1,6 @@
 # 决策 022：宿主环境继承 Main 的环境再剔除，不用严格白名单（工具可见的环境有变化）
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-3 方案 §4 D6](../topics/p1-3-shared-host.md#4-需要拍板的决策点)、[分片 03](../topics/p1-3-shared-host/03-env-and-logs.md)、`dsh-subprocess` 的 `scrubbedParentEnv`。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-3 方案 §4 D6](../topics/p1-3-shared-host.md#4-需要拍板的决策点)、[分片 03](../topics/p1-3-shared-host/03-env-and-logs.md)、`dsh-subprocess` 的 `scrubbedParentEnv`。
 
 ## 规则
 

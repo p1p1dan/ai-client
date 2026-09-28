@@ -1,6 +1,6 @@
 # 决策 028：DSH 下「重试上一轮」追加一条用户看不到的续跑提示（偏离决策 045 字面，请重点审批）
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-4 方案 §5 D3](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、[runtime-hardening 决策 045](../../runtime-hardening/decisions/045-failure-card-continue-retries-last-turn.md)、[分片 04](../topics/p1-4-bridge-parity/04-turn-semantics.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-4 方案 §5 D3](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、[runtime-hardening 决策 045](../../runtime-hardening/decisions/045-failure-card-continue-retries-last-turn.md)、[分片 04](../topics/p1-4-bridge-parity/04-turn-semantics.md)。
 
 ## 规则
 

@@ -1,6 +1,6 @@
 # 决策 027：回退与 fork 用种子子会话加桩指针切换；fork 子会话的逻辑 id 由 Main 预铸
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-4 方案 §5 D2、D6](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、[决策 006](006-session-identity-stub-file.md) 第 2 条（桩是可变指针）。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-4 方案 §5 D2、D6](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、[决策 006](006-session-identity-stub-file.md) 第 2 条（桩是可变指针）。
 
 ## 规则
 

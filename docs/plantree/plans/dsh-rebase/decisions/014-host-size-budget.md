@@ -1,6 +1,6 @@
 # 决策 014：宿主体积按 B 档裁剪，硬上限每平台 128 MiB / 1.2 万个文件
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-2 方案 §4 D4](../topics/p1-2-host-packaging.md#4-需要拍板的决策点)、[分片 02](../topics/p1-2-host-packaging/02-natives-and-size.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-2 方案 §4 D4](../topics/p1-2-host-packaging.md#4-需要拍板的决策点)、[分片 02](../topics/p1-2-host-packaging/02-natives-and-size.md)。
 
 ## 规则
 

@@ -1,6 +1,6 @@
 # 决策 039：P1-15 一次性补全经宿主的 LLM 服务直调
 
-日期：2026-09-26。**状态：自主决定，待用户审批。** 依据：[P1-5 方案 §5 D7](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 04](../topics/p1-5-models-and-credentials/04-one-shot-completions.md)。
+日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-5 方案 §5 D7](../topics/p1-5-models-and-credentials.md#5-需要拍板的决策点)、[分片 04](../topics/p1-5-models-and-credentials/04-one-shot-completions.md)。
 
 ## 规则
 
