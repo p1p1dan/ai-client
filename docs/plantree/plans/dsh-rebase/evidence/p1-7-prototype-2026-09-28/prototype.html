@@ -1,0 +1,1397 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>P1-7 / P1-11 原型 · 待办目标条 + 后台任务/子代理子窗口 + 终端按钮（决策 090）</title>
+<style>
+/* ------------------------------------------------------------------
+   Static prototype for decision 090 (revises 068) + Q003. Not product code.
+   Color tokens copied verbatim from src/renderer/styles/globals.css
+   (Flexoki light / dark). Size, radius and spacing follow the @theme tokens
+   and docs/design-system.md (h-7 rows, h-6 buttons, gap-1 / gap-2,
+   text-meta / text-ui / text-code, min-w-0 flex-1 truncate).
+   The app frame size is switchable (1440x900 / 1280x720 / 1024x640) via
+   --app-w / --app-h, driven by the "画幅" segmented control.
+   ------------------------------------------------------------------ */
+:root {
+  --background: oklch(0.9931 0.012 96.42);
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82);
+  --popover: oklch(0.97 0.0106 100.82);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.962 0.0111 89.72);
+  --muted: oklch(0.965 0.0093 99.98);
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --info: oklch(0.4818 0.1315 254.79);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --tool-arg: color-mix(in oklab, var(--muted-foreground) 62%, var(--background));
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --text-code: 13px;
+  --text-meta: 14px;
+  --text-ui: 15px;
+  --text-chat-body: 17px;
+  --text-chat-process: 14px;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", "Ubuntu",
+    "Cantarell", "Noto Sans", "Liberation Sans", Arial, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC",
+    "WenQuanYi Micro Hei", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Mono", "Consolas",
+    "Liberation Mono", "DejaVu Sans Mono", "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    monospace;
+  /* Prototype-only annotation ink. Deliberately the brand orange so it never
+     reads as a UI state colour. */
+  --anno: var(--primary);
+  /* App frame size, switched by the 画幅 control (default 1440x900). */
+  --app-w: 1440px;
+  --app-h: 900px;
+}
+.dark {
+  --background: oklch(0.1981 0.0032 17.43);
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55);
+  --popover: oklch(0.262 0.0037 48.55);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.276 0.0024 67.71);
+  --muted: oklch(0.268 0.0025 67.7);
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --info: oklch(0.5988 0.1104 247);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  font-family: var(--font-sans);
+  font-size: var(--text-ui);
+  line-height: 1.55;
+  background: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  font-synthesis-weight: none;
+}
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+p { margin: 0; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border-radius: 999px; background: color-mix(in oklab, var(--muted-foreground) 20%, transparent); }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in oklab, var(--muted-foreground) 40%, transparent); }
+
+.i { width: 16px; height: 16px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round; }
+.s12 { width: 12px; height: 12px; }
+.s13 { width: 13px; height: 13px; }
+.s14 { width: 14px; height: 14px; }
+.s18 { width: 18px; height: 18px; }
+.s28 { width: 28px; height: 28px; }
+.m { color: var(--muted-foreground); }
+.run { color: var(--status-running); }
+.ok { color: var(--success); }
+.bad { color: var(--destructive); }
+.folder { color: var(--folder); }
+.tnum { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--font-mono); font-size: var(--text-code); }
+.trunc { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grow { flex: 1 1 0; }
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes locateFlash { from { background: var(--selection); } to { background: transparent; } }
+.flash { animation: locateFlash 1.4s ease-out; border-radius: var(--radius-sm); }
+
+/* ---------------- page chrome (not part of the app) ---------------- */
+.page-bar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 16px; border-bottom: 1px solid var(--border); background: var(--card);
+}
+.page-bar h1 { margin: 0; font-size: var(--text-ui); font-weight: 600; }
+.pg-label { font-size: var(--text-meta); color: var(--muted-foreground); margin-right: -4px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button {
+  height: 28px; padding: 0 10px; font-size: var(--text-meta); color: var(--muted-foreground);
+  border-right: 1px solid var(--border); transition: background-color 150ms; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--selection); color: var(--foreground); }
+.seg button:hover:not([aria-pressed="true"]) { background: var(--hover); }
+.chk { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-meta); }
+.notes {
+  width: var(--app-w); margin: 16px auto; padding: 12px 16px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card);
+  font-size: var(--text-meta); line-height: 1.6;
+}
+.notes h2 { margin: 0 0 4px; font-size: var(--text-ui); font-weight: 600; }
+.notes ol { margin: 6px 0 6px; padding-left: 20px; }
+.notes .measure { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
+.notes .measure b { color: var(--anno); }
+.frame-wrap {
+  width: calc(var(--app-w) + 2px); margin: 0 auto 40px; border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden;
+}
+body.shot .page-bar, body.shot .notes { display: none; }
+body.shot .frame-wrap { margin: 0; border: 0; border-radius: 0; width: var(--app-w); }
+body.shot *, body.shot *::before { animation: none !important; transition: none !important; }
+
+/* ---------------- app shell ---------------- */
+.app { position: relative; width: var(--app-w); height: var(--app-h); display: flex; flex-direction: column;
+  overflow: hidden; background: var(--background); }
+.titlebar { height: 32px; flex-shrink: 0; display: flex; align-items: center; gap: 8px;
+  padding-left: 12px; border-bottom: 1px solid var(--border); font-size: var(--text-meta); }
+.titlebar .logo { font-weight: 700; font-size: 13px; }
+.titlebar .wc { margin-left: auto; display: flex; }
+.titlebar .wc span { width: 44px; height: 31px; display: grid; place-items: center; color: var(--muted-foreground); }
+.shell { flex: 1; min-height: 0; display: flex; }
+.rail { width: 44px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center;
+  gap: 2px; padding: 6px 0 8px; background: var(--card); border-right: 1px solid var(--border); }
+.rb { position: relative; width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: grid; place-items: center; color: var(--muted-foreground); }
+.rb.on { background: var(--selection); color: var(--foreground); }
+.rb.on::before { content: ""; position: absolute; left: -6px; top: 7px; bottom: 7px; width: 2px;
+  border-radius: 1px; background: var(--primary); }
+
+.side { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+  background: var(--card); border-right: 1px solid var(--border); }
+.side-head { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  border-bottom: 1px solid var(--border); font-weight: 600; }
+.side-scroll { flex: 1; min-height: 0; overflow: auto; }
+.side-scroll.pad { padding: 8px; }
+.side-foot { height: 40px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  border-top: 1px solid var(--border); }
+.sp-actions { display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
+.obtn { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--background);
+  font-size: var(--text-meta); }
+.search { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 12px; margin-bottom: 4px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--background);
+  color: var(--muted-foreground); font-size: var(--text-meta); }
+.grp { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--muted-foreground); }
+.srow { height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border-radius: var(--radius-sm); }
+.srow.on { background: var(--selection); }
+.srow.nest { margin-left: 12px; }
+.srow .rt { flex-shrink: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+.frow { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; font-weight: 600; }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dot.run { background: var(--status-running); }
+.dot.idle { border: 1px solid var(--muted-foreground); }
+
+/* ---------------- terminal surface (left dock, Q003) ---------------- */
+.term-body { flex: 1; min-height: 0; overflow: auto; padding: 10px 12px; font-family: var(--font-mono);
+  font-size: var(--text-code); line-height: 1.7; color: var(--foreground); background: var(--background); }
+.term-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.term-cwd { color: var(--muted-foreground); }
+.term-cursor { display: inline-block; width: 6px; background: var(--foreground); animation: spin 1s steps(1) infinite alternate; opacity: 0.8; }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ---------------- terminal, variant 2: whole-column switch (supplementary
+   variant, matches 1.0.x's GUI/TUI swap of the whole centre column) ---------------- */
+.column-terminal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--background); }
+.colterm-head { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px;
+  border-bottom: 1px solid var(--border); font-weight: 600; }
+.colterm-head .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.colterm-head .hint { font-weight: 400; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+.center { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.sessionbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-bottom: 1px solid var(--border); }
+.sessionbar .title { font-weight: 600; white-space: nowrap; }
+.vsep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+.timeline { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 16px; }
+.col { width: 100%; max-width: 720px; margin: 0 auto; }
+.dock { flex-shrink: 0; padding: 0 24px 14px; position: relative; z-index: 5; }
+.empty-tl { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; color: var(--muted-foreground); text-align: center; }
+.empty-tl .i { width: 32px; height: 32px; opacity: 0.5; }
+.empty-tl p:first-of-type { color: var(--foreground); font-size: var(--text-chat-body); }
+
+/* ghost chip / icon button (design-system: no border, hover fill, h-6, rounded-sm) */
+.gbtn { height: 24px; display: inline-flex; align-items: center; gap: 4px; padding: 0 8px; flex-shrink: 0;
+  border-radius: var(--radius-sm); font-size: var(--text-meta); white-space: nowrap;
+  transition: background-color 150ms; }
+.gbtn:hover, .gbtn:focus-visible { background: var(--hover); }
+.gbtn[aria-pressed="true"] { background: var(--selection); }
+.gbtn.ui { font-size: var(--text-ui); }
+.gbtn.tight { padding: 0 6px; }
+.gbtn.disabled { opacity: 0.5; cursor: not-allowed; }
+.ibtn { width: 24px; height: 24px; flex-shrink: 0; display: inline-grid; place-items: center;
+  border-radius: var(--radius-sm); color: var(--muted-foreground); transition: background-color 150ms; }
+.ibtn:hover, .ibtn:focus-visible { background: var(--hover); color: var(--foreground); }
+.cbadge { display: inline-flex; align-items: center; justify-content: center; height: 16px; min-width: 16px;
+  padding: 0 4px; border-radius: 999px; background: var(--primary); color: var(--primary-foreground);
+  font-size: 11px; font-weight: 500; }
+
+/* ---------------- timeline ---------------- */
+.turns { display: flex; flex-direction: column; gap: 20px; }
+.turn { display: flex; flex-direction: column; gap: 12px; }
+.turn.settled { padding-bottom: 24px; }
+.bubble-row { display: flex; justify-content: flex-end; }
+.bubble { min-width: 0; max-width: 80%; padding: 8px 14px; border: 1px solid var(--input);
+  border-radius: var(--radius-md); border-top-right-radius: var(--radius-xs); background: var(--accent);
+  font-size: var(--text-chat-body); line-height: 1.5; }
+.clock { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: var(--text-ui);
+  color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.divider { display: flex; align-items: center; gap: 8px; padding-top: 4px; font-size: var(--text-meta);
+  color: var(--muted-foreground); }
+.divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+.answer { font-size: var(--text-chat-body); line-height: 1.625; }
+.answer code { font-family: var(--font-mono); font-size: 0.85em; padding: 1px 4px; border-radius: var(--radius-xs);
+  background: var(--muted); border: 1px solid var(--border); }
+.zone { display: flex; align-items: center; gap: 6px; font-size: var(--text-ui); color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums; }
+.proc { display: flex; flex-direction: column; gap: 8px; }
+.row { display: flex; align-items: baseline; gap: 6px; min-width: 0; font-size: var(--text-chat-process);
+  line-height: 1.5; color: var(--tool-arg); }
+.row > .i { width: 13px; height: 13px; align-self: center; opacity: 0.8; }
+.row.fail { color: var(--destructive); }
+.row .arg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row .dim { color: color-mix(in oklab, currentColor 55%, var(--background)); }
+.row .rtail { flex-shrink: 0; font-size: var(--text-meta); }
+.lane { margin: -2px 0 0 2px; padding-left: 14px; border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; gap: 4px; }
+.autohead { display: flex; align-items: center; gap: 8px; font-size: var(--text-meta); color: var(--muted-foreground); }
+.autohead .rule { flex: 1; border-top: 1px solid var(--border); }
+
+/* ---------------- decision 090: todo + goal strips above the composer ---------------- */
+/* Same wrapper contract as the queue strip: queueStripWrapperClass() =
+   'mb-2 flex flex-col gap-1', rows 'h-7 rounded-sm border bg-muted/50 text-meta'.
+   The background-jobs strip from decision 068 is REMOVED here: jobs and
+   subagents moved into the floating/embedded sub-windows below (decision 090). */
+.strips { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.strips:empty { display: none; }
+.strip { position: relative; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--muted) 50%, transparent); font-size: var(--text-meta); line-height: 1.5; }
+.strip-head { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 1px 0 8px; cursor: pointer; }
+.strip-head > .i { width: 14px; height: 14px; color: var(--muted-foreground); }
+.strip-head > .i.run { color: var(--status-running); }
+.strip-head .lbl { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strip-head .acts { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.strip-body { padding: 0 8px 6px; }
+.todo { height: 24px; display: flex; align-items: center; gap: 8px; padding-left: 20px; }
+.todo .i { width: 14px; height: 14px; }
+.todo.done { color: var(--muted-foreground); }
+.todo.done .trunc { text-decoration: line-through; }
+.goal-full { padding: 2px 0 2px 20px; }
+.goal-full .m { font-size: var(--text-meta); }
+.menu-anchor { position: relative; display: inline-flex; }
+.menu { position: absolute; right: 0; bottom: calc(100% + 4px); z-index: 30; min-width: 168px; padding: 4px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--popover);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+.menu button { width: 100%; min-height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px;
+  border-radius: var(--radius-sm); font-size: var(--text-ui); text-align: left; }
+.menu button:hover { background: var(--accent); }
+.menu .danger { color: var(--destructive); }
+
+/* ---------------- composer ---------------- */
+.composer { display: flex; flex-direction: column; gap: 8px; min-height: 74px; padding: 8px;
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--card); }
+.composer .ph { height: 25.5px; line-height: 25.5px; font-size: var(--text-chat-body); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis; color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); }
+.cbar { height: 24px; display: flex; align-items: center; gap: 8px; }
+.chip { height: 24px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--radius-sm);
+  font-size: var(--text-ui); white-space: nowrap; }
+.rbtn { width: 24px; height: 24px; flex-shrink: 0; display: grid; place-items: center; border-radius: 999px; }
+.rbtn.send { background: var(--foreground); color: var(--background); }
+.rbtn.stop { background: var(--destructive); color: var(--destructive-foreground); }
+.rbtn.off { opacity: 0.64; }
+.target { margin-top: 8px; height: 24px; display: flex; align-items: center; gap: 4px; }
+
+/* ---------------- sub-windows: background jobs / subagents (decision 090) ---------------- */
+.subwin-layer { position: absolute; inset: 0; pointer-events: none; z-index: 15; }
+/* `overflow: hidden` is a defence-in-depth clip: the real fix for the header
+   overflow bug (coordinator round 2, defect 1) is the two-line head below
+   (min-width:0 + ellipsis on the title, icon-only "stop all"), but nothing
+   here is EVER allowed to spill past the card into the timeline again. */
+.subwin { pointer-events: auto; display: flex; flex-direction: column; border: 1px solid var(--border);
+  border-radius: var(--radius-lg); overflow: hidden; background: var(--card);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+.subwin.floating, .subwin.docked { position: absolute; }
+.subwin.embedded { border-radius: 0; }
+/* Docked is flush against the right edge of .center: square off that side so
+   it visually reads as "attached", not "floating with a corner cut off". */
+.subwin.docked { border-radius: var(--radius-lg) 0 0 var(--radius-lg); border-right: 0; }
+.subwin.anno-outline { outline: 1.5px dashed var(--anno); outline-offset: 1px; }
+/* Two-line head (coordinator round 2, defect 1): a single 32px row does not
+   fit icon + title + count + "stop all" + close inside a 300-340px window
+   without either the title or the trailing buttons overflowing the card.
+   Line 1 is title + close ONLY (close must never be pushed out); line 2 is
+   count + actions. Both lines truncate via min-width:0, never the buttons. */
+.subwin-head-l1 { height: 30px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px;
+  border-bottom: 1px solid var(--border); }
+.subwin-head-l1[data-drag] { cursor: grab; }
+.subwin-head-l1 .grip { display: inline-flex; flex-shrink: 0; color: var(--muted-foreground); }
+.subwin-head-l1 .lbl { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 600; }
+.subwin-head-l1 .fallback-note { min-width: 0; flex-shrink: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-weight: 400; font-size: 11px; }
+.subwin-head-l2 { min-height: 26px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 8px;
+  font-size: var(--text-meta); color: var(--muted-foreground); border-bottom: 1px solid var(--border); }
+.subwin-head-l2 .cnt { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subwin-head-l2 .jacts { flex-shrink: 0; display: flex; gap: 2px; }
+.subwin-body { flex: 1; min-height: 0; overflow: auto; padding: 4px 4px 6px; }
+.subwin-empty { padding: 20px 8px; text-align: center; color: var(--muted-foreground); font-size: var(--text-meta); }
+
+/* embedded form: a fixed-height flex child between .timeline and .dock, so it
+   reflows the layout instead of overlaying it (structurally cannot cover the
+   dock — see README "两种形态的取舍"). */
+.embedded-drawer { flex-shrink: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border);
+  background: var(--card); }
+.embedded-drawer .subwin.embedded { flex: 1 1 0; min-height: 84px; border: 0; border-radius: 0; box-shadow: none; }
+.embedded-drawer .subwin.embedded + .subwin.embedded { border-top: 1px solid var(--border); }
+
+/* job / agent rows inside a sub-window (same visual language as the retired
+   jobs strip, decision 068's §4, just re-hosted). Two lines, like .arow below:
+   a single 28px line does not fit id + label + status + result + two action
+   buttons inside a 300-340px sub-window without hiding the command label. */
+.jrow { padding: 3px 8px; border-radius: var(--radius-sm); }
+.jrow:hover { background: var(--hover); }
+.jrow-l1 { height: 24px; display: flex; align-items: center; gap: 6px; }
+.jrow-l1 .jid { flex-shrink: 0; color: var(--muted-foreground); }
+.jrow-l1 .jlabel { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jrow-l1 .jtime { flex-shrink: 0; text-align: right; color: var(--muted-foreground); }
+.jrow-l2 { height: 24px; display: flex; align-items: center; gap: 6px; padding-left: 20px; font-size: var(--text-meta); color: var(--muted-foreground); }
+.jrow-l2 .jacts { margin-left: auto; display: flex; gap: 2px; flex-shrink: 0; }
+.badge { display: inline-flex; align-items: center; height: 18px; padding: 0 5px; border: 1px solid var(--border);
+  border-radius: var(--radius-xs); font-size: 12px; font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+.tail { margin: 0 0 6px 30px; padding-left: 12px; border-left: 1px solid var(--border); }
+.tail-title { font-size: var(--text-meta); color: var(--muted-foreground); }
+.tail pre { margin: 0; max-height: 160px; overflow: auto; font-family: var(--font-mono); font-size: var(--text-code);
+  line-height: 1.55; color: var(--muted-foreground); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mini-lane { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-meta); color: var(--muted-foreground); }
+
+.arow { padding: 3px 8px; border-radius: var(--radius-sm); }
+.arow:hover { background: var(--hover); }
+.arow-l1 { height: 24px; display: flex; align-items: center; gap: 6px; }
+.arow-l1 .name { flex-shrink: 0; font-weight: 500; }
+.arow-l2 { height: 24px; display: flex; align-items: center; gap: 2px; padding-left: 20px; font-size: var(--text-meta);
+  color: var(--muted-foreground); }
+.arow-l2 .gbtn { color: var(--foreground); padding: 0 6px; }
+
+/* ---------------- small-screen collapse (app.compact = 1280 / 1024 preset) ---------------- */
+.app.compact .lbltext { display: none; }
+.app.compact .gbtn.ui { padding: 0 6px; }
+
+/* ---------------- prototype annotations (not UI) ---------------- */
+.anno-layer { position: absolute; inset: 0; pointer-events: none; z-index: 20; }
+.anno-bracket { position: absolute; width: 10px; border: 1.5px solid var(--anno); border-left: 0;
+  border-radius: 0 3px 3px 0; }
+.anno-guide { position: absolute; height: 0; border-top: 1px dashed var(--anno); opacity: 0.7; }
+.anno-label { position: absolute; transform: translateY(-50%); width: 158px; color: var(--anno);
+  font-size: 13px; line-height: 1.45; font-weight: 600; font-variant-numeric: tabular-nums; }
+.anno-label b { font-size: 18px; }
+.anno-label small { display: block; font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.anno-tag { display: inline-flex; align-items: center; height: 16px; padding: 0 4px; margin-left: 6px;
+  border: 1px dashed var(--anno); border-radius: var(--radius-xs); color: var(--anno); font-size: 11px;
+  letter-spacing: 0.02em; font-weight: 500; flex-shrink: 0; }
+</style>
+</head>
+<body>
+<!--ICONS:BEGIN-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><rect x="14" y="3" width="5" height="18" rx="1"/><rect x="5" y="3" width="5" height="18" rx="1"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></symbol>
+<symbol id="i-triangle-alert" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-circle-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></symbol>
+<symbol id="i-circle-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></symbol>
+<symbol id="i-circle-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="1"/></symbol>
+<symbol id="i-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chevron-up" viewBox="0 0 24 24"><path d="m18 15-6-6-6 6"/></symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-square" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+<symbol id="i-trash-2" viewBox="0 0 24 24"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="i-terminal" viewBox="0 0 24 24"><path d="M12 19h8"/><path d="m4 17 6-6-6-6"/></symbol>
+<symbol id="i-square-terminal" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/></symbol>
+<symbol id="i-workflow" viewBox="0 0 24 24"><rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/></symbol>
+<symbol id="i-grip-horizontal" viewBox="0 0 24 24"><circle cx="12" cy="9" r="1"/><circle cx="19" cy="9" r="1"/><circle cx="5" cy="9" r="1"/><circle cx="12" cy="15" r="1"/><circle cx="19" cy="15" r="1"/><circle cx="5" cy="15" r="1"/></symbol>
+<symbol id="i-app-window" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/></symbol>
+<symbol id="i-panel-bottom" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 15h18"/></symbol>
+<symbol id="i-scroll-text" viewBox="0 0 24 24"><path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/></symbol>
+<symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></symbol>
+<symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+<symbol id="i-locate-fixed" viewBox="0 0 24 24"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+<symbol id="i-loader-circle" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+<symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-blocks" viewBox="0 0 24 24"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+<symbol id="i-send-horizontal" viewBox="0 0 24 24"><path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/><path d="M6 12h16"/></symbol>
+<symbol id="i-list-plus" viewBox="0 0 24 24"><path d="M16 5H3"/><path d="M11 12H3"/><path d="M16 19H3"/><path d="M18 9v6"/><path d="M21 12h-6"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><line x1="8" x2="16" y1="21" y2="21"/><line x1="12" x2="12" y1="17" y2="21"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></symbol>
+<symbol id="i-arrow-left-right" viewBox="0 0 24 24"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-list-filter" viewBox="0 0 24 24"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></symbol>
+<symbol id="i-list-todo" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><rect x="3" y="4" width="6" height="6" rx="1"/></symbol>
+<symbol id="i-corner-down-right" viewBox="0 0 24 24"><path d="m15 10 5 5-5 5"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/></symbol>
+<symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></symbol>
+<symbol id="i-file-text" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-file-pen-line" viewBox="0 0 24 24"><path d="m18.226 5.226-2.52-2.52A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-.351"/><path d="M21.378 12.626a1 1 0 0 0-3.004-3.004l-4.01 4.012a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506z"/><path d="M8 18h1"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></symbol>
+</svg>
+<!--ICONS:END-->
+
+<header class="page-bar">
+  <h1>P1-7 / P1-11 原型 · 决策 090</h1>
+  <span class="pg-label">场景</span>
+  <div class="seg" id="sceneSeg" role="group" aria-label="场景">
+    <button data-scene="A">A 空会话</button>
+    <button data-scene="B">B 待办+目标</button>
+    <button data-scene="C">C 后台任务</button>
+    <button data-scene="D">D 子代理</button>
+    <button data-scene="E">E 两窗同开</button>
+    <button data-scene="F">F 终端</button>
+  </div>
+  <span class="pg-label">主题</span>
+  <div class="seg" id="themeSeg" role="group" aria-label="主题">
+    <button data-theme="light">浅色</button>
+    <button data-theme="dark">深色</button>
+  </div>
+  <span class="pg-label">子窗口形态</span>
+  <div class="seg" id="formSeg" role="group" aria-label="子窗口形态">
+    <button data-form="floating">浮动</button>
+    <button data-form="embedded">嵌入（底部抽屉）</button>
+    <button data-form="docked">右侧停靠</button>
+  </div>
+  <span class="pg-label">终端位置</span>
+  <div class="seg" id="termPosSeg" role="group" aria-label="终端位置">
+    <button data-termpos="panel">左栏面板</button>
+    <button data-termpos="column">整列切换</button>
+  </div>
+  <span class="pg-label">目标状态</span>
+  <div class="seg" id="goalSeg" role="group" aria-label="目标状态">
+    <button data-goal="running">运行</button>
+    <button data-goal="paused">暂停</button>
+    <button data-goal="disarmed">挂起</button>
+    <button data-goal="blocked">轮次上限</button>
+  </div>
+  <span class="pg-label">画幅</span>
+  <div class="seg" id="sizeSeg" role="group" aria-label="画幅">
+    <button data-size="1440">1440×900</button>
+    <button data-size="1280">1280×720</button>
+    <button data-size="1024">1024×640</button>
+  </div>
+  <label class="chk"><input type="checkbox" id="annoChk" /> 高度标注</label>
+</header>
+
+<section class="notes" id="notes"></section>
+
+<div class="frame-wrap">
+  <div class="app" id="app">
+    <div class="titlebar">
+      <span class="logo">Pi</span><span>AI Client</span>
+      <span class="wc"><span><svg class="i s14"><use href="#i-minus" /></svg></span><span><svg class="i s12"><use href="#i-square" /></svg></span><span><svg class="i s14"><use href="#i-x" /></svg></span></span>
+    </div>
+    <div class="shell">
+      <nav class="rail" id="rail"></nav>
+      <aside class="side" id="side"></aside>
+      <main class="center" id="center">
+        <div class="sessionbar" id="sessionbar"></div>
+        <div class="timeline" id="timeline"></div>
+        <div id="embeddedSlot"></div>
+        <div class="column-terminal" id="columnTerminal" style="display:none"></div>
+        <div class="dock" id="dock">
+          <div class="col">
+            <div class="strips" id="strips"></div>
+            <div id="composer"></div>
+          </div>
+        </div>
+        <div class="subwin-layer" id="floatLayer"></div>
+        <div class="anno-layer" id="anno"></div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (s) => document.querySelector(s);
+  const ic = (n, cls = '') => `<svg class="i ${cls}" aria-hidden="true"><use href="#i-${n}"/></svg>`;
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  const px = (n) => Math.round(n * 10) / 10;
+
+  // ---------------- fixture data ----------------
+  const GOAL = '让 CI 全绿并提交修复，不改 workflow 配置，提交前跑一遍全量测试';
+  const TODOS = [
+    { s: 'done', t: '读 CI 日志，定位失败用例' },
+    { s: 'done', t: '修复 parseConfig 的空值分支' },
+    { s: 'done', t: '给 parseConfig 补单测' },
+    { s: 'doing', t: '跑全量测试，确认全绿' },
+    { s: 'pending', t: '提交修复' },
+  ];
+  // Goal strip states (topics/p1-7-renderer/03-panels.md §2), narrowed to the
+  // four the task calls out: running / paused / disarmed(挂起) / blocked(round-limit).
+  const GOAL_STATES = {
+    running: { icon: 'target', iconCls: 'run',
+      label: () => `目标<span class="m"> · 第 3/256 轮 · 进行中 · </span>${GOAL}`,
+      act: () => gbtn('pause', '暂停', 'goal-pause') },
+    paused: { icon: 'pause', iconCls: '',
+      label: () => `目标已暂停<span class="m"> · 第 3/256 轮 · </span>${GOAL}`,
+      act: () => gbtn('play', '继续', 'goal-resume') },
+    disarmed: { icon: 'target', iconCls: '',
+      label: () => `目标已挂起<span class="m"> · 重开会话、回退或打断后需要手动继续 · </span>${GOAL}`,
+      act: () => gbtn('play', '继续', 'goal-resume') },
+    blocked: { icon: 'triangle-alert', iconCls: '',
+      label: () => `目标已用完 256 轮<span class="m"> · </span>${GOAL}`,
+      act: () => `<span class="gbtn disabled" title="让助手调高轮数上限，或清除目标后重新开始">${ic('play', 's14')}继续</span>` },
+  };
+  const TAILS = {
+    'bash-2': '> ai-client@1.0.3 dev\n> vite\n\n  VITE v6.3.5  ready in 812 ms\n\n  ➜  Local:   http://localhost:5173/\n  ➜  Network: use --host to expose',
+    'bash-6': '> ai-client@1.0.3 build\n> tsc -b && vite build\n\nsrc/goal/GoalStrip.tsx(42,7): 正在编译……',
+    'bash-4': "> ai-client@1.0.3 lint\n> eslint src --max-warnings 0\n\nsrc/goal/GoalStrip.tsx\n  3:10  error  'Pause' is defined but never used    @typescript-eslint/no-unused-vars\n\n✖ 1 problem (1 error, 0 warnings)",
+  };
+  // Background jobs sub-window (decision 090): background commands, a command
+  // converted to background after its foreground timeout, a background
+  // subagent, and a background workflow — the four kinds named in the task.
+  const JOBS_MAIN = [
+    { id: 'bash-2', kind: 'cmd', origin: 'bg', label: 'npm run dev', status: 'running', time: '4:12' },
+    { id: 'bash-6', kind: 'cmd', origin: 'timeout', label: 'npm run build', status: 'running', time: '1:47' },
+    { id: 'bash-4', kind: 'cmd', origin: 'bg', label: 'npm run lint', status: 'failed', exit: 1, time: '0:18' },
+    { id: 'agent-explore', kind: 'agent', origin: 'agent', continuable: true, label: 'explore · 调研 goal 投影',
+      status: 'running', time: '2:31',
+      activity: ['读取 goal/types.d.ts', '搜索 activation（src/dsh-host/）', '状态 运行中 · 12 次调用 · 45k tokens'] },
+    { id: 'wf-release', kind: 'workflow', origin: 'workflow', label: '发布前检查', status: 'running', time: '3:05',
+      stages: ['阶段 1/4 · 代码检查 已完成', '阶段 2/4 · 运行测试 进行中', '阶段 3/4 · 构建产物 等待中', '阶段 4/4 · 生成发布说明 等待中'] },
+  ];
+  // Subagent sub-window (decision 090). `id` doubles as the timeline
+  // data-agent key so "定位" can scroll/flash the matching lane.
+  const SUBAGENTS_MAIN = [
+    { id: 'explore', st: 'running', name: 'explore', desc: '调研 goal 投影', time: '2:31', meta: '45k tokens · 12 次调用' },
+    { id: 'fork', st: 'done', name: '分叉', desc: '复核方案', time: '0:48', meta: '12k tokens · 5 次调用' },
+    { id: 'review', st: 'failed', name: 'review', desc: '检查审批文案', time: '1:02', meta: '拒绝了任务' },
+  ];
+  const SESSIONS = [
+    { id: 'empty', title: '新会话', time: '刚刚' },
+    { id: 'ci', title: '修复 CI 失败的单测', time: 'now' },
+    { id: 'sa', title: '并行调研 goal 投影', time: '5m' },
+  ];
+
+  // scene -> base state. `goalMode: null` means the goal strip does not apply
+  // (session has no active goal); `todo: false` means the todo strip is absent
+  // (decision 068 rule 1: no content, no strip).
+  const SCENES = {
+    A: { session: 'empty', running: false, todo: false, goalMode: null, tl: 'empty', open: {} },
+    B: { session: 'ci', running: true, todo: true, goalMode: 'running', tl: 'goal', open: {} },
+    C: { session: 'ci', running: true, todo: true, goalMode: 'running', tl: 'goal', open: { jobs: true } },
+    D: { session: 'sa', running: true, todo: false, goalMode: null, tl: 'agents', open: { agents: true } },
+    E: { session: 'sa', running: true, todo: true, goalMode: 'running', tl: 'agents', open: { jobs: true, agents: true } },
+    F: { session: 'ci', running: true, todo: true, goalMode: 'running', tl: 'goal', open: { terminal: true } },
+  };
+
+  const NOTES = {
+    A: { title: 'A · 空会话', decisions: '决策 090（新会话默认态）',
+      desc: '新建的空会话：没有待办、没有目标，后台任务与子代理按钮显示但没有徽标（0 项）。会话栏原来 GUI / TUI 开关的位置，现在是终端按钮。',
+      ask: ['终端 / 后台任务 / 子代理三个按钮常驻显示（不像待办、目标条那样"没内容就不出现"），这样合适吗？',
+        '空会话下点开后台任务 / 子代理，子窗口显示"当前没有…"的空态文案，这个文案可以在浏览器里点开按钮试。'] },
+    B: { title: 'B · 有待办和目标（输入框上方两条）', decisions: '决策 090 修订 068 规则 1；目标状态见方案分片 03 §2',
+      desc: '后台条已移除，输入框上方只剩待办、目标两条，默认各折叠成一行 h-7。用页面顶部的"目标状态"切换可以看运行 / 暂停 / 挂起 / 轮次上限四态；点条标题可以展开待办清单与目标全文。',
+      ask: ['待办、目标两条都折叠时，比决策 068 原先三条折叠少占一条（约 36px），聊天区可视高度回升多少见下方实测。',
+        '"挂起"与"轮次上限"两态是本轮新加的：挂起用灰色靶心图标、轮次上限用三角警示图标，继续按钮在轮次上限态置灰，这样区分度够不够？',
+        '轮次上限态的文案在"目标已用完 256 轮"后面追加了目标原文，方案原文没有这一截——是否要加，见 README 的"原型自定的细节"。'] },
+    C: { title: 'C · 打开后台任务子窗口', decisions: '决策 090（Q003 件）；内容对应决策 068 §4 / 069',
+      desc: '点会话栏"后台任务"按钮后出现的子窗口，列出后台命令（bash-2）、超时转入后台的命令（bash-6，带"超时转入"标签）、后台子代理（explore，可续跑）、后台 workflow（发布前检查）。每项能停止或打断，能展开看尾部（命令是字节尾部，子代理 / workflow 展开的是"最近活动 / 阶段"摘要，理由见 README 冲突记录）。',
+      ask: ['子窗口默认在右上角浮动，用页面顶部"子窗口形态"切到"嵌入"可以对比底部抽屉的样子。',
+        '子代理 / workflow 行的"停止"用词是"打断"（continuable 子代理）或"停止"（一次性 / 命令 / workflow），与决策 069、方案分片 03 §4 的动词一致，这样统一吗？'] },
+    D: { title: 'D · 打开子代理子窗口', decisions: '决策 090（Q003 件）；内容对应决策 068 规则 2、方案分片 03 §5.2',
+      desc: '点会话栏"子代理"按钮后出现的子窗口：explore 运行中（可打断）、分叉已完成、review 失败，各显示用时与用量。点"定位"会把时间线滚到对应的委派行 / 泳道并短暂高亮。',
+      ask: ['子窗口列的字段（状态、名称、描述、用时、用量、操作）与旧原型左栏"运行"面板清单一致，只是换了容器——这样迁移可以接受吗？',
+        '"定位"命中的是时间线里那一行（分叉、review 没有展开的泳道，定位到委派行本身；explore 定位到泳道），这个区分明显吗？'] },
+    E: { title: 'E · 两个子窗口同时打开（小屏幕压力场景）', decisions: '决策 090；小屏幕不遮挡输入框/最新消息的验收点',
+      desc: '后台任务、子代理两个子窗口同时打开，加上待办、目标两条，是最挤的一种组合。用页面顶部"画幅"切到 1280×720 / 1024×640，可以看浮动/停靠子窗口按可用高度自动对半分配、底边始终不越过输入框上边界（见下方实测与 measurements.json 的 overlapsDock）；用"子窗口形态"切到"右侧停靠"可以看第三种形态——中栏够宽时子窗口停在右侧、时间线在剩下宽度里重新居中，宽度不够会自动退回浮动（见下方是否已退回的提示）。',
+      ask: ['两个子窗口同时打开时，浮动/停靠形态默认纵向堆叠、各占可用高度的一半——小屏幕下会变得很矮（1024×640 时可能不到 150px），能接受这种"够用但局促"的效果吗？',
+        '嵌入（底部抽屉）形态下两个子窗口共用一个抽屉、上下各占一半，这个高度分配和浮动形态一致，方便对比；但它会压缩时间线可视高度，浮动/停靠不会，见下方实测。',
+        '浮动形态会盖住时间线内容（见下方"盖住时间线内容"提示，C、E 场景都能看到），这个代价能接受吗？还是应该默认用"右侧停靠"（宽屏不盖、窄屏退回浮动）？'] },
+    F: { title: 'F · 打开终端', decisions: '决策 090 / Q003；现状见方案 p1-8-p1-11 分片 01、02',
+      desc: '点会话栏"终端"按钮后开一个普通 shell，有两种位置可切换对比：「左栏面板」复用左栏已有的、目前仅供"建 worktree 后跑初始化脚本"打开的 terminal surface（`surfaceRegistry.ts` 里 `registeredOnly: true` 的那个）；「整列切换」是 1.0.x GUI / TUI 开关的形态，中栏整个换成终端，点"聊天"或再点一次终端按钮切回来。终端不出现在会话栏原来 GUI / TUI 开关的位置本身，那个位置现在是"终端"按钮。',
+      ask: ['两种终端位置该保留哪个做默认：左栏面板只有 280px 宽，普通 shell 输出经常放不下；整列切换更宽敞但会暂时看不见聊天。',
+        '终端复用左栏已有的 terminal surface（左栏面板变体）、不再新增面板/浮层，这个选择见 README"原型与决策方案的冲突/待厘清点"——是否认可？',
+        '打开终端后，rail 上没有任何图标被点亮（因为 terminal 不是 rail 可选中的 surface），这个"来源不在导轨里"的状态是否需要额外提示？'] },
+  };
+
+  // ---------------- state ----------------
+  const SIZES = { 1440: { w: 1440, h: 900 }, 1280: { w: 1280, h: 720 }, 1024: { w: 1024, h: 640 } };
+  const FORMS = ['floating', 'embedded', 'docked'];
+  // Docked (variant 1, coordinator round 2): only viable when the centre
+  // column can fit the timeline's normal reading width (.col's 720px) AND a
+  // docked panel side by side; below that it falls back to floating (see
+  // `effectiveForm()` — chosen over embedded because the fallback should look
+  // exactly like "plain floating", which is the form docked already IS when
+  // there's no room to spare, not a structurally different overlay).
+  const DOCK_PANEL_WIDTH = 300;
+  const DOCK_GAP = 16;
+  const DOCK_TIMELINE_RESERVE = 720;
+  const params = new URLSearchParams(location.search);
+  const state = {
+    scene: SCENES[params.get('scene')] ? params.get('scene') : 'A',
+    theme: params.get('theme') === 'dark' ? 'dark' : 'light',
+    form: FORMS.includes(params.get('form')) ? params.get('form') : 'floating',
+    termPos: params.get('termpos') === 'column' ? 'column' : 'panel',
+    size: SIZES[params.get('size')] ? params.get('size') : '1440',
+    anno: params.get('anno') !== '0',
+    shot: params.get('shot') === '1',
+    ui: null,
+  };
+  /** True when the centre column has room to dock two panels beside a
+   * full-width (720px) timeline. Measured live, not per-breakpoint guessed. */
+  function dockedFits() {
+    const centerRect = $('#center').getBoundingClientRect();
+    return centerRect.width >= DOCK_TIMELINE_RESERVE + DOCK_PANEL_WIDTH + DOCK_GAP;
+  }
+  /** The form actually rendered: docked degrades to floating when it does not fit. */
+  function effectiveForm() {
+    if (state.form !== 'docked') return state.form;
+    return dockedFits() ? 'docked' : 'floating';
+  }
+  function resetUi() {
+    const s = SCENES[state.scene];
+    state.ui = {
+      goalMode: s.goalMode,
+      open: { jobs: false, agents: false, terminal: false, ...s.open },
+      stripsOpen: { todo: false, goal: false },
+      tails: {},
+      removed: {},
+      killed: {},
+      menu: false,
+      pos: { jobs: null, agents: null },
+    };
+    if (params.get('goal') && GOAL_STATES[params.get('goal')] && state.ui.goalMode !== null) {
+      state.ui.goalMode = params.get('goal');
+    }
+    if (params.get('openTodo') === '1') state.ui.stripsOpen.todo = true;
+    if (params.get('openGoal') === '1') state.ui.stripsOpen.goal = true;
+  }
+
+  // ---------------- small builders ----------------
+  const gbtn = (icon, text, act, id = '', pressed = null, extra = '') =>
+    `<button class="gbtn ${extra}" data-act="${act}" data-id="${id}"${pressed === null ? '' : ` aria-pressed="${pressed}"`}>${icon ? ic(icon, 's14') : ''}${text}</button>`;
+  const bubble = (text) => `<div class="bubble-row"><div class="bubble">${text}</div></div>`;
+  const clock = (text, { fold = false, running = false } = {}) =>
+    `<div class="clock">${running ? ic('loader-circle', 's14 spin') + '<span>✻</span>' : ''}<span>${text}</span>${fold ? ic('chevron-down', 's14') : ''}</div>`;
+  const divider = () => '<div class="divider">最终输出</div>';
+  const answer = (html) => `<div class="answer">${html}</div>`;
+  const zone = (text) => `<div class="zone"><span>✻</span><span>${text}</span></div>`;
+  const row = (icon, verb, arg = '', tail = '', cls = '', attrs = '') =>
+    `<div class="row ${cls}"${attrs}>${ic(icon)}<span>${verb}</span>${arg ? `<span class="arg">${arg}</span>` : ''}${tail ? `<span class="rtail">${tail}</span>` : ''}</div>`;
+  const mono = (s) => `<span class="mono">${s}</span>`;
+  const path = (file, dir) => `${file} <span class="dim">${dir}</span>`;
+  const autohead = (icon, text, time) =>
+    `<div class="autohead">${ic(icon, 's14')}<span>${text}</span><span class="rule"></span><span class="tnum">${time}</span></div>`;
+  const turn = (settled, ...parts) => `<div class="turn${settled ? ' settled' : ''}">${parts.join('')}</div>`;
+  const proc = (...rows) => `<div class="proc">${rows.join('')}</div>`;
+  const lane = (attrs, ...rows) => `<div class="lane"${attrs}>${rows.join('')}</div>`;
+
+  // ---------------- timelines ----------------
+  const TIMELINES = {
+    empty: () => [],
+    goal: () => [
+      turn(true, autohead('target', '目标 · 第 2/256 轮', '12:02'), clock('已工作 1 分 12 秒', { fold: true }), divider(),
+        answer('空值分支修好了，补了 3 个用例，本地单测通过。下一轮在后台跑全量测试，同时起 dev server 看页面。'),
+        zone('完成于 12:04 · 5 次工具调用')),
+      turn(false, autohead('target', '目标 · 第 3/256 轮', '12:05'), clock('工作中 38 秒 · 运行中', { running: true }), proc(
+        row('list-checks', '规划', '3/5 已完成'),
+        row('square-terminal', '终端', mono('npm run dev'), ' · 后台 · bash-2'),
+        row('square-terminal', '终端', mono('npm run build'), ' · 后台 · bash-6'),
+        row('file-text', '读取', path('parseConfig.ts', 'src/config/')),
+      )),
+    ],
+    agents: () => [
+      turn(true, bubble('查一下 DSH 的子代理能不能后台续跑。'), clock('已工作 22 秒'), divider(),
+        answer('能。<code>subagent</code> 缺省就是后台可续跑，父回合结束后还会继续，完成时会唤醒会话。'),
+        zone('完成于 15:28 · 2 次工具调用')),
+      turn(false, bubble('并行做三件事：查 goal 投影带不带 armed 状态；复核一遍 P1-7 方案；检查审批卡文案。'),
+        clock('工作中 2 分 31 秒 · 运行中', { running: true }), proc(
+          row('users', '已委派', 'explore · 调研 goal 投影', ` · <span class="tnum">2:31</span> ${ic('loader-circle', 's12 spin')}`, '', ' data-agent="explore"') +
+          lane('',
+            row('file-text', '读取', path('types.d.ts', 'dsh-goal/lib/types/')),
+            row('search', '搜索', 'activation <span class="dim">src/dsh-host/</span>'),
+            row('activity', '状态', '运行中 · 12 次调用 · 45k tokens'),
+          ),
+          row('users', '已委派', '分叉 · 复核方案', ' · <span class="tnum">0:48</span>', '', ' data-agent="fork"'),
+          row('users', '已委派', 'review · 检查审批文案', ' · 失败', 'fail', ' data-agent="review"'),
+        )),
+    ],
+  };
+
+  // ---------------- todo + goal strips (decision 090, revises 068) ----------------
+  function strip(key, icon, iconCls, label, acts, body, title = '') {
+    const open = state.ui.stripsOpen[key];
+    return `<div class="strip" data-strip="${key}">
+      <div class="strip-head" data-toggle="${key}"${title ? ` title="${esc(title)}"` : ''}>
+        ${ic(icon, iconCls)}<span class="lbl">${label}</span>
+        <span class="acts">${acts}<button class="ibtn" data-toggle="${key}" aria-label="${open ? '收起' : '展开'}">${ic(open ? 'chevron-down' : 'chevron-up', 's14')}</button></span>
+      </div>${open ? body : ''}</div>`;
+  }
+
+  function todoStrip() {
+    const done = TODOS.filter((t) => t.s === 'done').length;
+    const doing = TODOS.filter((t) => t.s === 'doing');
+    const cur = doing.length > 1 ? `${doing[0].t} 等 ${doing.length} 项` : doing[0]?.t;
+    const label = done === TODOS.length
+      ? `待办 <span class="tnum">${done}/${TODOS.length}</span> 已完成`
+      : `待办 <span class="tnum">${done}/${TODOS.length}</span><span class="m"> · 正在：</span>${cur}`;
+    const iconFor = { done: 'circle-check', doing: 'circle-dot', pending: 'circle' };
+    const body = `<div class="strip-body">${TODOS.map((t) =>
+      `<div class="todo ${t.s === 'pending' ? '' : t.s}">${ic(iconFor[t.s])}<span class="trunc">${t.t}</span></div>`).join('')}</div>`;
+    return strip('todo', 'list-checks', '', label, '', body);
+  }
+
+  function goalStrip() {
+    const mode = state.ui.goalMode;
+    const g = GOAL_STATES[mode];
+    const menu = state.ui.menu ? `<div class="menu" role="menu">
+        <button data-act="menu-item">${ic('pencil', 's14 m')}编辑目标…</button>
+        <button data-act="menu-item">${ic('copy', 's14 m')}复制目标文本</button>
+        <button data-act="menu-item" class="danger">${ic('trash-2', 's14')}清除目标…</button></div>` : '';
+    const more = `<span class="menu-anchor"><button class="ibtn" data-act="goal-menu" aria-label="目标菜单">${ic('ellipsis', 's14')}</button>${menu}</span>`;
+    const body = `<div class="strip-body"><div class="goal-full"><p>${GOAL}</p>
+      <div class="m tnum">创建于 12:00 · 最后更新 12:05 · 已用 3/256 轮</div></div></div>`;
+    return strip('goal', g.icon, g.iconCls, g.label(), g.act() + more, body, GOAL);
+  }
+
+  // ---------------- background jobs sub-window (decision 090) ----------------
+  function tailContent(j) {
+    if (j.kind === 'cmd') {
+      return `<div class="tail"><div class="tail-title">${j.id} 输出 · 最近 16 KB</div><pre>${esc(TAILS[j.id] || '')}</pre></div>`;
+    }
+    const lines = j.kind === 'agent' ? (j.activity || []) : (j.stages || []);
+    const title = j.kind === 'agent' ? '最近活动（非字节尾部，取子代理活动事件）' : '阶段（非字节尾部）';
+    return `<div class="tail"><div class="tail-title">${title}</div><div class="mini-lane">${lines.map((l) => `<div>${esc(l)}</div>`).join('')}</div></div>`;
+  }
+  function jrow(j) {
+    const isCmd = j.kind === 'cmd';
+    const isContinuable = j.kind === 'agent' && j.continuable;
+    const killed = state.ui.killed[j.id];
+    const status = killed ? (isContinuable ? '已打断' : '已停止')
+      : { running: '运行中', completed: '已完成', failed: '失败' }[j.status];
+    const res = j.exit != null ? `<span class="badge tnum">退出码 ${j.exit}</span>` : '';
+    // Only the timeout-conversion provenance needs a tag; kind already reads
+    // "workflow" / "子代理" via idLabel, a second "workflow" badge is noise.
+    const tag = j.origin === 'timeout' ? '<span class="badge">超时转入</span>' : '';
+    const tailOpen = !!state.ui.tails[j.id];
+    const running = j.status === 'running' && !killed;
+    const expandLabel = isCmd ? '输出' : j.kind === 'agent' ? '活动' : '阶段';
+    let acts;
+    if (running) {
+      const stopVerb = isContinuable ? gbtn('hand', '打断', 'job-stop', j.id, null, 'tight') : gbtn('square', '停止', 'job-stop', j.id, null, 'tight');
+      acts = gbtn('scroll-text', expandLabel, 'tail', j.id, tailOpen, 'tight') + stopVerb;
+    } else {
+      acts = gbtn('scroll-text', expandLabel, 'tail', j.id, tailOpen, 'tight') + gbtn('eye-off', '移除', 'job-remove', j.id, null, 'tight');
+    }
+    const icon = { cmd: 'square-terminal', agent: 'users', workflow: 'workflow' }[j.kind];
+    const idLabel = isCmd ? j.id : j.kind === 'workflow' ? 'workflow' : '子代理';
+    return `<div class="jrow">
+      <div class="jrow-l1">${ic(icon)}<span class="jid ${isCmd ? 'mono' : ''}">${idLabel}</span>
+        <span class="jlabel ${isCmd ? 'mono' : ''}" title="${esc(j.label)}">${j.label}</span>
+        <span class="jtime tnum">${j.time}</span></div>
+      <div class="jrow-l2"><span>${status}</span>${tag}${res}<span class="jacts">${acts}</span></div>
+    </div>${tailOpen ? tailContent(j) : ''}`;
+  }
+  /**
+   * Shared sub-window chrome. Two-line head, always — see the CSS comment on
+   * `.subwin-head-l1/l2` (coordinator round 2, defect 1): a single line does
+   * not fit icon + title + count + actions + close inside a 300-340px window
+   * without something overflowing the card. Line 1 = title + close (never
+   * truncated away); line 2 = count + actions (both can truncate/shrink).
+   * `formOverride` lets a caller render a window as plain "floating" even
+   * while the user's saved preference is "docked" (the docked-does-not-fit
+   * fallback, see `effectiveForm()`); `fallbackNote` prints why, inline.
+   */
+  function subwinShell(key, icon, titleHtml, countHtml, headActs, bodyHtml, formOverride, fallbackNote) {
+    const form = formOverride || effectiveForm();
+    const tag = state.anno ? '<span class="anno-tag">新增</span>' : '';
+    const draggable = form === 'floating';
+    const grip = draggable ? `<span class="grip">${ic('grip-horizontal', 's14')}</span>` : '';
+    const note = fallbackNote ? `<span class="m fallback-note">（空间不够，已按浮动显示）</span>` : '';
+    return `<div class="subwin ${form}${state.anno ? ' anno-outline' : ''}" data-win="${key}" data-form="${form}" id="win-${key}">
+      <div class="subwin-head-l1" ${draggable ? `data-drag="${key}"` : ''}>
+        ${grip}${ic(icon, 's14 m')}<span class="lbl">${titleHtml}</span>${note}${tag}<span class="grow"></span>
+        <button class="ibtn" data-act="close-${key}" aria-label="关闭">${ic('x', 's14')}</button>
+      </div>
+      <div class="subwin-head-l2"><span class="cnt">${countHtml}</span><span class="grow"></span><span class="jacts">${headActs}</span></div>
+      <div class="subwin-body">${bodyHtml}</div>
+    </div>`;
+  }
+  function jobsWindow(list, formOverride, fallbackNote) {
+    const items = list.filter((j) => !state.ui.removed[j.id]);
+    const running = items.filter((j) => j.status === 'running' && !state.ui.killed[j.id]).length;
+    const ended = items.length - running;
+    const body = items.length ? items.map(jrow).join('') : '<div class="subwin-empty">当前没有后台任务</div>';
+    // Icon-only "stop all" (defect 1 fix option 2, combined with the two-line
+    // head for extra margin): a text button here was the single biggest
+    // contributor to the header overflowing a 300-340px window.
+    const stopAll = running > 1
+      ? `<button class="ibtn" data-act="jobs-stop-all" title="全部停止" aria-label="全部停止">${ic('square', 's14')}</button>` : '';
+    const count = items.length ? `${running} 运行中${ended ? ` · ${ended} 已结束` : ''}` : '';
+    return subwinShell('jobs', 'layers', '后台任务', count, stopAll, body, formOverride, fallbackNote);
+  }
+
+  // ---------------- subagents sub-window (decision 090) ----------------
+  function arow(s) {
+    const killed = state.ui.killed[`agent-${s.id}`];
+    const st = killed ? 'killed' : s.st;
+    const icon = st === 'running' ? ic('loader-circle', 's14 spin run')
+      : st === 'done' ? ic('circle-check', 's14 ok')
+      : st === 'killed' ? ic('circle-x', 's14 m')
+      : ic('circle-x', 's14 bad');
+    const meta = st === 'killed' ? `${s.meta} · 已打断` : s.meta;
+    const interrupt = st === 'running' ? gbtn('hand', '打断', 'agent-interrupt', s.id, null, 'tight') : '';
+    const locate = gbtn('locate-fixed', '定位', 'locate', s.id, null, 'tight');
+    return `<div class="arow"><div class="arow-l1">${icon}<span class="name">${s.name}</span><span class="m">·</span>
+        <span class="trunc" title="${esc(s.desc)}">${s.desc}</span><span class="m tnum">${s.time}</span></div>
+      <div class="arow-l2"><span class="trunc">${meta}</span>${interrupt}${locate}</div></div>`;
+  }
+  function agentsWindow(list, formOverride, fallbackNote) {
+    const body = list.length ? list.map(arow).join('') : '<div class="subwin-empty">当前没有子代理</div>';
+    const count = list.length ? `共 ${list.length} 个` : '';
+    return subwinShell('agents', 'users', '子代理', count, '', body, formOverride, fallbackNote);
+  }
+
+  // ---------------- shell pieces ----------------
+  function rail() {
+    // `terminal` is intentionally never marked `on`: it is a registeredOnly
+    // surface with no rail entry (surfaceRegistry.ts), reached only via the
+    // sessionbar button (Q003), same as today's initialization-script terminal.
+    const top = ['message-square', 'git-branch', 'file-code', 'gauge', 'activity'];
+    return top.map((n, idx) => `<span class="rb${idx === 0 && !state.ui.open.terminal ? ' on' : ''}">${ic(n, 's18')}</span>`).join('') +
+      '<span class="grow"></span>' +
+      ['panel-left-close', 'blocks', 'settings'].map((n) => `<span class="rb">${ic(n, 's18')}</span>`).join('');
+  }
+
+  function srow(s, active, running, nest) {
+    const on = s.id === active;
+    return `<div class="srow${on ? ' on' : ''}${nest ? ' nest' : ''}"><span class="dot ${on && running ? 'run' : 'idle'}"></span>
+      <span class="trunc">${s.title}</span><span class="rt">${s.time}</span></div>`;
+  }
+
+  function chatPanel(sc) {
+    return `<div class="side-head">聊天</div>
+      <div class="side-scroll pad">
+        <div class="sp-actions">
+          <button class="obtn">${ic('plus', 's14')}新建</button><button class="obtn">${ic('folder-plus', 's14')}添加仓库</button>
+          <span class="grow"></span><button class="ibtn">${ic('list-todo', 's14')}</button>
+        </div>
+        <div class="search">${ic('search', 's14')}<span>搜索会话</span></div>
+        <div class="grp"><span class="trunc">最近</span>${ic('chevron-down', 's14')}</div>
+        ${SESSIONS.map((s) => srow(s, sc.session, sc.running, false)).join('')}
+        <div class="grp" style="margin-top:8px"><span class="trunc">仓库列表</span>${ic('list-filter', 's14')}${ic('folder-plus', 's14')}</div>
+        <div class="frow">${ic('folder', 's14 folder')}<span>workspace</span></div>
+        ${SESSIONS.map((s) => srow(s, sc.session, sc.running, true)).join('')}
+      </div>
+      <div class="side-foot"><span class="trunc">未登录</span>${ic('bell', 's14 m')}</div>`;
+  }
+
+  function terminalPanel(sc) {
+    const s = SESSIONS.find((x) => x.id === sc.session);
+    return `<div class="side-head">${ic('terminal', 's14')}终端<span class="m" style="font-weight:400"> · ${esc(s.title)}</span></div>
+      <div class="term-body">
+        <div class="term-line"><span class="term-cwd">~/code/ai-client/worktrees/ci-fix</span> $ git status</div>
+        <div class="term-line m">On branch main\nnothing to commit, working tree clean</div>
+        <div class="term-line"><span class="term-cwd">~/code/ai-client/worktrees/ci-fix</span> $ <span class="term-cursor">&nbsp;</span></div>
+      </div>`;
+  }
+
+  // Terminal, variant 2 (coordinator round 2, supplementary variant 2): swap
+  // the WHOLE centre column for a plain shell, same shape as 1.0.x's GUI/TUI
+  // switch (`01-terminal-inventory.md` line 13). Clicking "聊天" here, or the
+  // sessionbar's terminal button again, reuses the same `toggle-terminal`
+  // action to switch back.
+  function columnTerminalView(sc) {
+    const s = SESSIONS.find((x) => x.id === sc.session);
+    return `<div class="colterm-head">${ic('terminal', 's14')}<span class="lbl">终端 · ${esc(s.title)}</span>
+        <span class="hint">整列切换 · 与 1.0.x 的 GUI / TUI 开关同形</span><span class="grow"></span>
+        ${gbtn('message-square', '聊天', 'toggle-terminal')}</div>
+      <div class="term-body" style="flex:1">
+        <div class="term-line"><span class="term-cwd">~/code/ai-client/worktrees/ci-fix</span> $ git status</div>
+        <div class="term-line m">On branch main\nnothing to commit, working tree clean</div>
+        <div class="term-line"><span class="term-cwd">~/code/ai-client/worktrees/ci-fix</span> $ npm test</div>
+        <div class="term-line m">Test Files  31 passed (31)\n     Tests  128 passed (128)</div>
+        <div class="term-line"><span class="term-cwd">~/code/ai-client/worktrees/ci-fix</span> $ <span class="term-cursor">&nbsp;</span></div>
+      </div>`;
+  }
+
+  function sessionbar(sc, jobsList, agentsList) {
+    const s = SESSIONS.find((x) => x.id === sc.session);
+    const jobsRunning = jobsList.filter((j) => j.status === 'running' && !state.ui.killed[j.id]).length;
+    const agentsRunning = agentsList.filter((a) => a.st === 'running' && !state.ui.killed[`agent-${a.id}`]).length;
+    const cbadge = (n) => (n > 0 ? `<span class="cbadge tnum">${n}</span>` : '');
+    return `<span class="dot ${sc.running ? 'run' : 'idle'}"></span><span class="title">${esc(s.title)}</span>
+      <span class="m">workspace · Main</span><span class="grow"></span>
+      <button class="gbtn ui m">${ic('git-branch', 's14')}<span class="lbltext">会话分支</span></button>
+      <button class="gbtn ui m">${ic('arrow-left-right', 's14')}<span class="lbltext">审阅</span></button>
+      <button class="ibtn">${ic('plus', 's14')}</button><span class="vsep"></span>
+      <button class="gbtn ui" data-act="toggle-terminal" aria-pressed="${state.ui.open.terminal}" title="终端：在该会话目录打开一个 shell（Q003）">${ic('terminal', 's14')}<span class="lbltext">终端</span></button>
+      <button class="gbtn ui" data-act="toggle-jobs" aria-pressed="${state.ui.open.jobs}" title="后台任务">${ic('layers', 's14')}<span class="lbltext">后台任务</span>${cbadge(jobsRunning)}</button>
+      <button class="gbtn ui" data-act="toggle-agents" aria-pressed="${state.ui.open.agents}" title="子代理">${ic('users', 's14')}<span class="lbltext">子代理</span>${cbadge(agentsRunning)}</button>`;
+  }
+
+  function composer(running) {
+    const ph = running ? 'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…' : '继续输入…';
+    const btns = running
+      ? `<span class="rbtn stop">${ic('square', 's12')}</span><span class="rbtn send off">${ic('list-plus', 's14')}</span>`
+      : `<span class="rbtn send off">${ic('send-horizontal', 's14')}</span>`;
+    return `<div class="composer"><div class="ph">${ph}</div>
+        <div class="cbar"><span class="ibtn">${ic('plus', 's14')}</span><span class="chip">${ic('shield', 's14')}执行 · 每次询问</span>
+          <span class="grow"></span><span class="chip m">Automatic${ic('chevron-down', 's14')}</span>${btns}</div></div>
+      <div class="target"><span class="chip">${ic('folder', 's14')}workspace${ic('lock', 's12 m')}</span>
+        <span class="chip">${ic('monitor', 's14')}本机</span></div>`;
+  }
+
+  function emptyTimeline() {
+    return `<div class="empty-tl">${ic('message-square', 's28')}<p>开始一段新的对话</p><p class="m">在下方输入消息，或用 /goal 设一个目标（原型占位文案，未核对真实空态copy）</p></div>`;
+  }
+
+  // ---------------- overlay window layout (shared by floating + docked) ----------------
+  // Both stack top-right inside `.center` and share the same "stop above the
+  // dock, split available height in two when both are open" rule (coordinator
+  // round 2, defect 2 asks this to be MEASURED, not just eyeballed — see
+  // `measure()`'s `coversMessages` check below). They differ only in the
+  // horizontal anchor/width and in whether dragging is allowed.
+  function layoutOverlayWindows(mode) {
+    const layer = $('#floatLayer');
+    const wins = [...layer.querySelectorAll('.subwin.floating, .subwin.docked')];
+    if (!wins.length) return;
+    const centerEl = $('#center');
+    const centerRect = centerEl.getBoundingClientRect();
+    const sessionbarH = $('.sessionbar').getBoundingClientRect().height;
+    const dockRect = $('#dock').getBoundingClientRect();
+    const dockTop = dockRect.top - centerRect.top;
+    const top0 = sessionbarH + 8;
+    const gap = 8;
+    const rightGap = mode === 'docked' ? 0 : 12;
+    const winWidth = mode === 'docked' ? DOCK_PANEL_WIDTH : (state.size === '1024' ? 300 : 340);
+    const bottomSafe = dockTop - gap; // overlay windows must stop above this line
+    const availH = Math.max(96, bottomSafe - top0);
+    const perH = wins.length === 2 ? Math.floor((availH - gap) / 2) : availH;
+    let cursorTop = top0;
+    for (const win of wins) {
+      const key = win.dataset.win;
+      const h = Math.max(88, Math.min(perH, 420));
+      const isDraggable = win.classList.contains('floating');
+      const saved = isDraggable ? state.ui.pos[key] : null; // docked ignores manual drag positions
+      win.style.width = winWidth + 'px';
+      win.style.maxHeight = h + 'px';
+      if (saved) {
+        win.style.top = saved.top + 'px';
+        win.style.left = saved.left + 'px';
+        win.style.right = 'auto';
+      } else {
+        win.style.top = cursorTop + 'px';
+        win.style.right = rightGap + 'px';
+        win.style.left = 'auto';
+      }
+      cursorTop += h + gap;
+    }
+  }
+
+  // ---------------- sub-window mount (floating / embedded drawer / docked) ----------------
+  function renderSubwindows(jobsList, agentsList) {
+    const openJobs = state.ui.open.jobs;
+    const openAgents = state.ui.open.agents;
+    const floatLayer = $('#floatLayer');
+    const embedSlot = $('#embeddedSlot');
+    const tl = $('#timeline');
+    const eff = effectiveForm();
+
+    if (eff === 'embedded') {
+      tl.style.paddingRight = '';
+      floatLayer.innerHTML = '';
+      embedSlot.innerHTML = (openJobs || openAgents)
+        ? `<div class="embedded-drawer" id="embedDrawer">${openJobs ? jobsWindow(jobsList, 'embedded') : ''}${openAgents ? agentsWindow(agentsList, 'embedded') : ''}</div>`
+        : '';
+      const drawer = $('#embedDrawer');
+      if (drawer) {
+        const centerH = $('#center').getBoundingClientRect().height;
+        const both = openJobs && openAgents;
+        const h = Math.round(Math.min(centerH * (both ? 0.42 : 0.3), both ? 340 : 220));
+        drawer.style.height = Math.max(120, h) + 'px';
+      }
+      return;
+    }
+
+    // floating, or docked (possibly folded back to floating — `eff` already
+    // reflects that; `dockedFallback` only controls the inline explanatory note).
+    embedSlot.innerHTML = '';
+    const dockedFallback = state.form === 'docked' && eff === 'floating';
+    floatLayer.innerHTML = [
+      openJobs ? jobsWindow(jobsList, eff, dockedFallback) : '',
+      openAgents ? agentsWindow(agentsList, eff, dockedFallback) : '',
+    ].join('');
+    layoutOverlayWindows(eff);
+    tl.style.paddingRight = eff === 'docked' ? `${24 + DOCK_PANEL_WIDTH + DOCK_GAP}px` : '';
+  }
+
+  // ---------------- measurement + annotation ----------------
+  // Selector for "a piece of message content a user is meant to read", used
+  // by the defect-2 coverage check below: bubbles, answer text, tool rows,
+  // dividers, auto-turn heads, notices, the turn clock/zone lines.
+  const MSG_SELECTOR = '.timeline .bubble, .timeline .answer, .timeline .divider, .timeline .row, '
+    + '.timeline .autohead, .timeline .notice, .timeline .clock, .timeline .zone';
+  /** True when any child of the window's head row is wider than the row
+   * itself — i.e. something (typically the trailing buttons) is being pushed
+   * outside the card instead of wrapping/truncating (coordinator round 2,
+   * defect 1). */
+  function headRowOverflows(win) {
+    return [...win.querySelectorAll('.subwin-head-l1, .subwin-head-l2')]
+      .some((row) => row.scrollWidth > row.clientWidth + 0.5);
+  }
+  /** Which visible timeline message elements a sub-window's rect visually
+   * intersects (coordinator round 2, defect 2). Returns human-readable
+   * `tag:"snippet"` strings, not just a count, so the README/report can name
+   * exactly what is covered instead of asserting a bare boolean. */
+  function coveredMessages(rect) {
+    const hits = [];
+    for (const el of document.querySelectorAll(MSG_SELECTOR)) {
+      const r = el.getBoundingClientRect();
+      if (r.width === 0 || r.height === 0) continue;
+      const intersects = r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
+      if (intersects) {
+        const text = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+        hits.push(`${el.className.split(' ')[0]}:"${text}"`);
+      }
+    }
+    return hits;
+  }
+  function measure() {
+    if (state.ui.open.terminal && state.termPos === 'column') {
+      // Whole-column terminal (variant 2): timeline/strips/dock/sub-windows
+      // are all hidden, nothing here applies. Report a minimal, honest shape
+      // rather than stale numbers from before the switch.
+      return {
+        scene: state.scene, theme: state.theme, form: state.form, size: state.size, termPos: state.termPos,
+        columnTerminal: true, strips: 0, expanded: [], perStripPx: [], stripsPx: 0, gapBelowPx: 0, addedPx: 0,
+        timelinePxWithout: 0, timelinePxWith: 0, dockTopPx: 0, centerHeightPx: 0, subwindows: [],
+        embeddedDrawerPx: null, anyOverlap: false, anyHeaderOverflow: false, anyMessageCovered: false,
+        anyMessageCoveredUnexpected: false,
+      };
+    }
+    const strips = $('#strips');
+    const tl = $('#timeline');
+    const kids = [...strips.children];
+    const n = kids.length;
+    const stripsPx = n ? strips.getBoundingClientRect().height : 0;
+    const gapBelowPx = n ? parseFloat(getComputedStyle(strips).marginBottom) : 0;
+    const timelineWith = tl.clientHeight;
+    strips.style.display = 'none';
+    const timelineWithout = tl.clientHeight;
+    strips.style.display = '';
+    // Always finish on the correct bottom-scrolled state before reading any
+    // message-element geometry below, regardless of how many times this runs:
+    // render() calls it once per paint, and shoot.cjs calls it once more,
+    // externally, after the page has already settled — the strips hide/show
+    // above can otherwise leave a stale scrollTop (see git history for the
+    // long version of this note).
+    tl.scrollTop = tl.scrollHeight;
+    const centerRect = $('#center').getBoundingClientRect();
+    const dockRect = $('#dock').getBoundingClientRect();
+    const eff = effectiveForm();
+    const subwindows = [...document.querySelectorAll('.subwin')].map((w) => {
+      const r = w.getBoundingClientRect();
+      return {
+        id: w.dataset.win, form: w.dataset.form || eff,
+        top: px(r.top - centerRect.top), left: px(r.left - centerRect.left),
+        width: px(r.width), height: px(r.height), bottom: px(r.bottom - centerRect.top),
+        overlapsDock: r.bottom > dockRect.top + 0.5,
+        headerOverflow: headRowOverflows(w),
+        coversMessages: coveredMessages(r),
+      };
+    });
+    const embedDrawer = document.getElementById('embedDrawer');
+    return {
+      scene: state.scene, theme: state.theme, form: state.form, effectiveForm: eff, size: state.size,
+      termPos: state.termPos, columnTerminal: false,
+      strips: n,
+      expanded: Object.keys(state.ui.stripsOpen).filter((k) => state.ui.stripsOpen[k] && kids.some((el) => el.dataset.strip === k)),
+      perStripPx: kids.map((el) => ({ strip: el.dataset.strip, px: px(el.getBoundingClientRect().height) })),
+      stripsPx: px(stripsPx),
+      gapBelowPx,
+      addedPx: px(n ? stripsPx + gapBelowPx : 0),
+      timelinePxWithout: timelineWithout,
+      timelinePxWith: timelineWith,
+      dockTopPx: px(dockRect.top - centerRect.top),
+      centerHeightPx: px(centerRect.height),
+      subwindows,
+      embeddedDrawerPx: embedDrawer ? px(embedDrawer.getBoundingClientRect().height) : null,
+      anyOverlap: subwindows.some((w) => w.overlapsDock),
+      anyHeaderOverflow: subwindows.some((w) => w.headerOverflow),
+      // Floating windows are EXPECTED to be able to cover timeline content —
+      // that is the documented trade-off (README). embedded/docked promise
+      // NOT to, so coverage from those two is a real bug, not a trade-off.
+      anyMessageCovered: subwindows.some((w) => w.coversMessages.length > 0),
+      anyMessageCoveredUnexpected: subwindows.some((w) => w.coversMessages.length > 0 && w.form !== 'floating'),
+    };
+  }
+  window.__measure = measure;
+
+  function drawAnno(m) {
+    const layer = $('#anno');
+    layer.innerHTML = '';
+    if (!state.anno || !m.strips) return;
+    const center = $('#center').getBoundingClientRect();
+    const sr = $('#strips').getBoundingClientRect();
+    const top = sr.top - center.top;
+    const h = m.addedPx;
+    const x = sr.right - center.left + 12;
+    const what = m.strips === 2 ? '两条' : '一条';
+    const state2 = m.expanded.length ? '（含展开）' : '（折叠）';
+    layer.innerHTML = `
+      <div class="anno-guide" style="left:${sr.left - center.left}px;width:${sr.width + 12}px;top:${top}px"></div>
+      <div class="anno-guide" style="left:${sr.left - center.left}px;width:${sr.width + 12}px;top:${top + h}px"></div>
+      <div class="anno-bracket" style="left:${x}px;top:${top}px;height:${h}px"></div>
+      <div class="anno-label" style="left:${x + 18}px;top:${top + h / 2}px">
+        输入框上方多占<br><b>${h} px</b>
+        <small>${what}${state2} ${m.stripsPx} px</small>
+        <small>+ 下方间距 ${m.gapBelowPx} px</small></div>`;
+  }
+
+  function renderNotes(m) {
+    const n = NOTES[state.scene];
+    if (m.columnTerminal) {
+      $('#notes').innerHTML = `<h2>${n.title}</h2><p class="m">依据：${n.decisions}</p><p>${n.desc}</p>
+        <ol>${n.ask.map((q) => `<li>${q}</li>`).join('')}</ol>
+        <div class="measure">终端位置＝整列切换：时间线、待办/目标条、后台任务/子代理子窗口全部让位，与 1.0.x GUI/TUI 开关同形，故本场景下无高度/遮挡实测。</div>`;
+      return;
+    }
+    const per = m.perStripPx.map((p) => `${{ todo: '待办', goal: '目标' }[p.strip]} ${p.px}`).join(' + ');
+    const gaps = m.strips > 1 ? ` + 条间距 4 × ${m.strips - 1}` : '';
+    const measureLine = m.strips
+      ? `实测：${per}${gaps} = <b>${m.stripsPx} px</b>；再加与输入框之间的 ${m.gapBelowPx} px，输入框上方共多占 <b>${m.addedPx} px</b>。聊天区可视高度 ${m.timelinePxWithout} px → ${m.timelinePxWith} px（画幅 ${state.size}）。`
+      : '本场景输入框上方没有待办 / 目标条。';
+    const fmtCover = (hits) => hits.length ? `<b style="color:var(--destructive)"> · 盖住时间线内容 ${hits.length} 处：${hits.join('；')}</b>` : '';
+    const winLines = m.subwindows.length
+      ? m.subwindows.map((w) => `${w.id === 'jobs' ? '后台任务' : '子代理'}窗（${w.form}）：${w.width}×${w.height}px，底边距输入框上边界 ${px(m.dockTopPx - w.bottom)}px`
+          + `${w.overlapsDock ? '<b style="color:var(--destructive)"> · 遮挡输入框！</b>' : ''}`
+          + `${w.headerOverflow ? '<b style="color:var(--destructive)"> · 标题行溢出！</b>' : ''}`
+          + fmtCover(w.coversMessages)).join('<br>')
+      : '';
+    $('#notes').innerHTML = `<h2>${n.title}</h2><p class="m">依据：${n.decisions}</p><p>${n.desc}</p>
+      <ol>${n.ask.map((q) => `<li>${q}</li>`).join('')}</ol>
+      <div class="measure">${measureLine}${winLines ? `<br>${winLines}` : ''}<br><span class="m">橙色虚线、括号与"新增"小标是原型标注，不属于界面。聊天区与左栏的其余内容只作背景，不在本次确认范围内。</span></div>`;
+  }
+
+  // ---------------- render ----------------
+  function render() {
+    const sc = SCENES[state.scene];
+    document.documentElement.classList.toggle('dark', state.theme === 'dark');
+    document.body.classList.toggle('shot', state.shot);
+    document.querySelectorAll('#sceneSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scene === state.scene)));
+    document.querySelectorAll('#themeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.theme === state.theme)));
+    document.querySelectorAll('#formSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.form === state.form)));
+    document.querySelectorAll('#termPosSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.termpos === state.termPos)));
+    document.querySelectorAll('#goalSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.goal === state.ui.goalMode)));
+    document.querySelectorAll('#sizeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === state.size)));
+    $('#annoChk').checked = state.anno;
+
+    const dims = SIZES[state.size];
+    document.documentElement.style.setProperty('--app-w', dims.w + 'px');
+    document.documentElement.style.setProperty('--app-h', dims.h + 'px');
+    $('#app').classList.toggle('compact', state.size !== '1440');
+
+    const jobsList = sc.session === 'empty' ? [] : JOBS_MAIN;
+    const agentsList = sc.session === 'empty' ? [] : SUBAGENTS_MAIN;
+    const columnTerminal = state.ui.open.terminal && state.termPos === 'column';
+
+    $('#rail').innerHTML = rail();
+    // The whole-column terminal (variant 2) only ever replaces the CENTRE;
+    // the left dock stays the normal chat/session list either way. The
+    // left-dock terminal panel (variant 1) only applies in `termPos: panel`.
+    $('#side').innerHTML = (state.ui.open.terminal && state.termPos === 'panel') ? terminalPanel(sc) : chatPanel(sc);
+    $('#sessionbar').innerHTML = sessionbar(sc, jobsList, agentsList);
+
+    $('#timeline').style.display = columnTerminal ? 'none' : '';
+    $('#dock').style.display = columnTerminal ? 'none' : '';
+    $('#columnTerminal').style.display = columnTerminal ? 'flex' : 'none';
+    if (columnTerminal) {
+      $('#columnTerminal').innerHTML = columnTerminalView(sc);
+      $('#embeddedSlot').innerHTML = '';
+      $('#floatLayer').innerHTML = '';
+    } else {
+      $('#columnTerminal').innerHTML = '';
+      $('#timeline').innerHTML = sc.tl === 'empty' ? emptyTimeline() : `<div class="col"><div class="turns">${TIMELINES[sc.tl]().join('')}</div></div>`;
+      $('#timeline').style.paddingRight = '';
+      $('#strips').innerHTML = [sc.todo ? todoStrip() : '', state.ui.goalMode ? goalStrip() : ''].join('');
+      $('#composer').innerHTML = composer(sc.running);
+      renderSubwindows(jobsList, agentsList);
+    }
+
+    const m = measure(); // also finalizes tl.scrollTop — see the comment inside measure()
+    drawAnno(m);
+    renderNotes(m);
+    const q = new URLSearchParams({ scene: state.scene, theme: state.theme, form: state.form, size: state.size });
+    if (state.ui.goalMode) q.set('goal', state.ui.goalMode);
+    if (state.termPos !== 'panel') q.set('termpos', state.termPos);
+    if (!state.anno) q.set('anno', '0');
+    if (state.shot) q.set('shot', '1');
+    history.replaceState(null, '', `?${q}`);
+  }
+
+  // ---------------- interaction ----------------
+  function act(name, id) {
+    const ui = state.ui;
+    if (name !== 'goal-menu') ui.menu = false;
+    switch (name) {
+      case 'goal-pause': ui.goalMode = 'paused'; break;
+      case 'goal-resume': ui.goalMode = 'running'; break;
+      case 'goal-menu': ui.menu = !ui.menu; break;
+      case 'menu-item': break;
+      case 'tail': ui.tails[id] = !ui.tails[id]; break;
+      case 'job-stop': ui.killed[id] = true; break;
+      case 'jobs-stop-all': JOBS_MAIN.forEach((j) => { if (j.status === 'running') ui.killed[j.id] = true; }); break;
+      case 'job-remove': ui.removed[id] = true; break;
+      case 'agent-interrupt': ui.killed[`agent-${id}`] = true; break;
+      case 'toggle-terminal': ui.open.terminal = !ui.open.terminal; break;
+      case 'toggle-jobs': ui.open.jobs = !ui.open.jobs; break;
+      case 'toggle-agents': ui.open.agents = !ui.open.agents; break;
+      case 'close-jobs': ui.open.jobs = false; break;
+      case 'close-agents': ui.open.agents = false; break;
+      case 'locate': locate(id); break;
+      default: break;
+    }
+    render();
+  }
+
+  function locate(agentId) {
+    const target = document.querySelector(`[data-agent="${agentId}"]`);
+    if (!target) return;
+    target.scrollIntoView({ block: 'center', behavior: 'auto' });
+    target.classList.remove('flash');
+    // eslint-disable-next-line no-void
+    void target.offsetWidth; // restart the animation if clicked twice in a row
+    target.classList.add('flash');
+    setTimeout(() => target.classList.remove('flash'), 1400);
+  }
+
+  $('#app').addEventListener('click', (e) => {
+    const a = e.target.closest('[data-act]');
+    if (a) { e.stopPropagation(); act(a.dataset.act, a.dataset.id); return; }
+    const t = e.target.closest('[data-toggle]');
+    if (t) {
+      const k = t.dataset.toggle;
+      state.ui.stripsOpen[k] = !state.ui.stripsOpen[k];
+      state.ui.menu = false;
+      render();
+      return;
+    }
+    if (state.ui.menu) { state.ui.menu = false; render(); }
+  });
+
+  // Drag-to-move for floating sub-windows (pointer events; clamped to .center).
+  let dragCtx = null;
+  document.addEventListener('pointerdown', (e) => {
+    const head = e.target.closest('[data-drag]');
+    if (!head || e.target.closest('[data-act]')) return;
+    const key = head.dataset.drag;
+    const win = head.closest('.subwin');
+    const centerRect = $('#center').getBoundingClientRect();
+    const r = win.getBoundingClientRect();
+    dragCtx = { key, win, startX: e.clientX, startY: e.clientY, startLeft: r.left - centerRect.left, startTop: r.top - centerRect.top, centerRect, width: r.width, height: r.height };
+    win.style.right = 'auto';
+    win.style.left = dragCtx.startLeft + 'px';
+    win.style.top = dragCtx.startTop + 'px';
+  });
+  document.addEventListener('pointermove', (e) => {
+    if (!dragCtx) return;
+    const dx = e.clientX - dragCtx.startX;
+    const dy = e.clientY - dragCtx.startY;
+    const left = Math.max(0, Math.min(dragCtx.startLeft + dx, dragCtx.centerRect.width - dragCtx.width));
+    const top = Math.max(0, Math.min(dragCtx.startTop + dy, dragCtx.centerRect.height - 40));
+    dragCtx.win.style.left = left + 'px';
+    dragCtx.win.style.top = top + 'px';
+  });
+  document.addEventListener('pointerup', () => {
+    if (!dragCtx) return;
+    state.ui.pos[dragCtx.key] = { top: parseFloat(dragCtx.win.style.top), left: parseFloat(dragCtx.win.style.left) };
+    dragCtx = null;
+  });
+
+  $('#sceneSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-scene]');
+    if (!b) return;
+    state.scene = b.dataset.scene;
+    resetUi();
+    render();
+  });
+  $('#themeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-theme]');
+    if (!b) return;
+    state.theme = b.dataset.theme;
+    render();
+  });
+  $('#formSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-form]');
+    if (!b) return;
+    state.form = b.dataset.form;
+    state.ui.pos = { jobs: null, agents: null };
+    render();
+  });
+  $('#termPosSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-termpos]');
+    if (!b) return;
+    state.termPos = b.dataset.termpos;
+    render();
+  });
+  $('#goalSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-goal]');
+    if (!b || state.ui.goalMode === null) return;
+    state.ui.goalMode = b.dataset.goal;
+    render();
+  });
+  $('#sizeSeg').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-size]');
+    if (!b) return;
+    state.size = b.dataset.size;
+    state.ui.pos = { jobs: null, agents: null };
+    render();
+  });
+  $('#annoChk').addEventListener('change', (e) => { state.anno = e.target.checked; render(); });
+
+  resetUi();
+  render();
+  // Re-measure once web fonts / fallback fonts have settled.
+  document.fonts.ready.then(() => render());
+})();
+</script>
+</body>
+</html>

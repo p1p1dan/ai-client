@@ -1,0 +1,1277 @@
+[
+  {
+    "file": "A-empty-light.png",
+    "size": "1440",
+    "scene": "A",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 711,
+    "dockTopPx": 746.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "A-empty-dark.png",
+    "size": "1440",
+    "scene": "A",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 711,
+    "dockTopPx": 746.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "B-strips-collapsed-light.png",
+    "size": "1440",
+    "scene": "B",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "B-strips-collapsed-dark.png",
+    "size": "1440",
+    "scene": "B",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "B-strips-expanded-light.png",
+    "size": "1440",
+    "scene": "B",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": ["todo", "goal"],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 154
+      },
+      {
+        "strip": "goal",
+        "px": 80
+      }
+    ],
+    "stripsPx": 238,
+    "gapBelowPx": 8,
+    "addedPx": 246,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 465,
+    "dockTopPx": 500.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "B-goal-blocked-light.png",
+    "size": "1440",
+    "scene": "B",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": ["goal"],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 80
+      }
+    ],
+    "stripsPx": 112,
+    "gapBelowPx": 8,
+    "addedPx": 120,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 591,
+    "dockTopPx": 626.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "C-jobs-floating-light.png",
+    "size": "1440",
+    "scene": "C",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 338,
+        "bottom": 382,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 2/256 轮12:02\"",
+          "clock:\"已工作 1 分 12 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"空值分支修好了，补了 3 个用例，本地单测通过。\"",
+          "zone:\"✻完成于 12:04 · 5 次工具调用\"",
+          "autohead:\"目标 · 第 3/256 轮12:05\"",
+          "clock:\"✻工作中 38 秒 · 运行中\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "C-jobs-floating-dark.png",
+    "size": "1440",
+    "scene": "C",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 338,
+        "bottom": 382,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 2/256 轮12:02\"",
+          "clock:\"已工作 1 分 12 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"空值分支修好了，补了 3 个用例，本地单测通过。\"",
+          "zone:\"✻完成于 12:04 · 5 次工具调用\"",
+          "autohead:\"目标 · 第 3/256 轮12:05\"",
+          "clock:\"✻工作中 38 秒 · 运行中\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "D-agents-floating-light.png",
+    "size": "1440",
+    "scene": "D",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 711,
+    "dockTopPx": 746.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 230,
+        "bottom": 274,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"查一下 DSH 的子代理能不能后台续跑。\"",
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "D-agents-floating-dark.png",
+    "size": "1440",
+    "scene": "D",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 711,
+    "dockTopPx": 746.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 230,
+        "bottom": 274,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"查一下 DSH 的子代理能不能后台续跑。\"",
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-floating-light.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"查一下 DSH 的子代理能不能后台续跑。\"",
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 361,
+        "left": 764,
+        "width": 340,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-floating-dark.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 764,
+        "width": 340,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"查一下 DSH 的子代理能不能后台续跑。\"",
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 361,
+        "left": 764,
+        "width": 340,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-embedded-light.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "light",
+    "form": "embedded",
+    "effectiveForm": "embedded",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 371,
+    "timelinePxWith": 303,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "embedded",
+        "top": 339.5,
+        "left": 0,
+        "width": 1116,
+        "height": 169,
+        "bottom": 508.5,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      },
+      {
+        "id": "agents",
+        "form": "embedded",
+        "top": 508.5,
+        "left": 0,
+        "width": 1116,
+        "height": 170,
+        "bottom": 678.5,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      }
+    ],
+    "embeddedDrawerPx": 340,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-embedded-dark.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "dark",
+    "form": "embedded",
+    "effectiveForm": "embedded",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 371,
+    "timelinePxWith": 303,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "embedded",
+        "top": 339.5,
+        "left": 0,
+        "width": 1116,
+        "height": 169,
+        "bottom": 508.5,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      },
+      {
+        "id": "agents",
+        "form": "embedded",
+        "top": 508.5,
+        "left": 0,
+        "width": 1116,
+        "height": 170,
+        "bottom": 678.5,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      }
+    ],
+    "embeddedDrawerPx": 340,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-floating-1280x720-light.png",
+    "size": "1280",
+    "scene": "E",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 531,
+    "timelinePxWith": 463,
+    "dockTopPx": 498.5,
+    "centerHeightPx": 688,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 263,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 271,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 490,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-floating-1024x640-light.png",
+    "size": "1024",
+    "scene": "E",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 451,
+    "timelinePxWith": 383,
+    "dockTopPx": 418.5,
+    "centerHeightPx": 608,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 388,
+        "width": 300,
+        "height": 179,
+        "bottom": 223,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 231,
+        "left": 388,
+        "width": 300,
+        "height": 179,
+        "bottom": 410,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "F-terminal-light.png",
+    "size": "1440",
+    "scene": "F",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "F-terminal-dark.png",
+    "size": "1440",
+    "scene": "F",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-docked-light.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "light",
+    "form": "docked",
+    "effectiveForm": "docked",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "docked",
+        "top": 44,
+        "left": 816,
+        "width": 300,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      },
+      {
+        "id": "agents",
+        "form": "docked",
+        "top": 361,
+        "left": 816,
+        "width": 300,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-docked-dark.png",
+    "size": "1440",
+    "scene": "E",
+    "theme": "dark",
+    "form": "docked",
+    "effectiveForm": "docked",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "docked",
+        "top": 44,
+        "left": 816,
+        "width": 300,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      },
+      {
+        "id": "agents",
+        "form": "docked",
+        "top": 361,
+        "left": 816,
+        "width": 300,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": []
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-docked-1280x720-light.png",
+    "size": "1280",
+    "scene": "E",
+    "theme": "light",
+    "form": "docked",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 531,
+    "timelinePxWith": 463,
+    "dockTopPx": 498.5,
+    "centerHeightPx": 688,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 263,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 271,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 490,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-docked-1280x720-dark.png",
+    "size": "1280",
+    "scene": "E",
+    "theme": "dark",
+    "form": "docked",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 531,
+    "timelinePxWith": 463,
+    "dockTopPx": 498.5,
+    "centerHeightPx": 688,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 263,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"已工作 22 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"能。subagent 缺省就是后台可续跑，父回合\"",
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 271,
+        "left": 604,
+        "width": 340,
+        "height": 219,
+        "bottom": 490,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "E-both-docked-1024x640-light.png",
+    "size": "1024",
+    "scene": "E",
+    "theme": "light",
+    "form": "docked",
+    "effectiveForm": "floating",
+    "termPos": "panel",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 451,
+    "timelinePxWith": 383,
+    "dockTopPx": 418.5,
+    "centerHeightPx": 608,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 388,
+        "width": 300,
+        "height": 179,
+        "bottom": 223,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "zone:\"✻完成于 15:28 · 2 次工具调用\"",
+          "bubble:\"并行做三件事：查 goal 投影带不带 arme\"",
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\""
+        ]
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 231,
+        "left": 388,
+        "width": 300,
+        "height": 179,
+        "bottom": 410,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"✻工作中 2 分 31 秒 · 运行中\"",
+          "row:\"已委派explore · 调研 goal 投影 \"",
+          "row:\"读取types.d.ts dsh-goal/li\"",
+          "row:\"搜索activation src/dsh-hos\"",
+          "row:\"状态运行中 · 12 次调用 · 45k tok\"",
+          "row:\"已委派分叉 · 复核方案 · 0:48\"",
+          "row:\"已委派review · 检查审批文案 · 失败\""
+        ]
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "F-terminal-column-light.png",
+    "size": "1440",
+    "scene": "F",
+    "theme": "light",
+    "form": "floating",
+    "termPos": "column",
+    "columnTerminal": true,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 0,
+    "timelinePxWith": 0,
+    "dockTopPx": 0,
+    "centerHeightPx": 0,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "F-terminal-column-dark.png",
+    "size": "1440",
+    "scene": "F",
+    "theme": "dark",
+    "form": "floating",
+    "termPos": "column",
+    "columnTerminal": true,
+    "strips": 0,
+    "expanded": [],
+    "perStripPx": [],
+    "stripsPx": 0,
+    "gapBelowPx": 0,
+    "addedPx": 0,
+    "timelinePxWithout": 0,
+    "timelinePxWith": 0,
+    "dockTopPx": 0,
+    "centerHeightPx": 0,
+    "subwindows": [],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": false,
+    "anyMessageCoveredUnexpected": false
+  }
+]
