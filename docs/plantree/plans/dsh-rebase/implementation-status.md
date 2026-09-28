@@ -15,19 +15,23 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 - **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
 - **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
 
-## Next Target（2026-09-28 暂停，下次在 Windows 开发机上从这里接）
+## Next Target（2026-09-28 晚在 Linux 开发机续做）
 
 交接文档：[handoff-2026-09-28.md](handoff-2026-09-28.md)。
 
 用户在 2026-09-28 裁决了决策 005～089 与 Q003、Q007～Q010（[决策 090](decisions/090-user-rulings-2026-09-28.md)）。**总原则：默认跟随 DSH 的做法，不再为了与 1.0.x 一致而移植。** 只做 Linux 与 Windows，macOS 暂不做。
 
-1. **P1-13c**：Windows 上读到密文时，改用 Windows PowerShell 5.1 回读（可以覆盖 yml、php、ps1、cmd、sql、scss）；rb、docx、pptx 读不出时返回明确的错误。写入维持 DSH 的做法。
-2. P1-6c：授权记忆 sidecar、setter 生效。现在「本会话允许」在宿主重启后会丢。
-3. P1-6b 剩余：`escalate_sandbox` 文案、提示词里的档位说明。
-4. 按「跟随 DSH」原则重划 P1-4c / d、P1-16 的范围，再开工。P1-16b（MCP）与 P1-16d（自定义子代理）已取消。
-5. P1-11：去掉 pi TUI，加普通终端按钮；P1-7：待办与目标两条，后台与子代理的浮动子窗口（先出原型）。
-6. P1-10d：试点插件 `dsh-office-tools` 进白名单（已批准随包）。
-7. P1-9c～f 迁移执行；P1-15 一次性补全；P1-4e 录制门禁接 CI。
+2026-09-28 晚用户决定：P1-13c 交 Windows 机上的会话做，其余在本机按泳道推进。续做前四套 tsc 复核通过；最后一次全套验证（P1-6b）晚于最后一次代码改动，不重跑。
+
+**决策编号预留**：091 给 P1-13c（Windows 端），092 给 P1-6c 与 P1-6b 剩余的实现取舍，093 起给 P1-4 / P1-16 重划范围。
+
+1. **P1-13c（Windows 端执行）**：Windows 上读到密文时，改用 Windows PowerShell 5.1 回读（可以覆盖 yml、php、ps1、cmd、sql、scss）；rb、docx、pptx 读不出时返回明确的错误。写入维持 DSH 的做法。派工说明见 [p1-13c-windows-read-fallback.md](topics/p1-13c-windows-read-fallback.md)；Windows 端在分支 `feat/dsh-p1-13c` 上交付，编排者验证后合入本分支。
+2. **第一波（本机，进行中）**：
+   - 泳道 ①：P1-6c（授权记忆 sidecar、setter 生效；现在「本会话允许」在宿主重启后会丢），连同 P1-6b 剩余（`escalate_sandbox` 文案、提示词里的档位说明、`perm-*` 录制场景）；
+   - 泳道 ⑤：P1-7 新原型（待办、目标两条留在输入框上方；后台与子代理改成浮动子窗口），含 P1-11 的终端按钮与面板开关，原型出来后给用户确认；
+   - 编排：按「跟随 DSH」原则重划 P1-4c / d / e、P1-16 的范围，决策从 093 起。P1-16b（MCP）与 P1-16d（自定义子代理）已取消。
+3. 第二波：泳道 ① 按重划后的范围串行做 P1-4c → 4d → 4e；并行做 P1-10d（试点插件 `dsh-office-tools` 进白名单，已批准随包）、P1-5c～e。
+4. 之后：P1-11 与 P1-7a～d（原型确认后）；P1-9c～f 迁移执行；P1-15 一次性补全；P1-4e 录制门禁接 CI。
 
 ## Last Landed
 
