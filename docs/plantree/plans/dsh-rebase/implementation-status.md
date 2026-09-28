@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-09-27。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-09-28。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -9,14 +9,16 @@ Role: implementation-status。更新日期：2026-09-27。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～075 自主决定、待用户审批）。已落地：P1-0、P1-1（含收尾）、P1-2 本机部分、P1-3a / 3b / 3c、P1-4a 第一部分、P1-6a、P1-9a 与 9g 语料。所有聊天会话已共用一个 DSH 宿主；恢复与崩溃重启后能看到历史。
+P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～084 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a 纯函数、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
 
 ## Next Target
 
-P1-3d（共享宿主收尾）与 P1-9b（纯转换器）落地；之后 P1-4a 第二部分（只读回放）、P1-5a（模型计划与路由，修掉「界面选的模型被忽略」）、P1-4b～d、P1-6b / c。
+P1-5 宿主侧接线与 P1-5b 凭据注入（在跑）→ P1-10a 收尾（关 plugin-manager、删 `packageManager`、改上机包的 pnpm 检查）→ P1-6 第二部分 → P1-4c / d → P1-9c。P1-13b 加密矩阵上机包（在做）。
 
 ## Last Landed
 
+- 2026-09-28 P1-13 第一轮（加密机，用户现场执行）：正式轮 45 项通过、3 项记录，DSH Desktop 对照组 14 项通过。`.txt` 的读取、编辑、搜索、shell、终端、spill、会话日志都是明文；node.exe 新建的文件不加密（三组一样，[Q009](open-questions.md)）；另有两处读到密文的旁证（`.ps1`、`.yml`），要做扩展名矩阵。证据在 [p1-13-encrypted-2026-09-28/](evidence/p1-13-encrypted-2026-09-28/README.md)。
+- 2026-09-28 P1-10a：`ad999a0f` 插件白名单与构建期审计，去掉随包 pnpm，产物从 97.9 MiB 降到 82.1 MiB（[决策 082](decisions/082-allowlist-implementation-choices.md)、[083](decisions/083-host-size-budget-reset-after-pnpm.md)）。编排器在只含 P1-10a 改动的临时 worktree 里复跑：相关 5 个测试文件、165 例全过，biome 通过。代理在同样的隔离环境里重建产物，打包冒烟 L1 共 37 项全过。
 - 2026-09-27 P1-4b 与 P1-8：`36d4f84a` 回退、fork、跨 lineage 的树；`72330d1b` 防空转插件。合跑复跑：三套 tsc 通过；单测 65 + 4 个文件全过；真宿主集成 13/13；bridge-smoke 33 项、loop-guard-smoke 31 项、bridge-record 9 个场景；重建产物 97.9 MiB，打包冒烟 L1 通过。
 - 2026-09-27 P1-4a（第二部分）：`d3a275ff` DSH 会话只读回放、`outcomeUnknown`、三条迁移投影规则。复跑：三套 tsc 通过；相关单测 92 个文件通过（修掉一处 `defaultPaths` 守卫的误报）；真宿主集成 11/11；bridge-smoke 33 项全真。
 - 2026-09-27 P1-5a：`91761cbe` 模型计划纯函数与菜单过滤。复跑：根 tsc 通过，相关测试 31 个文件、497 例全过。
@@ -34,12 +36,11 @@ P1-3d（共享宿主收尾）与 P1-9b（纯转换器）落地；之后 P1-4a �
 
 ## Active TODO
 
-1. P1-2 本机部分完成（`2788952f`，[证据](evidence/p1-2-host-packaging-2026-09-27.md)）；三平台 CI 实跑待用户确认推送。
-2. P1-3d 已落地（`b3b58f2b`），P1-3 只剩 P1-3e。P1-4a 全部落地（第二部分 `d3a275ff`）。P1-4b 已落地（`36d4f84a`）。P1-8 已落地（`72330d1b`）。
-3. P1-6b 第一部分已落地（插件本体与实验，默认不启用）；第二部分排在 P1-4b 之后，因为两者都改 bridge。
-3. P1-9b 已落地（纯转换器）。P1-9c（宿主执行 `seedSession`）依赖 P1-3 协议与 P1-6a（均已具备）以及实验 E1、E2。
-4. 排队：P1-4a 第二部分（只读回放）在 P1-3d 之后；之后是 P1-5a、P1-4b～d、P1-6b / c。P1 各任务都已出方案。P1-8 / P1-11 方案已定（决策 065～067 待审批）；P1-11 等用户答复 Q003。
-5. 决策 005～081 与 Q007（许可）等用户审批。P1-5a 纯函数部分已落地；下一步是宿主侧接线（configure、resolveRoute、删假路由）与 P1-5b，排在 P1-4a 第二部分之后，因为两者都改 bridge 与宿主协议。P1-10 / P1-16 方案已定（[方案](topics/p1-10-p1-16-extensions.md)）。
+1. 在跑：P1-5 宿主侧接线加 P1-5b（configure 与 overlay、每轮 `resolveRoute`、`aiclient-credentials` 宿主插件与 Main 的 `DshCredentialBroker`、删掉假路由、KEY-CANARY 门禁）；P1-13b 加密矩阵上机包，同时把第一轮现场的脚本修改合回仓库。
+2. P1-10a 收尾排在 P1-5 之后：bundle 补丁里关掉 `plugin-manager`，加进 `REQUIRED_DISABLED`，删掉 `packageManager` 与 `AICLIENT_DSH_PNPM_CLI`，上机包的 G-pnpm-install 改成预装插件检查。
+3. P1-6 第二部分（bridge 挂接闸门、卡片往返、sidecar）排在 P1-5 之后，因为两者都改 bridge。之后是 P1-4c / d、P1-4e、P1-9c～f。
+4. P1-2 三平台 CI 待用户确认推送。
+5. 决策 005～084 与 Q003、Q007～Q010 等用户审批或答复。
 
 ## Blocked By
 
@@ -48,7 +49,7 @@ P1-3d（共享宿主收尾）与 P1-9b（纯转换器）落地；之后 P1-4a �
 - P1-9 的真实数据离线迁移测试要用户指定机器与 profile 副本，由用户本人运行，或授权代理运行且只看报告。
 - P1-7a 等用户确认布局原型（[Q008](open-questions.md)）。
 - P1-11 等用户答复 [Q003](open-questions.md) 的两个问题：去不去掉 pi TUI、要不要换成普通终端入口。
-- P1-13 第一轮上机（引擎载体）：上机包与手册已就绪（`/var/tmp/aiclient-p1-13-kit/`、[runbook](topics/p1-13-encrypted-machine-runbook.md)），等用户在加密 Windows 机器上运行并发回 `report-*` 目录。
+- P1-13b 加密矩阵：上机包做好后，要用户在加密机上运行，并人工确认输入文件已加密。Q009（node.exe 新建文件不加密）等 P1-13b 结果出来后再裁决。Q010（能否用普通权限账户补测）要用户答复。
 - P1-13 第二轮上机要等 GUI、真实模型、迁移落地；P1-11 内嵌终端去留要用户拍板；P1-14 推送与发版要用户确认。
 
 ## Last Verified
