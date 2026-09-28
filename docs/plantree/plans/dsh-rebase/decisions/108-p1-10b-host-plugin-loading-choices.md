@@ -57,6 +57,7 @@
    - `WorkerManager.reconcileHostPlugins(key)` 与模型计划共用一套复查（决策 033 第 4 条）：运行中的宿主选择键不同，且没有会话在跑，就 `invalidateAll`；否则每 2 s 再查。计划与插件同时过期时只重启一次；
    - 没有宿主在跑时不做任何事，下次启动自然用新选择；
    - Main 侧入口是 `src/main/services/agent-host/dshHostPlugins.ts`，提供 `getDshPluginSelection`、`setDshPluginSelection`、`getDshPluginReport`，P1-10c 的 IPC 只调这三个。
+     - **补记（2026-09-28，[决策 117](117-p1-10c-plugin-settings-choices.md) 第 2 条）**：选择与宿主状态仍只经这三个函数；另外 IPC 按宿主同样的规则只读一份白名单清单（`src/main/services/dshPlugins/pluginCatalog.ts`），补齐上报里没有的来源、工具分类与审查，也让第一次对话之前页面就能列出插件。
 
 ### 三、`ready` 回报
 
@@ -170,6 +171,7 @@
 - **探针工具**：十个用 `baseEnv` 的驱动和 `p0-4-probe` 都带上了探针开关。只用 `installProbeBundle`、却另拼环境变量的新驱动，要记得带上这个开关，否则探针 bundle 会被剔除，驱动会卡在第一步（`aiclient-probe` 行不在）。
 - **加密机工具包**：文件清单已补，但本次没有重新构建或上机。
 - **P1-10c**：设置页与 IPC 只需要调用 `dshHostPlugins.ts` 的三个函数。「已下架」的提示可以用 `dropped` 与 Main 的设置来判断。
+  - **补记（2026-09-28，[决策 117](117-p1-10c-plugin-settings-choices.md)）**：已落地，另读白名单清单见第 7 条补记；「已下架」按 117 第 7 条判。
 - **P1-10d**：试点插件进白名单之后，打包冒烟 L1 带一个已启用插件，可以直接复用 E3 的装配方式（`tools/lib/plugin-install.ts` 的 artifact 形态）。
   - **补记（2026-09-28，[决策 115](115-p1-10d-pilot-plugin-choices.md) 第 13 条）**：试点插件本来就装在产物里，L1 只设 `AICLIENT_DSH_PLUGINS` 开启它，没有复用 E3 的装配方式。
 - **没有做**：

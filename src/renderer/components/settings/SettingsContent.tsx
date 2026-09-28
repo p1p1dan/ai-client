@@ -20,6 +20,7 @@ import { AISettings } from './AISettings';
 import { AppearanceSettings } from './AppearanceSettings';
 import { ConversationImportSettings } from './ConversationImportSettings';
 import type { SettingsCategory } from './constants';
+import { DshPluginsSettings } from './DshPluginsSettings';
 import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { GitSettings } from './GitSettings';
@@ -130,13 +131,15 @@ export function SettingsContent({
               <PiModelManagementSettings />
             </>
           )}
-          {/* dsh-rebase P1-16e (decision 104): skills, then what the previous
+          {/* dsh-rebase P1-16e (decision 104): skills, then the allowlisted
+              DSH plugins (P1-10c, decision 117), then what the previous
               version used that this one no longer loads. The sub-agent page is
               gone (definitions are not loaded), and so is the pi extension
-              page (decision 090); P1-10c adds the DSH plugin list here. */}
+              page (decision 090). */}
           {activeCategory === 'extensions' && (
             <>
               <PiResourcesSettings />
+              <DshPluginsSettings />
               <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}

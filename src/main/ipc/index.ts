@@ -11,6 +11,7 @@ import { registerAuthHandlers } from './auth';
 import { registerChatHandlers } from './chat';
 import { registerCliHandlers } from './cli';
 import { registerDialogHandlers } from './dialog';
+import { registerDshPluginHandlers } from './dshPlugins';
 import {
   cleanupTempFiles,
   cleanupTempFilesSync,
@@ -92,6 +93,7 @@ export function registerIpcHandlers(): void {
   registerPiSubagentHandlers();
   registerPiPluginHandlers();
   registerLegacyAssetHandlers();
+  registerDshPluginHandlers();
   registerAgentMigrationHandlers();
   registerUserProviderHandlers();
   registerUsageHandlers();

@@ -667,6 +667,38 @@ export const zhTranslations: Record<string, string> = {
   'Project files were checked in {{path}}.': '已检查 {{path}} 下的项目文件。',
   'Open a workspace to also check its project files.': '打开一个工作区后，还会检查它的项目文件。',
 
+  // dsh-rebase P1-10c（决策 117）：「设置 > 扩展」里的白名单插件一节。只有启用开关，
+  // 没有安装与删除；切换在对话引擎下次启动时生效（决策 108 第 7 条）。
+  // 复用的已有键：Plugins、Loading plugins...、No plugins available、Switched off。
+  'Plugins reviewed by this app and installed with it. Nothing is downloaded, and plugins cannot be added or removed here. Tools a plugin adds go through this app’s approval like the built-in tools.':
+    '经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。',
+  'Create, read and update Word, Excel and PowerPoint files in the workspace.':
+    '在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。',
+  Loaded: '已加载',
+  'Missing from the install': '安装包中缺失',
+  'Refused to load': '已拒绝加载',
+  'Restart pending': '待重启生效',
+  'Official DSH plugin': 'DSH 官方插件',
+  'Third-party plugin, reviewed by this app': '第三方插件，已经过本应用审查',
+  'Reviewed {{date}}: approved': '{{date}} 审查：通过',
+  'Reviewed {{date}}: approved with conditions': '{{date}} 审查：有条件通过',
+  'Writes files': '写入文件',
+  'Reads files': '读取文件',
+  'Other tools, always ask first': '其他工具（每次先询问）',
+  'Reason: {{reason}}': '原因：{{reason}}',
+  'Loaded, but part of it did not start: {{rows}}': '已加载，但有部分未能启动：{{rows}}',
+  'The plugin list could not be read: {{error}}': '无法读取插件清单：{{error}}',
+  'The chat engine could not read the plugin settings when it last started, so it loaded no plugin.':
+    '对话引擎上次启动时没能读取插件设置，因此没有加载任何插件。',
+  'Plugin changes take effect the next time the chat engine starts. If it is running, it restarts on its own once no chat has work in progress.':
+    '插件的改动在对话引擎下次启动时生效；引擎正在运行时，会等所有对话都没有进行中的工作后自动重启。',
+  'This version ships without any plugins.': '这个版本没有随附任何插件。',
+  'The chat engine has not started since the app opened, so what it loaded is not shown yet.':
+    '应用打开后对话引擎还没有启动过，所以暂时看不到它加载了什么。',
+  'No longer available': '已下架',
+  'This version no longer ships these plugins, so they are not loaded.':
+    '当前版本已不再提供这些插件，它们不会被加载。',
+
   // P5-2-5：原生子代理的管理界面。
   Subagents: '子代理',
   'Background delegates the model can start with Task. Each one runs on its own context and reports back when it finishes.':

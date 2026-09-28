@@ -41,6 +41,7 @@ const panels = [
   'PiModelManagementSettings',
   'PermissionPolicySettings',
   'PiResourcesSettings',
+  'DshPluginsSettings',
   'LegacyAssetsSettings',
   'KeybindingsSettings',
   'NetworkSettings',
@@ -82,9 +83,10 @@ describe('settings navigation', () => {
       ['EditorSettings'],
       ['GitSettings', 'AISettings'],
       ['UserProvidersSettings', 'PiModelManagementSettings'],
-      // dsh-rebase P1-16e (decision 104): skills, then the legacy-asset
-      // entry; no sub-agent page, no pi extension page.
-      ['PiResourcesSettings', 'LegacyAssetsSettings'],
+      // dsh-rebase P1-16e (decision 104): skills, then the allowlisted DSH
+      // plugins (P1-10c), then the legacy-asset entry; no sub-agent page, no
+      // pi extension page.
+      ['PiResourcesSettings', 'DshPluginsSettings', 'LegacyAssetsSettings'],
       ['AgentMigrationSettings', 'ConversationImportSettings'],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],

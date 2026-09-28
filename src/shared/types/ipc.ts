@@ -267,6 +267,11 @@ export const IPC_CHANNELS = {
   LEGACY_ASSETS_MARK_SEEN: 'legacyAssets:markSeen',
   LEGACY_ASSETS_OPEN_AGENT_DIR: 'legacyAssets:openAgentDir',
 
+  // dsh-rebase P1-10c (decisions 108, 110, 117) — the allowlisted DSH plugins:
+  // list them, switch one on or off. No install, no removal.
+  DSH_PLUGINS_LIST: 'dshPlugins:list',
+  DSH_PLUGINS_SET_ENABLED: 'dshPlugins:setEnabled',
+
   // P5-2-5 — managing the native subagent definitions.
   PI_SUBAGENTS_LIST: 'piSubagents:list',
   PI_SUBAGENTS_SAVE: 'piSubagents:save',

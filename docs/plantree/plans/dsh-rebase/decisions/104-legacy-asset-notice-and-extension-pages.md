@@ -6,6 +6,8 @@
 - [P1-10 / P1-16 方案 §4.4](../topics/p1-10-p1-16-extensions.md)；
 - [决策 087](087-subagent-catalog-move-and-fixture-relocation.md)（`src/shared/subagentCatalogRoots.ts` 保留作检测用）。
 
+修订注记（2026-09-28，P1-10c）：「插件」一节已落地，`piPluginsPermissionNoticeStatic.test.ts` 删除、要点并入 `dshPluginsSettingsStatic.test.ts`，见[决策 117](117-p1-10c-plugin-settings-choices.md) 第 18 条（待审批）。
+
 修订注记（2026-09-28，P1-16e）：实现取舍见[决策 116](116-p1-16e-legacy-asset-notice-choices.md)（待审批）。其中补充：项目级检测的是当前打开的那个工作区，范围含项目技能；用户层指令只列 1.0.x 实际读的那一个文件；弹窗关闭（任何方式）即记为看过；「插件」页整页卸下、不留占位，由 P1-10c 直接加白名单插件一节；卸下后无引用的文件清单列在 116 里留给 P1-12。
 
 ## 规则

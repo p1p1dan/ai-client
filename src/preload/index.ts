@@ -5,6 +5,7 @@ import type { UpdateStatus } from '../shared/types/updater';
 import 'electron-log/preload.js';
 import type { MigrationPlan, MigrationRequest, MigrationResult } from '@shared/agentMigration';
 import type { AnnouncementsResult } from '@shared/announcements';
+import type { DshPluginsState } from '@shared/dshPluginSettings';
 import type { Locale } from '@shared/i18n';
 import type { InspectLegacyAssetsRequest, LegacyAssetNoticeState } from '@shared/legacyAssets';
 import type {
@@ -1269,6 +1270,19 @@ const electronAPI = {
     markSeen: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.LEGACY_ASSETS_MARK_SEEN),
     openAgentDir: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.LEGACY_ASSETS_OPEN_AGENT_DIR),
+  },
+
+  /**
+   * dsh-rebase P1-10c (decisions 108, 110, 117) — the allowlisted DSH plugins
+   * this build ships. `setEnabled` stores one per-plugin override and answers
+   * with the whole new state; the change reaches the chat engine at its next
+   * start (a running engine restarts once no chat has work in flight). There
+   * is no install and no removal.
+   */
+  dshPlugins: {
+    list: (): Promise<DshPluginsState> => ipcRenderer.invoke(IPC_CHANNELS.DSH_PLUGINS_LIST),
+    setEnabled: (name: string, enabled: boolean): Promise<DshPluginsState> =>
+      ipcRenderer.invoke(IPC_CHANNELS.DSH_PLUGINS_SET_ENABLED, { name, enabled }),
   },
 
   /**

@@ -122,3 +122,4 @@
   - 能力弹窗只剩技能数。
 - **迁移**：只读，不改任何用户文件；回装 1.0.x 不受影响（它不认识新设置键，会忽略它）。
 - **与 P1-10c 的衔接**：插件页在「扩展」页上的位置空着，P1-10c 直接加一节白名单插件列表，并处理 `piPluginsPermissionNoticeStatic.test.ts`。
+  - **补记（2026-09-28，[决策 117](117-p1-10c-plugin-settings-choices.md)）**：「插件」一节排在技能与旧版遗留内容之间；`piPluginsPermissionNoticeStatic.test.ts` 已删除，要点并入 `dshPluginsSettingsStatic.test.ts`（117 第 18 条）。上面「留给 P1-12 的无引用清单」里它随 `PiPluginsSettings.tsx` 一条不再适用。
