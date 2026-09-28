@@ -44,6 +44,7 @@ import {
 import os from 'node:os';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { APP_STATE_DIR } from '../../shared/defaultPaths.ts';
 import {
   FAKE_MODEL,
   FAKE_ROUTE,
@@ -234,7 +235,7 @@ async function main(): Promise<number> {
   const root = join(scratchRoot, 'run');
   const home = join(root, 'home');
   // Where Main puts it for users: `~/.pilab/<profile>/dsh-home` (decision 008).
-  const dshHome = join(home, '.pilab', 'aiclient', 'dsh-home');
+  const dshHome = join(home, APP_STATE_DIR, 'aiclient', 'dsh-home');
   const box: Sandbox = {
     root,
     home,
