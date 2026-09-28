@@ -5,7 +5,9 @@
  * copies that directory to resources/dsh-host, and verify-packaged-app.mjs runs
  * `verifyDshArtifact` again on the packaged copy. Decisions: 011 (the host
  * ships as a build artifact), 013 (clean `npm ci`, deletion pruning,
- * verification), 014 (B-tier pruning and the size budget), 016 (pnpm ships).
+ * verification), 014 (B-tier pruning and the size budget), 058 (allowlisted
+ * plugins are preinstalled; pnpm no longer ships, closing 016), 059 (the
+ * build-time plugin audit).
  *
  * Pruning is deletion-based on purpose: every rule names what goes, everything
  * else stays. A mistake shows up as bytes too many (caught by the budget and
@@ -18,11 +20,20 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
+import {
+  auditBundlePatches,
+  checkAllowlistKeys,
+  lockPathName,
+  parseAllowlist,
+  patchRowIds,
+} from '../src/shared/dshPluginAllowlist.ts';
 import {
   DSH_HOST_ARTIFACT_MAX_BYTES,
   DSH_HOST_ARTIFACT_MAX_FILES,
   DSH_HOST_ARTIFACT_TARGET_BYTES,
+  evaluateDshPlugin,
 } from './packaging-budget.mjs';
 
 export const DSH_HOST_SOURCE_REL = 'src/dsh-host';
@@ -32,6 +43,27 @@ export const DSH_HOST_LICENSES = 'THIRD_PARTY_LICENSES.json';
 export const PRODUCT_BUNDLE = '@aiclient/dsh-app';
 export const PROBE_BUNDLE = '@aiclient/dsh-probe';
 export const MANIFEST_SCHEMA = 1;
+/** The plugin allowlist, relative to src/dsh-host (decision 059). */
+export const PLUGIN_ALLOWLIST_REL = 'plugins/allowlist.json';
+
+/**
+ * Host dependencies that are not plugins (P1-2, P1-6b). Every other entry of
+ * src/dsh-host/package.json must be on the plugin allowlist (decision 059).
+ */
+export const HOST_DEPENDENCIES = [
+  PRODUCT_BUNDLE,
+  '@deepseek-ai/cordis',
+  '@deepseek-ai/cordis-plugin-group',
+  '@deepseek-ai/cordis-plugin-include',
+  '@deepseek-ai/cordis-plugin-loader',
+  '@deepseek-ai/dsh-app-boot',
+  '@deepseek-ai/dsh-base',
+  '@deepseek-ai/dsh-home-paths',
+  '@deepseek-ai/dsh-launch-environment',
+  '@deepseek-ai/dsh-system-prompt',
+  'tree-sitter-bash',
+  'web-tree-sitter',
+];
 
 /** Source files staged next to the install; the bundle's own files are listed below. */
 export const STAGED_SOURCE_FILES = ['package.json', 'package-lock.json', '.npmrc'];
@@ -150,14 +182,31 @@ export function treeStats(root, exclude = new Set()) {
 
 /**
  * Source-side checks before anything is built: exact pins, the committed
- * lockfile, one DSH version everywhere, and a bundle peer that matches it (DSH
- * refuses a bundle whose dsh peer does not match the running version).
+ * lockfile, one DSH version everywhere, a bundle peer that matches it (DSH
+ * refuses a bundle whose dsh peer does not match the running version), and
+ * the plugin allowlist against package.json and the lockfile (decision 059).
  */
 export function preflightDshHost(sourceDir) {
   const failures = [];
   const manifest = readJson(path.join(sourceDir, 'package.json'));
   const lockPath = path.join(sourceDir, 'package-lock.json');
   if (!fs.existsSync(lockPath)) failures.push('src/dsh-host/package-lock.json is missing');
+  const allowlistPath = path.join(sourceDir, ...PLUGIN_ALLOWLIST_REL.split('/'));
+  let allowlist = { schema: 1, plugins: [] };
+  let closures = {};
+  if (!fs.existsSync(allowlistPath))
+    failures.push(`src/dsh-host/${PLUGIN_ALLOWLIST_REL} is missing`);
+  else {
+    const parsed = parseAllowlist(readJson(allowlistPath));
+    allowlist = parsed.allowlist;
+    failures.push(...parsed.failures.map((failure) => `allowlist: ${failure}`));
+    for (const entry of allowlist.plugins) {
+      const record = path.join(path.dirname(allowlistPath), ...entry.review.record.split('/'));
+      if (!fs.existsSync(record)) {
+        failures.push(`allowlist: ${entry.name} review record ${entry.review.record} is missing`);
+      }
+    }
+  }
   const deps = manifest.dependencies ?? {};
   for (const [name, spec] of Object.entries(deps)) {
     if (name === PRODUCT_BUNDLE) {
@@ -186,6 +235,15 @@ export function preflightDshHost(sourceDir) {
     for (const [name, spec] of Object.entries(deps)) {
       if (lockRoot[name] !== spec) failures.push(`lockfile root is stale for ${name}`);
     }
+    const keys = checkAllowlistKeys({
+      allowlist,
+      manifest,
+      lock,
+      hostDependencies: HOST_DEPENDENCIES,
+      dshPin,
+    });
+    failures.push(...keys.failures.map((failure) => `allowlist: ${failure}`));
+    closures = keys.closures;
   }
   const bundle = readJson(path.join(sourceDir, 'bundle', 'package.json'));
   const peer = bundle.peerDependencies?.['@deepseek-ai/dsh-llm'];
@@ -196,7 +254,7 @@ export function preflightDshHost(sourceDir) {
   if (failures.length > 0) {
     throw new Error(`DSH host preflight failed:\n  - ${failures.join('\n  - ')}`);
   }
-  return { dshPin, version: manifest.version };
+  return { dshPin, version: manifest.version, allowlist, closures };
 }
 
 /** Bundle files staging knows about; anything else in `bundle/` is an error. */
@@ -432,17 +490,6 @@ export function pruneReason(rel, kind, target) {
   if (/(^|\/)node_modules\/node-pty\/(src|deps)$/.test(rel) && kind === 'dir') {
     return 'node-pty native sources';
   }
-  match = rel.match(/(^|\/)node_modules\/pnpm\/dist\/node_modules\/@reflink\/(reflink-[^/]+)$/);
-  if (match && kind === 'dir' && !match[2].startsWith(`reflink-${key}`)) {
-    return 'pnpm reflink binding for another platform';
-  }
-  if (/(^|\/)node_modules\/pnpm\/dist\/vendor$/.test(rel) && target.platform !== 'win32') {
-    return 'pnpm Windows helpers';
-  }
-  match = rel.match(/(^|\/)node_modules\/pnpm\/dist\/vendor\/([^/]+)$/);
-  if (match && kind !== 'dir' && target.platform === 'win32' && !match[2].includes(target.arch)) {
-    return 'pnpm Windows helper for another architecture';
-  }
 
   // Package-level variants npm installs regardless of platform or libc.
   match = rel.match(/(^|\/)node_modules\/(@img\/[^/]+)$/);
@@ -469,8 +516,8 @@ export function pruneReason(rel, kind, target) {
   if (isLicenseFileName(base)) return null;
   if (STRIPPED_EXTENSION.test(base)) return 'source map, declaration or debug symbols';
   if (isDocumentationMarkdown(rel)) return 'documentation';
-  // C / C++ sources and gyp files; pnpm's node-gyp keeps its own for plugin builds.
-  if (NATIVE_SOURCE.test(base) && !/(^|\/)node_modules\/pnpm\//.test(rel)) return 'native sources';
+  // C / C++ sources and gyp files.
+  if (NATIVE_SOURCE.test(base)) return 'native sources';
   return null;
 }
 
@@ -699,7 +746,6 @@ export const LICENSE_FILE_REQUIRED = [
   'koffi',
   'node-pty',
   'sharp',
-  'pnpm',
   '@vscode/ripgrep',
   'web-tree-sitter',
   'tree-sitter-bash',
@@ -767,6 +813,319 @@ export function checkLicenses(packages) {
   return failures;
 }
 
+// ---- plugins (decisions 058, 059) ----------------------------------------------
+
+/** Licences a plugin and the closure it brings may carry: permissive only (decision 059). */
+export const PLUGIN_LICENSES = new Set([
+  'MIT',
+  'ISC',
+  'Apache-2.0',
+  'BSD-2-Clause',
+  'BSD-3-Clause',
+  '0BSD',
+  'BlueOak-1.0.0',
+  'CC0-1.0',
+  'Unlicense',
+]);
+
+/**
+ * Whether an SPDX expression is acceptable: `OR` needs one allowed side, `AND`
+ * both. A `WITH` exception, `SEE LICENSE IN …` or a malformed expression is not.
+ */
+export function isAllowedLicense(expression, allowed = PLUGIN_LICENSES) {
+  if (typeof expression !== 'string') return false;
+  const tokens = expression.match(/\(|\)|[^\s()]+/g) ?? [];
+  let at = 0;
+  const keyword = (word) => tokens[at]?.toUpperCase() === word;
+  const primary = () => {
+    const token = tokens[at++];
+    if (token === '(') {
+      const value = either();
+      if (tokens[at++] !== ')') throw new Error('unbalanced');
+      return value;
+    }
+    if (token === undefined || token === ')' || /^(AND|OR|WITH)$/i.test(token)) {
+      throw new Error('unexpected token');
+    }
+    if (keyword('WITH')) {
+      at += 2;
+      return false;
+    }
+    return allowed.has(token);
+  };
+  const both = () => {
+    let value = primary();
+    while (keyword('AND')) {
+      at += 1;
+      const right = primary();
+      value = value && right;
+    }
+    return value;
+  };
+  const either = () => {
+    let value = both();
+    while (keyword('OR')) {
+      at += 1;
+      const right = both();
+      value = value || right;
+    }
+    return value;
+  };
+  try {
+    const value = either();
+    return at === tokens.length && value;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * What the reviewer reads by hand (P1-10 shard 03 §6.2 items 5 and 6). A hit
+ * is a pointer, never a verdict: the report goes into the manifest and the
+ * review record, and passes the build either way.
+ */
+export const SENSITIVE_API_PATTERNS = [
+  [
+    'credentials',
+    /\bctx\.credentials\b|\bcredentials\s*\.\s*(?:resolve|get|list)\b|['"]credentials['"]/,
+  ],
+  ['process-env', /\bprocess\.env\b/],
+  [
+    'ipc',
+    /\bprocess\.(?:send|channel|disconnect)\b|\bprocess\.(?:on|once|addListener)\(\s*['"](?:message|disconnect)['"]/,
+  ],
+  [
+    'subprocess',
+    /\bchild_process\b|\bctx\.subprocess\b|['"]subprocess['"]|\bspawnTerminal\b|\bexecFile(?:Sync)?\s*\(/,
+  ],
+  [
+    'network',
+    /\bfetch\s*\(|['"](?:node:)?(?:http|https|http2|net|tls|dns|dgram)['"]|['"](?:ws|undici|axios|node-fetch|got)['"]|\bnew\s+WebSocket\b|\bXMLHttpRequest\b/,
+  ],
+  [
+    'fs-write',
+    /\b(?:writeFile|appendFile|mkdir|rmdir|unlink|rename|copyFile|symlink|chmod|chown|truncate|createWriteStream)(?:Sync)?\s*\(|\bfs(?:\.promises)?\.(?:rm|cp)(?:Sync)?\s*\(/,
+  ],
+  ['eval', /\beval\s*\(|\bnew\s+Function\s*\(/],
+  ['dynamic-import', /\bimport\s*\(\s*[^'"`\s)]|\brequire\s*\(\s*[^'"`\s)]/],
+  ['vm', /['"](?:node:)?vm['"]/],
+  ['worker-threads', /['"](?:node:)?worker_threads['"]/],
+  [
+    'monkey-patch',
+    /\bModule\._(?:load|resolveFilename|extensions|compile)\b|\brequire\.cache\b|\bObject\.defineProperty\(\s*(?:globalThis|global|process)\b|\b(?:globalThis|global)\.[A-Za-z_$][\w$]*\s*=(?!=)/,
+  ],
+  ['telemetry', /\b(?:telemetry|analytics|sentry|posthog|mixpanel)\b/i],
+  [
+    'hooks',
+    /['"](?:tools\/pre-execute|approval\/request|agent\/request|system-prompt\/assemble|llm\/[\w/-]+)['"]/,
+  ],
+];
+
+/** Per category: how many lines hit, and the first `perCategory` of them. */
+export function scanSensitiveApis(root, dirs, perCategory = 10) {
+  const counts = {};
+  const hits = [];
+  for (const dir of dirs) {
+    for (const entry of walkTree(dir)) {
+      if (entry.kind !== 'file' || !/\.(c?js|mjs)$/.test(entry.rel)) continue;
+      const file = path.relative(root, entry.full).split(path.sep).join('/');
+      fs.readFileSync(entry.full, 'utf8')
+        .split('\n')
+        .forEach((line, index) => {
+          for (const [category, pattern] of SENSITIVE_API_PATTERNS) {
+            if (!pattern.test(line)) continue;
+            counts[category] = (counts[category] ?? 0) + 1;
+            if (counts[category] <= perCategory) hits.push({ category, file, line: index + 1 });
+          }
+        });
+    }
+  }
+  return { counts, hits };
+}
+
+/** The patch files a `dsh.bundle` declares, as DSH reads them (dsh-app-boot `bundlePatchFiles`). */
+function declaredPatchFiles(bundle) {
+  const declared = typeof bundle?.patch === 'string' ? [bundle.patch] : bundle?.patch;
+  if (!Array.isArray(declared) || !declared.every((file) => typeof file === 'string')) return null;
+  return declared;
+}
+
+/** The staged dsh-app-boot: peers and patches judged exactly as the host will judge them. */
+export async function loadStagedDsh(outDir) {
+  const entry = path.join(
+    outDir,
+    'node_modules',
+    '@deepseek-ai',
+    'dsh-app-boot',
+    'lib',
+    'index.js'
+  );
+  const boot = await import(pathToFileURL(entry).href);
+  return {
+    evaluatePluginCompatibility: boot.evaluatePluginCompatibility,
+    loadOverlayPatches: boot.loadOverlayPatches,
+  };
+}
+
+/** Row ids the product composition already has: dsh-base and @aiclient/dsh-app. */
+export function productRowIds(outDir, dsh) {
+  const ids = new Set();
+  for (const name of ['@deepseek-ai/dsh-base', PRODUCT_BUNDLE]) {
+    const dir = path.join(outDir, 'node_modules', ...name.split('/'));
+    const files = declaredPatchFiles(readJson(path.join(dir, 'package.json')).dsh?.bundle) ?? [];
+    for (const file of files) {
+      for (const id of patchRowIds(
+        dsh.loadOverlayPatches('build-dsh-host', path.join(dir, file))
+      )) {
+        ids.add(id);
+      }
+    }
+  }
+  return ids;
+}
+
+function displayOf(dir, manifest) {
+  let locale = {};
+  const file = path.join(dir, 'locale', 'en.json');
+  try {
+    if (fs.existsSync(file)) locale = readJson(file);
+  } catch {
+    // Display text falls back to package.json.
+  }
+  const text = (value) => (typeof value === 'string' ? value : undefined);
+  return {
+    title: text(locale.title) ?? manifest.name,
+    description: text(locale.description) ?? text(manifest.description) ?? '',
+    ...(typeof manifest.icon === 'string' ? { icon: manifest.icon } : {}),
+  };
+}
+
+/**
+ * The post-install half of the plugin audit (decision 059), on the pruned
+ * tree: identity, no `dsh.client` / `bin`, a DSH bundle, compatibility with
+ * the pinned DSH (DSH's own rule, no exemption), the bundle patch, licences,
+ * size, and the sensitive-API report. `dsh` is {@link loadStagedDsh}; the
+ * source half (double key, closure, install scripts) ran in the preflight.
+ * Returns the manifest's `plugins` section, in allowlist order.
+ */
+export function auditInstalledPlugins({ outDir, allowlist, closures, dshPin, dsh }) {
+  const failures = [];
+  const plugins = [];
+  if (allowlist.plugins.length === 0) return { failures, plugins };
+  const existingIds = productRowIds(outDir, dsh);
+  for (const entry of allowlist.plugins) {
+    const { name, version } = entry;
+    const own = `node_modules/${name}`;
+    const dir = path.join(outDir, ...own.split('/'));
+    const fail = (message) => failures.push(`${name}@${version}: ${message}`);
+    if (!fs.existsSync(path.join(dir, 'package.json'))) {
+      fail('is not installed');
+      continue;
+    }
+    const manifest = readJson(path.join(dir, 'package.json'));
+    if (manifest.name !== name || manifest.version !== version) {
+      fail(`installed as ${manifest.name}@${manifest.version}`);
+    }
+    if (manifest.dsh?.client !== undefined) fail('carries dsh.client (a UI plugin)');
+    if (manifest.bin !== undefined) fail('declares bin');
+
+    try {
+      const issue = dsh.evaluatePluginCompatibility(manifest, {}, dshPin);
+      if (issue)
+        fail(`incompatible with DSH ${dshPin}: ${JSON.stringify(issue.peers)} (no exemption)`);
+    } catch (error) {
+      fail(`peer check failed: ${error.message}`);
+    }
+
+    let expressions = [];
+    const patchFiles = declaredPatchFiles(manifest.dsh?.bundle);
+    if (patchFiles === null) fail('is not a DSH bundle (no dsh.bundle.patch)');
+    else {
+      const patches = [];
+      for (const file of patchFiles) {
+        const abs = path.resolve(dir, file);
+        if (!abs.startsWith(`${dir}${path.sep}`)) {
+          fail(`bundle patch ${file} lies outside the package`);
+          continue;
+        }
+        try {
+          patches.push(...dsh.loadOverlayPatches('build-dsh-host', abs));
+        } catch (error) {
+          fail(error.message);
+        }
+      }
+      const audit = auditBundlePatches({
+        patches,
+        packageName: name,
+        packageUrl: pathToFileURL(dir).href,
+        rows: entry.rows,
+        existingIds,
+      });
+      for (const failure of audit.failures) fail(failure);
+      expressions = audit.expressions;
+    }
+
+    const license = licenseOf(manifest);
+    if (!isAllowedLicense(license))
+      fail(`licence ${license ?? '(none)'} is not on the plugin list`);
+    const hasLicenseFile = fs
+      .readdirSync(dir, { withFileTypes: true })
+      .some((item) => item.isFile() && isLicenseFileName(item.name));
+    if (!hasLicenseFile) fail('ships without a licence file');
+    const closure = closures[name] ?? [];
+    for (const rel of closure) {
+      const file = path.join(outDir, ...rel.split('/'), 'package.json');
+      if (!fs.existsSync(file)) continue;
+      const depLicense = licenseOf(readJson(file));
+      if (!isAllowedLicense(depLicense)) {
+        fail(`${lockPathName(rel)} has licence ${depLicense ?? '(none)'}, not on the plugin list`);
+      }
+    }
+
+    // Measured over the package and the closure it brings; nested paths are counted once.
+    const paths = [own, ...closure];
+    const roots = paths
+      .filter((rel) => !paths.some((other) => other !== rel && rel.startsWith(`${other}/`)))
+      .map((rel) => path.join(outDir, ...rel.split('/')))
+      .filter((abs) => fs.existsSync(abs));
+    const size = roots.reduce(
+      (sum, abs) => {
+        const stats = treeStats(abs);
+        return { bytes: sum.bytes + stats.bytes, files: sum.files + stats.files };
+      },
+      { bytes: 0, files: 0 }
+    );
+    const budget = evaluateDshPlugin(size, entry.limits);
+    if (budget.status !== 'ok') {
+      fail(
+        `${formatMiB(size.bytes)} / ${size.files} files is over its ${formatMiB(budget.ceiling.bytes)} / ${budget.ceiling.files} ceiling`
+      );
+    }
+
+    plugins.push({
+      name,
+      version,
+      kind: entry.kind,
+      integrity: entry.integrity,
+      defaultEnabled: entry.defaultEnabled,
+      description: typeof manifest.description === 'string' ? manifest.description : '',
+      display: displayOf(dir, manifest),
+      rows: entry.rows,
+      tools: entry.tools,
+      replaces: entry.replaces ?? [],
+      review: entry.review,
+      license,
+      dependencies: Object.keys(entry.dependencies ?? {}).sort(),
+      bytes: size.bytes,
+      files: size.files,
+      limits: budget.ceiling,
+      patchExpressions: expressions,
+      sensitiveApis: scanSensitiveApis(outDir, roots),
+    });
+  }
+  return { failures, plugins };
+}
+
 // ---- verification ------------------------------------------------------------
 
 /** Files every target ships (relative to the artifact root). */
@@ -786,9 +1145,6 @@ export function requiredFiles(target) {
     'node_modules/@deepseek-ai/dsh-skill-badge/assets/dsh-badge.md',
     'node_modules/@deepseek-ai/dsh-session-persistence-jsonl/lib/worker.cjs',
     'node_modules/@deepseek-ai/dsh-ptc-runtime-node/lib/process.js',
-    // decision 016: plugin installs run this, never a pnpm from PATH.
-    'node_modules/pnpm/bin/pnpm.mjs',
-    'node_modules/pnpm/dist/pnpm.mjs',
     // P1-6b: the permission row and its bash parser, read by path on the first bash call.
     'node_modules/@aiclient/dsh-app/lib/permissions.js',
     'node_modules/web-tree-sitter/web-tree-sitter.wasm',
@@ -817,6 +1173,8 @@ export const FORBIDDEN_PATHS = [
 ];
 
 const FORBIDDEN_FILE = /\.(map|d\.ts|d\.mts|d\.cts|tsbuildinfo|pdb)$/i;
+/** Decision 058: no package manager ships, at any depth. */
+const PACKAGE_MANAGER_DIR = /(^|\/)node_modules\/(pnpm|@pnpm)$/;
 
 /**
  * Structural verification of an artifact directory for `target`. Throws with
@@ -852,6 +1210,8 @@ export function verifyDshArtifact({ outDir, target, requireManifest = false }) {
       failures.push(`must not ship ${entry.rel}`);
     else if (entry.kind === 'dir' && entry.rel.endsWith('/.bin'))
       failures.push(`must not ship ${entry.rel}`);
+    else if (entry.kind === 'dir' && PACKAGE_MANAGER_DIR.test(entry.rel))
+      failures.push(`must not ship ${entry.rel}: no package manager ships (decision 058)`);
   }
 
   // The product bundle: bridges are bundled JS, the probe row is absent (decision 015).
@@ -954,6 +1314,19 @@ export function verifyDshArtifact({ outDir, target, requireManifest = false }) {
           `manifest target ${manifest.target?.platform}-${manifest.target?.arch} is not ${targetKey(target)}`
         );
       }
+      // Decision 059: the plugins section lists what is preinstalled, even when empty.
+      if (!Array.isArray(manifest.plugins)) failures.push('manifest has no plugins section');
+      else {
+        for (const plugin of manifest.plugins) {
+          const file = abs(`node_modules/${plugin?.name}/package.json`);
+          const installed = fs.existsSync(file) ? readJson(file).version : undefined;
+          if (installed !== plugin?.version) {
+            failures.push(
+              `manifest plugin ${plugin?.name}@${plugin?.version} is not installed (found ${installed ?? 'nothing'})`
+            );
+          }
+        }
+      }
     } catch (error) {
       failures.push(`${DSH_HOST_MANIFEST} is not valid JSON: ${error.message}`);
     }
@@ -986,6 +1359,7 @@ export function buildManifest({
   materialized,
   lockSha256,
   builtAt,
+  plugins = [],
 }) {
   return {
     schema: MANIFEST_SCHEMA,
@@ -1006,5 +1380,7 @@ export function buildManifest({
     pruned,
     materialized,
     natives,
+    // Decision 059: the audited allowlisted plugins; Main and the host read the list from here.
+    plugins,
   };
 }

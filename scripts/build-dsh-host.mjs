@@ -1,6 +1,6 @@
 /**
  * Build the DSH host artifact shipped as resources/dsh-host (dsh-rebase P1-2,
- * decisions 011, 013, 014, 016).
+ * decisions 011, 013, 014; P1-10a, decisions 058, 059).
  *
  *   node scripts/build-dsh-host.mjs [--platform <p> --arch <a>] [--out <dir>]
  *
@@ -8,11 +8,13 @@
  *   host.js                     esbuild bundle of src/dsh-host/host.ts and its lib/
  *                               (npm packages external)
  *   package.json                the install anchor (@aiclient/dsh-host)
- *   dsh-host-manifest.json      target, versions, git commit, size, file count, natives
+ *   dsh-host-manifest.json      target, versions, git commit, size, file count, natives,
+ *                               and the audited allowlisted plugins (`plugins`)
  *   THIRD_PARTY_LICENSES.json   one entry per installed package of the final tree
  *   node_modules/               `npm ci` of the committed lockfile, pruned (B tier);
  *                               @aiclient/dsh-app is a real copy whose bridge rows
- *                               are esbuild bundles of src/dsh-host/bridge
+ *                               are esbuild bundles of src/dsh-host/bridge; the
+ *                               allowlisted plugins sit beside it (install scope)
  *
  * The target defaults to this machine: packaging jobs run on each platform's
  * own runner. `--platform/--arch` build a foreign tree for a static rehearsal
@@ -27,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   assertSupportedTarget,
+  auditInstalledPlugins,
   BRIDGE_ENTRIES,
   bridgeBuildOptions,
   buildManifest,
@@ -41,6 +44,7 @@ import {
   fixExecutableBits,
   formatMiB,
   hostBuildOptions,
+  loadStagedDsh,
   materializeLinks,
   npmCiArgs,
   preflightDshHost,
@@ -189,7 +193,7 @@ async function main() {
       `static rehearsal for ${targetKey(target)} on ${process.platform}-${process.arch}; not for packaging`
     );
 
-  const { dshPin, version } = preflightDshHost(sourceDir);
+  const { dshPin, version, allowlist, closures } = preflightDshHost(sourceDir);
   stage(args.out);
   const bridges = await compile(args.out);
   log(
@@ -209,6 +213,27 @@ async function main() {
   const fixed = fixExecutableBits(args.out, target);
   log(
     `pruned ${pruned.removedFiles} files (${formatMiB(pruned.removedBytes)})${fixed.length ? `; chmod 755 ${fixed.join(', ')}` : ''}`
+  );
+
+  // Decision 059: the allowlisted plugins, judged by the staged DSH itself.
+  const plugins = auditInstalledPlugins({
+    outDir: args.out,
+    allowlist,
+    closures,
+    dshPin,
+    dsh: allowlist.plugins.length > 0 ? await loadStagedDsh(args.out) : null,
+  });
+  if (plugins.failures.length > 0) {
+    throw new Error(`DSH plugin audit failed:\n  - ${plugins.failures.join('\n  - ')}`);
+  }
+  log(
+    `plugins: ${
+      plugins.plugins
+        .map(
+          (item) => `${item.name}@${item.version} (${formatMiB(item.bytes)}, ${item.files} files)`
+        )
+        .join(', ') || 'none allowlisted'
+    }`
   );
 
   const packages = collectLicenses(args.out);
@@ -241,6 +266,7 @@ async function main() {
       })),
     },
     materialized,
+    plugins: plugins.plugins,
   });
   fs.writeFileSync(
     path.join(args.out, DSH_HOST_MANIFEST),

@@ -1,0 +1,5 @@
+{
+  "$comment": "DSH plugins preinstalled in resources/dsh-host (decisions 058-060). Each entry is an exact dependency of ../package.json, locked at the same integrity; scripts/build-dsh-host.mjs audits them and writes dsh-host-manifest.json's plugins section. Review records live in reviews/. Entries change by PR together with package.json and the lockfile, after review and user approval.",
+  "schema": 1,
+  "plugins": []
+}

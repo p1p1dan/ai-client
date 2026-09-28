@@ -29,6 +29,9 @@ const dshHostDir = path.join(repoRoot, 'src', 'dsh-host');
 const dshPackage = JSON.parse(readFileSync(path.join(dshHostDir, 'package.json'), 'utf8'));
 const dshLock = JSON.parse(readFileSync(path.join(dshHostDir, 'package-lock.json'), 'utf8'));
 const dshBundle = JSON.parse(readFileSync(path.join(dshHostDir, 'bundle', 'package.json'), 'utf8'));
+const dshAllowlist = JSON.parse(
+  readFileSync(path.join(dshHostDir, 'plugins', 'allowlist.json'), 'utf8')
+);
 
 describe('afterPack resource layout', () => {
   it('copies resources inside the macOS app bundle', () => {
@@ -191,8 +194,13 @@ describe('electron-builder.yml (C4)', () => {
 describe('DSH host package dependency boundary', () => {
   const pin = dshPackage.dependencies['@deepseek-ai/dsh-base'];
 
-  it("declares exactly the host, the bundle, pnpm and the permission row's bash parser", () => {
-    expect(Object.keys(dshPackage.dependencies).sort()).toEqual([
+  it("declares exactly the host, the bundle, the permission row's bash parser and the allowlisted plugins", () => {
+    const plugins = dshAllowlist.plugins.map((entry) => entry.name);
+    expect(
+      Object.keys(dshPackage.dependencies)
+        .filter((name) => !plugins.includes(name))
+        .sort()
+    ).toEqual([
       '@aiclient/dsh-app',
       '@deepseek-ai/cordis',
       '@deepseek-ai/cordis-plugin-group',
@@ -203,11 +211,15 @@ describe('DSH host package dependency boundary', () => {
       '@deepseek-ai/dsh-home-paths',
       '@deepseek-ai/dsh-launch-environment',
       '@deepseek-ai/dsh-system-prompt',
-      'pnpm',
       // P1-6b: wasm only (web-tree-sitter runtime + bash grammar), both MIT.
       'tree-sitter-bash',
       'web-tree-sitter',
     ]);
+    // Decision 058: no package manager ships; plugins are preinstalled at build time.
+    expect(dshPackage.dependencies).not.toHaveProperty('pnpm');
+    expect(
+      Object.keys(dshLock.packages).filter((rel) => /(^|\/)node_modules\/pnpm$/.test(rel))
+    ).toEqual([]);
     expect(dshPackage.devDependencies).toBeUndefined();
     expect(dshPackage.dependencies['@aiclient/dsh-app']).toBe('file:./bundle');
     expect(dshPackage.dependencies).not.toHaveProperty(PROBE_BUNDLE);

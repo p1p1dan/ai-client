@@ -191,12 +191,6 @@ function addPruneNoise(root) {
   nm('@emnapi/runtime/package.json', JSON.stringify(pkg('@emnapi/runtime')));
   nm('@deepseek-ai/node-addon-system-linux-x64/bin/musl/system.node', nativeBytes(LINUX));
   nm('@koromix/koffi-linux-x64/musl_x64/koffi.node', nativeBytes(LINUX));
-  nm(
-    'pnpm/dist/node_modules/@reflink/reflink-darwin-arm64/reflink.darwin-arm64.node',
-    nativeBytes(MAC)
-  );
-  nm('pnpm/dist/vendor/fastlist-0.3.0-x64.exe', nativeBytes(WIN));
-  nm('pnpm/dist/node_modules/node-gyp/src/win_delay_load_hook.cc');
   nm('@deepseek-ai/dsh-base/lib/index.js.map');
   nm('@deepseek-ai/dsh-base/lib/types/index.d.ts');
   nm('@deepseek-ai/dsh-spill-policy/lib/types/notice.d.ts');
@@ -220,10 +214,6 @@ describe('pruneReason keeps every package directory the host loads', () => {
     'node_modules/node-pty',
     'node_modules/node-pty/lib',
     'node_modules/node-pty/prebuilds',
-    'node_modules/pnpm',
-    'node_modules/pnpm/dist',
-    'node_modules/pnpm/dist/node_modules',
-    'node_modules/pnpm/dist/node_modules/@reflink',
     'node_modules/@img',
     'node_modules/@img/colour',
     'node_modules/sharp',
@@ -245,7 +235,6 @@ describe('pruneReason keeps every package directory the host loads', () => {
           ? [
               'node_modules/node-pty/third_party',
               'node_modules/node-pty/third_party/conpty/1.25/win10-x64',
-              'node_modules/pnpm/dist/vendor',
             ]
           : [
               `node_modules/@img/sharp-libvips-${key}`,
@@ -302,22 +291,6 @@ describe('pruneReason removes the B-tier payload', () => {
     ).not.toBeNull();
     expect(pruneReason('node_modules/@img/sharp-linux-x64', 'dir', MAC)).not.toBeNull();
     expect(pruneReason('node_modules/@emnapi', 'dir', LINUX)).not.toBeNull();
-    expect(
-      pruneReason('node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-arm64', 'dir', LINUX)
-    ).not.toBeNull();
-    expect(
-      pruneReason('node_modules/pnpm/dist/node_modules/@reflink/reflink-darwin-arm64', 'dir', MAC)
-    ).toBeNull();
-    expect(
-      pruneReason('node_modules/pnpm/dist/node_modules/@reflink/reflink-win32-x64-msvc', 'dir', WIN)
-    ).toBeNull();
-    expect(pruneReason('node_modules/pnpm/dist/vendor', 'dir', LINUX)).not.toBeNull();
-    expect(
-      pruneReason('node_modules/pnpm/dist/vendor/fastlist-0.3.0-x86.exe', 'file', WIN)
-    ).not.toBeNull();
-    expect(
-      pruneReason('node_modules/pnpm/dist/vendor/fastlist-0.3.0-x64.exe', 'file', WIN)
-    ).toBeNull();
     expect(pruneReason('node_modules/a/.bin', 'dir', LINUX)).not.toBeNull();
   });
 
@@ -372,8 +345,6 @@ describe('pruneReason removes the B-tier payload', () => {
       'node_modules/@img/sharp-libvips-linux-x64/README.md',
       'node_modules/@img/sharp-libvips-linux-x64/versions.json',
       'node_modules/koffi/src/koffi/index.js',
-      'node_modules/pnpm/dist/node_modules/node-gyp/src/win_delay_load_hook.cc',
-      'node_modules/pnpm/dist/node_modules/node-gyp/addon.gypi',
     ]) {
       expect(pruneReason(rel, 'file', LINUX), rel).toBeNull();
     }
@@ -410,7 +381,6 @@ describe('pruneTree over a whole fixture', () => {
       'node_modules/@img/sharp-wasm32',
       'node_modules/@img/sharp-linuxmusl-x64',
       'node_modules/@emnapi',
-      'node_modules/pnpm/dist/vendor',
       'node_modules/@deepseek-ai/dsh-spill-policy/lib/types/notice.d.ts',
     ]) {
       expect(fs.existsSync(path.join(tmp, ...rel.split('/'))), rel).toBe(false);
@@ -498,9 +468,31 @@ describe('verifyDshArtifact rejects', () => {
   });
 
   it('a required package without its licence text', () => {
-    fs.rmSync(path.join(tmp, 'node_modules', 'pnpm', 'LICENSE'));
+    fs.rmSync(path.join(tmp, 'node_modules', 'node-pty', 'LICENSE'));
     writeLicenses(tmp);
-    failsWith(/node_modules\/pnpm ships without a licence file/);
+    failsWith(/node_modules\/node-pty ships without a licence file/);
+  });
+
+  it('pnpm or any package manager, at any depth (decision 058)', () => {
+    writeJson(path.join(tmp, 'node_modules', 'pnpm', 'package.json'), pkg('pnpm'));
+    writeJson(
+      path.join(tmp, 'node_modules', 'x', 'node_modules', '@pnpm', 'exe', 'package.json'),
+      pkg('@pnpm/exe')
+    );
+    writeLicenses(tmp);
+    failsWith(
+      /must not ship node_modules\/pnpm: no package manager[\s\S]*node_modules\/x\/node_modules\/@pnpm:/
+    );
+  });
+
+  it('but not a package whose name only mentions pnpm', () => {
+    writeJson(
+      path.join(tmp, 'node_modules', 'pnpm-lock-parser', 'package.json'),
+      pkg('pnpm-lock-parser')
+    );
+    writeJson(path.join(tmp, 'node_modules', '@x', 'pnpm', 'package.json'), pkg('@x/pnpm'));
+    writeLicenses(tmp);
+    expect(() => verifyDshArtifact({ outDir: tmp, target: LINUX })).not.toThrow();
   });
 
   it('the probe row or the probe plugin in the product bundle (decision 015)', () => {
@@ -548,10 +540,25 @@ describe('verifyDshArtifact rejects', () => {
     writeJson(path.join(tmp, DSH_HOST_MANIFEST), {
       schema: 1,
       target: { platform: 'darwin', arch: 'arm64' },
+      plugins: [],
     });
     expect(() => verifyDshArtifact({ outDir: tmp, target: LINUX, requireManifest: true })).toThrow(
       /manifest target darwin-arm64 is not linux-x64/
     );
+  });
+
+  it('a manifest without its plugins section, or listing a plugin that is not installed', () => {
+    const verify = () => verifyDshArtifact({ outDir: tmp, target: LINUX, requireManifest: true });
+    const manifest = { schema: 1, target: LINUX };
+    writeJson(path.join(tmp, DSH_HOST_MANIFEST), manifest);
+    expect(verify).toThrow(/manifest has no plugins section/);
+    writeJson(path.join(tmp, DSH_HOST_MANIFEST), { ...manifest, plugins: [] });
+    expect(verify).not.toThrow();
+    writeJson(path.join(tmp, DSH_HOST_MANIFEST), {
+      ...manifest,
+      plugins: [{ name: 'dsh-fixture-plugin', version: '1.0.0' }],
+    });
+    expect(verify).toThrow(/manifest plugin dsh-fixture-plugin@1\.0\.0 is not installed/);
   });
 });
 
@@ -641,16 +648,24 @@ describe('install and staging', () => {
     expect(preflightDshHost(sourceDir).dshPin).toMatch(/^\d+\.\d+\.\d+/);
     const copy = path.join(tmp, 'src');
     fs.mkdirSync(path.join(copy, 'bundle'), { recursive: true });
-    for (const rel of ['package.json', 'package-lock.json', 'bundle/package.json']) {
+    fs.mkdirSync(path.join(copy, 'plugins'), { recursive: true });
+    for (const rel of [
+      'package.json',
+      'package-lock.json',
+      'bundle/package.json',
+      'plugins/allowlist.json',
+    ]) {
       fs.copyFileSync(path.join(sourceDir, ...rel.split('/')), path.join(copy, ...rel.split('/')));
     }
     const manifest = JSON.parse(fs.readFileSync(path.join(copy, 'package.json'), 'utf8'));
-    manifest.dependencies.pnpm = `^${manifest.dependencies.pnpm}`;
+    manifest.dependencies['web-tree-sitter'] = `^${manifest.dependencies['web-tree-sitter']}`;
     writeJson(path.join(copy, 'package.json'), manifest);
     const bundle = JSON.parse(fs.readFileSync(path.join(copy, 'bundle', 'package.json'), 'utf8'));
     bundle.peerDependencies['@deepseek-ai/dsh-llm'] = '0.0.1';
     writeJson(path.join(copy, 'bundle', 'package.json'), bundle);
-    expect(() => preflightDshHost(copy)).toThrow(/pnpm must be an exact version[\s\S]*bundle peer/);
+    expect(() => preflightDshHost(copy)).toThrow(
+      /web-tree-sitter must be an exact version[\s\S]*bundle peer/
+    );
   });
 });
 
