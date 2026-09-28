@@ -13,6 +13,10 @@ import {
 // Inlined to break circular chunk: shell -> settings -> shell.
 // Canonical definition: src/shared/credentialMode.ts
 const CREDENTIAL_MODE_SETTING_KEY = 'credentialMode';
+// dsh-rebase P1-10b: the user's DSH plugin selection, written by
+// services/agent-host/dshPluginSelection.ts. Canonical definition:
+// src/shared/dshPlugins.ts (a test pins the two equal).
+const DSH_PLUGINS_SETTING_KEY = 'dshPlugins';
 
 /**
  * The renderer's not-yet-flushed settings object, or `null` when nothing is
@@ -55,6 +59,7 @@ const MAIN_OWNED_SETTING_KEYS: readonly string[] = [
   'onboarding',
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  DSH_PLUGINS_SETTING_KEY,
 ];
 
 /** Take the Main-owned keys from the file as it is NOW, over a renderer payload. */

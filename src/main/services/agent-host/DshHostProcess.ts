@@ -22,11 +22,15 @@ import { PI_MANAGED_AGENT_DIR_NAME } from '@shared/piModelConfig';
 import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { buildDshHostEnvironment } from './dshHostEnvironment';
+import { readDshPluginSelection } from './dshPluginSelection';
 
 export {
   buildDshHostEnvironment,
   DSH_HOST_PERMISSION_AGENT_DIR_ENV,
+  DSH_HOST_PLUGINS_ENV,
   DSH_SENSITIVE_ENV_PATTERN,
+  dshHostPluginSelection,
+  dshPluginSelectionKey,
   isStrippedDshHostEnvName,
 } from './dshHostEnvironment';
 
@@ -135,8 +139,12 @@ export function dshPermissionAgentDir(appStateRoot: string): string {
   return path.join(appStateRoot, PI_MANAGED_AGENT_DIR_NAME);
 }
 
+/**
+ * `enabledPlugins` (P1-10b, decision 108 rule 5): the user's plugin list, or
+ * `undefined` when nobody chose (the host applies the allowlist's defaults).
+ */
 export function buildDshHostLaunch(
-  input: DshHostLayoutInput & { appStateRoot: string }
+  input: DshHostLayoutInput & { appStateRoot: string; enabledPlugins?: readonly string[] }
 ): DshHostLaunch {
   const layout = resolveDshHostLayout(input);
   const dshHome = resolveDshHome(input);
@@ -151,6 +159,7 @@ export function buildDshHostLaunch(
       nativeCacheDir,
       isPackaged: input.isPackaged,
       permissionAgentDir: dshPermissionAgentDir(input.appStateRoot),
+      enabledPlugins: input.enabledPlugins,
       env: input.env,
       platform: input.platform,
     }),
@@ -158,13 +167,16 @@ export function buildDshHostLaunch(
   };
 }
 
-/** The launch for this running app. */
-export function currentDshHostLaunch(): DshHostLaunch {
+/** The launch for this running app, with the plugin selection as of now (P1-10b). */
+export function currentDshHostLaunch(
+  readPluginSelection: () => string[] | undefined = () => readDshPluginSelection()
+): DshHostLaunch {
   return buildDshHostLaunch({
     isPackaged: app.isPackaged,
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
     appStateRoot: getAppStateRoot(),
+    enabledPlugins: readPluginSelection(),
   });
 }
 

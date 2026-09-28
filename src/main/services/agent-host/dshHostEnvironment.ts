@@ -51,6 +51,37 @@ const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
  */
 export const DSH_HOST_PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
 
+/**
+ * dsh-rebase P1-10b (decision 108 rule 6): the plugins the user enabled, as a
+ * JSON list of package names. Absent when nobody chose: the host then applies
+ * the allowlist's `defaultEnabled`. Read by host.ts (`PLUGINS_ENV` in
+ * src/dsh-host/lib/hostPlugins.ts; hostStatic.test.ts pins the two equal),
+ * which intersects it with its own allowlist. A package name, not a secret.
+ */
+export const DSH_HOST_PLUGINS_ENV = 'AICLIENT_DSH_PLUGINS';
+
+/** What a launch that carries no plugin list runs with: the allowlist's defaults. */
+export const DSH_HOST_DEFAULT_PLUGIN_SELECTION = 'default';
+
+/** `DSH_HOST_PLUGINS_ENV`'s value for an enabled list: each name once, sorted. None when nobody chose. */
+export function dshHostPluginsEnvValue(enabled: readonly string[] | undefined): string | undefined {
+  return enabled === undefined ? undefined : JSON.stringify([...new Set(enabled)].sort());
+}
+
+/**
+ * The plugin selection a launch environment carries, as one comparable key:
+ * the variable's value, or `default`. The supervisor records it per host, and
+ * WorkerManager restarts a host whose key is not Main's current one.
+ */
+export function dshHostPluginSelection(env: Readonly<Record<string, string | undefined>>): string {
+  return env[DSH_HOST_PLUGINS_ENV] ?? DSH_HOST_DEFAULT_PLUGIN_SELECTION;
+}
+
+/** The key a launch built from `enabled` would carry (`dshHostPluginSelection`). */
+export function dshPluginSelectionKey(enabled: readonly string[] | undefined): string {
+  return dshHostPluginsEnvValue(enabled) ?? DSH_HOST_DEFAULT_PLUGIN_SELECTION;
+}
+
 /** Whether an inherited variable stays behind (decision 022). */
 export function isStrippedDshHostEnvName(name: string): boolean {
   if (DSH_SENSITIVE_ENV_PATTERN.test(name)) return true;
@@ -88,12 +119,15 @@ export function setDshHostEnvEntry(
  *
  * `permissionAgentDir` (P1-6c) becomes AICLIENT_PERMISSION_AGENT_DIR; without
  * it the host reads no user permission policy (the packaged smoke's case).
+ * `enabledPlugins` (P1-10b) becomes AICLIENT_DSH_PLUGINS; without it the host
+ * enables the allowlist's defaults.
  */
 export function buildDshHostEnvironment(input: {
   dshHome: string;
   nativeCacheDir: string;
   isPackaged: boolean;
   permissionAgentDir?: string;
+  enabledPlugins?: readonly string[];
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
 }): Record<string, string> {
@@ -111,6 +145,8 @@ export function buildDshHostEnvironment(input: {
   if (input.permissionAgentDir) {
     explicit[DSH_HOST_PERMISSION_AGENT_DIR_ENV] = input.permissionAgentDir;
   }
+  const plugins = dshHostPluginsEnvValue(input.enabledPlugins);
+  if (plugins !== undefined) explicit[DSH_HOST_PLUGINS_ENV] = plugins;
   for (const name of FORWARDED_ENV) {
     const value = source[name];
     if (value !== undefined) explicit[name] = value;

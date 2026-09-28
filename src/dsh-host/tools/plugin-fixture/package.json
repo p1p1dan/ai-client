@@ -1,0 +1,23 @@
+{
+  "name": "@aiclient-test/dsh-fixture-plugin",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "description": "Test-only DSH plugin bundle for the P1-10b checks (dsh-rebase decision 108): one row, one tool. Copied into a scratch host install by tools/lib/plugin-install.ts; never part of the app build.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/dsh-tools": "0.1.7-rc.2"
+  }
+}

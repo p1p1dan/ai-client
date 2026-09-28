@@ -100,6 +100,8 @@ interface FakeHost {
   collectSessions?: ReturnType<typeof vi.fn>;
   /** The model plan revision the running host was configured with (P1-5a). */
   planRevision?: string;
+  /** The plugin selection the running host was launched with (P1-10b). */
+  pluginSelection?: string;
 }
 
 const BUDGETED_HOST_EXITS = new Set([
@@ -200,6 +202,9 @@ function createHarness(
         },
         ...(fake.lastExit ? { lastExit: { ...fake.lastExit } } : {}),
         ...(fake.state === 'ready' && fake.planRevision ? { planRevision: fake.planRevision } : {}),
+        ...(fake.state === 'ready' && fake.pluginSelection
+          ? { pluginSelection: fake.pluginSelection }
+          : {}),
       })),
       ensureHost: vi.fn(async (options: { userInitiated?: boolean } = {}) => {
         if (fake.state === 'disposed') {
@@ -4853,5 +4858,93 @@ describe('WorkerManager — a host on an older model plan (dsh-rebase P1-5a, dec
     h.host.busy.clear();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(h.host.shutdown).not.toHaveBeenCalled();
+  });
+});
+
+describe('WorkerManager — a host on another plugin selection (dsh-rebase P1-10b, decision 108 rule 7)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('[WM-plugins-01] restarts an idle host launched with another selection', async () => {
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.pluginSelection = 'default';
+    await create(h.manager, 's1', 7);
+    h.manager.reconcileHostPlugins('default');
+    await Promise.resolve();
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.waitFor(() => expect(h.host?.shutdown).toHaveBeenCalledWith('invalidate'));
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+  });
+
+  it('[WM-plugins-02] waits for the turn in flight, then restarts', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.pluginSelection = 'default';
+    await create(h.manager, 's1', 7);
+    const turnId = await h.manager.send({
+      sessionId: 's1',
+      attemptId: 'a1',
+      text: 'still working',
+      ownerWebContentsId: 7,
+    });
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.records[0].emit({
+      type: 'session.completed',
+      sessionId: 's1',
+      requestId: turnId,
+      payload: {},
+    });
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: turnId,
+      payload: { status: 'idle' },
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
+    expect(h.host.shutdown).toHaveBeenCalledTimes(1);
+  });
+
+  it('[WM-plugins-03] leaves a host that is not running alone, and forgets a change reverted before idle', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.state = 'idle';
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.host.state = 'ready';
+    h.host.pluginSelection = 'default';
+    h.host.busy.add('c1-1');
+    await create(h.manager, 's1', 7);
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    h.manager.reconcileHostPlugins('default');
+    h.host.busy.clear();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+  });
+
+  it('[WM-plugins-04] one restart covers a stale plan and a stale selection together', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.planRevision = 'rev-a';
+    h.host.pluginSelection = 'default';
+    h.host.busy.add('c1-1');
+    await create(h.manager, 's1', 7);
+    h.manager.reconcileModelPlan('rev-b');
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.host.busy.clear();
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(h.host.shutdown).toHaveBeenCalledTimes(1);
+    expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
   });
 });

@@ -15,7 +15,8 @@
  * - the profile bundle list the host composes ({@link targetProfileBundles}).
  *
  * No I/O and no imports: `scripts/*.mjs` load this file through Node's type
- * stripping, so the syntax stays erasable.
+ * stripping, so the syntax stays erasable. host.js takes it in too (P1-10b,
+ * `src/dsh-host/lib/hostPlugins.ts`; `HOST_INPUTS` in the build lib).
  */
 
 export const ALLOWLIST_SCHEMA = 1;
@@ -672,7 +673,7 @@ export function auditBundlePatches(input: BundlePatchAuditInput): {
 export function targetProfileBundles(
   productBundles: readonly string[],
   enabled: readonly string[],
-  allowlist: PluginAllowlist
+  allowlist: { plugins: ReadonlyArray<Pick<AllowlistEntry, 'name' | 'replaces'>> }
 ): string[] {
   const wanted = new Set(enabled);
   const plugins = allowlist.plugins

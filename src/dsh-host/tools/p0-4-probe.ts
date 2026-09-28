@@ -218,6 +218,9 @@ function hostEnv(extra: Record<string, string> = {}): Record<string, string> {
     DSH_TELEMETRY_DISABLED: '1',
     AICLIENT_PROBE_EVENT_LOG: join(logs, 'events.jsonl'),
     AICLIENT_PROBE_HOOK_LOG: join(logs, 'hooks.jsonl'),
+    // P1-10b (decision 108 rule 4): keep the probe bundle launchHost lists;
+    // the host drops every bundle off its allowlist otherwise.
+    AICLIENT_DSH_PROBE_BUNDLE: '1',
     ...extra,
   };
 }

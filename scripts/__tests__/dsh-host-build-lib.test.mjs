@@ -703,11 +703,15 @@ describe('the host bundle (P1-3a)', () => {
     const verdict = checkHostMetafile(result.metafile, repoRoot);
     expect(verdict.failures).toEqual([]);
     // P1-5: the model plan's overlays and the credential relay (decisions 033, 034).
+    // P1-10b: the plugin rules and the shared allowlist library (decision 108).
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
       'src/dsh-host/lib/credentialRelay.ts',
       'src/dsh-host/lib/hostModelPlan.ts',
+      'src/dsh-host/lib/hostPlugins.ts',
       'src/dsh-host/lib/hostProfile.ts',
+      'src/shared/dshPluginAllowlist.ts',
+      'src/shared/dshPlugins.ts',
     ]);
     expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
       '@deepseek-ai/dsh-app-boot',

@@ -17,12 +17,13 @@
  *
  * One host serves every chat session of the app (decision 019). IPC, when
  * spawned with an 'ipc' stdio slot (protocol: src/shared/types/dshHostProtocol.ts):
- *   host -> parent: { type: 'ready', pid, revision, routeDiagnostics, ... }
- *                   once boot() settles and the aiclient-bridge row holds the
- *                   channel; { type: 'fatal' } right before exiting on a
- *                   refused boot; { type: 'stopped' } after disposal, just
- *                   before disconnecting; { host: 'credential' } whenever a
- *                   model request needs a key (lib/credentialRelay.ts).
+ *   host -> parent: { type: 'ready', pid, revision, routeDiagnostics, plugins,
+ *                   ... } once boot() settles and the aiclient-bridge row holds
+ *                   the channel; { type: 'fatal', message, code? } right
+ *                   before exiting on a refused boot; { type: 'stopped' }
+ *                   after disposal, just before disconnecting;
+ *                   { host: 'credential' } whenever a model request needs a
+ *                   key (lib/credentialRelay.ts).
  *   parent -> host: { host: 'configure' } first: the model plan (P1-5a,
  *                   decision 033). Nothing is composed before it, and a host
  *                   that gets none within 10 s refuses to boot. Then
@@ -40,13 +41,19 @@
  * Environment (decision 023): the launch environment snapshot is the process
  * layer alone. No .env file is read, from the launch directory or from
  * DSH_HOME, and nothing is written into process.env.
+ *
+ * Plugins (P1-10b; decisions 058, 059, 108): the profile composes the product
+ * bundles plus the allowlisted plugins Main enabled (AICLIENT_DSH_PLUGINS, or
+ * the allowlist's defaults) that this host's own node_modules holds, audited
+ * layer by layer (lib/hostPlugins.ts); the profile's own patch layer is never
+ * read, and `ready.plugins` reports every allowlisted plugin's state.
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { format } from 'node:util';
 import { CredentialRelay } from './lib/credentialRelay.ts';
 import {
@@ -59,6 +66,25 @@ import {
   readConfigure,
   routeDiagnostics,
 } from './lib/hostModelPlan.ts';
+import {
+  allowlistFromManifest,
+  allowlistFromSource,
+  auditPluginLayers,
+  enabledNames,
+  type HostAllowlist,
+  type HostPlugin,
+  type InstalledPackage,
+  type InstallVerdict,
+  judgeInstalled,
+  PLUGINS_ENV,
+  PROBE_BUNDLE_ENV,
+  planProfileBundles,
+  pluginReport,
+  readEnabledInput,
+  UNDECLARED_ROWS_CODE,
+  undeclaredRows,
+  withInactiveRows,
+} from './lib/hostPlugins.ts';
 import {
   AGENT_DIR_ENV,
   agentDirOverlays,
@@ -140,9 +166,10 @@ function awaitConfigure(): Promise<HostModelPlan> {
   });
 }
 
-function fail(message: string): never {
+/** `code`, when given, is the refusal's stable name (e.g. decision 108's `DSH_HOST_UNDECLARED_ROWS`). */
+function fail(message: string, code?: string): never {
   process.stderr.write(`[dsh-host] ${message}\n`);
-  if (process.connected) process.send?.({ type: 'fatal', message });
+  if (process.connected) process.send?.({ type: 'fatal', message, ...(code ? { code } : {}) });
   process.exit(1);
 }
 
@@ -178,6 +205,91 @@ function describeArtifact(): Record<string, unknown> {
   };
 }
 
+/**
+ * P1-10b (decision 108 rule 3): the plugins this host may compose. Packaged,
+ * the manifest's `plugins` section the build audited; in a checkout,
+ * `plugins/allowlist.json`. An unreadable list allowlists nothing.
+ */
+function readHostAllowlist(): HostAllowlist {
+  const file =
+    artifact.form === 'packaged'
+      ? join(hostDir, 'dsh-host-manifest.json')
+      : join(hostDir, 'plugins', 'allowlist.json');
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(file, 'utf8'));
+  } catch (error) {
+    return {
+      plugins: [],
+      failures: [`${file} is unreadable (${String(error)}); no plugin is allowlisted`],
+    };
+  }
+  return artifact.form === 'packaged'
+    ? allowlistFromManifest((raw as { plugins?: unknown } | null)?.plugins)
+    : allowlistFromSource(raw);
+}
+
+/** Each allowlisted plugin as its own directory under this host's node_modules has it. */
+function inspectInstalledPlugins(plugins: readonly HostPlugin[]): Map<string, InstallVerdict> {
+  const verdicts = new Map<string, InstallVerdict>();
+  for (const plugin of plugins) {
+    const file = join(hostDir, 'node_modules', ...plugin.name.split('/'), 'package.json');
+    let found: InstalledPackage;
+    try {
+      const manifest = JSON.parse(readFileSync(file, 'utf8')) as {
+        name?: unknown;
+        version?: unknown;
+        dsh?: { bundle?: { patch?: unknown } };
+      } | null;
+      found = {
+        found: true,
+        name: manifest?.name,
+        version: manifest?.version,
+        bundle: manifest?.dsh?.bundle?.patch !== undefined,
+      };
+    } catch (error) {
+      found =
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+          ? { found: false }
+          : { found: 'unreadable', error: String(error) };
+    }
+    verdicts.set(plugin.name, judgeInstalled(plugin, found));
+  }
+  return verdicts;
+}
+
+/**
+ * The real path of `dir` (or `dir` itself when it cannot be resolved), in a
+ * form two paths compare equal in: Windows paths are case-insensitive.
+ */
+function realDirOf(dir: string): string {
+  let real: string;
+  try {
+    real = realpathSync(dir);
+  } catch {
+    real = resolve(dir);
+  }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+}
+
+/**
+ * Decision 058 rule 3: the profile's own patch file never composes. Say so
+ * when someone (or something) wrote patches into it.
+ */
+function warnIgnoredUserLayer(file: string): void {
+  if (!existsSync(file)) return;
+  try {
+    const patches = appBoot.loadOverlayPatches(BIN, file);
+    if (patches.length > 0) {
+      warn(
+        `${file} is ignored: a profile's own patch layer never composes (${patches.length} patch(es))`
+      );
+    }
+  } catch (error) {
+    warn(`${file} is ignored, and unreadable: ${String(error)}`);
+  }
+}
+
 const home = process.env.DSH_HOME;
 if (home === undefined || home === '') fail('DSH_HOME must be set; the host never uses ~/.dsh');
 // os.userInfo() reads the account database, so an overridden HOME cannot hide the real one.
@@ -204,15 +316,47 @@ const installAnchor = join(hostDir, 'package.json');
 const artifact = describeArtifact();
 const profileDir = appBoot.resolveProfileDir(PROFILE_NAME, home);
 appBoot.initProfile(profileDir, PRODUCT_BUNDLES);
+// P1-10b (decisions 058, 059, 108): the plugins this host may compose, and the
+// ones Main enabled (its list, or the allowlist's defaults when it sent none).
+const allowlist = readHostAllowlist();
+for (const failure of allowlist.failures) warn(`plugin allowlist: ${failure}`);
+const enabledInput = readEnabledInput(process.env[PLUGINS_ENV]);
+if (enabledInput.from === 'invalid') {
+  warn(`${PLUGINS_ENV} is ${enabledInput.error}; no plugin is enabled`);
+}
+// Decision 015: the auto-approving probe bundle composes only in a checkout,
+// and only when the probe driver that listed it says so. Main never does.
+const testBundles =
+  artifact.form === 'source' && process.env[PROBE_BUNDLE_ENV] === '1' ? [PROBE_BUNDLE] : [];
 // Decision 025 rule 5: `initProfile` writes the bundle list once, so the product
-// bundles are restated at every start; plugin bundles keep their place after them.
+// bundles are restated at every start. Decision 058 rule 2: after them, only the
+// enabled allowlisted plugins this host's install directory holds; anything
+// else the profile lists is dropped, and said so.
 const manifest = appBoot.readProfileManifest(BIN, profileDir);
 const listedBundles: unknown = manifest.dsh?.profile?.bundles;
-const bundles = reconcileProductBundles(listedBundles);
+const bundlePlan = planProfileBundles({
+  listed: reconcileProductBundles(listedBundles),
+  product: PRODUCT_BUNDLES,
+  plugins: allowlist.plugins,
+  enabled: enabledNames(allowlist.plugins, enabledInput),
+  installed: inspectInstalledPlugins(allowlist.plugins),
+  testBundles,
+});
+for (const dropped of bundlePlan.dropped) {
+  warn(`bundle ${JSON.stringify(dropped.name)} is not composed: ${dropped.reason}`);
+}
+for (const plugin of bundlePlan.plugins) {
+  if (plugin.state === 'missing' || plugin.state === 'rejected') {
+    warn(`plugin ${JSON.stringify(plugin.name)} ${plugin.state}: ${plugin.reason}`);
+  }
+}
+const bundles = bundlePlan.bundles;
 if (!Array.isArray(listedBundles) || !sameBundles(listedBundles, bundles)) {
   appBoot.writeProfileBundles(profileDir, manifest, bundles);
 }
-const profile = appBoot.loadProfileDirectory(BIN, profileDir, installAnchor);
+// Decision 058 rule 3: the bundles alone; the profile's own patch layer is not read.
+const profile = appBoot.loadProfileDirectory(BIN, profileDir, installAnchor, { userLayer: false });
+warnIgnoredUserLayer(profile.patchPath);
 const skipped = partitionSkippedBundles(profile.skippedBundles);
 for (const bundle of skipped.plugins) {
   warn(`plugin bundle ${JSON.stringify(bundle.packageName)} skipped: ${bundle.reason}`);
@@ -221,10 +365,43 @@ if (skipped.product.length > 0) {
   appBoot.reportSkippedBundles(BIN, profile);
   fail(`product bundles skipped: ${JSON.stringify(skipped.product)}`);
 }
+// Decision 059 rule 3: a plugin layer comes from this host's node_modules and
+// inserts only its declared rows; one that does not is left out (only warned,
+// as decision 025 rule 5 has it for any plugin).
+const layerAudit = auditPluginLayers({
+  layers: profile.layers.map((layer) => ({
+    packageName: layer.packageName,
+    patches: layer.patches,
+    packageUrl: pathToFileURL(layer.packageDir).href,
+    realDir: realDirOf(layer.packageDir),
+  })),
+  skipped: skipped.plugins,
+  plugins: allowlist.plugins,
+  statuses: bundlePlan.plugins,
+  expectedDirs: new Map(
+    allowlist.plugins.map((plugin) => [
+      plugin.name,
+      realDirOf(join(hostDir, 'node_modules', ...plugin.name.split('/'))),
+    ])
+  ),
+});
+for (const status of layerAudit.plugins) {
+  if (status.state === 'rejected' && layerAudit.rejected.includes(status.name)) {
+    warn(`plugin ${JSON.stringify(status.name)} rejected: ${status.reason}`);
+  }
+}
+const composedProfile = {
+  ...profile,
+  layers: profile.layers.filter((layer) => !layerAudit.rejected.includes(layer.packageName)),
+};
 // The Loader needs a real include root to anchor baseUrl; the composition is all patches.
 const rootConfig = join(profile.dir, 'cordis.yml');
 writeFileSync(rootConfig, '[]\n');
-const resolution = await appBoot.createRuntimeResolution({ installAnchor, profile, home });
+const resolution = await appBoot.createRuntimeResolution({
+  installAnchor,
+  profile: composedProfile,
+  home,
+});
 marks.profileResolved = performance.now();
 
 const processLayer: Record<string, string> = {};
@@ -262,7 +439,7 @@ const profileContext = {
   dir: profile.dir,
   patchPath: profile.patchPath,
   installAnchor,
-  startedBundles: profile.layers.map((layer) => layer.packageName),
+  startedBundles: composedProfile.layers.map((layer) => layer.packageName),
   cwd: process.cwd(),
   home,
   // The plan's two rows, then <agentDir>'s two rows (P1-16a, decision 101),
@@ -279,10 +456,25 @@ const profileContext = {
   // is disabled at every start (bundle/cordis.patch.yml, REQUIRED_DISABLED),
   // so nothing ever reads this field's fallback (`?? {command: 'pnpm'}`).
 };
-const patches = appBoot.readProfilePatches(BIN, profileContext, profile);
+const patches = appBoot.readProfilePatches(BIN, profileContext, composedProfile);
 
 // Static composition audit, before any plugin imports.
 const entries = appBoot.composeEntries([patches]);
+// Decision 059 rule 3 (refining 023 rule 3), decision 108 rule 12: the rows are
+// the composed bundles' and nothing else's. With the profile's own layer out,
+// only the home layer can bring another one: a packaged host refuses to boot
+// on it, naming the file; a checkout says so and goes on.
+const undeclared = undeclaredRows(
+  appBoot.composeEntries([
+    [...composedProfile.layers.flatMap((layer) => layer.patches), ...profileContext.overlays],
+  ]),
+  entries
+);
+if (undeclared.length > 0) {
+  const refusal = `${UNDECLARED_ROWS_CODE}: ${homePatch} inserts rows that no composed bundle declares: ${undeclared.join(', ')}; remove them from that file`;
+  if (artifact.form === 'packaged') fail(refusal, UNDECLARED_ROWS_CODE);
+  warn(`${refusal} (a packaged host refuses to boot on this)`);
+}
 const flat: Array<{ id?: string; name?: string; disabled?: unknown }> = [];
 const walk = (list: unknown[]): void => {
   for (const row of list as Array<Record<string, unknown>>) {
@@ -311,7 +503,7 @@ const notEnabled = REQUIRED_ENABLED.filter((id) => {
 });
 if (notEnabled.length > 0) fail(`rows expected enabled: ${notEnabled.join(', ')}`);
 // The auto-approving probe row may only arrive with its own test bundle.
-const probeLayered = profile.layers.some((layer) => layer.packageName === PROBE_BUNDLE);
+const probeLayered = composedProfile.layers.some((layer) => layer.packageName === PROBE_BUNDLE);
 const probeRows = flat.filter(
   (row) => row.id === PROBE_ROW || String(row.name ?? '').startsWith(PROBE_BUNDLE)
 );
@@ -389,6 +581,8 @@ marks.bootResolved = performance.now();
 // Activation census of the settled Loader tree.
 const FIBER_ACTIVE = 2; // FiberState.ACTIVE (a const enum in @deepseek-ai/cordis)
 const census = { active: 0, disabled: 0, inactive: [] as string[] };
+/** Row ids of `census.inactive`, for the plugin report. */
+const inactiveIds = new Set<string>();
 for (const entry of ctx.get('loader')?.entries() ?? []) {
   try {
     if (entry.disabled) {
@@ -397,10 +591,14 @@ for (const entry of ctx.get('loader')?.entries() ?? []) {
     }
   } catch {
     census.inactive.push(`${entry.options.id}: disabled expression threw`);
+    inactiveIds.add(String(entry.options.id));
     continue;
   }
   if (entry.fiber?.state === FIBER_ACTIVE) census.active += 1;
-  else census.inactive.push(`${entry.options.id}: state ${String(entry.fiber?.state)}`);
+  else {
+    census.inactive.push(`${entry.options.id}: state ${String(entry.fiber?.state)}`);
+    inactiveIds.add(String(entry.options.id));
+  }
 }
 
 // A host whose bridge never took the channel would swallow every session's
@@ -436,8 +634,14 @@ const ready = {
   execArgv: process.execArgv,
   artifact,
   dshRuntimeVersion: appBoot.getDshRuntimeVersion(),
-  bundles: profile.layers.map((layer) => layer.packageName),
+  bundles: composedProfile.layers.map((layer) => layer.packageName),
   skippedPlugins: skipped.plugins,
+  // P1-10b (decision 108 rule 8): every allowlisted plugin's state, for Main.
+  plugins: pluginReport(
+    enabledInput,
+    withInactiveRows(layerAudit.plugins, allowlist.plugins, inactiveIds),
+    bundlePlan.dropped
+  ),
   composition,
   census,
   marks,

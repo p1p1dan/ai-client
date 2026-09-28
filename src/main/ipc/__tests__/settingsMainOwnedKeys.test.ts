@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
+import { DSH_PLUGINS_SETTING_KEY } from '@shared/dshPlugins';
 import {
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
@@ -160,5 +161,32 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     settings.mergeSettingsPatch({ onboarding: { registered: true, email: 'a@jcdz.cc' } });
 
     expect(readSettingsFile().onboarding).toEqual({ registered: true, email: 'a@jcdz.cc' });
+  });
+
+  // dsh-rebase P1-10b (decision 108 rule 5): the DSH plugin selection is Main's.
+  it('a DSH plugin selection written by Main survives a stale renderer save, and cannot be invented', async () => {
+    vi.useFakeTimers();
+    await loadSettingsModule();
+    const { writeDshPluginSelection, readDshPluginSelection } = await import(
+      '../../services/agent-host/dshPluginSelection'
+    );
+    const read = handlers.get(IPC_CHANNELS.SETTINGS_READ);
+    if (!read) throw new Error('settings handlers not registered');
+    await read({});
+
+    writeDshPluginSelection(['dsh-office-tools']);
+    await rendererSave({ [DSH_PLUGINS_SETTING_KEY]: { enabled: ['@evil/bundle'] }, theme: 'dark' });
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(readSettingsFile()[DSH_PLUGINS_SETTING_KEY]).toEqual({ enabled: ['dsh-office-tools'] });
+    expect(readDshPluginSelection()).toEqual(['dsh-office-tools']);
+  });
+
+  it('ipc/settings.ts spells the plugin key the way the shared module does', () => {
+    const source = readFileSync(join(__dirname, '..', 'settings.ts'), 'utf8');
+    expect(source.match(/const DSH_PLUGINS_SETTING_KEY = '([A-Za-z]+)'/)?.[1]).toBe(
+      DSH_PLUGINS_SETTING_KEY
+    );
+    expect(source).toMatch(/MAIN_OWNED_SETTING_KEYS[^;]*DSH_PLUGINS_SETTING_KEY,\n\];/);
   });
 });

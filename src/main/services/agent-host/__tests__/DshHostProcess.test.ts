@@ -1,21 +1,25 @@
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
   buildDshHostEnvironment,
   buildDshHostLaunch,
   currentDshHostLaunch,
   DSH_HOST_MISSING,
   DSH_HOST_PERMISSION_AGENT_DIR_ENV,
+  DSH_HOST_PLUGINS_ENV,
   DSH_SENSITIVE_ENV_PATTERN,
+  dshHostPluginSelection,
   dshHostSpawnOptions,
   dshPermissionAgentDir,
+  dshPluginSelectionKey,
   ensurePrivateDirectory,
   isStrippedDshHostEnvName,
   prepareDshHostDirectories,
   resolveDshHome,
   resolveDshHostLayout,
 } from '../DshHostProcess';
+import { dshHostPluginsEnvValue } from '../dshHostEnvironment';
 
 const electronApp = vi.hoisted(() => ({ isPackaged: false, getAppPath: () => '/repo' }));
 vi.mock('electron', () => ({ app: electronApp }));
@@ -475,5 +479,74 @@ describe('currentDshHostLaunch', () => {
     electronApp.isPackaged = true;
     vi.mocked(existsSync).mockImplementation((file) => !String(file).endsWith('host.js'));
     expect(() => currentDshHostLaunch()).toThrow(DSH_HOST_MISSING);
+  });
+});
+
+// dsh-rebase P1-10b (decision 108 rule 6): the user's plugin list reaches the
+// host at every spawn; nobody's choice means the allowlist's defaults.
+describe('the plugin selection in the launch (P1-10b)', () => {
+  const build = (enabledPlugins?: readonly string[], env: NodeJS.ProcessEnv = SHELL_ENV) =>
+    buildDshHostEnvironment({
+      dshHome: '/state/dsh-home',
+      nativeCacheDir: '/state/dsh-native-cache',
+      isPackaged: true,
+      enabledPlugins,
+      env,
+      platform: 'linux',
+    });
+
+  it('sets AICLIENT_DSH_PLUGINS to the list, each name once and sorted', () => {
+    expect(DSH_HOST_PLUGINS_ENV).toBe('AICLIENT_DSH_PLUGINS');
+    expect(build(['dsh-b', '@s/dsh-a', 'dsh-b'])).toEqual({
+      ...INHERITED,
+      ...EXPLICIT,
+      AICLIENT_DSH_PLUGINS: '["@s/dsh-a","dsh-b"]',
+    });
+    expect(build([])[DSH_HOST_PLUGINS_ENV]).toBe('[]');
+  });
+
+  it('leaves it out when nobody chose, and never inherits it or the probe switch from Main', () => {
+    expect(build(undefined)).toEqual({ ...INHERITED, ...EXPLICIT });
+    const env = build(undefined, {
+      ...SHELL_ENV,
+      AICLIENT_DSH_PLUGINS: '["@evil/bundle"]',
+      AICLIENT_DSH_PROBE_BUNDLE: '1',
+    });
+    expect(env).toEqual({ ...INHERITED, ...EXPLICIT });
+    expect(isStrippedDshHostEnvName('AICLIENT_DSH_PROBE_BUNDLE')).toBe(true);
+    expect(DSH_SENSITIVE_ENV_PATTERN.test(DSH_HOST_PLUGINS_ENV)).toBe(false);
+  });
+
+  it('gives every launch one comparable selection key', () => {
+    expect(dshHostPluginsEnvValue(undefined)).toBeUndefined();
+    expect(dshPluginSelectionKey(undefined)).toBe('default');
+    expect(dshPluginSelectionKey(['dsh-b', 'dsh-a'])).toBe('["dsh-a","dsh-b"]');
+    expect(dshHostPluginSelection(build(['dsh-a', 'dsh-b']))).toBe(
+      dshPluginSelectionKey(['dsh-b', 'dsh-a'])
+    );
+    expect(dshHostPluginSelection(build(undefined))).toBe('default');
+  });
+
+  it('passes the selection read at launch time into the launch', () => {
+    const resources = process.resourcesPath;
+    Object.defineProperty(process, 'resourcesPath', { value: '/resources', configurable: true });
+    onTestFinished(() => {
+      Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true });
+    });
+    vi.mocked(existsSync).mockReset().mockReturnValue(true);
+    const launch = currentDshHostLaunch(() => ['dsh-a']);
+    expect(launch.env[DSH_HOST_PLUGINS_ENV]).toBe('["dsh-a"]');
+    expect(currentDshHostLaunch(() => undefined).env[DSH_HOST_PLUGINS_ENV]).toBeUndefined();
+    const direct = buildDshHostLaunch({
+      isPackaged: true,
+      appPath: '/app.asar',
+      resourcesPath: '/resources',
+      appStateRoot: STATE_ROOT,
+      platform: 'linux',
+      env: SHELL_ENV,
+      exists: always,
+      enabledPlugins: ['dsh-a'],
+    });
+    expect(direct.env[DSH_HOST_PLUGINS_ENV]).toBe('["dsh-a"]');
   });
 });

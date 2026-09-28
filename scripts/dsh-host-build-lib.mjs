@@ -74,8 +74,17 @@ export const STAGED_SOURCE_FILES = ['package.json', 'package-lock.json', '.npmrc
  */
 export const STAGED_BUNDLE_FILES = ['package.json', 'cordis.patch.yml', 'lib/index.js'];
 export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
-/** Our own sources host.js may take in (P1-3a: its pure rules in lib/); everything else stays external. */
-export const HOST_INPUTS = ['src/dsh-host/host.ts', 'src/dsh-host/lib/'];
+/**
+ * Our own sources host.js may take in (P1-3a: its pure rules in lib/; P1-10b:
+ * the plugin allowlist library and the Main/host plugin contract it applies
+ * at every start); everything else stays external.
+ */
+export const HOST_INPUTS = [
+  'src/dsh-host/host.ts',
+  'src/dsh-host/lib/',
+  'src/shared/dshPluginAllowlist.ts',
+  'src/shared/dshPlugins.ts',
+];
 /** npm packages host.js imports at run time, from the artifact's node_modules. */
 export const HOST_EXTERNALS = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-launch-environment'];
 /**

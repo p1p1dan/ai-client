@@ -640,6 +640,8 @@ export class WorkerManager {
   private orphanCollectionStarted = false;
   /** Decision 033 rule 4: a plan revision the running host does not run yet. */
   private pendingPlanRevision: string | null = null;
+  /** P1-10b (decision 108 rule 7): a plugin selection the running host does not run yet. */
+  private pendingPluginSelection: string | null = null;
   private planRecheckTimer: NodeJS.Timeout | null = null;
 
   constructor(options: WorkerManagerOptions = {}) {
@@ -2698,27 +2700,55 @@ export class WorkerManager {
     this.recheckModelPlan();
   }
 
+  /**
+   * dsh-rebase P1-10b (decisions 025 rule 2, 059 rule 4, 108 rule 7) — the
+   * user changed which DSH plugins are enabled; `selection` is the key the
+   * next launch will carry (`dshPluginSelectionKey`). The composition is
+   * host-wide, so a running host launched with another selection goes the way
+   * a new model plan takes it: `invalidateAll`, once no session has work under
+   * way. A host that is not running picks the selection up when it starts.
+   */
+  reconcileHostPlugins(selection: string): void {
+    this.pendingPluginSelection = selection;
+    this.recheckModelPlan();
+  }
+
+  /** Restarts a running host that is stale on its plan or its plugins, once idle. */
   private recheckModelPlan(): void {
     if (this.planRecheckTimer) clearTimeout(this.planRecheckTimer);
     this.planRecheckTimer = null;
+    const status = this.host?.status();
     const revision = this.pendingPlanRevision;
-    const running = this.host?.status().planRevision;
-    if (revision === null || running === undefined || running === revision) {
-      this.pendingPlanRevision = null;
-      return;
-    }
+    const running = status?.planRevision;
+    const planStale = revision !== null && running !== undefined && running !== revision;
+    if (!planStale) this.pendingPlanRevision = null;
+    const selection = this.pendingPluginSelection;
+    const runningSelection = status?.pluginSelection;
+    const pluginsStale =
+      selection !== null && runningSelection !== undefined && runningSelection !== selection;
+    if (!pluginsStale) this.pendingPluginSelection = null;
+    if (!planStale && !pluginsStale) return;
     if (this.hasWorkInFlight()) {
       this.planRecheckTimer = setTimeout(() => this.recheckModelPlan(), PLAN_RECHECK_MS);
       this.planRecheckTimer.unref?.();
       return;
     }
     this.pendingPlanRevision = null;
-    this.log(
-      `[worker-manager] the DSH host runs model plan ${running.slice(0, 12)}, Main has ` +
-        `${revision.slice(0, 12)}; restarting it`
-    );
+    this.pendingPluginSelection = null;
+    if (planStale && running !== undefined && revision !== null) {
+      this.log(
+        `[worker-manager] the DSH host runs model plan ${running.slice(0, 12)}, Main has ` +
+          `${revision.slice(0, 12)}; restarting it`
+      );
+    }
+    if (pluginsStale) {
+      this.log(
+        `[worker-manager] the DSH host runs plugin selection ${String(runningSelection)}, ` +
+          `Main has ${String(selection)}; restarting it`
+      );
+    }
     this.invalidateAll().catch((error: unknown) =>
-      this.log('[worker-manager] restart for a new model plan failed', error)
+      this.log('[worker-manager] restart for a new model plan or plugin selection failed', error)
     );
   }
 
@@ -2739,6 +2769,7 @@ export class WorkerManager {
     if (this.planRecheckTimer) clearTimeout(this.planRecheckTimer);
     this.planRecheckTimer = null;
     this.pendingPlanRevision = null;
+    this.pendingPluginSelection = null;
   }
 
   disposeAll(reason: 'app-shutdown' | 'slot-dispose' = 'app-shutdown'): Promise<void> {

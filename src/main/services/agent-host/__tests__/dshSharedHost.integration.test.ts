@@ -46,6 +46,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * sixth phase routes turns to two models with two keys, rotates a key, signs
  * out, and runs the KEY-CANARY scan; the last loads the shipped catalog's plan
  * into a host and requires no route diagnostic (the drift gate).
+ *
+ * P1-10b (decision 108): a ninth supervisor runs packaged-form hosts from
+ * scratch installs with a test-only fixture plugin preinstalled, enables and
+ * disables it through WorkerManager's restart, and checks the rejected,
+ * missing and refused cases. It needs the repo root's esbuild as well.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -113,6 +118,8 @@ const { WorkerManager } = await import('../WorkerManager');
 const { createPiWorkerSlot } = await import('../createPiWorkerSlot');
 const { DshCredentialBroker } = await import('../DshCredentialBroker');
 const { spawn } = await import('node:child_process');
+// P1-10b: Main's environment rule, for the plugin phase's own launches.
+const { buildDshHostEnvironment, dshPluginSelectionKey } = await import('../dshHostEnvironment');
 
 type Event = RuntimeEvent & { payload?: Record<string, unknown> };
 type Manager = InstanceType<typeof WorkerManager>;
@@ -1891,5 +1898,253 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       }
       expect(liveHosts()).toHaveLength(0);
     }, 120_000);
+  });
+
+  /**
+   * P1-10b (decisions 058, 059, 108): plugins preinstalled the way the product
+   * ships them, on scratch host installs built from this checkout
+   * (tools/lib/plugin-install.ts: host.js bundled by the build's own rules,
+   * node_modules linked onto src/dsh-host's, the test-only fixture plugin or
+   * a bad variant of it copied in and listed in the manifest's `plugins`
+   * section). A real supervisor spawns every host with Main's environment
+   * rule and the plugin selection of that moment; WorkerManager restarts the
+   * host when the selection changes; the supervisor keeps each start's report.
+   * Nothing in the shared checkout is written.
+   */
+  describe('a ninth supervisor: preinstalled plugins, enabled, disabled, rejected (P1-10b)', () => {
+    type PluginInstall = typeof import('../../../../dsh-host/tools/lib/plugin-install.ts');
+    let kit: PluginInstall;
+    /** The host entry (`<install>/host.js`) of each scratch install. */
+    const installs: Record<'good' | 'undeclared', string> = { good: '', undeclared: '' };
+    let current = '';
+    let selection: string[] | undefined;
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const base = () => join(shared.stateRoot, 'plugins');
+    const dshHome = () => join(base(), 'dsh-home');
+    const MISSING = '@aiclient-test/dsh-missing-plugin';
+    const isScratchHost = (child: ChildProcess) =>
+      child.spawnargs.some((arg) => arg.startsWith(base()) && arg.endsWith('host.js'));
+    const liveScratchHosts = () => shared.children.filter(isScratchHost).filter(alive);
+    const gatewayRequests = () => {
+      const file = join(shared.stateRoot, 'gateway.jsonl');
+      if (!existsSync(file)) return [];
+      return readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    };
+    /** One P0-STREAM turn on a fresh session; the tool count its model request carried. */
+    async function streamTurn(sessionId: string, owner: number) {
+      await manager.createSession({
+        ...BYPASS,
+        sessionId,
+        workspacePath: workspace,
+        ownerWebContentsId: owner,
+      });
+      const seen = gatewayRequests().length;
+      const result = await turn(
+        manager,
+        sessionId,
+        'P0-STREAM: stream a paragraph back to me.',
+        owner
+      );
+      const tools = gatewayRequests()
+        .slice(seen)
+        .map((request) => request.tools);
+      await manager.closeSession(sessionId);
+      return { ...result, tools };
+    }
+    const profileBundles = () =>
+      (
+        JSON.parse(
+          readFileSync(join(dshHome(), 'profiles', 'aiclient', 'package.json'), 'utf8')
+        ) as {
+          dsh?: { profile?: { bundles?: string[] } };
+        }
+      ).dsh?.profile?.bundles;
+    /** Main's side of a selection change: store it, reconcile, wait for the old host to go. */
+    async function select(next: string[] | undefined) {
+      selection = next;
+      manager.reconcileHostPlugins(dshPluginSelectionKey(next));
+      expect(await until(() => supervisor.status().state !== 'ready', 30_000)).toBe(true);
+      expect(await until(() => liveScratchHosts().length === 0, 30_000)).toBe(true);
+    }
+
+    beforeAll(async () => {
+      kit = await import('../../../../dsh-host/tools/lib/plugin-install.ts');
+      const root = base();
+      mkdirSync(root, { recursive: true, mode: 0o700 });
+      const missing = kit.fixtureManifestEntry({ name: MISSING, rows: ['missing-row'] });
+      installs.good = (
+        await kit.assembleInstall({
+          into: join(root, 'install-good'),
+          base: 'source',
+          plugins: [{ dir: kit.fixtureVariant(root, 'good'), entry: kit.fixtureManifestEntry() }],
+          listOnly: [missing],
+        })
+      ).entry;
+      installs.undeclared = (
+        await kit.assembleInstall({
+          into: join(root, 'install-undeclared'),
+          base: 'source',
+          plugins: [
+            { dir: kit.fixtureVariant(root, 'undeclared-row'), entry: kit.fixtureManifestEntry() },
+          ],
+        })
+      ).entry;
+      current = installs.good;
+      const hostCwd = join(root, 'host-cwd');
+      const nativeCache = join(root, 'native-cache');
+      const home = join(root, 'home');
+      mkdirSync(home, { recursive: true, mode: 0o700 });
+      supervisor = new DshHostSupervisor({
+        idleStopMs: 0,
+        modelSource: modelSource(),
+        resolveLaunch: () => ({
+          command: NODE,
+          args: ['--expose-internals', current],
+          cwd: hostCwd,
+          // Main's rule; a scratch HOME keeps the host off this user's own skills.
+          env: buildDshHostEnvironment({
+            dshHome: dshHome(),
+            nativeCacheDir: nativeCache,
+            isPackaged: true,
+            enabledPlugins: selection,
+            env: { ...process.env, HOME: home },
+          }),
+          privateDirs: [dshHome(), hostCwd, nativeCache],
+        }),
+      });
+      manager = newManager(supervisor, true);
+    }, 120_000);
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(await until(() => liveScratchHosts().length === 0, 15_000)).toBe(true);
+    }, 60_000);
+
+    it('[PLG-1, PLG-2] an enabled plugin loads from the install directory and its tool reaches the model; switching it off restarts the host without it', async () => {
+      selection = [kit.FIXTURE_PLUGIN];
+      const enabled = await streamTurn('pl1', 90);
+      expect(enabled).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.status()).toMatchObject({
+        state: 'ready',
+        pluginSelection: JSON.stringify([kit.FIXTURE_PLUGIN]),
+      });
+      expect(supervisor.pluginReport()).toEqual({
+        enabledFrom: 'main',
+        plugins: [
+          {
+            name: kit.FIXTURE_PLUGIN,
+            version: kit.FIXTURE_VERSION,
+            defaultEnabled: false,
+            state: 'loaded',
+          },
+          { name: MISSING, version: kit.FIXTURE_VERSION, defaultEnabled: false, state: 'disabled' },
+        ],
+        dropped: [],
+      });
+      expect(profileBundles()).toEqual([
+        '@deepseek-ai/dsh-base',
+        '@aiclient/dsh-app',
+        kit.FIXTURE_PLUGIN,
+      ]);
+
+      // Main's side of the switch (decision 059 rule 4): the running host is
+      // on another selection, nothing is in flight, so it goes at once.
+      await select([]);
+      const disabled = await streamTurn('pl2', 91);
+      expect(disabled).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.status().pluginSelection).toBe('[]');
+      expect(supervisor.pluginReport()?.plugins[0]).toMatchObject({
+        name: kit.FIXTURE_PLUGIN,
+        state: 'disabled',
+      });
+      expect(supervisor.pluginReport()?.dropped).toEqual([
+        { name: kit.FIXTURE_PLUGIN, reason: 'not enabled' },
+      ]);
+      expect(profileBundles()).toEqual(['@deepseek-ai/dsh-base', '@aiclient/dsh-app']);
+      // The fixture's one tool, `fixture_ping`, is in the first request only.
+      expect(enabled.tools[0]).toBe(Number(disabled.tools[0]) + 1);
+    }, 240_000);
+
+    it('[PLG-3] a plugin whose patch inserts an undeclared row is rejected; the host serves without it', async () => {
+      current = installs.undeclared;
+      await select([kit.FIXTURE_PLUGIN]);
+      const result = await streamTurn('pl3', 92);
+      expect(result).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.pluginReport()?.plugins).toEqual([
+        {
+          name: kit.FIXTURE_PLUGIN,
+          version: kit.FIXTURE_VERSION,
+          defaultEnabled: false,
+          state: 'rejected',
+          reason: 'bundle patch: patch 1.insert[1]: inserts undeclared row fixture-undeclared',
+        },
+      ]);
+    }, 180_000);
+
+    it('[PLG-4] a plugin enabled but not installed is missing, and a stray bundle the profile lists is dropped', async () => {
+      current = installs.good;
+      await select([kit.FIXTURE_PLUGIN, MISSING]);
+      const manifest = join(dshHome(), 'profiles', 'aiclient', 'package.json');
+      const tampered = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
+      writeFileSync(
+        manifest,
+        `${JSON.stringify({ ...tampered, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app', '@evil/bundle'] } } }, null, 2)}\n`
+      );
+      const result = await streamTurn('pl4', 93);
+      expect(result).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.pluginReport()).toEqual({
+        enabledFrom: 'main',
+        plugins: [
+          {
+            name: kit.FIXTURE_PLUGIN,
+            version: kit.FIXTURE_VERSION,
+            defaultEnabled: false,
+            state: 'loaded',
+          },
+          {
+            name: MISSING,
+            version: kit.FIXTURE_VERSION,
+            defaultEnabled: false,
+            state: 'missing',
+            reason: 'not in the install directory',
+          },
+        ],
+        dropped: [{ name: '@evil/bundle', reason: 'not on the allowlist' }],
+      });
+      expect(profileBundles()).toEqual([
+        '@deepseek-ai/dsh-base',
+        '@aiclient/dsh-app',
+        kit.FIXTURE_PLUGIN,
+      ]);
+    }, 180_000);
+
+    it('[PLG-5] a home layer that inserts an undeclared row keeps the packaged host from starting', async () => {
+      await manager.invalidateAll();
+      const homePatch = join(dshHome(), 'cordis.patch.yml');
+      writeFileSync(
+        homePatch,
+        "- insert:\n    - id: home-undeclared\n      name: '@aiclient-test/dsh-fixture-plugin'\n"
+      );
+      try {
+        const refused = await supervisor.ensureHost({ userInitiated: true }).then(
+          () => undefined,
+          (error: unknown) => error as { code?: string; message?: string }
+        );
+        expect(refused?.code).toBe('DSH_HOST_START_FAILED');
+        expect(refused?.message).toContain(
+          `DSH_HOST_UNDECLARED_ROWS: ${homePatch} inserts rows that no composed bundle declares: home-undeclared`
+        );
+      } finally {
+        rmSync(homePatch, { force: true });
+      }
+      // Without it the next start is fine again.
+      await supervisor.ensureHost({ userInitiated: true });
+      expect(supervisor.status().state).toBe('ready');
+    }, 180_000);
   });
 });

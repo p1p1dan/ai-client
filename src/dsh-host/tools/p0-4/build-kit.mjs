@@ -109,6 +109,9 @@ for (const file of [
   'lib/hostProfile.ts',
   'lib/hostModelPlan.ts',
   'lib/credentialRelay.ts',
+  // P1-10b: the plugin rules, and the allowlist a checkout's host reads.
+  'lib/hostPlugins.ts',
+  'plugins/allowlist.json',
   'tools/p0-4-probe.ts',
   'tools/p0-4-report.ts',
   'tools/lib/kit.ts',
@@ -121,7 +124,11 @@ for (const file of [
 // P1-5: the probe plays Main's model source (tools/lib/hostClient.ts), which
 // builds its plan with the product's own translation. Those modules go where
 // the relative imports look for them: <kit>/shared, beside <kit>/host.
+// P1-10b: host.ts's plugin rules (lib/hostPlugins.ts) build on the shared
+// allowlist library and the Main/host plugin contract.
 for (const file of [
+  'dshPluginAllowlist.ts',
+  'dshPlugins.ts',
   'dshModelPlan/build.ts',
   'dshModelPlan/index.ts',
   'dshModelPlan/menu.ts',

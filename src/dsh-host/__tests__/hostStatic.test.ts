@@ -237,3 +237,57 @@ describe('the product bundle: one bridge row always on, the permission row, the 
     ]);
   });
 });
+
+describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108)', () => {
+  it("reads Main's enabled list from the variable Main sets", () => {
+    const main = readFileSync(
+      join(HOST_DIR, '..', 'main', 'services', 'agent-host', 'dshHostEnvironment.ts'),
+      'utf8'
+    );
+    expect(read('lib', 'hostPlugins.ts').match(/PLUGINS_ENV = '([A-Z_]+)'/)?.[1]).toBe(
+      'AICLIENT_DSH_PLUGINS'
+    );
+    expect(main.match(/DSH_HOST_PLUGINS_ENV = '([A-Z_]+)'/)?.[1]).toBe('AICLIENT_DSH_PLUGINS');
+    expect(host).toContain('readEnabledInput(process.env[PLUGINS_ENV])');
+  });
+
+  it("composes the bundles alone: the profile's own patch layer is never read (decision 058 rule 3)", () => {
+    expect(host).toContain(
+      'appBoot.loadProfileDirectory(BIN, profileDir, installAnchor, { userLayer: false })'
+    );
+    expect(host).not.toMatch(/loadProfileDirectory\(BIN, profileDir, installAnchor\)/);
+    expect(host).toContain('warnIgnoredUserLayer(profile.patchPath);');
+  });
+
+  it('writes the planned list, and composes and resolves only the audited layers', () => {
+    expect(host).toContain('const bundles = bundlePlan.bundles;');
+    expect(host).toContain('const layerAudit = auditPluginLayers({');
+    expect(host).toMatch(
+      /layers: profile\.layers\.filter\(\(layer\) => !layerAudit\.rejected\.includes\(layer\.packageName\)\)/
+    );
+    expect(host).toContain('appBoot.readProfilePatches(BIN, profileContext, composedProfile)');
+    expect(host).toMatch(
+      /appBoot\.createRuntimeResolution\(\{\s*installAnchor,\s*profile: composedProfile,/
+    );
+    expect(host).toContain('bundles: composedProfile.layers.map((layer) => layer.packageName),');
+  });
+
+  it('keeps the probe bundle only in a checkout whose driver asks for it (decision 015)', () => {
+    expect(host).toContain(
+      "artifact.form === 'source' && process.env[PROBE_BUNDLE_ENV] === '1' ? [PROBE_BUNDLE] : []"
+    );
+  });
+
+  it('refuses a packaged boot on rows no composed bundle declares, with a code (decision 108 rule 12)', () => {
+    expect(host).toContain(
+      "if (artifact.form === 'packaged') fail(refusal, UNDECLARED_ROWS_CODE);"
+    );
+    expect(read('lib', 'hostPlugins.ts')).toContain(
+      "export const UNDECLARED_ROWS_CODE = 'DSH_HOST_UNDECLARED_ROWS';"
+    );
+  });
+
+  it("reports every allowlisted plugin's state in ready (decision 108 rule 8)", () => {
+    expect(host).toMatch(/plugins: pluginReport\(\s*enabledInput,/);
+  });
+});

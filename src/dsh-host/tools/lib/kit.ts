@@ -221,7 +221,14 @@ export function sandbox(scratchRoot: string, label: string, dshHome?: string): S
   return box;
 }
 
-/** Allowlisted environment: nothing from the developer shell but PATH and locale. */
+/**
+ * Allowlisted environment: nothing from the developer shell but PATH and
+ * locale. Every driver may layer the test-only probe bundle
+ * (`installProbeBundle`): since P1-10b a source-checkout host keeps it only
+ * when asked (`AICLIENT_DSH_PROBE_BUNDLE`, decision 108 rule 4), and drops
+ * every other bundle off its allowlist. A driver that lists no probe bundle
+ * is unaffected.
+ */
 export function baseEnv(box: Sandbox): Record<string, string> {
   return {
     PATH: process.env.PATH ?? '/usr/bin:/bin',
@@ -232,6 +239,7 @@ export function baseEnv(box: Sandbox): Record<string, string> {
     SHELL: '/bin/bash',
     TMPDIR: box.tmp,
     AICLIENT_PROBE_HOOK_LOG: box.hookLog,
+    AICLIENT_DSH_PROBE_BUNDLE: '1',
   };
 }
 

@@ -1319,3 +1319,77 @@ describe('DshHostSupervisor model plan and keys (P1-5, decisions 033 and 034)', 
     expect(warned).toContain('compat key not offered');
   });
 });
+
+describe('DshHostSupervisor plugins (P1-10b, decision 108)', () => {
+  const report = {
+    enabledFrom: 'main' as const,
+    plugins: [
+      { name: 'dsh-a', version: '1.0.0', state: 'loaded' as const, defaultEnabled: false },
+      {
+        name: 'dsh-b',
+        version: '1.0.0',
+        state: 'missing' as const,
+        reason: 'not in the install directory',
+        defaultEnabled: true,
+      },
+    ],
+    dropped: [{ name: '@evil/bundle', reason: 'not on the allowlist' }],
+  };
+  const withPlugins = (selection?: string) => ({
+    ...LAUNCH,
+    env: {
+      ...LAUNCH.env,
+      ...(selection === undefined ? {} : { AICLIENT_DSH_PLUGINS: selection }),
+    },
+  });
+
+  it('[SH-PL1] remembers the selection each host was launched with, while it lives', async () => {
+    let selection: string | undefined = '["dsh-a"]';
+    const h = createFakeHostHarness({ resolveLaunch: () => withPlugins(selection) });
+    const child = await startReadyHost(h);
+    expect(h.supervisor.status().pluginSelection).toBe('["dsh-a"]');
+    child.die(0);
+    await flushMicrotasks();
+    expect(h.supervisor.status().pluginSelection).toBeUndefined();
+    selection = undefined;
+    await startReadyHost(h);
+    expect(h.supervisor.status().pluginSelection).toBe('default');
+  });
+
+  it("[SH-PL2] keeps the latest ready's plugin report, past the host's exit", async () => {
+    const h = createFakeHostHarness();
+    expect(h.supervisor.pluginReport()).toBeUndefined();
+    const pending = h.supervisor.ensureHost();
+    const child = h.child();
+    child.post({ type: 'ready', pid: child.pid, plugins: report });
+    await pending;
+    expect(h.supervisor.pluginReport()).toEqual(report);
+    // A copy: nobody outside can edit what the next caller reads.
+    const copy = h.supervisor.pluginReport();
+    copy?.plugins.pop();
+    expect(h.supervisor.pluginReport()).toEqual(report);
+    child.die(0);
+    await flushMicrotasks();
+    expect(h.supervisor.pluginReport()).toEqual(report);
+    const warned = consoleWarn.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(warned).toContain('plugins (enabled from main) not composed as asked');
+    expect(warned).toContain('not in the install directory');
+  });
+
+  it('[SH-PL3] ignores a malformed report and keeps the last good one', async () => {
+    const h = createFakeHostHarness();
+    const first = h.supervisor.ensureHost();
+    const child = h.child();
+    child.post({ type: 'ready', pid: child.pid, plugins: report });
+    await first;
+    child.die(0);
+    await flushMicrotasks();
+    const second = h.supervisor.ensureHost();
+    const next = h.child();
+    next.post({ type: 'ready', pid: next.pid, plugins: { enabledFrom: 'user', plugins: 'x' } });
+    await second;
+    expect(h.supervisor.pluginReport()).toEqual(report);
+    const warned = consoleWarn.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(warned).toContain('ready carried a malformed plugin report');
+  });
+});

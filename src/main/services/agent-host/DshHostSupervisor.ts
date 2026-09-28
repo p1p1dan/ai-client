@@ -48,11 +48,18 @@
  * each `credential` request it sends is answered by the model source's broker,
  * told whether the request came from the running host and with which nonce
  * and references.
+ *
+ * Plugins (P1-10b, decision 108): every launch carries the user's plugin
+ * selection as of its spawn (`AICLIENT_DSH_PLUGINS`); the supervisor remembers
+ * it per host (`status().pluginSelection`) so WorkerManager can tell a host
+ * that runs another set, and keeps the latest `ready.plugins` report past the
+ * host's exit (`pluginReport()`).
  */
 
 import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
+import { type DshPluginReport, isDshPluginReport } from '@shared/dshPlugins';
 import {
   type DshChannelId,
   type DshHostChannelStatus,
@@ -83,6 +90,7 @@ import { type DshChannelLink, DshChannelTransport } from './DshChannelTransport'
 import {
   currentDshHostLaunch,
   type DshHostLaunch,
+  dshHostPluginSelection,
   dshHostSpawnOptions,
   prepareDshHostDirectories,
 } from './DshHostProcess';
@@ -290,6 +298,11 @@ export interface DshHostSupervisorStatus {
   planRevision?: string;
   /** The plan's routes the live host reported not serving as planned (empty: none). */
   routeDiagnostics?: DshRouteDiagnostic[];
+  /**
+   * P1-10b (decision 108 rule 7): the plugin selection the live host was
+   * launched with, `dshHostPluginSelection` of its environment.
+   */
+  pluginSelection?: string;
 }
 
 export interface DshPowerMonitor {
@@ -357,6 +370,8 @@ interface HostRecord {
   readonly pid: number | undefined;
   /** Decisions 033, 034: what this host was configured with. */
   readonly plan: { revision: string; nonce: string; refs: Readonly<Record<string, string>> };
+  /** P1-10b: the plugin selection its launch carried (`dshHostPluginSelection`). */
+  readonly pluginSelection: string;
   /** What its `ready` said about the plan's routes. */
   routeDiagnostics?: DshRouteDiagnostic[];
   readonly ready: Promise<DshHostInfo>;
@@ -455,6 +470,8 @@ export class DshHostSupervisor {
   private readonly pendingReadPages = new Map<number, PendingRead>();
   /** `readPage` calls in flight, host start included: a host about to be read is not idle. */
   private pendingReads = 0;
+  /** P1-10b: the plugin report of the latest `ready`, kept past that host's exit. */
+  private lastPluginReport: DshPluginReport | null = null;
 
   private readonly channelLink: DshChannelLink = {
     send: (ch, rpc, onError) => {
@@ -519,7 +536,18 @@ export class DshHostSupervisor {
         : {}),
       ...(live ? { planRevision: live.plan.revision } : {}),
       ...(live?.routeDiagnostics ? { routeDiagnostics: [...live.routeDiagnostics] } : {}),
+      ...(live ? { pluginSelection: live.pluginSelection } : {}),
     };
+  }
+
+  /**
+   * P1-10b (decision 108 rule 9): every allowlisted plugin's state as the
+   * latest host start composed it (loaded, disabled, missing, rejected), with
+   * what that start dropped. Kept after the host stops, for the settings page
+   * (P1-10c); `undefined` until a host has reported once.
+   */
+  pluginReport(): DshPluginReport | undefined {
+    return this.lastPluginReport ? structuredClone(this.lastPluginReport) : undefined;
   }
 
   /** Resolves once a host is ready; concurrent callers share one start. */
@@ -797,10 +825,12 @@ export class DshHostSupervisor {
   private async launch(): Promise<DshHostInfo> {
     let child: ChildProcess;
     let configure: DshHostConfigure;
+    let pluginSelection: string;
     try {
       // The plan first: a plan that cannot be built spawns nothing.
       configure = this.configureMessage();
       const launch = this.resolveLaunch();
+      pluginSelection = dshHostPluginSelection(launch.env);
       this.prepareDirectories(launch);
       this.subscribePowerMonitor();
       child = this.spawnHost(launch.command, launch.args, dshHostSpawnOptions(launch));
@@ -808,11 +838,16 @@ export class DshHostSupervisor {
       if (this.state === 'starting') this.setState('idle');
       throw error instanceof Error ? error : new Error(String(error));
     }
-    const host = this.attach(child, ++this.spawnCount, {
-      revision: configure.revision,
-      nonce: configure.nonce,
-      refs: { ...configure.refs },
-    });
+    const host = this.attach(
+      child,
+      ++this.spawnCount,
+      {
+        revision: configure.revision,
+        nonce: configure.nonce,
+        refs: { ...configure.refs },
+      },
+      pluginSelection
+    );
     this.host = host;
     // Decision 033: the host composes nothing before it (and refuses to boot without it).
     this.sendControl(host, configure);
@@ -834,7 +869,12 @@ export class DshHostSupervisor {
     };
   }
 
-  private attach(child: ChildProcess, generation: number, plan: HostRecord['plan']): HostRecord {
+  private attach(
+    child: ChildProcess,
+    generation: number,
+    plan: HostRecord['plan'],
+    pluginSelection: string
+  ): HostRecord {
     const ready = deferred<DshHostInfo>();
     // Awaited by callers; a start nobody waits for must not surface as unhandled.
     ready.promise.catch(() => {});
@@ -846,6 +886,7 @@ export class DshHostSupervisor {
       child,
       pid: child.pid,
       plan,
+      pluginSelection,
       ready: ready.promise,
       resolveReady: ready.resolve,
       rejectReady: ready.reject,
@@ -922,6 +963,7 @@ export class DshHostSupervisor {
     host.handshakePid = message.pid;
     host.readyAt = this.now();
     this.notePlanReport(host, message);
+    this.notePluginReport(host, message);
     if (this.host !== host || this.state !== 'starting') {
       host.rejectReady(this.stoppedError());
       return;
@@ -958,6 +1000,32 @@ export class DshHostSupervisor {
       console.warn(
         `[dsh-host:g${host.generation}] ${diagnostics.length} route(s) of the model plan not served as planned:`,
         JSON.stringify(diagnostics).slice(0, 2000)
+      );
+    }
+  }
+
+  /**
+   * P1-10b (decision 108 rule 9): the host's plugin report, kept for the
+   * settings page. A plugin that is enabled but missing or rejected, a loaded
+   * one whose rows did not start, and a malformed selection are logged.
+   */
+  private notePluginReport(host: HostRecord, ready: Record<string, unknown>): void {
+    if (ready.plugins === undefined) return;
+    if (!isDshPluginReport(ready.plugins)) {
+      console.warn(`[dsh-host:g${host.generation}] ready carried a malformed plugin report`);
+      return;
+    }
+    this.lastPluginReport = structuredClone(ready.plugins);
+    const troubled = ready.plugins.plugins.filter(
+      (plugin) =>
+        plugin.state === 'missing' ||
+        plugin.state === 'rejected' ||
+        (plugin.inactiveRows?.length ?? 0) > 0
+    );
+    if (troubled.length > 0 || ready.plugins.enabledFrom === 'invalid') {
+      console.warn(
+        `[dsh-host:g${host.generation}] plugins (enabled from ${ready.plugins.enabledFrom}) not composed as asked:`,
+        JSON.stringify(troubled).slice(0, 2000)
       );
     }
   }

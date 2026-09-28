@@ -1,0 +1,7 @@
+# @aiclient-test/dsh-fixture-plugin — test-only plugin bundle (dsh-rebase
+# P1-10b, decision 108). Inserts exactly the one row its allowlist entry
+# declares (`fixture-ping`); tools/lib/plugin-install.ts derives the bad
+# variants (an undeclared row, a product row touched, an unmet peer) from it.
+- insert:
+    - id: fixture-ping
+      name: '@aiclient-test/dsh-fixture-plugin'
