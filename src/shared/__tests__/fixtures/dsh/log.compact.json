@@ -125,6 +125,10 @@
             {
               "name": "approval:policy",
               "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
             }
           ]
         },
@@ -762,7 +766,7 @@
           "end": 20
         },
         "shadowedSeqs": [5, 6, 10, 17, 18, 20],
-        "shadowedTokenCount": 223,
+        "shadowedTokenCount": 334,
         "provider": "aiclient-gateway",
         "model": "fake-1",
         "maxTokens": 65536,
@@ -824,7 +828,7 @@
       "data": {
         "commandId": "cmd-id-13",
         "kind": "success",
-        "text": "Compacted 6 history items (~223 tokens).",
+        "text": "Compacted 6 history items (~334 tokens).",
         "sourceEventSeq": 28
       }
     }

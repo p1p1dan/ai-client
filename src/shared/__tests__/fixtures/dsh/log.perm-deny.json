@@ -1,9 +1,9 @@
 {
   "header": {
     "version": 4,
-    "id": "aiclient-rec-tool",
+    "id": "aiclient-rec-perm-deny",
     "createdAt": "<ms>",
-    "cwd": "<workspace>",
+    "cwd": "<workspace>/perm-deny",
     "isSeeded": false
   },
   "inheritedEventCount": 0,
@@ -21,7 +21,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "P0-TOOL: list the workspace."
+                "text": "P1-PERM-DENY: print the env file."
               }
             ],
             "source": {
@@ -92,7 +92,7 @@
         "content": [
           {
             "type": "text",
-            "text": "P0-TOOL: list the workspace."
+            "text": "P1-PERM-DENY: print the env file."
           }
         ],
         "source": {
@@ -194,7 +194,7 @@
       "seq": 9,
       "time": "<ms>",
       "data": {
-        "title": "P0-TOOL: list the workspace.",
+        "title": "P1-PERM-DENY: print the env file.",
         "messageSeqs": [5],
         "source": {
           "kind": "fallback"
@@ -215,7 +215,7 @@
               "type": "tool-call",
               "id": "toolu_id-4",
               "name": "bash",
-              "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+              "arguments": "{\"command\":\"cat .env\",\"description\":\"Print the env file\"}"
             }
           ],
           "source": {
@@ -262,9 +262,7 @@
             "index": 0,
             "id": "toolu_id-4",
             "name": "bash",
-            "args": [
-              "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
-            ]
+            "args": ["{\"command\":\"cat .env\",\"description\":\"Print the env file\"}"]
           },
           {
             "type": "chunk",
@@ -276,7 +274,7 @@
                 "type": "tool-call",
                 "id": "toolu_id-4",
                 "name": "bash",
-                "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+                "arguments": "{\"command\":\"cat .env\",\"description\":\"Print the env file\"}"
               }
             }
           },
@@ -331,7 +329,7 @@
         "step": 1,
         "callId": "toolu_id-4",
         "name": "bash",
-        "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+        "arguments": "{\"command\":\"cat .env\",\"description\":\"Print the env file\"}"
       }
     },
     {
@@ -351,11 +349,16 @@
           "content": [
             {
               "type": "text",
-              "text": "bridge tool row ok\n<workspace>\n.\n..\n"
+              "text": "Error: shell operand is denied: <workspace>/perm-deny/.env"
             }
           ],
-          "isError": false,
+          "isError": true,
           "id": "id-7"
+        },
+        "error": {
+          "name": "PermissionDenial",
+          "code": "tool_denied",
+          "reason": "policy-deny"
         }
       },
       "sourceEventSeqs": [11],
@@ -391,7 +394,7 @@
           "content": [
             {
               "type": "text",
-              "text": "Tool row finished: the workspace listing is above."
+              "text": "P1-PERM-DENY finished."
             }
           ],
           "source": {
@@ -436,7 +439,7 @@
             "type": "text-chunks",
             "time0": "<ms>",
             "index": 0,
-            "texts": ["Tool row finished: the workspace listing is above."]
+            "texts": ["P1-PERM-DENY finished."]
           },
           {
             "type": "chunk",
@@ -446,7 +449,7 @@
               "index": 0,
               "block": {
                 "type": "text",
-                "text": "Tool row finished: the workspace listing is above."
+                "text": "P1-PERM-DENY finished."
               }
             }
           },

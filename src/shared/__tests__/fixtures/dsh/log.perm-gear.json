@@ -1,13 +1,13 @@
 {
   "header": {
     "version": 4,
-    "id": "aiclient-rec-tool",
+    "id": "aiclient-rec-perm-gear",
     "createdAt": "<ms>",
-    "cwd": "<workspace>",
+    "cwd": "<workspace>/perm-gear",
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 17,
+  "cursor": 18,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -21,7 +21,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "P0-TOOL: list the workspace."
+                "text": "P1-PERM-HOLD: run one command."
               }
             ],
             "source": {
@@ -92,7 +92,7 @@
         "content": [
           {
             "type": "text",
-            "text": "P0-TOOL: list the workspace."
+            "text": "P1-PERM-HOLD: run one command."
           }
         ],
         "source": {
@@ -128,7 +128,7 @@
             },
             {
               "name": "aiclient:permission",
-              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: ask. Writes, edits and shell calls require approval. Wait for the tool result. Never bypass a denied tool or path by switching tools."
             }
           ]
         },
@@ -194,7 +194,7 @@
       "seq": 9,
       "time": "<ms>",
       "data": {
-        "title": "P0-TOOL: list the workspace.",
+        "title": "P1-PERM-HOLD: run one command.",
         "messageSeqs": [5],
         "source": {
           "kind": "fallback"
@@ -215,7 +215,7 @@
               "type": "tool-call",
               "id": "toolu_id-4",
               "name": "bash",
-              "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+              "arguments": "{\"command\":\"echo P1-PERM-HOLD\",\"description\":\"Held at the gate\"}"
             }
           ],
           "source": {
@@ -262,9 +262,7 @@
             "index": 0,
             "id": "toolu_id-4",
             "name": "bash",
-            "args": [
-              "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
-            ]
+            "args": ["{\"command\":\"echo P1-PERM-HOLD\",\"description\":\"Held at the gate\"}"]
           },
           {
             "type": "chunk",
@@ -276,7 +274,7 @@
                 "type": "tool-call",
                 "id": "toolu_id-4",
                 "name": "bash",
-                "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+                "arguments": "{\"command\":\"echo P1-PERM-HOLD\",\"description\":\"Held at the gate\"}"
               }
             }
           },
@@ -331,7 +329,7 @@
         "step": 1,
         "callId": "toolu_id-4",
         "name": "bash",
-        "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+        "arguments": "{\"command\":\"echo P1-PERM-HOLD\",\"description\":\"Held at the gate\"}"
       }
     },
     {
@@ -351,7 +349,7 @@
           "content": [
             {
               "type": "text",
-              "text": "bridge tool row ok\n<workspace>\n.\n..\n"
+              "text": "P1-PERM-HOLD\n"
             }
           ],
           "isError": false,
@@ -380,8 +378,42 @@
       }
     },
     {
-      "type": "assistant/message",
+      "type": "user/message",
       "seq": 15,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-8"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -391,7 +423,7 @@
           "content": [
             {
               "type": "text",
-              "text": "Tool row finished: the workspace listing is above."
+              "text": "P1-PERM-HOLD finished."
             }
           ],
           "source": {
@@ -405,7 +437,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-8",
+                "responseId": "msg_id-9",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -415,7 +447,7 @@
               ]
             }
           },
-          "id": "id-9"
+          "id": "id-10"
         },
         "usage": {
           "inputTokens": 0,
@@ -436,7 +468,7 @@
             "type": "text-chunks",
             "time0": "<ms>",
             "index": 0,
-            "texts": ["Tool row finished: the workspace listing is above."]
+            "texts": ["P1-PERM-HOLD finished."]
           },
           {
             "type": "chunk",
@@ -446,7 +478,7 @@
               "index": 0,
               "block": {
                 "type": "text",
-                "text": "Tool row finished: the workspace listing is above."
+                "text": "P1-PERM-HOLD finished."
               }
             }
           },
@@ -477,7 +509,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-8",
+                  "responseId": "msg_id-9",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -494,7 +526,7 @@
     },
     {
       "type": "step/end",
-      "seq": 16,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -503,7 +535,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 17,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "turn": 1,

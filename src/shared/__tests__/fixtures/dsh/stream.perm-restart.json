@@ -1,0 +1,701 @@
+[
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-GRANT"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-SESSION: echo twice."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "echo perm-session-first",
+        "description": "First echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-restart",
+        "command": "echo perm-session-first",
+        "workspace": "<workspace>/perm-restart"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-session-first",
+        "cwd": "<workspace>/perm-restart"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "allow": true,
+      "decision": "allow_session"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "perm-session-first\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "input": {
+        "command": "echo perm-session-second",
+        "description": "Second echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "ok": true,
+      "output": "perm-session-second\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s3",
+      "blockId": "dsh-aiclient-rec-perm-restart-t1-s3-b0",
+      "text": "P1-PERM-SESSION finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-27",
+      "role": "user",
+      "attemptId": "attempt-PERM-COVERED"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-27",
+      "blockId": "dsh-user-27-text",
+      "text": "P1-PERM-SESSION: echo twice."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-27"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
+      "toolCallId": "toolu_id-13",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
+      "toolCallId": "toolu_id-13",
+      "input": {
+        "command": "echo perm-session-first",
+        "description": "First echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
+      "toolCallId": "toolu_id-13",
+      "ok": true,
+      "output": "perm-session-first\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
+      "toolCallId": "toolu_id-17",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
+      "toolCallId": "toolu_id-17",
+      "input": {
+        "command": "echo perm-session-second",
+        "description": "Second echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
+      "toolCallId": "toolu_id-17",
+      "ok": true,
+      "output": "perm-session-second\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s3",
+      "blockId": "dsh-aiclient-rec-perm-restart-t2-s3-b0",
+      "text": "P1-PERM-SESSION finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-46",
+      "role": "user",
+      "attemptId": "attempt-PERM-ASKED"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-46",
+      "blockId": "dsh-user-46-text",
+      "text": "P1-PERM-SESSION: echo twice."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-46"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
+      "toolCallId": "toolu_id-24",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
+      "toolCallId": "toolu_id-24",
+      "input": {
+        "command": "echo perm-session-first",
+        "description": "First echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-24",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-restart",
+        "command": "echo perm-session-first",
+        "workspace": "<workspace>/perm-restart"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-session-first",
+        "cwd": "<workspace>/perm-restart"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-24",
+      "allow": false,
+      "decision": "deny"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
+      "toolCallId": "toolu_id-24",
+      "ok": false,
+      "error": "Error: permission denied"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
+      "toolCallId": "toolu_id-28",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
+      "toolCallId": "toolu_id-28",
+      "input": {
+        "command": "echo perm-session-second",
+        "description": "Second echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-28",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-restart",
+        "command": "echo perm-session-second",
+        "workspace": "<workspace>/perm-restart"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-session-second",
+        "cwd": "<workspace>/perm-restart"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-28",
+      "allow": false,
+      "decision": "deny"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
+      "toolCallId": "toolu_id-28",
+      "ok": false,
+      "error": "Error: permission denied"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s3",
+      "blockId": "dsh-aiclient-rec-perm-restart-t3-s3-b0",
+      "text": "P1-PERM-SESSION finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t3-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-ASKED",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

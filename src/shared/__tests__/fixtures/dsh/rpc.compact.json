@@ -217,7 +217,7 @@
   },
   "compact": {
     "kind": "success",
-    "text": "Compacted 6 history items (~223 tokens).",
+    "text": "Compacted 6 history items (~334 tokens).",
     "sourceEventSeq": 28
   }
 }

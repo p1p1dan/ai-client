@@ -1,0 +1,197 @@
+[
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-PLAN"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-PLAN: write, then read."
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "write",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "file_path": "perm-plan.txt",
+        "content": "written in plan mode\n",
+        "path": "perm-plan.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": false,
+      "error": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "name": "read",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "input": {
+        "file_path": "perm-plan-notes.txt",
+        "path": "perm-plan-notes.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "ok": true,
+      "output": "<path><workspace>/perm-plan/perm-plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3",
+      "blockId": "dsh-aiclient-rec-perm-plan-t1-s3-b0",
+      "text": "P1-PERM-PLAN finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

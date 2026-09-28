@@ -104,6 +104,15 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'crash-resume',
     'fail',
     'fork',
+    'perm-card',
+    'perm-deny',
+    'perm-gear',
+    'perm-grants',
+    'perm-plan',
+    'perm-restart',
+    'perm-search',
+    'perm-stop',
+    'perm-subagent',
     'rewind',
     'stop-stream',
     'stop-tool',
@@ -147,10 +156,11 @@ describe.each(scenarios)('the %s recording', (name) => {
     const { rpc, messages } = project(name);
     for (const boot of rpc.bootstrap) {
       if (!boot.initialHistory) continue;
-      const { offset, limit } = boot.initialHistory.page;
-      expect(normalized(paginateHistory(messages, offset, limit))).toEqual(
-        boot.initialHistory.page
-      );
+      const { offset, limit, totalCount } = boot.initialHistory.page;
+      // A reopen can be followed by more turns (perm-restart): the page is the
+      // history as it stood then, a prefix of the final log's.
+      const then = messages.slice(0, totalCount);
+      expect(normalized(paginateHistory(then, offset, limit))).toEqual(boot.initialHistory.page);
     }
   });
 });

@@ -1,0 +1,574 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-restart",
+      "piSessionId": "aiclient-rec-perm-restart",
+      "cwd": "<workspace>/perm-restart",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    },
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-restart",
+      "piSessionId": "aiclient-rec-perm-restart",
+      "cwd": "<workspace>/perm-restart",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
+      "leaf": {
+        "activeEntryId": "id-1:interrupted",
+        "fileTailEntryId": "aiclient-rec-perm-restart#22"
+      },
+      "initialHistory": {
+        "logicalSessionId": "rec-perm-restart",
+        "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
+        "workspacePath": "<workspace>/perm-restart",
+        "page": {
+          "messages": [
+            {
+              "id": "h:id-1",
+              "entryId": "id-1",
+              "role": "user",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-1:text:0",
+                  "text": "P1-PERM-SESSION: echo twice."
+                }
+              ]
+            },
+            {
+              "id": "h:id-6",
+              "entryId": "id-6",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "tool_call",
+                  "id": "h:id-6:tool-call:toolu_id-4",
+                  "toolCallId": "toolu_id-4",
+                  "name": "bash",
+                  "input": {
+                    "command": "echo perm-session-first",
+                    "description": "First echo"
+                  }
+                },
+                {
+                  "type": "tool_result",
+                  "id": "h:id-7:tool-result:toolu_id-4",
+                  "toolCallId": "toolu_id-4",
+                  "ok": true,
+                  "output": "perm-session-first\n"
+                }
+              ]
+            },
+            {
+              "id": "h:id-10",
+              "entryId": "id-10",
+              "role": "assistant",
+              "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
+              "blocks": [
+                {
+                  "type": "tool_call",
+                  "id": "h:id-10:tool-call:toolu_id-8",
+                  "toolCallId": "toolu_id-8",
+                  "name": "bash",
+                  "input": {
+                    "command": "echo perm-session-second",
+                    "description": "Second echo"
+                  }
+                },
+                {
+                  "type": "tool_result",
+                  "id": "h:id-11:tool-result:toolu_id-8",
+                  "toolCallId": "toolu_id-8",
+                  "ok": true,
+                  "output": "perm-session-second\n"
+                }
+              ],
+              "incomplete": true,
+              "stopReason": "interrupted"
+            },
+            {
+              "id": "h:id-1:interrupted",
+              "entryId": "id-1:interrupted",
+              "role": "system",
+              "timestamp": "<ms>",
+              "blocks": [
+                {
+                  "type": "text",
+                  "id": "h:id-1:interrupted:interrupted:0",
+                  "text": "This turn was interrupted when the engine stopped unexpectedly.",
+                  "notice": {
+                    "key": "This turn was interrupted when the engine stopped unexpectedly."
+                  }
+                }
+              ]
+            }
+          ],
+          "offset": 0,
+          "limit": 80,
+          "totalCount": 4,
+          "hasMore": false
+        }
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-perm-restart",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
+    "workspacePath": "<workspace>/perm-restart",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PERM-SESSION: echo twice."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-first",
+                "description": "First echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "perm-session-first\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-second",
+                "description": "Second echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": true,
+              "output": "perm-session-second\n"
+            }
+          ],
+          "incomplete": true,
+          "stopReason": "interrupted"
+        },
+        {
+          "id": "h:id-1:interrupted",
+          "entryId": "id-1:interrupted",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:interrupted:interrupted:0",
+              "text": "This turn was interrupted when the engine stopped unexpectedly.",
+              "notice": {
+                "key": "This turn was interrupted when the engine stopped unexpectedly."
+              }
+            }
+          ]
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "P1-PERM-SESSION: echo twice."
+            }
+          ]
+        },
+        {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-15:tool-call:toolu_id-13",
+              "toolCallId": "toolu_id-13",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-first",
+                "description": "First echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-16:tool-result:toolu_id-13",
+              "toolCallId": "toolu_id-13",
+              "ok": true,
+              "output": "perm-session-first\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-19",
+          "entryId": "id-19",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-19:tool-call:toolu_id-17",
+              "toolCallId": "toolu_id-17",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-second",
+                "description": "Second echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-20:tool-result:toolu_id-17",
+              "toolCallId": "toolu_id-17",
+              "ok": true,
+              "output": "perm-session-second\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-22",
+          "entryId": "id-22",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-22:text:0",
+              "text": "P1-PERM-SESSION finished."
+            }
+          ]
+        },
+        {
+          "id": "h:id-23",
+          "entryId": "id-23",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-23:text:0",
+              "text": "P1-PERM-SESSION: echo twice."
+            }
+          ]
+        },
+        {
+          "id": "h:id-26",
+          "entryId": "id-26",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-26:tool-call:toolu_id-24",
+              "toolCallId": "toolu_id-24",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-first",
+                "description": "First echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-27:tool-result:toolu_id-24",
+              "toolCallId": "toolu_id-24",
+              "ok": false,
+              "output": "Error: permission denied",
+              "error": "Error: permission denied"
+            }
+          ]
+        },
+        {
+          "id": "h:id-30",
+          "entryId": "id-30",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-30:tool-call:toolu_id-28",
+              "toolCallId": "toolu_id-28",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-session-second",
+                "description": "Second echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-31:tool-result:toolu_id-28",
+              "toolCallId": "toolu_id-28",
+              "ok": false,
+              "output": "Error: permission denied",
+              "error": "Error: permission denied"
+            }
+          ]
+        },
+        {
+          "id": "h:id-33",
+          "entryId": "id-33",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-33:text:0",
+              "text": "P1-PERM-SESSION finished."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 12,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-perm-restart",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
+      "workspacePath": "<workspace>/perm-restart",
+      "leaf": {
+        "activeEntryId": "id-33",
+        "fileTailEntryId": "aiclient-rec-perm-restart#59"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-SESSION: echo twice.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-1:interrupted",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "This turn was interrupted when the engine stopped unexpectedly.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-1:interrupted",
+          "depth": 4,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-SESSION: echo twice.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-15",
+          "parentId": "id-12",
+          "depth": 5,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-19",
+          "parentId": "id-15",
+          "depth": 6,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-22",
+          "parentId": "id-19",
+          "depth": 7,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-SESSION finished.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-23",
+          "parentId": "id-22",
+          "depth": 8,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-SESSION: echo twice.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-26",
+          "parentId": "id-23",
+          "depth": 9,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-30",
+          "parentId": "id-26",
+          "depth": 10,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-33",
+          "parentId": "id-30",
+          "depth": 11,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-SESSION finished.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 12,
+      "returnedNodes": 12,
+      "truncated": false
+    }
+  },
+  "grants": {
+    "granted": {
+      "version": 2,
+      "grants": [
+        {
+          "kind": "command",
+          "prefix": "echo",
+          "root": "<workspace>/perm-restart"
+        }
+      ]
+    },
+    "configured": {
+      "version": 2,
+      "grants": []
+    }
+  },
+  "configure": {
+    "ok": true,
+    "result": {
+      "applied": true
+    }
+  }
+}

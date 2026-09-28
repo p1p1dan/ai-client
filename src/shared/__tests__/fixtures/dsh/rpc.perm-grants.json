@@ -1,0 +1,226 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-grants",
+      "piSessionId": "aiclient-rec-perm-grants",
+      "cwd": "<workspace>/perm-grants",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-grants.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-perm-grants",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-grants.dsh.json",
+    "workspacePath": "<workspace>/perm-grants",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PERM-GRANTS: echo three times."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-grant-a",
+                "description": "First echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "perm-grant-a\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-grant-b",
+                "description": "Second echo"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": true,
+              "output": "perm-grant-b\n"
+            }
+          ]
+        },
+        {
+          "id": "h:id-14",
+          "entryId": "id-14",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-14:tool-call:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "name": "bash",
+              "input": {
+                "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+                "description": "Echo, then remove a file"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-15:tool-result:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "ok": false,
+              "output": "Error: permission denied",
+              "error": "Error: permission denied"
+            }
+          ]
+        },
+        {
+          "id": "h:id-17",
+          "entryId": "id-17",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-17:text:0",
+              "text": "P1-PERM-GRANTS finished."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 5,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-perm-grants",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-grants.dsh.json",
+      "workspacePath": "<workspace>/perm-grants",
+      "leaf": {
+        "activeEntryId": "id-17",
+        "fileTailEntryId": "aiclient-rec-perm-grants#27"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-GRANTS: echo three times.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-14",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-17",
+          "parentId": "id-14",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-GRANTS finished.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 5,
+      "returnedNodes": 5,
+      "truncated": false
+    }
+  },
+  "grants": {
+    "version": 2,
+    "grants": [
+      {
+        "kind": "command",
+        "prefix": "echo",
+        "root": "<workspace>/perm-grants"
+      }
+    ]
+  }
+}

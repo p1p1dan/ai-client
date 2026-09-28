@@ -1,0 +1,158 @@
+[
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-STOP"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-HOLD: run one command."
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-stop-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-stop-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-stop-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "echo P1-PERM-HOLD",
+        "description": "Held at the gate"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-stop",
+        "command": "echo P1-PERM-HOLD",
+        "workspace": "<workspace>/perm-stop"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo P1-PERM-HOLD",
+        "cwd": "<workspace>/perm-stop"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "session.status",
+    "payload": {
+      "status": "stopping"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "allow": false,
+      "decision": "deny",
+      "autoReason": "aborted"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-stop-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": false,
+      "error": "Error: tool call aborted before dispatch"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-stop-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "session.stopped",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-stop",
+    "requestId": "turn-PERM-STOP",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

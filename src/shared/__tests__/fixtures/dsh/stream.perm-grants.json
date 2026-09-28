@@ -1,0 +1,332 @@
+[
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-GRANTS"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-GRANTS: echo three times."
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "echo perm-grant-a",
+        "description": "First echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-grants",
+        "command": "echo perm-grant-a",
+        "workspace": "<workspace>/perm-grants"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-grant-a",
+        "cwd": "<workspace>/perm-grants"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "allow": true,
+      "decision": "allow_session"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "perm-grant-a\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "input": {
+        "command": "echo perm-grant-b",
+        "description": "Second echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "ok": true,
+      "output": "perm-grant-b\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s3",
+      "toolCallId": "toolu_id-12",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s3",
+      "toolCallId": "toolu_id-12",
+      "input": {
+        "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+        "description": "Echo, then remove a file"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-12",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-grants",
+        "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+        "workspace": "<workspace>/perm-grants"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+        "cwd": "<workspace>/perm-grants"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo, rm"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-12",
+      "allow": false,
+      "decision": "deny"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s3",
+      "toolCallId": "toolu_id-12",
+      "ok": false,
+      "error": "Error: permission denied"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s4",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s4",
+      "blockId": "dsh-aiclient-rec-perm-grants-t1-s4-b0",
+      "text": "P1-PERM-GRANTS finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-grants-t1-s4"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

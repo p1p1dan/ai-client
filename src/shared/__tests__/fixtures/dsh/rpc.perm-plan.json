@@ -1,0 +1,180 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-plan",
+      "piSessionId": "aiclient-rec-perm-plan",
+      "cwd": "<workspace>/perm-plan",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-plan.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-perm-plan",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-plan.dsh.json",
+    "workspacePath": "<workspace>/perm-plan",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PERM-PLAN: write, then read."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "write",
+              "input": {
+                "file_path": "perm-plan.txt",
+                "content": "written in plan mode\n",
+                "path": "perm-plan.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": false,
+              "output": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt",
+              "error": "Error: access denied: write <workspace>/perm-plan/perm-plan.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "read",
+              "input": {
+                "file_path": "perm-plan-notes.txt",
+                "path": "perm-plan-notes.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": true,
+              "output": "<path><workspace>/perm-plan/perm-plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
+            }
+          ]
+        },
+        {
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-13:text:0",
+              "text": "P1-PERM-PLAN finished."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 4,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-perm-plan",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-plan.dsh.json",
+      "workspacePath": "<workspace>/perm-plan",
+      "leaf": {
+        "activeEntryId": "id-13",
+        "fileTailEntryId": "aiclient-rec-perm-plan#22"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-PLAN: write, then read.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-13",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-PLAN finished.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 4,
+      "returnedNodes": 4,
+      "truncated": false
+    }
+  },
+  "written": false
+}

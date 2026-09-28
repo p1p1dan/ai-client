@@ -1,13 +1,13 @@
 {
   "header": {
     "version": 4,
-    "id": "aiclient-rec-tool",
+    "id": "aiclient-rec-perm-grants",
     "createdAt": "<ms>",
-    "cwd": "<workspace>",
+    "cwd": "<workspace>/perm-grants",
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 17,
+  "cursor": 27,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -21,7 +21,7 @@
             "content": [
               {
                 "type": "text",
-                "text": "P0-TOOL: list the workspace."
+                "text": "P1-PERM-GRANTS: echo three times."
               }
             ],
             "source": {
@@ -92,7 +92,7 @@
         "content": [
           {
             "type": "text",
-            "text": "P0-TOOL: list the workspace."
+            "text": "P1-PERM-GRANTS: echo three times."
           }
         ],
         "source": {
@@ -128,7 +128,7 @@
             },
             {
               "name": "aiclient:permission",
-              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: bypass. The user has turned off approval prompts entirely: available tools execute without approval, including shell commands whose operands cannot be resolved statically. Explicit deny rules and the tool whitelist remain enforced, and a denied call is still denied. Never bypass a denied tool or path by switching tools."
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: ask. Writes, edits and shell calls require approval. Wait for the tool result. Never bypass a denied tool or path by switching tools."
             }
           ]
         },
@@ -194,7 +194,7 @@
       "seq": 9,
       "time": "<ms>",
       "data": {
-        "title": "P0-TOOL: list the workspace.",
+        "title": "P1-PERM-GRANTS: echo three times.",
         "messageSeqs": [5],
         "source": {
           "kind": "fallback"
@@ -215,7 +215,7 @@
               "type": "tool-call",
               "id": "toolu_id-4",
               "name": "bash",
-              "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+              "arguments": "{\"command\":\"echo perm-grant-a\",\"description\":\"First echo\"}"
             }
           ],
           "source": {
@@ -262,9 +262,7 @@
             "index": 0,
             "id": "toolu_id-4",
             "name": "bash",
-            "args": [
-              "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
-            ]
+            "args": ["{\"command\":\"echo perm-grant-a\",\"description\":\"First echo\"}"]
           },
           {
             "type": "chunk",
@@ -276,7 +274,7 @@
                 "type": "tool-call",
                 "id": "toolu_id-4",
                 "name": "bash",
-                "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+                "arguments": "{\"command\":\"echo perm-grant-a\",\"description\":\"First echo\"}"
               }
             }
           },
@@ -331,7 +329,7 @@
         "step": 1,
         "callId": "toolu_id-4",
         "name": "bash",
-        "arguments": "{\"command\":\"echo \\\"bridge tool row ok\\\"; pwd; ls -a\",\"description\":\"List the workspace\"}"
+        "arguments": "{\"command\":\"echo perm-grant-a\",\"description\":\"First echo\"}"
       }
     },
     {
@@ -351,7 +349,7 @@
           "content": [
             {
               "type": "text",
-              "text": "bridge tool row ok\n<workspace>\n.\n..\n"
+              "text": "perm-grant-a\n"
             }
           ],
           "isError": false,
@@ -390,8 +388,10 @@
           "role": "assistant",
           "content": [
             {
-              "type": "text",
-              "text": "Tool row finished: the workspace listing is above."
+              "type": "tool-call",
+              "id": "toolu_id-8",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo perm-grant-b\",\"description\":\"Second echo\"}"
             }
           ],
           "source": {
@@ -405,7 +405,364 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-8",
+                "responseId": "msg_id-9",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-10"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-8",
+            "name": "bash",
+            "args": ["{\"command\":\"echo perm-grant-b\",\"description\":\"Second echo\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-8",
+                "name": "bash",
+                "arguments": "{\"command\":\"echo perm-grant-b\",\"description\":\"Second echo\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-9",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 16,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "callId": "toolu_id-8",
+        "name": "bash",
+        "arguments": "{\"command\":\"echo perm-grant-b\",\"description\":\"Second echo\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 17,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-8"
+          },
+          "toolCallId": "toolu_id-8",
+          "content": [
+            {
+              "type": "text",
+              "text": "perm-grant-b\n"
+            }
+          ],
+          "isError": false,
+          "id": "id-11"
+        }
+      },
+      "sourceEventSeqs": [16],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 18,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-12",
+              "name": "bash",
+              "arguments": "{\"command\":\"echo perm-grant-c && rm -f perm-grant-missing.txt\",\"description\":\"Echo, then remove a file\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-13",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-14"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-12",
+            "name": "bash",
+            "args": [
+              "{\"command\":\"echo perm-grant-c && rm -f perm-grant-missing.txt\",\"description\":\"Echo, then remove a file\"}"
+            ]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-12",
+                "name": "bash",
+                "arguments": "{\"command\":\"echo perm-grant-c && rm -f perm-grant-missing.txt\",\"description\":\"Echo, then remove a file\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-13",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "callId": "toolu_id-12",
+        "name": "bash",
+        "arguments": "{\"command\":\"echo perm-grant-c && rm -f perm-grant-missing.txt\",\"description\":\"Echo, then remove a file\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 22,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-12"
+          },
+          "toolCallId": "toolu_id-12",
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: permission denied"
+            }
+          ],
+          "isError": true,
+          "id": "id-15"
+        },
+        "error": {
+          "name": "PermissionDenial",
+          "code": "tool_denied",
+          "reason": "user-denied"
+        }
+      },
+      "sourceEventSeqs": [21],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 24,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 25,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-PERM-GRANTS finished."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-16",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -415,7 +772,7 @@
               ]
             }
           },
-          "id": "id-9"
+          "id": "id-17"
         },
         "usage": {
           "inputTokens": 0,
@@ -436,7 +793,7 @@
             "type": "text-chunks",
             "time0": "<ms>",
             "index": 0,
-            "texts": ["Tool row finished: the workspace listing is above."]
+            "texts": ["P1-PERM-GRANTS finished."]
           },
           {
             "type": "chunk",
@@ -446,7 +803,7 @@
               "index": 0,
               "block": {
                 "type": "text",
-                "text": "Tool row finished: the workspace listing is above."
+                "text": "P1-PERM-GRANTS finished."
               }
             }
           },
@@ -477,7 +834,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-8",
+                  "responseId": "msg_id-16",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -494,16 +851,16 @@
     },
     {
       "type": "step/end",
-      "seq": 16,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "turn": 1,
-        "step": 2
+        "step": 4
       }
     },
     {
       "type": "turn/end",
-      "seq": 17,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 1,

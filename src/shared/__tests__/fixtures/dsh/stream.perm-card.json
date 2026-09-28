@@ -1,0 +1,286 @@
+[
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-CARD"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-WRITES: write two files."
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "write",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "file_path": "perm-allowed.txt",
+        "content": "first write\n",
+        "path": "perm-allowed.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "toolName": "write",
+      "action": "write_file",
+      "input": {
+        "path": "<workspace>/perm-card/perm-allowed.txt",
+        "content": "first write\n",
+        "contentLabel": "Content",
+        "workspace": "<workspace>/perm-card"
+      },
+      "kind": "file_change",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "file_change",
+        "changes": [
+          {
+            "path": "<workspace>/perm-card/perm-allowed.txt",
+            "change": "add"
+          }
+        ]
+      },
+      "sessionGrantScope": {
+        "kind": "path",
+        "value": "perm-allowed.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "allow": true,
+      "decision": "allow"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "<path><workspace>/perm-card/perm-allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "name": "write",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "input": {
+        "file_path": "perm-denied.txt",
+        "content": "second write\n",
+        "path": "perm-denied.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-8",
+      "toolName": "write",
+      "action": "write_file",
+      "input": {
+        "path": "<workspace>/perm-card/perm-denied.txt",
+        "content": "second write\n",
+        "contentLabel": "Content",
+        "workspace": "<workspace>/perm-card"
+      },
+      "kind": "file_change",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "file_change",
+        "changes": [
+          {
+            "path": "<workspace>/perm-card/perm-denied.txt",
+            "change": "add"
+          }
+        ]
+      },
+      "sessionGrantScope": {
+        "kind": "path",
+        "value": "perm-denied.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-8",
+      "allow": false,
+      "decision": "deny"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "ok": false,
+      "error": "Error: permission denied"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s3",
+      "blockId": "dsh-aiclient-rec-perm-card-t1-s3-b0",
+      "text": "P1-PERM-WRITES finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

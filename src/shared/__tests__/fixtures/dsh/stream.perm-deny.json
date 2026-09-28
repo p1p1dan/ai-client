@@ -1,0 +1,138 @@
+[
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-DENY"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-DENY: print the env file."
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "cat .env",
+        "description": "Print the env file"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": false,
+      "error": "Error: shell operand is denied: <workspace>/perm-deny/.env"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s2",
+      "blockId": "dsh-aiclient-rec-perm-deny-t1-s2-b0",
+      "text": "P1-PERM-DENY finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-deny-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

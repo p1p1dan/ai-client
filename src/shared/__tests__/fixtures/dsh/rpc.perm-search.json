@@ -1,0 +1,175 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-search",
+      "piSessionId": "aiclient-rec-perm-search",
+      "cwd": "<workspace>/perm-search",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-search.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-perm-search",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-search.dsh.json",
+    "workspacePath": "<workspace>/perm-search",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PERM-SEARCH: list and search the workspace."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "glob",
+              "input": {
+                "pattern": "**/*"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "notes.txt"
+            }
+          ]
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "grep",
+              "input": {
+                "pattern": "PERM-SECRET"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": true,
+              "output": "Found 1 match\n\nnotes.txt\nLine 1: PERM-SECRET in plain notes"
+            }
+          ]
+        },
+        {
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-13:text:0",
+              "text": "P1-PERM-SEARCH finished."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 4,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-perm-search",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-search.dsh.json",
+      "workspacePath": "<workspace>/perm-search",
+      "leaf": {
+        "activeEntryId": "id-13",
+        "fileTailEntryId": "aiclient-rec-perm-search#22"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-SEARCH: list and search the workspace.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-13",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-SEARCH finished.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 4,
+      "returnedNodes": 4,
+      "truncated": false
+    }
+  }
+}

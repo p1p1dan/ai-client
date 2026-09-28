@@ -1,0 +1,185 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-perm-card",
+      "piSessionId": "aiclient-rec-perm-card",
+      "cwd": "<workspace>/perm-card",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-perm-card",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
+    "workspacePath": "<workspace>/perm-card",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PERM-WRITES: write two files."
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "write",
+              "input": {
+                "file_path": "perm-allowed.txt",
+                "content": "first write\n",
+                "path": "perm-allowed.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "<path><workspace>/perm-card/perm-allowed.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+            }
+          ]
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "write",
+              "input": {
+                "file_path": "perm-denied.txt",
+                "content": "second write\n",
+                "path": "perm-denied.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": false,
+              "output": "Error: permission denied",
+              "error": "Error: permission denied"
+            }
+          ]
+        },
+        {
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-13:text:0",
+              "text": "P1-PERM-WRITES finished."
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 4,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-perm-card",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-card.dsh.json",
+      "workspacePath": "<workspace>/perm-card",
+      "leaf": {
+        "activeEntryId": "id-13",
+        "fileTailEntryId": "aiclient-rec-perm-card#22"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PERM-WRITES: write two files.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-13",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-WRITES finished.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 4,
+      "returnedNodes": 4,
+      "truncated": false
+    }
+  },
+  "files": {
+    "allowed": true,
+    "denied": false
+  },
+  "grants": null
+}

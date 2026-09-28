@@ -1,0 +1,177 @@
+[
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-GEAR"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-HOLD: run one command."
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "echo P1-PERM-HOLD",
+        "description": "Held at the gate"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-gear",
+        "command": "echo P1-PERM-HOLD",
+        "workspace": "<workspace>/perm-gear"
+      },
+      "kind": "exec",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo P1-PERM-HOLD",
+        "cwd": "<workspace>/perm-gear"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-4",
+      "allow": true,
+      "decision": "allow"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "P1-PERM-HOLD\n"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s2",
+      "blockId": "dsh-aiclient-rec-perm-gear-t1-s2-b0",
+      "text": "P1-PERM-HOLD finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

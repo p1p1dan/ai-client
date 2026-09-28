@@ -1,0 +1,180 @@
+[
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-SUB"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-SUB: delegate one command."
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "subagent",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "description": "Permission probe child",
+        "prompt": "P1-PERM-CHILD: run one bash call, then answer.",
+        "run_in_background": false
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "permission.requested",
+    "payload": {
+      "permissionId": "toolu_id-11",
+      "toolName": "bash",
+      "action": "run_command",
+      "input": {
+        "path": "<workspace>/perm-subagent",
+        "command": "echo perm-child-call",
+        "workspace": "<workspace>/perm-subagent"
+      },
+      "kind": "exec",
+      "agentId": "id-7",
+      "agentName": "subagent",
+      "decisions": ["allow", "allow_session", "deny"],
+      "timeoutMs": 120000,
+      "queuePosition": 1,
+      "queueDepth": 1,
+      "detail": {
+        "kind": "exec",
+        "command": "echo perm-child-call",
+        "cwd": "<workspace>/perm-subagent"
+      },
+      "sessionGrantScope": {
+        "kind": "command",
+        "value": "echo"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "permission.resolved",
+    "payload": {
+      "permissionId": "toolu_id-11",
+      "allow": true,
+      "decision": "allow"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "P1-PERM-CHILD finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s2",
+      "blockId": "dsh-aiclient-rec-perm-subagent-t1-s2-b0",
+      "text": "P1-PERM-SUB finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

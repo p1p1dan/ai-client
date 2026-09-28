@@ -1,0 +1,194 @@
+[
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-PERM-SEARCH"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-PERM-SEARCH: list and search the workspace."
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "glob",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "pattern": "**/*"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "notes.txt"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "name": "grep",
+      "input": {
+        "__streaming": {
+          "bytes": 0,
+          "lines": 0
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "input": {
+        "pattern": "PERM-SECRET"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "ok": true,
+      "output": "Found 1 match\n\nnotes.txt\nLine 1: PERM-SECRET in plain notes"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s3",
+      "blockId": "dsh-aiclient-rec-perm-search-t1-s3-b0",
+      "text": "P1-PERM-SEARCH finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]
