@@ -1,4 +1,5 @@
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
+import { installDshHostModelSource } from '../services/agent-host/dshHostModelSource';
 import { piUtilityService } from '../services/agent-host/PiUtilityService';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { workerManager } from '../services/agent-host/WorkerManager';
@@ -29,6 +30,14 @@ export async function cleanupWorkerManager(): Promise<void> {
  */
 export function sweepScratchWorkspacesOnStartup(): void {
   void scratchWorkspaceService.wipeAll();
+}
+
+/**
+ * dsh-rebase P1-5 (decisions 033, 034): the shared DSH host's model plan and
+ * per-request keys come from Main's catalog. Before any host starts.
+ */
+export function installChatEngineModelSource(): void {
+  installDshHostModelSource();
 }
 
 /** Signal/deadline fallback: detach routing and synchronously kill every worker. */

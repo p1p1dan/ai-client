@@ -26,6 +26,7 @@ export {
 } from './route.ts';
 export { dshRouteSettings } from './settings.ts';
 export {
+  CLIENT_IDENTITY_HEADER,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
   DSH_EFFORT_LEVELS,

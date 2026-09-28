@@ -1,12 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   DSH_CHANNEL_OPENING_METHODS,
+  DSH_CONFIGURE_TIMEOUT_MS,
+  DSH_CREDENTIAL_TIMEOUT_MS,
   dshHostControlKind,
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshChannelId,
   isDshHostChannelClosed,
   isDshHostCloseChannel,
+  isDshHostConfigure,
+  isDshHostCredentialRequest,
+  isDshHostCredentialResult,
   isDshHostFatal,
   isDshHostGcRequest,
   isDshHostGcResult,
@@ -219,5 +224,61 @@ describe('dshHostProtocol readPage (P1-4a, decision 030)', () => {
     ]) {
       expect(isDshHostPage(bad), JSON.stringify(bad)).toBe(false);
     }
+  });
+});
+
+describe('dshHostProtocol model plan and keys (P1-5, decisions 033 and 034)', () => {
+  const configure = {
+    host: 'configure',
+    nonce: 'n-1',
+    revision: 'r-1',
+    routes: { gw: { models: [] } },
+    defaultModel: { provider: 'gw', model: 'm1' },
+    index: {},
+    refs: { AICLIENT_KEY_GW_1A2B: 'gw' },
+  };
+
+  it('accepts a configure with a nonce, a revision, the plan tables and a default model', () => {
+    expect(isDshHostConfigure(configure)).toBe(true);
+    for (const [field, bad] of [
+      ['nonce', ''],
+      ['revision', undefined],
+      ['routes', []],
+      ['index', null],
+      ['refs', { A: 1 }],
+      ['defaultModel', { provider: 'gw' }],
+    ] as const) {
+      expect(isDshHostConfigure({ ...configure, [field]: bad }), field).toBe(false);
+    }
+  });
+
+  it('accepts a credential request with an id, a reference and a nonce', () => {
+    const request = { host: 'credential', id: 4, ref: 'AICLIENT_KEY_GW_1A2B', nonce: 'n-1' };
+    expect(isDshHostCredentialRequest(request)).toBe(true);
+    expect(isDshHostCredentialRequest({ ...request, id: 0 })).toBe(false);
+    expect(isDshHostCredentialRequest({ ...request, ref: '' })).toBe(false);
+    expect(isDshHostCredentialRequest({ ...request, nonce: 7 })).toBe(false);
+  });
+
+  it('accepts a result carrying a key, or a known failure, and nothing in between', () => {
+    expect(
+      isDshHostCredentialResult({ host: 'credential-result', id: 4, ok: true, value: 'k' })
+    ).toBe(true);
+    for (const error of ['unavailable', 'refused']) {
+      expect(
+        isDshHostCredentialResult({ host: 'credential-result', id: 4, ok: false, error })
+      ).toBe(true);
+    }
+    expect(
+      isDshHostCredentialResult({ host: 'credential-result', id: 4, ok: true, value: '' })
+    ).toBe(false);
+    expect(
+      isDshHostCredentialResult({ host: 'credential-result', id: 4, ok: false, error: 'why' })
+    ).toBe(false);
+  });
+
+  it('gives the host 10 s for configure and a key request 5 s', () => {
+    expect(DSH_CONFIGURE_TIMEOUT_MS).toBe(10_000);
+    expect(DSH_CREDENTIAL_TIMEOUT_MS).toBe(5_000);
   });
 });

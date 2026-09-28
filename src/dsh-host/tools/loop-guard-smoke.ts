@@ -8,7 +8,8 @@
  *   (cd src/dsh-host && ../../out-node-runtime/node tools/loop-guard-smoke.ts [--keep] [--out f.json])
  *
  * Host A  guard on, step ceiling 3 (home patch), gateway route retrying in
- *         mode `always` with a short backoff:
+ *         mode `always` with a short backoff (the plan the script configures
+ *         the host with, P1-5a):
  *   G1/E1/E2  P8-REPEAT: 200 identical `job_list {}` in one paced reply. Cut at
  *             the third: the gateway sees the client hang up right after it,
  *             one request only (no retry), `assistant/attempt`, no `tool/call`,
@@ -44,6 +45,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -156,27 +158,16 @@ async function call(host: Host, type: string, payload: Line = {}, timeoutMs = 60
   return reply;
 }
 
-/** The gateway route, restated whole (a patch replaces a row's config). */
-function routePatch(port: number, retryPolicy: string): string {
-  return [
-    '- id: llm-pi-ai',
-    '  config:',
-    '    providers:',
-    '      aiclient-gateway:',
-    '        displayName: ai-client gateway (P1-8 probe)',
-    '        api: anthropic-messages',
-    `        baseURL: http://127.0.0.1:${port}`,
-    '        apiKeyEnv: AICLIENT_DSH_GATEWAY_KEY',
-    '        models:',
-    '          - id: fake-1',
-    '            name: P0 fake model',
-    '            contextWindow: 200000',
-    '            maxTokens: 8192',
-    '            reasoningEfforts: false',
-    `        retryPolicy: ${retryPolicy}`,
-    '',
-  ].join('\n');
-}
+/** Retry policies of the gateway route; the plan's routes carry them (P1-5a). */
+const ALWAYS_RETRY = {
+  mode: 'always',
+  backoff: { initialDelayMs: 200, maxDelayMs: 400, jitterRatio: 0 },
+};
+const NORMAL_RETRY = {
+  mode: 'normal',
+  maxRetries: 3,
+  backoff: { initialDelayMs: 200, maxDelayMs: 400, jitterRatio: 0 },
+};
 
 const ceilingPatch = `- id: aiclient-loop-guard\n  config:\n    stepCeiling: ${CEILING}\n`;
 
@@ -184,7 +175,8 @@ async function startHost(
   label: string,
   port: number,
   homePatch: string,
-  extraEnv: Record<string, string> = {}
+  extraEnv: Record<string, string> = {},
+  retryPolicy?: Record<string, unknown>
 ): Promise<Host> {
   const box = sandbox(scratchRoot, label);
   writeFileSync(join(box.workspace, 'p8-loop.txt'), 'P8 loop file\n');
@@ -195,8 +187,6 @@ async function startHost(
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-8-fake-key',
     AICLIENT_PROBE_EVENT_LOG: events,
     ...extraEnv,
   };
@@ -206,6 +196,15 @@ async function startHost(
     [nodeBin, '--expose-internals', '--import', hooksEntry, hostEntry],
     env,
     launchDir
+  );
+  // Main's model source, played: the route with this host's retry policy, and its key.
+  serveModelPlan(
+    child,
+    fakeGatewayPlan({
+      baseUrl: `http://127.0.0.1:${port}`,
+      ...(retryPolicy ? { retryPolicy } : {}),
+    }),
+    'p1-8-fake-key'
   );
   const stderr = captureStderr(child);
   const exited = exitOf(child);
@@ -318,9 +317,7 @@ function approvals(host: Host): Line[] {
 // ---- hosts ---------------------------------------------------------------------------
 
 async function hostA(port: number, gatewayRoot: string) {
-  const always =
-    '{ mode: always, backoff: { initialDelayMs: 200, maxDelayMs: 400, jitterRatio: 0 } }';
-  const host = await startHost('a', port, `${ceilingPatch}${routePatch(port, always)}`);
+  const host = await startHost('a', port, ceilingPatch, {}, ALWAYS_RETRY);
   const facts: Line = { census: host.ready.census };
   const known = new Set<string>();
   const session = async (id: string) => {
@@ -517,12 +514,12 @@ async function hostB(port: number, gatewayRoot: string) {
 }
 
 async function hostC(port: number, gatewayRoot: string) {
-  const normal =
-    '{ mode: normal, maxRetries: 3, backoff: { initialDelayMs: 200, maxDelayMs: 400, jitterRatio: 0 } }';
   const host = await startHost(
     'c',
     port,
-    `${ceilingPatch}${routePatch(port, normal)}- id: aiclient-permissions\n  disabled: false\n`
+    `${ceilingPatch}- id: aiclient-permissions\n  disabled: false\n`,
+    {},
+    NORMAL_RETRY
   );
   const facts: Line = { census: host.ready.census };
   try {

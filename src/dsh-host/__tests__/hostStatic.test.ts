@@ -30,13 +30,52 @@ describe('host.ts reads no .env file (HS-01, decision 023)', () => {
 });
 
 describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
-  it('restates the required rows off after the home layer', () => {
-    expect(host).toContain('overlays: requiredDisabledOverlays(),');
+  it('restates the required rows off after the home layer and the plan rows', () => {
+    expect(host).toContain(
+      'overlays: [...modelPlanOverlays(modelPlan), ...requiredDisabledOverlays()],'
+    );
   });
 
-  it('refuses a composition without the loop guard row on (P1-8, decision 065)', () => {
-    expect(host).toContain("const REQUIRED_ENABLED = ['aiclient-loop-guard'];");
+  it('refuses a composition without the loop guard or the credentials row on (P1-8, P1-5b)', () => {
+    expect(host).toContain(
+      "const REQUIRED_ENABLED = ['aiclient-loop-guard', 'aiclient-credentials'];"
+    );
     expect(host).toMatch(/if \(notEnabled\.length > 0\) fail\(/);
+  });
+});
+
+describe('host.ts model plan and keys (P1-5, decisions 033 and 034)', () => {
+  it("composes nothing before Main's configure, and waits for it with IPC only", () => {
+    const waited = host.indexOf(
+      'const modelPlan = ipc ? await awaitConfigure() : emptyHostModelPlan();'
+    );
+    expect(waited).toBeGreaterThan(0);
+    expect(waited).toBeLessThan(host.indexOf('appBoot.readProfilePatches('));
+    expect(host).toContain('CONFIGURE_TIMEOUT_MS');
+  });
+
+  it('takes configure and credential answers off the IPC link before the bridge sees them', () => {
+    const listener = host.slice(
+      host.indexOf("process.on('message'"),
+      host.indexOf('bridgeInbox.queue.push')
+    );
+    expect(listener).toContain('isConfigureMessage(message)');
+    expect(listener).toContain('credentialRelay?.receive(message)');
+  });
+
+  it('provides the plan without its nonce, and the relay, to the rows', () => {
+    expect(host).toContain("hostCtx.provide('aiclientModelPlan', publicModelPlan(modelPlan));");
+    expect(host).toContain("hostCtx.provide('aiclientCredentialRelay', credentialRelay)");
+  });
+
+  it('reports the revision and the route diagnostics in ready', () => {
+    expect(host).toContain('revision: modelPlan.revision,');
+    expect(host).toContain('routeDiagnostics: diagnostics,');
+  });
+
+  it('never reads a key from its environment or writes one to it', () => {
+    expect(host).not.toContain('AICLIENT_DSH_GATEWAY_');
+    expect(host).not.toMatch(/AICLIENT_KEY_/);
   });
 
   it('restates the product bundles at every start and fails only on a product bundle', () => {
@@ -78,10 +117,26 @@ describe('the product bundle: one bridge row always on, the permission row, the 
       /^- id: aiclient-bridge\n\s+name: '@aiclient\/dsh-app\/bridge'\n?$/
     );
     expect(patch.match(/- id: aiclient-[a-z-]+/g)).toEqual([
+      '- id: aiclient-credentials',
       '- id: aiclient-bridge',
       '- id: aiclient-permissions',
       '- id: aiclient-loop-guard',
     ]);
+  });
+
+  it("composes aiclient-credentials on and dsh-base's plain-text credentials row off (P1-5b)", () => {
+    expect(rowOf('aiclient-credentials')).toMatch(
+      /^- id: aiclient-credentials\n\s+name: '@aiclient\/dsh-app\/credentials'\n?$/
+    );
+    expect(patch).toMatch(/^- id: credentials\n {2}disabled: true$/m);
+  });
+
+  it('carries no route, no default model and no key: they come from Main (P1-5a)', () => {
+    const rows = patch.replace(/#[^\n]*/g, '');
+    expect(rows).not.toMatch(/^- id: (llm-pi-ai|agent-default-model)$/m);
+    expect(rows).not.toContain('AICLIENT_DSH_GATEWAY_');
+    expect(rows).not.toContain('apiKeyEnv');
+    expect(rows).not.toContain('baseURL');
   });
 
   it('composes aiclient-permissions off until the bridge attaches gates (P1-6b)', () => {
@@ -101,6 +156,7 @@ describe('the product bundle: one bridge row always on, the permission row, the 
       '.',
       './bridge',
       './cordis.patch.yml',
+      './credentials',
       './loop-guard',
       './package.json',
       './permissions',

@@ -413,6 +413,8 @@ export interface WorkerManagerSlotSnapshot {
 
 const DEFAULT_IDLE_TIMEOUT_MS = 15 * 60_000;
 const DEFAULT_IDLE_SWEEP_INTERVAL_MS = 60_000;
+/** Decision 033 rule 4: how often a stale host's restart re-checks for idle. */
+const PLAN_RECHECK_MS = 2_000;
 const DEFAULT_MAX_RESTART_ATTEMPTS = 2;
 const DEFAULT_RESTART_WINDOW_MS = 60_000;
 
@@ -636,6 +638,9 @@ export class WorkerManager {
   private orphanCollectionTimer: NodeJS.Timeout | null = null;
   /** Decision 024: at most one collection per run, started or not. */
   private orphanCollectionStarted = false;
+  /** Decision 033 rule 4: a plan revision the running host does not run yet. */
+  private pendingPlanRevision: string | null = null;
+  private planRecheckTimer: NodeJS.Timeout | null = null;
 
   constructor(options: WorkerManagerOptions = {}) {
     this.host = options.host ?? null;
@@ -2679,12 +2684,70 @@ export class WorkerManager {
     });
   }
 
+  /**
+   * dsh-rebase decision 033 rule 4 — Main just rebuilt the model plan. A
+   * running host configured with another revision is stale (a sync finished
+   * after it started, a setting changed): it goes the way a login takes it,
+   * `invalidateAll`, but only once no session has a turn or other work under
+   * way; until then the check repeats. A host that is not running starts on
+   * the new plan anyway. Idempotent: calling it for the host's own revision
+   * cancels a pending restart.
+   */
+  reconcileModelPlan(revision: string): void {
+    this.pendingPlanRevision = revision;
+    this.recheckModelPlan();
+  }
+
+  private recheckModelPlan(): void {
+    if (this.planRecheckTimer) clearTimeout(this.planRecheckTimer);
+    this.planRecheckTimer = null;
+    const revision = this.pendingPlanRevision;
+    const running = this.host?.status().planRevision;
+    if (revision === null || running === undefined || running === revision) {
+      this.pendingPlanRevision = null;
+      return;
+    }
+    if (this.hasWorkInFlight()) {
+      this.planRecheckTimer = setTimeout(() => this.recheckModelPlan(), PLAN_RECHECK_MS);
+      this.planRecheckTimer.unref?.();
+      return;
+    }
+    this.pendingPlanRevision = null;
+    this.log(
+      `[worker-manager] the DSH host runs model plan ${running.slice(0, 12)}, Main has ` +
+        `${revision.slice(0, 12)}; restarting it`
+    );
+    this.invalidateAll().catch((error: unknown) =>
+      this.log('[worker-manager] restart for a new model plan failed', error)
+    );
+  }
+
+  /** A turn, a mutation, or work the host reports on some session's channel. */
+  private hasWorkInFlight(): boolean {
+    const busy = this.busyChannels();
+    return [...this.entriesBySession.values()].some((entry) => {
+      const channel = entry.slot?.channelId;
+      return (
+        entry.activeRequestId !== null ||
+        entry.mutationInFlight !== null ||
+        (channel !== undefined && busy.has(channel))
+      );
+    });
+  }
+
+  private cancelPlanRecheck(): void {
+    if (this.planRecheckTimer) clearTimeout(this.planRecheckTimer);
+    this.planRecheckTimer = null;
+    this.pendingPlanRevision = null;
+  }
+
   disposeAll(reason: 'app-shutdown' | 'slot-dispose' = 'app-shutdown'): Promise<void> {
     return this.serialize(async () => {
       if (reason === 'app-shutdown' && this.idleTimer) {
         clearInterval(this.idleTimer);
         this.idleTimer = null;
       }
+      if (reason === 'app-shutdown') this.cancelPlanRecheck();
       if (reason === 'app-shutdown') this.cancelOrphanCollection();
       const activeImport = this.activeImport;
       const activeImportSlot = this.activeImportSlot;
@@ -2745,6 +2808,7 @@ export class WorkerManager {
       clearInterval(this.idleTimer);
       this.idleTimer = null;
     }
+    this.cancelPlanRecheck();
     this.cancelOrphanCollection();
     const entries = [...this.entriesBySession.values()];
     const slots = [...this.ownedSlots];

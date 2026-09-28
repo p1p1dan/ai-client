@@ -80,6 +80,10 @@ describe('requiredDisabledOverlays (HS-02, decision 023 rule 3)', () => {
       expect(REQUIRED_DISABLED).toContain(id);
     }
   });
+
+  it('keeps the plain-text credential store off (P1-5b, decision 034)', () => {
+    expect(REQUIRED_DISABLED).toContain('credentials');
+  });
 });
 
 describe('partitionSkippedBundles (decision 025 rule 5)', () => {

@@ -25,6 +25,7 @@ import {
   stubPathFor,
 } from '../dshSessionRuntime.ts';
 import { grantsSidecarFor, writeStubAtomically } from '../stub.ts';
+import { TEST_PLAN } from './testPlan.ts';
 
 /**
  * dsh-rebase P1-4b — rewind and fork through seeded child sessions (decision
@@ -239,6 +240,7 @@ async function open(
       home,
       writeStub: dsh.writeStub,
       disposeTimeoutMs: 50,
+      modelPlan: () => TEST_PLAN,
     }
   );
   await runtime.bootstrap();
@@ -392,6 +394,8 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
       sessionId: `${ROOT}.r2`,
       meta: { cwd: CWD, parentSession: ROOT },
       agentOptions: { provider: 'aiclient-gateway', model: 'fake-1' },
+      // P1-5a: the child routes by the session's selection too.
+      setup: expect.any(Function),
     });
     expect(result.editorText).toBe('first');
     expect(result.history.page.messages).toEqual([]);

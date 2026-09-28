@@ -3502,3 +3502,12 @@ Object.assign(zhTranslations, {
   '1 model is unavailable with the current engine': '1 个模型在当前引擎下不可用',
   '{{count}} models are unavailable with the current engine': '{{count}} 个模型在当前引擎下不可用',
 });
+
+// dsh-rebase P1-5b (decision 034): the failed-turn card when the engine got no key.
+Object.assign(zhTranslations, {
+  'The model service key is not available': '拿不到模型服务的密钥',
+  'This app could not hand the engine a key for the model service: your sign-in has expired, or the system keyring is locked.':
+    '本应用没能把模型服务的密钥交给引擎：登录已失效，或者系统钥匙串未解锁。',
+  'Sign in again, or unlock the system keyring, then send your message again.':
+    '重新登录或解锁系统钥匙串后，再发一次消息。',
+});

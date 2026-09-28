@@ -54,6 +54,7 @@ import { registerWebInspectorHandlers } from './webInspector';
 import {
   cleanupWorkerManager,
   cleanupWorkerManagerSync,
+  installChatEngineModelSource,
   sweepScratchWorkspacesOnStartup,
 } from './workerManager';
 import { clearAllWorktreeServices, registerWorktreeHandlers } from './worktree';
@@ -95,6 +96,7 @@ export function registerIpcHandlers(): void {
   registerAnnouncementHandlers();
   registerPiTuiHandlers();
   sweepScratchWorkspacesOnStartup();
+  installChatEngineModelSource();
 }
 
 export async function cleanupAllResources(): Promise<void> {

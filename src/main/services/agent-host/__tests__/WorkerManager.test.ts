@@ -98,6 +98,8 @@ interface FakeHost {
   /** Channels the last pong called busy (P1-3d). */
   busy: Set<string>;
   collectSessions?: ReturnType<typeof vi.fn>;
+  /** The model plan revision the running host was configured with (P1-5a). */
+  planRevision?: string;
 }
 
 const BUDGETED_HOST_EXITS = new Set([
@@ -197,6 +199,7 @@ function createHarness(
           channels: [...fake.busy].map((ch) => ({ ch, busy: true })),
         },
         ...(fake.lastExit ? { lastExit: { ...fake.lastExit } } : {}),
+        ...(fake.state === 'ready' && fake.planRevision ? { planRevision: fake.planRevision } : {}),
       })),
       ensureHost: vi.fn(async (options: { userInitiated?: boolean } = {}) => {
         if (fake.state === 'disposed') {
@@ -4781,4 +4784,74 @@ describe('WorkerManager on one shared DSH host: housekeeping (P1-3d)', () => {
   function snapshot(h: ReturnType<typeof createHarness>, sessionId: string) {
     return h.manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === sessionId);
   }
+});
+
+describe('WorkerManager — a host on an older model plan (dsh-rebase P1-5a, decision 033 rule 4)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("[WM-plan-01] restarts an idle host whose plan revision is not Main's", async () => {
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.planRevision = 'rev-a';
+    await create(h.manager, 's1', 7);
+    h.manager.reconcileModelPlan('rev-a');
+    await Promise.resolve();
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.manager.reconcileModelPlan('rev-b');
+    await vi.waitFor(() => expect(h.host?.shutdown).toHaveBeenCalledWith('invalidate'));
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+  });
+
+  it('[WM-plan-02] waits for the turn in flight, then restarts', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.planRevision = 'rev-a';
+    await create(h.manager, 's1', 7);
+    const turnId = await h.manager.send({
+      sessionId: 's1',
+      attemptId: 'a1',
+      text: 'still working',
+      ownerWebContentsId: 7,
+    });
+    h.manager.reconcileModelPlan('rev-b');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.records[0].emit({
+      type: 'session.completed',
+      sessionId: 's1',
+      requestId: turnId,
+      payload: {},
+    });
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: turnId,
+      payload: { status: 'idle' },
+    });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
+  });
+
+  it('[WM-plan-03] leaves a host that is not running alone, and forgets a pending restart it no longer needs', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.state = 'idle';
+    h.manager.reconcileModelPlan('rev-b');
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    // Busy on rev-a, then Main's plan goes back to rev-a: nothing to do.
+    h.host.state = 'ready';
+    h.host.planRevision = 'rev-a';
+    h.host.busy.add('c1-1');
+    await create(h.manager, 's1', 7);
+    h.manager.reconcileModelPlan('rev-b');
+    h.manager.reconcileModelPlan('rev-a');
+    h.host.busy.clear();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+  });
 });

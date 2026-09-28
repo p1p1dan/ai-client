@@ -67,8 +67,10 @@ const SHELL_ENV = {
   npm_config_registry: 'https://registry.npmjs.org',
   npm_lifecycle_event: 'dev',
   NARB_NATIVE_CACHE_DIR: '/tmp/shared-cache',
+  // The retired dev route (P1-5 removed it) and a plan's key reference name.
   AICLIENT_DSH_GATEWAY_URL: 'http://127.0.0.1:1234',
   AICLIENT_DSH_GATEWAY_KEY: 'fake-key',
+  AICLIENT_KEY_OPENAI_1A2B: 'sk-must-not-leak',
 };
 
 /** What survives from SHELL_ENV, packaged or not. */
@@ -222,14 +224,19 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     expect(build()).toEqual({ ...INHERITED, ...EXPLICIT });
   });
 
-  it('adds the dev gateway back only when unpackaged; its key is credential-shaped', () => {
-    expect(build({ isPackaged: false })).toEqual({
-      ...INHERITED,
-      ...EXPLICIT,
-      AICLIENT_DSH_GATEWAY_URL: 'http://127.0.0.1:1234',
-      AICLIENT_DSH_GATEWAY_KEY: 'fake-key',
-    });
-    expect(isStrippedDshHostEnvName('AICLIENT_DSH_GATEWAY_KEY')).toBe(true);
+  // P1-5 (decisions 033, 034): routes come over IPC and keys per request, so
+  // nothing is added back, not even unpackaged.
+  it('adds no route and no key back, packaged or not', () => {
+    for (const isPackaged of [true, false]) {
+      expect(build({ isPackaged }), String(isPackaged)).toEqual({ ...INHERITED, ...EXPLICIT });
+    }
+    for (const name of [
+      'AICLIENT_DSH_GATEWAY_URL',
+      'AICLIENT_DSH_GATEWAY_KEY',
+      'AICLIENT_KEY_OPENAI_1A2B',
+    ]) {
+      expect(isStrippedDshHostEnvName(name), name).toBe(true);
+    }
   });
 
   it('strips the switch families case-insensitively, but npm lifecycle names only lower-case', () => {
@@ -300,12 +307,7 @@ describe('buildDshHostEnvironment (decision 022)', () => {
       isPackaged: false,
       env: { ...SHELL_ENV, AICLIENT_PI_WORKER_GENERATION: '3', AICLIENT_DSH_PROBE_ROW: '0' },
     });
-    expect(env).toEqual({
-      ...INHERITED,
-      ...EXPLICIT,
-      AICLIENT_DSH_GATEWAY_URL: 'http://127.0.0.1:1234',
-      AICLIENT_DSH_GATEWAY_KEY: 'fake-key',
-    });
+    expect(env).toEqual({ ...INHERITED, ...EXPLICIT });
   });
 });
 

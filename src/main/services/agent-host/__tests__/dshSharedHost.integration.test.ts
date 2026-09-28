@@ -1,5 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
@@ -11,6 +11,8 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { zstdDecompressSync } from 'node:zlib';
+import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -36,6 +38,13 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * phases add a close that never lands and the idle stop (P1-3d), Main's
  * read-only preview (`readPage`, P1-4a, decision 030), and rewind and fork
  * through seeded child sessions (P1-4b, decision 027).
+ *
+ * P1-5 (decisions 033, 034, 038): every supervisor spawns its hosts with a
+ * model plan built by the product's own rules (one route to the fake gateway)
+ * and answers their key requests through a real `DshCredentialBroker`. The
+ * sixth phase routes turns to two models with two keys, rotates a key, signs
+ * out, and runs the KEY-CANARY scan; the last loads the shipped catalog's plan
+ * into a host and requires no route diagnostic (the drift gate).
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -53,6 +62,8 @@ const shared = vi.hoisted(() => ({
   children: [] as ChildProcess[],
   /** Main-to-host messages to swallow, as a host that never answers them would. */
   dropToHost: null as ((message: unknown) => boolean) | null,
+  /** Every host's stderr as it came, before Main's redaction (KEY-CANARY). */
+  rawStderr: [] as string[],
 }));
 
 vi.mock('node:child_process', async (importOriginal) => {
@@ -63,6 +74,9 @@ vi.mock('node:child_process', async (importOriginal) => {
       const child = actual.spawn(...args);
       shared.children.push(child);
       const send = child.send?.bind(child);
+      if ((args[1] as readonly string[] | undefined)?.some((arg) => arg.endsWith('host.ts'))) {
+        child.stderr?.on('data', (chunk: Buffer | string) => shared.rawStderr.push(String(chunk)));
+      }
       if (
         send &&
         (args[1] as readonly string[] | undefined)?.some((arg) => arg.endsWith('host.ts'))
@@ -96,6 +110,7 @@ const { DshHostSupervisor, DSH_HOST_TIMINGS, dshHostSupervisor } = await import(
 );
 const { WorkerManager } = await import('../WorkerManager');
 const { createPiWorkerSlot } = await import('../createPiWorkerSlot');
+const { DshCredentialBroker } = await import('../DshCredentialBroker');
 const { spawn } = await import('node:child_process');
 
 type Event = RuntimeEvent & { payload?: Record<string, unknown> };
@@ -142,6 +157,91 @@ const alive = (child: ChildProcess) => child.exitCode === null && child.signalCo
 
 /** Decision 025 rule 1, shortened for the third phase. */
 const IDLE_STOP_MS = 3_000;
+
+/** P1-5: the key every phase but the sixth hands out, per request. */
+const FAKE_KEY = 'p1-3-fake-key';
+
+/**
+ * P1-5: Main's model plan for these tests, by the product's own rules: the
+ * probes' `aiclient-gateway` / `fake-1` on the fake gateway, plus `extra`
+ * services, every one with a key; the product's retry and timeout settings.
+ */
+function gatewayPlan(port: number, extra: Record<string, unknown> = {}): DshModelPlan {
+  const providers: Record<string, unknown> = {
+    'aiclient-gateway': {
+      baseUrl: `http://127.0.0.1:${port}`,
+      api: 'anthropic-messages',
+      models: [{ id: 'fake-1', name: 'P0 fake model', contextWindow: 200_000, maxTokens: 8192 }],
+    },
+    ...extra,
+  };
+  return buildDshModelPlan({
+    models: { providers },
+    keyed: Object.fromEntries(Object.keys(providers).map((id) => [id, true])),
+    clientVersion: 'it-p1-5',
+  });
+}
+
+/** How the fake gateway logs a key (`sha256:<8 hex>`), never the key itself. */
+const digestOf = (key: string) =>
+  `sha256:${createHash('sha256').update(key).digest('hex').slice(0, 8)}`;
+
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd]);
+
+/**
+ * The text of every zstd frame in `raw` (DSH appends one frame per write, and
+ * the one-shot decoder stops after the first), or undefined when it holds none.
+ * A split at a magic inside a frame is widened until the slice decodes.
+ */
+function zstdFrames(raw: Buffer): string | undefined {
+  const starts: number[] = [];
+  for (let at = raw.indexOf(ZSTD_MAGIC); at >= 0; at = raw.indexOf(ZSTD_MAGIC, at + 1)) {
+    starts.push(at);
+  }
+  if (starts.length === 0) return undefined;
+  let text = '';
+  let from = 0;
+  for (let next = 1; next <= starts.length; next += 1) {
+    const end = next < starts.length ? starts[next] : raw.length;
+    try {
+      text += zstdDecompressSync(raw.subarray(starts[from], end)).toString('utf8');
+      from = next;
+    } catch {
+      // Not a frame boundary; the next slice is wider.
+    }
+  }
+  return text;
+}
+
+/**
+ * Every file under `root` as text: its raw bytes, plus the decoded text of
+ * every zstd frame it holds (DSH's `.jsonl.zstd` session logs), for the canary
+ * scan. `decoded` counts the files that had any.
+ */
+function textsUnder(root: string): Array<{ file: string; text: string; decoded: boolean }> {
+  const out: Array<{ file: string; text: string; decoded: boolean }> = [];
+  const walk = (dir: string) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const file = join(dir, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (entry.isFile()) {
+        const bytes = readFileSync(file);
+        const frames = zstdFrames(bytes);
+        out.push({
+          file,
+          text:
+            frames === undefined
+              ? bytes.toString('utf8')
+              : `${bytes.toString('latin1')}\n${frames}`,
+          decoded: frames !== undefined && frames.length > 0,
+        });
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
 
 /** `<DSH_HOME>/sessions/<project>/<session id>` of every session on disk, by id. */
 function sessionDirs(home: string): Map<string, string> {
@@ -207,7 +307,13 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
               : e.type
       );
 
-  async function turn(manager: Manager, sessionId: string, text: string, owner: number) {
+  async function turn(
+    manager: Manager,
+    sessionId: string,
+    text: string,
+    owner: number,
+    model?: string
+  ) {
     const from = events.length;
     attempt += 1;
     const requestId = await manager.send({
@@ -215,6 +321,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       attemptId: `attempt-${attempt}`,
       text,
       ownerWebContentsId: owner,
+      ...(model ? { model } : {}),
     });
     const settled = await until(
       () =>
@@ -260,6 +367,19 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     return ok ? Date.now() - started : -1;
   }
 
+  /** P1-5: set in beforeAll, once the gateway's port is known. */
+  let port = 0;
+  let plan: DshModelPlan;
+  /** Main's model source as production wires it: the plan, and a broker over a catalog. */
+  const modelSource = (
+    auth: () => Record<string, unknown> | undefined = () => ({
+      'aiclient-gateway': { type: 'api_key', key: FAKE_KEY },
+    })
+  ) => ({
+    plan: () => plan,
+    credentials: new DshCredentialBroker({ readAuth: auth }),
+  });
+
   function newManager(supervisor: Supervisor, own: boolean): Manager {
     return new WorkerManager({
       host: supervisor,
@@ -289,8 +409,10 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     for (const name of [
       'AICLIENT_DSH_HOME',
       'AICLIENT_DSH_NODE',
+      // Retired by P1-5; a stale one must not matter.
       'AICLIENT_DSH_GATEWAY_URL',
       'AICLIENT_DSH_GATEWAY_KEY',
+      'TMPDIR',
     ]) {
       saved[name] = process.env[name];
       delete process.env[name];
@@ -313,7 +435,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       ],
       { stdio: ['ignore', 'pipe', 'pipe'] }
     );
-    const port = await new Promise<number>((done, fail) => {
+    port = await new Promise<number>((done, fail) => {
       let text = '';
       gateway?.stdout?.setEncoding('utf8');
       gateway?.stdout?.on('data', (chunk: string) => {
@@ -324,9 +446,10 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       setTimeout(() => fail(new Error('fake gateway did not start')), 15_000);
     });
     gateway.stderr?.resume();
-    // Main's dev route (DshHostProcess adds these back unpackaged, decision 022).
-    process.env.AICLIENT_DSH_GATEWAY_URL = `http://127.0.0.1:${port}`;
-    process.env.AICLIENT_DSH_GATEWAY_KEY = 'p1-3-fake-key';
+    // P1-5: the plan every host is configured with; the app's singleton gets the
+    // model source production installs at startup (dshHostModelSource.ts).
+    plan = gatewayPlan(port);
+    dshHostSupervisor.setModelSource(modelSource());
     vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => {
       hostLines.push(args.map(String).join(' '));
     });
@@ -645,7 +768,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     let manager: Manager;
 
     beforeAll(async () => {
-      supervisor = new DshHostSupervisor();
+      supervisor = new DshHostSupervisor({ modelSource: modelSource() });
       manager = newManager(supervisor, true);
       for (const [index, id] of ['b1', 'b2', 'b3'].entries()) {
         tokens[id] = `P13C${id.toUpperCase()}${Date.now() % 100_000}`;
@@ -827,7 +950,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     let wedged: string | undefined;
 
     beforeAll(async () => {
-      supervisor = new DshHostSupervisor({ idleStopMs: IDLE_STOP_MS });
+      supervisor = new DshHostSupervisor({ idleStopMs: IDLE_STOP_MS, modelSource: modelSource() });
       manager = newManager(supervisor, true);
       // Remembers each session's channel; drops what the wedged one is sent to close.
       shared.dropToHost = (message) => {
@@ -983,7 +1106,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     }
 
     beforeAll(() => {
-      supervisor = new DshHostSupervisor({ idleStopMs: 0 });
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
       manager = newManager(supervisor, true);
     });
 
@@ -1061,7 +1184,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       supervisor.forceKillNow();
       expect(await until(() => liveHosts().length === 0, 15_000)).toBe(true);
 
-      successor = new DshHostSupervisor({ idleStopMs: 0 });
+      successor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
       successorManager = newManager(successor, true);
       const before = onDisk('aiclient-r2', stubFile);
       const page = await successor.readPage({ stubFile, logicalSessionId: 'r2', limit: 80 });
@@ -1125,7 +1248,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       String(manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === id)?.sessionFile);
 
     beforeAll(() => {
-      supervisor = new DshHostSupervisor({ idleStopMs: 0 });
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
       manager = newManager(supervisor, true);
     });
 
@@ -1232,5 +1355,259 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       await manager.closeSession(child);
       await manager.closeSession('w1');
     }, 240_000);
+  });
+
+  /**
+   * P1-5 (decisions 033, 034, 038; plan P1-5 shard 05 §3 IT-01..IT-06): a
+   * supervisor whose plan has two routes on the fake gateway, each with its
+   * own key, served by a broker over a catalog this test controls.
+   */
+  describe('a sixth supervisor: routes, keys and KEY-CANARY (P1-5)', () => {
+    const canary = `sk-canary-${randomBytes(12).toString('hex')}`;
+    const second = `sk-second-${randomBytes(12).toString('hex')}`;
+    const rotated = `sk-rotated-${randomBytes(12).toString('hex')}`;
+    let auth: Record<string, unknown> | undefined;
+    let twoRoutes: DshModelPlan;
+    let credentials: InstanceType<typeof DshCredentialBroker>;
+    let supervisor: Supervisor;
+    let manager: Manager;
+    let tmpDir = '';
+    /** What Main wrote to its own log in this phase (console, redacted host stderr). */
+    const mainLines: string[] = [];
+    const scanned = { environ: '', cmdline: '', toolEnv: '', rawFrom: 0, hostLinesFrom: 0 };
+
+    /** The gateway's request log; it appears with the first request. */
+    const gatewayLines = () => {
+      const file = join(shared.stateRoot, 'gateway.jsonl');
+      if (!existsSync(file)) return [];
+      return readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    };
+    const failedCode = (id: string, from: number) =>
+      forSession(id, from).find((e) => e.type === 'session.failed')?.payload?.errorCode;
+
+    beforeAll(() => {
+      tmpDir = join(shared.stateRoot, 'tmp-canary');
+      mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
+      // The host (and every tool it runs) inherits it: its temp files are scanned too.
+      process.env.TMPDIR = tmpDir;
+      auth = {
+        'aiclient-gateway': { type: 'api_key', key: canary },
+        'second-gw': { type: 'api_key', key: second },
+      };
+      twoRoutes = gatewayPlan(port, {
+        'second-gw': {
+          baseUrl: `http://127.0.0.1:${port}/second`,
+          api: 'anthropic-messages',
+          models: [{ id: 'fake-2', name: 'Second fake', contextWindow: 100_000, maxTokens: 4096 }],
+        },
+      });
+      credentials = new DshCredentialBroker({
+        readAuth: () => auth,
+        log: (...args) => mainLines.push(args.map(String).join(' ')),
+      });
+      supervisor = new DshHostSupervisor({
+        idleStopMs: 0,
+        modelSource: { plan: () => twoRoutes, credentials },
+        logLine: (line) => mainLines.push(line),
+      });
+      manager = newManager(supervisor, true);
+      scanned.rawFrom = shared.rawStderr.length;
+      for (const level of ['warn', 'error'] as const) {
+        vi.spyOn(console, level).mockImplementation((...args: unknown[]) => {
+          mainLines.push(args.map(String).join(' '));
+        });
+      }
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      delete process.env.TMPDIR;
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('[IT-01, IT-04] routes each turn to the model it names, each route with its own key', async () => {
+      await manager.createSession({
+        sessionId: 'c1',
+        workspacePath: workspace,
+        ownerWebContentsId: 60,
+      });
+      const hostPid = supervisor.status().pid;
+      expect(supervisor.status()).toMatchObject({
+        planRevision: twoRoutes.revision,
+        routeDiagnostics: [],
+      });
+      const seen = gatewayLines().length;
+      const first = await turn(manager, 'c1', 'P0-STREAM: stream a paragraph back to me.', 60);
+      expect(first).toMatchObject({ settled: true, completed: true });
+      const switched = await turn(
+        manager,
+        'c1',
+        'P0-STREAM: again, on the second model.',
+        60,
+        'second-gw/fake-2'
+      );
+      expect(switched).toMatchObject({ settled: true, completed: true });
+      const lines = gatewayLines().slice(seen);
+      expect(
+        lines.map((line) => [line.model, line.auth, String(line.path).replace(/\?.*$/, '')])
+      ).toEqual([
+        ['fake-1', digestOf(canary), '/v1/messages'],
+        ['fake-2', digestOf(second), '/second/v1/messages'],
+      ]);
+      // Decision 037's default: DSH's User-Agent, and our identity header beside it.
+      expect(new Set(lines.map((line) => line.clientHeader))).toEqual(new Set(['it-p1-5']));
+      const agents = [...new Set(lines.map((line) => String(line.userAgent)))];
+      expect(agents.every((agent) => agent.startsWith('deepseek-harness/'))).toBe(true);
+      process.stderr.write(`[p1-5] User-Agent sent: ${agents.join(', ')}\n`);
+      // The model switch is a DSH notice in the log, and message.started names our id.
+      const log = textsUnder(
+        sessionDirs(join(shared.stateRoot, 'dsh-home')).get('aiclient-c1') ?? ''
+      )
+        .map((item) => item.text)
+        .join('\n');
+      expect(log).toContain('"kind":"model-selection"');
+      const models = forSession('c1')
+        .filter((e) => e.type === 'message.started' && e.payload?.role === 'assistant')
+        .map((e) => e.payload?.model);
+      expect(new Set(models)).toEqual(new Set(['aiclient-gateway/fake-1', 'second-gw/fake-2']));
+      expect(supervisor.status().pid).toBe(hostPid);
+    }, 180_000);
+
+    it('[IT-02] a rotated key reaches the next request, without a host restart', async () => {
+      const generation = supervisor.status().generation;
+      auth = { ...auth, 'aiclient-gateway': { type: 'api_key', key: rotated } };
+      // What the vault's change listener does in production.
+      credentials.invalidate();
+      const seen = gatewayLines().length;
+      const done = await turn(
+        manager,
+        'c1',
+        'P0-STREAM: after the key changed.',
+        60,
+        'aiclient-gateway/fake-1'
+      );
+      expect(done).toMatchObject({ settled: true, completed: true });
+      expect(
+        gatewayLines()
+          .slice(seen)
+          .map((line) => line.auth)
+      ).toEqual([digestOf(rotated)]);
+      expect(supervisor.status().generation).toBe(generation);
+      auth = { ...auth, 'aiclient-gateway': { type: 'api_key', key: canary } };
+      credentials.invalidate();
+    }, 120_000);
+
+    it('[IT-03] signed out: the turn fails as CREDENTIALS_UNAVAILABLE and reaches no gateway', async () => {
+      const kept = auth;
+      auth = undefined;
+      credentials.invalidate();
+      const seen = gatewayLines().length;
+      const from = events.length;
+      const done = await turn(manager, 'c1', 'P0-STREAM: while signed out.', 60);
+      expect(done.settled).toBe(true);
+      expect(failedCode('c1', from)).toBe('CREDENTIALS_UNAVAILABLE');
+      expect(gatewayLines().length).toBe(seen);
+      auth = kept;
+      credentials.invalidate();
+    }, 120_000);
+
+    it('[IT-06] KEY-CANARY: the key is nowhere but in the requests the gateway got', async () => {
+      const pid = supervisor.status().pid as number;
+      const dumped = await turn(manager, 'c1', 'P1-ENVDUMP: print the tool environment.', 60);
+      expect(dumped).toMatchObject({ settled: true, completed: true });
+      const tools = forSession('c1').filter((e) => e.type === 'tool.completed');
+      scanned.toolEnv = String(tools.at(-1)?.payload?.output ?? '');
+      expect(scanned.toolEnv).toContain('PATH=');
+      scanned.environ = readFileSync(`/proc/${pid}/environ`, 'utf8');
+      scanned.cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8');
+      // The provider repeats the key in its error (echo-key-error).
+      const from = events.length;
+      const echoed = await turn(manager, 'c1', 'P1-ECHOKEY: the upstream repeats the key.', 60);
+      expect(echoed.settled).toBe(true);
+      const failed = forSession('c1', from).find((e) => e.type === 'session.failed');
+      expect(failed?.payload?.errorCode).toBe('PROVIDER_UNAUTHORIZED');
+      expect(String(failed?.payload?.error)).toContain('P1-ECHOKEY');
+      expect(String(failed?.payload?.error).includes(canary)).toBe(false);
+      // Everything on disk is written once the host is gone.
+      await manager.disposeAll('app-shutdown');
+      expect(await until(() => liveHosts().length === 0, 15_000)).toBe(true);
+
+      const home = join(shared.stateRoot, 'dsh-home');
+      const onDisk = textsUnder(home);
+      const inTmp = textsUnder(tmpDir);
+      const rawStderr = shared.rawStderr.slice(scanned.rawFrom).join('');
+      const gatewayLog = JSON.stringify(gatewayLines());
+      const hits = (text: string) => text.includes(canary);
+      const report = {
+        dshHome: onDisk
+          .filter((item) => hits(item.text))
+          .map((item) => item.file.slice(home.length)),
+        tmp: inTmp.filter((item) => hits(item.text)).map((item) => item.file.slice(tmpDir.length)),
+        hostStderr: hits(rawStderr),
+        mainLog: hits(mainLines.join('\n')) || hits(hostLines.join('\n')),
+        hostEnviron: hits(scanned.environ) || hits(scanned.cmdline),
+        toolEnv: hits(scanned.toolEnv),
+        gatewayLog: hits(gatewayLog),
+        renderer: hits(JSON.stringify(forSession('c1'))),
+      };
+      const decoded = onDisk.filter((item) => item.decoded).length;
+      process.stderr.write(
+        `[p1-5] KEY-CANARY scanned ${onDisk.length} files under DSH_HOME (${decoded} zstd-decoded), ` +
+          `${inTmp.length} under TMPDIR, ${rawStderr.length} B of host stderr, ` +
+          `${mainLines.length} Main log lines\n`
+      );
+      // The session logs were read as text, not as compressed bytes.
+      expect(decoded).toBeGreaterThan(0);
+      expect(report).toEqual({
+        dshHome: [],
+        tmp: [],
+        hostStderr: false,
+        mainLog: false,
+        hostEnviron: false,
+        toolEnv: false,
+        gatewayLog: false,
+        renderer: false,
+      });
+      // The echo reached the log masked, and the plain-text store was never created.
+      const echoLog = onDisk.find((item) => item.text.includes('P1-ECHOKEY: invalid x-api-key'));
+      expect(echoLog?.text).toContain('[redacted]');
+      expect(existsSync(join(home, '.credentials.yaml'))).toBe(false);
+      // No key reference name reaches a tool either.
+      expect(scanned.toolEnv).not.toMatch(/^AICLIENT_KEY_/m);
+    }, 240_000);
+  });
+
+  /** The drift gate (plan P1-5 shard 05 §3): the shipped catalog's plan, as DSH takes it. */
+  describe('the drift gate: the P1-5a plan golden loads with no route diagnostic', () => {
+    it('registers every route of the shipped catalog', async () => {
+      const golden = JSON.parse(
+        readFileSync(
+          join(
+            REPO,
+            'src/main/services/piModelConfig/__tests__/fixtures/dshModelPlan.snapshot.json'
+          ),
+          'utf8'
+        )
+      ) as DshModelPlan;
+      const supervisor = new DshHostSupervisor({
+        idleStopMs: 0,
+        modelSource: { plan: () => golden },
+      });
+      try {
+        await supervisor.ensureHost({ userInitiated: true });
+        expect(supervisor.status()).toMatchObject({
+          state: 'ready',
+          planRevision: golden.revision,
+          routeDiagnostics: [],
+        });
+      } finally {
+        await supervisor.shutdown('app-quit');
+      }
+      expect(liveHosts()).toHaveLength(0);
+    }, 120_000);
   });
 });

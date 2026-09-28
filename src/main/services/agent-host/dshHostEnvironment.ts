@@ -32,14 +32,6 @@ const STRIPPED_ENV_PREFIXES = ['ELECTRON_', 'AICLIENT_', 'DSH_', 'VITE_'];
 const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
 
 /**
- * Where the dev gateway route points and the key it sends (the bundle's
- * llm-pi-ai row); absent means the discard port. The key is credential-shaped,
- * so it is added back explicitly. Unpackaged only; removed by P1-5 when routing
- * moves to the real credential path.
- */
-const DEV_GATEWAY_ENV = ['AICLIENT_DSH_GATEWAY_URL', 'AICLIENT_DSH_GATEWAY_KEY'];
-
-/**
  * App switches the host itself reads, forwarded packaged or not: the loop
  * guard's emergency kill switch (dsh-rebase decision 065; `0` turns the
  * `aiclient-loop-guard` row off), under 1.0.x's name.
@@ -77,6 +69,9 @@ export function setDshHostEnvEntry(
  * plus the explicit settings below. It is also the base of every tool the host
  * spawns, so it keeps what 1.0.x tools saw (`SSH_AUTH_SOCK`, `JAVA_HOME`,
  * proxies, `XDG_RUNTIME_DIR` and DBus for systemd containment).
+ *
+ * No key is ever added back, packaged or not (P1-5, decisions 033 and 034):
+ * routes come with Main's model plan over IPC, and keys per request.
  */
 export function buildDshHostEnvironment(input: {
   dshHome: string;
@@ -99,12 +94,6 @@ export function buildDshHostEnvironment(input: {
   for (const name of FORWARDED_ENV) {
     const value = source[name];
     if (value !== undefined) explicit[name] = value;
-  }
-  if (!input.isPackaged) {
-    for (const name of DEV_GATEWAY_ENV) {
-      const value = source[name];
-      if (value !== undefined) explicit[name] = value;
-    }
   }
   for (const [name, value] of Object.entries(explicit)) {
     setDshHostEnvEntry(hostEnv, name, value, platform);

@@ -40,20 +40,35 @@
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
  * becomes a session's `session.stderr`.
+ *
+ * Models and keys (P1-5, decisions 033 and 034): the first message every host
+ * gets is `configure`, Main's model plan as of its spawn plus a fresh nonce;
+ * the supervisor remembers the revision it ran with (`status().planRevision`)
+ * so a later plan can tell whether the host is stale. The host holds no key:
+ * each `credential` request it sends is answered by the model source's broker,
+ * told whether the request came from the running host and with which nonce
+ * and references.
  */
 
 import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
 import {
   type DshChannelId,
   type DshHostChannelStatus,
+  type DshHostConfigure,
+  type DshHostCredentialRequest,
+  type DshHostCredentialResult,
   type DshHostGcResult,
   type DshHostPage,
   type DshHostPong,
   type DshMainToHostMessage,
+  type DshRouteDiagnostic,
   dshHostControlKind,
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshHostChannelClosed,
+  isDshHostCredentialRequest,
   isDshHostFatal,
   isDshHostGcResult,
   isDshHostPage,
@@ -212,6 +227,30 @@ export interface DshHostInfo {
   pid: number;
 }
 
+/** What the supervisor knows about the host a credential request came from. */
+export interface DshHostCredentialContext {
+  current: boolean;
+  nonce: string;
+  refs: Readonly<Record<string, string>>;
+}
+
+/**
+ * Where each host's model plan and keys come from (decisions 033, 034). Main's
+ * wiring (`dshHostModelSource.ts`) sets the real one; without one a host gets
+ * an empty plan and every credential request is answered `unavailable`.
+ */
+export interface DshHostModelSource {
+  /** Main's plan now (`resolveDshModelPlan()`); read once per spawn. */
+  plan(): DshModelPlan;
+  /** Answers one credential request of a host (`DshCredentialBroker`). */
+  credentials?: {
+    answer(
+      request: DshHostCredentialRequest,
+      context: DshHostCredentialContext
+    ): DshHostCredentialResult;
+  };
+}
+
 export interface DshHostEnsureOptions {
   /** A user's create / resume / retry: the one kind of request allowed to leave `failed`. */
   userInitiated?: boolean;
@@ -247,6 +286,10 @@ export interface DshHostSupervisorStatus {
   /** Budgeted exits inside the current restart window (decision 020 rule 4). */
   recentFaults: number;
   failure?: { code: DshHostSupervisorErrorCode; message: string };
+  /** Decision 033: the plan revision the live host was configured with. */
+  planRevision?: string;
+  /** The plan's routes the live host reported not serving as planned (empty: none). */
+  routeDiagnostics?: DshRouteDiagnostic[];
 }
 
 export interface DshPowerMonitor {
@@ -276,6 +319,8 @@ export interface DshHostSupervisorOptions {
   stopOrphanScopes?: ((pid: number) => Promise<unknown>) | null;
   /** Overrides `DSH_HOST_TIMINGS.idleStopMs`; 0 never stops an idle host. */
   idleStopMs?: number;
+  /** Decisions 033, 034; `setModelSource` sets it later. */
+  modelSource?: DshHostModelSource;
 }
 
 /** What `collectSessions` asks the host to keep; see `DshHostGcRequest`. */
@@ -310,6 +355,10 @@ interface HostRecord {
   readonly generation: number;
   readonly child: ChildProcess;
   readonly pid: number | undefined;
+  /** Decisions 033, 034: what this host was configured with. */
+  readonly plan: { revision: string; nonce: string; refs: Readonly<Record<string, string>> };
+  /** What its `ready` said about the plan's routes. */
+  routeDiagnostics?: DshRouteDiagnostic[];
   readonly ready: Promise<DshHostInfo>;
   readonly resolveReady: (info: DshHostInfo) => void;
   readonly rejectReady: (error: Error) => void;
@@ -376,6 +425,7 @@ export class DshHostSupervisor {
   private readonly selfPid: number;
   private readonly stopOrphanScopes: ((pid: number) => Promise<unknown>) | null;
   private readonly idleStopMs: number;
+  private modelSource: DshHostModelSource | null;
 
   private state: DshHostSupervisorState = 'idle';
   private host: HostRecord | null = null;
@@ -441,6 +491,15 @@ export class DshHostSupervisor {
         ? (pid) => stopDeadHostScopes(pid)
         : options.stopOrphanScopes;
     this.idleStopMs = options.idleStopMs ?? DSH_HOST_TIMINGS.idleStopMs;
+    this.modelSource = options.modelSource ?? null;
+  }
+
+  /**
+   * Decisions 033, 034: where the next host's plan, and every host's keys,
+   * come from. A running host keeps the plan it was spawned with.
+   */
+  setModelSource(source: DshHostModelSource | null): void {
+    this.modelSource = source;
   }
 
   status(): DshHostSupervisorStatus {
@@ -458,6 +517,8 @@ export class DshHostSupervisor {
       ...(this.failure
         ? { failure: { code: this.failure.code, message: this.failure.message } }
         : {}),
+      ...(live ? { planRevision: live.plan.revision } : {}),
+      ...(live?.routeDiagnostics ? { routeDiagnostics: [...live.routeDiagnostics] } : {}),
     };
   }
 
@@ -735,7 +796,10 @@ export class DshHostSupervisor {
 
   private async launch(): Promise<DshHostInfo> {
     let child: ChildProcess;
+    let configure: DshHostConfigure;
     try {
+      // The plan first: a plan that cannot be built spawns nothing.
+      configure = this.configureMessage();
       const launch = this.resolveLaunch();
       this.prepareDirectories(launch);
       this.subscribePowerMonitor();
@@ -744,12 +808,33 @@ export class DshHostSupervisor {
       if (this.state === 'starting') this.setState('idle');
       throw error instanceof Error ? error : new Error(String(error));
     }
-    const host = this.attach(child, ++this.spawnCount);
+    const host = this.attach(child, ++this.spawnCount, {
+      revision: configure.revision,
+      nonce: configure.nonce,
+      refs: { ...configure.refs },
+    });
     this.host = host;
+    // Decision 033: the host composes nothing before it (and refuses to boot without it).
+    this.sendControl(host, configure);
     return host.ready;
   }
 
-  private attach(child: ChildProcess, generation: number): HostRecord {
+  /** The `configure` for the next host: Main's plan now, and a nonce of its own. */
+  private configureMessage(): DshHostConfigure {
+    const plan =
+      this.modelSource?.plan() ?? buildDshModelPlan({ models: { providers: {} }, keyed: {} });
+    return {
+      host: 'configure',
+      nonce: randomBytes(24).toString('base64url'),
+      revision: plan.revision,
+      routes: plan.routes,
+      defaultModel: plan.defaultModel,
+      index: plan.index,
+      refs: plan.refs,
+    };
+  }
+
+  private attach(child: ChildProcess, generation: number, plan: HostRecord['plan']): HostRecord {
     const ready = deferred<DshHostInfo>();
     // Awaited by callers; a start nobody waits for must not surface as unhandled.
     ready.promise.catch(() => {});
@@ -760,6 +845,7 @@ export class DshHostSupervisor {
       generation,
       child,
       pid: child.pid,
+      plan,
       ready: ready.promise,
       resolveReady: ready.resolve,
       rejectReady: ready.reject,
@@ -835,6 +921,7 @@ export class DshHostSupervisor {
     this.clearReadyTimer(host);
     host.handshakePid = message.pid;
     host.readyAt = this.now();
+    this.notePlanReport(host, message);
     if (this.host !== host || this.state !== 'starting') {
       host.rejectReady(this.stoppedError());
       return;
@@ -843,6 +930,65 @@ export class DshHostSupervisor {
     this.startHeartbeat(host);
     host.resolveReady(this.infoOf(host));
     this.armIdleStop();
+  }
+
+  /**
+   * Decision 033: what the host says it runs. A revision other than the one
+   * it was sent, or routes DSH did not take, is logged; the menu is built from
+   * the same plan, so a route DSH refused fails its turns with DSH's reason.
+   */
+  private notePlanReport(host: HostRecord, ready: Record<string, unknown>): void {
+    if (ready.revision !== host.plan.revision) {
+      console.warn(
+        `[dsh-host:g${host.generation}] runs plan ${String(ready.revision).slice(0, 12)}, ` +
+          `sent ${host.plan.revision.slice(0, 12)}`
+      );
+    }
+    const diagnostics = (Array.isArray(ready.routeDiagnostics) ? ready.routeDiagnostics : [])
+      .filter(
+        (item): item is DshRouteDiagnostic =>
+          typeof item === 'object' &&
+          item !== null &&
+          typeof (item as DshRouteDiagnostic).provider === 'string' &&
+          typeof (item as DshRouteDiagnostic).error === 'string'
+      )
+      .map((item) => ({ provider: item.provider, error: item.error.slice(0, 500) }));
+    host.routeDiagnostics = diagnostics;
+    if (diagnostics.length > 0) {
+      console.warn(
+        `[dsh-host:g${host.generation}] ${diagnostics.length} route(s) of the model plan not served as planned:`,
+        JSON.stringify(diagnostics).slice(0, 2000)
+      );
+    }
+  }
+
+  /**
+   * Decision 034: one key, for one model request of `host`. The broker checks
+   * that the request came from the running host with its nonce and a
+   * reference of its plan; the value goes back over IPC and nowhere else.
+   */
+  private onCredentialRequest(host: HostRecord, request: DshHostCredentialRequest): void {
+    const context: DshHostCredentialContext = {
+      current: this.host === host && !host.exitInfo,
+      nonce: host.plan.nonce,
+      refs: host.plan.refs,
+    };
+    let answer: DshHostCredentialResult;
+    try {
+      answer = this.modelSource?.credentials?.answer(request, context) ?? {
+        host: 'credential-result',
+        id: request.id,
+        ok: false,
+        error: 'unavailable',
+      };
+    } catch (error) {
+      this.warnRateLimited(
+        'credential-broker',
+        `[dsh-host] the credential broker failed: ${errorMessage(error)}`
+      );
+      answer = { host: 'credential-result', id: request.id, ok: false, error: 'unavailable' };
+    }
+    this.sendControl(host, answer);
   }
 
   /** Settles a failed start once the process is confirmed gone (or presumed unkillable). */
@@ -902,6 +1048,10 @@ export class DshHostSupervisor {
     }
     if (isDshHostPage(message)) {
       this.onPage(host, message);
+      return;
+    }
+    if (isDshHostCredentialRequest(message)) {
+      this.onCredentialRequest(host, message);
       return;
     }
     const record =

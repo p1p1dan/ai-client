@@ -26,6 +26,11 @@ vi.mock('../../services/agent-host/DshHostSupervisor', () => ({
   dshHostSupervisor: { shutdown: shutdownHost, forceKillNow: forceKillHost },
 }));
 
+// dsh-rebase P1-5: the model-source wiring reaches the vault and the catalog.
+vi.mock('../../services/agent-host/dshHostModelSource', () => ({
+  installDshHostModelSource: vi.fn(),
+}));
+
 describe('WorkerManager cleanup ownership', () => {
   beforeEach(() => vi.clearAllMocks());
 

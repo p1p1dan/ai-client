@@ -45,6 +45,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { zstdDecompressSync } from 'node:zlib';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import { captureStderr, exitOf, round, sleep, stopWithin, waitMessage } from './lib/kit.ts';
 import { installProbeBundle } from './lib/probe-bundle.ts';
 
@@ -214,8 +215,6 @@ function hostEnv(extra: Record<string, string> = {}): Record<string, string> {
     ...env,
     DSH_HOME: dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gatewayPort}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p0-4-fake-gateway-key',
     AICLIENT_PROBE_EVENT_LOG: join(logs, 'events.jsonl'),
     AICLIENT_PROBE_HOOK_LOG: join(logs, 'hooks.jsonl'),
     AICLIENT_DSH_PNPM_CLI: pnpmCli,
@@ -360,6 +359,12 @@ function launchHost(label: string, extraEnv: Record<string, string>): Host {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     windowsHide: true,
   });
+  // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+  serveModelPlan(
+    child,
+    fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gatewayPort}` }),
+    'p0-4-fake-gateway-key'
+  );
   const host: Host = { label, child, stderr: captureStderr(child), exited: exitOf(child) };
   liveHosts.add(host);
   return host;

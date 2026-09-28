@@ -37,10 +37,25 @@ export interface DshModelPlanDeps {
   /** Expands `$NAME` header values, as the native runtime did in its own process. */
   env: Readonly<Record<string, string | undefined>>;
   settings: DshRouteSettingsInput;
+  /** The app version, sent as `X-Pilab-Client` (decision 037). */
+  clientVersion?: string;
   log?: (...args: unknown[]) => void;
 }
 
 let lastLoggedRevision: string | null = null;
+
+type DshModelPlanListener = (plan: DshModelPlan) => void;
+const planListeners = new Set<DshModelPlanListener>();
+
+/**
+ * Decision 033 rule 4: every plan Main builds (a menu read, a sync, a host
+ * start) is announced, so a host running an older revision can be replaced
+ * and the credential broker can drop keys the new plan no longer names.
+ */
+export function onDshModelPlanBuilt(listener: DshModelPlanListener): () => void {
+  planListeners.add(listener);
+  return () => planListeners.delete(listener);
+}
 
 /**
  * The plan for this catalog. With no catalog the plan is empty: the host can
@@ -53,6 +68,7 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
     keyed: providerKeyPresence(deps.native?.auth),
     env: deps.env,
     settings: deps.settings,
+    ...(deps.clientVersion ? { clientVersion: deps.clientVersion } : {}),
   });
   // Once per revision, not per menu open.
   if (plan.revision !== lastLoggedRevision) {
@@ -66,6 +82,13 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
             : `${drop.providerId}${drop.modelId ? `/${drop.modelId}` : ''} ${drop.field}: ${drop.reason}`
         ),
       });
+    }
+  }
+  for (const listener of [...planListeners]) {
+    try {
+      listener(plan);
+    } catch (error) {
+      deps.log?.('[dsh-model-plan] a plan listener failed', error);
     }
   }
   return plan;

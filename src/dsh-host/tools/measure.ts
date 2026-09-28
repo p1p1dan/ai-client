@@ -29,6 +29,7 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -161,6 +162,8 @@ async function runDsh(label: string, options: LaunchOptions & { ladder: boolean 
   ];
   const t0 = performance.now();
   const child = launch(command, env, box.workspace, options.traceFile);
+  // P1-5: a host composes nothing before Main's plan; boot measurements need no route.
+  serveModelPlan(child, fakeGatewayPlan({ routes: [] }), {});
   const stderr = captureStderr(child);
   const exited = exitOf(child);
   const sampler = treeSampler(child.pid as number, t0);
@@ -372,6 +375,7 @@ async function runParallel(engine: 'dsh' | 'worker', n: number, sharedDshHome?: 
         ? { ...baseEnv(box), DSH_HOME: box.dshHome, DSH_TELEMETRY_DISABLED: '1' }
         : workerEnv(box);
     const child = launch(command, env, box.workspace);
+    if (engine === 'dsh') serveModelPlan(child, fakeGatewayPlan({ routes: [] }), {});
     return { label, box, child, stderr: captureStderr(child), exited: exitOf(child) };
   });
   const result: Record<string, unknown> = { engine, n };

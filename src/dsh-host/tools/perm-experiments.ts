@@ -38,6 +38,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -143,8 +144,6 @@ async function startHost(
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-6b-fake-key',
     AICLIENT_PROBE_EVENT_LOG: join(box.root, 'events.jsonl'),
     AICLIENT_PERM_EXPERIMENT: '1',
     AICLIENT_PERM_EXPERIMENT_LOG: join(box.root, 'experiment.jsonl'),
@@ -157,6 +156,8 @@ async function startHost(
     env,
     launchDir
   );
+  // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+  serveModelPlan(child, fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${port}` }), 'p1-6b-fake-key');
   const stderr = captureStderr(child);
   const exited = exitOf(child);
   const ready = await waitMessage(child, (m) => m.type === 'ready', 180_000, `${label} ready`);

@@ -17,7 +17,9 @@
  *
  *   L0  boot to `ready` over IPC with the host's own pid (composition audit
  *       passed, every row active or disabled), a ping answered with a pong,
- *       `shutdown` answered with `stopped`, exit code 0.
+ *       `shutdown` answered with `stopped`, exit code 0. The smoke plays
+ *       Main's model source (P1-5): every host is sent a model plan first (an
+ *       empty one for L0) and asks for its key per request.
  *   L1  one chat session on a channel of the shared host, driven as Main's
  *       supervisor and WorkerSlot drive it (src/shared/types/dshHostProtocol.ts):
  *       worker.bootstrap, one P0-FS turn from the local fake gateway (read,
@@ -41,6 +43,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// Main's model source, played the way the probes play it (P1-5, decisions 033, 034).
+import { fakeGatewayPlan, serveModelPlan } from '../src/dsh-host/tools/lib/hostClient.ts';
 // Main's rule itself, loaded by Node's type stripping (the module has no imports).
 import { buildDshHostEnvironment } from '../src/main/services/agent-host/dshHostEnvironment.ts';
 
@@ -310,7 +314,7 @@ async function startGateway(logs) {
 
 // ---- host ---------------------------------------------------------------------------
 
-function startHost(ctx, label, extraEnv) {
+function startHost(ctx, label, extraEnv, plan, key) {
   const child = spawn(
     ctx.node,
     [
@@ -326,6 +330,8 @@ function startHost(ctx, label, extraEnv) {
       windowsHide: true,
     }
   );
+  // The host composes nothing before its plan; keys are asked for per request.
+  const served = serveModelPlan(child, plan, key);
   let stderr = '';
   child.stderr.setEncoding('utf8');
   child.stderr.on('data', (chunk) => {
@@ -341,6 +347,7 @@ function startHost(ctx, label, extraEnv) {
     child,
     exited,
     watcher,
+    served,
     stderr: () => stderr,
     started: Date.now(),
   };
@@ -547,7 +554,7 @@ async function runTurn(client, label, text, timeoutMs) {
 // ---- levels ---------------------------------------------------------------------------
 
 async function level0(ctx) {
-  const host = startHost(ctx, 'L0', {});
+  const host = startHost(ctx, 'L0', {}, fakeGatewayPlan({ routes: [] }), {});
   const result = { label: 'L0' };
   try {
     const ready = await waitIpc(host, (m) => m?.type === 'ready', 180_000, 'ready');
@@ -564,6 +571,8 @@ async function level0(ctx) {
       census: ready.census,
       composition: ready.composition,
       marks: ready.marks,
+      revision: ready.revision,
+      routeDiagnostics: ready.routeDiagnostics,
     };
     result.pong = await ping(host, 1);
     result.stopped = await requestShutdown(host, 30_000);
@@ -577,12 +586,9 @@ async function level0(ctx) {
 }
 
 async function level1(ctx, gateway) {
-  // The packaged app routes through the credential path (P1-5); the smoke points
-  // the bundle's gateway row at the local fake instead.
-  const host = startHost(ctx, 'L1', {
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'packaged-smoke-fake-key',
-  });
+  // One route to the local fake, and its fake key per request (P1-5).
+  const plan = fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` });
+  const host = startHost(ctx, 'L1', {}, plan, 'packaged-smoke-fake-key');
   const client = new WorkerClient(host.child, CHANNEL);
   const result = { label: 'L1' };
   const marker = `P12-MARKER-${randomBytes(4).toString('hex')}`;
@@ -601,7 +607,10 @@ async function level1(ctx, gateway) {
       artifact: ready.artifact,
       bundles: ready.bundles,
       census: ready.census,
+      revision: ready.revision,
+      routeDiagnostics: ready.routeDiagnostics,
     };
+    result.planRevision = plan.revision;
     const boot = await client.call(
       'worker.bootstrap',
       { logicalSessionId: SESSION, cwd: ctx.workspace },
@@ -648,6 +657,10 @@ async function level1(ctx, gateway) {
   } catch (error) {
     result.error = error instanceof Error ? error.message : String(error);
   }
+  result.credentials = {
+    requests: host.served.requests.length,
+    outcomes: [...new Set(host.served.requests.map((item) => item.outcome))],
+  };
   result.exit = await stopHost(host, 30_000);
   result.leftovers = await leftovers(host.child.pid, host.watcher.stop());
   result.stderrTail = host.stderr().slice(-3000);
@@ -834,6 +847,8 @@ function verdictFor(ctx, report) {
       Array.isArray(l0.pong.channels) &&
       l0.pong.channels.length === 0 &&
       l0.pong.rssMb > 0;
+    v.l0EmptyPlan =
+      typeof l0.ready?.revision === 'string' && JSON.stringify(l0.ready?.routeDiagnostics) === '[]';
     v.l0Stopped = l0.stopped?.type === 'stopped';
     v.l0ExitedZero = l0.exit?.code === 0 && !l0.exit?.forced;
     v.l0NoLeftovers = (l0.leftovers ?? []).length === 0;
@@ -853,6 +868,11 @@ function verdictFor(ctx, report) {
     v.l1Bootstrapped = l1.bootstrap?.bootstrapped === true && !l1.error;
     v.l1ReadyOwnPid = l1.ready?.pid !== undefined && l1.ready.pid === l1.ready.spawnedPid;
     v.l1Packaged = l1.ready?.artifact?.form === 'packaged';
+    v.l1RunsPlan =
+      l1.ready?.revision === l1.planRevision && JSON.stringify(l1.ready?.routeDiagnostics) === '[]';
+    v.l1KeysPulledPerRequest =
+      (l1.credentials?.requests ?? 0) > 0 &&
+      JSON.stringify(l1.credentials?.outcomes) === '["served"]';
     v.l1FsTurnIdle = fsTurn.idle === true && fsTurn.completed === true;
     v.l1FsTools = ['read', 'edit', 'write', 'grep', 'glob', shell].every((name) => used.has(name));
     // The P0-FS script: read x4, edit, write, grep, glob, three shell calls, read.

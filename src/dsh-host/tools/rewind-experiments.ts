@@ -40,7 +40,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
 import { buildDshForkSeed, planDshCut } from '../bridge/forkSeed.ts';
-import { isRecord, type Message } from './lib/hostClient.ts';
+import { fakeGatewayPlan, isRecord, type Message, serveModelPlan } from './lib/hostClient.ts';
 import { baseEnv, captureStderr, exitOf, sandbox, sleep } from './lib/kit.ts';
 import { installProbeBundle, probeBundleSource } from './lib/probe-bundle.ts';
 
@@ -210,14 +210,18 @@ async function main(): Promise<number> {
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
     AICLIENT_DSH_PROBE_ROW: '0',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-4b-fake-key',
   };
   const child = spawn(nodeBin, ['--expose-internals', '--import', hooksEntry, hostEntry], {
     cwd: hostCwd,
     env,
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
+  // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+  serveModelPlan(
+    child,
+    fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` }),
+    'p1-4b-fake-key'
+  );
   const stderr = captureStderr(child);
   const exited = exitOf(child);
   const x = new Experiment(child);

@@ -15,10 +15,17 @@
  */
 
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { installModelSelection } from '@deepseek-ai/dsh-agent';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
 import { DshChannelMux } from './channelMux.ts';
-import { type DshBridgeContext, type DshJobsView, DshSessionRuntime } from './dshSessionRuntime.ts';
+import {
+  type DshBridgeContext,
+  type DshBridgeDeps,
+  type DshJobsView,
+  DshSessionRuntime,
+} from './dshSessionRuntime.ts';
+import type { DshBridgeModelPlan } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 
@@ -57,6 +64,8 @@ interface BridgeRowContext extends DshBridgeContext {
   /** Services the row reads without injecting them: absent ones are `undefined`. */
   get(name: 'jobs'): DshJobsView | undefined;
   get(name: 'sessionPersistence'): GcPersistence | undefined;
+  /** Decision 033: provided by host.ts from Main's `configure`. */
+  get(name: 'aiclientModelPlan'): DshBridgeModelPlan | undefined;
 }
 
 function tenths(value: number): number {
@@ -80,9 +89,17 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
       if (error) console.error('[aiclient-bridge] IPC send failed:', error.message);
     });
   };
+  const deps: DshBridgeDeps = {
+    createUserMessage,
+    // Decision 033: read per turn, so every turn routes by the plan the host runs.
+    modelPlan: () => ctx.get('aiclientModelPlan'),
+    installModelSelection: installModelSelection as unknown as NonNullable<
+      DshBridgeDeps['installModelSelection']
+    >,
+  };
   const mux = new DshChannelMux({
     send,
-    createRuntime: (options) => new DshSessionRuntime(ctx, options, { createUserMessage }),
+    createRuntime: (options) => new DshSessionRuntime(ctx, options, deps),
     sample: () => {
       const worstMs = eld.max / 1e6;
       eld.reset();

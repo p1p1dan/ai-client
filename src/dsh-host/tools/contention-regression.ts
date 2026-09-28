@@ -46,7 +46,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
-import { HostClient, isRecord, type Message } from './lib/hostClient.ts';
+import { fakeGatewayPlan, HostClient, isRecord, type Message } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -190,8 +190,6 @@ async function startHost(
     DSH_TELEMETRY_DISABLED: '1',
     // Sessions are driven through the product bridge; the probe row would answer approvals.
     AICLIENT_DSH_PROBE_ROW: '0',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-8-fake-key',
     ...extraEnv,
   };
   const child = spawn(nodeBin, ['--expose-internals', '--import', hooksEntry, hostEntry], {
@@ -209,6 +207,8 @@ async function startHost(
     exited: exitOf(child),
     pid: child.pid as number,
   };
+  // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+  host.client.configure(fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${port}` }), 'p1-8-fake-key');
   const ready = await host.client.control((m) => m.type === 'ready' || m.type === 'fatal', 180_000);
   if (ready?.type !== 'ready') {
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');

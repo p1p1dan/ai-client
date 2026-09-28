@@ -65,31 +65,17 @@
 - id: web-fetch-http
   disabled: true
 
-# Every model request goes through llm-pi-ai to the ai-client gateway route.
-# The probe points it at a local fake gateway; unset, it points at the discard
-# port, never at a real provider.
-- id: llm-pi-ai
-  config:
-    providers:
-      aiclient-gateway:
-        displayName: ai-client gateway (P0 probe)
-        api: anthropic-messages
-        baseURL: !!js "process.env.AICLIENT_DSH_GATEWAY_URL ?? 'http://127.0.0.1:9'"
-        apiKeyEnv: AICLIENT_DSH_GATEWAY_KEY
-        models:
-          - id: fake-1
-            name: P0 fake model
-            contextWindow: 200000
-            maxTokens: 8192
-            reasoningEfforts: false
-        retryPolicy:
-          mode: normal
-          maxRetries: 0
+# Every model request goes through llm-pi-ai. Its routes and the default model
+# are not here: Main's model plan brings them at every start (`configure`, P1-5a,
+# decision 033), and host.ts injects the `llm-pi-ai` and `agent-default-model`
+# rows as in-memory overlays after every user layer. A route names its key by
+# reference only (`apiKeyEnv`).
 
-- id: agent-default-model
-  config:
-    provider: aiclient-gateway
-    model: fake-1
+# P1-5b (decision 034): dsh-credentials-local keeps keys in plain text in
+# $DSH_HOME/.credentials.yaml. aiclient-credentials below pulls each key from
+# Main per request instead; host.ts restates this row off after every layer.
+- id: credentials
+  disabled: true
 
 # Plugin installs ask npm's own registry only; no mirror fallback.
 - id: plugin-manager
@@ -98,6 +84,13 @@
     fallbackRegistries: []
 
 - insert:
+    # P1-5b (decision 034): ctx.credentials, read-only. A key reference of the
+    # model plan resolves to the key Main hands over for that one request;
+    # nothing is cached, every write is refused. Always on; host.ts refuses a
+    # composition without it.
+    - id: aiclient-credentials
+      name: '@aiclient/dsh-app/credentials'
+
     # P1-3a (decision 019): ai-client's worker RPC for every chat session of the
     # app, one channel per session over the IPC link Main's DshHostSupervisor
     # opened. Always on; inert only when the host has no IPC channel.

@@ -3,14 +3,173 @@
  * around our worker RPC in both directions (src/shared/types/dshHostProtocol.ts),
  * host control messages beside them. Shared by tools/bridge-smoke.ts and
  * tools/bridge-record.ts; it only ever talks to a ChildProcess the caller spawned.
+ *
+ * P1-5 (decisions 033, 034): a host composes nothing before Main's model plan,
+ * and asks Main for a key on every model request. `fakeGatewayPlan` builds a
+ * plan with one route to the local fake gateway, through the product's own
+ * translation (`buildDshModelPlan`), and `serveModelPlan` plays Main: it sends
+ * `configure` and answers `credential` requests with a fake key.
  */
 
 import type { ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { buildDshModelPlan } from '../../../shared/dshModelPlan/build.ts';
+import type {
+  DshModelPlan,
+  DshProtocol,
+  DshRetryPolicy,
+} from '../../../shared/dshModelPlan/types.ts';
 
 export type Message = Record<string, unknown>;
 
 export function isRecord(value: unknown): value is Message {
   return typeof value === 'object' && value !== null;
+}
+
+// ---- the model plan and the keys, as Main hands them over -------------------
+
+/** The route and model every probe used before P1-5, kept so recorded samples do not move. */
+export const FAKE_ROUTE = 'aiclient-gateway';
+export const FAKE_MODEL = 'fake-1';
+
+/** A probe gets its answer at once: no retry, unlike the product's 3 (decision 040). */
+export const NO_RETRY: DshRetryPolicy = {
+  mode: 'normal',
+  maxRetries: 0,
+  backoff: { initialDelayMs: 1_000, maxDelayMs: 1_000 },
+};
+
+export interface FakeRoute {
+  /** Our provider id, which is also the route name. */
+  provider: string;
+  baseUrl: string;
+  api?: DshProtocol;
+  models: Array<{
+    id: string;
+    name?: string;
+    contextWindow?: number;
+    maxTokens?: number;
+    input?: Array<'text' | 'image'>;
+    reasoning?: boolean;
+    thinkingLevelMap?: Record<string, string | null>;
+  }>;
+}
+
+/**
+ * A model plan built by the product's own rules. By default one route,
+ * `aiclient-gateway`, with the non-reasoning `fake-1` (200000 / 8192), on
+ * `baseUrl`. `retryPolicy` replaces every route's (default: no retry; `null`
+ * keeps the product's); any DSH retry policy goes, `always` included.
+ */
+export function fakeGatewayPlan(options: {
+  baseUrl?: string;
+  routes?: FakeRoute[];
+  retryPolicy?: DshRetryPolicy | Record<string, unknown> | null;
+  clientVersion?: string;
+}): DshModelPlan {
+  const routes: FakeRoute[] = options.routes ?? [
+    {
+      provider: FAKE_ROUTE,
+      baseUrl: options.baseUrl ?? 'http://127.0.0.1:9',
+      models: [{ id: FAKE_MODEL, name: 'P0 fake model', contextWindow: 200_000, maxTokens: 8192 }],
+    },
+  ];
+  const providers: Record<string, unknown> = {};
+  const keyed: Record<string, boolean> = {};
+  for (const route of routes) {
+    providers[route.provider] = {
+      baseUrl: route.baseUrl,
+      api: route.api ?? 'anthropic-messages',
+      models: route.models,
+    };
+    keyed[route.provider] = true;
+  }
+  const plan = buildDshModelPlan({
+    models: { providers },
+    keyed,
+    ...(options.clientVersion ? { clientVersion: options.clientVersion } : {}),
+  });
+  const retryPolicy = options.retryPolicy === undefined ? NO_RETRY : options.retryPolicy;
+  if (retryPolicy) {
+    for (const route of Object.values(plan.routes)) {
+      route.retryPolicy = structuredClone(retryPolicy) as DshRetryPolicy;
+    }
+  }
+  return plan;
+}
+
+/** How a credential request was answered, value excluded. */
+export interface ServedCredential {
+  id: number;
+  ref: string;
+  outcome: 'served' | 'refused' | 'unavailable';
+}
+
+export interface ServedPlan {
+  readonly plan: DshModelPlan;
+  readonly nonce: string;
+  /** Every credential request this host sent, in order. */
+  readonly requests: ServedCredential[];
+  /** Changes the key behind one reference (a provider id works too); undefined answers `unavailable`. */
+  setKey(refOrProvider: string, value: string | undefined): void;
+  stop(): void;
+}
+
+/**
+ * Plays Main for one host: `configure` right away (the host buffers it until
+ * it is ready to compose), then one answer per `credential` request, checking
+ * the nonce and the reference the way `DshCredentialBroker` does.
+ */
+export function serveModelPlan(
+  child: ChildProcess,
+  plan: DshModelPlan,
+  keys: Readonly<Record<string, string>> | string
+): ServedPlan {
+  const nonce = randomBytes(18).toString('base64url');
+  const values = new Map<string, string | undefined>();
+  for (const [ref, provider] of Object.entries(plan.refs)) {
+    values.set(ref, typeof keys === 'string' ? keys : (keys[ref] ?? keys[provider]));
+  }
+  const requests: ServedCredential[] = [];
+  const onMessage = (message: unknown) => {
+    if (!isRecord(message) || message.host !== 'credential' || typeof message.id !== 'number') {
+      return;
+    }
+    const ref = String(message.ref);
+    const value = values.get(ref);
+    const refused = message.nonce !== nonce || !Object.hasOwn(plan.refs, ref);
+    const outcome = refused ? 'refused' : value ? 'served' : 'unavailable';
+    requests.push({ id: message.id, ref, outcome });
+    if (!child.connected) return;
+    child.send(
+      outcome === 'served'
+        ? { host: 'credential-result', id: message.id, ok: true, value }
+        : { host: 'credential-result', id: message.id, ok: false, error: outcome }
+    );
+  };
+  child.on('message', onMessage);
+  child.send({
+    host: 'configure',
+    nonce,
+    revision: plan.revision,
+    routes: plan.routes,
+    defaultModel: plan.defaultModel,
+    index: plan.index,
+    refs: plan.refs,
+  });
+  return {
+    plan,
+    nonce,
+    requests,
+    setKey(refOrProvider, value) {
+      for (const [ref, provider] of Object.entries(plan.refs)) {
+        if (ref === refOrProvider || provider === refOrProvider) values.set(ref, value);
+      }
+    },
+    stop() {
+      child.off('message', onMessage);
+    },
+  };
 }
 
 export class HostClient {
@@ -46,6 +205,11 @@ export class HostClient {
       }
       for (const wake of [...this.waiters]) wake();
     });
+  }
+
+  /** Plays Main's model source for this host (see `serveModelPlan`). */
+  configure(plan: DshModelPlan, keys: Readonly<Record<string, string>> | string): ServedPlan {
+    return serveModelPlan(this.child, plan, keys);
   }
 
   /** A fresh channel id: `c<host generation>-<sequence>`, never reused. */

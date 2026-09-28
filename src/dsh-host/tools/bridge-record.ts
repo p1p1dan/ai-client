@@ -7,7 +7,10 @@
  * Drives the product bridge through a real DSH host and the local fake gateway
  * (plan dsh-p0-2), exactly as Main's supervisor and WorkerSlot do (Node IPC,
  * one channel per session), one scenario per session, and records three golden
- * samples per scenario under src/shared/__tests__/fixtures/dsh/:
+ * samples per scenario under src/shared/__tests__/fixtures/dsh/. Main's model
+ * source is played too (P1-5): each host is configured with a plan whose one
+ * route is the probes' `aiclient-gateway` / `fake-1`, so the samples keep
+ * their route names, and gets its fake key per request.
  *
  *   stream.<scenario>.json  the RuntimeEvents the channel carried (the renderer's input)
  *   log.<scenario>.json     the session's DSH events at the end, read the way the bridge's
@@ -67,7 +70,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { HostClient, isRecord, type Message } from './lib/hostClient.ts';
+import { fakeGatewayPlan, HostClient, isRecord, type Message } from './lib/hostClient.ts';
 import { baseEnv, captureStderr, exitOf, type Sandbox, sandbox, sleep } from './lib/kit.ts';
 import { installProbeBundle } from './lib/probe-bundle.ts';
 
@@ -768,9 +771,8 @@ async function main(): Promise<number> {
     DSH_TELEMETRY_DISABLED: '1',
     // The probe bundle's auto-approving row would answer the bridge's approvals.
     AICLIENT_DSH_PROBE_ROW: '0',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-4-fake-key',
   };
+  const plan = fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` });
   const live: Host[] = [];
   const context: RecordContext = {
     box,
@@ -787,6 +789,7 @@ async function main(): Promise<number> {
         stderr: captureStderr(child),
         exited: exitOf(child),
       };
+      host.client.configure(plan, 'p1-4-fake-key');
       live.push(host);
       const ready = await host.client.control(
         (message) => message.type === 'ready' || message.type === 'fatal',

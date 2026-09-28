@@ -42,7 +42,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
-import { HostClient, type Message } from './lib/hostClient.ts';
+import { fakeGatewayPlan, HostClient, type Message } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -281,9 +281,9 @@ async function main(): Promise<number> {
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
     AICLIENT_DSH_PROBE_ROW: '0',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-4a-fake-key',
   };
+  // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+  const plan = fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` });
   const live: Host[] = [];
   const startHost = async (label: string): Promise<Host> => {
     const child = spawn(
@@ -297,6 +297,7 @@ async function main(): Promise<number> {
       stderr: captureStderr(child),
       exited: exitOf(child),
     };
+    host.client.configure(plan, 'p1-4a-fake-key');
     live.push(host);
     const ready = await host.client.control(
       (m) => m.type === 'ready' || m.type === 'fatal',

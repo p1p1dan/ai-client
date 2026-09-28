@@ -18,6 +18,13 @@
  * (P1-4b, decision 027). Compact, retry and attachments refuse until the rest
  * of P1-4 fills them in (dsh-rebase decision 010).
  *
+ * Model and effort (P1-5a, decisions 033, 035, 040): each turn resolves the
+ * model and effort Main sent (or the session's current model) against the
+ * host's model plan (`modelRoute.ts`) and hands the DSH selection to the
+ * agent through `installModelSelection`, installed when the agent is opened;
+ * a model the plan cannot serve refuses the send with `MODEL_NOT_CONFIGURED`.
+ * A turn DSH ends in error carries our failure code (`dshFailureCodes.ts`).
+ *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
  * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
  * session `aiclient-<logical id>`. A new session is flushed to disk BEFORE the
@@ -38,6 +45,7 @@ import type {
   PiWorkerRuntime,
   PiWorkerRuntimeOptions,
 } from '../../agent-host/piWorkerRpcServer.ts';
+import { mapDshFailureCode } from '../../shared/dshFailureCodes.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
@@ -83,6 +91,12 @@ import {
   retiredSessionIds,
   rewindSessionId,
 } from './lineage.ts';
+import {
+  type DshBridgeModelPlan,
+  DshModelRouter,
+  type DshModelSelection,
+  type DshRoutedModel,
+} from './modelRoute.ts';
 import {
   DSH_SESSION_MISSING,
   grantsSidecarFor,
@@ -191,10 +205,13 @@ export interface DshBridgeContext {
       seed?: readonly DshLogEvent[];
       inheritedEventCount?: number;
       agentOptions: { provider: string; model: string };
+      /** Composes the unpublished agent's scope (here: its model selection). */
+      setup?: DshAgentSetup;
     }): Promise<DshAgentHandle>;
     resume(options: {
       resumeSessionId: string;
       agentOptions: { provider: string; model: string };
+      setup?: DshAgentSetup;
     }): Promise<DshAgentHandle>;
   };
   agentDefaultModel: { currentSelection(): { provider: string; model: string } };
@@ -204,6 +221,15 @@ export interface DshBridgeContext {
   sessionQuery: DshSessionQuery;
   /** A service the row does not inject, when it is there (`ctx.jobs`, for `busy`). */
   get?(name: 'jobs'): DshJobsView | undefined;
+}
+
+/** DSH's `AgentSetup`: runs on the agent's own scope before it is published. */
+export type DshAgentSetup = (agentCtx: unknown) => void;
+
+/** `ModelSelectionRef` of `@deepseek-ai/dsh-agent`: the selection the next step routes to. */
+export interface DshModelSelectionRef {
+  current: DshModelSelection | undefined;
+  assembled: DshModelSelection | undefined;
 }
 
 /** The slice of `ctx.jobs` (dsh-jobs) `busy` reads. */
@@ -225,6 +251,17 @@ export interface DshBridgeDeps {
   writeStub?: (file: string, stub: SessionStub) => void;
   /** How long a retired agent may take to dispose before the rewind moves on (3 s). */
   disposeTimeoutMs?: number;
+  /**
+   * Decision 033: the host's model plan (`aiclientModelPlan`), read per turn.
+   * Without one no turn can be routed, and every send is refused.
+   */
+  modelPlan?: () => DshBridgeModelPlan | undefined;
+  /**
+   * `installModelSelection` from `@deepseek-ai/dsh-agent`: couples `selection`
+   * to the agent's prompt assembly and requests. Without it the agent keeps
+   * the model it was opened with.
+   */
+  installModelSelection?: (agentCtx: unknown, selection: DshModelSelectionRef) => () => void;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -401,7 +438,13 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private result: WorkerBootstrapResult | null = null;
   private booting: Promise<WorkerBootstrapResult> | null = null;
   private dshSessionId = '';
+  /** Our `provider/modelId` of the current selection; `message.started` reports it. */
   private route = '';
+  /** The model the session is on; a turn that names none keeps it. */
+  private modelId: string | undefined;
+  private readonly router: DshModelRouter;
+  /** Read by the agent's prompt assembly and requests (`installModelSelection`). */
+  private readonly selection: DshModelSelectionRef = { current: undefined, assembled: undefined };
   private turn: Turn | null = null;
   private readonly steps = new Map<string, StepMessage>();
   private readonly toolStep = new Map<string, string>();
@@ -439,6 +482,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     };
     this.historyCache = new DshHistoryCache(this.query, options.log);
     this.retired = new DshRetiredHistory(this.query, options.log);
+    this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
+    this.modelId = options.model;
   }
 
   /**
@@ -489,8 +534,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
     if (!this.home) throw new Error('DSH_HOME is not set for the DSH bridge');
-    const selection = this.ctx.agentDefaultModel.currentSelection();
-    this.route = `${selection.provider}/${selection.model}`;
+    const selection = this.openingSelection();
     this.listen();
     const requested = this.options.sessionFile;
     let stubFile: string;
@@ -531,6 +575,44 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   }
 
   /**
+   * The model an agent is opened on: the session's model when the plan serves
+   * it, else the plan's default. Never a refusal: a chat whose model left the
+   * plan still opens, to be read; its next send is refused instead.
+   */
+  private openingSelection(): { provider: string; model: string } {
+    const routed = this.router.trySession(this.modelId, this.options.effort);
+    if (routed) {
+      this.applyRoute(routed);
+      return { provider: routed.selection.provider, model: routed.selection.model };
+    }
+    const fallback =
+      this.router.defaultSelection() ?? this.ctx.agentDefaultModel.currentSelection();
+    this.route = this.modelId ?? `${fallback.provider}/${fallback.model}`;
+    return { provider: fallback.provider, model: fallback.model };
+  }
+
+  /** The selection the next step routes to, and the id `message.started` reports. */
+  private applyRoute(routed: DshRoutedModel): void {
+    this.selection.current = { ...routed.selection };
+    this.modelId = routed.modelId;
+    this.route = routed.modelId;
+  }
+
+  /** `setup` for every agent this runtime opens: the model selection, per turn. */
+  private readonly setupAgent: DshAgentSetup = (agentCtx) => {
+    this.deps.installModelSelection?.(agentCtx, this.selection);
+  };
+
+  /** The agent options of the current selection, for an agent opened later (rewind, fork). */
+  private currentAgentOptions(): { provider: string; model: string } {
+    const current =
+      this.selection.current ??
+      this.router.defaultSelection() ??
+      this.ctx.agentDefaultModel.currentSelection();
+    return { provider: current.provider, model: current.model };
+  }
+
+  /**
    * decision 007: create, flush the header to disk, then write the stub. Main
    * commits the identity as soon as the stub exists, so the log must already
    * be there — or a host that dies before the first turn leaves an identity
@@ -550,6 +632,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         sessionId: this.dshSessionId,
         meta: { cwd: this.cwd },
         agentOptions: selection,
+        setup: this.setupAgent,
       });
       await this.ctx.sessions.flush(this.handle.agent.session);
     } catch (error) {
@@ -611,6 +694,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       this.handle = await this.ctx.agents.resume({
         resumeSessionId: dshSessionId,
         agentOptions: selection,
+        setup: this.setupAgent,
       });
     } catch (error) {
       throw mapOpenError(error, dshSessionId);
@@ -650,6 +734,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     await this.bootstrap();
     const agent = this.requireAgent();
+    // Decisions 033, 040: this turn's model and effort, or a refusal before anything is sent.
+    this.applyRoute(
+      this.router.session(input.model ?? this.modelId, input.effort ?? this.options.effort)
+    );
     const message = this.deps.createUserMessage({
       content: [{ type: 'text', text: input.text }],
       source: { kind: 'user' },
@@ -1042,7 +1130,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const boundary = cut.plan.boundary;
     // Nothing before the first turn: an empty child, still naming where it came from.
     const seed = boundary !== null ? buildDshForkSeed(cut.events, boundary) : undefined;
-    const selection = this.ctx.agentDefaultModel.currentSelection();
+    const selection = this.currentAgentOptions();
     for (let attempt = 0; ; attempt += 1) {
       const id = idOf(attempt);
       if (!SAFE_SESSION_ID.test(id)) {
@@ -1053,7 +1141,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
           sessionId: id,
           meta: { cwd: this.cwd, parentSession: cut.sourceId, ...(seed ? { isSeeded: true } : {}) },
           ...(seed && boundary !== null ? { seed, inheritedEventCount: boundary + 1 } : {}),
-          agentOptions: { provider: selection.provider, model: selection.model },
+          agentOptions: selection,
+          setup: this.setupAgent,
         });
         return { handle, id };
       } catch (error) {
@@ -1367,9 +1456,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         } else if (reason.kind === 'aborted') {
           this.emit({ type: 'session.stopped', payload: {} });
         } else {
+          // Design shard 03 §5: DSH's failure code in our vocabulary, beside its sentence.
+          const errorCode = mapDshFailureCode(
+            (reason.error as { code?: unknown } | undefined)?.code
+          );
           this.emit({
             type: 'session.failed',
-            payload: { error: `DSH turn ended: ${JSON.stringify(reason).slice(0, 500)}` },
+            payload: {
+              error: `DSH turn ended: ${JSON.stringify(reason).slice(0, 500)}`,
+              ...(errorCode ? { errorCode } : {}),
+            },
           });
         }
         this.emit({ type: 'session.status', payload: { status: 'idle' } });

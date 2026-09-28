@@ -22,7 +22,7 @@
  *   --port <n>       Required. TCP port to listen on (127.0.0.1 only).
  *   --plan <name>    Required. One of: text | long-turn | retry-503 | retry-503-forever |
  *                    write-approval | archive-probe | ask-question | slow-write |
- *                    long-thinking | slow-fail
+ *                    long-thinking | slow-fail | echo-key-error | dsh-p0-2
  *   --sleep <n>      Seconds used in the long-turn plan's `sleep <n> && echo done` bash
  *                    command, and in the archive-probe plan's 1st-request bash command.
  *                    Default: 90 (long-turn) — archive-probe callers should pass their own
@@ -97,6 +97,11 @@
  *                       text block + `message_delta` (stop_reason: end_turn).
  *                       Every later request repeats the same turn, so a second send in the
  *                       same session streams a second thought.
+ *   echo-key-error     (added by dsh-rebase P1-5b, KEY-CANARY) Every request answers
+ *                       HTTP 401 with an error message that repeats the key it received,
+ *                       the way some providers do. The dsh-p0-2 plan has the same case
+ *                       under the P1-ECHOKEY marker. What the client stores of that
+ *                       message is what the canary scan checks.
  *   slow-fail          (added by batch I point-check for T093) Writes the 200 response
  *                       headers immediately and then sends ZERO body bytes for --hold
  *                       seconds (default 120) before closing. This is the shape decision 029
@@ -133,6 +138,8 @@
  *                       the id/revision from the latest get_goal result, and a
  *                       `<goal_complete>` / `<goal_blocked>` wrap-up is answered with text.
  *                       Scripts are listed in `DSH_P0_2_SCRIPTS` below.
+ *                       dsh-rebase P1-5b adds P1-ECHOKEY (HTTP 401 repeating the key it got)
+ *                       and P1-ENVDUMP (one bash `env`) for the KEY-CANARY scan.
  *                       dsh-rebase P1-4e adds P1-FAIL (HTTP 500 for the whole turn) and
  *                       answers DSH's compaction instruction (`/compact`) with a short
  *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
@@ -159,7 +166,10 @@
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
  * last message in the request body, a <=200 char snippet of that message's content, and whether
  * the body contained a tool_result content block. The dsh-p0-2 plan also logs its decision
- * (scenario, round, step, tool) and the auth header it received.
+ * (scenario, round, step, tool). Every line also says what identified the client: `auth`,
+ * the key it received as `sha256:<first 8 hex>` (never the key itself: P1-5b's canary scan
+ * reads these logs too), `userAgent`, `clientHeader` (X-Pilab-Client), the model the body
+ * named, the path, and the reasoning fields the body carried.
  *
  * `--port 0` listens on an ephemeral port; the startup line prints the actual one.
  *
@@ -195,6 +205,7 @@ const VALID_PLANS = [
   'slow-write',
   'long-thinking',
   'slow-fail',
+  'echo-key-error',
   'dsh-p0-2',
 ];
 
@@ -321,7 +332,7 @@ function logRequest(entry) {
 const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
-const P1_MARKER = /P1-(FAIL|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD))/;
+const P1_MARKER = /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -708,6 +719,18 @@ const DSH_P0_2_SCRIPTS = {
       ...say(`P0-RECALL ${present ? 'present' : 'missing'}`),
       tag: present ? 'present' : 'missing',
     };
+  },
+  // dsh-rebase P1-5b (KEY-CANARY): the upstream rejects the key and repeats it.
+  'P1-ECHOKEY'() {
+    return { kind: 'echo-key', status: 401 };
+  },
+  // dsh-rebase P1-5b (KEY-CANARY): a tool prints its whole environment, which the
+  // canary scan reads; then one more request, so the key is asked for twice.
+  'P1-ENVDUMP'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'env', description: 'Print the tool environment' });
+    }
+    return say('Environment printed.');
   },
   // dsh-rebase P1-4e: every request of the turn fails upstream (no retry in this route).
   'P1-FAIL'() {
@@ -1531,9 +1554,35 @@ function sendHang(res, holdMs) {
   res.on('close', () => clearTimeout(timer));
 }
 
-function sendError(res, status, message) {
+function sendError(res, status, message, type = 'overloaded_error') {
   res.writeHead(status, { 'content-type': 'application/json' });
-  res.end(JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message } }));
+  res.end(JSON.stringify({ type: 'error', error: { type, message } }));
+}
+
+/** The key a request carried: `x-api-key`, or a bearer token. */
+function receivedKey(req) {
+  const apiKey = req.headers['x-api-key'];
+  if (typeof apiKey === 'string' && apiKey) return apiKey;
+  const auth = req.headers.authorization;
+  if (typeof auth === 'string' && auth) return auth.replace(/^bearer\s+/i, '');
+  return null;
+}
+
+/** A key as the log shows it: a digest prefix, never the value. */
+function keyDigest(key) {
+  return key === null
+    ? null
+    : `sha256:${crypto.createHash('sha256').update(key).digest('hex').slice(0, 8)}`;
+}
+
+/** What a request's body asked for in reasoning, whatever the wire protocol. */
+function reasoningOf(parsed) {
+  const out = {};
+  if (parsed?.thinking !== undefined) out.thinking = parsed.thinking;
+  if (parsed?.reasoning_effort !== undefined) out.reasoning_effort = parsed.reasoning_effort;
+  if (parsed?.reasoning !== undefined) out.reasoning = parsed.reasoning;
+  if (parsed?.output_config !== undefined) out.output_config = parsed.output_config;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 // ---- dsh-rebase P1-8: loop guard scenarios ---------------------------------------
@@ -1855,7 +1904,10 @@ function main() {
       const decision =
         args.plan === 'dsh-p0-2'
           ? decideDshP02(parsed)
-          : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
+          : args.plan === 'echo-key-error'
+            ? { kind: 'echo-key', status: 401 }
+            : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
+      const key = receivedKey(req);
 
       logRequest({
         seq,
@@ -1864,6 +1916,12 @@ function main() {
         contentSummary: summary,
         hasToolResult: toolResultPresent,
         plan: args.plan,
+        auth: keyDigest(key),
+        userAgent: req.headers['user-agent'] ?? null,
+        clientHeader: req.headers['x-pilab-client'] ?? null,
+        model: typeof parsed?.model === 'string' ? parsed.model : null,
+        path: req.url,
+        reasoning: reasoningOf(parsed),
         ...(args.plan === 'dsh-p0-2'
           ? {
               decision: decision.label,
@@ -1875,8 +1933,6 @@ function main() {
                     : decision.kind === 'burst'
                       ? `${decision.calls.length}x ${[...new Set(decision.calls.map((c) => c.name))].join('+')}`
                       : undefined,
-              auth: req.headers['x-api-key'] ?? req.headers.authorization ?? null,
-              path: req.url,
               tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
               calls: decision.calls,
               // P0-6: request size and what a resumed session sent.
@@ -1889,6 +1945,13 @@ function main() {
 
       if (decision.kind === 'error') {
         sendError(res, decision.status, decision.message);
+      } else if (decision.kind === 'echo-key') {
+        sendError(
+          res,
+          decision.status,
+          `P1-ECHOKEY: invalid x-api-key ${key ?? '(none)'} for this fake upstream`,
+          'authentication_error'
+        );
       } else if (decision.kind === 'text') {
         sendTextTurn(res, model, decision.text);
       } else if (decision.kind === 'tool_use') {

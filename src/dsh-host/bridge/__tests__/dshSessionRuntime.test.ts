@@ -26,12 +26,14 @@ import {
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
+  type DshModelSelectionRef,
   DshSessionRuntime,
   dshSessionIdFor,
   INITIAL_HISTORY_LIMIT,
   type SessionStub,
   stubPathFor,
 } from '../dshSessionRuntime.ts';
+import { TEST_PLAN } from './testPlan.ts';
 
 /**
  * dsh-rebase P1-1 — the bridge half of the engine cutover (decisions 006, 007
@@ -131,6 +133,7 @@ function fakeDsh(options: FakeOptions = {}) {
 const deps: DshBridgeDeps = {
   createUserMessage: vi.fn(() => ({ id: 'user-message-1' })),
   now: () => 1_700_000_000_000,
+  modelPlan: () => TEST_PLAN,
 };
 
 function runtime(
@@ -534,6 +537,169 @@ describe('DshSessionRuntime — history, tree and leaf (P1-4a, decision 026)', (
     const history = await bridge.history({ logicalSessionId: LOGICAL });
     expect(history.page.messages.map((message) => message.id)).toEqual(['h:u1']);
     expect(dsh.ctx.sessionQuery.observeSession).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DshSessionRuntime — model and effort per turn (P1-5a, decisions 033, 035, 040)', () => {
+  type Ref = DshModelSelectionRef;
+
+  /** A bridge on the test plan, whose agent's setup ran: `ref()` is what the agent routes by. */
+  async function routed(extra: Partial<PiWorkerRuntimeOptions> = {}, plan = true) {
+    const dsh = fakeDsh();
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const log = vi.fn();
+    let selection: Ref | undefined;
+    const installModelSelection = vi.fn((_agentCtx: unknown, ref: Ref) => {
+      selection = ref;
+      return () => undefined;
+    });
+    const bridge = new DshSessionRuntime(
+      dsh.ctx,
+      {
+        logicalSessionId: LOGICAL,
+        cwd: CWD,
+        projectTrusted: true,
+        emit: (event) => events.push(event as (typeof events)[number]),
+        log,
+        ...extra,
+      },
+      {
+        ...deps,
+        home,
+        installModelSelection,
+        modelPlan: () => (plan ? TEST_PLAN : undefined),
+      }
+    );
+    await bridge.bootstrap();
+    const created = vi.mocked(dsh.ctx.agents.create).mock.calls[0]?.[0] as {
+      agentOptions: unknown;
+      setup?: (agentCtx: unknown) => void;
+    };
+    created.setup?.('agent-scope');
+    return { dsh, bridge, events, log, created, installModelSelection, ref: () => selection };
+  }
+
+  const turn = (requestId: string, extra: Record<string, unknown> = {}) => ({
+    logicalSessionId: LOGICAL,
+    requestId,
+    attemptId: `attempt-${requestId}`,
+    text: 'hi',
+    ...extra,
+  });
+
+  it('[route-open] opens the agent on the session model and couples its selection', async () => {
+    const opened = await routed({ model: 'thinker/deep-1' });
+    expect(opened.created.agentOptions).toEqual({ provider: 'thinker~2', model: 'deep-1' });
+    expect(opened.installModelSelection).toHaveBeenCalledWith('agent-scope', expect.any(Object));
+    // No effort chosen: a session sends medium when the model offers it (decision 040).
+    expect(opened.ref()?.current).toEqual({
+      provider: 'thinker~2',
+      model: 'deep-1',
+      reasoningEffort: 'medium',
+    });
+  });
+
+  it('[route-open] a new session with no model opens on the plan default', async () => {
+    const opened = await routed();
+    expect(opened.created.agentOptions).toEqual({ provider: 'aiclient-gateway', model: 'fake-1' });
+    expect(opened.ref()?.current).toEqual({ provider: 'aiclient-gateway', model: 'fake-1' });
+  });
+
+  it('[route-turn] each turn routes its own model and effort before the prompt goes out', async () => {
+    const opened = await routed();
+    await opened.bridge.startSend(turn('t1', { model: 'thinker/deep-1', effort: 'high' }));
+    expect(opened.ref()?.current).toEqual({
+      provider: 'thinker~2',
+      model: 'deep-1',
+      reasoningEffort: 'high',
+    });
+    expect(opened.dsh.followups).toHaveLength(1);
+  });
+
+  it('[route-turn] a turn that names no model keeps the current one; no effort means medium', async () => {
+    const opened = await routed();
+    await opened.bridge.startSend(turn('t1', { model: 'thinker/deep-1', effort: 'low' }));
+    opened.dsh.append({
+      type: 'turn/end',
+      seq: 1,
+      time: 1,
+      data: { turn: 1, reason: { kind: 'completed' } },
+    });
+    await opened.bridge.startSend(turn('t2'));
+    expect(opened.ref()?.current).toEqual({
+      provider: 'thinker~2',
+      model: 'deep-1',
+      reasoningEffort: 'medium',
+    });
+  });
+
+  it('[route-turn] an effort the model does not offer is dropped and logged, never sent', async () => {
+    const opened = await routed();
+    await opened.bridge.startSend(turn('t1', { model: 'thinker/deep-1', effort: 'xhigh' }));
+    expect(opened.ref()?.current).toEqual({ provider: 'thinker~2', model: 'deep-1' });
+    expect(opened.log).toHaveBeenCalledWith(
+      '[dsh-bridge] thinker/deep-1 does not offer effort xhigh; sending none'
+    );
+  });
+
+  it('[route-turn] message.started reports our model id, not the DSH route', async () => {
+    const opened = await routed();
+    await opened.bridge.startSend(turn('t1', { model: 'thinker/deep-1' }));
+    opened.dsh.append({ type: 'turn/start', seq: 1, time: 1, data: { turn: 1 } });
+    opened.dsh.append({
+      type: 'step/end',
+      seq: 2,
+      time: 2,
+      data: { turn: 1, step: 1 },
+    });
+    opened.dsh.append({
+      type: 'tool/call',
+      seq: 3,
+      time: 3,
+      data: { turn: 1, step: 2, callId: 'c1', name: 'bash', arguments: '{}' },
+    });
+    const started = opened.events.find(
+      (event) => event.type === 'message.started' && event.payload?.role === 'assistant'
+    );
+    expect(started?.payload?.model).toBe('thinker/deep-1');
+  });
+
+  it('[route-refuse] a model the plan cannot serve refuses the send before anything goes out', async () => {
+    const opened = await routed();
+    const error = await refusal(opened.bridge.startSend(turn('t1', { model: 'gone/model-9' })));
+    expect(error.code).toBe('MODEL_NOT_CONFIGURED');
+    expect(opened.dsh.followups).toEqual([]);
+    expect(opened.bridge.busy).toBe(false);
+    expect(opened.events.map((event) => event.type)).not.toContain('session.status');
+  });
+
+  it('[route-refuse] a host without a plan opens the session but refuses every send', async () => {
+    const opened = await routed({}, false);
+    expect(opened.created.agentOptions).toEqual({ provider: 'aiclient-gateway', model: 'fake-1' });
+    const error = await refusal(opened.bridge.startSend(turn('t1')));
+    expect(error.code).toBe('MODEL_NOT_CONFIGURED');
+    expect(opened.dsh.followups).toEqual([]);
+  });
+
+  it('[route-failure-code] a turn DSH ends in error carries our failure code (design 03 §5)', async () => {
+    const opened = await routed();
+    const end = (seq: number, code: string) =>
+      opened.dsh.append({
+        type: 'turn/end',
+        seq,
+        time: seq,
+        data: { turn: seq, reason: { kind: 'error', error: { code, message: `${code} failed` } } },
+      });
+    end(1, 'MISSING_CREDENTIAL');
+    end(2, 'SERVER');
+    end(3, 'SOMETHING_NEW');
+    const failed = opened.events.filter((event) => event.type === 'session.failed');
+    expect(failed.map((event) => event.payload?.errorCode)).toEqual([
+      'CREDENTIALS_UNAVAILABLE',
+      'PROVIDER_ERROR',
+      undefined,
+    ]);
+    expect(String(failed[0]?.payload?.error)).toContain('MISSING_CREDENTIAL');
   });
 });
 

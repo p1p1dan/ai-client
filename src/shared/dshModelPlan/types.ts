@@ -122,4 +122,6 @@ export interface DshModelPlanInput {
   /** Environment used to expand `$NAME` header values, as the native runtime does. */
   env?: Readonly<Record<string, string | undefined>>;
   settings?: DshRouteSettingsInput;
+  /** The app version, sent on every route as `X-Pilab-Client` (decision 037). */
+  clientVersion?: string;
 }

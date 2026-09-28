@@ -182,6 +182,7 @@ function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
     native,
     env: process.env,
     settings: { ...(promptCacheTtl ? { promptCacheTtl } : {}), ...providerTimeoutSettings() },
+    clientVersion: app.getVersion(),
     log: (...args) => console.info(...args),
   });
 }
@@ -281,7 +282,7 @@ export async function syncManagedPiModels(
       failureKind: 'credentials-missing',
     });
   }
-  return rememberSyncOutcome(
+  const outcome = rememberSyncOutcome(
     await service.sync({
       endpointUrl,
       apiKey: credential.apiKey,
@@ -289,6 +290,16 @@ export async function syncManagedPiModels(
       force: options.force,
     })
   );
+  // dsh-rebase decision 033 rule 4: a sync that finished after the host
+  // started leaves it on an older plan; rebuilding announces the new one.
+  if (outcome.ok) {
+    try {
+      resolveDshModelPlan();
+    } catch (error) {
+      console.warn('[pi-models] the DSH model plan could not be rebuilt after a sync', error);
+    }
+  }
+  return outcome;
 }
 
 export function getPiModelSyncState(): PiModelSyncState {
@@ -426,4 +437,5 @@ export function resolveManagedPiPtyEnv(): Record<string, string> {
 }
 
 export { validatePiManagedModelsConfig } from './configValidation';
+export { onDshModelPlanBuilt } from './dshModelPlan';
 export { PiModelConfigService } from './PiModelConfigService';

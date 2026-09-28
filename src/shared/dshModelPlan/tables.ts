@@ -91,3 +91,9 @@ export const EMPTY_PLAN_DEFAULT_MODEL = { provider: 'aiclient-none', model: 'non
 
 /** Prefix of every key reference name a route carries. */
 export const KEY_REF_PREFIX = 'AICLIENT_KEY_';
+
+/**
+ * Decision 037's default: DSH owns User-Agent, so the client identifies itself
+ * with its own header, carrying the app version, on every route.
+ */
+export const CLIENT_IDENTITY_HEADER = 'X-Pilab-Client';

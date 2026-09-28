@@ -11,6 +11,7 @@
 import { createHash } from 'node:crypto';
 import { dshRouteSettings } from './settings.ts';
 import {
+  CLIENT_IDENTITY_HEADER,
   DEFAULT_CONTEXT_WINDOW,
   DEFAULT_MAX_TOKENS,
   DSH_EFFORT_LEVELS,
@@ -214,6 +215,14 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
         continue;
       }
       out[name] = resolved;
+    }
+    // Decision 037: our own identity header, over any provider header of that name.
+    const version = input.clientVersion?.trim();
+    if (version && HEADER_VALUE.test(version)) {
+      for (const name of Object.keys(out)) {
+        if (name.toLowerCase() === CLIENT_IDENTITY_HEADER.toLowerCase()) delete out[name];
+      }
+      out[CLIENT_IDENTITY_HEADER] = version;
     }
     return Object.keys(out).length > 0 ? out : undefined;
   };

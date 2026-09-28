@@ -189,6 +189,16 @@ const FAILURE_VIEWS = {
     action: 'continue',
     detail: false,
   },
+  // dsh-rebase P1-5b (decision 034): the engine asked Main for the model
+  // service's key and got none — signed out, or the system keyring is locked.
+  // Resending fails the same way until that changes, so no Continue.
+  CREDENTIALS_UNAVAILABLE: {
+    title: 'The model service key is not available',
+    reason:
+      'This app could not hand the engine a key for the model service: your sign-in has expired, or the system keyring is locked.',
+    hint: 'Sign in again, or unlock the system keyring, then send your message again.',
+    action: 'configure',
+  },
   unknown: {
     title: 'The turn stopped',
     reason: 'This app does not recognise the reason the turn ended with.',

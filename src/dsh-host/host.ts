@@ -17,15 +17,22 @@
  *
  * One host serves every chat session of the app (decision 019). IPC, when
  * spawned with an 'ipc' stdio slot (protocol: src/shared/types/dshHostProtocol.ts):
- *   host -> parent: { type: 'ready', pid, ... } once boot() settles and the
- *                   aiclient-bridge row holds the channel; { type: 'fatal' }
- *                   right before exiting on a refused boot; { type: 'stopped' }
- *                   after disposal, just before disconnecting.
- *   parent -> host: { type: 'shutdown' }. Everything else is the aiclient-bridge
- *                   row's (bridge/plugin.ts): every chat session's channel
- *                   envelopes and the host controls (ping, close). Probe
- *                   drivers layer the test-only bundle @aiclient/dsh-probe
- *                   (tools/probe-bundle) on top of it (decision 015).
+ *   host -> parent: { type: 'ready', pid, revision, routeDiagnostics, ... }
+ *                   once boot() settles and the aiclient-bridge row holds the
+ *                   channel; { type: 'fatal' } right before exiting on a
+ *                   refused boot; { type: 'stopped' } after disposal, just
+ *                   before disconnecting; { host: 'credential' } whenever a
+ *                   model request needs a key (lib/credentialRelay.ts).
+ *   parent -> host: { host: 'configure' } first: the model plan (P1-5a,
+ *                   decision 033). Nothing is composed before it, and a host
+ *                   that gets none within 10 s refuses to boot. Then
+ *                   { type: 'shutdown' }, and { host: 'credential-result' }
+ *                   for the credential relay. Everything else is the
+ *                   aiclient-bridge row's (bridge/plugin.ts): every chat
+ *                   session's channel envelopes and the host controls (ping,
+ *                   close). Probe drivers layer the test-only bundle
+ *                   @aiclient/dsh-probe (tools/probe-bundle) on top of it
+ *                   (decision 015).
  * Every IPC message is buffered from the first line of this file until the
  * bridge row claims the buffer, so nothing a driver writes before boot
  * settles is lost.
@@ -41,6 +48,17 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { format } from 'node:util';
+import { CredentialRelay } from './lib/credentialRelay.ts';
+import {
+  CONFIGURE_TIMEOUT_MS,
+  emptyHostModelPlan,
+  type HostModelPlan,
+  isConfigureMessage,
+  modelPlanOverlays,
+  publicModelPlan,
+  readConfigure,
+  routeDiagnostics,
+} from './lib/hostModelPlan.ts';
 import {
   PRODUCT_BUNDLES,
   partitionSkippedBundles,
@@ -71,11 +89,50 @@ interface BridgeInbox {
 }
 const ipc = typeof process.send === 'function';
 const bridgeInbox: BridgeInbox | undefined = ipc ? { queue: [] } : undefined;
+/** Decision 033: the first `configure`, or why it was refused, until boot takes it. */
+const configure: {
+  received?: { ok: true; plan: HostModelPlan } | { ok: false; reason: string };
+  wake?: () => void;
+} = {};
+/** Decision 034: set once the plan is known; answers go to it, never to the bridge. */
+let credentialRelay: CredentialRelay | undefined;
 if (bridgeInbox) {
   (globalThis as Record<symbol, unknown>)[Symbol.for('aiclient.dsh.bridge')] = bridgeInbox;
   process.on('message', (message: unknown) => {
+    if (isConfigureMessage(message)) {
+      if (configure.received) warn('a second configure was ignored; the plan is fixed at boot');
+      else {
+        configure.received = readConfigure(message);
+        configure.wake?.();
+      }
+      return;
+    }
+    if (credentialRelay?.receive(message)) return;
     if (bridgeInbox.deliver) bridgeInbox.deliver(message);
     else bridgeInbox.queue.push(message);
+  });
+}
+
+/** Resolves with Main's plan; refuses the boot after `CONFIGURE_TIMEOUT_MS` or on a malformed one. */
+function awaitConfigure(): Promise<HostModelPlan> {
+  return new Promise((done) => {
+    const settle = () => {
+      const received = configure.received;
+      if (!received) return false;
+      clearTimeout(timer);
+      if (!received.ok) fail(`malformed configure: ${received.reason}`);
+      done(received.plan);
+      return true;
+    };
+    const timer = setTimeout(
+      () =>
+        fail(
+          `no configure within ${CONFIGURE_TIMEOUT_MS} ms; the host composes nothing without Main's model plan`
+        ),
+      CONFIGURE_TIMEOUT_MS
+    );
+    configure.wake = () => void settle();
+    settle();
   });
 }
 
@@ -172,6 +229,25 @@ const homePatch = join(home, 'cordis.patch.yml');
 if (existsSync(homePatch)) {
   warn(`${homePatch} is applied; the privacy and endpoint rows stay off regardless`);
 }
+// Decision 033: nothing is composed before Main's plan. A host run by hand
+// without IPC gets an empty one: no route, so no model request can go out.
+const modelPlan = ipc ? await awaitConfigure() : emptyHostModelPlan();
+marks.configured = performance.now();
+// Decision 034: keys are asked for per request, with this host's nonce.
+credentialRelay = ipc
+  ? new CredentialRelay({
+      nonce: modelPlan.nonce,
+      refs: modelPlan.refs,
+      send: (message) => {
+        if (!process.connected) return false;
+        process.send?.(message, undefined, undefined, (error) => {
+          if (error) warn(`credential request could not be sent: ${error.message}`);
+        });
+        return true;
+      },
+      log: (...args) => warn(format(...args)),
+    })
+  : undefined;
 const profileContext = {
   name: PROFILE_NAME,
   dir: profile.dir,
@@ -180,7 +256,8 @@ const profileContext = {
   startedBundles: profile.layers.map((layer) => layer.packageName),
   cwd: process.cwd(),
   home,
-  overlays: requiredDisabledOverlays(),
+  // The plan's two rows after every user layer, then the required rows off.
+  overlays: [...modelPlanOverlays(modelPlan), ...requiredDisabledOverlays()],
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
   // Plugin installs run pnpm's CLI on this same Node binary, from this host's
   // own node_modules (the bundled copy in a packaged app), never a `pnpm` from
@@ -216,8 +293,9 @@ const notDisabled = REQUIRED_DISABLED.filter(
 );
 if (notDisabled.length > 0) fail(`rows expected disabled: ${notDisabled.join(', ')}`);
 // P1-8 (decision 065): the loop guard must be composed and on; its kill switch
-// is AICLIENT_RUNTIME_LOOP_GUARD=0, never a disabled row.
-const REQUIRED_ENABLED = ['aiclient-loop-guard'];
+// is AICLIENT_RUNTIME_LOOP_GUARD=0, never a disabled row. P1-5b (decision 034):
+// so must the read-only credentials row that replaces dsh-base's.
+const REQUIRED_ENABLED = ['aiclient-loop-guard', 'aiclient-credentials'];
 const notEnabled = REQUIRED_ENABLED.filter((id) => {
   const row = flat.find((item) => item.id === id);
   return row === undefined || (row.disabled !== undefined && row.disabled !== false);
@@ -251,6 +329,7 @@ const stop = (reason: string): Promise<void> => {
 };
 async function stopOnce(reason: string): Promise<void> {
   const started = performance.now();
+  credentialRelay?.close();
   await app.current?.fiber.dispose();
   const ms = performance.now() - started;
   process.stderr.write(`[dsh-host] stopped (${reason}) in ${ms.toFixed(0)}ms\n`);
@@ -289,6 +368,10 @@ const ctx = await appBoot.boot(BIN, rootConfig, patches, async (hostCtx) => {
   });
   hostCtx.provide('profileContext', profileContext);
   hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment);
+  // Decision 033: the plan the bridge routes each turn by (the nonce stays
+  // here); decision 034: the relay aiclient-credentials resolves keys through.
+  hostCtx.provide('aiclientModelPlan', publicModelPlan(modelPlan));
+  if (credentialRelay) hostCtx.provide('aiclientCredentialRelay', credentialRelay);
   await hostCtx.plugin(appBoot.PluginPackages, { resolution });
 });
 app.current = ctx;
@@ -317,9 +400,28 @@ if (bridgeInbox && !bridgeInbox.deliver) {
   fail(`the aiclient-bridge row did not take the IPC channel: ${JSON.stringify(census.inactive)}`);
 }
 
+// The drift gate: every route of the plan registered, none with a diagnostic.
+const llm = ctx.get('llm') as
+  | { listConfigurableProviders(): Array<{ provider?: unknown; error?: unknown }> }
+  | undefined;
+let diagnostics: ReturnType<typeof routeDiagnostics>;
+try {
+  diagnostics = routeDiagnostics(modelPlan, llm?.listConfigurableProviders());
+} catch (error) {
+  diagnostics = Object.keys(modelPlan.routes).map((provider) => ({
+    provider,
+    error: `the llm directory could not be read: ${String(error)}`,
+  }));
+}
+for (const diagnostic of diagnostics) {
+  warn(`route ${JSON.stringify(diagnostic.provider)} of the plan: ${diagnostic.error}`);
+}
+
 const ready = {
   type: 'ready',
   pid: process.pid,
+  revision: modelPlan.revision,
+  routeDiagnostics: diagnostics,
   node: process.version,
   execPath: process.execPath,
   execArgv: process.execArgv,

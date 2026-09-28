@@ -13,7 +13,11 @@ import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import { type Mock, type MockInstance, vi } from 'vitest';
 import type { DshHostLaunch } from '../DshHostProcess';
-import { DshHostSupervisor, type DshPowerMonitor } from '../DshHostSupervisor';
+import {
+  type DshHostModelSource,
+  DshHostSupervisor,
+  type DshPowerMonitor,
+} from '../DshHostSupervisor';
 
 export const FAKE_PID = 424242;
 export const SELF_PID = 1000;
@@ -46,8 +50,15 @@ export class FakeChild extends EventEmitter {
     this.pid = pid;
   }
 
+  /** `ready` as host.ts sends it: the revision of the plan it was configured with. */
   ready(pid: number | undefined = this.pid): void {
-    this.emit('message', { type: 'ready', pid, node: 'v24.0.0' });
+    const revision = this.configures()[0]?.revision;
+    this.emit('message', {
+      type: 'ready',
+      pid,
+      node: 'v24.0.0',
+      ...(revision !== undefined ? { revision, routeDiagnostics: [] } : {}),
+    });
   }
 
   post(message: unknown): void {
@@ -66,11 +77,24 @@ export class FakeChild extends EventEmitter {
     this.emit('close', code, signal);
   }
 
-  /** Messages that are not channel envelopes. */
+  /**
+   * Messages that are not channel envelopes, `configure` aside: every host
+   * gets it first (decision 033), and `configures()` has it.
+   */
   controls(): unknown[] {
     return this.sent.filter(
       (message) =>
-        !(typeof message === 'object' && message !== null && 'ch' in message && 'rpc' in message)
+        !(typeof message === 'object' && message !== null && 'ch' in message && 'rpc' in message) &&
+        (message as { host?: unknown } | null)?.host !== 'configure'
+    );
+  }
+
+  configures(): Array<Record<string, unknown>> {
+    return this.sent.filter(
+      (message): message is Record<string, unknown> =>
+        typeof message === 'object' &&
+        message !== null &&
+        (message as { host?: unknown }).host === 'configure'
     );
   }
 
@@ -109,6 +133,8 @@ export function createFakeHostHarness(
      * passes one (never systemctl here).
      */
     stopOrphanScopes?: (pid: number) => Promise<unknown>;
+    /** Decisions 033, 034; none by default (an empty plan, every key unavailable). */
+    modelSource?: DshHostModelSource;
   } = {}
 ): FakeHostHarness {
   const children: FakeChild[] = [];
@@ -134,6 +160,7 @@ export function createFakeHostHarness(
     selfPid: options.selfPid ?? SELF_PID,
     stopOrphanScopes: options.stopOrphanScopes ?? null,
     idleStopMs: options.idleStopMs ?? 0,
+    ...(options.modelSource ? { modelSource: options.modelSource } : {}),
   });
   return {
     supervisor,

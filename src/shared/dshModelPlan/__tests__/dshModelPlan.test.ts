@@ -328,6 +328,27 @@ describe('MP-07 headers and keys (R4, R5)', () => {
     ]);
   });
 
+  it('sends the app version as X-Pilab-Client on every route, over a provider header of that name (decision 037)', () => {
+    const p = plan(
+      {
+        h: provider('openai-completions', [{ id: 'a' }, { id: 'b', baseUrl: `${GW}/v2` }], {
+          headers: { 'x-pilab-client': 'spoofed', 'X-Literal': 'fixed' },
+        }),
+        bare: provider('anthropic-messages', [{ id: 'c' }]),
+      },
+      { clientVersion: '1.0.3' }
+    );
+    expect(p.routes.h?.headers).toEqual({ 'X-Literal': 'fixed', 'X-Pilab-Client': '1.0.3' });
+    expect(p.routes['h~2']?.headers).toEqual({ 'X-Literal': 'fixed', 'X-Pilab-Client': '1.0.3' });
+    expect(p.routes.bare?.headers).toEqual({ 'X-Pilab-Client': '1.0.3' });
+    // No version, no header: the revision of a plan without it is unchanged.
+    const without = plan({ bare: provider('anthropic-messages', [{ id: 'c' }]) });
+    expect(without.routes.bare?.headers).toBeUndefined();
+    expect(
+      plan({ bare: provider('anthropic-messages', [{ id: 'c' }]) }, { clientVersion: ' ' }).revision
+    ).toBe(without.revision);
+  });
+
   it('derives a stable, env-safe reference name from the provider id alone', () => {
     expect(keyRefFor('claude')).toMatch(/^AICLIENT_KEY_CLAUDE_[0-9A-F]{4}$/);
     expect(keyRefFor('claude')).toBe(keyRefFor('claude'));

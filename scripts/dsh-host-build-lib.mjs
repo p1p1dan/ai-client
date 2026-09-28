@@ -78,15 +78,19 @@ export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
 export const HOST_INPUTS = ['src/dsh-host/host.ts', 'src/dsh-host/lib/'];
 /** npm packages host.js imports at run time, from the artifact's node_modules. */
 export const HOST_EXTERNALS = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-launch-environment'];
-/** npm packages the bridge row may import at run time; everything else must be bundled. */
-export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm'];
+/**
+ * npm packages the bridge row may import at run time; everything else must be
+ * bundled. P1-5a: `installModelSelection` routes each turn (dsh-agent).
+ */
+export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-agent'];
 
 /**
  * The product bundle's own rows, each an esbuild bundle of our TypeScript:
  * the shared host's only bridge (P1-3a, decision 019), the permission gate
- * (P1-6b, decision 042) and the loop guard (P1-8, decisions 065 and 066).
- * `inputs` are the source prefixes a row may take in, `externals` the npm
- * packages it may import at run time.
+ * (P1-6b, decision 042), the loop guard (P1-8, decisions 065 and 066) and the
+ * read-only credentials provider (P1-5b, decision 034). `inputs` are the
+ * source prefixes a row may take in, `externals` the npm packages it may
+ * import at run time.
  */
 export const BRIDGE_ENTRIES = [
   {
@@ -112,6 +116,15 @@ export const BRIDGE_ENTRIES = [
     inputs: ['src/dsh-host/loopGuard/'],
     // isAgentLoopRequest reads a registry private to the host's own dsh-llm.
     externals: ['@deepseek-ai/dsh-llm'],
+  },
+  {
+    entry: 'credentials/plugin.ts',
+    out: 'bundle/lib/credentials.js',
+    row: 'aiclient-credentials',
+    // The repo's one key-shape rule set masks keys in provider failure text.
+    inputs: ['src/dsh-host/credentials/', 'src/agent-host/stderrRedaction.ts'],
+    // Its service class extends the abstract `ctx.credentials` seam.
+    externals: ['@deepseek-ai/dsh-credentials'],
   },
 ];
 

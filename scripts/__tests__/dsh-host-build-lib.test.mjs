@@ -675,8 +675,11 @@ describe('the host bundle (P1-3a)', () => {
     const result = await build(hostBuildOptions(sourceDir, outDir));
     const verdict = checkHostMetafile(result.metafile, repoRoot);
     expect(verdict.failures).toEqual([]);
+    // P1-5: the model plan's overlays and the credential relay (decisions 033, 034).
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
+      'src/dsh-host/lib/credentialRelay.ts',
+      'src/dsh-host/lib/hostModelPlan.ts',
       'src/dsh-host/lib/hostProfile.ts',
     ]);
     expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
@@ -731,6 +734,45 @@ describe('bridge bundles (decision 011)', () => {
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
   };
+  /** Rows that are a Cordis service class (the default export) instead of `apply`. */
+  const SERVICE_ROWS = new Set(['aiclient-credentials']);
+
+  /** Stand-ins for the npm packages the rows leave external. */
+  const EXTERNAL_STUBS = {
+    '@deepseek-ai/dsh-llm':
+      'export function createUserMessage(input) { return { id: "m1", ...input }; }\n' +
+      'export function isAgentLoopRequest() { return false; }\n',
+    '@deepseek-ai/dsh-agent': 'export function installModelSelection() { return () => {}; }\n',
+    '@deepseek-ai/dsh-credentials':
+      'export class CredentialProvider { constructor(ctx) { this.ctx = ctx; } }\n',
+  };
+
+  it('flags a credentials row bundle that takes in more than its sources and the key rules (P1-5b)', () => {
+    const credentials = BRIDGE_ENTRIES.find((item) => item.row === 'aiclient-credentials');
+    const { failures } = checkBridgeMetafile(
+      {
+        inputs: {
+          'src/dsh-host/credentials/plugin.ts': {},
+          'src/agent-host/stderrRedaction.ts': {},
+          'src/shared/types/workerRpc.ts': {},
+        },
+        outputs: {
+          'x.js': {
+            imports: [
+              { path: '@deepseek-ai/dsh-credentials', external: true },
+              { path: '@deepseek-ai/dsh-llm', external: true },
+            ],
+          },
+        },
+      },
+      repoRoot,
+      credentials
+    );
+    expect(failures).toEqual([
+      'bridge bundle took in src/shared/types/workerRpc.ts',
+      'bridge bundle imports @deepseek-ai/dsh-llm at run time',
+    ]);
+  });
 
   it('flags a permission row bundle that imports anything but web-tree-sitter', () => {
     const permissions = BRIDGE_ENTRIES.find((item) => item.row === 'aiclient-permissions');
@@ -790,17 +832,15 @@ describe('bridge bundles (decision 011)', () => {
   for (const item of BRIDGE_ENTRIES) {
     it(`builds ${item.out} that imports with only its npm externals present`, async () => {
       const outDir = path.join(tmp, 'artifact');
-      const stubRoot = path.join(outDir, 'node_modules', '@deepseek-ai', 'dsh-llm');
-      writeJson(path.join(stubRoot, 'package.json'), {
-        name: '@deepseek-ai/dsh-llm',
-        type: 'module',
-        exports: './index.js',
-      });
-      write(
-        path.join(stubRoot, 'index.js'),
-        'export function createUserMessage(input) { return { id: "m1", ...input }; }\n' +
-          'export function isAgentLoopRequest() { return false; }\n'
-      );
+      for (const [name, code] of Object.entries(EXTERNAL_STUBS)) {
+        const stubRoot = path.join(outDir, 'node_modules', ...name.split('/'));
+        writeJson(path.join(stubRoot, 'package.json'), {
+          name,
+          type: 'module',
+          exports: './index.js',
+        });
+        write(path.join(stubRoot, 'index.js'), code);
+      }
       const options = bridgeBuildOptions(sourceDir, outDir, item);
       // The artifact keeps it inside the materialized bundle package.
       options.outfile = path.join(
@@ -817,8 +857,14 @@ describe('bridge bundles (decision 011)', () => {
       expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
       const row = await import(pathToFileURL(options.outfile).href);
       expect(row.name).toBe(item.row);
-      expect(row.inject).toEqual(ROW_INJECT[item.row]);
-      expect(typeof row.apply).toBe('function');
+      if (SERVICE_ROWS.has(item.row)) {
+        // Cordis takes the default export: the service class itself.
+        expect(typeof row.default).toBe('function');
+        expect(typeof row.default.prototype.resolve).toBe('function');
+      } else {
+        expect(row.inject).toEqual(ROW_INJECT[item.row]);
+        expect(typeof row.apply).toBe('function');
+      }
     });
   }
 });

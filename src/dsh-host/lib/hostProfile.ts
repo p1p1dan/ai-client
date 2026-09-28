@@ -33,6 +33,9 @@ export const REQUIRED_DISABLED: readonly string[] = [
   'plugin-package-inventory-deepseek',
   'session-log-deepseek',
   'web-search-deepseek',
+  // P1-5b (decision 034): dsh-credentials-local keeps keys in plain text in
+  // $DSH_HOME/.credentials.yaml; aiclient-credentials pulls them from Main.
+  'credentials',
 ];
 
 export interface SkippedBundle {

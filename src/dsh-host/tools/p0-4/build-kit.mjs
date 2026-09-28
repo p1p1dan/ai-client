@@ -107,13 +107,34 @@ for (const file of [
   'package-lock.json',
   'host.ts',
   'lib/hostProfile.ts',
+  'lib/hostModelPlan.ts',
+  'lib/credentialRelay.ts',
   'tools/p0-4-probe.ts',
   'tools/p0-4-report.ts',
   'tools/lib/kit.ts',
+  'tools/lib/hostClient.ts',
   'tools/lib/probe-hooks.mjs',
   'tools/lib/probe-bundle.ts',
 ]) {
   cpSync(join(hostSrc, file), join(host, file));
+}
+// P1-5: the probe plays Main's model source (tools/lib/hostClient.ts), which
+// builds its plan with the product's own translation. Those modules go where
+// the relative imports look for them: <kit>/shared, beside <kit>/host.
+for (const file of [
+  'dshModelPlan/build.ts',
+  'dshModelPlan/index.ts',
+  'dshModelPlan/menu.ts',
+  'dshModelPlan/route.ts',
+  'dshModelPlan/settings.ts',
+  'dshModelPlan/tables.ts',
+  'dshModelPlan/types.ts',
+  'types/agentHost.ts',
+  'types/promptCacheTtl.ts',
+  'types/providerTimeout.ts',
+]) {
+  mkdirSync(dirname(join(kit, 'shared', file)), { recursive: true });
+  cpSync(join(repoRoot, 'src', 'shared', file), join(kit, 'shared', file));
 }
 for (const dir of ['bundle', 'tools/probe-bundle']) {
   cpSync(join(hostSrc, dir), join(host, dir), {

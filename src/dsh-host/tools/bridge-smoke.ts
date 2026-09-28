@@ -6,8 +6,10 @@
  *   (cd src/dsh-host && ../../out-node-runtime/node tools/bridge-smoke.ts [--keep] [--out file.json]
  *      [--systemd-scope])
  *
- * Every model reply comes from the local fake gateway (plan dsh-p0-2). Hosts,
- * in order — at most two alive at once:
+ * Every model reply comes from the local fake gateway (plan dsh-p0-2). The
+ * smoke plays Main's model source (P1-5, decisions 033 and 034): every host
+ * gets a model plan with one route to the gateway first, and asks for its fake
+ * key per request. Hosts, in order — at most two alive at once:
  *
  *   A  new session S1 on channel 1, bootstrapped before the host reports ready
  *      (the host buffers it). Before any turn: the DSH log and the identity
@@ -64,7 +66,7 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { HostClient, type Message } from './lib/hostClient.ts';
+import { fakeGatewayPlan, HostClient, type Message, type ServedPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -95,6 +97,8 @@ const SESSION = 'bridge-smoke';
 const EMPTY_SESSION = 'bridge-smoke-empty';
 const SIDE_SESSION = 'bridge-smoke-side';
 const CHANNEL_UNKNOWN = 'WORKER_CHANNEL_UNKNOWN';
+/** The fake key Main's stand-in hands every host, per request. */
+const SMOKE_KEY = 'p1-5-smoke-fake-key';
 
 async function startGateway(root: string) {
   const child = spawn(
@@ -163,6 +167,8 @@ interface Host {
   stderr: () => string;
   exited: Promise<{ code: number | null; signal: string | null }>;
   startedAt: number;
+  /** Main's model source, played for this host. */
+  served: ServedPlan;
 }
 
 /**
@@ -225,8 +231,6 @@ async function main() {
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
-    AICLIENT_DSH_GATEWAY_KEY: 'p1-1-fake-key',
     ...(systemdScope
       ? Object.fromEntries(
           ['XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']
@@ -235,6 +239,11 @@ async function main() {
         )
       : {}),
   };
+  // P1-5: the route every host is configured with, and the key it asks for.
+  const plan = fakeGatewayPlan({
+    baseUrl: `http://127.0.0.1:${gateway.port}`,
+    clientVersion: 'bridge-smoke',
+  });
   const report: Record<string, unknown> = { node: nodeBin, scratch: '<scratch>' };
   const turns: Record<string, unknown> = {};
   const hosts: Record<string, Message> = {};
@@ -255,13 +264,15 @@ async function main() {
       env,
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
+    const client = new HostClient(child);
     const host = {
       label,
       child,
-      client: new HostClient(child),
+      client,
       stderr: captureStderr(child),
       exited: exitOf(child),
       startedAt: performance.now(),
+      served: client.configure(plan, SMOKE_KEY),
     };
     live.push(host);
     return host;
@@ -275,7 +286,15 @@ async function main() {
       ...(hosts[host.label] ?? {}),
       pid: host.child.pid,
       readyMs: Math.round(performance.now() - host.startedAt),
-      ready: message ? { type: message.type, pid: message.pid, message: message.message } : null,
+      ready: message
+        ? {
+            type: message.type,
+            pid: message.pid,
+            message: message.message,
+            revision: message.revision,
+            routeDiagnostics: message.routeDiagnostics,
+          }
+        : null,
     };
     if (message?.type !== 'ready')
       throw new Error(`${host.label}: no ready (${JSON.stringify(message)})`);
@@ -496,6 +515,12 @@ async function main() {
       .slice(0, 6);
     await stopHost(a);
     report.graceful = hosts.A.graceful;
+    // P1-5b: what host A asked Main for, values excluded.
+    report.credentials = {
+      requests: a.served.requests.length,
+      outcomes: [...new Set(a.served.requests.map((item) => item.outcome))],
+      refs: [...new Set(a.served.requests.map((item) => item.ref))],
+    };
 
     // ---- B: new session S2, killed before any turn (header-only log, lock held)
     const b = startHost('B');
@@ -686,6 +711,13 @@ async function main() {
     | { mainSessions?: unknown[]; sideSessions?: unknown[] }
     | undefined;
   const dotEnv = experiments.dotEnv as { line?: string } | undefined;
+  const credentials = report.credentials as
+    | { requests: number; outcomes: string[]; refs: string[] }
+    | undefined;
+  type FdsView = { lines: string[]; inherited: boolean; channelVariable: boolean };
+  const ipcHandle = experiments.ipcHandle as
+    | { hostFd3: string | null; sandboxed: FdsView; escalated: FdsView }
+    | undefined;
   /** A reopened session's first page is non-empty and repeats what the session answered before. */
   const samePage = (reopened: unknown, before: unknown) => {
     const page = (reopened as { page?: { messages?: unknown[] } } | undefined)?.page;
@@ -817,6 +849,25 @@ async function main() {
     dotEnvNotRead:
       dotEnv?.line?.includes('hostcwd=unset') === true &&
       dotEnv.line.includes('dshhome=unset') === true,
+    // P1-5a (decision 033): the host runs the plan it was sent, every route taken
+    configuredWithPlan:
+      (hosts.A?.ready as Message | undefined)?.revision === plan.revision &&
+      JSON.stringify((hosts.A?.ready as Message | undefined)?.routeDiagnostics) === '[]',
+    // P1-5b (decision 034): every model request pulled its key from Main, one per request
+    keysPulledPerRequest:
+      credentials !== undefined &&
+      credentials.requests >= 4 &&
+      JSON.stringify(credentials.outcomes) === '["served"]' &&
+      JSON.stringify(credentials.refs) === JSON.stringify(Object.keys(plan.refs)),
+    // Decision 034's precondition (IT-07): no tool inherits the host's IPC channel
+    toolsDoNotInheritIpc:
+      ipcHandle !== undefined &&
+      ipcHandle.hostFd3 !== null &&
+      !ipcHandle.sandboxed.inherited &&
+      !ipcHandle.escalated.inherited &&
+      !ipcHandle.sandboxed.channelVariable &&
+      !ipcHandle.escalated.channelVariable &&
+      ipcHandle.sandboxed.lines.length > 0,
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)

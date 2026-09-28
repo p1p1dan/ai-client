@@ -74,6 +74,7 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -275,8 +276,6 @@ class SharedHost implements RpcTarget {
       DSH_TELEMETRY_DISABLED: '1',
       // The probe bundle's auto-approving row would answer the bridge sessions' approvals.
       AICLIENT_DSH_PROBE_ROW: '0',
-      AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gatewayPort}`,
-      AICLIENT_DSH_GATEWAY_KEY: 'p0-6-fake-key',
       ...hostExtraEnv,
       ...extraEnv,
     };
@@ -286,6 +285,12 @@ class SharedHost implements RpcTarget {
       [nodeBin, '--expose-internals', '--expose-gc', '--import', hooksEntry, hostEntry],
       env,
       hostCwd
+    );
+    // P1-5: Main's model source, played — one route to the gateway, a fake key per request.
+    serveModelPlan(
+      this.child,
+      fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gatewayPort}` }),
+      'p0-6-fake-key'
     );
     this.pid = this.child.pid as number;
     this.stderr = captureStderr(this.child);

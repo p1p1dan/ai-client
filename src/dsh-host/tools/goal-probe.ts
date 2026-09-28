@@ -32,6 +32,7 @@ import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } 
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -162,7 +163,6 @@ async function startHost(
     ...baseEnv(box),
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
-    AICLIENT_DSH_GATEWAY_URL: `http://127.0.0.1:${gateway.port}`,
     AICLIENT_PROBE_EVENT_LOG: eventLog,
     AICLIENT_DSH_PNPM_CLI: pnpmCli,
   };
@@ -174,6 +174,12 @@ async function startHost(
     env,
     hostCwd,
     traceFile
+  );
+  // P1-5: the route now comes with Main's plan and the key per request (P0-2 read .env files).
+  serveModelPlan(
+    child,
+    fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` }),
+    'p0-2-key-from-main'
   );
   const stderr = captureStderr(child);
   const exited = exitOf(child);

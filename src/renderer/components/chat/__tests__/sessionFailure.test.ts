@@ -174,6 +174,7 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'model_missing',
       'dsh_host_crashed',
       'dsh_engine_restarted',
+      'CREDENTIALS_UNAVAILABLE',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });
@@ -195,6 +196,10 @@ describe('canContinueSession — the button only when it can work', () => {
   it('refuses a reason a resend cannot fix, whatever the transcript holds', () => {
     const configure = deriveSessionFailure({ errorCode: 'context_too_large' });
     expect(canContinueSession(configure, true)).toBe(false);
+    // dsh-rebase P1-5b: no key until the user signs in or unlocks the keyring.
+    const keyless = deriveSessionFailure({ errorCode: 'CREDENTIALS_UNAVAILABLE' });
+    expect(keyless.title).toBe('The model service key is not available');
+    expect(canContinueSession(keyless, true)).toBe(false);
     const stopped = deriveSessionFailure({ errorCode: 'aborted' });
     expect(canContinueSession(stopped, true)).toBe(false);
   });
@@ -297,6 +302,7 @@ describe('every failure sentence has a Chinese entry', () => {
       'model_missing',
       'dsh_host_crashed',
       'dsh_engine_restarted',
+      'CREDENTIALS_UNAVAILABLE',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });

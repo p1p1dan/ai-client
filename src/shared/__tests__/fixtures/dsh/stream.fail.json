@@ -58,7 +58,8 @@
     "requestId": "turn-FAIL",
     "type": "session.failed",
     "payload": {
-      "error": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"500 {\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"overloaded_error\\\",\\\"message\\\":\\\"P1-FAIL: the fake upstream failed this request\\\"}}\",\"code\":\"SERVER\"}}"
+      "error": "DSH turn ended: {\"kind\":\"error\",\"error\":{\"message\":\"500 {\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"overloaded_error\\\",\\\"message\\\":\\\"P1-FAIL: the fake upstream failed this request\\\"}}\",\"code\":\"SERVER\"}}",
+      "errorCode": "PROVIDER_ERROR"
     }
   },
   {

@@ -9,7 +9,10 @@
  *                                      virtual slot it belongs to
  *   host control   {host: <kind>, ...} ping / pong, close / closed,
  *                                      gc / gc-result (P1-3d, decision 024),
- *                                      readPage / page (P1-4a, decision 030)
+ *                                      readPage / page (P1-4a, decision 030),
+ *                                      configure (P1-5a, decision 033),
+ *                                      credential / credential-result
+ *                                      (P1-5b, decision 034)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -17,9 +20,13 @@
  * host; any other request addressed to an unknown channel is answered with a
  * worker RPC error `WORKER_CHANNEL_UNKNOWN`.
  *
+ * `configure` is the first message Main sends a host it spawned: the model
+ * plan (routes without keys, the default model, the index and the key
+ * reference names) and the nonce every `credential` request of that host
+ * must carry. The host composes nothing, and serves no session, before it.
+ *
  * Reserved control kinds, added by the tasks that need them and dropped with a
  * diagnostic by whichever side does not know them yet:
- *   configure / credential / credential-result   P1-5 (decisions 033, 034)
  *   seedSession                                  P1-9
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
@@ -27,6 +34,7 @@
  * host gets bundled in: erasable syntax only, and no value imports.
  */
 
+import type { DshModelPlan } from '../dshModelPlan/types';
 import type { SessionHistoryPage } from './sessionHistory';
 import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
 
@@ -110,13 +118,40 @@ export interface DshHostReadPageRequest {
   limit?: number;
 }
 
+/**
+ * Decision 033: the model plan, Main's first message to a host it spawned.
+ * The host waits for it before composing its profile (`DSH_CONFIGURE_TIMEOUT_MS`,
+ * then `fatal`), injects `routes` and `defaultModel` as in-memory overlays and
+ * answers `ready` with the `revision` it runs. No key is in it: a route names
+ * its key by reference (`apiKeyEnv`), resolved per request through `credential`.
+ */
+export type DshHostConfigure = {
+  host: 'configure';
+  /** Fresh per spawn; every `credential` request of this host must echo it (decision 034). */
+  nonce: string;
+} & Pick<DshModelPlan, 'revision' | 'routes' | 'defaultModel' | 'index' | 'refs'>;
+
+/** Why Main answered a `credential` request without a key. */
+export type DshCredentialFailure =
+  /** Signed out, the keyring locked or unreadable, or no key for that provider. */
+  | 'unavailable'
+  /** Not the current host, a wrong nonce, or a reference outside the host's plan. */
+  | 'refused';
+
+/** Decision 034: the answer to one `credential` request, echoing its id. Never logged. */
+export type DshHostCredentialResult =
+  | { host: 'credential-result'; id: number; ok: true; value: string }
+  | { host: 'credential-result'; id: number; ok: false; error: DshCredentialFailure };
+
 export type DshMainToHostMessage =
   | DshChannelEnvelope<WorkerRpcRequest>
   | DshHostPing
   | DshHostCloseChannel
   | DshHostShutdown
   | DshHostGcRequest
-  | DshHostReadPageRequest;
+  | DshHostReadPageRequest
+  | DshHostConfigure
+  | DshHostCredentialResult;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -129,8 +164,21 @@ export interface DshHostReady {
    * warned (decision 025 rule 5). A product bundle that fails refuses the boot.
    */
   skippedPlugins?: Array<{ packageName: string; reason: string }>;
-  /** Boot diagnostics (versions, composition, marks, later plan revision). */
+  /** Decision 033: the revision of the plan `configure` gave this host. */
+  revision?: string;
+  /**
+   * The plan's routes DSH could not serve, with DSH's own reason. Empty when
+   * the plan's translation rules and the installed DSH agree (the drift gate).
+   */
+  routeDiagnostics?: DshRouteDiagnostic[];
+  /** Boot diagnostics (versions, composition, marks). */
   [detail: string]: unknown;
+}
+
+/** One route of the plan DSH did not register, or registered with an error. */
+export interface DshRouteDiagnostic {
+  provider: string;
+  error: string;
 }
 
 /** Boot refused; the host exits right after sending it. */
@@ -231,6 +279,21 @@ export interface DshHostPage {
   ms: number;
 }
 
+/**
+ * Decision 034: the host's credential provider asks for the key behind one
+ * reference of its plan, once per model request; the host keeps no copy. Main
+ * answers `credential-result` with the same id, within
+ * `DSH_CREDENTIAL_TIMEOUT_MS` or the request resolves to no key.
+ */
+export interface DshHostCredentialRequest {
+  host: 'credential';
+  id: number;
+  /** An `apiKeyEnv` reference name of the plan (`AICLIENT_KEY_…`). */
+  ref: string;
+  /** The nonce of the `configure` this host received. */
+  nonce: string;
+}
+
 export type DshHostToMainMessage =
   | DshHostReady
   | DshHostFatal
@@ -239,7 +302,14 @@ export type DshHostToMainMessage =
   | DshHostPong
   | DshHostChannelClosed
   | DshHostGcResult
-  | DshHostPage;
+  | DshHostPage
+  | DshHostCredentialRequest;
+
+/** How long a host waits for `configure` before it refuses to boot. */
+export const DSH_CONFIGURE_TIMEOUT_MS = 10_000;
+
+/** How long the host's credential provider waits for `credential-result`. */
+export const DSH_CREDENTIAL_TIMEOUT_MS = 5_000;
 
 // ---- guards -------------------------------------------------------------------
 
@@ -433,4 +503,55 @@ export function isDshHostPage(value: unknown): value is DshHostPage {
     error.code.length > 0 &&
     typeof error.message === 'string'
   );
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    isRecord(value) &&
+    !Array.isArray(value) &&
+    Object.values(value).every((item) => typeof item === 'string')
+  );
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return isRecord(value) && !Array.isArray(value);
+}
+
+/** Shape only: the plan's own translation rules made it, and the host re-checks what it uses. */
+export function isDshHostConfigure(value: unknown): value is DshHostConfigure {
+  if (!isRecord(value) || value.host !== 'configure') return false;
+  const defaultModel = value.defaultModel;
+  return (
+    typeof value.nonce === 'string' &&
+    value.nonce.length > 0 &&
+    typeof value.revision === 'string' &&
+    value.revision.length > 0 &&
+    isPlainRecord(value.routes) &&
+    isPlainRecord(value.index) &&
+    isStringRecord(value.refs) &&
+    isRecord(defaultModel) &&
+    typeof defaultModel.provider === 'string' &&
+    defaultModel.provider.length > 0 &&
+    typeof defaultModel.model === 'string' &&
+    defaultModel.model.length > 0
+  );
+}
+
+export function isDshHostCredentialRequest(value: unknown): value is DshHostCredentialRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'credential' &&
+    isPositiveSafeInteger(value.id) &&
+    typeof value.ref === 'string' &&
+    value.ref.length > 0 &&
+    typeof value.nonce === 'string'
+  );
+}
+
+export function isDshHostCredentialResult(value: unknown): value is DshHostCredentialResult {
+  if (!isRecord(value) || value.host !== 'credential-result' || !isPositiveSafeInteger(value.id)) {
+    return false;
+  }
+  if (value.ok === true) return typeof value.value === 'string' && value.value.length > 0;
+  return value.ok === false && (value.error === 'unavailable' || value.error === 'refused');
 }

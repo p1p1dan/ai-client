@@ -1,3 +1,4 @@
+import { buildDshModelPlan } from '@shared/dshModelPlan';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 import { DSH_HOST_RESTART_BUDGET, DSH_HOST_TIMINGS } from '../DshHostSupervisor';
 import {
@@ -1184,5 +1185,137 @@ describe('DshHostSupervisor readPage (P1-4a, decision 030)', () => {
     expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
     await advance(T.heartbeatIntervalMs);
     expect(child.controls()).toContainEqual({ type: 'shutdown' });
+  });
+});
+
+describe('DshHostSupervisor model plan and keys (P1-5, decisions 033 and 034)', () => {
+  const plan = buildDshModelPlan({
+    models: {
+      providers: {
+        gw: { baseUrl: 'http://127.0.0.1:9', api: 'anthropic-messages', models: [{ id: 'm1' }] },
+      },
+    },
+    keyed: { gw: true },
+  });
+  const ref = Object.keys(plan.refs)[0] as string;
+  const request = (child: FakeChild, extra: Record<string, unknown> = {}) => {
+    const nonce = child.configures()[0]?.nonce;
+    child.post({ host: 'credential', id: 7, ref, nonce, ...extra });
+  };
+  const answers = (child: FakeChild) =>
+    child.sent.filter(
+      (message) => (message as { host?: unknown } | null)?.host === 'credential-result'
+    );
+
+  it('[SH-P1] sends the plan first, with a nonce of its own per spawn, and reports its revision', async () => {
+    const h = createFakeHostHarness({ modelSource: { plan: () => plan } });
+    const child = await startReadyHost(h);
+    const [configure] = child.configures();
+    expect(child.sent[0]).toBe(configure);
+    expect(configure).toMatchObject({
+      host: 'configure',
+      revision: plan.revision,
+      routes: plan.routes,
+      defaultModel: plan.defaultModel,
+      index: plan.index,
+      refs: plan.refs,
+    });
+    expect(String(configure?.nonce).length).toBeGreaterThanOrEqual(24);
+    expect(JSON.stringify(configure)).not.toMatch(/sk-/);
+    expect(h.supervisor.status().planRevision).toBe(plan.revision);
+    // The next host is the one after this one exits; it gets a nonce of its own.
+    child.die(0);
+    await flushMicrotasks();
+    expect(h.supervisor.status().planRevision).toBeUndefined();
+    const next = await startReadyHost(h);
+    expect(h.children).toHaveLength(2);
+    expect(next.configures()[0]?.nonce).not.toBe(configure?.nonce);
+  });
+
+  it('[SH-P1] a supervisor without a model source configures an empty plan', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    expect(child.configures()[0]).toMatchObject({
+      routes: {},
+      index: {},
+      refs: {},
+      defaultModel: { provider: 'aiclient-none', model: 'none' },
+    });
+  });
+
+  it('[SH-P2] a plan that cannot be built spawns nothing', async () => {
+    const h = createFakeHostHarness({
+      modelSource: {
+        plan: () => {
+          throw new Error('catalog unreadable');
+        },
+      },
+    });
+    await expect(h.supervisor.ensureHost()).rejects.toThrow('catalog unreadable');
+    expect(h.spawn).not.toHaveBeenCalled();
+    expect(h.supervisor.status().state).toBe('idle');
+  });
+
+  it('[SH-P3] answers a credential request through the broker, with what it knows of the host', async () => {
+    const answer = vi.fn(() => ({
+      host: 'credential-result' as const,
+      id: 7,
+      ok: true as const,
+      value: 'sk-canary-supervisor',
+    }));
+    const h = createFakeHostHarness({ modelSource: { plan: () => plan, credentials: { answer } } });
+    const child = await startReadyHost(h);
+    request(child);
+    expect(answer).toHaveBeenCalledWith(
+      { host: 'credential', id: 7, ref, nonce: child.configures()[0]?.nonce },
+      { current: true, nonce: child.configures()[0]?.nonce, refs: plan.refs }
+    );
+    expect(answers(child)).toEqual([
+      { host: 'credential-result', id: 7, ok: true, value: 'sk-canary-supervisor' },
+    ]);
+    // The key crosses IPC and nothing else: no log line holds it.
+    const logged = [...consoleWarn.mock.calls, ...consoleError.mock.calls].flat().join(' ');
+    expect(logged).not.toContain('sk-canary-supervisor');
+  });
+
+  it('[SH-P3] answers unavailable without a broker, or when the broker throws', async () => {
+    const bare = createFakeHostHarness({ modelSource: { plan: () => plan } });
+    const child = await startReadyHost(bare);
+    request(child);
+    expect(answers(child)).toEqual([
+      { host: 'credential-result', id: 7, ok: false, error: 'unavailable' },
+    ]);
+    const throwing = createFakeHostHarness({
+      modelSource: {
+        plan: () => plan,
+        credentials: {
+          answer: () => {
+            throw new Error('vault gone');
+          },
+        },
+      },
+    });
+    const other = await startReadyHost(throwing);
+    request(other);
+    expect(answers(other)).toEqual([
+      { host: 'credential-result', id: 7, ok: false, error: 'unavailable' },
+    ]);
+  });
+
+  it('[SH-P4] logs routes the host did not take, and a revision it does not run', async () => {
+    const h = createFakeHostHarness({ modelSource: { plan: () => plan } });
+    const pending = h.supervisor.ensureHost();
+    const child = h.child();
+    child.post({
+      type: 'ready',
+      pid: child.pid,
+      revision: 'something-else',
+      routeDiagnostics: [{ provider: 'gw', error: 'compat key not offered' }],
+    });
+    await pending;
+    const warned = consoleWarn.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(warned).toContain('runs plan something-el');
+    expect(warned).toContain('1 route(s) of the model plan not served as planned');
+    expect(warned).toContain('compat key not offered');
   });
 });
