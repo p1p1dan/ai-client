@@ -131,7 +131,7 @@ for (const dir of ['bundle', 'tools/probe-bundle']) {
   const esbuild = await import('esbuild');
   for (const item of buildLib.BRIDGE_ENTRIES) {
     const result = await esbuild.build(buildLib.bridgeBuildOptions(hostSrc, host, item));
-    const verdict = buildLib.checkBridgeMetafile(result.metafile, repoRoot);
+    const verdict = buildLib.checkBridgeMetafile(result.metafile, repoRoot, item);
     if (verdict.failures.length > 0) throw new Error(verdict.failures.join('; '));
     log(`bundled ${item.out} (${verdict.inputs.length} inputs)`);
   }
@@ -187,7 +187,13 @@ for (const entry of readdirSync(modules)) {
 
 // ---- prune -----------------------------------------------------------------
 const target = platform === 'win32' ? 'win32-x64' : 'linux-x64';
-const prune = [join(modules, '.bin')];
+// tree-sitter-bash ships every platform's native prebuilds and C sources; the
+// permission row only loads its wasm (P1-6b), as the product build prunes too.
+const prune = [
+  join(modules, '.bin'),
+  join(modules, 'tree-sitter-bash', 'prebuilds'),
+  join(modules, 'tree-sitter-bash', 'src'),
+];
 for (const dir of readdirSync(join(modules, 'node-pty', 'prebuilds'))) {
   if (dir !== target) prune.push(join(modules, 'node-pty', 'prebuilds', dir));
 }
