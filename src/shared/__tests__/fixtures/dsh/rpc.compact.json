@@ -13,7 +13,9 @@
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
-      "capabilities": {}
+      "capabilities": {
+        "skills": 0
+      }
     }
   ],
   "history": {
@@ -134,7 +136,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-15",
-        "fileTailEntryId": "aiclient-rec-compact#31"
+        "fileTailEntryId": "aiclient-rec-compact#33"
       },
       "nodes": [
         {
@@ -220,9 +222,28 @@
       "truncated": false
     }
   },
+  "commands": {
+    "commands": [
+      {
+        "name": "goal",
+        "description": "Set or view the goal for a long-running task",
+        "source": "command"
+      }
+    ],
+    "truncated": false
+  },
   "compact": {
-    "kind": "success",
-    "text": "Compacted 6 history items (~334 tokens).",
-    "sourceEventSeq": 28
+    "refused": {
+      "ok": false,
+      "code": "WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED",
+      "retryable": false
+    },
+    "compacted": {
+      "ok": true,
+      "result": {
+        "compacted": true
+      }
+    },
+    "eventsAfter": 0
   }
 }

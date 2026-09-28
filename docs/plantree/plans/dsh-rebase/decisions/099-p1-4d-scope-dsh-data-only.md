@@ -6,6 +6,8 @@
 - [P1-4 方案 §4.4～4.7](../topics/p1-4-bridge-parity.md) 与[分片 04 §4、§5](../topics/p1-4-bridge-parity/04-turn-semantics.md)；
 - 决策 [031](031-session-projection-event.md)、[047](047-tool-classification-and-plan-mode.md)、[072](072-renderer-data-channels.md)、[081](081-loop-guard-implementation-choices.md)、[085](085-model-plan-wiring-implementation-choices.md)、[088](088-permission-gate-wiring-choices.md)「留给后续」。
 
+修订注记（2026-09-28，P1-4d2）：第 9～12 条的实现取舍见[决策 113](113-p1-4d2-commands-and-projection-choices.md)（待审批）。其中补充：隐藏的三条命令输入后也不执行，照常作为提示词发出；带附件的命令行当提示词；`/compact` 由窗口的内置行提供，菜单里不再重复列；`session.projection` 的首次快照推迟到 bootstrap 之后的第一个事件之前发。
+
 ## 规则
 
 P1-4d 的每一项都按同一个口径定：渲染层没有别的数据源、要显示 DSH 自己的状态的，保留，只做映射；只为与 1.0.x 一致的，删除、简化或移走。提问工具另见[决策 098](098-ask-user-via-official-tool.md)。

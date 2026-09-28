@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-tool",
     "requestId": "turn-TOOL",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-tool",
+    "requestId": "turn-TOOL",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-tool",
+    "requestId": "turn-TOOL",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-tool",
+    "requestId": "turn-TOOL",
     "type": "session.status",
     "payload": {
       "status": "running"

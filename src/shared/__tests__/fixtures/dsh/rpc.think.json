@@ -13,7 +13,9 @@
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
-      "capabilities": {}
+      "capabilities": {
+        "skills": 0
+      }
     }
   ],
   "history": {

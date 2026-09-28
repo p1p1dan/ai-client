@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-image",
     "requestId": "turn-IMAGE",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
     "type": "session.status",
     "payload": {
       "status": "running"

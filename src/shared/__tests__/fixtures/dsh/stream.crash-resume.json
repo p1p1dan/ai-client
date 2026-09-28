@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-crash-resume",
     "requestId": "turn-CRASH",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
     "type": "session.status",
     "payload": {
       "status": "running"

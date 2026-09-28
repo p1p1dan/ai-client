@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-job-notice",
     "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
     "type": "session.status",
     "payload": {
       "status": "running"

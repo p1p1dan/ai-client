@@ -22,9 +22,6 @@
  *                               history cache reads it (`sessionQuery.
  *                               observeSession`: live snapshot or cold read,
  *                               never a lock or a write)
- *   compact { sessionId }       P1-4e: `/compact` on a live agent, as DSH's
- *                               command adapter runs it (the bridge does not
- *                               bridge compaction yet)
  *   seed { sessionId, cwd, events }
  *                               P1-4a: a new session admitted with `events` as
  *                               its seed (`agents.create`, the path P1-9's
@@ -330,14 +327,6 @@ export function apply(ctx) {
       } finally {
         observation[Symbol.dispose]?.();
       }
-    },
-    async compact(message) {
-      const commands = ctx.get('commands');
-      if (commands === undefined) throw new Error('no commands service');
-      const agent = ctx.agents.list().find((item) => item.id === message.sessionId);
-      if (agent === undefined) throw new Error(`no live agent ${message.sessionId}`);
-      const execution = await commands.execute(agent, '/compact', [], new AbortController().signal);
-      return { result: JSON.parse(JSON.stringify(execution?.result ?? null)) };
     },
   };
 

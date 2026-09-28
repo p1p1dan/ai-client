@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-fail",
     "requestId": "turn-FAIL",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-fail",
+    "requestId": "turn-FAIL",
     "type": "session.status",
     "payload": {
       "status": "running"

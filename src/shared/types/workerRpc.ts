@@ -280,6 +280,11 @@ export interface WorkerMcpServerInfo {
  * reported", the second as "none configured"; collapsing them is how a panel
  * tells someone their working setup is empty. Consumers get that distinction
  * from `undefined` vs `[]` / `0`.
+ *
+ * The DSH engine reports `skills` alone (dsh-rebase decisions 099 rule 12 and
+ * 113): it has no MCP bridge yet (decision 090), no prompt templates (decision
+ * 103) and loads no custom sub-agent definitions (decisions 062 / 070), so the
+ * other three have no producer and stay absent.
  */
 export interface WorkerCapabilityInventory {
   /** Absent when this graph has no MCP bridge; `[]` when it found no servers. */
@@ -305,16 +310,22 @@ export interface WorkerCapabilityInventory {
  * carry pi's `skill:` prefix in the name itself — that prefix is what
  * `_expandSkillCommand` matches on, so stripping it here would produce a
  * command the runtime does not recognise.
+ *
+ * The DSH engine (dsh-rebase P1-4d2, decisions 099 rule 9 and 101) lists its
+ * own commands (`command`) and the user-invocable skills by their bare name
+ * (`skill`): DSH runs a skill for `/<name>` anywhere in a message, and has no
+ * `skill:` spelling and no prompt templates (decision 103).
  */
 export interface WorkerSlashCommandInfo {
-  /** Invocation name without the leading slash; skills read `skill:<name>`. */
+  /** Invocation name without the leading slash; pi's skills read `skill:<name>`, DSH's `<name>`. */
   name: string;
   description?: string;
   /**
    * Deliberately `string` and not a union: this crosses a version boundary (an
    * older build must survive a value a newer runtime introduces), and a second
    * copy of the runtime's vocabulary here is how a layer starts rejecting words
-   * the runtime accepts. Known values: `extension`, `prompt`, `skill`.
+   * the runtime accepts. Known values: `command` (DSH), `skill`, and 1.0.x's
+   * `extension`, `prompt`.
    */
   source: string;
   /** Absolute path pi resolved it from, when it reported one. */
@@ -344,8 +355,17 @@ export interface WorkerCommandsPayload {
  */
 export interface WorkerCompactPayload {
   logicalSessionId: string;
+  /** The DSH engine takes none: see {@link WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED}. */
   instructions?: string;
 }
+
+/**
+ * dsh-rebase decisions 099 rule 10 and 113: DSH's `/compact` takes no
+ * arguments, so a `worker.compact` carrying non-empty `instructions` is
+ * refused before anything runs. Nothing was compacted; the same request is
+ * refused the same way every time.
+ */
+export const WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED = 'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED';
 
 /**
  * The two halves of `/compact`'s clock, kept together so they cannot drift.

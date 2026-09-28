@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-steer",
     "requestId": "turn-STEER",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
     "type": "session.status",
     "payload": {
       "status": "running"

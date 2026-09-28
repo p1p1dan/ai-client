@@ -41,6 +41,7 @@ export type RuntimeEventType =
   | 'usage.updated'
   | 'permission.activity'
   | 'subagent.activity'
+  | 'session.projection'
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped';
@@ -1186,6 +1187,65 @@ export interface SubagentActivityEvent extends RuntimeEventBase {
 }
 
 /**
+ * dsh-rebase decisions 031 and 099 rule 11 (P1-4d2): the DSH session
+ * projections the renderer draws, forwarded as DSH computes them
+ * (`ctx.sessionProjections`). Only these three keys cross the bridge;
+ * `permissions`, `sandboxMode` and `plan` are constant or off in our
+ * composition, and the bridge-made `goalActivation` / `jobs` belong to P1-7b.
+ */
+export const SESSION_PROJECTION_KEYS = ['todos', 'goal', 'subagentCatalog'] as const;
+
+export type SessionProjectionKey = (typeof SESSION_PROJECTION_KEYS)[number];
+
+/** One entry of `todos` (dsh-tool-todo's `TodoItem`): the list is replaced whole on every write. */
+export interface DshTodoItem {
+  content: string;
+  status: 'pending' | 'in_progress' | 'completed';
+}
+
+/** `goal` (dsh-goal's `GoalProjection`): the current durable goal and its admitted rounds. */
+export interface DshGoalProjection {
+  goal: {
+    id: string;
+    revision: number;
+    objective: string;
+    phase: 'active' | 'paused' | 'blocked' | 'complete';
+    /** Present exactly while `phase` is `blocked`. */
+    blockedReason?: { code: string; message: string };
+    maxGoalRounds: number;
+  };
+  roundsStarted: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** One row of `subagentCatalog` (dsh-subagent's `SubagentCatalogEntry`): a direct child session. */
+export interface DshSubagentCatalogEntry {
+  id: string;
+  createdAt: number;
+  mode: 'one-shot' | 'continuable' | 'unknown';
+  label?: string;
+}
+
+/** The whole current value of one key; `null` before the first write (todos) or with no goal. */
+export type SessionProjectionPayload =
+  | { key: 'todos'; view: DshTodoItem[] | null }
+  | { key: 'goal'; view: DshGoalProjection | null }
+  | { key: 'subagentCatalog'; view: DshSubagentCatalogEntry[] };
+
+/**
+ * A DSH session projection's current value. A later event of the same key
+ * replaces the earlier one. The bridge sends the three keys once ahead of the
+ * first event after a bootstrap (or right after a rewind), then each change.
+ * Consumed by P1-7; until then every reducer ignores it.
+ */
+export interface SessionProjectionEvent extends RuntimeEventBase {
+  type: 'session.projection';
+  sessionId: string;
+  payload: SessionProjectionPayload;
+}
+
+/**
  * T08-b — what the permission plugin BROADCAST, as opposed to what it asked.
  *
  * ## Why this is not `permission.requested`
@@ -1296,6 +1356,7 @@ export type RuntimeEvent =
   | UsageUpdatedEvent
   | PermissionActivityEvent
   | SubagentActivityEvent
+  | SessionProjectionEvent
   | SessionTerminalEvent;
 
 /**

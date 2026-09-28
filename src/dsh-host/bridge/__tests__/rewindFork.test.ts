@@ -374,6 +374,63 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     expect(dsh.calls.at(-1)).toBe(`followup ${child}`);
   });
 
+  it("[rewind-projections] sends the child's projections at once, and none of the retired session's (P1-4d2)", async () => {
+    const stubFile = writeRootStub();
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
+    const child = `${ROOT}.r2`;
+    const todosOf: Record<string, unknown> = {
+      [ROOT]: [{ content: 'root plan', status: 'pending' }],
+      [child]: null,
+    };
+    let listener: ((session: { id: string }, key: string, value: unknown) => void) | undefined;
+    const jobs = dsh.ctx.get;
+    (dsh.ctx as { get?: unknown }).get = (name: string) =>
+      name === 'sessionProjections'
+        ? {
+            snapshot: (session: { id: string }) => ({ values: { todos: todosOf[session.id] } }),
+            onChanged: (next: typeof listener) => {
+              listener = next;
+              return () => undefined;
+            },
+          }
+        : jobs?.(name as 'jobs');
+    const emitted: Array<{ type: string; payload?: unknown }> = [];
+    const runtime = new DshSessionRuntime(
+      dsh.ctx,
+      {
+        logicalSessionId: LOGICAL,
+        cwd: CWD,
+        projectTrusted: true,
+        sessionFile: stubFile,
+        emit: (event) => emitted.push(event),
+      },
+      {
+        createUserMessage: () => ({ id: 'user-message-1' }),
+        now: () => T + 1_000,
+        home,
+        writeStub: dsh.writeStub,
+        disposeTimeoutMs: 50,
+        modelPlan: () => TEST_PLAN,
+      }
+    );
+    await runtime.bootstrap();
+    // The bootstrap's baseline waits for the slot's first event.
+    expect(emitted).toEqual([]);
+
+    await rewind(runtime, 'u2');
+
+    // The child's values went out during the rewind; the root's never did.
+    expect(emitted.map((event) => [event.type, event.payload])).toEqual([
+      ['session.projection', { key: 'todos', view: null }],
+    ]);
+    listener?.({ id: ROOT }, 'todos', []);
+    listener?.({ id: child }, 'todos', [{ content: 'child plan', status: 'pending' }]);
+    expect(emitted.map((event) => event.payload)).toEqual([
+      { key: 'todos', view: null },
+      { key: 'todos', view: [{ content: 'child plan', status: 'pending' }] },
+    ]);
+  });
+
   it('[rewind-step] keeps a model step and returns no prompt', async () => {
     const stubFile = writeRootStub();
     const dsh = fakeDsh({ [ROOT]: TWO_TURNS });

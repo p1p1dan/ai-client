@@ -41,6 +41,21 @@ describe('deriveSessionCapabilities', () => {
     expect(emptyBridge.mcp).toBeNull();
   });
 
+  it('reads the DSH engine’s inventory: the skill count, everything else "not reported"', () => {
+    // dsh-rebase decisions 099 rule 12 and 113: the bridge reports `skills`
+    // alone — no MCP bridge, no templates, no custom sub-agent definitions on
+    // that engine — and those absent members must not read as zeros.
+    const view = deriveSessionCapabilities({ skills: 2 });
+    expect(view).toEqual({
+      reported: true,
+      mcpServers: null,
+      mcp: null,
+      skills: 2,
+      promptTemplates: null,
+      subagents: null,
+    });
+  });
+
   it('keeps a reported zero apart from an absent count', () => {
     const view = deriveSessionCapabilities({ skills: 0, subagents: 0 });
     expect(view.skills).toBe(0);

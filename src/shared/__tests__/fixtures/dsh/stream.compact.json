@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-compact",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -334,6 +361,66 @@
   {
     "sessionId": "rec-compact",
     "requestId": "turn-TOOL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-command-32",
+      "role": "user",
+      "attemptId": "attempt-COMMAND"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-command-32",
+      "blockId": "dsh-command-32-text",
+      "text": "/goal"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-command-32"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "custom.message",
+    "payload": {
+      "messageId": "dsh-command-33",
+      "customType": "dsh:command",
+      "content": "No goal is currently set.\nUsage: /goal [<objective>|clear|edit <objective>|pause|resume]"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-COMMAND",
     "type": "session.status",
     "payload": {
       "status": "idle"

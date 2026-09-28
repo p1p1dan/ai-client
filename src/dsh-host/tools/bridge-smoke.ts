@@ -64,6 +64,9 @@
  *      next turn's P0-RECALL confirms the agent-instructions baseline
  *      (<agentDir>/AGENTS.md, the project CLAUDE.md) and the skill's injected
  *      body all reached the model by the first request (INS-1, SKL-1).
+ *      P1-4d2 (decision 113) reads its menu (DSH's commands, the skill by its
+ *      bare name), its bootstrap's skill count, `worker.compact`'s refusal of
+ *      instructions, and a `/goal` send that runs with no model turn.
  *
  * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
  * and a verdict. Signals only ever go to a ChildProcess this script spawned.
@@ -778,6 +781,19 @@ async function main() {
       cwd: insSklWorkspace,
     });
     if (!bootH.ok) throw new Error(`H bootstrap: ${JSON.stringify(bootH.error)}`);
+    // P1-4d2 (decisions 099 rules 9-12, 113): the menu is DSH's commands and
+    // the fixture skill by its bare name; `worker.compact` refuses instructions.
+    report.menu = await h.client.request(chH, 'worker.commands', {
+      logicalSessionId: INS_SKL_SESSION,
+    });
+    const compactWithInstructions = await h.client.call(chH, 'worker.compact', {
+      logicalSessionId: INS_SKL_SESSION,
+      instructions: 'keep it short',
+    });
+    report.compactInstructions = {
+      ok: compactWithInstructions.ok,
+      code: (compactWithInstructions.error as Message | undefined)?.code,
+    };
     // Turn 1 carries no P0/P1 marker: it only has to be the session's first
     // step (agent-instructions' baseline is folded in then, right after this
     // claimed message) and name the skill by DSH's own `/name` gesture
@@ -799,6 +815,8 @@ async function main() {
       'INS-SKL-RECALL',
       `P0-RECALL {"markers":["${AGENTS_DIR_MARKER}","${PROJECT_MARKER}","${SKILL_BODY_MARKER}"]}`
     );
+    // P1-4d2: a known command line runs as DSH's command, with no model turn.
+    await runTurn(h, chH, INS_SKL_SESSION, 'COMMAND-GOAL', '/goal');
     await closeSession(h, chH);
     await stopHost(h);
   } catch (error) {
@@ -868,6 +886,16 @@ async function main() {
   type FdsView = { lines: string[]; inherited: boolean; channelVariable: boolean };
   const ipcHandle = experiments.ipcHandle as
     | { hostFd3: string | null; sandboxed: FdsView; escalated: FdsView }
+    | undefined;
+  // P1-4d2: host H's menu as `<source>:<name>`, its bootstrap's inventory and its command send.
+  const menuNames = (((report.menu as Message | undefined)?.commands as Message[]) ?? []).map(
+    (row) => `${String(row.source)}:${String(row.name)}`
+  );
+  const bootHCapabilities = (hosts.INS_SKL?.bootstrap as Message | undefined)?.capabilities as
+    | Message
+    | undefined;
+  const commandGoal = turns['COMMAND-GOAL'] as
+    | { idle?: boolean; completed?: boolean; sequence?: string[] }
     | undefined;
   /** A reopened session's first page is non-empty and repeats what the session answered before. */
   const samePage = (reopened: unknown, before: unknown) => {
@@ -1060,6 +1088,28 @@ async function main() {
       (turns['INS-SKL-RECALL'] as { reply?: string } | undefined)?.reply?.includes(
         `present=${AGENTS_DIR_MARKER},${PROJECT_MARKER},${SKILL_BODY_MARKER} missing=-`
       ) === true,
+    // P1-4d2 (decisions 099 rules 9-12, 113): DSH's commands minus the hidden
+    // and window-owned ones, the skill by its bare name; the inventory counts
+    // skills alone; `/compact` takes no instructions; a command send opens no
+    // model turn and answers with a notice.
+    menuListsDshCommandsAndSkills:
+      menuNames.includes('command:goal') &&
+      menuNames.includes('skill:ins-skl-smoke') &&
+      !menuNames.some((name) => /:(plan|permission|feedback|compact)$/.test(name)) &&
+      !menuNames.some((name) => name.includes('skill:skill:')),
+    capabilitiesReportSkillsOnly:
+      JSON.stringify(Object.keys(bootHCapabilities ?? {})) === '["skills"]' &&
+      Number(bootHCapabilities?.skills) >= 1,
+    compactRefusesInstructions:
+      (report.compactInstructions as Message | undefined)?.ok === false &&
+      (report.compactInstructions as Message | undefined)?.code ===
+        'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED',
+    commandSendOpensNoModelTurn:
+      commandGoal?.idle === true &&
+      commandGoal.completed === true &&
+      commandGoal.sequence?.includes('message.started user') === true &&
+      commandGoal.sequence.includes('custom.message') &&
+      !commandGoal.sequence.includes('message.started assistant'),
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)

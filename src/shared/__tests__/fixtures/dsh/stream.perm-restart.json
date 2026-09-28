@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-GRANT",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -356,6 +383,33 @@
     "type": "session.status",
     "payload": {
       "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
     }
   },
   {

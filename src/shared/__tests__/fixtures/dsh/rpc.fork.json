@@ -152,7 +152,9 @@
     },
     "projectTrusted": true,
     "permissionGate": "bundled",
-    "capabilities": {}
+    "capabilities": {
+      "skills": 0
+    }
   },
   "childBootstrap": {
     "bootstrapped": true,
@@ -209,7 +211,9 @@
     },
     "projectTrusted": true,
     "permissionGate": "bundled",
-    "capabilities": {}
+    "capabilities": {
+      "skills": 0
+    }
   },
   "fork": {
     "logicalSessionId": "rec-fork",

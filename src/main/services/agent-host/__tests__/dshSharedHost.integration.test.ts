@@ -524,6 +524,17 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       );
       for (const result of results)
         expect(result).toMatchObject({ settled: true, completed: true });
+      // P1-4d2 (decision 113): Main drops what a slot sends before it is ready,
+      // so the bridge holds each session's projection baseline until its first
+      // event; here it reaches the renderer's side, ahead of the turn's echo.
+      for (const id of ['s1', 's2', 's3']) {
+        const seen = forSession(id);
+        const projected = seen.filter((e) => e.type === 'session.projection');
+        expect(projected.map((e) => e.payload?.key)).toEqual(['todos', 'goal', 'subagentCatalog']);
+        expect(seen.indexOf(projected[0] as Event)).toBeLessThan(
+          seen.findIndex((e) => e.type === 'message.started')
+        );
+      }
       expect(hostChildren()).toHaveLength(1);
       expect(dshHostSupervisor.status()).toMatchObject({
         state: 'ready',

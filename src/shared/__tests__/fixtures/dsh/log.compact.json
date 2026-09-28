@@ -7,7 +7,7 @@
     "isSeeded": false
   },
   "inheritedEventCount": 0,
-  "cursor": 31,
+  "cursor": 33,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -830,6 +830,29 @@
         "kind": "success",
         "text": "Compacted 6 history items (~334 tokens).",
         "sourceEventSeq": 28
+      }
+    },
+    {
+      "type": "command/run",
+      "seq": 32,
+      "time": "<ms>",
+      "data": {
+        "commandId": "cmd-id-16",
+        "name": "goal",
+        "args": "",
+        "source": {
+          "kind": "user"
+        }
+      }
+    },
+    {
+      "type": "command/done",
+      "seq": 33,
+      "time": "<ms>",
+      "data": {
+        "commandId": "cmd-id-16",
+        "kind": "success",
+        "text": "No goal is currently set.\nUsage: /goal [<objective>|clear|edit <objective>|pause|resume]"
       }
     }
   ]

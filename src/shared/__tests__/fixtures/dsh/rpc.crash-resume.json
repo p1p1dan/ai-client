@@ -13,7 +13,9 @@
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
-      "capabilities": {}
+      "capabilities": {
+        "skills": 0
+      }
     },
     {
       "bootstrapped": true,
@@ -102,7 +104,9 @@
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
-      "capabilities": {}
+      "capabilities": {
+        "skills": 0
+      }
     }
   ],
   "history": {

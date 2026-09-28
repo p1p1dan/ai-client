@@ -1073,6 +1073,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           });
           return true;
         }
+        // dsh-rebase decision 113: DSH's /compact takes no instructions; the
+        // typed text stays so the user can remove it and press Enter again.
+        if (outcome.kind === 'instructions-unsupported') {
+          toastManager.add({
+            type: 'info',
+            title: t('/compact takes no instructions'),
+            description: t('Remove the text after /compact, then press Enter again.'),
+          });
+          return true;
+        }
         if (outcome.kind === 'failed') {
           toastManager.add({
             type: 'error',

@@ -11,8 +11,9 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { zhTranslations } from '@shared/i18n';
+import { WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
-import { runCompactCommand } from '../compactCommand';
+import { COMPACT_INSTRUCTIONS_UNSUPPORTED, runCompactCommand } from '../compactCommand';
 
 const COMPOSER_SOURCE = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../ChatComposer.tsx'),
@@ -42,6 +43,21 @@ describe('runCompactCommand', () => {
     });
   });
 
+  it('[CC-08] the DSH engine refusing instructions is its own outcome, not a failure sentence', async () => {
+    // dsh-rebase decision 113: `/compact keep X` reaches the worker as
+    // instructions, which DSH's /compact does not take.
+    const compact = vi.fn(async () => {
+      throw new Error(
+        "Error invoking remote method 'chat:compactSession': WorkerSlotError: WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED: /compact takes no instructions on the DSH engine; nothing was compacted"
+      );
+    });
+    await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
+      kind: 'instructions-unsupported',
+    });
+    // The renderer spells the code itself; it must stay the worker's.
+    expect(COMPACT_INSTRUCTIONS_UNSUPPORTED).toBe(WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED);
+  });
+
   it('[CC-03] success is success', async () => {
     const compact = vi.fn(async () => ({ compacted: true }));
     await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
@@ -62,14 +78,16 @@ describe('the composer reports every outcome and keeps the command (source scan)
     expect(compactCase).toMatch(/turnRunning: canStop \|\| stoppingRef\.current/);
   });
 
-  it('[CC-05] toasts both refusals and returns before the input box is cleared', () => {
+  it('[CC-05] toasts every refusal and returns before the input box is cleared', () => {
     expect(compactCase).toContain("outcome.kind === 'turn-running'");
     expect(compactCase).toContain("t('Wait for this turn to finish before compacting')");
+    expect(compactCase).toContain("outcome.kind === 'instructions-unsupported'");
+    expect(compactCase).toContain("t('/compact takes no instructions')");
     expect(compactCase).toContain("outcome.kind === 'failed'");
     expect(compactCase).toContain("t('Could not compact the conversation')");
     expect(compactCase).toContain('description: outcome.reason');
-    // Two early `return true`s: consumed, but the draft survives.
-    expect(compactCase.match(/return true;/g)?.length).toBe(2);
+    // Three early `return true`s: consumed, but the draft survives.
+    expect(compactCase.match(/return true;/g)?.length).toBe(3);
   });
 
   it('[CC-06] /archive no longer clears the command when the archive was refused', () => {
@@ -87,6 +105,8 @@ describe('the composer reports every outcome and keeps the command (source scan)
       '/compact stays in the input box — press Enter again once the turn ends.',
       'Could not compact the conversation',
       'Could not archive this conversation',
+      '/compact takes no instructions',
+      'Remove the text after /compact, then press Enter again.',
     ]) {
       expect(zhTranslations[key]).toBeTruthy();
     }

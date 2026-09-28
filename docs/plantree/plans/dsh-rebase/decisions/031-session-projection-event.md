@@ -2,6 +2,8 @@
 
 日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-4 方案 §5 D7](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)。
 
+修订注记（2026-09-28）：转发的 key 由[决策 099](099-p1-4d-scope-dsh-data-only.md) 第 11 条收窄为 `todos`、`goal`、`subagentCatalog`（P1-7b 再加 bridge 合成的 `goalActivation`、`jobs`）；P1-4d2 的实现取舍，包括首次快照为什么推迟到第一个事件之前，见[决策 113](113-p1-4d2-commands-and-projection-choices.md)（待审批）。
+
 ## 规则
 
 1. RuntimeEvent 新增 `session.projection {key, view}`，数据来自 DSH 的 `ctx.sessionProjections`：`todos`、`goal`、`plan`、`permissions`、`sandboxMode`、`tokenUsage`、`contextPressure`、`llmRetry` 等。同一个 key 后到的覆盖先到的。

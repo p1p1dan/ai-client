@@ -29,11 +29,15 @@
  *   `user/message` nobody typed         the head of a turn the engine started, or
  *                                       a notice (`custom.message`), by the table
  *                                       the history projection reads (rules 7, 8)
+ *   `command/run` / `command/done` of   the send's `running`, the line as its user
+ *   a command line one of our sends     echo, and the command's answer as a notice
+ *   carried                             (P1-4d2, rule 9); no turn is opened
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
  * `dsh-notice-<seq>`, `dsh-<session>-t<turn>-s<step>` — and the history
  * projection names the same ids on its rows (`liveMessageId`), so a replay can
- * recognise the live copy of a message it carries.
+ * recognise the live copy of a message it carries. A command send's rows are
+ * `dsh-command-<seq>`; the history does not project commands yet (decision 113).
  */
 
 import { mapDshFailureCode } from '../../shared/dshFailureCodes.ts';
@@ -61,6 +65,11 @@ import {
 } from '../../shared/streamingToolArgs.ts';
 import type { RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { TurnOrigin } from '../../shared/types/sessionHistory.ts';
+import {
+  DSH_COMMAND_ERROR_TYPE,
+  DSH_COMMAND_MESSAGE_PREFIX,
+  DSH_COMMAND_RESULT_TYPE,
+} from './commands.ts';
 
 // ---- shapes -----------------------------------------------------------------
 
@@ -138,7 +147,21 @@ export interface DshLiveEventsHost {
   usageSteps(): number;
   /** The goal's round budget, as the log last recorded it. */
   goalMaxRounds(): number | undefined;
+  /**
+   * P1-4d2: the command send whose line DSH just admitted (`command/run`),
+   * bound to that command's id; undefined when no send of ours is waiting
+   * (a `worker.compact`, another adapter).
+   */
+  claimCommand(commandId: string): CommandSendView | undefined;
+  /** The command send a `command/done` settles, when it is one of ours. */
+  commandSend(commandId: string): CommandSendView | undefined;
   now(): number;
+}
+
+/** A send that carried a command line (P1-4d2): its request and the renderer's attempt. */
+export interface CommandSendView {
+  readonly requestId: string;
+  readonly attemptId: string;
 }
 
 // ---- helpers -----------------------------------------------------------------
@@ -586,9 +609,61 @@ export class DshLiveEvents {
       case 'turn/end':
         this.onTurnEnd(data);
         return;
+      case 'command/run':
+        this.onCommandRun(event);
+        return;
+      case 'command/done':
+        this.onCommandDone(event);
+        return;
       default:
         return;
     }
+  }
+
+  /**
+   * P1-4d2 (decision 099 rule 9): a command line one of our sends carried,
+   * admitted by DSH. It opens no turn; the send reports `running`, and the
+   * line goes out as the user's echo with its attempt id — the composer's
+   * proof the send was taken in. The line is the log's own (`/name` + args).
+   */
+  private onCommandRun(event: DshSessionEvent): void {
+    const data = event.data;
+    const commandId = stringOf(data.commandId);
+    const send = commandId ? this.host.claimCommand(commandId) : undefined;
+    if (!send) return;
+    const { requestId, attemptId } = send;
+    const messageId = `${DSH_COMMAND_MESSAGE_PREFIX}${event.seq}`;
+    const args = typeof data.args === 'string' ? data.args : '';
+    this.emit({ type: 'session.status', requestId, payload: { status: 'running' } });
+    this.emit({
+      type: 'message.started',
+      requestId,
+      payload: { messageId, role: 'user', attemptId },
+    });
+    this.emit({
+      type: 'message.delta',
+      requestId,
+      payload: { messageId, blockId: `${messageId}-text`, text: `/${String(data.name)}${args}` },
+    });
+    this.emit({ type: 'message.completed', requestId, payload: { messageId } });
+  }
+
+  /** What the command answered, as a notice; the runtime ends the send once `execute` settles. */
+  private onCommandDone(event: DshSessionEvent): void {
+    const data = event.data;
+    const commandId = stringOf(data.commandId);
+    const send = commandId ? this.host.commandSend(commandId) : undefined;
+    const text = stringOf(data.text);
+    if (!send || !text) return;
+    this.emit({
+      type: 'custom.message',
+      requestId: send.requestId,
+      payload: {
+        messageId: `${DSH_COMMAND_MESSAGE_PREFIX}${event.seq}`,
+        customType: data.kind === 'error' ? DSH_COMMAND_ERROR_TYPE : DSH_COMMAND_RESULT_TYPE,
+        content: text,
+      },
+    });
   }
 
   private onUserMessage(event: DshSessionEvent): void {

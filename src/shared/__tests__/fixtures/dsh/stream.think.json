@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-think",
     "requestId": "turn-THINK",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-think",
+    "requestId": "turn-THINK",
     "type": "session.status",
     "payload": {
       "status": "running"

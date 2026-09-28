@@ -520,6 +520,10 @@ export const zhTranslations: Record<string, string> = {
   '/compact stays in the input box — press Enter again once the turn ends.':
     '/compact 还留在输入框里，这一轮结束后再按一次 Enter 即可。',
   'Could not compact the conversation': '压缩上下文失败',
+  // dsh-rebase decision 113: DSH's /compact takes no instructions.
+  '/compact takes no instructions': '/compact 不接受附加说明',
+  'Remove the text after /compact, then press Enter again.':
+    '删掉 /compact 后面的文字，再按一次 Enter。',
   'Could not archive this conversation': '归档对话失败',
   'Remote repository is not connected yet': '远程仓库尚未连接',
   'Open terminal': '在终端中打开',

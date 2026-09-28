@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-stream",
     "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-stream",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-stream",
+    "requestId": "turn-STREAM",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-stream",
+    "requestId": "turn-STREAM",
     "type": "session.status",
     "payload": {
       "status": "running"

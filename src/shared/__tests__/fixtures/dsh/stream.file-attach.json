@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-file-attach",
     "requestId": "turn-FILE-ATTACH",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
     "type": "session.status",
     "payload": {
       "status": "running"

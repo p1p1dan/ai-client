@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-perm-card",
     "requestId": "turn-PERM-CARD",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
     "type": "session.status",
     "payload": {
       "status": "running"

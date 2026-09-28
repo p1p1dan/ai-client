@@ -34,7 +34,10 @@
  *   fail          the only request of the turn fails upstream -> turn/end error
  *   stop-stream   Stop after five streamed deltas -> interrupted text, user_stop
  *   stop-tool     Stop while a bash call sleeps -> aborted tool result, user_stop
- *   compact       two turns, then `/compact` -> a "Context summary" row
+ *   compact       two turns, the menu (`worker.commands`), `worker.compact` with
+ *                 instructions (refused) and without (DSH's `/compact` -> a
+ *                 "Context summary" row, nothing live), then a `/goal` send: a
+ *                 command with no model turn, echoed with its answer (P1-4d2)
  *   crash-resume  SIGKILL while a bash call sleeps; a new host resumes the stub and
  *                 its first page carries the interrupted-turn note and the
  *                 outcome-unknown tool row (decision 032)
@@ -428,12 +431,16 @@ function payloadOf(event: Message): Message {
   return (event.payload ?? {}) as Message;
 }
 
-/** Assistant text deltas (the user's echo is one `message.delta` too). */
+/** Assistant text deltas (the user's echo, and a command send's, is one `message.delta` too). */
 function deltaCount(events: readonly Message[]): number {
-  return events.filter(
-    (event) =>
-      event.type === 'message.delta' && !String(payloadOf(event).messageId).startsWith('dsh-user-')
-  ).length;
+  return events.filter((event) => {
+    const messageId = String(payloadOf(event).messageId);
+    return (
+      event.type === 'message.delta' &&
+      !messageId.startsWith('dsh-user-') &&
+      !messageId.startsWith('dsh-command-')
+    );
+  }).length;
 }
 
 /** `value` without any `key` in `keys`, however deep. */
@@ -530,19 +537,35 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   async compact(context, host) {
     const { session, boot } = await context.openSession(host, 'compact');
+    const { client } = session.host;
+    const logicalSessionId = session.logicalSessionId;
     const first = await context.turn(
       session,
       'STREAM',
       'P0-STREAM: stream a paragraph back to me.'
     );
     const second = await context.turn(session, 'TOOL', 'P0-TOOL: list the workspace.');
-    const compacted = await host.client.probe(
-      'compact',
-      { sessionId: session.dshSessionId },
-      120_000
+    // P1-4d2 (decisions 099 rules 9-10, 113): the menu is DSH's commands and
+    // skills; `/compact` is `worker.compact`, which refuses instructions
+    // before anything runs and echoes nothing live.
+    const commands = await client.request(session.ch, 'worker.commands', { logicalSessionId });
+    const from = client.events(session.ch).length;
+    const refused = answerOf(
+      await client.call(session.ch, 'worker.compact', {
+        logicalSessionId,
+        instructions: 'keep the API decisions',
+      })
     );
-    return finish(context, session, [boot], [first, second], {
-      compact: (compacted as Message).result,
+    const compacted = answerOf(
+      await client.call(session.ch, 'worker.compact', { logicalSessionId }, 120_000)
+    );
+    const eventsAfter = client.events(session.ch).length - from;
+    if (!compacted.ok) throw new Error(`compact: not compacted: ${JSON.stringify(compacted)}`);
+    // A known command line is DSH's command, with no model turn: `/goal` alone shows its usage.
+    const command = await context.turn(session, 'COMMAND', '/goal');
+    return finish(context, session, [boot], [first, second, command], {
+      commands,
+      compact: { refused, compacted, eventsAfter },
     });
   },
   async 'crash-resume'(context, host) {

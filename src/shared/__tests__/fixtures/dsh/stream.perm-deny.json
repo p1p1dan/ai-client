@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-perm-deny",
     "requestId": "turn-PERM-DENY",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-perm-deny",
+    "requestId": "turn-PERM-DENY",
     "type": "session.status",
     "payload": {
       "status": "running"

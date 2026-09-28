@@ -9,6 +9,7 @@ import { readPiUsagePayload } from '../../../shared/piUsage.ts';
 import { TURN_CEILING_CANCEL_REASON } from '../../loopGuard/constants.ts';
 import {
   type BridgeDraft,
+  type CommandSendView,
   DshLiveEvents,
   type DshUsageView,
   type LiveTurn,
@@ -39,6 +40,8 @@ function harness(
     rounds?: number;
     /** P1-4c1: Ctrl+Enter messages the runtime steered in, by message id. */
     steered?: Map<string, { attemptId: string }>;
+    /** P1-4d2: a command send waiting for its `command/run`. */
+    command?: CommandSendView;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -46,11 +49,14 @@ function harness(
     options.turn === undefined ? { requestId: 'turn-1', synthetic: false } : options.turn;
   let clock = 1_000;
   let seq = 0;
+  let pendingCommand = options.command;
+  const commands = new Map<string, CommandSendView>();
   const live = new DshLiveEvents({
+    // As the runtime: an event's own requestId (a command send's) wins over the turn's.
     emit: (event: BridgeDraft) =>
       events.push({
-        ...(event as unknown as Emitted),
         ...(turn ? { requestId: turn.requestId } : {}),
+        ...(event as unknown as Emitted),
       }),
     route: () => 'aiclient-gateway/fake-1',
     dshSessionId: () => SID,
@@ -70,6 +76,13 @@ function harness(
     usageView: () => options.usage,
     usageSteps: () => options.steps ?? 0,
     goalMaxRounds: () => options.rounds,
+    claimCommand: (commandId) => {
+      const send = pendingCommand;
+      pendingCommand = undefined;
+      if (send) commands.set(commandId, send);
+      return send;
+    },
+    commandSend: (commandId) => commands.get(commandId),
     now: () => clock,
   });
   const durable = (type: string, data: Record<string, unknown>) => {
@@ -612,5 +625,68 @@ describe('DshLiveEvents — notices and turn heads (decisions 072, 081, 099 rule
     const rows = projectDshHistory(h.log, { liveSessionId: SID });
     expect(rows.map((row) => row.liveMessageId)).toEqual(liveIds);
     expect(rows.map((row) => row.role)).toEqual(['user', 'assistant', 'system']);
+  });
+});
+
+describe('DshLiveEvents — command sends (P1-4d2, decisions 099 rule 9, 113)', () => {
+  const send = { requestId: 'turn-GOAL', attemptId: 'attempt-GOAL' };
+
+  it('[D2-CMD-LIVE-1] echoes the admitted line with its attempt id, then the answer, no turn', () => {
+    const h = harness({ turn: null, command: send });
+    h.durable('command/run', {
+      commandId: 'cmd-a-1',
+      name: 'goal',
+      args: ' fix CI',
+      source: { kind: 'user' },
+    });
+    h.durable('command/done', { commandId: 'cmd-a-1', kind: 'success', text: 'Goal created' });
+    expect(h.events).toEqual([
+      { type: 'session.status', requestId: 'turn-GOAL', payload: { status: 'running' } },
+      {
+        type: 'message.started',
+        requestId: 'turn-GOAL',
+        payload: { messageId: 'dsh-command-1', role: 'user', attemptId: 'attempt-GOAL' },
+      },
+      {
+        type: 'message.delta',
+        requestId: 'turn-GOAL',
+        payload: {
+          messageId: 'dsh-command-1',
+          blockId: 'dsh-command-1-text',
+          text: '/goal fix CI',
+        },
+      },
+      {
+        type: 'message.completed',
+        requestId: 'turn-GOAL',
+        payload: { messageId: 'dsh-command-1' },
+      },
+      {
+        type: 'custom.message',
+        requestId: 'turn-GOAL',
+        payload: { messageId: 'dsh-command-2', customType: 'dsh:command', content: 'Goal created' },
+      },
+    ]);
+  });
+
+  it('[D2-CMD-LIVE-2] a refusal is an error notice; an answer without text shows nothing', () => {
+    const h = harness({ turn: null, command: send });
+    h.durable('command/run', { commandId: 'cmd-a-2', name: 'goal', source: { kind: 'user' } });
+    h.durable('command/done', { commandId: 'cmd-a-2', kind: 'error', text: 'Usage: /goal' });
+    expect(h.of('custom.message').map((event) => event.payload)).toEqual([
+      { messageId: 'dsh-command-2', customType: 'dsh:command-error', content: 'Usage: /goal' },
+    ]);
+    expect(h.of('message.delta')[0]?.payload.text).toBe('/goal');
+    const quiet = harness({ turn: null, command: send });
+    quiet.durable('command/run', { commandId: 'cmd-a-3', name: 'goal', source: { kind: 'user' } });
+    quiet.durable('command/done', { commandId: 'cmd-a-3', kind: 'success' });
+    expect(quiet.of('custom.message')).toEqual([]);
+  });
+
+  it('[D2-CMD-LIVE-3] a command no send of ours carried (worker.compact) shows nothing live', () => {
+    const h = harness({ turn: null });
+    h.durable('command/run', { commandId: 'cmd-a-4', name: 'compact', source: { kind: 'user' } });
+    h.durable('command/done', { commandId: 'cmd-a-4', kind: 'success', text: 'Compacted 3' });
+    expect(h.events).toEqual([]);
   });
 });

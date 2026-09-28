@@ -31,11 +31,17 @@
  * (P1-4d1, decision 099; `liveEvents.ts`), approvals, stop, the session
  * identity (create, resume, crash restart), the history, tree and leaf,
  * projected from the DSH log (P1-4a, decision 026; `historyCache.ts`), and
- * rewind and fork (P1-4b, decision 027). Compact refuses until the rest of P1-4
- * fills it in (dsh-rebase decision 010). Attachments (P1-4c2, decisions 096 and
+ * rewind and fork (P1-4b, decision 027). Attachments (P1-4c2, decisions 096 and
  * 097) go through DSH's attachment service, a send's and an interjection's
  * alike (`attachments.ts`): images as image blocks, text files as file blocks
  * the model reads on demand; a refusal is `WORKER_ATTACHMENT_REJECTED`.
+ *
+ * Commands and state (P1-4d2, decisions 099 rules 9-12 and 113): the menu
+ * lists DSH's commands and the user-invocable skills (`commands.ts`); a send
+ * that is a known command line runs through `ctx.commands.execute` with no
+ * model turn; `worker.compact` is DSH's `/compact`, without instructions; the
+ * `todos`, `goal` and `subagentCatalog` projections go out as
+ * `session.projection`; the capability inventory reports the skill count.
  *
  * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
  * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
@@ -95,7 +101,12 @@ import {
   type PermissionPolicyFiles,
 } from '../../shared/permissions/policy.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
-import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import {
+  type PermissionDecisionId,
+  type RuntimeEventDraft,
+  SESSION_PROJECTION_KEYS,
+  type SessionProjectionPayload,
+} from '../../shared/types/runtimeEvents.ts';
 import {
   migratePermissionTier,
   type PermissionGear,
@@ -105,12 +116,16 @@ import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
+  WORKER_COMPACT_BUDGET_MS,
+  WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
   WORKER_RETRY_UNAVAILABLE,
   WORKER_REWIND_JOBS_RUNNING,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
+  type WorkerCommandsPayload,
   type WorkerCommandsResult,
+  type WorkerCompactPayload,
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
@@ -131,6 +146,21 @@ import {
 } from '../../shared/types/workerRpc.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
+import {
+  compactOutcome,
+  DSH_COMMAND_ERROR_TYPE,
+  DSH_COMMAND_MESSAGE_PREFIX,
+  type DshCommandDescriptor,
+  type DshCommandExecution,
+  type DshCommandsView,
+  type DshSkillSummary,
+  type DshSkillsView,
+  dshCommandName,
+  HIDDEN_DSH_COMMANDS,
+  slashCommandRows,
+  WORKER_COMPACT_TIMEOUT,
+  WORKER_COMPACT_UNAVAILABLE,
+} from './commands.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
@@ -218,20 +248,31 @@ interface DshAgentHandle {
 }
 
 /**
- * `ctx.sessionProjections` (dsh-session-projection), narrowed to the one read
- * the live usage takes: dsh-token-meter's `tokenUsage` and `contextPressure`
- * views of a session (P1-4d1, decision 099 rule 1).
+ * `ctx.sessionProjections` (dsh-session-projection), narrowed to the reads
+ * the bridge takes: dsh-token-meter's `tokenUsage` and `contextPressure` views
+ * of a session (P1-4d1, decision 099 rule 1), and the `todos`, `goal` and
+ * `subagentCatalog` values with their change feed (P1-4d2, rule 11).
  */
 export interface DshSessionProjectionsView {
   snapshot(session: unknown, keys?: readonly string[]): { values: Record<string, unknown> };
+  /**
+   * Called inside DSH's projection drive, once per key whose view changed,
+   * with the schema-checked value. The listener must not read a snapshot
+   * there: that would advance units the drive has not reached yet.
+   */
+  onChanged?(listener: (session: { id: string }, key: string, value: unknown) => void): () => void;
 }
 
 /** Services the runtime reads without injecting them; a host without one leaves it undefined. */
 export interface DshBridgeOptionalServices {
   /** `ctx.jobs`, for `busy`. */
   jobs: DshJobsView;
-  /** `ctx.sessionProjections`, for the context occupancy and the session's usage total. */
+  /** `ctx.sessionProjections`, for usage and the three forwarded projections. */
   sessionProjections: DshSessionProjectionsView;
+  /** `ctx.commands` (P1-4d2): the menu, command sends and `worker.compact`. */
+  commands: DshCommandsView;
+  /** `ctx.skills` (P1-4d2): the menu's skills and the capability count. */
+  skills: DshSkillsView;
 }
 
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
@@ -342,6 +383,24 @@ export interface DshBridgeDeps {
    * danger-full-access and nothing is written.
    */
   applySandboxMode?: ApplySandboxMode;
+  /**
+   * How long `worker.compact` lets DSH's `/compact` run before it cancels it
+   * (`WORKER_COMPACT_BUDGET_MS`, inside Main's own wait); tests shorten it.
+   */
+  compactTimeoutMs?: number;
+}
+
+/**
+ * A send that carried a known command line (P1-4d2): its request, the
+ * renderer's attempt, and the command DSH bound it to at `command/run`.
+ */
+interface CommandSend {
+  readonly requestId: string;
+  readonly attemptId: string;
+  readonly controller: AbortController;
+  commandId?: string;
+  /** Its `command/done` reached the live translation (whose notice is the answer). */
+  settledInLog: boolean;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -518,6 +577,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    * in the inbox waits here until a later turn takes it in.
    */
   private readonly steered = new Map<string, { attemptId: string }>();
+  /** P1-4d2: a command send whose line DSH is admitting now; its `command/run` claims it. */
+  private pendingCommand: CommandSend | null = null;
+  /** Command sends DSH admitted and `execute` has not settled, by DSH's command id. */
+  private readonly commandSends = new Map<string, CommandSend>();
+  /**
+   * P1-4d2: the forwarded projections as a bootstrap found them, sent ahead of
+   * the next event this runtime emits — by then Main has the slot ready, and
+   * it drops whatever a slot sends before that (`WorkerManager.handleWorkerEvent`).
+   */
+  private projectionBaseline: SessionProjectionPayload[] | null = null;
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
@@ -569,6 +638,19 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       usageView: () => this.usageView(),
       usageSteps: () => this.historyCache.usageSteps(),
       goalMaxRounds: () => this.historyCache.goalMaxRounds(),
+      claimCommand: (commandId) => {
+        const send = this.pendingCommand;
+        if (!send) return undefined;
+        this.pendingCommand = null;
+        send.commandId = commandId;
+        this.commandSends.set(commandId, send);
+        return send;
+      },
+      commandSend: (commandId) => {
+        const send = this.commandSends.get(commandId);
+        if (send) send.settledInLog = true;
+        return send;
+      },
       now: this.now,
     });
   }
@@ -605,7 +687,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     if (this.turn !== null || (this.handle !== null && this.handle.agent.status !== 'idle')) {
       return true;
     }
-    return this.hasLiveJobs();
+    return this.commandSends.size > 0 || this.hasLiveJobs();
   }
 
   /** Jobs this session owns that have not settled; the agent reads idle meanwhile. */
@@ -674,6 +756,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     // A failed read leaves an empty, legal page and is retried by the next one.
     this.historyCache.reset(this.dshSessionId);
     await this.historyCache.load();
+    const skills = await this.skillCount();
     this.result = {
       bootstrapped: true,
       logicalSessionId: this.logicalSessionId,
@@ -689,10 +772,35 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       ...(this.options.model ? { model: this.options.model } : {}),
       projectTrusted: this.options.projectTrusted,
       permissionGate,
-      capabilities: {},
+      // Decisions 099 rule 12, 113: the skill count alone; MCP, templates and
+      // custom sub-agents have no producer on this engine, so they stay absent.
+      capabilities: skills === undefined ? {} : { skills },
     };
     this.syncSandboxMode();
+    this.projectionBaseline = this.readProjections();
     return this.result;
+  }
+
+  /**
+   * Every skill the agent's catalog has (`ctx.skills`, the agent's scope and
+   * workspace), model- or user-invocable. Undefined — "not reported" — when
+   * the host has no skill registry or the read fails; never a failed bootstrap.
+   */
+  private async skillCount(): Promise<number | undefined> {
+    const agent = this.handle?.agent;
+    if (!agent) return undefined;
+    try {
+      const skills = this.ctx.get?.('skills');
+      return skills ? (await skills.list(this.skillLookup(agent))).length : undefined;
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
+      return undefined;
+    }
+  }
+
+  /** The lookup dsh-tool-skill makes for this agent: its workspace, its scope. */
+  private skillLookup(agent: DshAgent): { cwd: string; scope: unknown } {
+    return { cwd: agent.session.header?.cwd ?? this.cwd, scope: agent };
   }
 
   /**
@@ -945,6 +1053,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.prompt.drain('session_closed');
     this.disposed = true;
     this.steered.clear();
+    for (const send of this.commandSends.values()) send.controller.abort();
+    this.commandSends.clear();
+    this.projectionBaseline = null;
     for (const dispose of this.disposers.splice(0)) dispose();
     try {
       await this.handle?.dispose();
@@ -968,6 +1079,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       input.model ?? this.modelId,
       input.effort ?? this.options.effort
     );
+    // Decisions 099 rule 9, 113: a known command line runs as DSH's command,
+    // with no model turn. With attachments it is a message, as the window's
+    // own commands treat it.
+    const commands = input.attachments?.length ? undefined : this.commandFor(input.text);
+    if (commands) {
+      this.applyRoute(routed);
+      const accepted = await this.startCommand(input, commands);
+      if (accepted) return accepted;
+    }
     // Decisions 096, 097: attachments through the engine's own admission; a
     // refusal (`WORKER_ATTACHMENT_REJECTED`) comes before any event.
     const content = await admitUserContent(this.ctx.attachments, input.text, input.attachments);
@@ -987,15 +1107,184 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return { accepted: true, requestId: input.requestId };
   }
 
-  /** A turn this bridge sent is running: a second send is busy (a turn DSH started is not). */
+  /**
+   * A turn this bridge sent is running, or a command it sent has not settled:
+   * a second send is busy (a turn DSH started is not).
+   */
   private assertNoOwnTurn(): void {
-    if (this.turn && !this.turn.synthetic) {
+    if ((this.turn && !this.turn.synthetic) || this.commandSends.size > 0) {
       throw new PiWorkerSessionError(
         'WORKER_SESSION_BUSY',
         'Session already has an active turn',
         true
       );
     }
+  }
+
+  // ---- commands (P1-4d2, decisions 099 rules 9-10, 113) ---------------------------
+
+  /**
+   * `ctx.commands`, when `text` is a line naming a command this session's
+   * agent has and the menu may run; undefined for anything else, which goes
+   * to the model as typed.
+   */
+  private commandFor(text: string): DshCommandsView | undefined {
+    const name = dshCommandName(text);
+    const agent = this.handle?.agent;
+    if (!name || HIDDEN_DSH_COMMANDS.has(name) || !agent) return undefined;
+    try {
+      const commands = this.ctx.get?.('commands');
+      return commands?.find(agent, name) !== undefined ? commands : undefined;
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] command registry unreadable', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * A command send: DSH runs the line against the agent and records it
+   * (`command/run`, `command/done`); the live translation echoes the line
+   * with the attempt id and shows the answer, and the send ends once
+   * `execute` settles. Nothing is emitted unless DSH admitted the line: a
+   * command gone from the registry since `commandFor` makes this undefined
+   * (the caller sends the text as a prompt), and a refused admission is the
+   * send's refusal.
+   */
+  private async startCommand(
+    input: WorkerSendPayload,
+    commands: DshCommandsView
+  ): Promise<WorkerSendResult | undefined> {
+    const agent = this.requireAgent();
+    const send: CommandSend = {
+      requestId: input.requestId,
+      attemptId: input.attemptId,
+      controller: new AbortController(),
+      settledInLog: false,
+    };
+    this.pendingCommand = send;
+    let execution: Promise<DshCommandExecution | undefined>;
+    try {
+      execution = commands.execute(agent, input.text, [], send.controller.signal);
+    } finally {
+      this.pendingCommand = null;
+    }
+    if (send.commandId === undefined) {
+      // DSH logged no `command/run` for it, so nothing went out.
+      if ((await execution) === undefined) return undefined;
+      this.options.log?.('[dsh-bridge] a command ran without its command/run reaching the bridge');
+    }
+    void execution
+      .then(
+        () => this.finishCommand(send),
+        (error: unknown) => this.finishCommand(send, error)
+      )
+      .catch((error: unknown) => {
+        this.options.log?.('[dsh-bridge] command send could not end', error);
+      });
+    return { accepted: true, requestId: input.requestId };
+  }
+
+  /**
+   * The command settled: the send completes (a command's error is its
+   * answer, not a failed turn). A turn DSH started meanwhile — a goal round
+   * the command armed — keeps the session running; otherwise it is idle.
+   */
+  private finishCommand(send: CommandSend, error?: unknown): void {
+    if (send.commandId !== undefined) this.commandSends.delete(send.commandId);
+    if (this.disposed) return;
+    if (error !== undefined) {
+      this.options.log?.('[dsh-bridge] command failed', error);
+      if (!send.settledInLog) {
+        this.emit({
+          type: 'custom.message',
+          requestId: send.requestId,
+          payload: {
+            messageId: `${DSH_COMMAND_MESSAGE_PREFIX}${send.requestId}`,
+            customType: DSH_COMMAND_ERROR_TYPE,
+            content: error instanceof Error ? error.message : String(error),
+          },
+        });
+      }
+    }
+    this.emit({ type: 'session.completed', requestId: send.requestId, payload: {} });
+    if (this.turn) {
+      this.emit({ type: 'session.status', payload: { status: 'running' } });
+    } else if (this.idle() && this.commandSends.size === 0) {
+      this.emit({ type: 'session.status', requestId: send.requestId, payload: { status: 'idle' } });
+    }
+  }
+
+  async commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    const agent = this.handle?.agent;
+    if (!agent || this.disposed) return { commands: [], truncated: false };
+    return slashCommandRows(this.listedCommands(agent), await this.userSkills(agent));
+  }
+
+  private listedCommands(agent: DshAgent): readonly DshCommandDescriptor[] {
+    try {
+      return this.ctx.get?.('commands')?.list(agent) ?? [];
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] command registry unreadable', error);
+      return [];
+    }
+  }
+
+  private async userSkills(agent: DshAgent): Promise<readonly DshSkillSummary[]> {
+    try {
+      return (await this.ctx.get?.('skills')?.list(this.skillLookup(agent))) ?? [];
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] skill catalog unreadable', error);
+      return [];
+    }
+  }
+
+  /**
+   * `/compact` (decisions 099 rule 10, 113): DSH's command, which takes no
+   * arguments, so instructions are refused before anything runs. Bounded as
+   * the native runtime bounded its summary: the command is cancelled at
+   * `compactTimeoutMs`, before Main's own wait ends, so Main's answer is
+   * what the log has. Compacted only when DSH names the summary it wrote.
+   */
+  async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (input.instructions !== undefined && input.instructions.trim().length > 0) {
+      throw new PiWorkerSessionError(
+        WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+        '/compact takes no instructions on the DSH engine; nothing was compacted'
+      );
+    }
+    await this.bootstrap();
+    this.assertIdle('compact the conversation');
+    const agent = this.requireAgent();
+    const commands = this.ctx.get?.('commands');
+    if (!commands || commands.find(agent, 'compact') === undefined) {
+      throw new PiWorkerSessionError(
+        WORKER_COMPACT_UNAVAILABLE,
+        'This host has no /compact command'
+      );
+    }
+    const budgetMs = this.deps.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), budgetMs);
+    let execution: DshCommandExecution | undefined;
+    try {
+      execution = await commands.execute(agent, '/compact', [], controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (controller.signal.aborted) {
+      throw new PiWorkerSessionError(
+        WORKER_COMPACT_TIMEOUT,
+        `summarizing the conversation took longer than ${budgetMs}ms; it was cancelled`,
+        true
+      );
+    }
+    const outcome = compactOutcome(execution);
+    if ('compacted' in outcome) return outcome;
+    throw new PiWorkerSessionError(outcome.code, outcome.message);
   }
 
   /**
@@ -1015,7 +1304,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     await this.bootstrap();
     const current = await this.historyCache.ready();
     const lastEnd = current ? this.historyCache.lastTurnEnd() : undefined;
-    if (!this.idle()) {
+    if (!this.idle() || this.commandSends.size > 0) {
       throw new PiWorkerSessionError(
         WORKER_RETRY_UNAVAILABLE,
         'A turn is running; there is nothing to retry'
@@ -1052,8 +1341,18 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    * DSH's stop button (decision 094): the turn ends, and input it has not
    * taken in yet — a Ctrl+Enter message, a job's completion notice — stays in
    * the inbox for the next turn. The Stop opens no turn by itself.
+   *
+   * A command send (P1-4d2) has no turn: Stop cancels the wait on it, and
+   * DSH settles it as cancelled; the send then completes as any command does.
    */
   async stop(_input: WorkerStopPayload): Promise<WorkerStopResult> {
+    if (!this.turn && this.commandSends.size > 0) {
+      // The reason is what the command's error notice reads.
+      for (const send of this.commandSends.values()) {
+        send.controller.abort(new Error('Stopped by the user'));
+      }
+      return { stopped: true };
+    }
     if (!this.turn || !this.handle) return { stopped: false };
     this.emit({ type: 'session.status', payload: { status: 'stopping' } });
     this.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });
@@ -1230,13 +1529,6 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     );
   }
 
-  async commands(): Promise<WorkerCommandsResult> {
-    return { commands: [], truncated: false };
-  }
-
-  async compact(): Promise<WorkerCompactResult> {
-    return unsupported('compact');
-  }
   async reload(): Promise<WorkerReloadResult> {
     return unsupported('reload');
   }
@@ -1336,6 +1628,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     this.syncSandboxMode();
     this.resetLiveState();
+    // The child's projections replace the retired session's at once: the slot
+    // is ready, so they reach the renderer ahead of the rewind's history.
+    this.projectionBaseline = this.readProjections();
+    this.flushProjectionBaseline();
     this.historyCache.reset(switched.id);
     await this.historyCache.load();
     const leaf = this.historyCache.leaf();
@@ -1638,7 +1934,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   }
 
   private assertIdle(action: string): void {
-    if (this.idle()) return;
+    if (this.idle() && this.commandSends.size === 0) return;
     throw new PiWorkerSessionError(
       'WORKER_SESSION_BUSY',
       `Cannot ${action} while a turn is active`,
@@ -1658,18 +1954,89 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return this.handle.agent;
   }
 
+  /** One event; a bootstrap's projection baseline goes out first (P1-4d2). */
   private emit(event: BridgeDraft): void {
+    if (this.projectionBaseline) this.flushProjectionBaseline();
+    this.emitNow(event);
+  }
+
+  /** The turn's requestId, unless the event names its own (a command send's, P1-4d2). */
+  private emitNow(event: BridgeDraft): void {
+    const requestId = event.requestId ?? this.turn?.requestId;
     this.options.emit({
       sessionId: this.logicalSessionId,
-      ...(this.turn ? { requestId: this.turn.requestId } : {}),
+      ...(requestId ? { requestId } : {}),
       ...event,
     } as RuntimeEventDraft);
+  }
+
+  // ---- session.projection (P1-4d2, decisions 031, 099 rule 11, 113) -----------------
+
+  /**
+   * The forwarded keys the open session has now, in one consistent cut.
+   * A key whose unit the host does not compose is absent; a failed read
+   * costs the baseline, never the session.
+   */
+  private readProjections(): SessionProjectionPayload[] {
+    const session = this.handle?.agent.session;
+    if (!session) return [];
+    try {
+      const values = this.ctx
+        .get?.('sessionProjections')
+        ?.snapshot(session, SESSION_PROJECTION_KEYS).values;
+      if (!values) return [];
+      return SESSION_PROJECTION_KEYS.filter((key) => key in values).map(
+        (key) => ({ key, view: values[key] }) as SessionProjectionPayload
+      );
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] session projections unreadable', error);
+      return [];
+    }
+  }
+
+  private flushProjectionBaseline(): void {
+    const baseline = this.projectionBaseline ?? [];
+    this.projectionBaseline = null;
+    for (const payload of baseline) this.emitNow({ type: 'session.projection', payload });
+  }
+
+  /**
+   * DSH's change feed, inside its projection drive: this session's forwarded
+   * keys only, once bootstrapped (the baseline covers what came before). A
+   * change that finds the baseline still waiting joins it and sends it.
+   */
+  private onProjectionChanged(
+    session: { id: string } | undefined,
+    key: string,
+    value: unknown
+  ): void {
+    if (this.disposed || !this.result || session?.id !== this.dshSessionId) return;
+    if (!(SESSION_PROJECTION_KEYS as readonly string[]).includes(key)) return;
+    const payload = { key, view: value } as SessionProjectionPayload;
+    const baseline = this.projectionBaseline;
+    if (baseline) {
+      this.projectionBaseline = baseline.some((entry) => entry.key === key)
+        ? baseline.map((entry) => (entry.key === key ? payload : entry))
+        : [...baseline, payload];
+      this.flushProjectionBaseline();
+      return;
+    }
+    this.emitNow({ type: 'session.projection', payload });
   }
 
   private listen(): void {
     // Once per runtime: a bootstrap retried after a failure must not double every event.
     if (this.listening) return;
     this.listening = true;
+    const unsubscribe = this.ctx.get?.('sessionProjections')?.onChanged?.((session, key, value) => {
+      // Called inside DSH's projection drive, which does not contain a throw.
+      try {
+        this.onProjectionChanged(session, key, value);
+      } catch (error) {
+        this.options.log?.('[dsh-bridge] projection change failed', key, error);
+      }
+    });
+    if (unsubscribe) this.disposers.push(unsubscribe);
     this.disposers.push(
       this.ctx.on('session/event', (session, event) => {
         if (session?.id !== this.dshSessionId || this.disposed) return;

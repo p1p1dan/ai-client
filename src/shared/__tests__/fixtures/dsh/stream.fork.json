@@ -2,6 +2,33 @@
   {
     "sessionId": "rec-fork",
     "requestId": "turn-BASE",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
     "type": "session.status",
     "payload": {
       "status": "running"
@@ -237,6 +264,33 @@
     "type": "session.status",
     "payload": {
       "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
     }
   },
   {
