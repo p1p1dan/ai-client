@@ -1,6 +1,13 @@
 /**
  * P5-3 — the MCP bridge: declared servers become tools the model can call.
  *
+ * dsh-rebase P1-16 prep: the connect phase, the client, the declarations, the
+ * tool naming and the result folding moved to `src/shared/mcp/` and are
+ * re-exported below under their old names. What stays here is the runtime's
+ * own: the Cordis service that registers each tool with `runtimeTools` and
+ * puts every call to `runtimePermissions`, and the runtime's error type.
+ * P1-12 deletes this file with the runtime.
+ *
  * ## Shape
  *
  * Connecting is IO, and Cordis service constructors are synchronous, so this
@@ -9,13 +16,6 @@
  * registers what it found. A server that fails to start is recorded and the
  * others still come up — one broken entry in a config file must not cost a
  * session every other tool.
- *
- * ## Naming
- *
- * `mcp__<server>__<tool>`, the convention the ecosystem already uses. The
- * prefix is not decoration: it is what tells a permission rule, an approval
- * card and a transcript row that this call leaves the machine's own tool set,
- * and what keeps two servers that both publish `search` apart.
  *
  * ## Permission
  *
@@ -29,83 +29,51 @@
  */
 
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
 import { type Context, Service } from 'cordis';
 import type { TSchema } from 'typebox';
+import type { McpClient, McpToolDefinition } from '../../../shared/mcp/client.ts';
+import {
+  connectMcpServers as connectSharedMcpServers,
+  type McpCatalog,
+  type McpConfig,
+  type McpConnection,
+} from '../../../shared/mcp/connect.ts';
+import {
+  MCP_POLICY_SURFACE,
+  mcpArgumentsPreview,
+  mcpPolicyValue,
+  mcpToolName,
+} from '../../../shared/mcp/naming.ts';
+import { foldMcpToolResult } from '../../../shared/mcp/results.ts';
 import {
   EXEC_SERVICE,
   HOST_IO_SERVICE,
   type RuntimeExecService,
   type RuntimeHostIoService,
 } from '../../contracts.ts';
-import { errorCode, RuntimeHostError } from '../../host/errors.ts';
-import type { SettingSource } from '../../settingSources.ts';
+import { errorCode } from '../../host/errors.ts';
 import { PERMISSIONS_SERVICE } from '../permissions/index.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
-import { McpClient, type McpToolDefinition, type McpToolResult } from './client.ts';
-import {
-  loadMcpConfig,
-  type McpConfigDiagnostic,
-  type McpServerConfig,
-  mcpConfigSource,
-} from './config.ts';
+import { runtimeMcpError } from './client.ts';
+import type { McpConfigDiagnostic } from './config.ts';
+
+export {
+  MCP_CALL_TIMEOUT_MS,
+  MCP_CONNECT_ALL_TIMEOUT_MS,
+  MCP_CONNECT_TIMEOUT_MS,
+  type McpCatalog,
+  type McpConfig,
+  type McpConnection,
+} from '../../../shared/mcp/connect.ts';
+export { mcpToolName } from '../../../shared/mcp/naming.ts';
+export {
+  MCP_IMAGE_BYTES,
+  MCP_IMAGE_TOTAL_BYTES,
+  MCP_MAX_IMAGES,
+  MCP_OUTPUT_BYTES,
+} from '../../../shared/mcp/results.ts';
 
 export const MCP_SERVICE = 'runtimeMcp';
-
-/** Handshake budget. A server that cannot introduce itself in this is not usable. */
-export const MCP_CONNECT_TIMEOUT_MS = 30_000;
-/**
- * Ceiling for the whole connect phase, across every declared server.
- *
- * This runs inside `createRuntime`, which Main awaits under one bounded RPC
- * (`BOOTSTRAP_REQUEST_TIMEOUT_MS`, 60s). Anything at or above that budget means
- * a single slow server does not merely lose its own tools — it fails the
- * session's creation with a generic timeout that says nothing about MCP, and it
- * does so again on every retry until the user finds and edits `mcp.json`. So it
- * is deliberately well under: what expires here is one server, not the session.
- */
-export const MCP_CONNECT_ALL_TIMEOUT_MS = 45_000;
-/** Per-call budget, matching the bash tool's default so one hung tool cannot outlast a turn. */
-export const MCP_CALL_TIMEOUT_MS = 120_000;
-/** Tool output is folded into the conversation, so it shares the tool budget. */
-export const MCP_OUTPUT_BYTES = 50 * 1024;
-/** Images bypass the text budget entirely, so their count is what is capped. */
-export const MCP_MAX_IMAGES = 8;
-/**
- * T024 — byte ceilings for the images one call may forward.
- *
- * A count alone does not bound anything: the base64 payload of every forwarded
- * image is written into the session file verbatim, and the only other limit on
- * it is the 8 MiB transport frame, so eight images could add most of that to a
- * single JSONL line. Unlike a tool's text output — which the model produced and
- * is therefore bounded by its own output budget — this size is chosen entirely
- * by a third-party server, which makes it the one session-file source a user
- * cannot influence. Per-image and per-call are both needed: one ceiling alone
- * is escapable by splitting one big image into eight merely large ones.
- *
- * The numbers: 1 MiB of base64 is roughly 768 KiB of PNG, generous for a
- * screenshot, and 2 MiB per call keeps the worst call at 1/16 of the session
- * budget instead of 1/4.
- */
-export const MCP_IMAGE_BYTES = 1024 * 1024;
-export const MCP_IMAGE_TOTAL_BYTES = 2 * 1024 * 1024;
-
-export interface McpConnection {
-  server: McpServerConfig;
-  /** Absent when the server never started: there is no client to fake. */
-  client?: McpClient;
-  tools: McpToolDefinition[];
-  /** Populated when this server failed to start or to introduce itself. */
-  error?: string;
-  /**
-   * Tools this server offered that could not be published, one message each.
-   *
-   * Separate from {@link error} because the connection itself is fine and its
-   * other tools work; folding these into `error` would report a healthy server
-   * as failed and stop anything that counts failures from being meaningful.
-   */
-  toolErrors?: string[];
-}
 
 export interface RuntimeMcpService {
   readonly connections: readonly McpConnection[];
@@ -120,233 +88,20 @@ declare module 'cordis' {
   }
 }
 
-export interface McpConfig {
-  agentDir?: string;
-  cwd?: string;
-  projectTrusted?: boolean;
-  /** decision 008 — which of user / project / local `mcp.json` files to read. */
-  settingSources?: readonly SettingSource[];
-  connectTimeoutMs?: number;
-  /** Ceiling for the whole connect phase. Defaults to {@link MCP_CONNECT_ALL_TIMEOUT_MS}. */
-  connectAllTimeoutMs?: number;
-  callTimeoutMs?: number;
-  /** Diagnostics sink. Server stderr is noisy and belongs in a log, not a card. */
-  log?: (...args: unknown[]) => void;
-}
-
 /**
- * `mcp__<server>__<tool>`, clamped to what a provider accepts as a tool name.
- *
- * The alphabet is `[A-Za-z0-9_-]` because that is OpenAI's and Anthropic's rule
- * for a function name, not a local preference — and a tool definition rides
- * along with EVERY request, so one unacceptable character does not break one
- * call, it breaks every turn of the session with a 400 that names no tool.
- * A dot is the common case (`slack.postMessage`), so it is replaced rather than
- * rejected; two names that collide once replaced are caught at registration.
+ * Start every declared server and ask each for its tools, through the
+ * runtime's HostIo and exec exits. See `src/shared/mcp/connect.ts`; the only
+ * thing added here is the runtime's error type on every client.
  */
-export function mcpToolName(server: string, tool: string): string {
-  const safe = (value: string) => value.replace(/[^A-Za-z0-9_-]/g, '_');
-  return `mcp__${safe(server)}__${safe(tool)}`.slice(0, 64);
-}
-
-export interface McpCatalog {
-  connections: McpConnection[];
-  diagnostics: McpConfigDiagnostic[];
-}
-
-/**
- * Start every declared server and ask each for its tools.
- *
- * Servers are started in parallel: they are independent processes and a slow
- * one must not delay a session's start by the sum of everyone's handshakes.
- * One shared stopwatch caps the phase as a whole, because the per-server
- * budgets are not the number Main is holding a timer against.
- */
-export async function connectMcpServers(
+export function connectMcpServers(
   io: RuntimeHostIoService,
   exec: RuntimeExecService,
   config: McpConfig
 ): Promise<McpCatalog> {
-  const loaded = await loadMcpConfig(mcpConfigSource(io), {
-    ...(config.agentDir ? { agentDir: config.agentDir } : {}),
-    ...(config.cwd ? { cwd: config.cwd } : {}),
-    ...(config.projectTrusted ? { projectTrusted: true } : {}),
-    ...(config.settingSources ? { settingSources: config.settingSources } : {}),
+  return connectSharedMcpServers(io, exec, {
+    ...config,
+    createError: config.createError ?? runtimeMcpError,
   });
-  const budgetMs = config.connectAllTimeoutMs ?? MCP_CONNECT_ALL_TIMEOUT_MS;
-  const budget = connectBudget(budgetMs);
-  try {
-    const connections = await Promise.all(
-      loaded.servers.map((server) => connectOne(exec, server, config, budget.expired, budgetMs))
-    );
-    return { connections, diagnostics: loaded.diagnostics };
-  } finally {
-    budget.cancel();
-  }
-}
-
-/** A stopwatch shared by every server in one connect phase. Never rejects. */
-function connectBudget(ms: number): { expired: Promise<void>; cancel: () => void } {
-  let ring: () => void = () => undefined;
-  const expired = new Promise<void>((resolve) => {
-    ring = resolve;
-  });
-  const timer = setTimeout(() => ring(), ms);
-  // The phase is awaited, so this timer must never be the reason a process
-  // stays alive after everyone has answered.
-  timer.unref?.();
-  return { expired, cancel: () => clearTimeout(timer) };
-}
-
-async function connectOne(
-  exec: RuntimeExecService,
-  server: McpServerConfig,
-  config: McpConfig,
-  expired: Promise<void>,
-  budgetMs: number
-): Promise<McpConnection> {
-  let client: McpClient | undefined;
-  try {
-    const child = await exec.spawn({
-      command: server.command,
-      args: server.args,
-      cwd: config.cwd ?? process.cwd(),
-      env: server.env,
-      onStdout: (chunk) => client?.receive(chunk),
-      // Drained and logged, never dropped: D11 point 5 — an unread pipe fills
-      // and the server blocks on its own startup banner.
-      onStderr: (chunk) =>
-        config.log?.(`[mcp:${server.name}]`, Buffer.from(chunk).toString('utf8').trimEnd()),
-    });
-    const started = new McpClient({
-      child,
-      timeoutMs: config.connectTimeoutMs ?? MCP_CONNECT_TIMEOUT_MS,
-      callTimeoutMs: config.callTimeoutMs ?? MCP_CALL_TIMEOUT_MS,
-    });
-    client = started;
-    let tools: McpToolDefinition[] = [];
-    let failure: unknown;
-    const handshake = (async () => {
-      await started.initialize();
-      tools = await started.listTools();
-      // Only now does this connection move to the per-call budget: `tools/list`
-      // is part of starting up, and starting up is what Main is timing.
-      started.beginCalls();
-    })().then(
-      () => 'ready' as const,
-      (error) => {
-        failure = error;
-        return 'failed' as const;
-      }
-    );
-    const outcome = await Promise.race([handshake, expired.then(() => 'expired' as const)]);
-    if (outcome === 'failed') throw failure;
-    if (outcome === 'expired')
-      throw new RuntimeHostError(
-        'mcp_timeout',
-        `${server.name} was still starting when the ${budgetMs}ms MCP connect budget ran out`
-      );
-    const connection: McpConnection = { server, client: started, tools };
-    // A server that dies later leaves a record that still reads as healthy and
-    // still lists tools. This is the only place that can correct it.
-    started.onFailure = (reason) => {
-      connection.error ??= reason;
-    };
-    return connection;
-  } catch (error) {
-    await client?.close().catch(() => undefined);
-    return {
-      server,
-      tools: [],
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-}
-
-/**
- * A server's `tools/call` result, as content the model can actually receive.
- *
- * An image comes back as `{type:'image', data, mimeType}`, which is exactly the
- * shape a tool result may carry, so it is forwarded rather than flattened: a
- * screenshot server is one of the most common MCP servers there is, and the
- * literal text `[image]` is indistinguishable to the model from a tool that
- * returned nothing.
- */
-function contentOf(result: McpToolResult): {
-  content: (TextContent | ImageContent)[];
-  images: number;
-} {
-  const texts: string[] = [];
-  const images: ImageContent[] = [];
-  let dropped = 0;
-  let oversized = 0;
-  let imageBytes = 0;
-  for (const part of result.content) {
-    if (part.type === 'text' && typeof part.text === 'string') {
-      if (part.text) texts.push(part.text);
-      continue;
-    }
-    if (part.type === 'image' && typeof part.data === 'string' && part.data) {
-      if (images.length >= MCP_MAX_IMAGES) {
-        dropped += 1;
-        continue;
-      }
-      // T024 — measured before the payload is kept, not after: an image that
-      // does not fit must never reach the session file at all.
-      const bytes = Buffer.byteLength(part.data);
-      if (bytes > MCP_IMAGE_BYTES || imageBytes + bytes > MCP_IMAGE_TOTAL_BYTES) {
-        oversized += 1;
-        continue;
-      }
-      imageBytes += bytes;
-      images.push({
-        type: 'image',
-        data: part.data,
-        mimeType: typeof part.mimeType === 'string' ? part.mimeType : 'image/png',
-      });
-      continue;
-    }
-    // Resource links, audio, and whatever a future revision adds: named, so the
-    // model can tell "I got something I cannot read" from "I got nothing".
-    texts.push(`[${part.type}]`);
-  }
-  if (dropped > 0) texts.push(`[${dropped} more image(s) not forwarded]`);
-  // Said separately from the count overflow: "too many" is answered by asking
-  // for fewer, "too large" is not, and a model told the wrong one retries the
-  // call forever.
-  if (oversized > 0) texts.push(`[${oversized} image(s) dropped: over the size budget]`);
-  const joined = texts.join('\n');
-  // T024 — cut on bytes, which is what the budget is named in and what the
-  // session file is measured in. `String.length` counts UTF-16 units, so the
-  // same "50 KiB" admitted up to three times that in CJK or emoji text.
-  const encoded = Buffer.from(joined);
-  const text =
-    encoded.byteLength > MCP_OUTPUT_BYTES
-      ? `${truncateUtf8(encoded, MCP_OUTPUT_BYTES)}\n[output truncated]`
-      : joined;
-  return {
-    content: [{ type: 'text', text: text || summarize(images.length) }, ...images],
-    images: images.length,
-  };
-}
-
-/**
- * Cut UTF-8 bytes without producing a replacement character.
- *
- * `stream: true` makes the decoder hold back an incomplete trailing sequence
- * rather than emit U+FFFD for it, so the cut lands on a character boundary and
- * the dropped bytes are at most three.
- */
-function truncateUtf8(bytes: Buffer, limit: number): string {
-  return new TextDecoder('utf-8', { ignoreBOM: true }).decode(bytes.subarray(0, limit), {
-    stream: true,
-  });
-}
-
-/** The text block is never empty: a transcript renders it, and JSON of a base64 image is not a transcript line. */
-function summarize(images: number): string {
-  if (images === 0) return '(no output)';
-  return images === 1 ? '(1 image)' : `(${images} images)`;
 }
 
 export class McpPlugin extends Service implements RuntimeMcpService {
@@ -412,9 +167,9 @@ export class McpPlugin extends Service implements RuntimeMcpService {
             // author writes rules against. Both are passed explicitly so a
             // rule like `"mcp": "deny"` or `"mcp": {"echo:*": "deny"}` is
             // actually consulted instead of silently never matching.
-            policySurface: 'mcp',
-            policyValue: `${connection.server.name}:${tool.name}`,
-            preview: { label: 'Arguments', text: JSON.stringify(args, null, 2).slice(0, 4000) },
+            policySurface: MCP_POLICY_SURFACE,
+            policyValue: mcpPolicyValue(connection.server.name, tool.name),
+            preview: mcpArgumentsPreview(args),
           },
           signal
         );
@@ -423,25 +178,16 @@ export class McpPlugin extends Service implements RuntimeMcpService {
         // it a stopped turn still waits out the call budget, and the server
         // keeps working on an answer no one will read.
         const result = await client.callTool(tool.name, args, signal);
-        // MCP's `isError` is the SERVER reporting a tool-level failure — a
-        // missing file, a rejected query — which the model is meant to read and
-        // react to. Throwing here would end the tool call as a runtime fault
-        // and hide the server's own explanation, so it is labelled in the text
-        // instead. A transport fault is a different thing and does throw.
-        const { content, images } = contentOf(result);
-        const [first, ...rest] = content;
+        // A server-reported `isError` is labelled in the text, not thrown; a
+        // transport fault already threw above. See `foldMcpToolResult`.
+        const folded = foldMcpToolResult(result);
         return {
-          content: [
-            result.isError && first?.type === 'text'
-              ? { type: 'text', text: `[tool reported an error]\n${first.text}` }
-              : first,
-            ...rest,
-          ].filter((part): part is TextContent | ImageContent => part !== undefined),
+          content: folded.content,
           details: {
             server: connection.server.name,
             tool: tool.name,
-            isError: result.isError === true,
-            images,
+            isError: folded.isError,
+            images: folded.images,
           },
         };
       },

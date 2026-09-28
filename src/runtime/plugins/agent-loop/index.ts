@@ -76,8 +76,9 @@ import {
  * reason to keep the whole thing — it exists to reconstruct what happened,
  * not to reproduce the file — so this listener caps its own copy before
  * `trace.note`. Matches the MCP bridge's existing preview cap
- * (`plugins/mcp/index.ts`), so an MCP preview that already fits is never
- * truncated a second time more aggressively than it already was.
+ * (`mcpArgumentsPreview` in `src/shared/mcp/naming.ts`), so an MCP preview
+ * that already fits is never truncated a second time more aggressively than
+ * it already was.
  */
 const MAX_TRACE_PREVIEW_CHARS = 4000;
 

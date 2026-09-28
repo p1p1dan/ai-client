@@ -1,6 +1,12 @@
 /**
  * P5-1 — the skills plugin: catalog, prompt slot and the `skill` tool.
  *
+ * dsh-rebase P1-16 prep: the roots, the IO adapter and the catalog scan moved
+ * to `src/shared/skills/catalog.ts` (the loader, templates and expansion to
+ * their shared siblings) and are re-exported below under their old names.
+ * What stays here is the runtime's own: the Cordis service, the `skill` tool
+ * and its permission gate. P1-12 deletes this file with the runtime.
+ *
  * ## Why the catalog is built before the plugin, not inside it
  *
  * Scanning is IO and Cordis service constructors are synchronous, so this
@@ -21,17 +27,14 @@
  * not a hole: there is no argument that reaches an arbitrary path.
  */
 
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
 import { type Context, Service } from 'cordis';
 import { Type } from 'typebox';
 import {
-  HOST_IO_SERVICE,
-  type RuntimeFileKind,
-  type RuntimeHostIoService,
-} from '../../contracts.ts';
-import { errorCode } from '../../host/errors.ts';
-import { resolveSettingSources, type SettingSource } from '../../settingSources.ts';
+  readCatalogBody,
+  rescanSkillCatalog,
+  type SkillCatalog,
+} from '../../../shared/skills/catalog.ts';
+import { HOST_IO_SERVICE } from '../../contracts.ts';
 import { PERMISSIONS_SERVICE } from '../permissions/index.ts';
 import type { PromptSegment } from '../prompt/segments.ts';
 import { TOOLS_SERVICE } from '../tools/index.ts';
@@ -41,35 +44,23 @@ import {
   parseSlashInvocation,
   type SlashInvocation,
 } from './expand.ts';
-import {
-  loadSkills,
-  type RuntimeSkill,
-  type SkillDiagnostic,
-  type SkillRoot,
-  type SkillSource,
-} from './loader.ts';
+import type { RuntimeSkill, SkillDiagnostic } from './loader.ts';
 import { skillsSegment } from './prompt.ts';
-import {
-  loadPromptTemplates,
-  MAX_TEMPLATE_BYTES,
-  type RuntimePromptTemplate,
-  type TemplateRoot,
-  templateBody,
-} from './templates.ts';
+import type { RuntimePromptTemplate } from './templates.ts';
+
+export {
+  loadSkillCatalog,
+  MAX_SCAN_BYTES,
+  MAX_SKILL_BYTES,
+  type SkillCatalog,
+  type SkillCatalogFiles,
+  type SkillsConfig,
+  skillRoots,
+  skillSource,
+  templateRoots,
+} from '../../../shared/skills/catalog.ts';
 
 export const SKILLS_SERVICE = 'runtimeSkills';
-
-/** A skill body is loaded into the conversation, so it shares the prompt's order of magnitude. */
-export const MAX_SKILL_BYTES = 256 * 1024;
-/**
- * Scanning reads only far enough to see the frontmatter (and, for a template
- * with no `description`, its first body line). Reading whole files here would
- * cost the full body of every installed skill on every session start, for three
- * fields — and skills are allowed to be long documents.
- */
-export const MAX_SCAN_BYTES = 16 * 1024;
-
-const OPTIONAL_FILE_ERRORS = new Set(['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM', 'EISDIR', 'ELOOP']);
 
 export interface RuntimeSkillsService {
   readonly skills: readonly RuntimeSkill[];
@@ -95,184 +86,6 @@ declare module 'cordis' {
   interface Context {
     runtimeSkills: RuntimeSkillsService;
   }
-}
-
-/**
- * Adapt `runtimeHostIo` to the loader's port (D11: one exit, not per-module
- * `node:fs`). Expected absences answer `undefined`; host/transport failures
- * propagate, because on the encrypted target a read that fails is not the same
- * fact as a user with no skills.
- */
-export function skillSource(io: RuntimeHostIoService, maxBytes: number): SkillSource {
-  return {
-    async readText(path) {
-      try {
-        const result = await io.readFile(path, { maxBytes, overflow: 'truncate' });
-        return new TextDecoder().decode(result.bytes, { stream: result.truncated });
-      } catch (error) {
-        if (OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) return undefined;
-        throw error;
-      }
-    },
-    async list(path) {
-      try {
-        const entries: { name: string; kind: RuntimeFileKind }[] = [];
-        for await (const entry of io.readDirectory(path)) entries.push(entry);
-        return entries;
-      } catch (error) {
-        if (OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) return undefined;
-        throw error;
-      }
-    },
-    async stat(path) {
-      try {
-        // Default `followSymlinks` (unlike `list`'s Dirent) resolves the link.
-        const info = await io.stat(path);
-        return { kind: info.kind };
-      } catch (error) {
-        if (OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) return undefined;
-        throw error;
-      }
-    },
-  };
-}
-
-export interface SkillsConfig {
-  /** Managed agent directory. Supplies `<agentDir>/skills` and `<agentDir>/prompts`. */
-  agentDir?: string;
-  /** Session workspace. Supplies the project roots. */
-  cwd?: string;
-  /**
-   * Project roots are loaded only when the user has trusted this folder — a
-   * skill is instructions the model follows and may point at scripts it runs,
-   * so an untrusted checkout must not be able to contribute one. Same gate
-   * `loadPermissionPolicy` applies to project policy files.
-   */
-  projectTrusted?: boolean;
-  /**
-   * decision 008 — which tiers contribute roots. Absent means all of them.
-   *
-   * There is no `local` skills root: the decision defines the local tier as
-   * three named files (`pi-permissions.local.jsonc`, `mcp.local.json`,
-   * `CLAUDE.local.md`) and skills are not among them. Inventing a fourth path
-   * here would be this app's own convention dressed as an official one, and
-   * `extraSkillRoots` already covers "a root only this machine has".
-   */
-  settingSources?: readonly SettingSource[];
-  /** Extra roots, for probes and tests. Highest precedence. */
-  extraSkillRoots?: readonly SkillRoot[];
-  extraTemplateRoots?: readonly TemplateRoot[];
-  /** Overridable so a test does not depend on the machine's real home. */
-  home?: string;
-}
-
-/** Safety bound on the ancestor climb (decision 004); a real filesystem never gets close. */
-const MAX_ANCESTOR_LEVELS = 64;
-
-/**
- * Decision 004 — `cwd` and every ancestor up to and including the repo root,
- * closest first. The repo root is the first ancestor whose `.git` stats
- * successfully (a worktree's `.git` is a file, not a directory, so this only
- * needs the stat to succeed, not a particular kind). No `.git` anywhere in
- * the climb answers `[cwd]`, which is the pre-decision-004 behaviour.
- */
-async function projectSkillDirectories(
-  io: Pick<RuntimeHostIoService, 'stat'>,
-  cwd: string
-): Promise<readonly string[]> {
-  const chain: string[] = [];
-  let dir = cwd;
-  for (let level = 0; level < MAX_ANCESTOR_LEVELS; level++) {
-    chain.push(dir);
-    let atRepoRoot: boolean;
-    try {
-      await io.stat(join(dir, '.git'));
-      atRepoRoot = true;
-    } catch (error) {
-      if (!OPTIONAL_FILE_ERRORS.has(errorCode(error) ?? '')) throw error;
-      atRepoRoot = false;
-    }
-    if (atRepoRoot) return chain;
-    const parent = dirname(dir);
-    if (parent === dir) break; // filesystem root reached, no `.git` found
-    dir = parent;
-  }
-  return [cwd];
-}
-
-/**
- * The roots to scan, least specific first.
- *
- * Order is precedence: a later root's skill of the same name replaces an
- * earlier one, which is how a project overrides a user-wide skill. It mirrors
- * `loadInstructionChain`'s globals-then-project order for the same reason.
- */
-export async function skillRoots(
-  io: Pick<RuntimeHostIoService, 'stat'>,
-  config: SkillsConfig
-): Promise<readonly SkillRoot[]> {
-  const home = config.home ?? homedir();
-  const roots: SkillRoot[] = [];
-  const enabled = resolveSettingSources(config);
-  if (config.agentDir && enabled.user)
-    roots.push({ path: join(config.agentDir, 'skills'), scope: 'user', rootMarkdown: true });
-  // decision 008 — `~/.agents/skills` is the user tier's second root, so the
-  // switch has to reach it too; leaving it unconditional would have made
-  // "settingSources without user" mean "half the user tier".
-  if (enabled.user)
-    roots.push({ path: join(home, '.agents', 'skills'), scope: 'user', rootMarkdown: false });
-  if (config.cwd && enabled.project) {
-    roots.push({ path: join(config.cwd, '.pi', 'skills'), scope: 'project', rootMarkdown: true });
-    // Decision 004: `.agents/skills` is looked up from cwd through every
-    // ancestor to the repo root, same as pi. Repo-root first (least
-    // specific), cwd last — `loadSkills` is last-wins, so a name declared
-    // closer to the work overrides one declared further away.
-    const chain = await projectSkillDirectories(io, config.cwd);
-    for (const dir of [...chain].reverse()) {
-      roots.push({ path: join(dir, '.agents', 'skills'), scope: 'project', rootMarkdown: false });
-    }
-  }
-  roots.push(...(config.extraSkillRoots ?? []));
-  return roots;
-}
-
-export function templateRoots(config: SkillsConfig): readonly TemplateRoot[] {
-  const roots: TemplateRoot[] = [];
-  const enabled = resolveSettingSources(config);
-  if (config.agentDir && enabled.user)
-    roots.push({ path: join(config.agentDir, 'prompts'), scope: 'user' });
-  if (config.cwd && enabled.project)
-    roots.push({ path: join(config.cwd, '.pi', 'prompts'), scope: 'project' });
-  roots.push(...(config.extraTemplateRoots ?? []));
-  return roots;
-}
-
-export interface SkillCatalog {
-  skills: readonly RuntimeSkill[];
-  templates: readonly RuntimePromptTemplate[];
-  diagnostics: readonly SkillDiagnostic[];
-  /** skills-mcp-20 — kept so `SkillsPlugin.refresh()` can re-scan without recomputing config. */
-  resolvedSkillRoots: readonly SkillRoot[];
-  resolvedTemplateRoots: readonly TemplateRoot[];
-}
-
-export async function loadSkillCatalog(
-  io: RuntimeHostIoService,
-  config: SkillsConfig
-): Promise<SkillCatalog> {
-  // Descriptions only at scan time; bodies are read on demand by the tool.
-  const source = skillSource(io, MAX_SCAN_BYTES);
-  const resolvedSkillRoots = await skillRoots(io, config);
-  const resolvedTemplateRoots = templateRoots(config);
-  const skills = await loadSkills(source, resolvedSkillRoots);
-  const templates = await loadPromptTemplates(source, resolvedTemplateRoots);
-  return {
-    skills: skills.skills,
-    templates: templates.templates,
-    diagnostics: [...skills.diagnostics, ...templates.diagnostics],
-    resolvedSkillRoots,
-    resolvedTemplateRoots,
-  };
 }
 
 export class SkillsPlugin extends Service implements RuntimeSkillsService {
@@ -361,18 +174,7 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
   }
 
   async refresh(): Promise<void> {
-    const source = skillSource(this.ctx.runtimeHostIo, MAX_SCAN_BYTES);
-    const [skills, templates] = await Promise.all([
-      loadSkills(source, this.catalog.resolvedSkillRoots),
-      loadPromptTemplates(source, this.catalog.resolvedTemplateRoots),
-    ]);
-    this.catalog = {
-      skills: skills.skills,
-      templates: templates.templates,
-      diagnostics: [...skills.diagnostics, ...templates.diagnostics],
-      resolvedSkillRoots: this.catalog.resolvedSkillRoots,
-      resolvedTemplateRoots: this.catalog.resolvedTemplateRoots,
-    };
+    this.catalog = await rescanSkillCatalog(this.ctx.runtimeHostIo, this.catalog);
   }
 
   /**
@@ -406,11 +208,7 @@ export class SkillsPlugin extends Service implements RuntimeSkillsService {
 
   /** Body of a catalog file, frontmatter stripped. Only catalog paths reach here. */
   private async body(filePath: string): Promise<string | undefined> {
-    const text = await skillSource(
-      this.ctx.runtimeHostIo,
-      Math.max(MAX_SKILL_BYTES, MAX_TEMPLATE_BYTES)
-    ).readText(filePath);
-    return text === undefined ? undefined : templateBody(text);
+    return readCatalogBody(this.ctx.runtimeHostIo, filePath);
   }
 }
 
