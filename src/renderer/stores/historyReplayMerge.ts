@@ -116,6 +116,20 @@
  * pre-anchor hole that hole A exists to reclaim, degrading "stable
  * duplication" into "duplication plus positional drift".
  *
+ * EXACT LIVE IDENTITY (dsh-rebase P1-4d1) runs before all of the above. A DSH
+ * session's history names, on each row, the id its live copy carried
+ * (`liveMessageId`: `dsh-user-<seq>`, `dsh-notice-<seq>`,
+ * `dsh-<session>-t<turn>-s<step>`). A candidate (guard 1) found under that id
+ * IS the row, whatever its blocks — tool rows, a notice, a turn head with no
+ * text — where the tiers below can only compare text and keep what they
+ * cannot match. The row stands for it at its own position, so a warm resume on
+ * a live DSH slot (the P1-1 point-check's repeated resume) neither duplicates
+ * nor reorders a turn: L6 does not apply to DSH sessions. A message still
+ * waiting — an unanswered card or question, a call with no result — is never
+ * folded this way; its live blocks are the ones being answered. Except after a
+ * restart (`sourceGone`): the engine that would have answered them is dead,
+ * and the row (an outcome-unknown result, say) is the only truth left.
+ *
  * Zero store imports on purpose (same leaf-module rule as
  * `sessionIndex/dismissedSessions.ts`): `chatSessions.ts` calls this from
  * its reducer, so this file must never import back into store/hook land.
@@ -128,11 +142,22 @@ import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 export interface ReplayMergeMessage {
   id: string;
   role: string;
-  blocks: readonly { type: string; text?: string }[];
+  blocks: readonly {
+    type: string;
+    text?: string;
+    /** Pairs a `tool_call` with its `tool_result` (exact-identity settledness). */
+    toolCallId?: string;
+    /** A `permission_request` that was answered. */
+    resolved?: boolean;
+    /** A `question` that was answered, skipped or refused. */
+    questionOutcome?: string;
+  }[];
   /** Attachment metadata; carried by runtime messages and, since the C-06
    * attachments widening, by history rows too. Fold checks only read it off
    * runtime copies. */
   attachments?: readonly unknown[];
+  /** History rows of a DSH session: the id the row's live copy carried (P1-4d1). */
+  liveMessageId?: string;
 }
 
 export interface ResumeSnapshot {
@@ -345,6 +370,57 @@ function isFoldable(message: ReplayMergeMessage): boolean {
 }
 
 /**
+ * P1-4d1: nothing in the message still waits on someone — every card and
+ * question is answered, every tool call has its result. Only such a message
+ * may give way to its history row by exact identity.
+ */
+function isSettled(message: ReplayMergeMessage): boolean {
+  const results = new Set(
+    message.blocks.filter((block) => block.type === 'tool_result').map((block) => block.toolCallId)
+  );
+  return message.blocks.every((block) => {
+    if (block.type === 'permission_request') return block.resolved === true;
+    if (block.type === 'question') return block.questionOutcome !== undefined;
+    if (block.type === 'tool_call') return results.has(block.toolCallId);
+    return true;
+  });
+}
+
+/**
+ * P1-4d1 — exact live identity (see the header): the candidates a history row
+ * names by `liveMessageId`, which give way to that row. Returns the runtime
+ * messages left for the text tiers, the history indexes already taken, and
+ * the rows whose live copy replaces them (the copy has attachment metadata a
+ * replayed row may lack, as in the replacement fold).
+ */
+function foldExactLiveIds<T extends ReplayMergeMessage>(
+  runtime: readonly T[],
+  historyMessages: readonly T[],
+  candidateIds: ReadonlySet<string>,
+  sourceGone: boolean
+): { remaining: T[]; claimed: Set<number>; replacements: Map<number, T> } {
+  const rowOf = new Map<string, number>();
+  historyMessages.forEach((row, index) => {
+    if (row.liveMessageId) rowOf.set(row.liveMessageId, index);
+  });
+  const claimed = new Set<number>();
+  const replacements = new Map<number, T>();
+  if (rowOf.size === 0) return { remaining: [...runtime], claimed, replacements };
+  const remaining: T[] = [];
+  for (const message of runtime) {
+    const at = candidateIds.has(message.id) ? rowOf.get(message.id) : undefined;
+    // A dead engine's message will never settle: its row is all there is to it.
+    if (at === undefined || claimed.has(at) || (!sourceGone && !isSettled(message))) {
+      remaining.push(message);
+      continue;
+    }
+    claimed.add(at);
+    if (message.attachments && message.attachments.length > 0) replacements.set(at, message);
+  }
+  return { remaining, claimed, replacements };
+}
+
+/**
  * True when the message would be foldable except for attachments. These are
  * "replacement foldable": when matched against a history row, the history
  * copy is REPLACED by the runtime copy (preserving attachment metadata)
@@ -365,7 +441,16 @@ function isReplacementFoldable(message: ReplayMergeMessage): boolean {
 export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   bucket: readonly T[],
   historyMessages: readonly T[],
-  options: { historyReadFailed: boolean; snapshot: ResumeSnapshot | null }
+  options: {
+    historyReadFailed: boolean;
+    snapshot: ResumeSnapshot | null;
+    /**
+     * P1-4d1: the replay follows a restart (`mode: 'refresh'`) — the engine
+     * that sent every pre-resume message is gone, so none of them is still
+     * waiting on anything, and exact identity folds them all.
+     */
+    sourceGone?: boolean;
+  }
 ): T[] {
   // Prefix replace semantics unchanged: previously hydrated `h:*` rows are
   // always superseded by the fresh replay.
@@ -385,6 +470,19 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   }
   const { candidateIds, anchorHistoryId, orderedIds } = snapshot;
 
+  // P1-4d1: exact live identity first. An id is no text guess, so it needs
+  // neither the anchor nor the cursor below.
+  const exact = foldExactLiveIds(
+    runtime,
+    historyMessages,
+    candidateIds,
+    options.sourceGone === true
+  );
+  const withExact = (rows: readonly T[]): T[] =>
+    exact.replacements.size > 0
+      ? rows.map((row, index) => exact.replacements.get(index) ?? row)
+      : [...rows];
+
   // Guard 3a: the anchor's PRESENCE proves `h:<jsonl-uuid>` id continuity
   // across re-reads. When the anchor row is GONE from this replay (head
   // eviction under the read caps — a protocol-legal success with
@@ -395,7 +493,7 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
     ? historyMessages.findIndex((history) => history.id === anchorHistoryId)
     : -1;
   if (anchorHistoryId && anchorIndex < 0) {
-    return [...historyMessages, ...runtime];
+    return [...withExact(historyMessages), ...exact.remaining];
   }
 
   // Guard 3d (alignment probe): the snapshot's bucket order IS the previous
@@ -414,8 +512,8 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   // is guard 3e below, one exact index at a time.
   let cursor = anchorIndex + 1;
   // Every index claimed by either channel, so the replacement map can never
-  // receive two writers for one key (INV-P1).
-  const claimed = new Set<number>();
+  // receive two writers for one key (INV-P1). The exact fold's rows are taken.
+  const claimed = exact.claimed;
   // Attachment-tier precondition 1, hoisted: an anchorless replay must never
   // fold the attachment tier (identity collapses and the scan covers the whole
   // file, so an unattributable hit would DELETE a real turn).
@@ -425,9 +523,9 @@ export function mergeReplayedHistory<T extends ReplayMergeMessage>(
   // Replacement folds: runtime messages with attachments that matched a
   // history row. The history row is swapped for the runtime copy so the
   // attachment metadata (thumbnails, names) survives the merge.
-  const historyReplacements = new Map<number, T>();
+  const historyReplacements = exact.replacements;
 
-  for (const message of runtime) {
+  for (const message of exact.remaining) {
     if (!candidateIds.has(message.id)) {
       kept.push(message);
       continue;

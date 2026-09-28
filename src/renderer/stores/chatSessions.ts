@@ -17,6 +17,7 @@ import {
   type HistoryAttachment,
   type HistoryMessage,
   type HistoryNotice,
+  type TurnOrigin,
   type TurnStopCause,
 } from '@shared/types/sessionHistory';
 import { create } from 'zustand';
@@ -361,6 +362,20 @@ export interface ChatMessage {
    * `replayedSpanMetadata` ends a replayed turn here (N2, 2026-09-24).
    */
   settledAt?: number;
+  /**
+   * dsh-rebase P1-4d1 (decision 072 rule 3; optional-field addition, same
+   * discipline as `attachments`): user messages only — this one heads a turn
+   * the engine started by itself (a goal round, a background job's or a child
+   * agent's wake-up), nobody typed it. Set once at `message.started` or by the
+   * replay, never mutated after. P1-7a draws such a message as a turn head.
+   */
+  origin?: TurnOrigin;
+  /**
+   * dsh-rebase P1-4d1: replay only — the id this message's live copy had
+   * (`HistoryMessage.liveMessageId`). `historyReplayMerge.ts` reads it to
+   * recognise a live message the replay carries, by id rather than by text.
+   */
+  liveMessageId?: string;
 }
 
 interface PendingPermission {
@@ -967,6 +982,10 @@ function mapHistoryMessageToChatMessage(
     ...(typeof historyMessage.settledAt === 'number'
       ? { settledAt: historyMessage.settledAt }
       : {}),
+    // P1-4d1: absent unless the row heads a turn the engine started (origin)
+    // or names its live copy (a DSH session's own history).
+    ...(historyMessage.origin ? { origin: historyMessage.origin } : {}),
+    ...(historyMessage.liveMessageId ? { liveMessageId: historyMessage.liveMessageId } : {}),
   };
 }
 
@@ -1205,6 +1224,8 @@ function applyRuntimeEventCore(
         mergedBucket = mergeReplayedHistory(bucket, historyMessages, {
           historyReadFailed: payload.error != null,
           snapshot: takeResumeSnapshot(sessionId, event.requestId),
+          // P1-4d1: Main replays `refresh` only after a restart; the old engine is gone.
+          sourceGone: payload.mode === 'refresh',
         });
       }
       const messages = withBucket(state, sessionId, mergedBucket);
@@ -1366,6 +1387,8 @@ function applyRuntimeEventCore(
         // `model` straight off the wire via `messageMetadata.ts`'s own
         // registry, never this store) — see that file's `reduceMessageMetadata`.
         ...(event.payload.attachments ? { attachments: event.payload.attachments } : {}),
+        // P1-4d1 (decision 072 rule 3): same optional-field rule.
+        ...(event.payload.origin ? { origin: event.payload.origin } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };

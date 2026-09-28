@@ -1248,3 +1248,142 @@ describe('T32 Pi hydration generations and pagination', () => {
     });
   });
 });
+
+/**
+ * dsh-rebase P1-4d1 — the P1-1 point-check's open question: after a refused
+ * send, and on Continue, Main resumes the SAME live DSH slot again and replays
+ * its first page (`session.resumed` + `session.history` initial). With P1-4a
+ * that page is no longer empty. Does it overwrite the timeline the window
+ * already shows?
+ */
+describe('applyRuntimeEvent — a warm resume on a live DSH slot (dsh-rebase P1-4d1)', () => {
+  const STEP_1 = 'dsh-aiclient-s1-t1-s1';
+  const STEP_2 = 'dsh-aiclient-s1-t1-s2';
+  const event = (type: string, payload: Record<string, unknown>, requestId = 'turn-1') =>
+    ({ type, seq: 0, sessionId: SESSION_ID, requestId, timestamp: 2000, payload }) as RuntimeEvent;
+
+  /** The live stream of one DSH turn: a prompt, a tool step, a text step, a notice, then a goal round's head. */
+  const liveTurn: RuntimeEvent[] = [
+    event('message.started', { messageId: 'dsh-user-7', role: 'user', attemptId: 'a-1' }),
+    event('message.delta', { messageId: 'dsh-user-7', blockId: 'dsh-user-7-text', text: 'run' }),
+    event('message.completed', { messageId: 'dsh-user-7' }),
+    event('message.started', { messageId: STEP_1, role: 'assistant' }),
+    event('tool.started', { messageId: STEP_1, toolCallId: 'c1', name: 'bash', input: {} }),
+    event('tool.completed', { messageId: STEP_1, toolCallId: 'c1', ok: true, output: 'ok' }),
+    event('message.completed', { messageId: STEP_1 }),
+    event('message.started', { messageId: STEP_2, role: 'assistant' }),
+    event('message.delta', { messageId: STEP_2, blockId: `${STEP_2}-b0`, text: 'done' }),
+    event('message.completed', { messageId: STEP_2 }),
+    event('custom.message', {
+      messageId: 'dsh-notice-12',
+      customType: 'dsh:tool-jobs',
+      content: 'bash sleep 1 exited 0',
+    }),
+    event('message.started', {
+      messageId: 'dsh-user-15',
+      role: 'user',
+      origin: { kind: 'goal', round: 2, maxRounds: 4 },
+    }),
+    event('message.completed', { messageId: 'dsh-user-15' }),
+  ];
+
+  /** The first page the bridge answers the second resume with (history cache, liveMessageId). */
+  const page: HistoryMessage[] = [
+    {
+      id: 'h:u0',
+      entryId: 'u0',
+      role: 'user',
+      blocks: [{ type: 'text', id: 'h:u0:text:0', text: 'before' }],
+    },
+    {
+      id: 'h:m7',
+      entryId: 'm7',
+      role: 'user',
+      blocks: [{ type: 'text', id: 'h:m7:text:0', text: 'run' }],
+      liveMessageId: 'dsh-user-7',
+    },
+    {
+      id: 'h:m8',
+      entryId: 'm8',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool_call', id: 'h:m8:tool-call:c1', toolCallId: 'c1', name: 'bash', input: {} },
+        {
+          type: 'tool_result',
+          id: 'h:m8:tool-result:c1',
+          toolCallId: 'c1',
+          ok: true,
+          output: 'ok',
+        },
+      ],
+      liveMessageId: STEP_1,
+    },
+    {
+      id: 'h:m9',
+      entryId: 'm9',
+      role: 'assistant',
+      blocks: [{ type: 'text', id: 'h:m9:text:0', text: 'done' }],
+      liveMessageId: STEP_2,
+    },
+    {
+      id: 'h:m12',
+      entryId: 'm12',
+      role: 'system',
+      blocks: [{ type: 'text', id: 'h:m12:notice:0', text: 'bash sleep 1 exited 0' }],
+      liveMessageId: 'dsh-notice-12',
+    },
+    {
+      id: 'h:m15',
+      entryId: 'm15',
+      role: 'user',
+      blocks: [],
+      origin: { kind: 'goal', round: 2, maxRounds: 4 },
+      liveMessageId: 'dsh-user-15',
+    },
+  ];
+
+  it('[D1-RESUME-STORE] keeps exactly one copy of every message, in order, with the head origin', () => {
+    const opened = applyAll(baseState({ sessions: [makeSession()] }), [
+      makeResumedEvent('req-1'),
+      makeHistoryEvent({ messages: [page[0] as HistoryMessage] }, 'req-1'),
+      ...liveTurn,
+    ]).state;
+    expect(opened.messages[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:u0',
+      'dsh-user-7',
+      STEP_1,
+      STEP_2,
+      'dsh-notice-12',
+      'dsh-user-15',
+    ]);
+    // The live head already carries its origin.
+    expect(opened.messages[SESSION_ID]?.at(-1)?.origin).toEqual({
+      kind: 'goal',
+      round: 2,
+      maxRounds: 4,
+    });
+
+    // The refused send / Continue: the same slot is resumed and replays its page.
+    const { state } = applyAll(opened, [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent({ messages: page, totalCount: page.length }, 'req-2'),
+    ]);
+
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual([
+      'h:u0',
+      'h:m7',
+      'h:m8',
+      'h:m9',
+      'h:m12',
+      'h:m15',
+    ]);
+    expect(bucket[5]).toMatchObject({
+      role: 'user',
+      origin: { kind: 'goal', round: 2, maxRounds: 4 },
+      liveMessageId: 'dsh-user-15',
+    });
+    // An ordinary row carries neither key.
+    expect(bucket[0] && ('origin' in bucket[0] || 'liveMessageId' in bucket[0])).toBe(false);
+  });
+});

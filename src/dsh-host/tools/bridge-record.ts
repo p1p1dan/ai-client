@@ -47,6 +47,14 @@
  *                 both. A second fork is discarded and leaves no stub. `log` is
  *                 the child's
  *
+ * Live-mapping scenarios (P1-4d1, decision 099):
+ *   think         one answer with a reasoning block: thinking.started / completed
+ *   usage         a tool step and an answer billed with cache reads and writes, then
+ *                 a second turn: pending and settled usage, the context occupancy,
+ *                 the running total across turns
+ *   job-notice    a background job outlives its turn; its completion notice wakes
+ *                 the agent into a turn nobody sent, headed by `origin: job`
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -76,7 +84,9 @@
  * its three samples (so the projection of `log` can be compared with `rpc`);
  * paths -> `<workspace>` / `<dsh-home>` / `<scratch>`; epoch milliseconds ->
  * `<ms>`; token counts -> 0; consecutive deltas of one block merged, in the
- * stream and in DSH's stored stream records, and stream timing (`dt`) dropped.
+ * stream and in DSH's stored stream records, and stream timing (`dt`) dropped;
+ * a tool row's size updates while its arguments stream (P1-4d1) dropped, since
+ * whether one exists depends on the wall clock between two deltas.
  * The system prompt, tool schemas and injected context bodies are replaced by
  * placeholders: they are DSH's text, not the bridge's, and carry dates. The
  * history's `settledAt` is dropped from `rpc`: whether it is present depends
@@ -186,6 +196,10 @@ class Normalizer {
       const { seq: _seq, timestamp: _timestamp, ...rest } = event;
       const previous = merged.at(-1);
       const payload = (rest.payload ?? {}) as Message;
+      // P1-4d1: a size update while a call's arguments stream exists only when
+      // a window of wall clock passed between two deltas (plan P1-4 shard 05 §2).
+      if (rest.type === 'tool.updated' && isRecord(payload.input) && '__streaming' in payload.input)
+        continue;
       if (
         (rest.type === 'message.delta' || rest.type === 'thinking.delta') &&
         previous?.type === rest.type &&
@@ -528,6 +542,20 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   rewind: rewindScenario,
   fork: forkScenario,
+  // P1-4d1 (decision 099): the live mapping's own scenarios.
+  async think(context, host) {
+    const { session, boot } = await context.openSession(host, 'think');
+    const turn = await context.turn(session, 'THINK', 'P1-THINK: think it through, then answer.');
+    return finish(context, session, [boot], [turn]);
+  },
+  async usage(context, host) {
+    const { session, boot } = await context.openSession(host, 'usage');
+    const first = await context.turn(session, 'USAGE', 'P1-USAGE: one tool step, then an answer.');
+    // A second turn, so the running total spans turns.
+    const second = await context.turn(session, 'USAGE-2', 'epsilon, no scenario.');
+    return finish(context, session, [boot], [first, second]);
+  },
+  'job-notice': jobNoticeScenario,
   'perm-card': permCardScenario,
   'perm-grants': permGrantsScenario,
   'perm-deny': permDenyScenario,
@@ -669,6 +697,48 @@ async function forkScenario(context: RecordContext, host: Host): Promise<Recordi
     stagedMarkerLeft: existsSync(`${childStub}.staged`),
     discard: { ...discard, filesLeft: droppedLeft },
   });
+}
+
+/**
+ * P1-4d1: a background job outlives the turn that started it; its completion
+ * notice wakes the agent into a turn nobody sent, which the bridge heads with
+ * an origin (decision 072 rule 3). The two turns are told apart by requestId:
+ * the wake-up's is the bridge's own `dsh-turn-<session>-2`.
+ */
+async function jobNoticeScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'job-notice');
+  const { client } = session.host;
+  const from = client.events(session.ch).length;
+  await context.turn(
+    session,
+    'JOBNOTICE',
+    'P1-JOBNOTICE: start a background job, then wait for its notice.'
+  );
+  const wake = `dsh-turn-${session.dshSessionId}-2`;
+  const woke = await client.until(
+    session.ch,
+    (events) =>
+      events
+        .slice(from)
+        .some(
+          (event) =>
+            event.type === 'session.status' &&
+            payloadOf(event).status === 'idle' &&
+            event.requestId === wake
+        ),
+    60_000
+  );
+  if (!woke) throw new Error(`${session.logicalSessionId}: the job notice never woke the agent`);
+  const events = client.events(session.ch).slice(from);
+  return finish(
+    context,
+    session,
+    [boot],
+    [
+      events.filter((event) => event.requestId === 'turn-JOBNOTICE'),
+      events.filter((event) => event.requestId === wake),
+    ]
+  );
 }
 
 // ---- permission scenarios (P1-6c) ---------------------------------------------------

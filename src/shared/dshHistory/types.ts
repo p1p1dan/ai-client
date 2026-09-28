@@ -59,6 +59,13 @@ export const DSH_FORM_NOTICE = 'notice';
  * decision 029): `cancel({kind: 'hook', reason: AICLIENT_INTERJECT_REASON})`.
  */
 export const AICLIENT_INTERJECT_REASON = 'aiclient-interject';
+/**
+ * `AgentCancelCause` reason of the step ceiling's cut after its wrap-up step
+ * (P1-8, `TURN_CEILING_CANCEL_REASON` of src/dsh-host/loopGuard/constants.ts,
+ * which the bridge bundle may not take in; a test pins the two together). The
+ * live bridge ends such a run as `turn_limit` (decision 081's handoff).
+ */
+export const AICLIENT_TURN_CEILING_REASON = 'aiclient-turn-ceiling';
 
 /** `tool/result.error.code`: Stop reached the call before it was dispatched (`dsh-tools`). */
 export const DSH_TOOL_ABORTED_BEFORE_DISPATCH = 'ABORTED_BEFORE_DISPATCH';
@@ -68,6 +75,15 @@ export const DSH_TOOL_ABORTED = 'ABORTED';
 export const DSH_TOOL_NOT_STARTED = 'TOOL_NOT_STARTED';
 /** `tool/result.error.code` of a crash or fork closer: started, result never recorded. */
 export const DSH_TOOL_OUTCOME_UNKNOWN = 'TOOL_OUTCOME_UNKNOWN';
+/**
+ * `tool/result.error.name` of a call our permission gate refused
+ * (`src/dsh-host/permissions/permissionHost.ts`, P1-6b); a card the user
+ * denied, a rule, a timeout. A call whose card Stop took down is cancelled
+ * instead, and reads `ABORTED_BEFORE_DISPATCH` (decision 088 rule 6).
+ */
+export const AICLIENT_PERMISSION_DENIAL = 'PermissionDenial';
+/** `tool/result.error.name` of a call the loop guard refused inside the step ceiling's wrap-up (P1-8). */
+export const AICLIENT_LOOP_GUARD_DENIAL = 'LoopGuard';
 
 /** A `tool_result` history block. */
 export type DshToolResultBlock = Extract<HistoryBlock, { type: 'tool_result' }>;

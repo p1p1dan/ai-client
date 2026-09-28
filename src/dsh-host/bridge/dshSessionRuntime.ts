@@ -7,8 +7,9 @@
  * the shared DSH host, one per channel of the `aiclient-bridge` row of
  * @aiclient/dsh-app (P1-3a), and talks to DSH services in-process:
  *
- *   durable `session/event`        -> message.* / tool.* / session.* events
- *   live `agent/assistant-stream`  -> message.started / message.delta / thinking.delta
+ *   durable `session/event`        -> message.* / tool.* / usage / session.* events
+ *   live `agent/assistant-stream`  -> message.* / thinking.* / streaming tool rows
+ *                                     (both translated by `liveEvents.ts`, P1-4d1)
  *   this session's PermissionGate  -> permission.requested / permission.resolved,
  *                                     answered by worker.permission.respond
  *
@@ -24,18 +25,22 @@
  * kept (`grantStore.ts`, decision 043) and writes every change back there,
  * and Main's three setters act on it.
  *
- * Mapped: text, tool rows, approvals, stop, the session identity (create,
- * resume, crash restart), the history, tree and leaf, projected from the
- * DSH log (P1-4a, decision 026; `historyCache.ts`), and rewind and fork
- * (P1-4b, decision 027). Compact, retry and attachments refuse until the rest
- * of P1-4 fills them in (dsh-rebase decision 010).
+ * Mapped: text, thinking, tool rows (streamed by size, flagged, with the
+ * review of DSH's diff card), usage, the retry banner, failures and the step
+ * ceiling, notices and the heads of turns the engine started itself
+ * (P1-4d1, decision 099; `liveEvents.ts`), approvals, stop, the session
+ * identity (create, resume, crash restart), the history, tree and leaf,
+ * projected from the DSH log (P1-4a, decision 026; `historyCache.ts`), and
+ * rewind and fork (P1-4b, decision 027). Compact, retry and attachments
+ * refuse until the rest of P1-4 fills them in (dsh-rebase decision 010).
  *
  * Model and effort (P1-5a, decisions 033, 035, 040): each turn resolves the
  * model and effort Main sent (or the session's current model) against the
  * host's model plan (`modelRoute.ts`) and hands the DSH selection to the
  * agent through `installModelSelection`, installed when the agent is opened;
  * a model the plan cannot serve refuses the send with `MODEL_NOT_CONFIGURED`.
- * A turn DSH ends in error carries our failure code (`dshFailureCodes.ts`).
+ * A turn DSH ends in error carries DSH's sentence and our failure code
+ * (`dshFailureCodes.ts`).
  *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
  * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
@@ -59,10 +64,8 @@ import type {
   PiWorkerRuntime,
   PiWorkerRuntimeOptions,
 } from '../../agent-host/piWorkerRpcServer.ts';
-import { mapDshFailureCode } from '../../shared/dshFailureCodes.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
-import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
 import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
 import {
@@ -119,6 +122,14 @@ import {
   retiredSessionIds,
   rewindSessionId,
 } from './lineage.ts';
+import {
+  type BridgeDraft,
+  DshLiveEvents,
+  type DshSessionEvent,
+  type DshUsageView,
+  type LiveTurn,
+  type StreamFrame,
+} from './liveEvents.ts';
 import {
   type DshBridgeModelPlan,
   DshModelRouter,
@@ -181,23 +192,22 @@ interface DshAgentHandle {
   dispose(): Promise<void>;
 }
 
-interface DshSessionEvent {
-  type: string;
-  seq: number;
-  time: number;
-  data: Record<string, unknown>;
+/**
+ * `ctx.sessionProjections` (dsh-session-projection), narrowed to the one read
+ * the live usage takes: dsh-token-meter's `tokenUsage` and `contextPressure`
+ * views of a session (P1-4d1, decision 099 rule 1).
+ */
+export interface DshSessionProjectionsView {
+  snapshot(session: unknown, keys?: readonly string[]): { values: Record<string, unknown> };
 }
 
-type StreamFrame =
-  | { type: 'start'; attemptId: string; turn: number; step: number }
-  | { type: 'chunk'; attemptId: string; index: number; chunk: StreamChunk }
-  | { type: 'end'; attemptId: string };
-
-type StreamChunk =
-  | { type: 'text-delta'; index: number; text: string }
-  | { type: 'reasoning-delta'; index: number; text: string }
-  | { type: 'tool-call-delta'; index: number; id: string; name?: string; argumentsDelta: string }
-  | { type: string; index?: number };
+/** Services the runtime reads without injecting them; a host without one leaves it undefined. */
+export interface DshBridgeOptionalServices {
+  /** `ctx.jobs`, for `busy`. */
+  jobs: DshJobsView;
+  /** `ctx.sessionProjections`, for the context occupancy and the session's usage total. */
+  sessionProjections: DshSessionProjectionsView;
+}
 
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
 export interface DshBridgeContext {
@@ -231,8 +241,10 @@ export interface DshBridgeContext {
   sessions: { flush(session: DshSession): Promise<boolean> };
   /** `ctx.sessionQuery` (dsh-session-query): the lock-free exact read the history cache folds. */
   sessionQuery: DshSessionQuery;
-  /** A service the row does not inject, when it is there (`ctx.jobs`, for `busy`). */
-  get?(name: 'jobs'): DshJobsView | undefined;
+  /** A service the row does not inject, when it is there. */
+  get?<K extends keyof DshBridgeOptionalServices>(
+    name: K
+  ): DshBridgeOptionalServices[K] | undefined;
   /**
    * `ctx.aiclientPermissions` (P1-6b, decision 042): the permission row every
    * session attaches its gate to. Injected by the bridge row; a runtime
@@ -295,13 +307,6 @@ export interface DshBridgeDeps {
 }
 
 // ---- helpers ----------------------------------------------------------------
-
-/** A RuntimeEventDraft without its session id, which `emit` fills in. */
-type BridgeDraft = RuntimeEventDraft extends infer E
-  ? E extends unknown
-    ? Omit<E, 'sessionId'>
-    : never
-  : never;
 
 /**
  * Error codes this bridge answers with, besides the stub's own
@@ -410,31 +415,7 @@ const POLICY_FILES: PermissionPolicyFiles = {
   },
 };
 
-function textOf(content: unknown): string {
-  if (!Array.isArray(content)) return '';
-  return content
-    .filter((block): block is { type: 'text'; text: string } => block?.type === 'text')
-    .map((block) => block.text)
-    .join('');
-}
-
 // ---- the runtime -------------------------------------------------------------
-
-interface Turn {
-  requestId: string;
-  attemptId?: string;
-  /** Id of the user message this turn sent; its durable echo carries attemptId. */
-  userMessageId?: string;
-  /** Set when a DSH turn started without a worker.send (goal rounds, job notices). */
-  synthetic: boolean;
-}
-
-interface StepMessage {
-  messageId: string;
-  closed: boolean;
-  /** Text already streamed per content-block index, to top up from the durable message. */
-  streamed: Map<number, string>;
-}
 
 export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly ctx: DshBridgeContext;
@@ -456,11 +437,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly router: DshModelRouter;
   /** Read by the agent's prompt assembly and requests (`installModelSelection`). */
   private readonly selection: DshModelSelectionRef = { current: undefined, assembled: undefined };
-  private turn: Turn | null = null;
-  private readonly steps = new Map<string, StepMessage>();
-  private readonly toolStep = new Map<string, string>();
-  private readonly toolArgs = new Map<string, Record<string, unknown>>();
-  private readonly startedTools = new Set<string>();
+  private turn: LiveTurn | null = null;
+  /** The live translation of this session's events (P1-4d1, `liveEvents.ts`). */
+  private readonly live: DshLiveEvents;
   private readonly disposers: Dispose[] = [];
   /** The session's approval cards (1.0.x's emitter): `permission.requested` / `resolved`. */
   private readonly prompt: PermissionPrompt;
@@ -517,6 +496,45 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         this.emit(draft as BridgeDraft);
       },
     });
+    this.live = new DshLiveEvents({
+      emit: (event) => this.emit(event),
+      route: () => this.route,
+      dshSessionId: () => this.dshSessionId,
+      turn: () => this.turn,
+      openSyntheticTurn: (turn) => {
+        // A turn the bridge did not start (goal round, job or subagent wake-up): give it an id.
+        this.turn = { requestId: `dsh-turn-${this.dshSessionId}-${String(turn)}`, synthetic: true };
+        this.emit({ type: 'session.status', payload: { status: 'running' } });
+      },
+      closeTurn: () => {
+        this.turn = null;
+      },
+      usageView: () => this.usageView(),
+      usageSteps: () => this.historyCache.usageSteps(),
+      goalMaxRounds: () => this.historyCache.goalMaxRounds(),
+      now: this.now,
+    });
+  }
+
+  /**
+   * dsh-token-meter's usage views of the open session (decision 099 rule 1):
+   * a snapshot advances them to the session's last event, so a view read
+   * inside `session/event` already counts that event. Absent when the host
+   * composes no projections, and on a failed read, which only costs the
+   * occupancy ring and the running total of one event.
+   */
+  private usageView(): DshUsageView | undefined {
+    const session = this.handle?.agent.session;
+    if (!session) return undefined;
+    try {
+      const projections = this.ctx.get?.('sessionProjections');
+      return projections?.snapshot(session, ['tokenUsage', 'contextPressure']).values as
+        | DshUsageView
+        | undefined;
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] usage projections unreadable', error);
+      return undefined;
+    }
   }
 
   /**
@@ -1440,11 +1458,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   /** Per-turn translation state; empty between turns, dropped when the session changes. */
   private resetLiveState(): void {
     this.turn = null;
-    this.steps.clear();
-    this.toolStep.clear();
-    this.toolArgs.clear();
-    this.startedTools.clear();
-    this.currentStream = null;
+    this.live.reset();
   }
 
   private assertLogicalSession(id: string): void {
@@ -1499,13 +1513,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.disposers.push(
       this.ctx.on('session/event', (session, event) => {
         if (session?.id !== this.dshSessionId || this.disposed) return;
+        // The history first: the live translation reads the fold (usage steps, goal budget).
         try {
           this.historyCache.push(event);
         } catch (error) {
           this.options.log?.('[dsh-bridge] history fold failed', event.type, error);
         }
         try {
-          this.onSessionEvent(event);
+          this.live.onSessionEvent(event);
         } catch (error) {
           this.options.log?.('[dsh-bridge] session event failed', event.type, error);
         }
@@ -1513,224 +1528,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       this.ctx.on('agent/assistant-stream', ({ agent, frame }) => {
         if (agent?.id !== this.dshSessionId || this.disposed) return;
         try {
-          this.onStreamFrame(frame);
+          this.live.onStreamFrame(frame);
         } catch (error) {
           this.options.log?.('[dsh-bridge] stream frame failed', frame.type, error);
         }
       })
     );
-  }
-
-  private stepMessage(turn: number, step: number): StepMessage {
-    const key = `${turn}:${step}`;
-    let message = this.steps.get(key);
-    if (!message) {
-      message = {
-        messageId: `dsh-${this.dshSessionId}-t${turn}-s${step}`,
-        closed: false,
-        streamed: new Map(),
-      };
-      this.steps.set(key, message);
-      this.emit({
-        type: 'message.started',
-        payload: { messageId: message.messageId, role: 'assistant', model: this.route },
-      });
-    }
-    return message;
-  }
-
-  private currentStream: { attemptId: string; message: StepMessage } | null = null;
-
-  private onStreamFrame(frame: StreamFrame): void {
-    if (frame.type === 'start') {
-      this.currentStream = {
-        attemptId: frame.attemptId,
-        message: this.stepMessage(frame.turn, frame.step),
-      };
-      return;
-    }
-    const current = this.currentStream;
-    if (!current || current.attemptId !== frame.attemptId) return;
-    if (frame.type === 'end') {
-      this.currentStream = null;
-      return;
-    }
-    const chunk = frame.chunk;
-    const { messageId, streamed } = current.message;
-    if (chunk.type === 'text-delta' && 'text' in chunk && typeof chunk.text === 'string') {
-      const index = chunk.index ?? 0;
-      streamed.set(index, (streamed.get(index) ?? '') + chunk.text);
-      this.emit({
-        type: 'message.delta',
-        payload: { messageId, blockId: `${messageId}-b${index}`, text: chunk.text },
-      });
-    } else if (
-      chunk.type === 'reasoning-delta' &&
-      'text' in chunk &&
-      typeof chunk.text === 'string'
-    ) {
-      this.emit({
-        type: 'thinking.delta',
-        payload: { messageId, blockId: `${messageId}-r${chunk.index ?? 0}`, text: chunk.text },
-      });
-    } else if (chunk.type === 'tool-call-delta' && 'id' in chunk && typeof chunk.id === 'string') {
-      if (!this.startedTools.has(chunk.id) && typeof chunk.name === 'string') {
-        this.startedTools.add(chunk.id);
-        this.toolStep.set(chunk.id, messageId);
-        this.emit({
-          type: 'tool.started',
-          payload: {
-            messageId,
-            toolCallId: chunk.id,
-            name: chunk.name,
-            input: { __streaming: { bytes: 0, lines: 0 } },
-          },
-        });
-      }
-    }
-  }
-
-  private onSessionEvent(event: DshSessionEvent): void {
-    const data = event.data;
-    switch (event.type) {
-      case 'turn/start': {
-        if (!this.turn) {
-          // A turn the bridge did not start (goal round, job notice): give it an id.
-          this.turn = {
-            requestId: `dsh-turn-${this.dshSessionId}-${String(data.turn)}`,
-            synthetic: true,
-          };
-          this.emit({ type: 'session.status', payload: { status: 'running' } });
-        }
-        return;
-      }
-      case 'user/message': {
-        const turn = this.turn;
-        if (!turn || data.id !== turn.userMessageId) return;
-        const messageId = `dsh-user-${String(event.seq)}`;
-        this.emit({
-          type: 'message.started',
-          payload: {
-            messageId,
-            role: 'user',
-            ...(turn.attemptId ? { attemptId: turn.attemptId } : {}),
-          },
-        });
-        this.emit({
-          type: 'message.delta',
-          payload: { messageId, blockId: `${messageId}-text`, text: textOf(data.content) },
-        });
-        this.emit({ type: 'message.completed', payload: { messageId } });
-        return;
-      }
-      case 'assistant/message': {
-        const message = this.stepMessage(Number(data.turn), Number(data.step));
-        const content = (data.message as { content?: unknown[] } | undefined)?.content ?? [];
-        content.forEach((block, index) => {
-          const record = block as Record<string, unknown>;
-          if (record.type === 'text' && typeof record.text === 'string') {
-            // Top up whatever the live stream did not deliver (e.g. a replayed attempt).
-            const already = message.streamed.get(index) ?? '';
-            if (record.text.length > already.length && record.text.startsWith(already)) {
-              const rest = record.text.slice(already.length);
-              message.streamed.set(index, record.text);
-              this.emit({
-                type: 'message.delta',
-                payload: {
-                  messageId: message.messageId,
-                  blockId: `${message.messageId}-b${index}`,
-                  text: rest,
-                },
-              });
-            }
-          }
-        });
-        return;
-      }
-      case 'tool/call': {
-        const callId = String(data.callId);
-        const name = String(data.name);
-        const args = parseToolArguments(data.arguments) as Record<string, unknown>;
-        this.toolArgs.set(callId, args);
-        const messageId = this.stepMessage(Number(data.turn), Number(data.step)).messageId;
-        this.toolStep.set(callId, messageId);
-        if (!this.startedTools.has(callId)) {
-          this.startedTools.add(callId);
-          this.emit({
-            type: 'tool.started',
-            payload: { messageId, toolCallId: callId, name, input: toolRowInput(args) },
-          });
-        } else {
-          this.emit({
-            type: 'tool.updated',
-            payload: { messageId, toolCallId: callId, input: toolRowInput(args) },
-          });
-        }
-        return;
-      }
-      case 'tool/result': {
-        const message = data.message as {
-          toolCallId?: string;
-          content?: unknown;
-          isError?: boolean;
-        };
-        const callId = String(message?.toolCallId ?? '');
-        const messageId =
-          this.toolStep.get(callId) ??
-          this.stepMessage(Number(data.turn), Number(data.step)).messageId;
-        const text = textOf(message?.content);
-        this.emit({
-          type: 'tool.completed',
-          payload: {
-            messageId,
-            toolCallId: callId,
-            ok: message?.isError !== true,
-            ...(message?.isError === true ? { error: text } : { output: text }),
-          },
-        });
-        return;
-      }
-      case 'step/end': {
-        const message = this.steps.get(`${String(data.turn)}:${String(data.step)}`);
-        if (message && !message.closed) {
-          message.closed = true;
-          this.emit({ type: 'message.completed', payload: { messageId: message.messageId } });
-        }
-        return;
-      }
-      case 'turn/end': {
-        const reason = (data.reason as { kind?: string; error?: unknown } | undefined) ?? {};
-        for (const message of this.steps.values()) {
-          if (!message.closed) {
-            message.closed = true;
-            this.emit({ type: 'message.completed', payload: { messageId: message.messageId } });
-          }
-        }
-        if (reason.kind === 'completed') {
-          this.emit({ type: 'session.completed', payload: {} });
-        } else if (reason.kind === 'aborted') {
-          this.emit({ type: 'session.stopped', payload: {} });
-        } else {
-          // Design shard 03 §5: DSH's failure code in our vocabulary, beside its sentence.
-          const errorCode = mapDshFailureCode(
-            (reason.error as { code?: unknown } | undefined)?.code
-          );
-          this.emit({
-            type: 'session.failed',
-            payload: {
-              error: `DSH turn ended: ${JSON.stringify(reason).slice(0, 500)}`,
-              ...(errorCode ? { errorCode } : {}),
-            },
-          });
-        }
-        this.emit({ type: 'session.status', payload: { status: 'idle' } });
-        this.turn = null;
-        this.steps.clear();
-        this.currentStream = null;
-        return;
-      }
-      default:
-        return;
-    }
   }
 }

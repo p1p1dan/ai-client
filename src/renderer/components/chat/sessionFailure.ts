@@ -211,6 +211,20 @@ const FAILURE_VIEWS = {
 export type KnownSessionFailureCode = keyof typeof FAILURE_VIEWS;
 
 /**
+ * dsh-rebase P1-4d1: a DSH session names a failed request in the native
+ * runtime's provider vocabulary (`src/shared/dshFailureCodes.ts`). Three of
+ * those codes mean exactly what a card above already says, so they read it.
+ * The rest (`PROVIDER_UNAUTHORIZED`, `PROVIDER_RATE_LIMITED`, `NETWORK_ERROR`,
+ * `PROVIDER_ERROR`) keep the generic card with DSH's own sentence as the
+ * detail until their wording is written (plan P1-7 shard 04 §7).
+ */
+const FAILURE_CODE_ALIASES: Readonly<Record<string, KnownSessionFailureCode>> = {
+  TIMEOUT: 'timeout',
+  CONTEXT_TOO_LARGE: 'context_too_large',
+  MODEL_NOT_CONFIGURED: 'model_missing',
+};
+
+/**
  * `errorCode` is a bare string on the wire — a newer runtime may send one this
  * build has never heard of, and that must render the fallback rather than
  * nothing. `Object.hasOwn`, not `in`: a code of `'constructor'` would otherwise
@@ -218,7 +232,10 @@ export type KnownSessionFailureCode = keyof typeof FAILURE_VIEWS;
  */
 export function toSessionFailureCode(code: string | undefined | null): KnownSessionFailureCode {
   if (typeof code !== 'string' || code === '') return 'unknown';
-  return Object.hasOwn(FAILURE_VIEWS, code) ? (code as KnownSessionFailureCode) : 'unknown';
+  if (Object.hasOwn(FAILURE_VIEWS, code)) return code as KnownSessionFailureCode;
+  return Object.hasOwn(FAILURE_CODE_ALIASES, code)
+    ? (FAILURE_CODE_ALIASES[code] as KnownSessionFailureCode)
+    : 'unknown';
 }
 
 /**

@@ -10,6 +10,7 @@ import type {
   HistoryParseStats,
   HistoryReadError,
   SubagentHistorySummary,
+  TurnOrigin,
 } from './sessionHistory';
 
 export type RuntimeEventType =
@@ -302,6 +303,13 @@ export interface MessageStartedEvent extends RuntimeEventBase {
      * from. Old Renderers/Hosts simply ignore an unknown key.
      */
     model?: string;
+    /**
+     * dsh-rebase P1-4d1 (decision 072 rule 3; optional-field addition): only
+     * on `role: 'user'`, and only on the head of a turn the engine started by
+     * itself — a goal round, a background job's or a subagent's wake-up. The
+     * message is then not something the user typed; see `TurnOrigin`.
+     */
+    origin?: TurnOrigin;
   };
 }
 
@@ -337,7 +345,9 @@ export interface ThinkingDeltaEvent extends RuntimeEventBase {
  * `__streaming: { bytes, lines }` key standing for the long text withheld.
  * Defined in `shared/streamingToolArgs.ts` (a leaf module, so the renderer can
  * import the reader as a value without pulling this whole file into a chunk);
- * produced by `runtime/events/streamingToolArgs.ts`.
+ * produced by `runtime/events/streamingToolArgs.ts`. The DSH bridge
+ * (dsh-rebase decision 099 rule 14) sends the size summary alone, with no
+ * short fields: DSH streams raw JSON and the bridge parses none of it early.
  *
  * The key's presence is the "not final yet" signal. One later `tool.updated`
  * carries the complete arguments without it.
@@ -375,12 +385,16 @@ export interface ToolOutcomeDetails {
   /**
    * The runtime answered the call with a refusal instead of acting on it (the
    * subagent plugin's repeated idle `TaskWait`/`TaskStop`/`TaskList`). Copied
-   * from the tool result's own `details.refused`.
+   * from the tool result's own `details.refused`. On a DSH session (P1-4d1):
+   * the permission gate or the loop guard refused it (`tool/result.error.name`
+   * `PermissionDenial` / `LoopGuard`).
    */
   refused?: true;
   /**
    * The call was never executed: the run ended (Stop, a loop-guard cut, a
-   * provider error) after the model wrote the call and before it ran.
+   * provider error) after the model wrote the call and before it ran. On a
+   * DSH session (P1-4d1): `ABORTED_BEFORE_DISPATCH` / `TOOL_NOT_STARTED`,
+   * which is also what a call gets whose approval card Stop took down.
    */
   notStarted?: true;
   /**
@@ -388,7 +402,8 @@ export interface ToolOutcomeDetails {
    * exec ended `aborted` / `disposed`. Settled `ok: false`, but not a failure
    * of the tool: the row reads "… · Stopped" in its ordinary tone and keeps
    * whatever output the command produced. Copied from the tool result's own
-   * `details.stopped`.
+   * `details.stopped`. On a DSH session (P1-4d1): the call ran and was
+   * cancelled (`tool/result.error.code` `ABORTED`, any tool).
    */
   stopped?: true;
   /**

@@ -874,3 +874,155 @@ describe('resume snapshot registry', () => {
     expect(takeResumeSnapshot('session-1', undefined)).toBeNull();
   });
 });
+
+/**
+ * dsh-rebase P1-4d1 — exact live identity. A DSH session's history names the
+ * id each row's live copy carried (`liveMessageId`), so a warm resume on a
+ * live slot (the P1-1 point-check's repeated resume) finds every live message
+ * it replays by id, tool rows included, instead of keeping and appending the
+ * ones the text tiers cannot match (the L6 pin above).
+ */
+describe('mergeReplayedHistory — exact live identity (dsh-rebase P1-4d1)', () => {
+  const STEP = 'dsh-aiclient-s1-t2-s1';
+  const TEXT_STEP = 'dsh-aiclient-s1-t2-s2';
+  const live = (liveMessageId: string, id: string, role: string, text?: string) => ({
+    id,
+    role,
+    blocks: text === undefined ? [] : [{ type: 'text', text }],
+    liveMessageId,
+  });
+  const toolStep = (id: string, extra: Partial<ReplayMergeMessage> = {}): ReplayMergeMessage => ({
+    id,
+    role: 'assistant',
+    blocks: [
+      { type: 'tool_call', toolCallId: 'c1' },
+      { type: 'tool_result', toolCallId: 'c1' },
+    ],
+    ...extra,
+  });
+
+  it('[D1-RESUME-1] a warm resume keeps one copy of every live DSH message, in history order', () => {
+    const bucket: ReplayMergeMessage[] = [
+      msg('h:u0', 'user', 'earlier'),
+      msg('h:a0', 'assistant', 'earlier answer'),
+      msg('dsh-user-7', 'user', 'list the workspace'),
+      toolStep(STEP),
+      msg(TEXT_STEP, 'assistant', 'done'),
+      { id: 'dsh-notice-12', role: 'system', blocks: [{ type: 'text', text: 'dsh:tool-jobs\nx' }] },
+      // A goal round's head: a user message with no text at all.
+      { id: 'dsh-user-15', role: 'user', blocks: [] },
+    ];
+    const history = [
+      msg('h:u0', 'user', 'earlier'),
+      msg('h:a0', 'assistant', 'earlier answer'),
+      live('dsh-user-7', 'h:m7', 'user', 'list the workspace'),
+      toolStep('h:m8', { liveMessageId: STEP }),
+      live(TEXT_STEP, 'h:m9', 'assistant', 'done'),
+      live('dsh-notice-12', 'h:m12', 'system', 'x'),
+      live('dsh-user-15', 'h:m15', 'user'),
+    ];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:a0')));
+
+    expect(ids(merged)).toEqual(['h:u0', 'h:a0', 'h:m7', 'h:m8', 'h:m9', 'h:m12', 'h:m15']);
+  });
+
+  it('[D1-RESUME-2] the same live messages without the ids stay the L6 behaviour: kept and appended', () => {
+    const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'earlier'), toolStep(STEP)];
+    const history = [msg('h:a0', 'assistant', 'earlier'), toolStep('h:m8')];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:a0')));
+
+    expect(ids(merged)).toEqual(['h:a0', 'h:m8', STEP]);
+  });
+
+  it('[D1-RESUME-3] a message still waiting on the user or a tool is never folded by id', () => {
+    const running: ReplayMergeMessage = {
+      id: 'dsh-aiclient-s1-t3-s1',
+      role: 'assistant',
+      blocks: [{ type: 'tool_call', toolCallId: 'c9' }],
+    };
+    const asking: ReplayMergeMessage = {
+      id: 'dsh-aiclient-s1-t3-s2',
+      role: 'assistant',
+      blocks: [
+        { type: 'tool_call', toolCallId: 'c10' },
+        { type: 'tool_result', toolCallId: 'c10' },
+        { type: 'permission_request', resolved: false },
+      ],
+    };
+    const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'x'), running, asking];
+    const history = [
+      msg('h:a0', 'assistant', 'x'),
+      toolStep('h:r1', { liveMessageId: running.id }),
+      toolStep('h:r2', { liveMessageId: asking.id }),
+    ];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:a0')));
+
+    expect(ids(merged)).toEqual(['h:a0', 'h:r1', 'h:r2', running.id, asking.id]);
+  });
+
+  it('[D1-RESUME-3b] after a restart the dead engine’s unsettled message gives way to its row', () => {
+    // The host died with a call running: the live row never got a result, the
+    // replay carries the call closed as outcome-unknown.
+    const running: ReplayMergeMessage = {
+      id: 'dsh-aiclient-s1-t3-s1',
+      role: 'assistant',
+      blocks: [{ type: 'tool_call', toolCallId: 'c9' }],
+    };
+    const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'x'), running];
+    const history = [
+      msg('h:a0', 'assistant', 'x'),
+      toolStep('h:r1', { liveMessageId: running.id }),
+    ];
+
+    const merged = mergeReplayedHistory(bucket, history, {
+      ...ok(snap(ids(bucket), 'h:a0')),
+      sourceGone: true,
+    });
+
+    expect(ids(merged)).toEqual(['h:a0', 'h:r1']);
+  });
+
+  it('[D1-RESUME-4] a message that arrived after the resume is kept even when a row names it', () => {
+    const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'x'), toolStep('dsh-late')];
+    const history = [
+      msg('h:a0', 'assistant', 'x'),
+      toolStep('h:r1', { liveMessageId: 'dsh-late' }),
+    ];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(['h:a0'], 'h:a0')));
+
+    expect(ids(merged)).toEqual(['h:a0', 'h:r1', 'dsh-late']);
+  });
+
+  it('[D1-RESUME-5] exact identity needs no anchor: it folds even when the anchor left the page', () => {
+    const bucket: ReplayMergeMessage[] = [msg('h:gone', 'user', 'old'), toolStep('dsh-t1')];
+    const history = [toolStep('h:r1', { liveMessageId: 'dsh-t1' })];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:gone')));
+
+    expect(ids(merged)).toEqual(['h:r1']);
+  });
+
+  it('[D1-RESUME-6] a live copy with attachment chips replaces its row, at the row position', () => {
+    const echo = attMsg(
+      'dsh-user-3',
+      'user',
+      [att('image', 'image/png', 'a.png')],
+      [{ type: 'text', text: 'look' }]
+    );
+    const bucket: ReplayMergeMessage[] = [msg('h:a0', 'assistant', 'x'), echo];
+    const history = [
+      msg('h:a0', 'assistant', 'x'),
+      { ...msg('h:m3', 'user', 'look'), liveMessageId: 'dsh-user-3' },
+      msg('h:m4', 'assistant', 'seen'),
+    ];
+
+    const merged = mergeReplayedHistory(bucket, history, ok(snap(ids(bucket), 'h:a0')));
+
+    expect(ids(merged)).toEqual(['h:a0', 'dsh-user-3', 'h:m4']);
+    expect(merged[1]?.attachments).toEqual([att('image', 'image/png', 'a.png')]);
+  });
+});

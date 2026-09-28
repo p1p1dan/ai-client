@@ -705,6 +705,53 @@ describe('DshSessionRuntime — model and effort per turn (P1-5a, decisions 033,
   });
 });
 
+describe('DshSessionRuntime — live usage from dsh-token-meter (P1-4d1, decision 099 rule 1)', () => {
+  it('[D1-USAGE-RUNTIME] reads the occupancy and the running total off the session projections', async () => {
+    const dsh = fakeDsh();
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const snapshot = vi.fn((_session: unknown, keys?: readonly string[]) => ({
+      values: {
+        tokenUsage: {
+          uncachedInputTokens: 30,
+          outputTokens: 7,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+        },
+        contextPressure: { pressureTokens: 30, projectedTokens: 40, contextWindow: 200 },
+        keys,
+      },
+    }));
+    (dsh.ctx as { get?: unknown }).get = (name: string) =>
+      name === 'sessionProjections' ? { snapshot } : undefined;
+    const bridge = runtime(dsh.ctx, {
+      emit: (event) => events.push(event as (typeof events)[number]),
+    });
+    await bridge.bootstrap();
+    dsh.append({ type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } });
+    dsh.append({
+      type: 'assistant/message',
+      seq: 1,
+      time: 2,
+      data: {
+        turn: 1,
+        step: 1,
+        message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'hi' }] },
+        usage: { inputTokens: 30, outputTokens: 7 },
+      },
+    });
+    expect(snapshot).toHaveBeenCalledWith(expect.anything(), ['tokenUsage', 'contextPressure']);
+    const usage = events.find((event) => event.type === 'usage.updated')?.payload;
+    expect(usage).toMatchObject({
+      input: 30,
+      output: 7,
+      costUsd: 0,
+      context: { tokens: 40, contextWindow: 200, percent: 20 },
+      // One reported step so far, counted by the history fold the event reached first.
+      session: { turns: 1, input: 30, output: 7, totalTokens: 37, costUsd: 0 },
+    });
+  });
+});
+
 describe('DshSessionRuntime behind PiWorkerRpcServer', () => {
   it('carries the bridge codes to Main in the RPC error payload', async () => {
     const stubFile = writeStub();

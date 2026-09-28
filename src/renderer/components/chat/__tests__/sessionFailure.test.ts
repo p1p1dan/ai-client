@@ -148,6 +148,23 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
     expect(deriveSessionFailure({ errorCode: 'something_new' }).showsDetail).toBe(true);
   });
 
+  it('[P1-4d1] a DSH code that means an existing card reads that card; the rest stay generic', () => {
+    // src/shared/dshFailureCodes.ts names DSH failures in the native provider vocabulary.
+    expect(toSessionFailureCode('TIMEOUT')).toBe('timeout');
+    expect(toSessionFailureCode('CONTEXT_TOO_LARGE')).toBe('context_too_large');
+    expect(toSessionFailureCode('MODEL_NOT_CONFIGURED')).toBe('model_missing');
+    expect(deriveSessionFailure({ errorCode: 'CONTEXT_TOO_LARGE' }).action).toBe('configure');
+    expect(toSessionFailureCode('tool_call_repetition')).toBe('tool_call_repetition');
+    for (const code of [
+      'PROVIDER_UNAUTHORIZED',
+      'PROVIDER_RATE_LIMITED',
+      'NETWORK_ERROR',
+      'PROVIDER_ERROR',
+    ]) {
+      expect(toSessionFailureCode(code), code).toBe('unknown');
+    }
+  });
+
   it('does not read a code out of the prototype chain', () => {
     // `'constructor' in {}` is true; `Object.hasOwn` is the difference, and a
     // code of `constructor` would otherwise index the table and render

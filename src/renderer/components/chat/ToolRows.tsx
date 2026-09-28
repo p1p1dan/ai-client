@@ -200,8 +200,10 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
       <ToolRowPermission view={view} />
       {/* N5: a call that never did its work says so in words — 「已拒绝」 for a
           runtime refusal, 「未执行」 for one the run ended before. Same slot and
-          class as the permission word, since both say how the call ended. */}
-      {view.outcome && (
+          class as the permission word, since both say how the call ended.
+          dsh-rebase P1-4d1: a call refused by the card the user answered
+          already says so in its permission word, and says it once. */}
+      {view.outcome && !(view.outcome === 'refused' && view.permissionVerb) && (
         <span data-slot="tool-row-outcome" className={toolRowPermissionClass()}>
           · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
         </span>

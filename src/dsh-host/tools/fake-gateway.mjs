@@ -144,6 +144,13 @@
  *                       answers DSH's compaction instruction (`/compact`) with a short
  *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
  *                       replay both deterministically.
+ *                       dsh-rebase P1-4d1 adds three for the recorder's live-mapping
+ *                       scenarios: P1-THINK (a thinking block, then text), P1-USAGE
+ *                       (a tool step, then text billed with cache reads and writes)
+ *                       and P1-JOBNOTICE (a background job that outlives the turn;
+ *                       its completion notice wakes the agent and is answered). A
+ *                       script also gets the text that reached the model since its
+ *                       last reply, which is how P1-JOBNOTICE tells the wake-up.
  *                       dsh-rebase P1-6b adds the P1-PERM-* scripts for the permission
  *                       plugin's pre-work experiments (tools/perm-experiments.ts): a
  *                       subagent, a workflow and a PTC program that each end in one
@@ -345,7 +352,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -746,6 +753,39 @@ const DSH_P0_2_SCRIPTS = {
     return say('Environment printed.');
   },
   // dsh-rebase P1-4e: every request of the turn fails upstream (no retry in this route).
+  // dsh-rebase P1-4d1 (tools/bridge-record.ts `think`): a reasoning block, then the answer.
+  'P1-THINK'() {
+    return {
+      ...say('Thought it through: the answer is 42.'),
+      thinking: 'First the question, then the arithmetic.\nSix times seven is forty-two.',
+    };
+  },
+  // P1-4d1 (`usage`): a tool step and an answer, both billed with cache reads
+  // and writes, so every usage field has a value to carry.
+  'P1-USAGE'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'echo usage-probe', description: 'Print a marker' });
+    }
+    return {
+      ...say('Usage recorded for both steps.'),
+      usage: { input_tokens: 30, cache_read_input_tokens: 400, cache_creation_input_tokens: 50 },
+    };
+  },
+  // P1-4d1 (`job-notice`): a background job that ends after the turn does; its
+  // completion notice wakes the agent into a turn nobody sent.
+  'P1-JOBNOTICE'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/background job \S+ .*finished/.test(recent ?? '')) {
+      return say('The background job reported back: done.');
+    }
+    if (step === 0) {
+      return tool('bash', {
+        command: 'sleep 3; echo job-notice-done',
+        description: 'Background sleeper',
+        run_in_background: true,
+      });
+    }
+    return say('Started a background job; its notice will wake me.');
+  },
   'P1-FAIL'() {
     return {
       kind: 'error',
@@ -1019,7 +1059,13 @@ function decideDshP02(parsed) {
         : String(message?.content ?? '')
     )
     .join('\n');
-  const decision = script(round, calls.length, calls, triggerText, history);
+  // P1-4d1: what reached the model since its last reply (a wake-up's notice).
+  const lastReply = messages.findLastIndex((message) => message?.role === 'assistant');
+  const recent = messages
+    .slice(lastReply + 1)
+    .map((message) => ownText(message))
+    .join('\n');
+  const decision = script(round, calls.length, calls, triggerText, history, recent);
   const tag = decision.tag ? `:${decision.tag}` : '';
   return {
     ...decision,
@@ -1258,7 +1304,43 @@ function writeSSE(res, frames) {
   res.end(frames.map(([event, data]) => sseFrame(event, data)).join(''));
 }
 
-function sendTextTurn(res, model, text) {
+/**
+ * One text reply. `usage` (dsh-rebase P1-4d1) replaces the default prompt-side
+ * counts of `message_start`, e.g. to report cache reads and writes.
+ * `thinking`, when given, is streamed first as its own block (P1-4d1 `think`).
+ */
+function sendTextTurn(res, model, text, { usage, thinking } = {}) {
+  const thought =
+    typeof thinking === 'string'
+      ? [
+          [
+            'content_block_start',
+            {
+              type: 'content_block_start',
+              index: 0,
+              content_block: { type: 'thinking', thinking: '' },
+            },
+          ],
+          ...splitInto(thinking, 3).map((piece) => [
+            'content_block_delta',
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'thinking_delta', thinking: piece },
+            },
+          ]),
+          [
+            'content_block_delta',
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'signature_delta', signature: 'fake-signature' },
+            },
+          ],
+          ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+        ]
+      : [];
+  const at = thought.length > 0 ? 1 : 0;
   const frames = [
     [
       'message_start',
@@ -1272,19 +1354,20 @@ function sendTextTurn(res, model, text) {
           content: [],
           stop_reason: null,
           stop_sequence: null,
-          usage: { input_tokens: 12, output_tokens: 0 },
+          usage: { input_tokens: 12, output_tokens: 0, ...usage },
         },
       },
     ],
+    ...thought,
     [
       'content_block_start',
-      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'content_block_start', index: at, content_block: { type: 'text', text: '' } },
     ],
     [
       'content_block_delta',
-      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
+      { type: 'content_block_delta', index: at, delta: { type: 'text_delta', text } },
     ],
-    ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+    ['content_block_stop', { type: 'content_block_stop', index: at }],
     [
       'message_delta',
       {
@@ -2014,7 +2097,10 @@ function main() {
           'authentication_error'
         );
       } else if (decision.kind === 'text') {
-        sendTextTurn(res, model, decision.text);
+        sendTextTurn(res, model, decision.text, {
+          usage: decision.usage,
+          thinking: decision.thinking,
+        });
       } else if (decision.kind === 'tool_use') {
         sendToolUseTurn(res, model, { name: decision.name, input: decision.input });
       } else if (decision.kind === 'hang') {

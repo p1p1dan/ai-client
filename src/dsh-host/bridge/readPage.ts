@@ -46,7 +46,8 @@ export async function readSessionPage(
     throw mapOpenError(error, stub.dshSessionId);
   }
   try {
-    const fold = new DshHistoryFold();
+    // Named like the cache's rows (P1-4d1), so a preview page equals a resumed one.
+    const fold = new DshHistoryFold({ liveSessionId: stub.dshSessionId });
     for (const event of observation.events) fold.push(event);
     return paginateHistory(fold.messages(), request.offset, request.limit);
   } finally {

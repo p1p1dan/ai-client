@@ -341,6 +341,77 @@ describe('cards round trip (decision 042 rule 5; P1-6 design 4.3)', () => {
     ]);
   });
 
+  /**
+   * P1-4d1 (decision 088's handoff, decision 099 rule 5): the row the renderer
+   * draws for such a call. DSH records the decision's `info` as the result's
+   * error identity (`appendToolResult`), a cancel as ABORTED_BEFORE_DISPATCH.
+   */
+  it('[perm-row-flags] a refused call reads as refused; one whose card Stop took down, as not run', async () => {
+    const dsh = fakeDsh();
+    const { bridge, events } = runtime(dsh.ctx);
+    await bridge.bootstrap();
+    const denied = dsh.host.preExecute(
+      call('write', { file_path: 'out.txt', content: 'x' }, { callId: 'call-f1' }),
+      allowNext
+    );
+    await until(() => cards(events).length === 1);
+    bridge.respondPermission({ permissionId: 'call-f1', decision: 'deny' });
+    const deny = await denied;
+    const stop = new AbortController();
+    const cancelled = dsh.host.preExecute(
+      call(
+        'write',
+        { file_path: 'out.txt', content: 'x' },
+        { callId: 'call-f2', signal: stop.signal }
+      ),
+      allowNext
+    );
+    await until(() => cards(events).length === 2);
+    stop.abort();
+    expect(await cancelled).toEqual({ kind: 'cancel' });
+    const result = (callId: string, error: unknown, text: string) =>
+      dsh.emitEvent('tool/result', {
+        turn: 1,
+        step: 1,
+        message: {
+          id: `r-${callId}`,
+          role: 'tool',
+          toolCallId: callId,
+          isError: true,
+          content: [{ type: 'text', text }],
+        },
+        error,
+      });
+    for (const callId of ['call-f1', 'call-f2']) {
+      dsh.emitEvent('tool/call', { turn: 1, step: 1, callId, name: 'write', arguments: '{}' });
+    }
+    result('call-f1', deny.kind === 'deny' ? deny.info : undefined, 'Error: permission denied');
+    result(
+      'call-f2',
+      { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' },
+      'Error: tool call aborted before dispatch'
+    );
+    const rows = events
+      .filter((event) => event.type === 'tool.completed')
+      .map((event) => [event.payload.toolCallId, event.payload.output]);
+    expect(rows).toEqual([
+      [
+        'call-f1',
+        {
+          content: [{ type: 'text', text: 'Error: permission denied' }],
+          details: { refused: true },
+        },
+      ],
+      [
+        'call-f2',
+        {
+          content: [{ type: 'text', text: 'Error: tool call aborted before dispatch' }],
+          details: { notStarted: true },
+        },
+      ],
+    ]);
+  });
+
   it('[perm-dispose] closing the session takes the card down and detaches the gate', async () => {
     const dsh = fakeDsh();
     const { bridge, events } = runtime(dsh.ctx);

@@ -62,10 +62,15 @@ export class DshHistoryCache {
   reset(sessionId: string): void {
     this.generation += 1;
     this.sessionId = sessionId;
-    this.fold = new DshHistoryFold();
+    this.fold = this.newFold();
     this.state = 'empty';
     this.pending = [];
     this.loading = null;
+  }
+
+  /** Rows name the ids this session's live events gave them (P1-4d1). */
+  private newFold(): DshHistoryFold {
+    return new DshHistoryFold({ liveSessionId: this.sessionId });
   }
 
   /** One `session/event` of this session, in the order DSH appended it. */
@@ -99,6 +104,16 @@ export class DshHistoryCache {
 
   messages(): readonly HistoryMessage[] {
     return this.fold.messages();
+  }
+
+  /** Model steps with provider-reported usage so far (P1-4d1: the session total's turn count). */
+  usageSteps(): number {
+    return this.fold.usageSteps;
+  }
+
+  /** The current goal's round budget, when the log recorded one (P1-4d1: a goal head's origin). */
+  goalMaxRounds(): number | undefined {
+    return this.fold.goalMaxRounds;
   }
 
   page(offset?: number, limit?: number): SessionHistoryPage {
@@ -141,7 +156,7 @@ export class DshHistoryCache {
     try {
       observation = await this.query.observeSession(sessionId, { projectionMode: 'none' });
       if (generation !== this.generation) return;
-      const fold = new DshHistoryFold();
+      const fold = this.newFold();
       for (const event of observation.events) fold.push(event);
       this.fold = fold;
       this.state = 'ready';

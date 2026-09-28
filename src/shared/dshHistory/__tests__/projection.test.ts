@@ -189,15 +189,31 @@ describe('projectDshHistory — human messages', () => {
         form: 'notice',
         summary: 'Background job finished: npm test',
       })
-      .user('n2', 'goal wrap-up body', { kind: 'tool-goal', form: 'notice', summary: '' });
+      .user('n2', 'relayed body', { kind: 'dsh-new-producer', form: 'notice', summary: '' });
     const rows = projectDshHistory(events);
     expect(
       rows.map((row) => [row.id, row.role, row.blocks[0]?.type === 'text' && row.blocks[0].text])
     ).toEqual([
       ['h:n1', 'system', 'Background job finished: npm test'],
-      ['h:n2', 'system', 'goal wrap-up body'],
+      ['h:n2', 'system', 'relayed body'],
     ]);
     expect(rows[0] && dshHistoryEntryType(rows[0])).toBe('notice');
+  });
+
+  it.each([
+    // P1-4d1 (decision 081's handoff): the step ceiling's wrap-up instruction.
+    ['aiclient-loop-guard', 'You have taken 500 assistant turns on this request'],
+    // Plan P1-7 shard 03 §6.2: the goal bar and the metadata line already say these.
+    ['tool-goal', 'complete: ship it'],
+    ['model-selection', 'aiclient-gateway/a → aiclient-gateway/b'],
+    ['repeat-tool-reminder', 'bash × 3'],
+    ['plan-mode', 'Plan mode is on'],
+  ])('[D1-NOTICE] hides the %s notice', (kind, summary) => {
+    const { events } = log()
+      .turn(1)
+      .user('u1', 'prompt')
+      .user('x1', 'body', { kind, form: 'notice', summary });
+    expect(ids(projectDshHistory(events))).toEqual(['h:u1']);
   });
 
   it.each([
@@ -935,5 +951,241 @@ describe('DshHistoryFold', () => {
     }
     expect(fold.messages()).toEqual([]);
     expect(fold.cursor).toBe(4);
+  });
+});
+
+/**
+ * dsh-rebase P1-4d1 (decision 099): the rules the live bridge shares with the
+ * history — heads of the turns the engine started itself (decision 072 rule
+ * 3), tool-row flags off DSH's error identity (rule 5), the review of DSH's
+ * diff card (rule 6), and the ids of the live copies.
+ */
+describe('projectDshHistory — turns the engine started itself (P1-4d1)', () => {
+  const stepStart = (turn: number, step: number) => ['step/start', { turn, step }] as const;
+
+  it('[D1-HEAD-1] a goal round is headed by an origin row with no text, and the budget the log recorded', () => {
+    const { events } = log()
+      .add('goal/change', { kind: 'goal/change', goal: { id: 'g1', maxGoalRounds: 6 } })
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('g-r2', '<goal_round>Round: 2/6', {
+        kind: 'goal',
+        goalId: 'g1',
+        revision: 1,
+        round: 2,
+      })
+      .user('ctx', 'snapshot', { kind: 'runtime-context', form: 'snapshot', sections: [] })
+      .assistant(1, 1, 'a1', [text('round two')])
+      .end(1, { kind: 'completed' });
+    const rows = projectDshHistory(events);
+    expect(rows.map((row) => [row.id, row.role])).toEqual([
+      ['h:g-r2', 'user'],
+      ['h:a1', 'assistant'],
+    ]);
+    expect(rows[0]).toMatchObject({ origin: { kind: 'goal', round: 2, maxRounds: 6 }, blocks: [] });
+  });
+
+  it('[D1-HEAD-2] a background job or a subagent that woke the agent heads its turn with its account', () => {
+    const job = log()
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('j1', 'background job job-1 ... finished', {
+        kind: 'tool-jobs',
+        form: 'notice',
+        summary: 'bash sleep 1 exited 0',
+      })
+      .assistant(1, 1, 'a1', [text('noted')])
+      .end(1, { kind: 'completed' });
+    expect(projectDshHistory(job.events)[0]).toMatchObject({
+      id: 'h:j1',
+      role: 'user',
+      origin: { kind: 'job' },
+      blocks: [{ type: 'text', text: 'bash sleep 1 exited 0' }],
+    });
+    const sub = log()
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('s1', 'closing text', {
+        kind: 'subagent-settled',
+        form: 'notice',
+        summary: 'explore completed',
+        senderSessionId: 'child-1',
+      });
+    expect(projectDshHistory(sub.events)[0]).toMatchObject({
+      role: 'user',
+      origin: { kind: 'subagent', childSessionId: 'child-1' },
+    });
+  });
+
+  it('[D1-HEAD-3] in a turn the user sent, what the engine queued before the prompt is a notice, not a head', () => {
+    const { events } = log()
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('j1', 'body', { kind: 'tool-jobs', form: 'notice', summary: 'bash x exited 0' })
+      .user('g1', '<goal_round>', { kind: 'goal', round: 1 })
+      .user('u1', 'my prompt')
+      .assistant(1, 1, 'a1', [text('ok')]);
+    const rows = projectDshHistory(events);
+    expect(rows.map((row) => [row.id, row.role])).toEqual([
+      ['h:j1', 'system'],
+      ['h:u1', 'user'],
+      ['h:a1', 'assistant'],
+    ]);
+    expect(rows[0]).toMatchObject({ blocks: [{ type: 'text', text: 'bash x exited 0' }] });
+    expect(rows[0] && 'origin' in rows[0]).toBe(false);
+  });
+
+  it('[D1-HEAD-4] the same account in the middle of a turn is a notice', () => {
+    const { events } = log()
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('u1', 'prompt')
+      .assistant(1, 1, 'a1', [toolCall('c1', 'job_output', {})])
+      .add('step/end', { turn: 1, step: 1 })
+      .add(...stepStart(1, 2))
+      .user('j1', 'body', { kind: 'tool-jobs', form: 'notice', summary: 'bash x exited 0' });
+    expect(projectDshHistory(events).map((row) => [row.id, row.role])).toEqual([
+      ['h:u1', 'user'],
+      ['h:a1', 'assistant'],
+      ['h:j1', 'system'],
+    ]);
+  });
+
+  it('[D1-HEAD-5] only the first message the engine sent heads the turn; the next is a notice', () => {
+    const { events } = log()
+      .turn(1)
+      .add(...stepStart(1, 1))
+      .user('s1', 'x', { kind: 'subagent-settled', form: 'notice', summary: 'explore done' })
+      .user('j1', 'y', { kind: 'tool-jobs', form: 'notice', summary: 'bash x exited 0' });
+    expect(projectDshHistory(events).map((row) => [row.id, row.role, 'origin' in row])).toEqual([
+      ['h:s1', 'user', true],
+      ['h:j1', 'system', false],
+    ]);
+  });
+});
+
+describe('projectDshHistory — tool rows and reviews from DSH data (P1-4d1)', () => {
+  it('[D1-FLAGS-1] reads our gate and the loop guard as refusals, a cancelled run as stopped', () => {
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [
+        toolCall('c1', 'bash', {}),
+        toolCall('c2', 'bash', {}),
+        toolCall('c3', 'write', {}),
+        toolCall('c4', 'read', {}),
+      ])
+      .result(1, 1, 'r1', 'c1', 'Error: denied', {
+        isError: true,
+        error: { name: 'PermissionDenial', code: 'tool_denied', reason: 'policy-deny' },
+      })
+      .result(1, 1, 'r2', 'c2', 'Refused: ceiling', {
+        isError: true,
+        error: { name: 'LoopGuard', code: 'turn_ceiling' },
+      })
+      .result(1, 1, 'r3', 'c3', 'Error: tool call aborted', {
+        isError: true,
+        error: { name: 'AbortError', code: 'ABORTED' },
+      })
+      .result(1, 1, 'r4', 'c4', 'Error: tool call aborted before dispatch', {
+        isError: true,
+        error: { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' },
+      });
+    const results = projectDshHistory(events)[0]?.blocks.filter(
+      (block) => block.type === 'tool_result'
+    );
+    expect(results?.map((block) => [block.toolCallId, block.ok, { ...block, id: '' }])).toEqual([
+      ['c1', false, expect.objectContaining({ refused: true })],
+      ['c2', false, expect.objectContaining({ refused: true })],
+      ['c3', false, expect.objectContaining({ stopped: true })],
+      ['c4', false, expect.objectContaining({ notStarted: true })],
+    ]);
+    expect(results?.[2]).not.toHaveProperty('refused');
+    expect(results?.[3]).not.toHaveProperty('stopped');
+  });
+
+  it('[D1-REVIEW-1] records a write / edit review off the diff card, and none for a failed call', () => {
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [
+        toolCall('c1', 'write', { file_path: 'new.txt', content: 'hi\n' }),
+        toolCall('c2', 'edit', { file_path: 'old.txt', old_string: 'a', new_string: 'b' }),
+        toolCall('c3', 'edit', { file_path: 'x.txt', old_string: 'a', new_string: 'b' }),
+      ])
+      .result(1, 1, 'r1', 'c1', 'Created file', { meta: { operation: 'create', diffs: [] } })
+      .result(1, 1, 'r2', 'c2', 'updated', {
+        meta: { diffs: [{ path: 'old.txt', oldText: 'a', newText: 'b' }] },
+      })
+      .result(1, 1, 'r3', 'c3', 'Error: stale', {
+        isError: true,
+        meta: { diffs: [{ path: 'x.txt', oldText: 'a', newText: 'b' }] },
+      });
+    const results = projectDshHistory(events)[0]?.blocks.filter(
+      (block) => block.type === 'tool_result'
+    );
+    expect(results?.[0]).toMatchObject({
+      review: { version: 1, path: 'new.txt', status: 'added', patch: '@@ -0,0 +1,1 @@\n+hi' },
+    });
+    expect(results?.[1]).toMatchObject({
+      review: { version: 1, path: 'old.txt', status: 'modified', patch: '@@\n-a\n+b' },
+    });
+    expect(results?.[2]).not.toHaveProperty('review');
+  });
+
+  it("[D1-REVIEW-2] a migrated result keeps the review 1.0.x recorded rather than DSH's card", () => {
+    const recorded = {
+      version: 1,
+      path: 'p.txt',
+      status: 'modified',
+      patch: '@@ -1 +1 @@\n-a\n+b',
+    };
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [toolCall('c1', 'edit', { file_path: 'p.txt' })])
+      .result(1, 1, 'r1', 'c1', 'ok', {
+        meta: {
+          aiclient: { piDetails: { review: recorded } },
+          diffs: [{ path: 'p.txt', oldText: 'x', newText: 'y' }],
+        },
+      });
+    expect(projectDshHistory(events)[0]?.blocks.at(-1)).toMatchObject({ review: recorded });
+  });
+});
+
+describe('DshHistoryFold — what the live bridge reads off it (P1-4d1)', () => {
+  it('[D1-LIVEID] names the live copy of each row when told the live session, and only then', () => {
+    const build = () =>
+      log()
+        .turn(1)
+        .add('step/start', { turn: 1, step: 1 })
+        .user('u1', 'prompt')
+        .assistant(1, 1, 'a1', [text('answer')])
+        .add('step/end', { turn: 1, step: 1 })
+        .add('step/start', { turn: 1, step: 2 })
+        .user('j1', 'x', { kind: 'tool-jobs', form: 'notice', summary: 'bash x exited 0' })
+        .assistant(1, 2, 'a2', [text('seen')]);
+    const plain = projectDshHistory(build().events);
+    expect(plain.some((row) => 'liveMessageId' in row)).toBe(false);
+    const named = projectDshHistory(build().events, { liveSessionId: 'aiclient-s1' });
+    expect(named.map((row) => [row.id, row.liveMessageId])).toEqual([
+      ['h:u1', 'dsh-user-2'],
+      ['h:a1', 'dsh-aiclient-s1-t1-s1'],
+      ['h:j1', 'dsh-notice-6'],
+      ['h:a2', 'dsh-aiclient-s1-t1-s2'],
+    ]);
+  });
+
+  it('[D1-USAGE-STEPS] counts the steps that reported usage, and keeps the goal budget current', () => {
+    const fold = new DshHistoryFold();
+    const { events } = log()
+      .add('goal/change', { goal: { maxGoalRounds: 4 } })
+      .turn(1)
+      .user('u1', 'go')
+      .assistant(1, 1, 'a1', [text('one')], { usage: { inputTokens: 5, outputTokens: 1 } })
+      .assistant(1, 2, 'a2', [text('two')])
+      .assistant(1, 3, 'a3', [text('three')], { usage: { inputTokens: 6, outputTokens: 2 } })
+      .add('goal/change', { goal: { maxGoalRounds: 9 } });
+    for (const event of events) fold.push(event);
+    expect(fold.usageSteps).toBe(2);
+    expect(fold.goalMaxRounds).toBe(9);
   });
 });

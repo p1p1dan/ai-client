@@ -1,0 +1,556 @@
+import { describe, expect, it } from 'vitest';
+import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
+import {
+  AICLIENT_LOOP_GUARD_DENIAL,
+  AICLIENT_TURN_CEILING_REASON,
+  type DshLogEvent,
+} from '../../../shared/dshHistory/types.ts';
+import { readPiUsagePayload } from '../../../shared/piUsage.ts';
+import { TURN_CEILING_CANCEL_REASON } from '../../loopGuard/constants.ts';
+import {
+  type BridgeDraft,
+  DshLiveEvents,
+  type DshUsageView,
+  type LiveTurn,
+  type StreamFrame,
+  streamingArgsSummary,
+  TOOL_ARG_COALESCE_MS,
+} from '../liveEvents.ts';
+
+/**
+ * dsh-rebase P1-4d1 (decision 099) — the live half of the bridge, against a
+ * fake host: DSH's own events and stream frames in, the RuntimeEvents the
+ * renderer draws out. The real engine runs under tools/bridge-record.ts.
+ */
+
+const SID = 'aiclient-s1';
+
+interface Emitted {
+  type: string;
+  requestId?: string;
+  payload: Record<string, unknown>;
+}
+
+function harness(
+  options: { turn?: LiveTurn | null; usage?: DshUsageView; steps?: number; rounds?: number } = {}
+) {
+  const events: Emitted[] = [];
+  let turn: LiveTurn | null =
+    options.turn === undefined ? { requestId: 'turn-1', synthetic: false } : options.turn;
+  let clock = 1_000;
+  let seq = 0;
+  const live = new DshLiveEvents({
+    emit: (event: BridgeDraft) =>
+      events.push({
+        ...(event as unknown as Emitted),
+        ...(turn ? { requestId: turn.requestId } : {}),
+      }),
+    route: () => 'aiclient-gateway/fake-1',
+    dshSessionId: () => SID,
+    turn: () => turn,
+    openSyntheticTurn: (number) => {
+      turn = { requestId: `dsh-turn-${SID}-${number}`, synthetic: true };
+      events.push({ type: 'session.status', payload: { status: 'running' } });
+    },
+    closeTurn: () => {
+      turn = null;
+    },
+    usageView: () => options.usage,
+    usageSteps: () => options.steps ?? 0,
+    goalMaxRounds: () => options.rounds,
+    now: () => clock,
+  });
+  const durable = (type: string, data: Record<string, unknown>) => {
+    seq += 1;
+    const event = { type, seq, time: 1_790_000_000_000 + seq, data };
+    log.push(event);
+    live.onSessionEvent(event);
+    return event;
+  };
+  const log: DshLogEvent[] = [];
+  const frame = (value: StreamFrame) => live.onStreamFrame(value);
+  const chunk = (chunk: Record<string, unknown>, attemptId = 'att-1') =>
+    frame({ type: 'chunk', attemptId, index: 0, chunk } as StreamFrame);
+  return {
+    live,
+    events,
+    log,
+    durable,
+    frame,
+    chunk,
+    tick: (ms: number) => {
+      clock += ms;
+    },
+    setTurn: (next: LiveTurn | null) => {
+      turn = next;
+    },
+    of: (type: string) => events.filter((event) => event.type === type),
+  };
+}
+
+const STEP_1 = `dsh-${SID}-t1-s1`;
+
+describe('the loop guard names the bridge reads without taking the row in', () => {
+  it("[D1-PIN] the shared copies are the loop guard's own (the bridge bundle may not import it)", () => {
+    expect(AICLIENT_TURN_CEILING_REASON).toBe(TURN_CEILING_CANCEL_REASON);
+    // permissionHost.test.ts pins the refusal's `info.name` to the same word.
+    expect(AICLIENT_LOOP_GUARD_DENIAL).toBe('LoopGuard');
+  });
+});
+
+describe('DshLiveEvents — thinking (decision 099 rule 2)', () => {
+  it('[D1-THINK-1] opens and closes a thought on its reasoning block', () => {
+    const h = harness();
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.chunk({ type: 'block-start', index: 0, blockType: 'reasoning' });
+    h.chunk({ type: 'reasoning-delta', index: 0, text: 'let me think' });
+    h.chunk({ type: 'block-end', index: 0, block: { type: 'reasoning', text: 'let me think' } });
+    h.chunk({ type: 'block-start', index: 1, blockType: 'text' });
+    h.chunk({ type: 'text-delta', index: 1, text: 'answer' });
+    expect(h.events.map((event) => [event.type, event.payload.blockId])).toEqual([
+      ['message.started', undefined],
+      ['thinking.started', `${STEP_1}-r0`],
+      ['thinking.delta', `${STEP_1}-r0`],
+      ['thinking.completed', `${STEP_1}-r0`],
+      ['message.delta', `${STEP_1}-b1`],
+    ]);
+  });
+
+  it('[D1-THINK-2] a thought the stream cut is closed with its step', () => {
+    const h = harness();
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.chunk({ type: 'reasoning-delta', index: 0, text: 'hmm' });
+    h.durable('step/end', { turn: 1, step: 1 });
+    expect(h.events.map((event) => event.type)).toEqual([
+      'message.started',
+      'thinking.started',
+      'thinking.delta',
+      'thinking.completed',
+      'message.completed',
+    ]);
+  });
+});
+
+describe('DshLiveEvents — streaming tool arguments (decision 099 rule 14)', () => {
+  it('[D1-ARGS-1] opens the row on the first named delta with the size so far, then coalesces', () => {
+    const h = harness();
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.chunk({
+      type: 'tool-call-delta',
+      index: 0,
+      id: 'c1',
+      name: 'write',
+      argumentsDelta: '{"file_',
+    });
+    h.chunk({
+      type: 'tool-call-delta',
+      index: 0,
+      id: 'c1',
+      name: 'write',
+      argumentsDelta: 'path":"a.txt","content":"x',
+    });
+    h.tick(TOOL_ARG_COALESCE_MS);
+    h.chunk({
+      type: 'tool-call-delta',
+      index: 0,
+      id: 'c1',
+      name: 'write',
+      argumentsDelta: '\\ny\\n',
+    });
+    const args = '{"file_path":"a.txt","content":"x\\ny\\n"}';
+    h.chunk({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'c1', name: 'write', arguments: args },
+    });
+    expect(h.events.slice(1).map((event) => [event.type, event.payload.input])).toEqual([
+      ['tool.started', { __streaming: { bytes: 7, lines: 1 } }],
+      // The second delta fell inside the window; the third reports all of it.
+      [
+        'tool.updated',
+        { __streaming: streamingArgsSummary('{"file_path":"a.txt","content":"x\\ny\\n') },
+      ],
+      ['tool.updated', { file_path: 'a.txt', content: 'x\ny\n', path: 'a.txt' }],
+    ]);
+    // The durable call carries the same arguments: nothing more to send.
+    h.durable('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'write', arguments: args });
+    expect(h.of('tool.updated')).toHaveLength(2);
+  });
+
+  it('[D1-ARGS-2] counts the lines the model wrote inside strings, not escaped backslashes', () => {
+    expect(streamingArgsSummary('{"content":"a\\nb\\n')).toEqual({ bytes: 18, lines: 2 });
+    expect(streamingArgsSummary('{"content":"C:\\\\new')).toEqual({ bytes: 19, lines: 1 });
+    expect(streamingArgsSummary('')).toEqual({ bytes: 0, lines: 0 });
+    expect(streamingArgsSummary('"中"').bytes).toBe(5);
+  });
+
+  it('[D1-ARGS-3] a call the stream never named still gets its row from the durable call', () => {
+    const h = harness();
+    h.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c9',
+      name: 'bash',
+      arguments: '{"command":"ls"}',
+    });
+    expect(h.of('tool.started')[0]?.payload).toMatchObject({
+      toolCallId: 'c9',
+      name: 'bash',
+      input: { command: 'ls' },
+    });
+  });
+});
+
+describe('DshLiveEvents — tool rows (decision 099 rules 5, 6)', () => {
+  const result = (callId: string, extra: Record<string, unknown>, content = 'out') => ({
+    turn: 1,
+    step: 1,
+    message: {
+      id: `r-${callId}`,
+      role: 'tool',
+      toolCallId: callId,
+      content: [{ type: 'text', text: content }],
+      ...(extra.isError ? { isError: true } : {}),
+    },
+    ...(extra.error ? { error: extra.error } : {}),
+    ...(extra.meta ? { meta: extra.meta } : {}),
+  });
+
+  it('[D1-FLAGS-LIVE] flags a row by DSH error code: not run, stopped, refused, outcome unknown', () => {
+    const h = harness();
+    for (const [callId, error] of [
+      ['c1', { name: 'AbortError', code: 'ABORTED_BEFORE_DISPATCH' }],
+      ['c2', { name: 'AbortError', code: 'ABORTED' }],
+      ['c3', { name: 'PermissionDenial', code: 'tool_denied', reason: 'user-denied' }],
+      ['c4', { name: 'ToolOutcomeUnknownError', code: 'TOOL_OUTCOME_UNKNOWN' }],
+    ] as const) {
+      h.durable('tool/call', { turn: 1, step: 1, callId, name: 'bash', arguments: '{}' });
+      h.durable('tool/result', result(callId, { isError: true, error }, 'Error: x'));
+    }
+    const completed = h.of('tool.completed').map((event) => event.payload);
+    expect(completed.map((payload) => (payload.output as { details: unknown }).details)).toEqual([
+      { notStarted: true },
+      { stopped: true },
+      { refused: true },
+      { outcomeUnknown: true },
+    ]);
+    expect(completed.every((payload) => payload.ok === false && payload.error === 'Error: x')).toBe(
+      true
+    );
+  });
+
+  it('[D1-REVIEW-LIVE] a write carries the review of its diff card, the same record the history keeps', () => {
+    const h = harness();
+    const args = JSON.stringify({ file_path: 'n.txt', content: 'hello\n' });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: {
+        id: 'a1',
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: 'c1', name: 'write', arguments: args }],
+      },
+    });
+    h.durable('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'write', arguments: args });
+    h.durable(
+      'tool/result',
+      result('c1', { meta: { operation: 'create', diffs: [] } }, 'Created file')
+    );
+    const output = h.of('tool.completed')[0]?.payload.output as {
+      content: unknown;
+      details: { review: unknown };
+    };
+    expect(output.content).toEqual([{ type: 'text', text: 'Created file' }]);
+    const replayed = projectDshHistory(h.log)[0]?.blocks.at(-1) as { review?: unknown };
+    expect(output.details.review).toEqual(replayed.review);
+    expect(output.details.review).toMatchObject({ status: 'added', path: 'n.txt' });
+  });
+
+  it('[D1-PLAIN] an ordinary result stays a plain string', () => {
+    const h = harness();
+    h.durable('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}' });
+    h.durable('tool/result', result('c1', {}, 'fine'));
+    expect(h.of('tool.completed')[0]?.payload).toMatchObject({ ok: true, output: 'fine' });
+  });
+});
+
+describe('DshLiveEvents — usage (decision 099 rule 1)', () => {
+  it('[D1-USAGE-1] sends the prompt side while streaming, then the settled bill with occupancy and total', () => {
+    const h = harness({
+      usage: {
+        tokenUsage: {
+          uncachedInputTokens: 100,
+          outputTokens: 20,
+          cacheReadTokens: 50,
+          cacheWriteTokens: 0,
+        },
+        contextPressure: { pressureTokens: 150, projectedTokens: 170, contextWindow: 1000 },
+      },
+      steps: 2,
+    });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    const usage = { inputTokens: 10, outputTokens: 5, cacheReadTokens: 30, totalTokens: 45 };
+    h.chunk({ type: 'usage', usage });
+    h.chunk({ type: 'usage', usage });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+      usage: { ...usage, reasoningTokens: 3 },
+    });
+    const [pending, settled] = h.of('usage.updated').map((event) => event.payload);
+    expect(h.of('usage.updated')).toHaveLength(2);
+    expect(pending).toEqual({
+      input: 10,
+      output: 0,
+      cacheRead: 30,
+      cacheWrite: 0,
+      totalTokens: 40,
+      costUsd: 0,
+      pending: true,
+    });
+    expect(readPiUsagePayload(settled)).toEqual({
+      input: 10,
+      output: 5,
+      cacheRead: 30,
+      cacheWrite: 0,
+      totalTokens: 45,
+      costUsd: 0,
+      reasoning: 3,
+      context: { tokens: 170, contextWindow: 1000, percent: 17 },
+      session: {
+        turns: 2,
+        toolResults: 0,
+        input: 100,
+        output: 20,
+        cacheRead: 50,
+        cacheWrite: 0,
+        totalTokens: 170,
+        costUsd: 0,
+      },
+    });
+  });
+
+  it('[D1-USAGE-2] without the projections a step still reports its own bill', () => {
+    const h = harness();
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [] },
+      usage: { inputTokens: 1, outputTokens: 2 },
+    });
+    expect(h.of('usage.updated')[0]?.payload).toEqual({
+      input: 1,
+      output: 2,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 3,
+      costUsd: 0,
+    });
+  });
+
+  it('[D1-USAGE-3] a step Stop cut mid-stream says its bill was never reported', () => {
+    const h = harness();
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'par' }] },
+      interrupted: true,
+    });
+    expect(h.of('usage.updated')[0]?.payload).toMatchObject({ output: 0, unreported: true });
+  });
+});
+
+describe('DshLiveEvents — retries and endings (decision 099 rules 3, 4)', () => {
+  it('[D1-RETRY] raises the banner on llm/retry and takes it down when the retry starts', () => {
+    const h = harness();
+    const retry = h.durable('llm/retry', {
+      retryId: 'rt-1',
+      turn: 1,
+      step: 1,
+      provider: 'aiclient-gateway',
+      mode: 'normal',
+      policyKey: 'k',
+      retry: 2,
+      maxRetries: 5,
+      delayMs: 800,
+      failure: { message: 'overloaded', code: 'SERVER', status: 503 },
+    });
+    h.durable('llm/retry-started', { retryId: 'rt-1', turn: 1, step: 1, retry: 2 });
+    expect(h.of('session.status').map((event) => event.payload)).toEqual([
+      {
+        status: 'running',
+        retry: {
+          attempt: 2,
+          maxRetries: 5,
+          delayMs: 800,
+          errorStatus: '503',
+          error: 'SERVER',
+          retryAt: retry.time + 800,
+        },
+      },
+      { status: 'running' },
+    ]);
+  });
+
+  it("[D1-RETRY-ALWAYS] an 'always' policy has no ceiling: maxRetries is the banner's absent sentinel", () => {
+    const h = harness();
+    h.durable('llm/retry', {
+      retry: 7,
+      mode: 'always',
+      delayMs: 100,
+      failure: { message: 'reset', code: 'TRANSPORT' },
+    });
+    expect(h.of('session.status')[0]?.payload.retry).toMatchObject({
+      attempt: 7,
+      maxRetries: 0,
+      errorStatus: null,
+      error: 'TRANSPORT',
+    });
+  });
+
+  it("[D1-FAIL] a failed turn reports DSH's sentence and our code, not the reason as JSON", () => {
+    const h = harness();
+    h.durable('turn/end', {
+      turn: 1,
+      reason: { kind: 'error', error: { message: 'Connection error.', code: 'TRANSPORT' } },
+    });
+    expect(h.of('session.failed')[0]?.payload).toEqual({
+      error: 'Connection error.',
+      errorCode: 'NETWORK_ERROR',
+    });
+    expect(h.events.at(-1)).toMatchObject({ type: 'session.status', payload: { status: 'idle' } });
+  });
+
+  it('[D1-FAIL-REPETITION] the loop guard cut keeps its own code, which has its own card', () => {
+    const h = harness();
+    h.durable('turn/end', {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: {
+          message: 'The model wrote the same subagent tool call 3 times',
+          code: 'tool_call_repetition',
+        },
+      },
+    });
+    expect(h.of('session.failed')[0]?.payload.errorCode).toBe('tool_call_repetition');
+  });
+
+  it('[D1-TURN-LIMIT] the step ceiling ends the run as a turn limit; a user stop stays a stop', () => {
+    const h = harness();
+    h.durable('turn/end', {
+      turn: 1,
+      reason: { kind: 'aborted', reason: { kind: 'hook', reason: 'aiclient-turn-ceiling' } },
+    });
+    h.setTurn({ requestId: 'turn-2', synthetic: false });
+    h.durable('turn/end', { turn: 2, reason: { kind: 'aborted', reason: { kind: 'user' } } });
+    expect(
+      h.events.filter(
+        (event) => event.type.startsWith('session.') && event.type !== 'session.status'
+      )
+    ).toEqual([
+      { type: 'session.completed', requestId: 'turn-1', payload: { stopCause: 'turn_limit' } },
+      { type: 'session.stopped', requestId: 'turn-2', payload: {} },
+    ]);
+  });
+
+  it('[D1-ENDINGS] a blocked or length-capped turn completes', () => {
+    for (const kind of ['completed', 'blocked', 'max-tokens']) {
+      const h = harness();
+      h.durable('turn/end', { turn: 1, reason: { kind } });
+      expect(h.of('session.completed'), kind).toHaveLength(1);
+    }
+  });
+});
+
+describe('DshLiveEvents — notices and turn heads (decisions 072, 081, 099 rules 7, 8)', () => {
+  const notice = (kind: string, summary: string) => ({
+    id: `m-${kind}`,
+    role: 'user',
+    content: [{ type: 'text', text: 'model-facing body' }],
+    source: { kind, form: 'notice', summary },
+  });
+
+  it('[D1-HEAD-LIVE-1] a goal round DSH started is headed by its origin, with the budget', () => {
+    const h = harness({ turn: null, rounds: 5 });
+    h.durable('turn/start', { turn: 4 });
+    h.durable('step/start', { turn: 4, step: 1 });
+    const round = h.durable('user/message', {
+      id: 'g1',
+      role: 'user',
+      content: [{ type: 'text', text: '<goal_round>' }],
+      source: { kind: 'goal', goalId: 'x', revision: 1, round: 2 },
+    });
+    expect(h.events.map((event) => [event.type, event.requestId])).toEqual([
+      ['session.status', undefined],
+      ['message.started', `dsh-turn-${SID}-4`],
+      ['message.completed', `dsh-turn-${SID}-4`],
+    ]);
+    expect(h.events[1]?.payload).toEqual({
+      messageId: `dsh-user-${round.seq}`,
+      role: 'user',
+      origin: { kind: 'goal', round: 2, maxRounds: 5 },
+    });
+  });
+
+  it('[D1-HEAD-LIVE-2] a job wake-up is headed by its account; the next account is a notice', () => {
+    const h = harness({ turn: null });
+    h.durable('turn/start', { turn: 2 });
+    const head = h.durable('user/message', notice('tool-jobs', 'bash sleep 1 exited 0'));
+    const next = h.durable('user/message', notice('subagent-settled', 'explore done'));
+    expect(h.of('message.started')[0]?.payload).toMatchObject({
+      messageId: `dsh-user-${head.seq}`,
+      origin: { kind: 'job' },
+    });
+    expect(h.of('message.delta')[0]?.payload.text).toBe('bash sleep 1 exited 0');
+    expect(h.of('custom.message')[0]?.payload).toEqual({
+      messageId: `dsh-notice-${next.seq}`,
+      customType: 'dsh:subagent-settled',
+      content: 'explore done',
+    });
+  });
+
+  it('[D1-NOTICE-LIVE] in a turn the user sent, accounts are notices and our wrap-up is hidden', () => {
+    const h = harness({ turn: { requestId: 'turn-1', synthetic: false, userMessageId: 'u1' } });
+    h.durable('turn/start', { turn: 1 });
+    h.durable('user/message', notice('tool-jobs', 'bash x exited 0'));
+    h.durable('user/message', {
+      id: 'u1',
+      role: 'user',
+      content: [{ type: 'text', text: 'my prompt' }],
+      source: { kind: 'user' },
+    });
+    h.durable('user/message', notice('aiclient-loop-guard', 'wrap up'));
+    h.durable('user/message', notice('tool-goal', 'complete: x'));
+    expect(h.events.map((event) => event.type)).toEqual([
+      'custom.message',
+      'message.started',
+      'message.delta',
+      'message.completed',
+    ]);
+    expect(h.of('message.started')[0]?.payload).not.toHaveProperty('origin');
+  });
+
+  it('[D1-HEAD-PARITY] the live ids are the ones the history names on its rows', () => {
+    const h = harness({ turn: null });
+    h.durable('turn/start', { turn: 1 });
+    h.durable('step/start', { turn: 1, step: 1 });
+    h.durable('user/message', notice('tool-jobs', 'bash x exited 0'));
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    });
+    h.durable('step/end', { turn: 1, step: 1 });
+    h.durable('step/start', { turn: 1, step: 2 });
+    h.durable('user/message', notice('subagent-settled', 'explore done'));
+    const liveIds = h.events
+      .filter((event) => event.type === 'message.started' || event.type === 'custom.message')
+      .map((event) => event.payload.messageId);
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows.map((row) => row.liveMessageId)).toEqual(liveIds);
+    expect(rows.map((row) => row.role)).toEqual(['user', 'assistant', 'system']);
+  });
+});

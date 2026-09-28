@@ -221,6 +221,28 @@ export interface HistoryAttachment {
   name?: string;
 }
 
+/**
+ * dsh-rebase decision 072 rule 3 (P1-4d1): why a turn started although nobody
+ * sent anything — the DSH engine opened it itself. Carried by the turn's head
+ * row: a `user`-role message the renderer draws as a turn head rather than a
+ * bubble, so turn grouping, the turn clock and work-group folding all count
+ * the autonomous round as a turn of its own.
+ *
+ * Only facts DSH records on the message that opened the turn:
+ *   - `goal`: a goal continuation round (`source.round`); `maxRounds` is the
+ *     goal's round budget when the log recorded it (`goal/change`);
+ *   - `job`: a background job's completion notice woke the agent;
+ *   - `subagent`: a continuable subagent settled (`subagent-settled`);
+ *   - `agent-message`: a subagent addressed this agent (`agent-message`).
+ * The head's text, when it has one, is DSH's one-line account (`summary`) or
+ * the relayed message itself; a goal round has none.
+ */
+export type TurnOrigin =
+  | { kind: 'goal'; round: number; maxRounds?: number }
+  | { kind: 'job' }
+  | { kind: 'subagent'; childSessionId?: string }
+  | { kind: 'agent-message'; childSessionId?: string };
+
 export interface HistoryMessage {
   /** Stable renderer id derived from the Pi session entry id. */
   id: `${typeof HISTORY_MESSAGE_ID_PREFIX}${string}`;
@@ -268,6 +290,21 @@ export interface HistoryMessage {
    * rather than just its chip.
    */
   attachments?: HistoryAttachment[];
+  /**
+   * dsh-rebase P1-4d1 (decision 072 rule 3): set on the head row of a turn
+   * the engine started by itself — see {@link TurnOrigin}. User messages
+   * only; absent on everything a person typed. Optional-field addition.
+   */
+  origin?: TurnOrigin;
+  /**
+   * dsh-rebase P1-4d1: the id the same message carried on the live event
+   * stream of the session that wrote it (`message.started` /
+   * `custom.message`), when the projection can name it. A replay that finds
+   * a live copy under this id in the timeline is looking at the same message
+   * — an exact identity, where the renderer's other folds can only compare
+   * text (`historyReplayMerge.ts`). Absent on migrated and non-DSH history.
+   */
+  liveMessageId?: string;
 }
 
 /**

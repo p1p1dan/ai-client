@@ -15,8 +15,18 @@
  * time, which is how the bridge keeps its cache current from `session/event`;
  * `projectDshHistory` is the same fold over a whole log. No IO, no DSH
  * package, no runtime — the static guard in `__tests__` holds it to that.
+ *
+ * P1-4d1 (decision 099): messages nobody typed follow the notice table the
+ * live bridge reads too (`dshNotices.ts`) — the head of a turn the engine
+ * started by itself carries its `origin`, the loop guard's wrap-up
+ * instruction is hidden; a `write` / `edit` result carries the review DSH's
+ * own diff card describes (`dshFileReview.ts`); and the tool-row flags are
+ * read off `tool/result.error` by `dshToolOutcomeFlags`, which the bridge's
+ * live `tool.completed` uses as well.
  */
 
+import { dshFileReview } from '../dshFileReview.ts';
+import { dshNoticeText, dshTurnHeadText, dshTurnOrigin } from '../dshNotices.ts';
 import type { SessionFileChange } from '../sessionFileChange.ts';
 import type {
   HistoryAttachment,
@@ -27,7 +37,8 @@ import type {
 import { parseToolArguments, toolRowInput } from './toolInput.ts';
 import {
   AICLIENT_INTERJECT_REASON,
-  DSH_FORM_NOTICE,
+  AICLIENT_LOOP_GUARD_DENIAL,
+  AICLIENT_PERMISSION_DENIAL,
   DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY,
   DSH_SOURCE_AICLIENT_RETRY,
   DSH_SOURCE_COMPACT_CHECKPOINT,
@@ -232,6 +243,38 @@ function reviewOf(value: unknown): SessionFileChange | undefined {
   };
 }
 
+/**
+ * The row flags a DSH `tool/result` carries (decision 099 rule 5), read off
+ * its `error` identity and `meta` — the history projection and the bridge's
+ * live `tool.completed` share it, so a replayed row reads like the live one:
+ *   - `ABORTED_BEFORE_DISPATCH` / `TOOL_NOT_STARTED` -> never ran (Stop before
+ *     dispatch, a card Stop took down, a crash or fork closer);
+ *   - `TOOL_OUTCOME_UNKNOWN` -> started, the engine died before its result;
+ *   - `ABORTED` -> ran and was cancelled (any tool: DSH's bash carries no
+ *     `meta.aborted`, decision 072); `meta.aborted` is still honoured;
+ *   - `PermissionDenial` / `LoopGuard` -> refused by our gate or the loop guard.
+ */
+export function dshToolOutcomeFlags(
+  error: unknown,
+  meta?: unknown
+): { notStarted?: true; outcomeUnknown?: true; stopped?: true; refused?: true } {
+  const identity = recordOf(error);
+  const code = stringOf(identity?.code);
+  const name = stringOf(identity?.name);
+  return {
+    ...(code === DSH_TOOL_ABORTED_BEFORE_DISPATCH || code === DSH_TOOL_NOT_STARTED
+      ? { notStarted: true as const }
+      : {}),
+    ...(code === DSH_TOOL_OUTCOME_UNKNOWN ? { outcomeUnknown: true as const } : {}),
+    ...(code === DSH_TOOL_ABORTED || recordOf(meta)?.aborted === true
+      ? { stopped: true as const }
+      : {}),
+    ...(name === AICLIENT_PERMISSION_DENIAL || name === AICLIENT_LOOP_GUARD_DENIAL
+      ? { refused: true as const }
+      : {}),
+  };
+}
+
 /** The user's own reasons for an `aborted` turn; every other cause carries none. */
 function stopCauseOf(reason: Row | null): TurnStopCause | undefined {
   const cause = recordOf(reason?.reason);
@@ -259,10 +302,32 @@ interface TurnState {
   anchored: boolean;
   /** A human prompt or a retry continuation already said what this turn is. */
   decided: boolean;
+  /**
+   * The turn is still taking in its first batch of input — the messages its
+   * first step entered with, which DSH appends before the step's first model
+   * event. Only there can a message head the turn.
+   */
+  firstBatch: boolean;
+  /**
+   * The head row a message the engine sent itself made of this turn (P1-4d1),
+   * with the notice it would have been anywhere else: a prompt the user
+   * typed in the same batch takes the turn back and turns the head into that.
+   */
+  head?: { index: number; seq: number; notice: string | undefined };
   /** Entry indexes of this turn's step messages, in order. */
   readonly steps: number[];
   /** Calls of this turn with no result yet. */
   readonly open: Set<string>;
+}
+
+export interface DshHistoryFoldOptions {
+  /**
+   * The DSH session whose live bridge streamed this log (P1-4d1). Given, each
+   * row also names the id its live copy carried (`liveMessageId`), so the
+   * renderer can recognise a message it already shows; the bridge's own cache
+   * passes it, a projection of someone else's log has nothing to match.
+   */
+  liveSessionId?: string;
 }
 
 /**
@@ -275,15 +340,40 @@ export class DshHistoryFold {
   /** Tool call id -> the entry of the step that asked for it. */
   private readonly callOwner = new Map<string, number>();
   private readonly callNames = new Map<string, string>();
+  /** Tool call id -> its parsed arguments, for the review of a `write` / `edit`. */
+  private readonly callArgs = new Map<string, unknown>();
   private turn: TurnState | null = null;
   /** Placeholder and note entries of the last closed turn; a retry hides them. */
   private retryHideable: number[] = [];
   private lastSeq = -1;
   private view: HistoryMessage[] | null = null;
+  private readonly liveSessionId: string | undefined;
+  /** The current goal's round budget, as the last `goal/change` recorded it. */
+  private goalRounds: number | undefined;
+  /** Model steps the provider reported usage for. */
+  private reportedSteps = 0;
+
+  constructor(options: DshHistoryFoldOptions = {}) {
+    this.liveSessionId = options.liveSessionId;
+  }
 
   /** Seq of the last event pushed, -1 before any. */
   get cursor(): number {
     return this.lastSeq;
+  }
+
+  /**
+   * How many model steps of the log carried provider-reported usage: the
+   * "turns" of the session's running usage total (P1-4d1), counted over the
+   * same log `tokenUsage` sums.
+   */
+  get usageSteps(): number {
+    return this.reportedSteps;
+  }
+
+  /** The current goal's round budget, when the log recorded one. */
+  get goalMaxRounds(): number | undefined {
+    return this.goalRounds;
   }
 
   /** The visible timeline, oldest first. Do not mutate: the array is reused until the next push. */
@@ -304,7 +394,12 @@ export class DshHistoryFold {
         this.onUserMessage(event);
         return;
       case 'assistant/message':
+        this.closeFirstBatch();
         this.onAssistantMessage(event);
+        return;
+      case 'assistant/attempt':
+      case 'step/end':
+        this.closeFirstBatch();
         return;
       case 'tool/call':
         this.onToolCall(event);
@@ -315,11 +410,34 @@ export class DshHistoryFold {
       case 'turn/end':
         this.onTurnEnd(event);
         return;
+      case 'goal/change': {
+        const rounds = recordOf(recordOf(event.data)?.goal)?.maxGoalRounds;
+        if (typeof rounds === 'number' && Number.isFinite(rounds)) this.goalRounds = rounds;
+        return;
+      }
       default: {
         const name = aiclientEventName(event.type);
         if (name) this.onAiclientEvent(name, event);
       }
     }
+  }
+
+  private closeFirstBatch(): void {
+    if (this.turn) this.turn.firstBatch = false;
+  }
+
+  /** The id the live bridge gave a message of step `turn`/`step` (`dshSessionRuntime.ts`). */
+  private liveStepId(data: Row): { liveMessageId?: string } {
+    return this.liveSessionId
+      ? {
+          liveMessageId: `dsh-${this.liveSessionId}-t${String(data.turn)}-s${String(data.step)}`,
+        }
+      : {};
+  }
+
+  /** The id the live bridge gave the echo of the `user/message` at `seq`: a prompt, a head, a notice. */
+  private liveInputId(kind: 'user' | 'notice', seq: number): { liveMessageId?: string } {
+    return this.liveSessionId ? { liveMessageId: `dsh-${kind}-${seq}` } : {};
   }
 
   // ---- turns ------------------------------------------------------------------
@@ -332,6 +450,7 @@ export class DshHistoryFold {
       anchor: `turn-${Number.isFinite(turn) ? turn : 'x'}-seq-${event.seq}`,
       anchored: false,
       decided: false,
+      firstBatch: true,
       steps: [],
       open: new Set(),
     };
@@ -345,9 +464,33 @@ export class DshHistoryFold {
   /** The first human prompt or retry continuation of a turn settles the last turn's placeholders. */
   private decide(retry: boolean): void {
     if (this.turn?.decided) return;
-    if (this.turn) this.turn.decided = true;
+    if (this.turn) {
+      this.turn.decided = true;
+      // Came in with the engine's own message: the turn is the user's, and
+      // what the engine had queued before it is an account, not the head.
+      const head = this.turn.head;
+      if (head && this.turn.firstBatch) {
+        this.turn.head = undefined;
+        this.demoteHead(head);
+      }
+    }
     if (retry) for (const index of this.retryHideable) this.hide(index);
     this.retryHideable = [];
+  }
+
+  /** A head that turned out not to head its turn: the notice it would have been, or nothing. */
+  private demoteHead(head: NonNullable<TurnState['head']>): void {
+    const notice = head.notice;
+    if (notice === undefined) {
+      this.hide(head.index);
+      return;
+    }
+    this.update(head.index, ({ origin: _origin, liveMessageId: _live, ...message }) => ({
+      ...message,
+      role: 'system',
+      blocks: [{ type: 'text', id: partId(message.id, 'notice', 0), text: notice }],
+      ...this.liveInputId('notice', head.seq),
+    }));
   }
 
   private onTurnEnd(event: DshLogEvent): void {
@@ -481,6 +624,7 @@ export class DshHistoryFold {
         ...(time !== undefined ? { timestamp: time } : {}),
         blocks: text ? [{ type: 'text', id: partId(id, 'text', 0), text }] : [],
         ...(attachments.length > 0 ? { attachments } : {}),
+        ...this.liveInputId('user', event.seq),
       });
       return;
     }
@@ -522,20 +666,45 @@ export class DshHistoryFold {
       });
       return;
     }
-    if (source?.form === DSH_FORM_NOTICE) {
-      // A background job or goal account, one line (`source.summary`, at most 120 chars).
-      const text = stringOf(source.summary) ?? textOf(message.content);
-      if (!text) return;
+    // P1-4d1 (decisions 072, 099): what the engine sent itself, by the notice
+    // table the live bridge reads too (`dshNotices.ts`).
+    const notice = dshNoticeText(source, message.content);
+    const origin =
+      turn?.firstBatch && !turn.decided && !turn.head
+        ? dshTurnOrigin(source, this.goalRounds)
+        : undefined;
+    if (turn && origin) {
+      // The first thing a turn nobody sent took in: the head of that turn.
+      const text = dshTurnHeadText(source, message.content);
+      turn.head = {
+        seq: event.seq,
+        notice,
+        index: this.append({
+          id,
+          entryId: rawId,
+          role: 'user',
+          ...(time !== undefined ? { timestamp: time } : {}),
+          blocks: text ? [{ type: 'text', id: partId(id, 'text', 0), text }] : [],
+          origin,
+          ...this.liveInputId('user', event.seq),
+        }),
+      };
+      return;
+    }
+    if (notice !== undefined) {
+      // A background job's or a subagent's account, one line (`source.summary`).
       this.append({
         id,
         entryId: rawId,
         role: 'system',
         ...(time !== undefined ? { timestamp: time } : {}),
-        blocks: [{ type: 'text', id: partId(id, 'notice', 0), text }],
+        blocks: [{ type: 'text', id: partId(id, 'notice', 0), text: notice }],
+        ...this.liveInputId('notice', event.seq),
       });
     }
     // Every other source is model context (runtime snapshots, instructions,
-    // catalogs, goal rounds, reminders) and stays off the timeline.
+    // catalogs, reminders, our loop guard's wrap-up instruction) and stays off
+    // the timeline.
   }
 
   private onAssistantMessage(event: DshLogEvent): void {
@@ -556,18 +725,21 @@ export class DshHistoryFold {
       } else if (block.type === 'tool-call') {
         const callId = stringOf(block.id) ?? `${rawId}-${position}`;
         const name = stringOf(block.name) ?? 'tool';
+        const args = parseToolArguments(block.arguments);
         blocks.push({
           type: 'tool_call',
           id: partId(id, 'tool-call', callId),
           toolCallId: callId,
           name,
-          input: toolRowInput(parseToolArguments(block.arguments)),
+          input: toolRowInput(args),
         });
         this.callOwner.set(callId, index);
         this.callNames.set(callId, name);
+        this.callArgs.set(callId, args);
         turn.open.add(callId);
       }
     });
+    if (recordOf(data.usage)) this.reportedSteps += 1;
     const source = recordOf(message.source);
     const provider = stringOf(source?.provider);
     const model = stringOf(source?.model);
@@ -580,6 +752,7 @@ export class DshHistoryFold {
       blocks,
       // A turn cancelled mid-stream keeps what had streamed, marked so.
       ...(data.interrupted === true ? { incomplete: true, stopReason: 'aborted' } : {}),
+      ...this.liveStepId(data),
     });
     turn.steps.push(index);
   }
@@ -589,6 +762,9 @@ export class DshHistoryFold {
     const callId = stringOf(data?.callId);
     const name = stringOf(data?.name);
     if (callId && name && !this.callNames.has(callId)) this.callNames.set(callId, name);
+    if (callId && !this.callArgs.has(callId)) {
+      this.callArgs.set(callId, parseToolArguments(data?.arguments));
+    }
   }
 
   private onToolResult(event: DshLogEvent): void {
@@ -600,12 +776,17 @@ export class DshHistoryFold {
     const time = timeOf(event);
     const callId =
       stringOf(message.toolCallId) ?? stringOf(recordOf(message.source)?.callId) ?? `${rawId}-call`;
-    const code = stringOf(recordOf(data.error)?.code);
     const failed = message.isError === true;
     const output = toolOutputOf(message.content);
     // A migrated pi result keeps the flags 1.0.x read off its `details`.
     const details = piDetailsOf(data.meta);
-    const review = failed ? undefined : reviewOf(details?.review);
+    const flags = dshToolOutcomeFlags(data.error, data.meta);
+    // Migrated results keep the review 1.0.x recorded; DSH's own come off its
+    // diff card (decision 099 rule 6).
+    const review = failed
+      ? undefined
+      : (reviewOf(details?.review) ??
+        dshFileReview(this.callNames.get(callId), this.callArgs.get(callId), data.meta));
     const result: DshToolResultBlock = {
       type: 'tool_result',
       id: partId(id, 'tool-result', callId),
@@ -615,16 +796,10 @@ export class DshHistoryFold {
       ...(review ? { review } : {}),
       ...(!failed && typeof details?.patch === 'string' ? { patch: details.patch } : {}),
       ...(failed ? { error: output || 'Tool call failed' } : {}),
-      ...(details?.refused === true ? { refused: true as const } : {}),
-      ...(code === DSH_TOOL_ABORTED_BEFORE_DISPATCH || code === DSH_TOOL_NOT_STARTED
-        ? { notStarted: true as const }
-        : {}),
-      ...(code === DSH_TOOL_OUTCOME_UNKNOWN ? { outcomeUnknown: true as const } : {}),
-      ...(code === DSH_TOOL_ABORTED ||
-      recordOf(data.meta)?.aborted === true ||
-      details?.stopped === true
-        ? { stopped: true as const }
-        : {}),
+      ...(flags.refused || details?.refused === true ? { refused: true as const } : {}),
+      ...(flags.notStarted ? { notStarted: true as const } : {}),
+      ...(flags.outcomeUnknown ? { outcomeUnknown: true as const } : {}),
+      ...(flags.stopped || details?.stopped === true ? { stopped: true as const } : {}),
     };
     this.turn?.open.delete(callId);
     const owner = this.callOwner.get(callId);
@@ -754,8 +929,11 @@ export class DshHistoryFold {
 }
 
 /** The whole timeline of one DSH session log (events in seq order). */
-export function projectDshHistory(events: Iterable<DshLogEvent>): HistoryMessage[] {
-  const fold = new DshHistoryFold();
+export function projectDshHistory(
+  events: Iterable<DshLogEvent>,
+  options?: DshHistoryFoldOptions
+): HistoryMessage[] {
+  const fold = new DshHistoryFold(options);
   for (const event of events) fold.push(event);
   return [...fold.messages()];
 }

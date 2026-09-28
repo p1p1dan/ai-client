@@ -178,3 +178,43 @@ it('[P1-4a-UNKNOWN-3] a call whose outcome the engine never recorded reads 「�
     'durably recorded'
   );
 });
+
+it('[P1-4d1-REFUSED-DOM] a call refused on the card the user answered says 「已拒绝」 once, not red', async () => {
+  // dsh-rebase P1-4d1: a DSH session flags our gate's refusal (`details.refused`),
+  // and the card the user denied already words it as the permission verb.
+  const blocks: ChatBlock[] = [
+    call('d1', 'write', { file_path: 'out.txt', content: 'x' }),
+    {
+      id: 'd1-result',
+      type: 'tool_result',
+      toolCallId: 'd1',
+      toolOk: false,
+      toolOutput: {
+        content: [{ type: 'text', text: 'Error: permission denied' }],
+        details: { refused: true },
+      },
+      text: 'Error: permission denied',
+    },
+  ];
+  const denied: ChatBlock = {
+    id: 'd1-card',
+    type: 'permission_request',
+    permissionId: 'd1',
+    resolved: true,
+    allowed: false,
+    permissionDecision: 'deny',
+  };
+  const rows = deriveToolGroupRows(
+    pairToolBlocks(blocks).map((run) => ({
+      kind: 'run' as const,
+      run: { ...run, permission: denied },
+    })),
+    { t: zh }
+  );
+  await act(async () => root.render(createElement(ToolGroup, { rows, sessionId: 's' })));
+  const row = container.querySelector<HTMLElement>('.group\\/row');
+  expect(row?.textContent?.match(/已拒绝/g)).toHaveLength(1);
+  expect(row?.querySelector('[data-slot="tool-row-outcome"]')).toBeNull();
+  expect(row?.className, 'the user said no; nothing failed').not.toContain('text-destructive');
+  expect(row?.textContent, 'what the call asked for, as a preview').toContain('修改预览');
+});
