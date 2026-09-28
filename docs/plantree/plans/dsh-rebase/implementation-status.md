@@ -32,7 +32,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
    - P1-7 / P1-11 新原型（子窗口形态、终端位置等 12 个问题，见原型 README）。
 4. **第二波已完成**：P1-4d1、P1-16a、P1-10b（见 Last Landed）。
 5. **第二批决策已裁决**（[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)）。**下一步**（本机一次只派一个代理，见下方「本机限制」）：
-   1. P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）；
+   1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
    2. 泳道 ①：P1-4c1（steer、Stop 保留收件箱、失败后继续）→ P1-4c2 → P1-4d2 → P1-4d3（联网装 `dsh-tool-ask-user`）→ P1-4e；
    3. P1-10d 试点插件（联网装 `dsh-office-tools`）；P1-16e 旧资产提示；
    4. P1-7a～d 与 P1-11（终端在右列，开工前补示意）；之后 P1-9c～f、P1-15、P1-6d。
@@ -41,6 +41,12 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-28 P1-10b 跟进 `9454b838`（决策 110，修订[决策 108](decisions/108-p1-10b-host-plugin-loading-choices.md) 第 5、6、12 条与[决策 023](decisions/023-no-dotenv-private-cwd-home-patch-overlay.md) 第 3 条）：
+  - 打包态自行拼接补丁列表，不读 `$DSH_HOME/cordis.patch.yml`，只告警一行；源码态照旧读。「home 层新增未声明行即拒绝启动」随之删除。
+  - 插件设置改为 `{overrides:{包名:bool}}`，`AICLIENT_DSH_PLUGINS` 同步改为对象；没改过的插件跟随 `defaultEnabled`。
+  - 编排者复核时补了一处：打包态拼接漏了 DSH 最后追加的遥测关闭补丁。该行本就被强制关闭，补上只为与原函数一致。
+  - 编排器复跑：两套 tsc 通过；相关单测 7 个文件 123 例；真宿主集成 27/27（PLG-5 改写为 home 层写 `!!js` 与不可解析的新行，打包态照常就绪）；重建产物 82.2 MiB，L1 共 41 项。
+  - `bridge-record --check` 用的是代理跑的结果：21 个场景无差异。编排者的改动只动打包态分支，录制走源码态，所以没有重跑。
 - 2026-09-28 第二波收口：P1-10b `3bf5efca`（[决策 108](decisions/108-p1-10b-host-plugin-loading-choices.md)）、P1-4d1 `86a0b379`（[决策 106](decisions/106-p1-4d1-live-mapping-choices.md)）、金样本与 loop-guard-smoke 清理修复 `60fdd778`、P1-16a `a51f751f`（[决策 107](decisions/107-p1-16a-overlay-choices.md)）。编排器复跑：
   - 四套 tsc 通过；
   - 相关单测 270 个文件、5150 例通过，余下 20 例是金样本待重录，重录后读样本的测试 414 例通过；
