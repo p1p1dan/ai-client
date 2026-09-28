@@ -73,6 +73,8 @@ describe('DSH tool classification (decision 047)', () => {
       'exit_plan_mode',
       'plugin_manager',
       'structured_output',
+      // P1-4d3: the host's own dsh-tool-ask-user, beside dsh-base.
+      'ask_user_question',
     ]) {
       expect(defined.has(name), name).toBe(true);
     }
@@ -91,6 +93,8 @@ describe('DSH tool classification (decision 047)', () => {
   it('covers the live tool list of the product composition (P1-6b experiment host A)', () => {
     // `ctx.tools.schemas()` on a real host with tool presentation `both`.
     for (const name of [
+      // P1-4d3: the product bundle mounts dsh-tool-ask-user (decision 114).
+      'ask_user_question',
       'bash',
       'create_goal',
       'edit',
@@ -126,6 +130,8 @@ describe('DSH tool classification (decision 047)', () => {
       'internal',
       'internal',
     ]);
+    // Decision 098: asking the user is the interaction, never gated (1.0.x's `ask` was not).
+    expect(classifyTool('ask_user_question')).toBe('internal');
     expect(['run_code', 'workflow', 'plugin_manager'].map(classifyTool)).toEqual([
       'opaque',
       'opaque',

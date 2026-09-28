@@ -1,0 +1,639 @@
+[
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-QUESTION-ANSWER"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-QUESTION: ask me before you start."
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "ask_user_question",
+      "input": {
+        "__streaming": {
+          "bytes": 139,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "questions": [
+          {
+            "id": "scope",
+            "header": "Scope",
+            "question": "Which part should change first?",
+            "options": [
+              {
+                "label": "Bridge (Recommended)",
+                "description": "The worker side of the card."
+              },
+              {
+                "label": "Renderer",
+                "description": "The card itself."
+              }
+            ]
+          },
+          {
+            "id": "checks",
+            "header": "Checks",
+            "question": "Which checks should run afterwards?",
+            "multi_select": true,
+            "options": [
+              {
+                "label": "tsc"
+              },
+              {
+                "label": "smoke, then record"
+              },
+              {
+                "label": "vitest"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "question.requested",
+    "payload": {
+      "questionId": "dsh-question-id-17",
+      "questions": [
+        {
+          "id": "scope",
+          "question": "Which part should change first?",
+          "header": "Scope",
+          "options": [
+            {
+              "label": "Bridge (Recommended)",
+              "description": "The worker side of the card."
+            },
+            {
+              "label": "Renderer",
+              "description": "The card itself."
+            }
+          ]
+        },
+        {
+          "id": "checks",
+          "question": "Which checks should run afterwards?",
+          "header": "Checks",
+          "options": [
+            {
+              "label": "tsc"
+            },
+            {
+              "label": "smoke, then record"
+            },
+            {
+              "label": "vitest"
+            }
+          ],
+          "multiSelect": true
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "question.resolved",
+    "payload": {
+      "questionId": "dsh-question-id-17",
+      "outcome": "answered",
+      "answers": {
+        "scope": "Renderer",
+        "checks": "tsc, smoke, then record, also lint"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "{\"answers\":[{\"id\":\"scope\",\"selected\":[\"Renderer\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"also lint\"}]}"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s2",
+      "blockId": "dsh-aiclient-rec-question-t1-s2-b0",
+      "text": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Renderer\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"also lint\"}]}"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "role": "user",
+      "attemptId": "attempt-QUESTION-SKIP"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "blockId": "dsh-user-22-text",
+      "text": "P1-QUESTION: ask me again."
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-22"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "name": "ask_user_question",
+      "input": {
+        "__streaming": {
+          "bytes": 139,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "input": {
+        "questions": [
+          {
+            "id": "scope",
+            "header": "Scope",
+            "question": "Which part should change first?",
+            "options": [
+              {
+                "label": "Bridge (Recommended)",
+                "description": "The worker side of the card."
+              },
+              {
+                "label": "Renderer",
+                "description": "The card itself."
+              }
+            ]
+          },
+          {
+            "id": "checks",
+            "header": "Checks",
+            "question": "Which checks should run afterwards?",
+            "multi_select": true,
+            "options": [
+              {
+                "label": "tsc"
+              },
+              {
+                "label": "smoke, then record"
+              },
+              {
+                "label": "vitest"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "question.requested",
+    "payload": {
+      "questionId": "dsh-question-id-18",
+      "questions": [
+        {
+          "id": "scope",
+          "question": "Which part should change first?",
+          "header": "Scope",
+          "options": [
+            {
+              "label": "Bridge (Recommended)",
+              "description": "The worker side of the card."
+            },
+            {
+              "label": "Renderer",
+              "description": "The card itself."
+            }
+          ]
+        },
+        {
+          "id": "checks",
+          "question": "Which checks should run afterwards?",
+          "header": "Checks",
+          "options": [
+            {
+              "label": "tsc"
+            },
+            {
+              "label": "smoke, then record"
+            },
+            {
+              "label": "vitest"
+            }
+          ],
+          "multiSelect": true
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "question.resolved",
+    "payload": {
+      "questionId": "dsh-question-id-18",
+      "outcome": "cancelled"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "ok": true,
+      "output": "{\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s2",
+      "blockId": "dsh-aiclient-rec-question-t2-s2-b0",
+      "text": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

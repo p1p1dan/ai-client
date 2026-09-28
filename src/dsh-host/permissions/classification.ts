@@ -3,7 +3,8 @@
  * P1-6 design shard 03 §2).
  *
  * One table for every built-in tool of the pinned DSH (0.1.7-rc.2), whether or
- * not the product composition mounts it today. `permissionsClassification`
+ * not the product composition mounts it today, and for the DSH packages the
+ * host installs beside dsh-base (P1-4d3: dsh-tool-ask-user). `permissionsClassification`
  * tests fail when an installed DSH package defines a tool this table does not
  * name, so a DSH upgrade cannot slip a new tool past the gate unclassified.
  */
@@ -57,6 +58,9 @@ export const DSH_TOOL_CLASSES: Readonly<Record<string, DshToolClass>> = Object.f
   update_goal: 'internal',
   exit_plan_mode: 'internal',
   present: 'internal',
+  // P1-4d3 (decision 098): asking the user is the interaction itself, never
+  // gated, as 1.0.x's `ask` was not (dsh-tool-ask-user, a product bundle row).
+  ask_user_question: 'internal',
   list_mcp_resources: 'generic',
   list_mcp_resource_templates: 'generic',
   read_mcp_resource: 'generic',

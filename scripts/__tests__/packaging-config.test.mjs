@@ -211,6 +211,8 @@ describe('DSH host package dependency boundary', () => {
       '@deepseek-ai/dsh-home-paths',
       '@deepseek-ai/dsh-launch-environment',
       '@deepseek-ai/dsh-system-prompt',
+      // P1-4d3 (decision 114): a plain DSH plugin the product bundle mounts as a row.
+      '@deepseek-ai/dsh-tool-ask-user',
       // P1-6b: wasm only (web-tree-sitter runtime + bash grammar), both MIT.
       'tree-sitter-bash',
       'web-tree-sitter',

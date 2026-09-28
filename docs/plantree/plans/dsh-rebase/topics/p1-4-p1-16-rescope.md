@@ -264,6 +264,7 @@ P1-16b（MCP）与 P1-16d（自定义子代理）已由决策 090 取消，不�
   - 分类表加 `ask_user_question: 'internal'`（决策 098）。
 - **P1-6 的 plan 模式**：我方 plan 档与 DSH 的 plan 模式并存（决策 047）。按总原则，合入后可以考虑直接用 DSH 的 plan 模式。
 - **P1-10c**：pi 扩展只读列表按决策 090 整块删除，插件页变简单。`dsh-tool-ask-user` 会是白名单里第一个 `official` 类条目，走 P1-10a 的构建期审计，需要联网装包（实验 E2 的同类问题）。
+  - **依[决策 114](../decisions/114-p1-4d3-ask-user-choices.md) 修订**：这个包不是 DSH bundle，进不了白名单，改由产品 bundle 挂一行，插件页不会列出它。
 - **P1-11**：去掉 pi TUI 后，`worker.reload`、`usePresentationSwitch` 成为死代码，P1-12 一起删。
 - **P1-12** 要多删：
   - `piSubagents:*` IPC、Main 的 `subagentCatalog.ts`、`PiSubagentsSettings.tsx`；
@@ -281,6 +282,7 @@ P1-16b（MCP）与 P1-16d（自定义子代理）已由决策 090 取消，不�
    - Stop（keepInbox）之后再 followup，确认待送达的插话随新回合一起被取走。
 2. **文件块**，P1-4c2 用，决策 097：沙箱关闭（决策 044）时，句柄里的路径能被 `read` 读到，过闸时判为可信路径，不出卡。
 3. **官方包**，P1-4d3 用，决策 098：`npm install --package-lock-only` 能否解析出 `dsh-tool-ask-user@0.1.7-rc.2` 的 peer，与 P1-10 的 E2 同类。要联网。
+   - **2026-09-28 已做，通过**（[证据](../evidence/p1-4d3-ask-user-install-2026-09-28.md)）：锁文件只新增这一个包；peer 都是精确版本，全部由钉住的树满足，不需要 `overrides`。另外发现它不是 bundle，挂法见[决策 114](../decisions/114-p1-4d3-ask-user-choices.md)。
 
 **拿不准、需要编排者判断的**：
 1. **决策 093 是否值得做**：

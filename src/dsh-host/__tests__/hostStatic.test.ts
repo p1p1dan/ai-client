@@ -228,6 +228,17 @@ describe('the product bundle: one bridge row always on, the permission row, the 
     );
   });
 
+  it("mounts DSH's ask_user_question tool as a row of its own, on (P1-4d3, decision 114)", () => {
+    // A plain DSH plugin, not a bundle: the allowlist cannot carry it.
+    expect(rowOf('tool-ask-user')).toMatch(
+      /^- id: tool-ask-user\n\s+name: '@deepseek-ai\/dsh-tool-ask-user'\n?$/
+    );
+    const host = JSON.parse(read('package.json')) as { dependencies: Record<string, string> };
+    expect(host.dependencies['@deepseek-ai/dsh-tool-ask-user']).toBe(
+      host.dependencies['@deepseek-ai/dsh-base']
+    );
+  });
+
   it('exports only its rows besides its patch', () => {
     expect(Object.keys(manifest.exports).sort()).toEqual([
       '.',

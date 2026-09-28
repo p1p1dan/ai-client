@@ -1729,6 +1729,87 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       expect(String(tools[0]?.error)).not.toContain('bridge tool row ok');
     }, 180_000);
 
+    /** P1-4d3: one P1-QUESTION turn on `g1` (DSH's ask_user_question), from its send to its card. */
+    async function questionTurnToCard() {
+      const from = events.length;
+      attempt += 1;
+      const requestId = await manager.send({
+        sessionId: 'g1',
+        attemptId: `attempt-${attempt}`,
+        text: 'P1-QUESTION: ask me before you start.',
+        ownerWebContentsId: 70,
+      });
+      expect(
+        await until(
+          () => forSession('g1', from).some((e) => e.type === 'question.requested'),
+          60_000
+        )
+      ).toBe(true);
+      const card = forSession('g1', from).find((e) => e.type === 'question.requested');
+      return { from, requestId, card, questionId: String(card?.payload?.questionId) };
+    }
+
+    it('[QST-1] a question of the model reaches Main as the card, ungated, and the answer reaches the model (P1-4d3)', async () => {
+      const { from, requestId, card, questionId } = await questionTurnToCard();
+      expect(card).toMatchObject({
+        requestId,
+        payload: {
+          questions: [
+            { id: 'scope', header: 'Scope' },
+            { id: 'checks', header: 'Checks', multiSelect: true },
+          ],
+        },
+      });
+      // Decision 098: asking is the interaction; no approval card in front of it.
+      expect(ofType(from, 'permission.requested')).toEqual([]);
+      const answers = { scope: 'Renderer', checks: 'tsc, smoke, then record' };
+      expect(await manager.respondQuestion({ sessionId: 'g1', questionId, answers })).toBe(true);
+      expect(await idleAfter(from, requestId)).toBe(true);
+      expect(ofType(from, 'question.resolved')).toEqual([
+        { questionId, outcome: 'answered', answers },
+      ]);
+      const tools = ofType(from, 'tool.completed');
+      expect(tools).toHaveLength(1);
+      expect(tools[0]).toMatchObject({ ok: true });
+      expect(JSON.parse(String(tools[0]?.output))).toEqual({
+        answers: [
+          { id: 'scope', selected: ['Renderer'] },
+          { id: 'checks', selected: ['tsc', 'smoke, then record'] },
+        ],
+      });
+      // Settled once: nothing waits on the id any more.
+      expect(await manager.respondQuestion({ sessionId: 'g1', questionId, cancel: true })).toBe(
+        false
+      );
+    }, 180_000);
+
+    it('[QST-2] Stop with a question up: the card is taken down and the turn stops (P1-4d3)', async () => {
+      const { from, requestId, questionId } = await questionTurnToCard();
+      await manager.stop('g1');
+      expect(
+        await until(
+          () =>
+            ofType(from, 'question.resolved').length > 0 &&
+            forSession('g1', from).some(
+              (e) =>
+                e.requestId === requestId &&
+                e.type === 'session.status' &&
+                e.payload?.status === 'idle'
+            ),
+          STOP_WATCHDOG_BOUND_MS
+        )
+      ).toBe(true);
+      expect(ofType(from, 'question.resolved')).toEqual([{ questionId, outcome: 'cancelled' }]);
+      expect(forSession('g1', from).some((e) => e.type === 'session.stopped')).toBe(true);
+      expect(
+        await manager.respondQuestion({
+          sessionId: 'g1',
+          questionId,
+          answers: { scope: 'Renderer' },
+        })
+      ).toBe(false);
+    }, 180_000);
+
     it('Stop with a card up: the card is taken down as aborted and the turn ends inside the Stop bound', async () => {
       const { from, requestId, permissionId } = await toolTurnToCard();
       const stoppedAt = Date.now();

@@ -15,6 +15,8 @@
 2. **装包**：这个包**不在钉住的树里**（`src/dsh-host/node_modules` 与锁文件都没有）。
    - 按 P1-10 的白名单流程以 `official` 类加入：版本必须等于 DSH 的钉版本，审查从简（`src/shared/dshPluginAllowlist.ts:182-191,485-486`）；
    - 装包要联网，在 CI 上或经授权做，与 P1-10 的实验 E2 同类。
+
+   > **修订注记（2026-09-28，[决策 114](114-p1-4d3-ask-user-choices.md) 第 1 条，待审批）**：装好后发现这个包不是 DSH bundle（没有 `dsh.bundle`、没有 `cordis.patch.yml`），白名单收不了它。改为宿主的精确依赖（钉版本、锁文件 integrity 不变），由产品 bundle `@aiclient/dsh-app` 插一行 `tool-ask-user` 挂载，与 dsh-base 挂普通插件的方式相同。结果是提问工具始终开启、没有开关（114 第 15 条待拍板）。联网装包已按决策 110 在开发机上完成，证据见 [p1-4d3-ask-user-install-2026-09-28](../evidence/p1-4d3-ask-user-install-2026-09-28.md)。
 3. **应答方**：bridge 挂 `user-questions/request` 应答方，转成 `question.requested`；`respondQuestion` 把回答交回去，字段对应见 [P1-4 分片 01 §1](../topics/p1-4-bridge-parity/01-event-mapping.md)。发起方中止时撤卡。问答卡沿用 1.0.x 的。
 4. **权限分类**：分类表加 `ask_user_question: 'internal'`，不过闸。问用户本身就是交互，1.0.x 的 `ask` 也不过闸（`ask.ts` 文件头）；装包后分类表的静态测试会要求补这一行。
 5. **只有根会话能问**：这是 DSH 的规则，子代理问会得到明确的错误（`dsh-user-questions/README.md:33,41`）。

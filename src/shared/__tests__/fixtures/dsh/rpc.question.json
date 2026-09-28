@@ -1,0 +1,316 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-question",
+      "piSessionId": "aiclient-rec-question",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-question.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-question",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-question.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-QUESTION: ask me before you start."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "ask_user_question",
+              "input": {
+                "questions": [
+                  {
+                    "id": "scope",
+                    "header": "Scope",
+                    "question": "Which part should change first?",
+                    "options": [
+                      {
+                        "label": "Bridge (Recommended)",
+                        "description": "The worker side of the card."
+                      },
+                      {
+                        "label": "Renderer",
+                        "description": "The card itself."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "checks",
+                    "header": "Checks",
+                    "question": "Which checks should run afterwards?",
+                    "multi_select": true,
+                    "options": [
+                      {
+                        "label": "tsc"
+                      },
+                      {
+                        "label": "smoke, then record"
+                      },
+                      {
+                        "label": "vitest"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "{\"answers\":[{\"id\":\"scope\",\"selected\":[\"Renderer\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"also lint\"}]}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-question-t1-s1"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-9:text:0",
+              "text": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Renderer\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"also lint\"}]}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-question-t1-s2"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "P1-QUESTION: ask me again."
+            }
+          ],
+          "liveMessageId": "dsh-user-22"
+        },
+        {
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-13:tool-call:toolu_id-11",
+              "toolCallId": "toolu_id-11",
+              "name": "ask_user_question",
+              "input": {
+                "questions": [
+                  {
+                    "id": "scope",
+                    "header": "Scope",
+                    "question": "Which part should change first?",
+                    "options": [
+                      {
+                        "label": "Bridge (Recommended)",
+                        "description": "The worker side of the card."
+                      },
+                      {
+                        "label": "Renderer",
+                        "description": "The card itself."
+                      }
+                    ]
+                  },
+                  {
+                    "id": "checks",
+                    "header": "Checks",
+                    "question": "Which checks should run afterwards?",
+                    "multi_select": true,
+                    "options": [
+                      {
+                        "label": "tsc"
+                      },
+                      {
+                        "label": "smoke, then record"
+                      },
+                      {
+                        "label": "vitest"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-14:tool-result:toolu_id-11",
+              "toolCallId": "toolu_id-11",
+              "ok": true,
+              "output": "{\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-question-t2-s1"
+        },
+        {
+          "id": "h:id-16",
+          "entryId": "id-16",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-16:text:0",
+              "text": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-question-t2-s2"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 6,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-question",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-question.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-16",
+        "fileTailEntryId": "aiclient-rec-question#30"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-QUESTION: ask me before you start.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Renderer\"]},{\"id\":\"checks\",\"selected\":[\"…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-9",
+          "depth": 3,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-QUESTION: ask me again.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-13",
+          "parentId": "id-10",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-16",
+          "parentId": "id-13",
+          "depth": 5,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 6,
+      "returnedNodes": 6,
+      "truncated": false
+    }
+  },
+  "respond": {
+    "answered": {
+      "ok": true,
+      "result": {
+        "handled": true
+      }
+    },
+    "skipped": {
+      "ok": true,
+      "result": {
+        "handled": true
+      }
+    }
+  }
+}

@@ -191,7 +191,10 @@ function fakeDsh(options: FakeOptions = {}) {
   } as unknown as DshBridgeContext;
   /** One durable event of this session, as DSH's `session/event` delivers it. */
   const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);
-  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append, attachments };
+  /** P1-4d3: one `user-questions/request` down the row's waterfall, as dsh-user-questions sends it. */
+  const ask = (request: Record<string, unknown>, next: () => Promise<unknown>) =>
+    listeners.get('user-questions/request')?.(request, next) as Promise<unknown> | undefined;
+  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append, ask, attachments };
 }
 
 const deps: DshBridgeDeps = {
@@ -1355,5 +1358,129 @@ describe('DshSessionRuntime — busy (P1-3d, decision 025)', () => {
       },
     });
     expect(session.busy).toBe(false);
+  });
+});
+
+describe('DshSessionRuntime — questions (P1-4d3, decisions 098 and 114)', () => {
+  const QUESTION = {
+    id: 'pick',
+    question: 'Which one?',
+    options: [{ label: 'A' }, { label: 'B' }],
+  };
+  type Event = { type: string; payload?: Record<string, unknown> };
+
+  async function opened() {
+    const dsh = fakeDsh();
+    const events: Event[] = [];
+    const session = runtime(dsh.ctx, { emit: (event) => events.push(event as Event) });
+    await session.bootstrap();
+    const next = vi.fn(async () => ({ answers: [] }));
+    const cards = () => events.filter((event) => event.type.startsWith('question.'));
+    return { dsh, session, next, cards };
+  }
+
+  it("answers its own root agent's request on the card, and passes every other one on", async () => {
+    const { dsh, session, next, cards } = await opened();
+    // Another chat's agent (or a delegate), and an agentless request: not this card.
+    await dsh.ask({ questions: [QUESTION], agent: { id: 'aiclient-other' } }, next);
+    await dsh.ask({ questions: [QUESTION] }, next);
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(cards()).toEqual([]);
+
+    const asked = dsh.ask(
+      { questions: [QUESTION], agent: { id: DSH_ID }, signal: new AbortController().signal },
+      next
+    );
+    expect(cards()).toHaveLength(1);
+    const card = cards()[0] as Event;
+    expect(card.payload).toMatchObject({
+      questions: [
+        { id: 'pick', question: 'Which one?', options: [{ label: 'A' }, { label: 'B' }] },
+      ],
+    });
+    const questionId = String(card.payload?.questionId);
+    expect(questionId).toMatch(/^dsh-question-[0-9a-f-]{36}$/);
+    expect(session.respondQuestion({ questionId, answers: { pick: 'B' } })).toBe(true);
+    await expect(asked).resolves.toEqual({ answers: [{ id: 'pick', selected: ['B'] }] });
+    expect(next).toHaveBeenCalledTimes(2);
+    expect(cards()[1]).toMatchObject({
+      type: 'question.resolved',
+      payload: { questionId, outcome: 'answered', answers: { pick: 'B' } },
+    });
+    expect(session.respondQuestion({ questionId, cancel: true })).toBe(false);
+  });
+
+  it('takes the card down when the asker aborts (a Stop), and when the session closes', async () => {
+    const { dsh, session, next, cards } = await opened();
+    const controller = new AbortController();
+    const stopped = dsh.ask(
+      { questions: [QUESTION], agent: { id: DSH_ID }, signal: controller.signal },
+      next
+    );
+    controller.abort();
+    await expect(stopped).rejects.toThrow('aborted');
+    const closing = dsh.ask({ questions: [QUESTION], agent: { id: DSH_ID } }, next);
+    await session.dispose();
+    await expect(closing).rejects.toThrow('closed before the user answered');
+    expect(cards().map((event) => [event.type, event.payload?.outcome])).toEqual([
+      ['question.requested', undefined],
+      ['question.resolved', 'cancelled'],
+      ['question.requested', undefined],
+      ['question.resolved', 'cancelled'],
+    ]);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('takes worker.question.respond through the RPC server, Skip included', async () => {
+    const dsh = fakeDsh();
+    const sent: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => sent.push(message as Record<string, unknown>) },
+      generation: 1,
+      projectTrusted: true,
+      createRuntime: (options) => new DshSessionRuntime(dsh.ctx, options, { ...deps, home }),
+      createImportWriter: () => {
+        throw new Error('not in this test');
+      },
+      createUtilityRuntime: () => {
+        throw new Error('not in this test');
+      },
+    });
+    const request = (requestId: string, type: string, payload: Record<string, unknown>) =>
+      server.receive({
+        protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
+        kind: 'request',
+        generation: 1,
+        requestId,
+        type,
+        payload,
+      });
+    const responseOf = (requestId: string) =>
+      sent.find((message) => message.kind === 'response' && message.requestId === requestId);
+    request('r1', 'worker.bootstrap', { logicalSessionId: LOGICAL, cwd: CWD });
+    await vi.waitFor(() => expect(responseOf('r1')).toMatchObject({ ok: true }));
+
+    const asked = dsh.ask({ questions: [QUESTION], agent: { id: DSH_ID } }, async () => ({
+      answers: [],
+    }));
+    const card = JSON.stringify(sent).match(/dsh-question-[0-9a-f-]{36}/)?.[0];
+    expect(card).toBeDefined();
+    request('r2', 'worker.question.respond', {
+      logicalSessionId: LOGICAL,
+      questionId: card,
+      cancel: true,
+    });
+    await vi.waitFor(() =>
+      expect(responseOf('r2')).toMatchObject({ ok: true, result: { handled: true } })
+    );
+    await expect(asked).resolves.toEqual({ answers: [{ id: 'pick', selected: [] }] });
+    request('r3', 'worker.question.respond', {
+      logicalSessionId: LOGICAL,
+      questionId: card,
+      answers: { pick: 'A' },
+    });
+    await vi.waitFor(() =>
+      expect(responseOf('r3')).toMatchObject({ ok: true, result: { handled: false } })
+    );
   });
 });

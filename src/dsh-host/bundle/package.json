@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row, the read-only credentials row, the permission gate row and the loop guard row.",
+  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row, the read-only credentials row, the permission gate row, the loop guard row, and the row mounting DSH's ask_user_question tool.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {

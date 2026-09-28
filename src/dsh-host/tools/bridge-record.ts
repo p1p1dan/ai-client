@@ -78,6 +78,14 @@
  *                 model reads the handle's path with `read` and no card comes up;
  *                 the history row carries the file's chip
  *
+ * Question scenario (P1-4d3, decisions 098 and 114), recorded after those:
+ *   question      the model calls DSH's `ask_user_question` twice, one turn each:
+ *                 the first card is answered (a single-select pick; two
+ *                 multi-select picks, one label holding ", ", then Other text),
+ *                 the second skipped; each turn's answer quotes the tool result
+ *                 the model got. `rpc.respond` keeps both `worker.question.respond`
+ *                 answers
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -620,6 +628,9 @@ const SCENARIOS: Record<string, Scenario> = {
   // keep the host state they were recorded with.
   image: imageScenario,
   'file-attach': fileAttachScenario,
+  // P1-4d3 (decisions 098, 114): DSH's ask_user_question on the card. After
+  // the attachments, so every scenario above keeps its recorded host state.
+  question: questionScenario,
 };
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
@@ -1223,6 +1234,60 @@ async function permSearchScenario(context: RecordContext, host: Host): Promise<R
     'P1-PERM-SEARCH: list and search the workspace.'
   );
   return finish(context, session, [boot], [turn]);
+}
+
+// ---- question scenario (P1-4d3) -------------------------------------------------------
+
+/**
+ * A `during` answering the first question card of the turn with `reply`, as the
+ * renderer's store sends it (`worker.question.respond`); the answer is kept.
+ */
+function answeringQuestion(
+  session: Session,
+  label: string,
+  reply: Message,
+  replies: Message
+): (from: number) => Promise<void> {
+  return async (from) => {
+    const { client } = session.host;
+    const isCard = (event: Message) => event.type === 'question.requested';
+    const up = await client.until(session.ch, (events) => events.slice(from).some(isCard), 60_000);
+    if (!up) throw new Error(`${session.logicalSessionId} ${label}: no question card came up`);
+    const card = payloadOf(client.events(session.ch).slice(from).find(isCard) as Message);
+    replies[label] = answerOf(
+      await client.call(session.ch, 'worker.question.respond', {
+        logicalSessionId: session.logicalSessionId,
+        questionId: card.questionId,
+        ...reply,
+      })
+    );
+  };
+}
+
+async function questionScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'question');
+  const respond: Message = {};
+  // The card's Continue: a single-select pick, and two multi-select picks (one
+  // label holding ", ") with Other text after them, joined as the card joins them.
+  const answered = await context.turn(
+    session,
+    'QUESTION-ANSWER',
+    'P1-QUESTION: ask me before you start.',
+    answeringQuestion(
+      session,
+      'answered',
+      { answers: { scope: 'Renderer', checks: 'tsc, smoke, then record, also lint' } },
+      respond
+    )
+  );
+  // The card's Skip: every question answered with nothing selected.
+  const skipped = await context.turn(
+    session,
+    'QUESTION-SKIP',
+    'P1-QUESTION: ask me again.',
+    answeringQuestion(session, 'skipped', { cancel: true }, respond)
+  );
+  return finish(context, session, [boot], [answered, skipped], { respond });
 }
 
 /** The durable `tool/call` has been appended: the call is dispatched. */

@@ -43,6 +43,13 @@
  * `todos`, `goal` and `subagentCatalog` projections go out as
  * `session.projection`; the capability inventory reports the skill count.
  *
+ * Questions (P1-4d3, decisions 098 and 114): DSH's `ask_user_question` (and
+ * `exit_plan_mode`) ask through `ctx.userQuestions`; this runtime answers the
+ * `user-questions/request` waterfall for its own root agent on 1.0.x's
+ * question card (`questions.ts`): `question.requested`, answered by
+ * `worker.question.respond`, settled with `question.resolved`; the asker's
+ * abort (a Stop) and a closing session take the card down.
+ *
  * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
  * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
  * in at its next step boundary, echoed with the renderer's attempt id; with no
@@ -184,6 +191,14 @@ import {
   type DshModelSelection,
   type DshRoutedModel,
 } from './modelRoute.ts';
+import {
+  createDshQuestionPrompt,
+  DSH_QUESTION_ID_PREFIX,
+  type DshQuestionAnswer,
+  type DshQuestionPrompt,
+  type DshQuestionRequest,
+  type DshQuestionResponse,
+} from './questions.ts';
 import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
 import {
   DSH_SESSION_MISSING,
@@ -284,6 +299,18 @@ export interface DshBridgeContext {
   on(
     name: 'agent/assistant-stream',
     listener: (payload: { agent: { id: string }; frame: StreamFrame }) => void
+  ): Dispose;
+  /**
+   * dsh-user-questions' answerer waterfall (P1-4d3): scope-filtered to the
+   * asking agent, which untagged listeners such as this row's also receive.
+   * Return an answer to claim the request, or `next()` to pass it on.
+   */
+  on(
+    name: 'user-questions/request',
+    listener: (
+      request: DshQuestionRequest,
+      next: () => Promise<DshQuestionAnswer>
+    ) => Promise<DshQuestionAnswer>
   ): Dispose;
   agents: {
     create(options: {
@@ -548,6 +575,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly disposers: Dispose[] = [];
   /** The session's approval cards (1.0.x's emitter): `permission.requested` / `resolved`. */
   private readonly prompt: PermissionPrompt;
+  /** P1-4d3: the root agent's questions on 1.0.x's card: `question.requested` / `resolved`. */
+  private readonly questions: DshQuestionPrompt;
   /** The session's gate (P1-6b), built at bootstrap; null before and after. */
   private gate: PermissionGate | null = null;
   /** Its routing in the permission row; re-pointed by a rewind. */
@@ -616,6 +645,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         const { sessionId: _sessionId, ...draft } = event;
         this.emit(draft as BridgeDraft);
       },
+    });
+    this.questions = createDshQuestionPrompt({
+      // Through `emit` as well: a card raised inside a turn carries its requestId.
+      emit: (event) => this.emit(event as BridgeDraft),
+      newId: () => `${DSH_QUESTION_ID_PREFIX}${randomUUID()}`,
     });
     this.live = new DshLiveEvents({
       emit: (event) => this.emit(event),
@@ -1051,6 +1085,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     // answered (denied, `session_closed`) and taken down, and the call it held
     // is refused rather than left parked.
     this.prompt.drain('session_closed');
+    // The same for a question: its card goes, and the tool call waiting on it
+    // is refused rather than left parked.
+    this.questions.drain('the chat session closed before the user answered');
     this.disposed = true;
     this.steered.clear();
     for (const send of this.commandSends.values()) send.controller.abort();
@@ -1417,8 +1454,24 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return this.prompt.respond(input);
   }
 
-  respondQuestion(): boolean {
-    return false;
+  /**
+   * A question card's answer, Skip or Continue (P1-4d3, decision 098); false
+   * when nothing waits on the id: answered already, or taken down by a Stop.
+   */
+  respondQuestion(input: DshQuestionResponse): boolean {
+    return this.questions.respond(input);
+  }
+
+  /**
+   * A `user-questions/request` of this session's root agent (P1-4d3). DSH
+   * lets only a live runtime root ask (a delegate gets `DELEGATED_CALLER`
+   * before any waterfall). Another chat's request goes on to that chat's
+   * runtime; an agentless one is no session's card and ends in DSH's
+   * `NO_PROVIDER`.
+   */
+  private ownsQuestion(request: DshQuestionRequest): boolean {
+    const agent = this.handle?.agent;
+    return !this.disposed && agent !== undefined && request.agent?.id === agent.id;
   }
 
   respondPreview(): boolean {
@@ -2059,7 +2112,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         } catch (error) {
           this.options.log?.('[dsh-bridge] stream frame failed', frame.type, error);
         }
-      })
+      }),
+      // P1-4d3: every runtime of the row hears every request; each claims its own.
+      this.ctx.on('user-questions/request', (request, next) =>
+        this.ownsQuestion(request) ? this.questions.ask(request) : next()
+      )
     );
   }
 }

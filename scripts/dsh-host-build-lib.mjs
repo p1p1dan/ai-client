@@ -49,6 +49,9 @@ export const PLUGIN_ALLOWLIST_REL = 'plugins/allowlist.json';
 /**
  * Host dependencies that are not plugins (P1-2, P1-6b). Every other entry of
  * src/dsh-host/package.json must be on the plugin allowlist (decision 059).
+ * P1-4d3 (decision 114): dsh-tool-ask-user is a plain DSH plugin, not a
+ * bundle, so the allowlist cannot carry it; the product bundle mounts it as a
+ * row of its own, at the DSH pin like every `@deepseek-ai/dsh-*` here.
  */
 export const HOST_DEPENDENCIES = [
   PRODUCT_BUNDLE,
@@ -61,6 +64,7 @@ export const HOST_DEPENDENCIES = [
   '@deepseek-ai/dsh-home-paths',
   '@deepseek-ai/dsh-launch-environment',
   '@deepseek-ai/dsh-system-prompt',
+  '@deepseek-ai/dsh-tool-ask-user',
   'tree-sitter-bash',
   'web-tree-sitter',
 ];

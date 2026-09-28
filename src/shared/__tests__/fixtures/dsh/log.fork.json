@@ -154,6 +154,7 @@
             "maxTokens": true
           },
           "tools": [
+            "ask_user_question",
             "bash",
             "create_goal",
             "edit",
@@ -430,6 +431,7 @@
             "maxTokens": true
           },
           "tools": [
+            "ask_user_question",
             "bash",
             "create_goal",
             "edit",

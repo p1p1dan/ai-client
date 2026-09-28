@@ -141,3 +141,12 @@
       name: '@aiclient/dsh-app/loop-guard'
       config:
         stepCeiling: 500
+
+    # P1-4d3 (decisions 098, 114): DSH's own `ask_user_question` tool, a plain
+    # plugin (no bundle of its own), mounted the way a DSH distribution mounts
+    # it: a row of the distribution's bundle. It asks through dsh-base's
+    # `user-questions` row; aiclient-bridge answers for each chat's root agent
+    # on the question card. An exact host dependency at the DSH pin, locked by
+    # integrity like the rest of the tree.
+    - id: tool-ask-user
+      name: '@deepseek-ai/dsh-tool-ask-user'

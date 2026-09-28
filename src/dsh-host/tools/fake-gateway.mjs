@@ -185,6 +185,9 @@
  *                       read) and P1-IMAGEREAD (a `read_image` of the normalized
  *                       copy an image handle line names). Scripts get the request's
  *                       messages as an eighth argument.
+ *                       dsh-rebase P1-4d3 adds P1-QUESTION (tools/bridge-record.ts
+ *                       `question`): one `ask_user_question` call, then an answer
+ *                       quoting the tool result the model got back.
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -369,7 +372,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -929,6 +932,39 @@ const DSH_P0_2_SCRIPTS = {
       read?.isError
         ? `P1-IMAGEREAD could not read it (${seen}): ${String(read.result ?? '').slice(0, 160)}`
         : `P1-IMAGEREAD read it; ${seen}.`
+    );
+  },
+  // dsh-rebase P1-4d3 (decisions 098, 114): one ask_user_question with a
+  // single-select and a multi-select question (a label holding ", "), then an
+  // answer quoting what the tool returned (tools/bridge-record.ts `question`).
+  'P1-QUESTION'(_round, step, calls) {
+    if (step === 0) {
+      return tool('ask_user_question', {
+        questions: [
+          {
+            id: 'scope',
+            header: 'Scope',
+            question: 'Which part should change first?',
+            options: [
+              { label: 'Bridge (Recommended)', description: 'The worker side of the card.' },
+              { label: 'Renderer', description: 'The card itself.' },
+            ],
+          },
+          {
+            id: 'checks',
+            header: 'Checks',
+            question: 'Which checks should run afterwards?',
+            multi_select: true,
+            options: [{ label: 'tsc' }, { label: 'smoke, then record' }, { label: 'vitest' }],
+          },
+        ],
+      });
+    }
+    const asked = calls[0];
+    return say(
+      asked?.isError
+        ? `P1-QUESTION failed: ${String(asked.result ?? '').slice(0, 300)}`
+        : `P1-QUESTION got ${String(asked?.result ?? '(nothing)').slice(0, 400)}`
     );
   },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).

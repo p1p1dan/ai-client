@@ -123,6 +123,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'perm-search',
     'perm-stop',
     'perm-subagent',
+    // P1-4d3 (decisions 098, 114): recorded by the orchestrator at close-out.
+    'question',
     'rewind',
     'steer',
     'stop-stream',
