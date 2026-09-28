@@ -1,6 +1,6 @@
 # 决策 088：P1-6b 权限闸门接线的实现取舍
 
-日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：`ac47a9c8`；[P1-6 方案](../topics/p1-6-permissions.md)；[决策 042](042-approval-in-pre-execute-plugin.md)～[045](045-windows-acl-sandbox-default-off.md)、[081](081-loop-guard-implementation-choices.md) 第 2 条。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：`262a240c`；[P1-6 方案](../topics/p1-6-permissions.md)；[决策 042](042-approval-in-pre-execute-plugin.md)～[045](045-windows-acl-sandbox-default-off.md)、[081](081-loop-guard-implementation-choices.md) 第 2 条。
 
 ## 规则
 

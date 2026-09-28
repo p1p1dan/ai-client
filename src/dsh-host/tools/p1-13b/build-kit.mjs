@@ -137,14 +137,14 @@ function readme({ builtAt, source }) {
      结果要与 SHA256SUMS 里 zip 那一行一致（不分大小写）。
   2. 解压：tar -xf C:\\p113b\\aiclient-p1-13b-kit.zip -C C:\\p113b
      得到 C:\\p113b\\aiclient-p1-13b-kit\\ 下的 run-p1-13b.ps1、matrix-probe.mjs、README.txt、kit-manifest.json。
-  3. 加密目录：选一个受加密策略覆盖的已有目录作 -EncDir（第一轮用的是 C:\\Users\\JC\\p1-13-encrypted-test）。
+  3. 加密目录：选一个受加密策略覆盖的已有目录作 -EncDir（第一轮用的是 D:\\Encrypted）。
      工具包目录不能在它里面。
-  4. 应用目录：已装 PiLab Ai 的安装目录作 -AppDir（第一轮是 D:\\Program Files\\AiClient\\PiLabAi）。
+  4. 应用目录：已装 PiLab Ai 的安装目录作 -AppDir（第一轮是 <应用安装目录>）。
      包里不带 node，用的是应用自带的 resources\\node-runtime\\node.exe。
 
 三、运行（用 Windows PowerShell 5.1，也就是开始菜单里的「Windows PowerShell」，不要用 PowerShell 7）
   Set-ExecutionPolicy -Scope Process Bypass
-  & 'C:\\p113b\\aiclient-p1-13b-kit\\run-p1-13b.ps1' -EncDir 'C:\\Users\\JC\\p1-13-encrypted-test' -AppDir 'D:\\Program Files\\AiClient\\PiLabAi' -ManualEncryption
+  & 'C:\\p113b\\aiclient-p1-13b-kit\\run-p1-13b.ps1' -EncDir 'D:\\Encrypted' -AppDir '<应用安装目录>' -ManualEncryption
 
   可选参数：
     -DelaySeconds 60      延迟复读距最后一次写入的秒数，默认 60

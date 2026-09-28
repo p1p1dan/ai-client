@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest';
  * port the caller supplies (ARD D11 point 4). Node is allowed for path and os
  * algebra only.
  *
- * Unlike the skills/MCP libraries (`fe089adf`), this is one flat file, not a
+ * Unlike the skills/MCP libraries (`36df9ac9`), this is one flat file, not a
  * directory: `subagentDefinition.ts` and `subagentBuiltins.ts`, which it
  * imports, already lived in `src/shared` before dsh-rebase P1-16 and are not
  * themselves being moved here — they are covered by the transitive walk below

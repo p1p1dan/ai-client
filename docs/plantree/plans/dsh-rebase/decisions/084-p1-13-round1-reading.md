@@ -1,6 +1,6 @@
 # 决策 084：P1-13 加密机第一轮的判读
 
-日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[证据目录](../evidence/p1-13-encrypted-2026-09-28/README.md)（现场三轮报告、人工观察、现场改过的脚本）。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[证据目录](../evidence/p1-13-encrypted-2026-09-28.md)（现场三轮报告、人工观察、现场改过的脚本）。
 
 ## 结论
 
@@ -32,11 +32,11 @@
    - 「PowerShell 是非白名单观察者」这个假设不成立，改为「PowerShell 读取视图，可能被透明解密」；
    - 对照组的 DSH_HOME 应该是 `%APPDATA%\dsh-desktop\harness`，原脚本写到了 `~/.dsh`；
    - G-pnpm-install 检查随[决策 082](082-allowlist-implementation-choices.md) 一起改掉。
-   - 已在 `fd8f2ac9` 修掉前三处。对照组的备份方式也改了：原来是复制到 `%TEMP%`、结束时再复制回来；现在改成在同一目录里改名为 `*.p0-4-backup-<时间>`，结束时改回。原因是用 PowerShell 复制回去可能把用户原有的配置加密，桌面端就读不了了（第一轮见过 Node 把 PowerShell 写的 `cordis.patch.yml` 读成密文）。
+   - 已在 `c3eb0068` 修掉前三处。对照组的备份方式也改了：原来是复制到 `%TEMP%`、结束时再复制回来；现在改成在同一目录里改名为 `*.p0-4-backup-<时间>`，结束时改回。原因是用 PowerShell 复制回去可能把用户原有的配置加密，桌面端就读不了了（第一轮见过 Node 把 PowerShell 写的 `cordis.patch.yml` 读成密文）。
 
 ## 下一步
 
-- **P1-13b 加密矩阵**：上机包已就绪（`fd8f2ac9` 构建，`/var/tmp/aiclient-p1-13b-kit/aiclient-p1-13b-kit.zip`，sha256 `4a5ea708e17f6511c334e777ff54cccb78f2376f7b076f58ea55ca9f6b33b652`，手册 [p1-13b-encryption-matrix-runbook.md](../topics/p1-13b-encryption-matrix-runbook.md)），请用户上机。它的 PowerShell 脚本在开发机上没法跑，第一次执行就在加密机上。内容：
+- **P1-13b 加密矩阵**：上机包已就绪（`c3eb0068` 构建，`/var/tmp/aiclient-p1-13b-kit/aiclient-p1-13b-kit.zip`，sha256 `4a5ea708e17f6511c334e777ff54cccb78f2376f7b076f58ea55ca9f6b33b652`，手册 [p1-13b-encryption-matrix-runbook.md](../topics/p1-13b-encryption-matrix-runbook.md)），请用户上机。它的 PowerShell 脚本在开发机上没法跑，第一次执行就在加密机上。内容：
   - 「扩展名 × 读者」：随包 node.exe、Electron 主程序以 node 模式运行、改名的 node 副本、PowerShell、certutil、Git Bash；
   - 「扩展名 × 写法」：直接新建（1.0.x 的写法）、DSH 的暂存再硬链接、先写临时文件再改名、先复制已加密文件再覆盖、原地改写、PowerShell 写；每种写法立即检查一次，延迟 60 秒后再检查一次；
   - 找出能看到原始字节的观察者，今后不必全靠人工确认。

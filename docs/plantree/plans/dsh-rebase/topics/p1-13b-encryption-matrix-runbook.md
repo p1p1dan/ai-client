@@ -4,7 +4,7 @@ Role: topic
 
 建立：2026-09-28。上位：[roadmap P1-13](../roadmap.md)、[决策 084](../decisions/084-p1-13-round1-reading.md) 的「下一步」。结论回填 [Q009](../open-questions.md)，以及决策 084 第 2、3 条里「由 P1-13b 验证」的两处推测。
 
-- 第一轮证据：[p1-13-encrypted-2026-09-28](../evidence/p1-13-encrypted-2026-09-28/)（`p1-13-field-summary.md` 与三个 `report-*` 目录的人工观察记录）。
+- 第一轮证据：[p1-13-encrypted-2026-09-28](../evidence/p1-13-encrypted-2026-09-28.md)（`p1-13-field-summary.md` 与三个 `report-*` 目录的人工观察记录）。
 - 第一轮上机步骤：[P1-13 runbook](p1-13-encrypted-machine-runbook.md)。本轮不起 DSH 宿主，与它互不依赖。
 - 工具：`src/dsh-host/tools/p1-13b/`（`run-p1-13b.ps1`、`matrix-probe.mjs`、`build-kit.mjs`）；单测 `scripts/__tests__/p1-13b-matrix-probe.test.mjs`。
 
@@ -79,11 +79,11 @@ Role: topic
 | # | 事项 | 怎么做 | 判据 |
 |---|---|---|---|
 | 0.1 | 机器 | 第一轮那台加密机；系统自带的 Windows PowerShell 5.1 | — |
-| 0.2 | 应用 | 已装 PiLab Ai（第一轮是 v1.0.2，装在 `D:\Program Files\AiClient\PiLabAi`） | 有 `resources\node-runtime\node.exe` 与 `PiLabAi.exe` |
+| 0.2 | 应用 | 已装 PiLab Ai（第一轮是 v1.0.2，装在 `<应用安装目录>`） | 有 `resources\node-runtime\node.exe` 与 `PiLabAi.exe` |
 | 0.3 | 账户 | 能用普通办公账户就用普通账户；只能用管理员也行 | 报告记下是否管理员与 EnableLUA |
 | 0.4 | 拷包 | 交付目录的 `aiclient-p1-13b-kit.zip` 与 `SHA256SUMS` 拷到不受策略的短路径，如 `C:\p113b\`；`Get-FileHash C:\p113b\aiclient-p1-13b-kit.zip -Algorithm SHA256` | 与 `SHA256SUMS` 里 zip 一行一致 |
 | 0.5 | 解压 | `tar -xf C:\p113b\aiclient-p1-13b-kit.zip -C C:\p113b` | 得到 `C:\p113b\aiclient-p1-13b-kit\` 下 4 个文件 |
-| 0.6 | 加密目录 | 第一轮用过的 `C:\Users\JC\p1-13-encrypted-test` 作 `-EncDir` | 工具包目录不能在它里面，脚本会检查 |
+| 0.6 | 加密目录 | 第一轮用过的 `D:\Encrypted` 作 `-EncDir` | 工具包目录不能在它里面，脚本会检查 |
 
 PowerShell 可能被透明解密，所以「PowerShell 读工具包文件能看到明文」不能证明工具包目录没受策略。真正的检查是脚本第一步：随包 node.exe 能不能跑起 `matrix-probe.mjs`。跑不起来时脚本会停下并提示换目录。
 
@@ -91,7 +91,7 @@ PowerShell 可能被透明解密，所以「PowerShell 读工具包文件能看�
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-& 'C:\p113b\aiclient-p1-13b-kit\run-p1-13b.ps1' -EncDir 'C:\Users\JC\p1-13-encrypted-test' -AppDir 'D:\Program Files\AiClient\PiLabAi' -ManualEncryption
+& 'C:\p113b\aiclient-p1-13b-kit\run-p1-13b.ps1' -EncDir 'D:\Encrypted' -AppDir '<应用安装目录>' -ManualEncryption
 ```
 
 - 必须用 Windows PowerShell 5.1（`powershell.exe`）。用 PowerShell 7 运行时脚本会直接退出：5.1 本身就是读者 R-ps51 与写者 W-ps51。

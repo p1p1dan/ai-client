@@ -2,7 +2,7 @@
 
 > **2026-09-28 用户已裁决**，结果见[决策 090](decisions/090-user-rulings-2026-09-28.md)。本文件保留作审批时的原始材料。仍待确认的只有 062 / 070（自定义子代理）。
 
-Role: review-summary。生成日期：2026-09-28，对应代码分支 `feat/dsh-p0-probe` 提交 `52cd915d`。
+Role: review-summary。生成日期：2026-09-28，对应代码分支 `feat/dsh-p0-probe` 提交 `867f8606`。
 
 ## 这是什么
 

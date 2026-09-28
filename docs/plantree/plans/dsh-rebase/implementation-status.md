@@ -30,26 +30,26 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 ## Last Landed
 
 - 2026-09-28 P1-13b 结果已回（[摘要](evidence/p1-13b-encryption-matrix-2026-09-28.md)，[决策 089](decisions/089-p1-13b-reading-and-hardlink-fix.md)）：DSH 的硬链接写法让新文件 51 类全部不加密，1.0.x 的写法有 22 类加密，这是回退，已登记 P1-13c；node.exe 读不出 9 类文件，与 1.0.x 相同（Q009）；读取的解密与进程名无关。原始报告只留在本地，不入库。
-- 2026-09-28 P1-6b 接线：`ac47a9c8`（[决策 088](decisions/088-permission-gate-wiring-choices.md)）。编排器复跑：
+- 2026-09-28 P1-6b 接线：`262a240c`（[决策 088](decisions/088-permission-gate-wiring-choices.md)）。编排器复跑：
   - dsh-host 与根两套 tsc 通过；
   - 相关单测 801 例通过；
   - 真宿主集成测试 21/21，新增批准、拒绝、Stop 收卡三项；
   - bridge-smoke 41 项，新增 `cat .env` 不出卡直接被拒、「本会话允许」后同类命令不再出卡、plan 模式拦写；
   - 金样本 27 份全部重录，重录后 `--check` 无差异，读样本的测试 31 例通过；
   - 重建产物 82.2 MiB，打包冒烟 L1 共 41 项。
-- 2026-09-28 P1-12 前置：`bed30955` 子代理目录规则搬进 `src/shared/subagentCatalogRoots.ts`，MCP stdio 夹具移出 runtime（[决策 087](decisions/087-subagent-catalog-move-and-fixture-relocation.md)）。编排器复跑相关 22 个文件、357 例通过。
-- 2026-09-28 P1-16 再前置：子代理目录规则（根、合并、内置、pin 解析）从 `plugins/subagent/catalog.ts` 搬进 `src/shared/subagentCatalogRoots.ts`，runtime 原位置改薄封装；MCP 真实 stdio 夹具 `mcp-echo-server.mjs` 移到 `src/shared/mcp/__tests__/fixtures/`（[决策 087](decisions/087-subagent-catalog-move-and-fixture-relocation.md)）。P1-16 方案里「删 runtime 前先搬」的三项（skills/模板、MCP、子代理目录规则）至此全部完成。子代理原测试文件（35 例，SA01+SA02）整份搬进 `src/shared/__tests__/subagentCatalogRoots.test.ts`，按用例全名比对零丢失；新增边界静态测试（5 例）与薄封装测试（2 例）。复跑：四套 tsc 通过（dsh-host 侧另一代理并行改动，未触及本次文件）；runtime 下 `subagent` 相关 20 个测试文件、314 例通过；`fe089adf` 涉及 MCP/skills 的 9 个相关测试文件、138 例通过；biome 改动文件全过。
-- 2026-09-28 P1-10a 收尾：`fc6061c6` plugin-manager 常闭，删掉宿主里的 pnpm 配置，上机包的插件检查改为不联网（[决策 082 实施补记](decisions/082-allowlist-implementation-choices.md)）。编排器复跑：dsh-host tsc 通过；相关单测 765 例通过；真宿主集成 18/18；`bridge-record --check` 9 个场景无差异；bridge-smoke 36 项；重建产物 82.1 MiB，打包冒烟 L1 共 40 项。代理另跑了上机包 Linux 预演：44 项里通过 40、失败 0。
-- 2026-09-28 P1-16 前置：`fe089adf` skills、模板与展开、MCP 的纯逻辑搬进 `src/shared`，runtime 改为薄封装（[决策 086](decisions/086-shared-skills-mcp-move-choices.md)）。编排器复跑：相关 20 个测试文件、480 例通过；根、runtime、agent-host 三套 tsc 通过。
-- 2026-09-28 P1-13b 上机包：`fd8f2ac9` 加密矩阵工具，外加第一轮现场脚本修改的回收。Linux 预演（只跑 node 那半边）通过，单测 17 例通过；PowerShell 脚本还没实跑过。包在 `/var/tmp/aiclient-p1-13b-kit/`，sha256 `4a5ea708…b652`。读代码还有一个发现：DSH 新建文件是先写临时文件再硬链接成目标名，1.0.x 是直接写目标名，所以决策 084 与 Q009 里「与 1.0.x 相同」的推断已撤回。
-- 2026-09-28 P1-5 宿主侧接线与 P1-5b：`c8bcdab1`（[决策 085](decisions/085-model-plan-wiring-implementation-choices.md)）。编排器复跑：
+- 2026-09-28 P1-12 前置：`e5d16e59` 子代理目录规则搬进 `src/shared/subagentCatalogRoots.ts`，MCP stdio 夹具移出 runtime（[决策 087](decisions/087-subagent-catalog-move-and-fixture-relocation.md)）。编排器复跑相关 22 个文件、357 例通过。
+- 2026-09-28 P1-16 再前置：子代理目录规则（根、合并、内置、pin 解析）从 `plugins/subagent/catalog.ts` 搬进 `src/shared/subagentCatalogRoots.ts`，runtime 原位置改薄封装；MCP 真实 stdio 夹具 `mcp-echo-server.mjs` 移到 `src/shared/mcp/__tests__/fixtures/`（[决策 087](decisions/087-subagent-catalog-move-and-fixture-relocation.md)）。P1-16 方案里「删 runtime 前先搬」的三项（skills/模板、MCP、子代理目录规则）至此全部完成。子代理原测试文件（35 例，SA01+SA02）整份搬进 `src/shared/__tests__/subagentCatalogRoots.test.ts`，按用例全名比对零丢失；新增边界静态测试（5 例）与薄封装测试（2 例）。复跑：四套 tsc 通过（dsh-host 侧另一代理并行改动，未触及本次文件）；runtime 下 `subagent` 相关 20 个测试文件、314 例通过；`36df9ac9` 涉及 MCP/skills 的 9 个相关测试文件、138 例通过；biome 改动文件全过。
+- 2026-09-28 P1-10a 收尾：`97a41728` plugin-manager 常闭，删掉宿主里的 pnpm 配置，上机包的插件检查改为不联网（[决策 082 实施补记](decisions/082-allowlist-implementation-choices.md)）。编排器复跑：dsh-host tsc 通过；相关单测 765 例通过；真宿主集成 18/18；`bridge-record --check` 9 个场景无差异；bridge-smoke 36 项；重建产物 82.1 MiB，打包冒烟 L1 共 40 项。代理另跑了上机包 Linux 预演：44 项里通过 40、失败 0。
+- 2026-09-28 P1-16 前置：`36df9ac9` skills、模板与展开、MCP 的纯逻辑搬进 `src/shared`，runtime 改为薄封装（[决策 086](decisions/086-shared-skills-mcp-move-choices.md)）。编排器复跑：相关 20 个测试文件、480 例通过；根、runtime、agent-host 三套 tsc 通过。
+- 2026-09-28 P1-13b 上机包：`c3eb0068` 加密矩阵工具，外加第一轮现场脚本修改的回收。Linux 预演（只跑 node 那半边）通过，单测 17 例通过；PowerShell 脚本还没实跑过。包在 `/var/tmp/aiclient-p1-13b-kit/`，sha256 `4a5ea708…b652`。读代码还有一个发现：DSH 新建文件是先写临时文件再硬链接成目标名，1.0.x 是直接写目标名，所以决策 084 与 Q009 里「与 1.0.x 相同」的推断已撤回。
+- 2026-09-28 P1-5 宿主侧接线与 P1-5b：`fcaeb8bc`（[决策 085](decisions/085-model-plan-wiring-implementation-choices.md)）。编排器复跑：
   - 四套 tsc 通过；
   - 相关单测 86 个文件、1337 例通过；
   - 真宿主集成测试 18/18，含 KEY-CANARY；
   - bridge-smoke 36 项、loop-guard-smoke 31 项；
   - `bridge-record --check` 只有预期中的一处差异，已重录 `stream.fail.json`；
   - 重建产物 82.1 MiB，打包冒烟 L1 共 40 项全过。
-- 2026-09-28 P1-13 第一轮（加密机，用户现场执行）：正式轮 45 项通过、3 项记录，DSH Desktop 对照组 14 项通过。`.txt` 的读取、编辑、搜索、shell、终端、spill、会话日志都是明文；node.exe 新建的文件不加密（三组一样，[Q009](open-questions.md)）；另有两处读到密文的旁证（`.ps1`、`.yml`），要做扩展名矩阵。证据在 [p1-13-encrypted-2026-09-28/](evidence/p1-13-encrypted-2026-09-28/README.md)。
+- 2026-09-28 P1-13 第一轮（加密机，用户现场执行）：正式轮 45 项通过、3 项记录，DSH Desktop 对照组 14 项通过。`.txt` 的读取、编辑、搜索、shell、终端、spill、会话日志都是明文；node.exe 新建的文件不加密（三组一样，[Q009](open-questions.md)）；另有两处读到密文的旁证（`.ps1`、`.yml`），要做扩展名矩阵。证据在 [p1-13-encrypted-2026-09-28.md](evidence/p1-13-encrypted-2026-09-28.md)。
 - 2026-09-28 P1-10a：`ad999a0f` 插件白名单与构建期审计，去掉随包 pnpm，产物从 97.9 MiB 降到 82.1 MiB（[决策 082](decisions/082-allowlist-implementation-choices.md)、[083](decisions/083-host-size-budget-reset-after-pnpm.md)）。编排器在只含 P1-10a 改动的临时 worktree 里复跑：相关 5 个测试文件、165 例全过，biome 通过。代理在同样的隔离环境里重建产物，打包冒烟 L1 共 37 项全过。
 - 2026-09-27 P1-4b 与 P1-8：`36d4f84a` 回退、fork、跨 lineage 的树；`72330d1b` 防空转插件。合跑复跑：三套 tsc 通过；单测 65 + 4 个文件全过；真宿主集成 13/13；bridge-smoke 33 项、loop-guard-smoke 31 项、bridge-record 9 个场景；重建产物 97.9 MiB，打包冒烟 L1 通过。
 - 2026-09-27 P1-4a（第二部分）：`d3a275ff` DSH 会话只读回放、`outcomeUnknown`、三条迁移投影规则。复跑：三套 tsc 通过；相关单测 92 个文件通过（修掉一处 `defaultPaths` 守卫的误报）；真宿主集成 11/11；bridge-smoke 33 项全真。

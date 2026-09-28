@@ -30,7 +30,7 @@
 - 实测：去掉 pnpm 后，linux-x64 产物从 97.9 MiB、10,194 个文件、365 个包，降到 82.1 MiB、9,760 个文件、342 个包。
 - 上机包探针里的 G-pnpm-install 检查（`tools/goal-probe.ts`、`tools/p0-4-probe.ts`）已经失效，[P1-13 手册](../topics/p1-13-encrypted-machine-runbook.md)里的对应项也要改成「预装插件由随包 node.exe 读回明文」。与收尾一起做。
 
-## 实施补记（2026-09-28，收尾 `fc6061c6`）
+## 实施补记（2026-09-28，收尾 `97a41728`）
 
 第 6 条的第二步已经做完：
 - bundle 补丁里把 `plugin-manager` 设成 disabled，并删掉了它的 registry 配置；

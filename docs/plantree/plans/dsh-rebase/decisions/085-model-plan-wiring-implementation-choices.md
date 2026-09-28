@@ -1,6 +1,6 @@
 # 决策 085：P1-5 宿主侧接线与凭据注入的实现取舍
 
-日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-5 / P1-5b 实现（`c8bcdab1`）、[决策 033](033-model-plan-via-configure-overlay.md)、[034](034-per-request-credential-pull.md)、[037](037-user-agent-test-first.md)、[077](077-model-plan-implementation-choices.md)。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：P1-5 / P1-5b 实现（`fcaeb8bc`）、[决策 033](033-model-plan-via-configure-overlay.md)、[034](034-per-request-credential-pull.md)、[037](037-user-agent-test-first.md)、[077](077-model-plan-implementation-choices.md)。
 
 ## 规则
 
