@@ -189,6 +189,11 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
     reason: 'Standard DialogPanel body (the session tree list) between header and footer.',
   },
   {
+    file: 'components/chat/GoalEditDialog.tsx',
+    category: 'panel',
+    reason: "dsh-rebase P1-7a: the goal bar's edit — the objective's textarea in a DialogPanel.",
+  },
+  {
     file: 'components/files/NewItemDialog.tsx',
     category: 'panel',
     reason: 'Standard DialogPanel body (a single name input) between header and footer.',

@@ -1181,6 +1181,18 @@ const electronAPI = {
       instructions?: string;
     }): Promise<{ compacted: true }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COMPACT_SESSION, payload),
+    /** dsh-rebase P1-7a — one engine command out of band (the goal bar's `/goal …`). */
+    runSessionCommand: (payload: {
+      sessionId: string;
+      line: string;
+    }): Promise<{ ok: true; output?: string } | { ok: false; error: string }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RUN_SESSION_COMMAND, payload),
+    /** dsh-rebase P1-7a — the panels' current projections; none without a running slot. */
+    getSessionPanels: (payload: {
+      sessionId: string;
+    }): Promise<{
+      projections: import('@shared/types/runtimeEvents').SessionProjectionPayload[];
+    }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SESSION_PANELS, payload),
     getSessionTree: (payload: {
       sessionId: string;
       requestSequence: number;

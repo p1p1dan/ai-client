@@ -43,6 +43,12 @@
  * `todos`, `goal` and `subagentCatalog` projections go out as
  * `session.projection`; the capability inventory reports the skill count.
  *
+ * Panels (P1-7a, decisions 072 rules 1-2, 118; `panels.ts`): the goal bar's
+ * buttons run `/goal …` through `worker.command`, out of band — no turn, no
+ * event, not refused while a turn runs; `worker.panels` answers the current
+ * projections for a renderer that missed them; and the bridge adds the key
+ * DSH's `goal` projection leaves out, `goalActivation` (armed or not).
+ *
  * Questions (P1-4d3, decisions 098 and 114): DSH's `ask_user_question` (and
  * `exit_plan_mode`) ask through `ctx.userQuestions`; this runtime answers the
  * `user-questions/request` waterfall for its own root agent on 1.0.x's
@@ -109,6 +115,7 @@ import {
 } from '../../shared/permissions/policy.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
 import {
+  type DshGoalActivation,
   type PermissionDecisionId,
   type RuntimeEventDraft,
   SESSION_PROJECTION_KEYS,
@@ -123,6 +130,9 @@ import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
+  WORKER_COMMAND_BUDGET_MS,
+  WORKER_COMMAND_TIMEOUT,
+  WORKER_COMMAND_UNKNOWN,
   WORKER_COMPACT_BUDGET_MS,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
   WORKER_RETRY_UNAVAILABLE,
@@ -130,6 +140,8 @@ import {
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
+  type WorkerCommandPayload,
+  type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
   type WorkerCompactPayload,
@@ -142,6 +154,8 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerPanelsPayload,
+  type WorkerPanelsResult,
   type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
@@ -191,6 +205,14 @@ import {
   type DshModelSelection,
   type DshRoutedModel,
 } from './modelRoute.ts';
+import {
+  commandResultOf,
+  type DshGoalActivationChanged,
+  type DshGoalsView,
+  goalActivationFromEdge,
+  goalActivationOf,
+  outOfBandCommandName,
+} from './panels.ts';
 import {
   createDshQuestionPrompt,
   DSH_QUESTION_ID_PREFIX,
@@ -288,6 +310,8 @@ export interface DshBridgeOptionalServices {
   commands: DshCommandsView;
   /** `ctx.skills` (P1-4d2): the menu's skills and the capability count. */
   skills: DshSkillsView;
+  /** `ctx.goals` (P1-7a): the live goal's activation, which no projection carries. */
+  goals: DshGoalsView;
 }
 
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
@@ -305,6 +329,14 @@ export interface DshBridgeContext {
    * asking agent, which untagged listeners such as this row's also receive.
    * Return an answer to claim the request, or `next()` to pass it on.
    */
+  /**
+   * dsh-goal's process-local activation edges (P1-7a): every session's, so
+   * each runtime picks its own by `sessionId`.
+   */
+  on(
+    name: 'goal/activation-changed',
+    listener: (payload: DshGoalActivationChanged) => void
+  ): Dispose;
   on(
     name: 'user-questions/request',
     listener: (
@@ -415,6 +447,8 @@ export interface DshBridgeDeps {
    * (`WORKER_COMPACT_BUDGET_MS`, inside Main's own wait); tests shorten it.
    */
   compactTimeoutMs?: number;
+  /** The same for `worker.command` (`WORKER_COMMAND_BUDGET_MS`); tests shorten it. */
+  commandTimeoutMs?: number;
 }
 
 /**
@@ -1324,6 +1358,68 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     throw new PiWorkerSessionError(outcome.code, outcome.message);
   }
 
+  // ---- panels (P1-7a, decisions 072 rules 1-2, 113 rule 12, 118) ------------------
+
+  /**
+   * `worker.command`: one DSH command, out of band. No turn is opened and no
+   * event is sent — DSH logs its `command/run` / `command/done`, which the
+   * live translation only shows for a send's command — and a running turn
+   * does not refuse it: the goal bar's pause is meant for the round that is
+   * running, and DSH's own pause cancels that round. The answer is DSH's
+   * text; a command DSH answered with an error (a goal in the wrong state)
+   * is `ok: false`, not a failed request. Bounded like `/compact`, inside
+   * Main's warm request timeout.
+   */
+  async command(input: WorkerCommandPayload): Promise<WorkerCommandResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    await this.bootstrap();
+    const agent = this.requireAgent();
+    const name = outOfBandCommandName(input.line);
+    const commands = name ? this.ctx.get?.('commands') : undefined;
+    if (!name || !commands || commands.find(agent, name) === undefined) {
+      throw new PiWorkerSessionError(
+        WORKER_COMMAND_UNKNOWN,
+        `${input.line.split(/\s/u, 1)[0] ?? ''} is not a command this session runs out of band`
+      );
+    }
+    const budgetMs = this.deps.commandTimeoutMs ?? WORKER_COMMAND_BUDGET_MS;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), budgetMs);
+    let execution: DshCommandExecution | undefined;
+    try {
+      execution = await commands.execute(agent, input.line, [], controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (controller.signal.aborted) {
+      throw new PiWorkerSessionError(
+        WORKER_COMMAND_TIMEOUT,
+        `/${name} took longer than ${budgetMs}ms; it was cancelled`,
+        true
+      );
+    }
+    if (!execution) {
+      // Gone from the registry between the lookup and the run: nothing was logged.
+      throw new PiWorkerSessionError(WORKER_COMMAND_UNKNOWN, `/${name} is no longer available`);
+    }
+    return commandResultOf(execution);
+  }
+
+  /**
+   * `worker.panels`: the panels' current values, the same the bridge sends
+   * as `session.projection`, for a renderer that was not listening then (a
+   * reload, a chat switched to, a session reopened with no event since —
+   * decision 113 rule 12). A read of an open session only: nothing before a
+   * bootstrap, never a bootstrap of its own.
+   */
+  async panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (!this.result || this.disposed) return { projections: [] };
+    return { projections: this.readProjections(true) };
+  }
+
   /**
    * The failure card's Continue (decisions 028 and 095). Taken only when the
    * session is idle and its last turn ended in error, was interrupted (the
@@ -2026,11 +2122,22 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   // ---- session.projection (P1-4d2, decisions 031, 099 rule 11, 113) -----------------
 
   /**
-   * The forwarded keys the open session has now, in one consistent cut.
-   * A key whose unit the host does not compose is absent; a failed read
-   * costs the baseline, never the session.
+   * The forwarded keys the open session has now, in one consistent cut, and
+   * the bridge's `goalActivation` (P1-7a): with them while a goal is current,
+   * or always — `null` included — for `worker.panels`, whose answer replaces
+   * what the renderer holds. A key whose unit (or service) the host does not
+   * compose is absent; a failed read costs the baseline, never the session.
    */
-  private readProjections(): SessionProjectionPayload[] {
+  private readProjections(alwaysActivation = false): SessionProjectionPayload[] {
+    const projections = this.readDshProjections();
+    const activation = this.readGoalActivation();
+    if (activation !== undefined && (activation !== null || alwaysActivation)) {
+      projections.push({ key: 'goalActivation', view: activation });
+    }
+    return projections;
+  }
+
+  private readDshProjections(): SessionProjectionPayload[] {
     const session = this.handle?.agent.session;
     if (!session) return [];
     try {
@@ -2044,6 +2151,19 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     } catch (error) {
       this.options.log?.('[dsh-bridge] session projections unreadable', error);
       return [];
+    }
+  }
+
+  /** The open agent's goal activation; undefined without a goal service or on a failed read. */
+  private readGoalActivation(): DshGoalActivation | null | undefined {
+    const agent = this.handle?.agent;
+    const goals = agent ? this.ctx.get?.('goals') : undefined;
+    if (!agent || !goals) return undefined;
+    try {
+      return goalActivationOf(goals.get(agent));
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] goal activation unreadable', error);
+      return undefined;
     }
   }
 
@@ -2065,11 +2185,24 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   ): void {
     if (this.disposed || !this.result || session?.id !== this.dshSessionId) return;
     if (!(SESSION_PROJECTION_KEYS as readonly string[]).includes(key)) return;
-    const payload = { key, view: value } as SessionProjectionPayload;
+    this.forwardProjection({ key, view: value } as SessionProjectionPayload);
+  }
+
+  /**
+   * dsh-goal's activation edge (P1-7a): this session's only, once
+   * bootstrapped — the baseline read covers what came before.
+   */
+  private onGoalActivationChanged(edge: DshGoalActivationChanged | undefined): void {
+    if (this.disposed || !this.result || !edge || edge.sessionId !== this.dshSessionId) return;
+    this.forwardProjection({ key: 'goalActivation', view: goalActivationFromEdge(edge) });
+  }
+
+  /** One key's new value; a change that finds the baseline still waiting joins it and sends it. */
+  private forwardProjection(payload: SessionProjectionPayload): void {
     const baseline = this.projectionBaseline;
     if (baseline) {
-      this.projectionBaseline = baseline.some((entry) => entry.key === key)
-        ? baseline.map((entry) => (entry.key === key ? payload : entry))
+      this.projectionBaseline = baseline.some((entry) => entry.key === payload.key)
+        ? baseline.map((entry) => (entry.key === payload.key ? payload : entry))
         : [...baseline, payload];
       this.flushProjectionBaseline();
       return;
@@ -2116,7 +2249,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       // P1-4d3: every runtime of the row hears every request; each claims its own.
       this.ctx.on('user-questions/request', (request, next) =>
         this.ownsQuestion(request) ? this.questions.ask(request) : next()
-      )
+      ),
+      // P1-7a: every session's activation edges; each runtime keeps its own.
+      this.ctx.on('goal/activation-changed', (edge) => {
+        try {
+          this.onGoalActivationChanged(edge);
+        } catch (error) {
+          this.options.log?.('[dsh-bridge] goal activation change failed', error);
+        }
+      })
     );
   }
 }

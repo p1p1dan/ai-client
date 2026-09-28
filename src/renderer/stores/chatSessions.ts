@@ -1,3 +1,6 @@
+// Leaf module (no value imports of its own, decision 106 rule 2): the DSH
+// notice table the bridge and the history projection read too.
+import { dshNoticeKindOf } from '@shared/dshNotices';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   PermissionAutoReason,
@@ -376,6 +379,16 @@ export interface ChatMessage {
    * recognise a live message the replay carries, by id rather than by text.
    */
   liveMessageId?: string;
+  /**
+   * dsh-rebase P1-7a (decision 118; optional-field addition, same discipline
+   * as `origin`): live only, on the system row of a DSH notice — the source
+   * kind its `custom.message` named (`dsh:<kind>`: `tool-jobs`,
+   * `agent-message`, `command`, `command-error`, …). Such
+   * a row's text is the notice alone, without the `customType` line other
+   * custom messages carry; the timeline draws it as one light line
+   * (`dshTimelineRowModel.ts`). Set once, never mutated after.
+   */
+  noticeKind?: string;
 }
 
 interface PendingPermission {
@@ -1525,14 +1538,23 @@ function applyRuntimeEventCore(
 
     case 'custom.message':
     case 'custom.entry': {
-      const content = event.payload.content
-        ? `${event.payload.customType}\n${event.payload.content}`
-        : event.payload.customType;
+      // P1-7a (decision 118): a DSH notice (`dsh:<kind>`) keeps its text alone
+      // and names its kind; the timeline draws it as a light line, not the
+      // Alert every other custom message still gets.
+      const noticeKind =
+        event.type === 'custom.message' ? dshNoticeKindOf(event.payload.customType) : undefined;
+      const content =
+        noticeKind !== undefined
+          ? (event.payload.content ?? '')
+          : event.payload.content
+            ? `${event.payload.customType}\n${event.payload.content}`
+            : event.payload.customType;
       const message: ChatMessage = {
         id: event.payload.messageId,
         sessionId,
         role: 'system',
         blocks: [{ id: `${event.payload.messageId}-text`, type: 'text', text: content }],
+        ...(noticeKind !== undefined ? { noticeKind } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];
       return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };

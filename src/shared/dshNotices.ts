@@ -36,6 +36,18 @@ const NOTICE_FORM = 'notice';
 export const DSH_NOTICE_CUSTOM_TYPE_PREFIX = 'dsh:';
 
 /**
+ * The source kind a live notice's `customType` names (`dsh:tool-jobs` ->
+ * `tool-jobs`; a command send's answer is `command` / `command-error`,
+ * decision 113), or undefined for any other custom message (P1-7a).
+ */
+export function dshNoticeKindOf(customType: string): string | undefined {
+  return customType.startsWith(DSH_NOTICE_CUSTOM_TYPE_PREFIX) &&
+    customType.length > DSH_NOTICE_CUSTOM_TYPE_PREFIX.length
+    ? customType.slice(DSH_NOTICE_CUSTOM_TYPE_PREFIX.length)
+    : undefined;
+}
+
+/**
  * Notice-form sources the timeline never shows (plan P1-7 shard 03 §6.2):
  * the goal bar already says what `tool-goal`'s wrap-up says; every reply's
  * metadata line names its model (`model-selection`, "[model changed]");

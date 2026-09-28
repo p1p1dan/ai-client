@@ -22,6 +22,8 @@ import type {
   WorkerBootstrapPayload,
   WorkerBootstrapResult,
   WorkerCapabilityInventory,
+  WorkerCommandPayload,
+  WorkerCommandResult,
   WorkerCommandsPayload,
   WorkerCommandsResult,
   WorkerCompactPayload,
@@ -34,6 +36,8 @@ import type {
   WorkerHistoryResult,
   WorkerInterjectPayload,
   WorkerInterjectResult,
+  WorkerPanelsPayload,
+  WorkerPanelsResult,
   WorkerReloadPayload,
   WorkerReloadResult,
   WorkerRewindPayload,
@@ -691,6 +695,24 @@ export class NativeWorkerRuntime {
    * commands" — an error would make it translate the failure back into the same
    * empty menu, with a log line nobody reads in between.
    */
+  /**
+   * dsh-rebase P1-7a: out-of-band engine commands belong to the DSH bridge.
+   * This runtime has none; it retires with P1-12.
+   */
+  async command(input: WorkerCommandPayload): Promise<WorkerCommandResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    throw new NativeWorkerRuntimeError(
+      'WORKER_COMMAND_UNKNOWN',
+      'This runtime runs no engine commands out of band'
+    );
+  }
+
+  /** dsh-rebase P1-7a: no goal, todo or subagent projections on this runtime. */
+  async panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    return { projections: [] };
+  }
+
   async commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult> {
     this.assertLogicalSession(input.logicalSessionId);
     const skills = this.handle?.skills;

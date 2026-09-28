@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
-import { WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED } from '../../../shared/types/workerRpc.ts';
+import {
+  WORKER_COMMAND_TIMEOUT,
+  WORKER_COMMAND_UNKNOWN,
+  WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
+} from '../../../shared/types/workerRpc.ts';
 import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
 import {
   type DshBridgeContext,
@@ -99,7 +103,9 @@ function fakeHost() {
     },
     get: (name: string) => services[name],
   } as unknown as DshBridgeContext;
-  return { ctx, agent, followups, append, services };
+  /** A host event (`goal/activation-changed`, P1-7a) to whoever of this runtime listens. */
+  const fire = (name: string, ...args: unknown[]) => listeners.get(name)?.(...args);
+  return { ctx, agent, followups, append, services, fire };
 }
 
 /**
@@ -672,5 +678,229 @@ describe('DshSessionRuntime — capabilities (P1-4d2, decisions 099 rule 12, 113
     const result = await runtime(failing.ctx, []).bootstrap();
     expect(result.bootstrapped).toBe(true);
     expect(result.capabilities).toEqual({});
+  });
+});
+
+/**
+ * dsh-rebase P1-7a (decisions 072 rules 1-2, 113 rule 12, 118): the goal
+ * bar's out-of-band command, the panels' rehydration and the bridge-made
+ * `goalActivation` key, against the same fake context.
+ */
+describe('DshSessionRuntime — worker.command (P1-7a, decisions 072 rule 2, 118)', () => {
+  it('[P7A-CMD] runs a known command out of band: no turn, no event, DSH’s text back', async () => {
+    const host = fakeHost();
+    const commands = fakeCommands(host, {
+      goal: {
+        description: 'goal',
+        handler: (input) =>
+          input.trim() === 'pause'
+            ? { kind: 'success', text: 'Goal paused' }
+            : { kind: 'error', text: 'The goal command is not valid for the current state.' },
+      },
+    });
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+
+    expect(await bridge.command({ logicalSessionId: LOGICAL, line: '/goal pause' })).toEqual({
+      ok: true,
+      output: 'Goal paused',
+    });
+    expect(await bridge.command({ logicalSessionId: LOGICAL, line: '/goal resume' })).toEqual({
+      ok: false,
+      error: 'The goal command is not valid for the current state.',
+    });
+    expect(commands.execute).toHaveBeenCalledWith(
+      host.agent,
+      '/goal pause',
+      [],
+      expect.any(AbortSignal)
+    );
+    // DSH logged both lifecycles; the live translation shows neither, and no turn opened.
+    expect(emitted).toEqual([]);
+    expect(host.followups).toEqual([]);
+    expect(bridge.busy).toBe(false);
+  });
+
+  it('[P7A-CMD-RUNNING] a running turn does not refuse it, and its events go on untouched', async () => {
+    const host = fakeHost();
+    fakeCommands(host, {
+      goal: { description: 'goal', handler: () => ({ kind: 'success', text: 'Goal paused' }) },
+    });
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'work on it'));
+    host.agent.status = 'running';
+    host.append('turn/start', { turn: 1 });
+    const before = shape(emitted);
+
+    expect(await bridge.command({ logicalSessionId: LOGICAL, line: '/goal pause' })).toEqual({
+      ok: true,
+      output: 'Goal paused',
+    });
+    expect(shape(emitted)).toEqual(before);
+  });
+
+  it('[P7A-CMD-REFUSED] hidden, window-owned, unknown or no command at all: refused, nothing run', async () => {
+    const host = fakeHost();
+    const commands = fakeCommands(host, {
+      compact: { description: 'compact' },
+      goal: { description: 'goal' },
+      plan: { description: 'plan' },
+    });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+
+    for (const line of ['/plan', '/compact', '/nope', '/Goal pause', '/usr/bin/env']) {
+      expect((await refusal(bridge.command({ logicalSessionId: LOGICAL, line }))).code).toBe(
+        WORKER_COMMAND_UNKNOWN
+      );
+    }
+    expect(commands.execute).not.toHaveBeenCalled();
+  });
+
+  it('[P7A-CMD-TIMEOUT] a command past its budget is cancelled, retryable', async () => {
+    const host = fakeHost();
+    fakeCommands(host, {
+      goal: {
+        description: 'goal',
+        handler: (_input, signal) =>
+          new Promise<DshCommandResult>((_resolve, reject) => {
+            signal.addEventListener('abort', () => reject(new Error('cancelled')));
+          }),
+      },
+    });
+    const bridge = runtime(host.ctx, [], { commandTimeoutMs: 20 });
+    await bridge.bootstrap();
+
+    const refused = await refusal(bridge.command({ logicalSessionId: LOGICAL, line: '/goal' }));
+    expect(refused.code).toBe(WORKER_COMMAND_TIMEOUT);
+    expect((refused as { retryable?: boolean }).retryable).toBe(true);
+  });
+});
+
+describe('DshSessionRuntime — worker.panels and goalActivation (P1-7a, decisions 072 rule 1, 113 rule 12, 118)', () => {
+  const GOAL = {
+    goal: {
+      id: 'goal-1',
+      revision: 3,
+      objective: 'Get CI green',
+      phase: 'active',
+      maxGoalRounds: 256,
+    },
+    roundsStarted: 3,
+    createdAt: 1,
+    updatedAt: 2,
+  };
+
+  it('[P7A-PANELS] answers the current values, `goalActivation` always; nothing before a bootstrap, no event', async () => {
+    const host = fakeHost();
+    fakeProjections(host, { todos: null, goal: null, subagentCatalog: [] });
+    host.services.goals = { get: () => undefined };
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+
+    expect(await bridge.panels({ logicalSessionId: LOGICAL })).toEqual({ projections: [] });
+    await bridge.bootstrap();
+    expect(await bridge.panels({ logicalSessionId: LOGICAL })).toEqual({
+      projections: [
+        { key: 'todos', view: null },
+        { key: 'goal', view: null },
+        { key: 'subagentCatalog', view: [] },
+        { key: 'goalActivation', view: null },
+      ],
+    });
+    expect(emitted).toEqual([]);
+  });
+
+  it('[P7A-ACT-BASELINE] the bootstrap snapshot carries the activation only while a goal is current', async () => {
+    const host = fakeHost();
+    fakeProjections(host, { todos: null, goal: GOAL, subagentCatalog: [] });
+    host.services.goals = {
+      get: () => ({ id: 'goal-1', revision: 3, activation: 'disarmed' }),
+    };
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+
+    const projections = emitted.filter((event) => event.type === 'session.projection');
+    expect(projections.map((event) => event.payload?.key)).toEqual([
+      'todos',
+      'goal',
+      'subagentCatalog',
+      'goalActivation',
+    ]);
+    expect(projections[3]?.payload?.view).toEqual({
+      goalId: 'goal-1',
+      revision: 3,
+      activation: 'disarmed',
+    });
+
+    // No goal: the three DSH keys alone, as before P1-7a.
+    const plain = fakeHost();
+    fakeProjections(plain, { todos: null, goal: null, subagentCatalog: [] });
+    plain.services.goals = { get: () => undefined };
+    const plainEmitted: Emitted[] = [];
+    const plainBridge = runtime(plain.ctx, plainEmitted);
+    await plainBridge.bootstrap();
+    await plainBridge.startSend(send('turn-1', 'hello'));
+    expect(
+      plainEmitted
+        .filter((event) => event.type === 'session.projection')
+        .map((event) => event.payload?.key)
+    ).toEqual(['todos', 'goal', 'subagentCatalog']);
+  });
+
+  it('[P7A-ACT-EDGE] forwards this session’s activation edges, a clear as null, nobody else’s', async () => {
+    const host = fakeHost();
+    fakeProjections(host, { todos: null, goal: null, subagentCatalog: [] });
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'hello'));
+    const before = emitted.length;
+
+    host.fire('goal/activation-changed', {
+      sessionId: DSH_ID,
+      goal: { id: 'goal-1', revision: 1, activation: 'armed' },
+    });
+    host.fire('goal/activation-changed', {
+      sessionId: 'aiclient-someone-else',
+      goal: { id: 'goal-9', revision: 1, activation: 'armed' },
+    });
+    host.fire('goal/activation-changed', { sessionId: DSH_ID });
+
+    expect(emitted.slice(before)).toEqual([
+      {
+        sessionId: LOGICAL,
+        requestId: 'turn-1',
+        type: 'session.projection',
+        payload: {
+          key: 'goalActivation',
+          view: { goalId: 'goal-1', revision: 1, activation: 'armed' },
+        },
+      },
+      {
+        sessionId: LOGICAL,
+        requestId: 'turn-1',
+        type: 'session.projection',
+        payload: { key: 'goalActivation', view: null },
+      },
+    ]);
+  });
+
+  it('[P7A-ACT-NO-SERVICE] a host without ctx.goals reports no activation; the rest goes on', async () => {
+    const host = fakeHost();
+    fakeProjections(host, { todos: null, goal: GOAL, subagentCatalog: [] });
+    const bridge = runtime(host.ctx, []);
+    await bridge.bootstrap();
+    const answer = await bridge.panels({ logicalSessionId: LOGICAL });
+    expect(answer.projections.map((entry) => entry.key)).toEqual([
+      'todos',
+      'goal',
+      'subagentCatalog',
+    ]);
   });
 });

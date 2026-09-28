@@ -2,6 +2,7 @@ import type { SubagentActivityState } from '@/components/chat/subagentActivityMo
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
 import { useMessageQueueStore } from './messageQueue';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
+import { useSessionPanelsStore } from './sessionPanels';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
@@ -94,4 +95,5 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
     bySession: pruneRecordBySession(state.bySession, sessionIds),
   }));
   useSubagentActivityStore.setState((state) => pruneSubagentActivityState(state, sessionIds));
+  useSessionPanelsStore.getState().pruneSessions(sessionIds);
 }

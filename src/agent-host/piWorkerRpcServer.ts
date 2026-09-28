@@ -22,6 +22,7 @@ import type { SessionPermissionTier } from '../shared/types/sessionPermissionTie
 import {
   isWorkerAcceptForkPayload,
   isWorkerBootstrapPayload,
+  isWorkerCommandPayload,
   isWorkerCommandsPayload,
   isWorkerCompactPayload,
   isWorkerDiscardForkPayload,
@@ -30,6 +31,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
+  isWorkerPanelsPayload,
   isWorkerPermissionRespondPayload,
   isWorkerPreviewRespondPayload,
   isWorkerQuestionRespondPayload,
@@ -50,6 +52,8 @@ import {
   type WorkerAcceptForkResult,
   type WorkerBootstrapPayload,
   type WorkerBootstrapResult,
+  type WorkerCommandPayload,
+  type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
   type WorkerCompactPayload,
@@ -64,6 +68,8 @@ import {
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
   type WorkerModelCatalog,
+  type WorkerPanelsPayload,
+  type WorkerPanelsResult,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondResult,
   type WorkerQuestionRespondResult,
@@ -114,6 +120,13 @@ export interface PiWorkerRuntime {
   tree(input: WorkerTreePayload): Promise<WorkerTreeResult>;
   commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult>;
   compact(input: WorkerCompactPayload): Promise<WorkerCompactResult>;
+  /**
+   * dsh-rebase P1-7a — one engine command run out of band (the goal bar's
+   * `/goal …`): no turn, no event, not refused while a turn runs.
+   */
+  command(input: WorkerCommandPayload): Promise<WorkerCommandResult>;
+  /** dsh-rebase P1-7a — the panels' current projections, for a renderer that missed them. */
+  panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult>;
   rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
   reload(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
@@ -432,6 +445,12 @@ export class PiWorkerRpcServer {
         case 'worker.compact':
           await this.handleCompact(request);
           break;
+        case 'worker.command':
+          await this.handleCommand(request);
+          break;
+        case 'worker.panels':
+          await this.handlePanels(request);
+          break;
         case 'worker.rewind':
           await this.handleRewind(request);
           break;
@@ -744,6 +763,42 @@ export class PiWorkerRpcServer {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.compact(request.payload));
+  }
+
+  private async handleCommand(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerCommandPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.command requires logicalSessionId and a /command line',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.command(request.payload));
+  }
+
+  /**
+   * A worker that is not bootstrapped answers with no panels, as
+   * `worker.commands` answers an empty menu: the renderer asks on every chat
+   * it shows, and a session that has not started is the ordinary case there.
+   */
+  private async handlePanels(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerPanelsPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.panels requires logicalSessionId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      this.respondSuccess(request, { projections: [] });
+      return;
+    }
+    this.respondSuccess(request, await this.runtime.panels(request.payload));
   }
 
   private async handleRewind(request: WorkerRpcRequest): Promise<void> {

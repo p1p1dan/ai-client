@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   isWorkerBootstrapPayload,
   isWorkerBootstrapResult,
+  isWorkerCommandPayload,
+  isWorkerCommandResult,
   isWorkerForkPayload,
   isWorkerForkResult,
   isWorkerHistoryPayload,
@@ -9,6 +11,7 @@ import {
   isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
   isWorkerInterjectResult,
+  isWorkerPanelsPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
   isWorkerReloadResult,
@@ -30,6 +33,8 @@ import {
   isWorkerUtilityStartResult,
   isWorkerUtilityTerminalEvent,
   normalizeWorkerCapabilities,
+  sanitizeWorkerPanels,
+  WORKER_COMMAND_LINE_MAX,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../workerRpc';
 
@@ -561,6 +566,55 @@ describe('worker RPC boundary guards', () => {
  * bootstrap — the U08-2 failure mode — so these two properties are tested
  * together on purpose.
  */
+describe('worker.command and worker.panels (dsh-rebase P1-7a)', () => {
+  it('[P7A-GUARD-CMD] takes a /command line of bounded length for a named session', () => {
+    expect(isWorkerCommandPayload({ logicalSessionId: 's1', line: '/goal pause' })).toBe(true);
+    expect(isWorkerCommandPayload({ logicalSessionId: 's1', line: '/goal edit a\nb' })).toBe(true);
+    expect(isWorkerCommandPayload({ logicalSessionId: 's1', line: 'goal pause' })).toBe(false);
+    expect(isWorkerCommandPayload({ logicalSessionId: 's1', line: '' })).toBe(false);
+    expect(isWorkerCommandPayload({ logicalSessionId: ' ', line: '/goal' })).toBe(false);
+    expect(isWorkerCommandPayload({ line: '/goal' })).toBe(false);
+    expect(
+      isWorkerCommandPayload({
+        logicalSessionId: 's1',
+        line: `/goal edit ${'x'.repeat(WORKER_COMMAND_LINE_MAX)}`,
+      })
+    ).toBe(false);
+  });
+
+  it('[P7A-GUARD-CMD-RESULT] an answer is ok with optional text, or not ok with a reason', () => {
+    expect(isWorkerCommandResult({ ok: true })).toBe(true);
+    expect(isWorkerCommandResult({ ok: true, output: 'Goal paused' })).toBe(true);
+    expect(isWorkerCommandResult({ ok: false, error: 'No goal is currently set.' })).toBe(true);
+    expect(isWorkerCommandResult({ ok: false })).toBe(false);
+    expect(isWorkerCommandResult({ ok: true, output: 3 })).toBe(false);
+    expect(isWorkerCommandResult(null)).toBe(false);
+  });
+
+  it('[P7A-GUARD-PANELS] a named session asks; an answer keeps known keys with a view', () => {
+    expect(isWorkerPanelsPayload({ logicalSessionId: 's1' })).toBe(true);
+    expect(isWorkerPanelsPayload({})).toBe(false);
+    expect(
+      sanitizeWorkerPanels({
+        projections: [
+          { key: 'todos', view: null },
+          { key: 'goalActivation', view: { goalId: 'g', revision: 1, activation: 'armed' } },
+          { key: 'jobs', view: [] },
+          { key: 'goal' },
+          'junk',
+        ],
+      })
+    ).toEqual({
+      projections: [
+        { key: 'todos', view: null },
+        { key: 'goalActivation', view: { goalId: 'g', revision: 1, activation: 'armed' } },
+      ],
+    });
+    expect(sanitizeWorkerPanels(undefined)).toEqual({ projections: [] });
+    expect(sanitizeWorkerPanels({ projections: 'nope' })).toEqual({ projections: [] });
+  });
+});
+
 describe('normalizeWorkerCapabilities', () => {
   const bootstrap = {
     bootstrapped: true,

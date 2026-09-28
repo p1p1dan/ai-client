@@ -2840,8 +2840,8 @@ export const zhTranslations: Record<string, string> = {
   'Sending {{count}} attachments to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
   'Add more optional details…': '可以再补充一些信息…',
   'Queued {{count}} — type another follow-up…': '已排队 {{count}} 条 —— 可以接着输入…',
-  'Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…':
-    'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…',
+  'Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…':
+    'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…',
   'Active session has no workspace…': '当前会话没有工作区…',
   'Choose a working directory to start…': '先选一个工作目录…',
   'Send follow-up…': '继续输入…',
@@ -3574,4 +3574,55 @@ Object.assign(zhTranslations, {
     '本应用没能把模型服务的密钥交给引擎：登录已失效，或者系统钥匙串未解锁。',
   'Sign in again, or unlock the system keyring, then send your message again.':
     '重新登录或解锁系统钥匙串后，再发一次消息。',
+});
+
+// dsh-rebase P1-7a (decision 118): the todo card and the goal bar above the
+// composer, the light rows a DSH timeline adds (turn heads, notices), and the
+// Ctrl+Enter message waiting for its turn.
+Object.assign(zhTranslations, {
+  Todo: '待办',
+  'Todo {{done}}/{{total}} done': '待办 {{done}}/{{total}} 已完成',
+  'Todo {{done}}/{{total}} · Doing: {{item}} ({{count}} in progress)':
+    '待办 {{done}}/{{total}} · 正在：{{item}} 等 {{count}} 项',
+  'Todo {{done}}/{{total}} · Doing: {{item}}': '待办 {{done}}/{{total}} · 正在：{{item}}',
+  'Todo {{done}}/{{total}} · Next: {{item}}': '待办 {{done}}/{{total}} · 下一项：{{item}}',
+  'Todo {{done}}/{{total}}': '待办 {{done}}/{{total}}',
+  Goal: '目标',
+  'Round {{round}}/{{max}} · In progress': '第 {{round}}/{{max}} 轮 · 进行中',
+  'Round {{round}}/{{max}} · Waiting for the next round': '第 {{round}}/{{max}} 轮 · 等待下一轮',
+  'Goal suspended': '目标已挂起',
+  'Resume by hand after reopening, rewinding or stopping': '重开会话、回退或打断后需要手动继续',
+  'Goal paused': '目标已暂停',
+  'Round {{round}}/{{max}}': '第 {{round}}/{{max}} 轮',
+  'Goal blocked': '目标受阻',
+  'Goal used all {{max}} rounds': '目标已用完 {{max}} 轮',
+  'Goal complete': '目标已完成',
+  '{{round}} rounds in all': '共 {{round}} 轮',
+  'The goal was not changed': '目标没有改动',
+  Pause: '暂停',
+  'Ask the assistant to raise the round limit, or clear the goal and start again':
+    '让助手调高轮数上限，或清除目标后重新开始',
+  'Put away': '收起',
+  'Goal menu': '目标菜单',
+  'Edit goal…': '编辑目标…',
+  'Copy goal text': '复制目标文本',
+  'Clear goal…': '清除目标…',
+  'Clear the goal?': '清除目标？',
+  'The goal stops and its bar goes away. The conversation and the work done so far stay as they are.':
+    '目标会停下，目标条随之消失。对话和已经完成的工作不受影响。',
+  'Blocked: {{reason}}': '受阻原因：{{reason}}',
+  'Set at {{created}} · Last changed {{updated}} · Round {{round}}/{{max}} used':
+    '创建于 {{created}} · 最后更新 {{updated}} · 已用 {{round}}/{{max}} 轮',
+  'Edit goal': '编辑目标',
+  'The assistant works toward the new objective from its next round.':
+    '助手会从下一轮起按新的目标继续。',
+  'Goal objective': '目标内容',
+  'Goal · round {{round}}/{{max}}': '目标 · 第 {{round}}/{{max}} 轮',
+  'Goal · round {{round}}': '目标 · 第 {{round}} 轮',
+  'A background task finished, carrying on': '后台任务已结束，自动继续',
+  'A subagent finished, carrying on': '子代理已完成，自动继续',
+  'A subagent sent a message': '子代理发来消息',
+  'Command failed': '命令失败',
+  'Hide the full text': '收起全文',
+  'Joins the running turn at its next step': '会在当前回合的下一步并入',
 });

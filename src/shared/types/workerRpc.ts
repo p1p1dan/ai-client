@@ -24,7 +24,12 @@ import {
 // explicit `.ts` applies to both for the reason stated above.
 import { isPromptCacheTtl, type PromptCacheTtl } from './promptCacheTtl.ts';
 import { isProviderIdleTimeoutMs } from './providerTimeout.ts';
-import type { PermissionDecisionId, RuntimeEvent } from './runtimeEvents';
+import type {
+  PermissionDecisionId,
+  RuntimeEvent,
+  SessionProjectionKey,
+  SessionProjectionPayload,
+} from './runtimeEvents';
 import {
   isPermissionGear,
   isRuntimePermissionSettings,
@@ -384,6 +389,52 @@ export const WORKER_COMPACT_REQUEST_TIMEOUT_MS = 60_000;
 
 export interface WorkerCompactResult {
   compacted: true;
+}
+
+/**
+ * dsh-rebase P1-7a (decisions 072 rule 2, 118): one DSH command run out of
+ * band — the goal bar's pause, resume, edit and clear are `/goal …` lines.
+ * Unlike a command send (`worker.send`, decision 113) it opens no turn, emits
+ * no event and is not refused while a turn runs: a pause is meant for the
+ * round that is running. Only a line naming a command the session offers is
+ * run; hidden and window-owned ones (`/compact`) are refused.
+ */
+export interface WorkerCommandPayload {
+  logicalSessionId: string;
+  /** The whole command line, `/name` first (`/goal pause`). */
+  line: string;
+}
+
+/** Longest command line `worker.command` takes (a goal objective can be long). */
+export const WORKER_COMMAND_LINE_MAX = 16_384;
+
+/**
+ * DSH's answer: `ok` with the text it printed, or not `ok` with its reason
+ * (a goal in the wrong state, say). Either way the command ran to its end.
+ */
+export type WorkerCommandResult = { ok: true; output?: string } | { ok: false; error: string };
+
+/** `worker.command`: the line names no command this session offers (or one it may not run). */
+export const WORKER_COMMAND_UNKNOWN = 'WORKER_COMMAND_UNKNOWN';
+/** `worker.command`: the command outlived {@link WORKER_COMMAND_BUDGET_MS} and was cancelled. */
+export const WORKER_COMMAND_TIMEOUT = 'WORKER_COMMAND_TIMEOUT';
+/** The worker's own budget for one command, inside Main's warm 10 s request timeout. */
+export const WORKER_COMMAND_BUDGET_MS = 8_000;
+
+/**
+ * dsh-rebase P1-7a (decisions 113, 118): the panels' current values, asked by
+ * a renderer that was not listening when the bridge sent them — a reload, a
+ * chat switched to, a session reopened with no event since (the bootstrap's
+ * snapshot waits for the first event, decision 113 rule 12). A read: no turn,
+ * no event, never refused for a running turn.
+ */
+export interface WorkerPanelsPayload {
+  logicalSessionId: string;
+}
+
+export interface WorkerPanelsResult {
+  /** One entry per key the host has; `goalActivation` always, `null` with no goal. */
+  projections: SessionProjectionPayload[];
 }
 
 export interface WorkerCommandsResult {
@@ -820,6 +871,8 @@ export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHist
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
 export type WorkerCommandsRequest = WorkerRpcRequest<'worker.commands', WorkerCommandsPayload>;
 export type WorkerCompactRequest = WorkerRpcRequest<'worker.compact', WorkerCompactPayload>;
+export type WorkerCommandRequest = WorkerRpcRequest<'worker.command', WorkerCommandPayload>;
+export type WorkerPanelsRequest = WorkerRpcRequest<'worker.panels', WorkerPanelsPayload>;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
 export type WorkerReloadRequest = WorkerRpcRequest<'worker.reload', WorkerReloadPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
@@ -1280,6 +1333,51 @@ export function isWorkerTreePayload(value: unknown): value is WorkerTreePayload 
 
 export function isWorkerCommandsPayload(value: unknown): value is WorkerCommandsPayload {
   return isLogicalSessionPayload(value);
+}
+
+/** A command line: `/` first, within {@link WORKER_COMMAND_LINE_MAX}; the worker parses the rest. */
+export function isWorkerCommandPayload(value: unknown): value is WorkerCommandPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.line === 'string' &&
+    value.line.startsWith('/') &&
+    value.line.length <= WORKER_COMMAND_LINE_MAX
+  );
+}
+
+export function isWorkerCommandResult(value: unknown): value is WorkerCommandResult {
+  if (!isRecord(value)) return false;
+  if (value.ok === true) return value.output === undefined || typeof value.output === 'string';
+  return value.ok === false && typeof value.error === 'string';
+}
+
+export function isWorkerPanelsPayload(value: unknown): value is WorkerPanelsPayload {
+  return isLogicalSessionPayload(value);
+}
+
+/** Every key `worker.panels` may answer; a key added to the union must be added here. */
+const PANEL_PROJECTION_KEYS: Readonly<Record<SessionProjectionKey, true>> = {
+  todos: true,
+  goal: true,
+  subagentCatalog: true,
+  goalActivation: true,
+};
+
+/**
+ * The entries of a `worker.panels` answer Main passes on: a known key with a
+ * view. A malformed answer costs the panels, never the session — the views
+ * themselves are read defensively by the renderer, as the live events are.
+ */
+export function sanitizeWorkerPanels(value: unknown): WorkerPanelsResult {
+  if (!isRecord(value) || !Array.isArray(value.projections)) return { projections: [] };
+  const projections = value.projections.filter(
+    (entry): entry is SessionProjectionPayload =>
+      isRecord(entry) &&
+      typeof entry.key === 'string' &&
+      Object.hasOwn(PANEL_PROJECTION_KEYS, entry.key) &&
+      'view' in entry
+  );
+  return { projections };
 }
 
 export function isWorkerCompactPayload(value: unknown): value is WorkerCompactPayload {

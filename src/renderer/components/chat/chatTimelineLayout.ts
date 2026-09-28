@@ -178,6 +178,20 @@ export function userBubbleClass(): string {
 }
 
 /**
+ * dsh-rebase P1-7a (decisions 093 rule 4, 111 rule 12, 118): a Ctrl+Enter
+ * message the running turn has been handed but has not taken in yet. The
+ * prototype draws no such bubble, so this is the smallest shape that reads
+ * as "not in the conversation yet": the same bubble and geometry, its edge
+ * dashed and its face left undrawn, so it cannot be mistaken for a message
+ * the model already has. It becomes an ordinary bubble where the turn takes
+ * it in (the echo replaces it), and a Stop before then leaves it for the next
+ * turn (decision 094).
+ */
+export function userBubbleAwaitingClass(): string {
+  return 'min-w-0 max-w-[80%] space-y-2 rounded-md rounded-tr-xs border border-dashed border-input bg-transparent px-3.5 py-2';
+}
+
+/**
  * The prompt text inside the bubble.
  *
  * `select-text` because `globals.css` sets `user-select: none` on `*`; without

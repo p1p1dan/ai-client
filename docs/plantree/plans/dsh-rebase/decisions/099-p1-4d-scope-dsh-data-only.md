@@ -6,6 +6,8 @@
 - [P1-4 方案 §4.4～4.7](../topics/p1-4-bridge-parity.md) 与[分片 04 §4、§5](../topics/p1-4-bridge-parity/04-turn-semantics.md)；
 - 决策 [031](031-session-projection-event.md)、[047](047-tool-classification-and-plan-mode.md)、[072](072-renderer-data-channels.md)、[081](081-loop-guard-implementation-choices.md)、[085](085-model-plan-wiring-implementation-choices.md)、[088](088-permission-gate-wiring-choices.md)「留给后续」。
 
+修订注记（2026-09-28，P1-7a）：第 11 条里归 P1-7b 的 `goalActivation` 已提前在 P1-7a 做了，原因是原型（验收基准）的目标条有「已挂起」一态；`jobs` 仍归 P1-7b（[决策 118](118-p1-7a-goal-todo-round-choices.md) 第 3、8、9 条，待审批）。
+
 修订注记（2026-09-28，P1-4d2）：第 9～12 条的实现取舍见[决策 113](113-p1-4d2-commands-and-projection-choices.md)（待审批）。其中补充：隐藏的三条命令输入后也不执行，照常作为提示词发出；带附件的命令行当提示词；`/compact` 由窗口的内置行提供，菜单里不再重复列；`session.projection` 的首次快照推迟到 bootstrap 之后的第一个事件之前发。
 
 ## 规则

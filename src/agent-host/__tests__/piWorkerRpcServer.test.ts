@@ -94,6 +94,8 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     tree: notCalled('tree') as PiWorkerRuntime['tree'],
     commands: notCalled('commands') as PiWorkerRuntime['commands'],
     compact: notCalled('compact') as PiWorkerRuntime['compact'],
+    command: notCalled('command') as PiWorkerRuntime['command'],
+    panels: notCalled('panels') as PiWorkerRuntime['panels'],
     rewind: notCalled('rewind') as PiWorkerRuntime['rewind'],
     reload: notCalled('reload') as PiWorkerRuntime['reload'],
     fork: notCalled('fork') as PiWorkerRuntime['fork'],
@@ -837,6 +839,83 @@ describe('PiWorkerRpcServer — worker.commands', () => {
     expect(messages[0]).toMatchObject({
       requestId: 'cmds',
       error: { code: 'WORKER_INVALID_PAYLOAD' },
+    });
+  });
+});
+
+/**
+ * dsh-rebase P1-7a (decision 118): the goal bar's out-of-band command and the
+ * panels' rehydration. `worker.panels` is a read the renderer makes for every
+ * chat it shows, so an un-bootstrapped worker answers no panels, as
+ * `worker.commands` answers an empty menu; `worker.command` acts on a session
+ * and needs one.
+ */
+describe('PiWorkerRpcServer — worker.command and worker.panels (P1-7a)', () => {
+  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime(overrides),
+    });
+    return { messages, server };
+  }
+  const bootstrap = request('bootstrap', 'worker.bootstrap', {
+    logicalSessionId: 'logical-1',
+    cwd: '/repo',
+  });
+
+  it('[P7A-RPC-CMD] routes a command line to the runtime and returns its answer', async () => {
+    const command = vi.fn(async () => ({ ok: false as const, error: 'No goal is currently set' }));
+    const { messages, server } = serverWith({ command });
+    server.receive(bootstrap);
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('cmd', 'worker.command', { logicalSessionId: 'logical-1', line: '/goal pause' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(command).toHaveBeenCalledWith({ logicalSessionId: 'logical-1', line: '/goal pause' });
+    expect(messages[1]).toMatchObject({
+      requestId: 'cmd',
+      result: { ok: false, error: 'No goal is currently set' },
+    });
+  });
+
+  it('[P7A-RPC-CMD-PAYLOAD] refuses a line that is not a command, and an un-bootstrapped worker', async () => {
+    const { messages, server } = serverWith();
+    server.receive(request('bad', 'worker.command', { logicalSessionId: 'logical-1', line: 'hi' }));
+    server.receive(
+      request('early', 'worker.command', { logicalSessionId: 'logical-1', line: '/goal' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages[0]).toMatchObject({
+      requestId: 'bad',
+      error: { code: 'WORKER_INVALID_PAYLOAD' },
+    });
+    expect(messages[1]).toMatchObject({
+      requestId: 'early',
+      error: { code: 'WORKER_NOT_BOOTSTRAPPED' },
+    });
+  });
+
+  it('[P7A-RPC-PANELS] routes to the runtime; an un-bootstrapped worker answers no panels', async () => {
+    const panels = vi.fn(async () => ({
+      projections: [{ key: 'todos' as const, view: null }],
+    }));
+    const { messages, server } = serverWith({ panels });
+    server.receive(request('early', 'worker.panels', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({ requestId: 'early', result: { projections: [] } });
+    expect(panels).not.toHaveBeenCalled();
+
+    server.receive(bootstrap);
+    server.receive(request('panels', 'worker.panels', { logicalSessionId: 'logical-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(3));
+    expect(messages[2]).toMatchObject({
+      requestId: 'panels',
+      result: { projections: [{ key: 'todos', view: null }] },
     });
   });
 });

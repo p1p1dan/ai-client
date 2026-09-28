@@ -451,6 +451,13 @@ export const IPC_CHANNELS = {
   CHAT_GET_SLASH_COMMANDS: 'chat:getSlashCommands',
   /** R02-c — manual context compaction. */
   CHAT_COMPACT_SESSION: 'chat:compactSession',
+  /**
+   * dsh-rebase P1-7a — one engine command run out of band (the goal bar's
+   * `/goal pause|resume|edit|clear`): no turn, not refused while one runs.
+   */
+  CHAT_RUN_SESSION_COMMAND: 'chat:runSessionCommand',
+  /** dsh-rebase P1-7a — the goal bar's and todo card's current projections (rehydration). */
+  CHAT_GET_SESSION_PANELS: 'chat:getSessionPanels',
   CHAT_REWIND_SESSION: 'chat:rewindSession',
   CHAT_FORK_SESSION: 'chat:forkSession',
   /** Pi-only model catalog; no provider credential or base URL crosses IPC. */

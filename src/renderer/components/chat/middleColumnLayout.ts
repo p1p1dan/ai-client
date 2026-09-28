@@ -1208,7 +1208,7 @@ export function composerPlaceholder(
     // field the user is already typing in — so the busy copy is the only place
     // it can be discovered. Said here rather than globally: it names a key that
     // only does anything while a turn is running.
-    return t('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
+    return t('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
   }
   // U28 removed a `!hasSession -> "Select a session in the left nav"` branch
   // here. It named a prerequisite that no longer exists: `runSend` creates the

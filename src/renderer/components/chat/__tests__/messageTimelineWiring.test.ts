@@ -1139,8 +1139,11 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     expect(classNameExpressionOf(jsxNodeAt('UserBubble', ['article']))).toBe(
       '{userBubbleRowClass()}'
     );
+    // dsh-rebase P1-7a (decision 118): a Ctrl+Enter message the turn has not
+    // taken in yet mounts its own box class (dashed, faceless) — still a
+    // layout function, never an inline literal.
     expect(classNameExpressionOf(jsxNodeAt('UserBubble', ['article', 'div']))).toBe(
-      '{userBubbleClass()}'
+      '{awaitingDelivery ? userBubbleAwaitingClass() : userBubbleClass()}'
     );
     // ③ the prose that has to break — the other half of the cap: a flex item's
     //    `min-width` resolves to `auto` and outranks `max-width`, so without a

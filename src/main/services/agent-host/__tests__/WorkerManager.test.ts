@@ -2966,6 +2966,68 @@ describe('WorkerManager slash commands', () => {
 });
 
 /**
+ * dsh-rebase P1-7a (decision 118): the goal bar's out-of-band command and the
+ * panels' rehydration. The command acts on a ready session and passes the
+ * engine's answer through; the panels are a read that answers nothing, not an
+ * error, for a session with no ready slot.
+ */
+describe('WorkerManager goal bar and panels (P1-7a)', () => {
+  it('[P7A-WM-CMD] forwards a command line to the ready slot and passes its answer on', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.command' ? { ok: false, error: 'No goal is currently set.' } : {}
+    );
+
+    await expect(
+      h.manager.runSessionCommand({ sessionId: 's1', line: '/goal pause', ownerWebContentsId: 11 })
+    ).resolves.toEqual({ ok: false, error: 'No goal is currently set.' });
+    expect(record?.request).toHaveBeenCalledWith('worker.command', {
+      logicalSessionId: 's1',
+      line: '/goal pause',
+    });
+  });
+
+  it('[P7A-WM-CMD-REFUSED] no ready slot, or a malformed answer, is an error', async () => {
+    const h = createHarness();
+    await expect(
+      h.manager.runSessionCommand({ sessionId: 'never-started', line: '/goal pause' })
+    ).rejects.toMatchObject({ code: 'session_not_found' });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async () => ({ ok: 'maybe' }));
+    await expect(
+      h.manager.runSessionCommand({ sessionId: 's1', line: '/goal pause' })
+    ).rejects.toMatchObject({ code: 'worker_command_failed' });
+  });
+
+  it('[P7A-WM-PANELS] reads the ready slot, keeps known keys; no slot answers no panels', async () => {
+    const h = createHarness();
+    await expect(h.manager.getSessionPanels({ sessionId: 'never-started' })).resolves.toEqual({
+      projections: [],
+    });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.panels'
+        ? {
+            projections: [
+              { key: 'todos', view: [{ content: 'a', status: 'pending' }] },
+              { key: 'nonsense', view: 1 },
+            ],
+          }
+        : {}
+    );
+
+    await expect(h.manager.getSessionPanels({ sessionId: 's1' })).resolves.toEqual({
+      projections: [{ key: 'todos', view: [{ content: 'a', status: 'pending' }] }],
+    });
+    expect(record?.request).toHaveBeenCalledWith('worker.panels', { logicalSessionId: 's1' });
+  });
+});
+
+/**
  * P5-2-3 — `preview.requested` is answered by Main, not by a card.
  *
  * The preview surface is an Electron window, so this event is the one blocking

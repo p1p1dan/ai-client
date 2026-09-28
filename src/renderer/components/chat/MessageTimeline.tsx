@@ -4,6 +4,7 @@ import {
   ArrowRightLeft,
   Check,
   ChevronRight,
+  Clock3,
   Copy,
   Eye,
   FileQuestion,
@@ -68,6 +69,7 @@ import {
   turnStatusToneClass,
   turnWorkGroupSummaryClass,
   turnWorkZoneClass,
+  userBubbleAwaitingClass,
   userBubbleClass,
   userBubbleRowClass,
   userBubbleTextClass,
@@ -82,6 +84,8 @@ import {
   type TurnItem,
   type TurnSegment,
 } from './chatTurn';
+import { AutoTurnHead, DshNoticeRow } from './DshTimelineRows';
+import { dshNoticeRowView } from './dshTimelineRowModel';
 import { FailureContinueButton } from './FailureContinueButton';
 import {
   deriveHistoryNotice,
@@ -511,7 +515,8 @@ export function MessageTimeline({
   const promptNavItems = useMemo<PromptNavItem[]>(
     () =>
       turns.flatMap((turn) => {
-        if (!turn.user) return [];
+        // P1-7a: a turn the engine started has nothing typed to jump back to.
+        if (!turn.user || turn.user.origin) return [];
         const text = turn.user.blocks
           .flatMap((block) => (block.type === 'text' && block.text ? [block.text] : []))
           .join('\n');
@@ -1286,7 +1291,8 @@ function UserBubble({ message }: { message: ChatMessage }) {
   const textBlocks = message.blocks.filter((block) => block.type === 'text');
   const pending = isPendingUserMessage(message);
   // Decision 093: a Ctrl+Enter message the running turn has not taken in yet.
-  // Minimal on purpose; its final look is P1-7's.
+  // P1-7a (decision 118): a dashed, faceless bubble with a clock, not a spinner
+  // — it is waiting for the turn's next step, not being sent.
   const awaitingDelivery = isAwaitingDeliveryMessage(message);
 
   return (
@@ -1296,8 +1302,11 @@ function UserBubble({ message }: { message: ChatMessage }) {
     // full reading width, no face, no edge — and that asymmetry is the whole
     // role signal now that the answer container has retired (see
     // `chatTimelineLayout.ts`'s note where it used to be defined).
-    <article className={userBubbleRowClass()}>
-      <div className={userBubbleClass()}>
+    <article
+      className={userBubbleRowClass()}
+      data-awaiting-delivery={awaitingDelivery || undefined}
+    >
+      <div className={awaitingDelivery ? userBubbleAwaitingClass() : userBubbleClass()}>
         {/* Round-2 P0 (Chat attachments): read-only echo of what this turn sent,
             metadata only (no bytes, no size — never threaded over the wire).
             Visual language mirrors ChatComposer's AttachmentChip (icon +
@@ -1347,8 +1356,16 @@ function UserBubble({ message }: { message: ChatMessage }) {
         </div>
         {pending && (
           <div className="mt-1 flex items-center justify-end gap-1 text-meta text-muted-foreground">
-            <Spinner className="size-3 shrink-0" />
-            <span>{awaitingDelivery ? t('Awaiting delivery') : t('Sending…')}</span>
+            {awaitingDelivery ? (
+              <Clock3 className="size-3 shrink-0" aria-hidden />
+            ) : (
+              <Spinner className="size-3 shrink-0" />
+            )}
+            <span
+              title={awaitingDelivery ? t('Joins the running turn at its next step') : undefined}
+            >
+              {awaitingDelivery ? t('Awaiting delivery') : t('Sending…')}
+            </span>
           </div>
         )}
       </div>
@@ -2432,7 +2449,19 @@ const ChatTurn = memo(function ChatTurn({
           "you can always see which prompt you are reading the reply to" — is
           paid for instead by the reading rhythm: 20px between turns against
           12px / 8px inside one. */}
-      {turn.user && <UserBubble message={turn.user} />}
+      {/* P1-7a (decision 118): a turn the engine started by itself (a goal
+          round, a background task's or a subagent's wake-up) opens with a
+          light head, not a bubble — nobody typed it. It still opens the turn,
+          so the clock and the work group count per round. */}
+      {turn.user &&
+        (turn.user.origin ? (
+          <AutoTurnHead
+            message={turn.user}
+            startedAt={getMetadata(turn.user.id)?.startedAt ?? turn.user.timestamp ?? null}
+          />
+        ) : (
+          <UserBubble message={turn.user} />
+        ))}
       <div className={turnBodyClass()}>
         {/* Decision 037: the turn's clock, first line, whenever no fold head is
             going to carry it. Above `workSections` rather than woven into them
@@ -2935,8 +2964,12 @@ function TurnItemView({
       return <QuestionCard variant="frozen" block={item.block} />;
     }
 
-    case 'notice':
-      return <NoticeMessage message={item.message} />;
+    case 'notice': {
+      // P1-7a: a DSH notice (a task's or a subagent's account, a command's
+      // answer) is one light line; every other notice keeps its Alert.
+      const row = dshNoticeRowView(item.message);
+      return row ? <DshNoticeRow view={row} /> : <NoticeMessage message={item.message} />;
+    }
 
     default:
       return null;

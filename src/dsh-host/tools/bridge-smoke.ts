@@ -862,6 +862,31 @@ async function main() {
     );
     // P1-4d2: a known command line runs as DSH's command, with no model turn.
     await runTurn(h, chH, INS_SKL_SESSION, 'COMMAND-GOAL', '/goal');
+    // P1-7a (decision 118): the panels a reloaded renderer asks for, and the
+    // goal bar's out-of-band command. No goal here: `/goal` answers its usage,
+    // `/goal pause` is DSH's own refusal (`ok: false`), `/plan` is not run out
+    // of band; none of the three puts an event on the channel.
+    const eventsBeforePanels = h.client.events(chH).length;
+    report.panels = await h.client.request(chH, 'worker.panels', {
+      logicalSessionId: INS_SKL_SESSION,
+    });
+    report.commandShow = await h.client.request(chH, 'worker.command', {
+      logicalSessionId: INS_SKL_SESSION,
+      line: '/goal',
+    });
+    report.commandPause = await h.client.request(chH, 'worker.command', {
+      logicalSessionId: INS_SKL_SESSION,
+      line: '/goal pause',
+    });
+    const planOutOfBand = await h.client.call(chH, 'worker.command', {
+      logicalSessionId: INS_SKL_SESSION,
+      line: '/plan',
+    });
+    report.commandPlan = {
+      ok: planOutOfBand.ok,
+      code: (planOutOfBand.error as Message | undefined)?.code,
+    };
+    report.panelsCommandEvents = h.client.events(chH).length - eventsBeforePanels;
     await closeSession(h, chH);
     await stopHost(h);
 
@@ -1217,6 +1242,27 @@ async function main() {
       commandGoal.sequence?.includes('message.started user') === true &&
       commandGoal.sequence.includes('custom.message') &&
       !commandGoal.sequence.includes('message.started assistant'),
+    // P1-7a (decision 118): `worker.panels` answers the three DSH keys and the
+    // bridge's `goalActivation` (null: no goal); `worker.command` runs `/goal`
+    // out of band with DSH's text either way, refuses `/plan`, and neither RPC
+    // puts an event on the channel.
+    panelsAnswerCurrentValues:
+      JSON.stringify(
+        (((report.panels as Message | undefined)?.projections as Message[]) ?? []).map(
+          (entry) => entry.key
+        )
+      ) === '["todos","goal","subagentCatalog","goalActivation"]' &&
+      (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
+        (entry) => entry.key === 'goalActivation'
+      )?.view === null,
+    commandRunsOutOfBand:
+      (report.commandShow as Message | undefined)?.ok === true &&
+      String((report.commandShow as Message | undefined)?.output).includes('No goal') &&
+      (report.commandPause as Message | undefined)?.ok === false &&
+      typeof (report.commandPause as Message | undefined)?.error === 'string' &&
+      (report.commandPlan as Message | undefined)?.ok === false &&
+      (report.commandPlan as Message | undefined)?.code === 'WORKER_COMMAND_UNKNOWN' &&
+      report.panelsCommandEvents === 0,
     // P1-10d (decisions 060, 115): the pilot plugin is allowlisted but off by
     // default — reported disabled, none of its tools offered to the model...
     pilotOffByDefault:

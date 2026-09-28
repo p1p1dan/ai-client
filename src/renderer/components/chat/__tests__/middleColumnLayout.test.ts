@@ -1297,7 +1297,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 0,
         })
-      ).toBe('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
+      ).toBe('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
 
       // U28: no session is no longer a blocker with its own copy — the first
       // send creates one. With `unbound` set (which is what ChatComposer passes
@@ -1390,7 +1390,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 0,
       })
-    ).toBe('Agent Host is running — Enter queues, Ctrl+Enter interrupts after this turn…');
+    ).toBe('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
   });
 
   it('T-19: a non-empty queue reports its count instead of the busy copy', () => {

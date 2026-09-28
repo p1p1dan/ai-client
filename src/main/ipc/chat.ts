@@ -927,6 +927,43 @@ export function registerChatHandlers(): void {
     }
   );
 
+  /**
+   * dsh-rebase P1-7a — the goal bar's buttons. A mutation of a live session,
+   * so it is claimed for the sender like `/compact`; unlike `/compact` it is
+   * not refused mid-turn (the worker and `WorkerManager.runSessionCommand`
+   * say why).
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_RUN_SESSION_COMMAND,
+    async (
+      e,
+      payload: { sessionId: string; line: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.runSessionCommand>>> => {
+      await requireLiveSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      return workerManager.runSessionCommand({
+        sessionId: payload.sessionId,
+        line: payload.line,
+        ownerWebContentsId,
+      });
+    }
+  );
+
+  /**
+   * dsh-rebase P1-7a — the panels' rehydration. A read, asked for every chat
+   * the renderer shows, so like the command menu above it neither requires a
+   * live session nor claims one: a chat with no running slot answers no
+   * panels.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_GET_SESSION_PANELS,
+    async (
+      _e,
+      payload: { sessionId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.getSessionPanels>>> =>
+      workerManager.getSessionPanels({ sessionId: payload.sessionId })
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SESSION_TREE,
     async (

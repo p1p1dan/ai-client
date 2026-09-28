@@ -34,6 +34,7 @@ import type {
 } from '@shared/types/workerRpc';
 import {
   isWorkerAcceptForkResult,
+  isWorkerCommandResult,
   isWorkerCommandsResult,
   isWorkerDiscardForkResult,
   isWorkerForkResult,
@@ -50,11 +51,14 @@ import {
   normalizeWorkerCapabilities,
   STAGED_FORK_MARKER_SUFFIX,
   sanitizeWorkerCommandRows,
+  sanitizeWorkerPanels,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RETRY_UNAVAILABLE,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerCapabilityInventory,
+  type WorkerCommandPayload,
+  type WorkerCommandResult,
   type WorkerCommandsPayload,
   type WorkerCommandsResult,
   type WorkerCompactPayload,
@@ -67,6 +71,8 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerPanelsPayload,
+  type WorkerPanelsResult,
   type WorkerPermissionRespondPayload,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondPayload,
@@ -1698,6 +1704,52 @@ export class WorkerManager {
       throw new WorkerManagerError('worker_compact_failed', 'Pi worker could not compact');
     }
     return result;
+  }
+
+  /**
+   * dsh-rebase P1-7a (decisions 072 rule 2, 118) — one engine command run out
+   * of band: the goal bar's pause, resume, edit and clear.
+   *
+   * A mutation, so the session must be ready and is claimed by the window —
+   * but, unlike `compactSession`, NOT refused while a turn runs: pausing the
+   * goal round that is running is the point, and the engine cancels that
+   * round itself. The worker bounds the command inside the warm request
+   * timeout; its answer (DSH's text, `ok` or not) goes back as it came.
+   */
+  async runSessionCommand(input: {
+    sessionId: string;
+    line: string;
+    ownerWebContentsId?: number;
+  }): Promise<WorkerCommandResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const result = await entry.slot?.request<WorkerCommandResult, WorkerCommandPayload>(
+      'worker.command',
+      { logicalSessionId: entry.logicalSessionId, line: input.line }
+    );
+    if (!isWorkerCommandResult(result)) {
+      throw new WorkerManagerError('worker_command_failed', 'The worker could not run the command');
+    }
+    return result;
+  }
+
+  /**
+   * dsh-rebase P1-7a (decisions 113 rule 12, 118) — the panels' current
+   * projections, for a renderer that missed the events (a reload, a chat
+   * switched to, a session reopened with no event since).
+   *
+   * A read, like `getSlashCommands`: no claim, no idle check, and a session
+   * without a ready slot answers no panels rather than an error — the
+   * renderer asks for every chat it shows, and most of them are not running.
+   */
+  async getSessionPanels(input: { sessionId: string }): Promise<WorkerPanelsResult> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry || entry.state !== 'ready' || !entry.slot) return { projections: [] };
+    const result = await entry.slot.request<WorkerPanelsResult, WorkerPanelsPayload>(
+      'worker.panels',
+      { logicalSessionId: entry.logicalSessionId }
+    );
+    return sanitizeWorkerPanels(result);
   }
 
   async getSessionTree(input: {

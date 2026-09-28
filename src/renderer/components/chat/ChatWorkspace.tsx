@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
+import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSettingsStore } from '@/stores/settings';
@@ -24,6 +25,7 @@ import {
 import { PendingPermissionDock } from './PendingPermissionDock';
 import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
+import { SessionPanelStrips } from './SessionPanelStrips';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -208,6 +210,13 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
     return useSubagentActivityStore.getState().init();
   }, []);
 
+  useEffect(() => {
+    // dsh-rebase P1-7a: the goal bar's and the todo card's store, same latch
+    // discipline — a `session.projection` that lands before either strip
+    // renders must still reach it.
+    return useSessionPanelsStore.getState().init();
+  }, []);
+
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).
   useEffect(() => {
@@ -289,6 +298,10 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               jumpToBottomRequest={sendJumpRequest}
             />
           )}
+          {/* dsh-rebase P1-7a (decisions 068 / 109): the todo card and the
+              goal bar, above the answerable cards, which stay nearest the
+              composer. Session mode only: an empty chat has neither. */}
+          {renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
           {/* F5: the only answerable copy of a live question. Above the
               composer rather than in the timeline so it cannot scroll away
               while the session waits on it. */}

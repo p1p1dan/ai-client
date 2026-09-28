@@ -1191,11 +1191,21 @@ export interface SubagentActivityEvent extends RuntimeEventBase {
  * projections the renderer draws, forwarded as DSH computes them
  * (`ctx.sessionProjections`). Only these three keys cross the bridge;
  * `permissions`, `sandboxMode` and `plan` are constant or off in our
- * composition, and the bridge-made `goalActivation` / `jobs` belong to P1-7b.
+ * composition. The keys the bridge makes itself are {@link BRIDGE_PROJECTION_KEYS}.
  */
 export const SESSION_PROJECTION_KEYS = ['todos', 'goal', 'subagentCatalog'] as const;
 
-export type SessionProjectionKey = (typeof SESSION_PROJECTION_KEYS)[number];
+/**
+ * dsh-rebase decision 072 rule 1, P1-7a (decision 118): keys no DSH
+ * projection unit produces — the bridge makes them. `goalActivation` is the
+ * process-local armed state DSH's `goal` projection deliberately leaves out
+ * (`goal/activation-changed`, `ctx.goals.get`). P1-7b adds `jobs`.
+ */
+export const BRIDGE_PROJECTION_KEYS = ['goalActivation'] as const;
+
+export type SessionProjectionKey =
+  | (typeof SESSION_PROJECTION_KEYS)[number]
+  | (typeof BRIDGE_PROJECTION_KEYS)[number];
 
 /** One entry of `todos` (dsh-tool-todo's `TodoItem`): the list is replaced whole on every write. */
 export interface DshTodoItem {
@@ -1227,17 +1237,35 @@ export interface DshSubagentCatalogEntry {
   label?: string;
 }
 
+/**
+ * `goalActivation` (bridge-made, P1-7a): whether this live process may
+ * continue the current goal by itself. `armed` only while DSH's round driver
+ * would start the next round; a resumed, rewound or forked session, a host
+ * restart and a Stop outside a goal round all leave an active goal
+ * `disarmed` until a person resumes it. It names the goal it belongs to:
+ * read it only against the `goal` projection of the same `goalId`.
+ */
+export interface DshGoalActivation {
+  goalId: string;
+  revision: number;
+  activation: 'armed' | 'disarmed';
+}
+
 /** The whole current value of one key; `null` before the first write (todos) or with no goal. */
 export type SessionProjectionPayload =
   | { key: 'todos'; view: DshTodoItem[] | null }
   | { key: 'goal'; view: DshGoalProjection | null }
-  | { key: 'subagentCatalog'; view: DshSubagentCatalogEntry[] };
+  | { key: 'subagentCatalog'; view: DshSubagentCatalogEntry[] }
+  | { key: 'goalActivation'; view: DshGoalActivation | null };
 
 /**
  * A DSH session projection's current value. A later event of the same key
  * replaces the earlier one. The bridge sends the three keys once ahead of the
- * first event after a bootstrap (or right after a rewind), then each change.
- * Consumed by P1-7; until then every reducer ignores it.
+ * first event after a bootstrap (or right after a rewind), then each change;
+ * `goalActivation` goes with them only while the session has a goal, and then
+ * on every activation edge. A renderer that missed them (a reload, a session
+ * reopened with no event since) asks `worker.panels` for the same values.
+ * Consumed by the renderer's `sessionPanels` store (P1-7a).
  */
 export interface SessionProjectionEvent extends RuntimeEventBase {
   type: 'session.projection';
