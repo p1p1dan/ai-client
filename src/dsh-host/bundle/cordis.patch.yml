@@ -103,3 +103,11 @@
     # opened. Always on; inert only when the host has no IPC channel.
     - id: aiclient-bridge
       name: '@aiclient/dsh-app/bridge'
+
+    # P1-6b (decisions 041, 042): ai-client's permission gate. Routes every
+    # tool call to the gate the bridge attached for its chat session and
+    # refuses calls nobody attached, so it stays off until the bridge attaches
+    # gates (P1-6b part 2).
+    - id: aiclient-permissions
+      name: '@aiclient/dsh-app/permissions'
+      disabled: true

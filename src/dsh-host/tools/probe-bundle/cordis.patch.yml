@@ -27,3 +27,9 @@
     # reason: no probe code ships).
     - id: aiclient-probe-measure
       name: '@aiclient/dsh-probe/measure'
+
+    # dsh-rebase P1-6b pre-work experiments (tools/perm-experiments.ts): raw
+    # listeners on the permission seams. Off unless the driver asks for it.
+    - id: aiclient-perm-experiment
+      name: '@aiclient/dsh-probe/perm-experiment'
+      disabled: !!js "process.env.AICLIENT_PERM_EXPERIMENT !== '1'"

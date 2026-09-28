@@ -191,7 +191,7 @@ describe('electron-builder.yml (C4)', () => {
 describe('DSH host package dependency boundary', () => {
   const pin = dshPackage.dependencies['@deepseek-ai/dsh-base'];
 
-  it('declares exactly the host, the bundle and pnpm', () => {
+  it("declares exactly the host, the bundle, pnpm and the permission row's bash parser", () => {
     expect(Object.keys(dshPackage.dependencies).sort()).toEqual([
       '@aiclient/dsh-app',
       '@deepseek-ai/cordis',
@@ -204,6 +204,9 @@ describe('DSH host package dependency boundary', () => {
       '@deepseek-ai/dsh-launch-environment',
       '@deepseek-ai/dsh-system-prompt',
       'pnpm',
+      // P1-6b: wasm only (web-tree-sitter runtime + bash grammar), both MIT.
+      'tree-sitter-bash',
+      'web-tree-sitter',
     ]);
     expect(dshPackage.devDependencies).toBeUndefined();
     expect(dshPackage.dependencies['@aiclient/dsh-app']).toBe('file:./bundle');

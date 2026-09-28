@@ -115,7 +115,7 @@ async function compile(outDir) {
   const bridges = [];
   for (const item of BRIDGE_ENTRIES) {
     const result = await esbuild.build(bridgeBuildOptions(sourceDir, outDir, item));
-    const verdict = checkBridgeMetafile(result.metafile, repoRoot);
+    const verdict = checkBridgeMetafile(result.metafile, repoRoot, item);
     if (verdict.failures.length > 0) throw new Error(verdict.failures.join('; '));
     bridges.push({ out: item.out, inputs: verdict.inputs.length, externals: verdict.externals });
   }

@@ -46,13 +46,33 @@ export const HOST_ENTRY = { entry: 'host.ts', out: 'host.js' };
 export const HOST_INPUTS = ['src/dsh-host/host.ts', 'src/dsh-host/lib/'];
 /** npm packages host.js imports at run time, from the artifact's node_modules. */
 export const HOST_EXTERNALS = ['@deepseek-ai/dsh-app-boot', '@deepseek-ai/dsh-launch-environment'];
-/** The product bundle's one row (P1-3a, decision 019: the shared host's only bridge). */
-export const BRIDGE_ENTRIES = [
-  { entry: 'bridge/plugin.ts', out: 'bundle/lib/bridge.js', row: 'aiclient-bridge' },
-];
-
-/** npm packages a bundled bridge may import at run time; everything else must be bundled. */
+/** npm packages the bridge row may import at run time; everything else must be bundled. */
 export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm'];
+
+/**
+ * The product bundle's own rows, each an esbuild bundle of our TypeScript:
+ * the shared host's only bridge (P1-3a, decision 019) and the permission gate
+ * (P1-6b, decision 042). `inputs` are the source prefixes a row may take in,
+ * `externals` the npm packages it may import at run time.
+ */
+export const BRIDGE_ENTRIES = [
+  {
+    entry: 'bridge/plugin.ts',
+    out: 'bundle/lib/bridge.js',
+    row: 'aiclient-bridge',
+    inputs: ['src/dsh-host/bridge/', 'src/agent-host/', 'src/shared/'],
+    externals: BRIDGE_EXTERNALS,
+  },
+  {
+    entry: 'permissions/plugin.ts',
+    out: 'bundle/lib/permissions.js',
+    row: 'aiclient-permissions',
+    // The pure library (src/shared/permissions) and the bundled policy table it reads.
+    inputs: ['src/dsh-host/permissions/', 'src/shared/', 'src/agent-host/permissionPolicy.mjs'],
+    // Loaded on the first bash call; its wasm and the bash grammar's resolve beside it.
+    externals: ['web-tree-sitter'],
+  },
+];
 
 /** The artifact budget (decision 014). The target is reported, the ceilings fail the build. */
 export const DSH_HOST_BUDGET = {
@@ -230,18 +250,12 @@ export function bridgeBuildOptions(sourceDir, outDir, item) {
 }
 
 /**
- * What a bridge bundle took in and left out: inputs must be our own sources
- * (src/dsh-host/bridge, src/agent-host, src/shared), imports left external
- * must be Node built-ins or `BRIDGE_EXTERNALS`.
+ * What a row bundle took in and left out: inputs must be the entry's own
+ * sources (`item.inputs`), imports left external must be Node built-ins or
+ * `item.externals`. Defaults to the bridge row.
  */
-export function checkBridgeMetafile(metafile, repoRoot) {
-  return checkMetafile(
-    'bridge bundle',
-    metafile,
-    repoRoot,
-    ['src/dsh-host/bridge/', 'src/agent-host/', 'src/shared/'],
-    BRIDGE_EXTERNALS
-  );
+export function checkBridgeMetafile(metafile, repoRoot, item = BRIDGE_ENTRIES[0]) {
+  return checkMetafile('bridge bundle', metafile, repoRoot, item.inputs, item.externals);
 }
 
 /** host.js: host.ts and its lib/ taken in, only `HOST_EXTERNALS` left to npm. */
@@ -433,6 +447,13 @@ export function pruneReason(rel, kind, target) {
   }
   if (/(^|\/)node_modules\/@koromix\/koffi-linux-[^/]+\/musl_[^/]+$/.test(rel) && kind === 'dir') {
     return 'koffi musl build';
+  }
+  // P1-6b: the permission row loads the bash grammar's wasm, never its native binding.
+  if (/(^|\/)node_modules\/tree-sitter-bash\/(prebuilds|src)$/.test(rel) && kind === 'dir') {
+    return 'tree-sitter-bash native binding (the wasm grammar is used)';
+  }
+  if (/(^|\/)node_modules\/web-tree-sitter\/debug$/.test(rel) && kind === 'dir') {
+    return 'web-tree-sitter debug build';
   }
 
   if (kind === 'dir') return null;
@@ -671,6 +692,8 @@ export const LICENSE_FILE_REQUIRED = [
   'sharp',
   'pnpm',
   '@vscode/ripgrep',
+  'web-tree-sitter',
+  'tree-sitter-bash',
 ];
 
 function licenseOf(manifest) {
@@ -757,6 +780,10 @@ export function requiredFiles(target) {
     // decision 016: plugin installs run this, never a pnpm from PATH.
     'node_modules/pnpm/bin/pnpm.mjs',
     'node_modules/pnpm/dist/pnpm.mjs',
+    // P1-6b: the permission row and its bash parser, read by path on the first bash call.
+    'node_modules/@aiclient/dsh-app/lib/permissions.js',
+    'node_modules/web-tree-sitter/web-tree-sitter.wasm',
+    'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
   ];
   // libvips: the library list and versions travel with the binaries (licenses shard §2.3).
   if (target.platform === 'win32')

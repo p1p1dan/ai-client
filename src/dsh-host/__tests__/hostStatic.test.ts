@@ -56,24 +56,41 @@ describe('host.ts IPC (P1-3a, decision 019)', () => {
   });
 });
 
-describe('the product bundle has one bridge row, always on', () => {
+describe('the product bundle has one bridge row, always on, and the permission row', () => {
   const patch = read('bundle', 'cordis.patch.yml');
   const manifest = JSON.parse(read('bundle', 'package.json')) as {
     exports: Record<string, string>;
   };
+  /** One inserted row: from its `- id:` line up to the next row or the end. */
+  const rowOf = (id: string) => {
+    const start = patch.indexOf(`- id: ${id}\n`);
+    const end = patch.indexOf('\n    - id:', start + 1);
+    return patch.slice(start, end < 0 ? undefined : end + 1).replace(/\n\s*(#[^\n]*\n\s*)*$/, '\n');
+  };
 
   it('composes aiclient-bridge without a disabled switch', () => {
-    const row = patch.slice(patch.indexOf('- id: aiclient-bridge'));
-    expect(row).toMatch(/^- id: aiclient-bridge\n\s+name: '@aiclient\/dsh-app\/bridge'\n?$/);
-    expect(patch.match(/- id: aiclient-/g)).toEqual(['- id: aiclient-']);
+    expect(rowOf('aiclient-bridge')).toMatch(
+      /^- id: aiclient-bridge\n\s+name: '@aiclient\/dsh-app\/bridge'\n?$/
+    );
+    expect(patch.match(/- id: aiclient-[a-z-]+/g)).toEqual([
+      '- id: aiclient-bridge',
+      '- id: aiclient-permissions',
+    ]);
   });
 
-  it('exports only the bridge row besides its patch', () => {
+  it('composes aiclient-permissions off until the bridge attaches gates (P1-6b)', () => {
+    expect(rowOf('aiclient-permissions')).toMatch(
+      /^- id: aiclient-permissions\n\s+name: '@aiclient\/dsh-app\/permissions'\n\s+disabled: true\n?$/
+    );
+  });
+
+  it('exports only its rows besides its patch', () => {
     expect(Object.keys(manifest.exports).sort()).toEqual([
       '.',
       './bridge',
       './cordis.patch.yml',
       './package.json',
+      './permissions',
     ]);
   });
 });

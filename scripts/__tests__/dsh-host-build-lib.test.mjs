@@ -321,6 +321,26 @@ describe('pruneReason removes the B-tier payload', () => {
     expect(pruneReason('node_modules/a/.bin', 'dir', LINUX)).not.toBeNull();
   });
 
+  it("keeps the permission row's wasm and drops tree-sitter's native payload (P1-6b)", () => {
+    for (const target of [LINUX, MAC, WIN]) {
+      for (const rel of [
+        'node_modules/tree-sitter-bash/prebuilds',
+        'node_modules/tree-sitter-bash/src',
+        'node_modules/web-tree-sitter/debug',
+      ]) {
+        expect(pruneReason(rel, 'dir', target), rel).not.toBeNull();
+      }
+      for (const rel of [
+        'node_modules/web-tree-sitter/web-tree-sitter.wasm',
+        'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
+      ]) {
+        expect(pruneReason(rel, 'file', target), rel).toBeNull();
+      }
+      expect(pruneReason('node_modules/tree-sitter-bash', 'dir', target)).toBeNull();
+      expect(pruneReason('node_modules/web-tree-sitter', 'dir', target)).toBeNull();
+    }
+  });
+
   it('drops maps, declarations, debug symbols, documentation and native sources', () => {
     for (const rel of [
       'node_modules/a/index.js.map',
@@ -690,6 +710,40 @@ describe('bridge bundles (decision 011)', () => {
     ]);
   });
 
+  /** What each row injects; anything else is a change to its contract with DSH. */
+  const ROW_INJECT = {
+    'aiclient-bridge': ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'],
+    'aiclient-permissions': ['tools'],
+  };
+
+  it('flags a permission row bundle that imports anything but web-tree-sitter', () => {
+    const permissions = BRIDGE_ENTRIES.find((item) => item.row === 'aiclient-permissions');
+    const { failures } = checkBridgeMetafile(
+      {
+        inputs: {
+          'src/dsh-host/permissions/plugin.ts': {},
+          'src/shared/permissions/gate.ts': {},
+          'src/agent-host/permissionPolicy.mjs': {},
+          'src/dsh-host/bridge/plugin.ts': {},
+        },
+        outputs: {
+          'x.js': {
+            imports: [
+              { path: 'web-tree-sitter', external: true },
+              { path: '@deepseek-ai/dsh-llm', external: true },
+            ],
+          },
+        },
+      },
+      repoRoot,
+      permissions
+    );
+    expect(failures).toEqual([
+      'bridge bundle took in src/dsh-host/bridge/plugin.ts',
+      'bridge bundle imports @deepseek-ai/dsh-llm at run time',
+    ]);
+  });
+
   for (const item of BRIDGE_ENTRIES) {
     it(`builds ${item.out} that imports with only its npm externals present`, async () => {
       const outDir = path.join(tmp, 'artifact');
@@ -714,18 +768,12 @@ describe('bridge bundles (decision 011)', () => {
         path.basename(item.out)
       );
       const result = await build(options);
-      expect(checkBridgeMetafile(result.metafile, repoRoot).failures).toEqual([]);
+      expect(checkBridgeMetafile(result.metafile, repoRoot, item).failures).toEqual([]);
       const text = fs.readFileSync(options.outfile, 'utf8');
       expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
       const row = await import(pathToFileURL(options.outfile).href);
       expect(row.name).toBe(item.row);
-      expect(row.inject).toEqual([
-        'agents',
-        'agentDefaultModel',
-        'sessions',
-        'agentLoop',
-        'sessionQuery',
-      ]);
+      expect(row.inject).toEqual(ROW_INJECT[item.row]);
       expect(typeof row.apply).toBe('function');
     });
   }

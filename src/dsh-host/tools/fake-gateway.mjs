@@ -137,6 +137,11 @@
  *                       answers DSH's compaction instruction (`/compact`) with a short
  *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
  *                       replay both deterministically.
+ *                       dsh-rebase P1-6b adds the P1-PERM-* scripts for the permission
+ *                       plugin's pre-work experiments (tools/perm-experiments.ts): a
+ *                       subagent, a workflow and a PTC program that each end in one
+ *                       bash call, a short-circuited bash call, glob + grep over a
+ *                       workspace with secrets, and a bash call held at the gate.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -304,7 +309,7 @@ function logRequest(entry) {
 const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
-const P1_MARKER = /P1-(FAIL)/;
+const P1_MARKER = /P1-(FAIL|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD))/;
 
 /** DSH's compaction request ends with this instruction (dsh-compaction-basic `COMPACTION_INSTRUCTION`). */
 const COMPACTION_INSTRUCTION = /You are now acting as a compaction engine/;
@@ -697,6 +702,62 @@ const DSH_P0_2_SCRIPTS = {
       status: 500,
       message: 'P1-FAIL: the fake upstream failed this request',
     };
+  },
+  // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
+  'P1-PERM-SUB'(_round, step) {
+    if (step === 0) {
+      return tool('subagent', {
+        description: 'Permission probe child',
+        prompt: 'P1-PERM-CHILD: run one bash call, then answer.',
+        run_in_background: false,
+      });
+    }
+    return say('P1-PERM-SUB finished.');
+  },
+  'P1-PERM-CHILD'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'echo perm-child-call', description: 'Echo from the child' });
+    }
+    return say('P1-PERM-CHILD finished.');
+  },
+  'P1-PERM-WF'(_round, step) {
+    if (step === 0) {
+      return tool('workflow', {
+        script:
+          'const r = await agent("P1-PERM-CHILD: run one bash call, then answer."); return r;',
+        meta: { name: 'perm-wf', description: 'Permission probe workflow' },
+      });
+    }
+    return say('P1-PERM-WF finished.');
+  },
+  'P1-PERM-PTC'(_round, step) {
+    if (step === 0) {
+      return tool('run_code', {
+        code: "const r = await tools.bash({ command: 'echo perm-ptc-sub', description: 'Echo from PTC' }); return r;",
+        description: 'Run one bash call from a program',
+      });
+    }
+    return say('P1-PERM-PTC finished.');
+  },
+  'P1-PERM-GUARD'(_round, step) {
+    if (step === 0) {
+      return tool('bash', {
+        command: 'echo P1-PERM-SHORTCIRCUIT',
+        description: 'Short-circuit probe',
+      });
+    }
+    return say('P1-PERM-GUARD finished.');
+  },
+  'P1-PERM-SEARCH'(_round, step) {
+    if (step === 0) return tool('glob', { pattern: '**/*' });
+    if (step === 1) return tool('grep', { pattern: 'PERM-SECRET' });
+    return say('P1-PERM-SEARCH finished.');
+  },
+  'P1-PERM-HOLD'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'echo P1-PERM-HOLD', description: 'Held at the gate' });
+    }
+    return say('P1-PERM-HOLD finished.');
   },
   // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
   CRASH(_round, step, _calls, triggerText) {

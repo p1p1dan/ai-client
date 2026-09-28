@@ -3,12 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row.",
+  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row and the permission gate row.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./bridge": "./lib/bridge.js",
+    "./permissions": "./lib/permissions.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
