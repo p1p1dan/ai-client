@@ -10,7 +10,10 @@
  * opened (stdio 'ipc'). Every request carries a `requestId`; every answer
  * echoes it, and a failure answers { type: 'probe-error', requestId, message }.
  *
- *   create-session { sessionId?, cwd? }      -> session-created { sessionId, ms }
+ *   create-session { sessionId?, cwd?, permissionGate? }
+ *                                            -> session-created { sessionId, ms }
+ *                                               (`permissionGate: 'none'`: no stand-in gate,
+ *                                               so the permission row refuses every call)
  *   close-session  { sessionId }             -> session-closed { ms }
  *   resume-session { sessionId }             -> session-resumed { ms }         (persisted session)
  *   prompt         { sessionId, text }       -> prompted { messageId }        (human followup)
@@ -24,6 +27,12 @@
  *   stats          {}                        -> stats { memory, liveAgents }
  *   natives        {}                        -> natives { sharedObjects }     (loaded native libraries)
  *   terminal       { argv, cwd, timeoutMs }  -> terminal { output, outcome } (ctx.subprocess PTY)
+ *
+ * Its sessions are not the bridge's, so no chat gate judges their tool calls:
+ * since P1-6b the product's `aiclient-permissions` row refuses a call nobody
+ * attached, and this row attaches an allow-all stand-in gate to every session
+ * it creates or resumes (the probe's own equivalent of `bypass`, like the
+ * answerer below). AICLIENT_PERM_EXPERIMENT=1 leaves that to the experiment row.
  *
  * It also answers every `approval/request` with 'allowed-once' (logged), and,
  * when AICLIENT_PROBE_EVENT_LOG names a file, appends one JSONL line per
@@ -77,6 +86,28 @@ function brief(value, depth = 0) {
   return out;
 }
 
+/**
+ * Test-only stand-in for the gate a bridge session attaches (P1-6b): every
+ * call allowed, nothing filtered, nothing asked. Never in the product bundle.
+ */
+const ALLOW_ALL_GATE = Object.freeze({
+  authorize: async () => {},
+  canTraverse: () => true,
+  onActivity: () => () => {},
+});
+
+/** Route `sessionId`'s calls to the stand-in gate; undefined when there is no permission row. */
+function attachStandInGate(ctx, sessionId, cwd) {
+  if (process.env.AICLIENT_PERM_EXPERIMENT === '1') return undefined;
+  const permissions = ctx.get('aiclientPermissions');
+  if (permissions === undefined) return undefined;
+  return permissions.attachGate(`aiclient-probe:${sessionId}`, {
+    dshSessionId: sessionId,
+    gate: ALLOW_ALL_GATE,
+    cwd,
+  });
+}
+
 function goalView(view) {
   if (view === undefined) return null;
   return {
@@ -114,6 +145,12 @@ export function apply(ctx) {
 
   /** @type {Map<string, { dispose(): Promise<void>, agent: any }>} */
   const handles = new Map();
+  /** Stand-in gate attachments by session id (see `attachStandInGate`). */
+  const gates = new Map();
+  const releaseGate = (sessionId) => {
+    gates.get(sessionId)?.detach();
+    gates.delete(sessionId);
+  };
   const dispatchCounts = new Map();
 
   const reply = (message) => {
@@ -130,11 +167,21 @@ export function apply(ctx) {
       const started = performance.now();
       const sessionId = message.sessionId ?? `aiclient-probe-${randomUUID()}`;
       const { provider, model } = ctx.agentDefaultModel.currentSelection();
-      const handle = await ctx.agents.create({
-        sessionId,
-        meta: { cwd: typeof message.cwd === 'string' ? message.cwd : process.cwd() },
-        agentOptions: { provider, model },
-      });
+      const cwd = typeof message.cwd === 'string' ? message.cwd : process.cwd();
+      const gate =
+        message.permissionGate === 'none' ? undefined : attachStandInGate(ctx, sessionId, cwd);
+      if (gate) gates.set(sessionId, gate);
+      let handle;
+      try {
+        handle = await ctx.agents.create({
+          sessionId,
+          meta: { cwd },
+          agentOptions: { provider, model },
+        });
+      } catch (error) {
+        releaseGate(sessionId);
+        throw error;
+      }
       handles.set(sessionId, handle);
       return {
         type: 'session-created',
@@ -150,15 +197,26 @@ export function apply(ctx) {
       if (handle === undefined) throw new Error(`unknown probe session ${message.sessionId}`);
       handles.delete(message.sessionId);
       await handle.dispose();
+      releaseGate(message.sessionId);
       return { type: 'session-closed', ms: performance.now() - started };
     },
     async 'resume-session'(message) {
       const started = performance.now();
       const { provider, model } = ctx.agentDefaultModel.currentSelection();
-      const handle = await ctx.agents.resume({
-        resumeSessionId: message.sessionId,
-        agentOptions: { provider, model },
-      });
+      if (!gates.has(message.sessionId)) {
+        const gate = attachStandInGate(ctx, message.sessionId, message.cwd);
+        if (gate) gates.set(message.sessionId, gate);
+      }
+      let handle;
+      try {
+        handle = await ctx.agents.resume({
+          resumeSessionId: message.sessionId,
+          agentOptions: { provider, model },
+        });
+      } catch (error) {
+        releaseGate(message.sessionId);
+        throw error;
+      }
       handles.set(message.sessionId, handle);
       return {
         type: 'session-resumed',
@@ -332,6 +390,7 @@ export function apply(ctx) {
       process.off('message', onMessage);
       for (const handle of handles.values()) await handle.dispose();
       handles.clear();
+      for (const sessionId of [...gates.keys()]) releaseGate(sessionId);
     };
   }, 'aiclient-probe.ipc');
 }

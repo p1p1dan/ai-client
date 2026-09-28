@@ -158,6 +158,14 @@ const alive = (child: ChildProcess) => child.exitCode === null && child.signalCo
 /** Decision 025 rule 1, shortened for the third phase. */
 const IDLE_STOP_MS = 3_000;
 
+/**
+ * P1-6b part 2: every session of the phases below opens in `bypass`, as a user
+ * who turned the prompts off would. The host still judges every call through
+ * the app's own gate (aiclient-permissions), which then asks nothing; the
+ * card round trip has a phase of its own at the end.
+ */
+const BYPASS = { permissions: { mode: 'agent', gear: 'bypass' } } as const;
+
 /** P1-5: the key every phase but the sixth hands out, per request. */
 const FAKE_KEY = 'p1-3-fake-key';
 
@@ -494,6 +502,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       for (const [index, id] of ['s1', 's2', 's3'].entries()) {
         tokens[id] = `P13A${id.toUpperCase()}${Date.now() % 100_000}`;
         await manager.createSession({
+          ...BYPASS,
           sessionId: id,
           workspacePath: workspace,
           ownerWebContentsId: index + 1,
@@ -664,6 +673,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('closing a session right after its turn leaves the host and the others alone', async () => {
       await manager.createSession({
+        ...BYPASS,
         sessionId: 's4',
         workspacePath: workspace,
         ownerWebContentsId: 4,
@@ -697,6 +707,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       const stubs: Record<string, string> = {};
       for (const [index, id] of ['g-empty', 'g-claimed', 'g-content'].entries()) {
         await manager.createSession({
+          ...BYPASS,
           sessionId: id,
           workspacePath: workspace,
           ownerWebContentsId: 20 + index,
@@ -712,6 +723,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       }
       // An empty session still open: its lock is held.
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'g-live',
         workspacePath: workspace,
         ownerWebContentsId: 23,
@@ -741,6 +753,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       // The deleted one reads as missing; the one with content reopens with its turn.
       await expect(
         manager.resumeSession({
+          ...BYPASS,
           sessionId: 'g-empty',
           sessionFile: stubs['g-empty'],
           workspacePath: workspace,
@@ -749,6 +762,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       ).rejects.toThrow(/dsh_session_missing/);
       const from = events.length;
       await manager.resumeSession({
+        ...BYPASS,
         sessionId: 'g-content',
         sessionFile: stubs['g-content'],
         workspacePath: workspace,
@@ -773,6 +787,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       for (const [index, id] of ['b1', 'b2', 'b3'].entries()) {
         tokens[id] = `P13C${id.toUpperCase()}${Date.now() % 100_000}`;
         await manager.createSession({
+          ...BYPASS,
           sessionId: id,
           workspacePath: workspace,
           ownerWebContentsId: 10 + index,
@@ -967,6 +982,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       };
       for (const [index, id] of ['k1', 'k2'].entries()) {
         await manager.createSession({
+          ...BYPASS,
           sessionId: id,
           workspacePath: workspace,
           ownerWebContentsId: 30 + index,
@@ -1037,6 +1053,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       });
       expect(liveHosts()).toHaveLength(0);
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'k3',
         workspacePath: workspace,
         ownerWebContentsId: 32,
@@ -1118,6 +1135,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('reads a closed session without opening or writing it: the page its resume then answers', async () => {
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'r1',
         workspacePath: workspace,
         ownerWebContentsId: 40,
@@ -1143,6 +1161,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
       const from = events.length;
       await manager.resumeSession({
+        ...BYPASS,
         sessionId: 'r1',
         sessionFile: stubFile,
         workspacePath: workspace,
@@ -1160,6 +1179,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('reads a session whose host died mid-call: the turn closes in memory only, as its resume shows it', async () => {
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'r2',
         workspacePath: workspace,
         ownerWebContentsId: 41,
@@ -1203,6 +1223,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
       const resumedFrom = events.length;
       await successorManager.resumeSession({
+        ...BYPASS,
         sessionId: 'r2',
         sessionFile: stubFile,
         workspacePath: workspace,
@@ -1259,6 +1280,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('rewinds: the next turn does not see what was cut off, and the tree keeps it as a branch', async () => {
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'w1',
         workspacePath: workspace,
         ownerWebContentsId: 50,
@@ -1310,6 +1332,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         'assistant',
       ]);
       await manager.resumeSession({
+        ...BYPASS,
         sessionId: 'w1',
         sessionFile: stubFile,
         workspacePath: workspace,
@@ -1431,6 +1454,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('[IT-01, IT-04] routes each turn to the model it names, each route with its own key', async () => {
       await manager.createSession({
+        ...BYPASS,
         sessionId: 'c1',
         workspacePath: workspace,
         ownerWebContentsId: 60,
@@ -1579,6 +1603,146 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       // No key reference name reaches a tool either.
       expect(scanned.toolEnv).not.toMatch(/^AICLIENT_KEY_/m);
     }, 240_000);
+  });
+
+  /**
+   * P1-6b part 2 (decisions 042, 044): the app's own gate on the real host.
+   * This phase's session opens in `ask`, Main's default, so every call raises
+   * the 1.0.x card, answered through `respondPermission` as the renderer
+   * answers it; DSH's sandbox is off, so nothing else asks.
+   */
+  describe('a seventh supervisor: the permission gate, cards round trip (P1-6b)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    /** One P0-TOOL turn on `g1`, from its send to its first card. */
+    async function toolTurnToCard() {
+      const from = events.length;
+      attempt += 1;
+      const requestId = await manager.send({
+        sessionId: 'g1',
+        attemptId: `attempt-${attempt}`,
+        text: 'P0-TOOL: list the workspace.',
+        ownerWebContentsId: 70,
+      });
+      expect(
+        await until(
+          () => forSession('g1', from).some((e) => e.type === 'permission.requested'),
+          60_000
+        )
+      ).toBe(true);
+      const card = forSession('g1', from).find((e) => e.type === 'permission.requested');
+      return { from, requestId, card, permissionId: String(card?.payload?.permissionId) };
+    }
+    const idleAfter = (from: number, requestId: string) =>
+      until(
+        () =>
+          forSession('g1', from).some(
+            (e) =>
+              e.requestId === requestId &&
+              e.type === 'session.status' &&
+              e.payload?.status === 'idle'
+          ),
+        120_000
+      );
+    const ofType = (from: number, type: string) =>
+      forSession('g1', from)
+        .filter((e) => e.type === type)
+        .map((e) => e.payload);
+
+    it('allow: the card carries the call inside its turn, the answer comes back, the command runs', async () => {
+      await manager.createSession({
+        sessionId: 'g1',
+        workspacePath: workspace,
+        ownerWebContentsId: 70,
+      });
+      const { from, requestId, card, permissionId } = await toolTurnToCard();
+      expect(card).toMatchObject({
+        requestId,
+        payload: {
+          toolName: 'bash',
+          action: 'run_command',
+          kind: 'exec',
+          decisions: ['allow', 'allow_session', 'deny'],
+          timeoutMs: 120_000,
+          queuePosition: 1,
+          queueDepth: 1,
+        },
+      });
+      expect(
+        await manager.respondPermission({ sessionId: 'g1', permissionId, decision: 'allow' })
+      ).toBe(true);
+      expect(await idleAfter(from, requestId)).toBe(true);
+      expect(ofType(from, 'permission.resolved')).toEqual([
+        { permissionId, allow: true, decision: 'allow' },
+      ]);
+      const tools = ofType(from, 'tool.completed');
+      expect(tools).toHaveLength(1);
+      expect(tools[0]).toMatchObject({ toolCallId: permissionId, ok: true });
+      expect(String(tools[0]?.output)).toContain('bridge tool row ok');
+      expect(forSession('g1', from).some((e) => e.type === 'session.completed')).toBe(true);
+    }, 180_000);
+
+    it('deny: the call is refused with the 1.0.x wording and never runs', async () => {
+      const { from, requestId, permissionId } = await toolTurnToCard();
+      expect(
+        await manager.respondPermission({ sessionId: 'g1', permissionId, decision: 'deny' })
+      ).toBe(true);
+      expect(await idleAfter(from, requestId)).toBe(true);
+      expect(ofType(from, 'permission.resolved')).toEqual([
+        { permissionId, allow: false, decision: 'deny' },
+      ]);
+      const tools = ofType(from, 'tool.completed');
+      expect(tools).toHaveLength(1);
+      expect(tools[0]).toMatchObject({ toolCallId: permissionId, ok: false });
+      expect(String(tools[0]?.error)).toContain('permission denied');
+      expect(String(tools[0]?.error)).not.toContain('bridge tool row ok');
+    }, 180_000);
+
+    it('Stop with a card up: the card is taken down as aborted and the turn ends inside the Stop bound', async () => {
+      const { from, requestId, permissionId } = await toolTurnToCard();
+      const stoppedAt = Date.now();
+      await manager.stop('g1');
+      expect(
+        await until(
+          () =>
+            ofType(from, 'permission.resolved').length > 0 &&
+            forSession('g1', from).some(
+              (e) =>
+                e.requestId === requestId &&
+                e.type === 'session.status' &&
+                e.payload?.status === 'idle'
+            ),
+          STOP_WATCHDOG_BOUND_MS
+        )
+      ).toBe(true);
+      const elapsed = Date.now() - stoppedAt;
+      expect(ofType(from, 'permission.resolved')).toEqual([
+        { permissionId, allow: false, decision: 'deny', autoReason: 'aborted' },
+      ]);
+      expect(forSession('g1', from).some((e) => e.type === 'session.stopped')).toBe(true);
+      // Nothing is left to answer, and the command never ran.
+      expect(
+        await manager.respondPermission({ sessionId: 'g1', permissionId, decision: 'allow' })
+      ).toBe(false);
+      expect(
+        ofType(from, 'tool.completed').some((tool) =>
+          String(tool?.output).includes('bridge tool row ok')
+        )
+      ).toBe(false);
+      console.log(`[p1-6b] Stop with a card up settled in ${elapsed} ms`);
+      await manager.closeSession('g1');
+    }, 180_000);
   });
 
   /** The drift gate (plan P1-5 shard 05 §3): the shipped catalog's plan, as DSH takes it. */

@@ -9,7 +9,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-stop-stream.dsh.json",
       "leaf": {
         "activeEntryId": null,
-        "fileTailEntryId": "aiclient-rec-stop-stream#2"
+        "fileTailEntryId": null
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
@@ -66,7 +66,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-4",
-        "fileTailEntryId": "aiclient-rec-stop-stream#15"
+        "fileTailEntryId": "aiclient-rec-stop-stream#12"
       },
       "nodes": [
         {

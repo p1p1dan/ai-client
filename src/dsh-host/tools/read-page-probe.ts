@@ -42,7 +42,7 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
-import { fakeGatewayPlan, HostClient, type Message } from './lib/hostClient.ts';
+import { BYPASS_PERMISSIONS, fakeGatewayPlan, HostClient, type Message } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -354,6 +354,7 @@ async function main(): Promise<number> {
           logicalSessionId: LOGICAL,
           cwd: box.workspace,
           sessionFile: stubFile,
+          permissions: BYPASS_PERMISSIONS,
         });
         run.resumeBootstrapMs = Math.round(performance.now() - started);
         run.afterResume = await mem(host);

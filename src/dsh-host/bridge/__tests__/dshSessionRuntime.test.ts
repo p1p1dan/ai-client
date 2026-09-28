@@ -33,6 +33,7 @@ import {
   type SessionStub,
   stubPathFor,
 } from '../dshSessionRuntime.ts';
+import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 
 /**
@@ -124,6 +125,7 @@ function fakeDsh(options: FakeOptions = {}) {
         return { events, cursor: events.at(-1)?.seq ?? -1, [Symbol.dispose]: () => undefined };
       }),
     },
+    aiclientPermissions: testPermissionHost().api,
   } as unknown as DshBridgeContext;
   /** One durable event of this session, as DSH's `session/event` delivers it. */
   const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);

@@ -26,6 +26,9 @@
  *       edit, write, grep, glob and three shell calls: bash, or pwsh on
  *       Windows), one write outside the workspace answered through the approval
  *       card, worker.dispose (its ACK, then `closed`), `shutdown`, exit 0.
+ *       The session opens in `ask`, Main's default (P1-6b part 2): the app's
+ *       own gate (aiclient-permissions) asks for every write, edit and shell
+ *       call, and the smoke answers each card `allow`, as a user would.
  *       Then the load-on-use natives no L1 turn reaches on every platform: the
  *       bundled node loads sharp (with libvips) and runs node-pty (conpty on
  *       Windows, spawn-helper on macOS) straight from the artifact.
@@ -885,6 +888,11 @@ function verdictFor(ctx, report) {
       String(fsTurn.files?.shellWritten).includes(`SHELL-${fsTurn.token}`) &&
       String(fsTurn.files?.edited).includes(`EDITED-${fsTurn.token}`);
     v.l1FsReplied = String(fsTurn.reply).includes('P0-FS l1 finished.');
+    // P1-6b part 2: the packaged host's own gate asked, and every card came back.
+    v.l1GateAskedEachChange =
+      ['edit', 'write', shell].every((name) => (fsTurn.permissions ?? []).includes(name)) &&
+      (fsTurn.resolved ?? []).length === (fsTurn.permissions ?? []).length &&
+      (fsTurn.resolved ?? []).every((decision) => decision === 'allow');
     v.l1ApprovalRoundTrip =
       (l1.approval?.permissions ?? []).includes('write') &&
       (l1.approval?.resolved ?? []).includes('allow') &&

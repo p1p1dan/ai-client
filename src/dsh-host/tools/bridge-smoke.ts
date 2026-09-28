@@ -18,10 +18,20 @@
  *      the host never opened is answered WORKER_CHANNEL_UNKNOWN; ping answers
  *      pong; closing an unknown channel answers closed. Then the P0-3 turns:
  *        STREAM         paced text in 20 deltas
- *        TOOL           one bash call, then text
- *        APPROVE-ALLOW  write outside the workspace -> sandbox denial ->
- *                       escalation -> permission.requested -> allow
- *        APPROVE-DENY   the same, answered deny
+ *        TOOL           one bash call (its card answered allow), then text
+ *        APPROVE-ALLOW  write outside the workspace -> permission.requested ->
+ *                       allow; the escalated retry the script sends next
+ *                       asks again and is allowed too
+ *        APPROVE-DENY   the same, both cards answered deny
+ *      P1-6b part 2: S1 opens in `ask` (Main's default), so every card of
+ *      every turn is answered by the smoke; the permission gate is the
+ *      aiclient-permissions row's, attached by the bridge, and DSH's sandbox
+ *      is off (decisions 044, 045). Three gate checks follow:
+ *        PERM-DENY      `cat .env` is refused without a card, nothing leaks
+ *        PERM-SESSION   two `echo` calls: one card, answered for the session,
+ *                       and the second call runs without one
+ *        PERM-PLAN      a second channel opened in plan mode: its write is
+ *                       refused without a card, its read runs
  *      two P1-3a experiments, ENV (no .env file reaches a tool, decision 023)
  *      and FDS (the descriptors a tool inherits, decision 034's precondition),
  *      then worker.dispose right after the last turn (ACK, then closed; the
@@ -96,6 +106,10 @@ const GENERATION = 1;
 const SESSION = 'bridge-smoke';
 const EMPTY_SESSION = 'bridge-smoke-empty';
 const SIDE_SESSION = 'bridge-smoke-side';
+/** P1-6b part 2: a session opened in plan mode. */
+const PLAN_SESSION = 'bridge-smoke-plan';
+/** In the workspace's `.env`; no tool output may ever carry it. */
+const ENV_CANARY = 'P16_ENV_CANARY=leaked-from-workspace-env';
 const CHANNEL_UNKNOWN = 'WORKER_CHANNEL_UNKNOWN';
 /** The fake key Main's stand-in hands every host, per request. */
 const SMOKE_KEY = 'p1-5-smoke-fake-key';
@@ -333,13 +347,18 @@ async function main() {
     if (host.child.exitCode === null && host.child.signalCode === null) host.child.kill('SIGKILL');
     hosts[host.label] = { ...hosts[host.label], killed: true, exit: await host.exited };
   };
+  /**
+   * One turn, every card it raises answered as it comes (P1-6b part 2: the
+   * gate asks in `ask`): `answer` is the decision, or picks one per card
+   * (0-based, in the order they were shown).
+   */
   const runTurn = async (
     host: Host,
     ch: string,
     logicalSessionId: string,
     label: string,
     text: string,
-    onPermission?: 'allow' | 'deny'
+    answer: 'allow' | 'deny' | ((card: Message, index: number) => string) = 'allow'
   ) => {
     const { client } = host;
     const requestId = `turn-${label}`;
@@ -350,37 +369,39 @@ async function main() {
       attemptId: `attempt-${label}`,
       text,
     });
-    if (onPermission) {
-      const asked = await client.until(
-        ch,
-        (events) => events.slice(from).some((e) => e.type === 'permission.requested'),
-        60_000
+    const isIdle = (events: Message[]) =>
+      events.some(
+        (e) =>
+          e.type === 'session.status' && payloadOf(e).status === 'idle' && e.requestId === requestId
       );
-      const request = client
-        .events(ch)
-        .slice(from)
-        .find((e) => e.type === 'permission.requested');
-      if (asked && request) {
+    const answered = new Set<unknown>();
+    const cards: Array<{ toolName: unknown; action: unknown; decision: string }> = [];
+    const unanswered = (events: Message[]) =>
+      events.filter(
+        (e) => e.type === 'permission.requested' && !answered.has(payloadOf(e).permissionId)
+      );
+    let idle = false;
+    for (;;) {
+      const woke = await client.until(
+        ch,
+        (events) => isIdle(events.slice(from)) || unanswered(events.slice(from)).length > 0,
+        150_000
+      );
+      const slice = client.events(ch).slice(from);
+      for (const card of unanswered(slice)) {
+        const payload = payloadOf(card);
+        answered.add(payload.permissionId);
+        const decision = typeof answer === 'function' ? answer(payload, cards.length) : answer;
+        cards.push({ toolName: payload.toolName, action: payload.action, decision });
         await client.request(ch, 'worker.permission.respond', {
           logicalSessionId,
-          permissionId: payloadOf(request).permissionId,
-          decision: onPermission,
+          permissionId: payload.permissionId,
+          decision,
         });
       }
+      idle = isIdle(client.events(ch).slice(from));
+      if (idle || !woke) break;
     }
-    const idle = await client.until(
-      ch,
-      (events) =>
-        events
-          .slice(from)
-          .some(
-            (e) =>
-              e.type === 'session.status' &&
-              payloadOf(e).status === 'idle' &&
-              e.requestId === requestId
-          ),
-      90_000
-    );
     const events = client.events(ch).slice(from);
     const deltas = events.filter((e) => e.type === 'message.delta');
     const turn = {
@@ -390,6 +411,10 @@ async function main() {
       assistantDeltas: deltas.length - 1,
       reply: assistantText(events).slice(0, 200),
       permission: events.find((e) => e.type === 'permission.requested')?.payload,
+      cards,
+      resolved: events
+        .filter((e) => e.type === 'permission.resolved')
+        .map((e) => String(payloadOf(e).decision)),
       tools: events.filter((e) => e.type === 'tool.completed').map((e) => payloadOf(e)),
       sessionIds: [...new Set(events.map((e) => e.sessionId))],
     };
@@ -464,6 +489,31 @@ async function main() {
     report.files = { allowed: existsSync(allowTarget), denied: existsSync(denyTarget) };
     report.history = await a.client.request(chA, 'worker.history', { logicalSessionId: SESSION });
 
+    // P1-6b part 2: the gate itself. A secret is refused without a card...
+    writeFileSync(join(box.workspace, '.env'), `${ENV_CANARY}\n`);
+    await runTurn(a, chA, SESSION, 'PERM-DENY', 'P1-PERM-DENY: print the env file.');
+    // ...an answer for the session covers the next call of the same command...
+    await runTurn(
+      a,
+      chA,
+      SESSION,
+      'PERM-SESSION',
+      'P1-PERM-SESSION: echo twice.',
+      (_card, index) => (index === 0 ? 'allow_session' : 'deny')
+    );
+    // ...and a session opened in plan mode cannot write.
+    writeFileSync(join(box.workspace, 'perm-plan-notes.txt'), 'plan notes\n');
+    const chPlan = a.client.openChannel();
+    const bootPlan = await bootstrap(a, chPlan, {
+      logicalSessionId: PLAN_SESSION,
+      cwd: box.workspace,
+      permissions: { mode: 'plan', gear: 'ask' },
+    });
+    if (!bootPlan.ok) throw new Error(`plan bootstrap: ${JSON.stringify(bootPlan.error)}`);
+    await runTurn(a, chPlan, PLAN_SESSION, 'PERM-PLAN', 'P1-PERM-PLAN: write, then read.');
+    report.planFileWritten = existsSync(join(box.workspace, 'perm-plan.txt'));
+    await closeSession(a, chPlan);
+
     // Experiment (decision 023): no .env file reaches a tool.
     await runTurn(a, chA, SESSION, 'ENV', 'P0-ENV: print the env canaries.');
     const envLine = toolOutput('ENV').split('\n')[0] ?? '';
@@ -474,7 +524,7 @@ async function main() {
     // Experiment (decision 034's precondition): does a tool inherit the host's
     // IPC channel, inside the sandbox and once escalated out of it?
     const hostChannelFd = fdTarget(a.child.pid, 3);
-    await runTurn(a, chA, SESSION, 'FDS', 'P0-FDS: list the inherited descriptors.', 'allow');
+    await runTurn(a, chA, SESSION, 'FDS', 'P0-FDS: list the inherited descriptors.');
     const fdsRuns = ((turns.FDS as { tools?: Message[] } | undefined)?.tools ?? []).map((item) =>
       String(item.output ?? item.error ?? '')
     );
@@ -685,8 +735,21 @@ async function main() {
 
   const stream = turns.STREAM as { assistantDeltas?: number } | undefined;
   const tool = turns.TOOL as { tools?: Message[] } | undefined;
-  const allow = turns['APPROVE-ALLOW'] as { permission?: Message; tools?: Message[] } | undefined;
-  const deny = turns['APPROVE-DENY'] as { permission?: Message; tools?: Message[] } | undefined;
+  const allow = turns['APPROVE-ALLOW'] as
+    | { permission?: Message; tools?: Message[]; resolved?: string[] }
+    | undefined;
+  const deny = turns['APPROVE-DENY'] as
+    | { permission?: Message; tools?: Message[]; resolved?: string[] }
+    | undefined;
+  type GateTurn = {
+    cards?: Message[];
+    tools?: Message[];
+    completed?: boolean;
+    permission?: Message;
+  };
+  const permDeny = turns['PERM-DENY'] as GateTurn | undefined;
+  const permSession = turns['PERM-SESSION'] as GateTurn | undefined;
+  const permPlan = turns['PERM-PLAN'] as GateTurn | undefined;
   const files = report.files as { allowed?: boolean; denied?: boolean } | undefined;
   type Turn = { idle?: boolean; completed?: boolean; reply?: string };
   const resumedTurn = turns['RESUMED-STREAM'] as Turn | undefined;
@@ -860,6 +923,40 @@ async function main() {
       JSON.stringify(credentials.outcomes) === '["served"]' &&
       JSON.stringify(credentials.refs) === JSON.stringify(Object.keys(plan.refs)),
     // Decision 034's precondition (IT-07): no tool inherits the host's IPC channel
+    // P1-6b part 2 (decisions 042, 044): the app's own gate judges every call
+    gateAsksInAsk:
+      JSON.stringify((turns.TOOL as { cards?: Message[] } | undefined)?.cards) ===
+      JSON.stringify([{ toolName: 'bash', action: 'run_command', decision: 'allow' }]),
+    approvalCardsAnsweredEach:
+      JSON.stringify(allow?.resolved) === '["allow","allow"]' &&
+      JSON.stringify(deny?.resolved) === '["deny","deny"]',
+    deniedCommandRefusedWithoutCard:
+      permDeny !== undefined &&
+      (permDeny.cards ?? []).length === 0 &&
+      (permDeny.tools ?? []).length === 1 &&
+      permDeny.tools?.[0]?.ok === false &&
+      // 1.0.x's wording for a denied shell operand, naming the file.
+      /denied: .*\/\.env$/.test(String(permDeny.tools?.[0]?.error)) &&
+      !JSON.stringify(permDeny.tools).includes(ENV_CANARY) &&
+      permDeny.completed === true,
+    sessionGrantCoversNextCall:
+      permSession !== undefined &&
+      JSON.stringify(permSession.cards) ===
+        JSON.stringify([{ toolName: 'bash', action: 'run_command', decision: 'allow_session' }]) &&
+      JSON.stringify((permSession.permission as Message | undefined)?.sessionGrantScope) ===
+        JSON.stringify({ kind: 'command', value: 'echo' }) &&
+      (permSession.tools ?? []).length === 2 &&
+      (permSession.tools ?? []).every((t) => t.ok === true) &&
+      String(permSession.tools?.[1]?.output).includes('perm-session-second'),
+    planModeRefusesWrite:
+      permPlan !== undefined &&
+      (permPlan.cards ?? []).length === 0 &&
+      permPlan.tools?.[0]?.ok === false &&
+      String(permPlan.tools?.[0]?.error).includes('access denied') &&
+      permPlan.tools?.[1]?.ok === true &&
+      String(permPlan.tools?.[1]?.output).includes('plan notes') &&
+      report.planFileWritten === false &&
+      permPlan.completed === true,
     toolsDoNotInheritIpc:
       ipcHandle !== undefined &&
       ipcHandle.hostFd3 !== null &&

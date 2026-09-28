@@ -9,7 +9,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-rewind.dsh.json",
       "leaf": {
         "activeEntryId": null,
-        "fileTailEntryId": "aiclient-rec-rewind#2"
+        "fileTailEntryId": null
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
@@ -90,7 +90,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-8",
-        "fileTailEntryId": "aiclient-rec-rewind.r2#25"
+        "fileTailEntryId": "aiclient-rec-rewind.r2#22"
       },
       "nodes": [
         {
@@ -185,7 +185,7 @@
     "editorText": "beta REWIND-DROP-2, no scenario.",
     "leaf": {
       "activeEntryId": "id-5",
-      "fileTailEntryId": "aiclient-rec-rewind.r2#16"
+      "fileTailEntryId": "aiclient-rec-rewind.r2#13"
     },
     "historyIds": ["h:id-1", "h:id-5"],
     "treeNodes": ["id-1", "id-5 *", "id-9 (retired)", "id-11 (retired)"]

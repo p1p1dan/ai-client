@@ -25,6 +25,7 @@ import {
   stubPathFor,
 } from '../dshSessionRuntime.ts';
 import { grantsSidecarFor, writeStubAtomically } from '../stub.ts';
+import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 
 /**
@@ -181,6 +182,7 @@ function fakeDsh(initial: Record<string, DshLogEvent[]>, faults: Faults = {}) {
       }),
     },
     get: (name: string) => (name === 'jobs' ? { list: () => jobs } : undefined),
+    aiclientPermissions: testPermissionHost().api,
   } as unknown as DshBridgeContext;
   /** A durable event of `id`, as `session/event` delivers it (and the log keeps it). */
   const append = (id: string, event: DshLogEvent) => {

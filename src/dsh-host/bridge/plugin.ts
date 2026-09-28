@@ -41,8 +41,17 @@ export const name = 'aiclient-bridge';
  * dynamic imports this row used to await had been hiding that race).
  * `sessionQuery` is the lock-free read the history cache folds, and Main's
  * preview reads through `readPage` (P1-4a, decision 030).
+ * `aiclientPermissions` is the permission row every session attaches its gate
+ * to (P1-6b, decision 042): the bridge serves no session without it.
  */
-export const inject = ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'];
+export const inject = [
+  'agents',
+  'agentDefaultModel',
+  'sessions',
+  'agentLoop',
+  'sessionQuery',
+  'aiclientPermissions',
+];
 
 /** Shared with host.ts through a global symbol; filled from the host's first line. */
 interface BridgeInbox {

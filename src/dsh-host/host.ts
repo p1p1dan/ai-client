@@ -63,8 +63,10 @@ import {
   PRODUCT_BUNDLES,
   partitionSkippedBundles,
   REQUIRED_DISABLED,
+  REQUIRED_ENABLED,
   reconcileProductBundles,
   requiredDisabledOverlays,
+  requiredEnabledOverlays,
   sameBundles,
 } from './lib/hostProfile.ts';
 
@@ -256,8 +258,13 @@ const profileContext = {
   startedBundles: profile.layers.map((layer) => layer.packageName),
   cwd: process.cwd(),
   home,
-  // The plan's two rows after every user layer, then the required rows off.
-  overlays: [...modelPlanOverlays(modelPlan), ...requiredDisabledOverlays()],
+  // The plan's two rows after every user layer, then the required rows off,
+  // then the permission gate on (P1-6b, decision 042).
+  overlays: [
+    ...modelPlanOverlays(modelPlan),
+    ...requiredDisabledOverlays(),
+    ...requiredEnabledOverlays(),
+  ],
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
   // No `packageManager` (decision 082, closing decision 016): plugin-manager
   // is disabled at every start (bundle/cordis.patch.yml, REQUIRED_DISABLED),
@@ -287,8 +294,8 @@ const notDisabled = REQUIRED_DISABLED.filter(
 if (notDisabled.length > 0) fail(`rows expected disabled: ${notDisabled.join(', ')}`);
 // P1-8 (decision 065): the loop guard must be composed and on; its kill switch
 // is AICLIENT_RUNTIME_LOOP_GUARD=0, never a disabled row. P1-5b (decision 034):
-// so must the read-only credentials row that replaces dsh-base's.
-const REQUIRED_ENABLED = ['aiclient-loop-guard', 'aiclient-credentials'];
+// so must the read-only credentials row that replaces dsh-base's. P1-6b
+// (decision 042): and the permission gate, which the overlays restate on.
 const notEnabled = REQUIRED_ENABLED.filter((id) => {
   const row = flat.find((item) => item.id === id);
   return row === undefined || (row.disabled !== undefined && row.disabled !== false);

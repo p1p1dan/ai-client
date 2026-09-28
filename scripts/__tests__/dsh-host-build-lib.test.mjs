@@ -757,7 +757,14 @@ describe('bridge bundles (decision 011)', () => {
 
   /** What each row injects; anything else is a change to its contract with DSH. */
   const ROW_INJECT = {
-    'aiclient-bridge': ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'],
+    'aiclient-bridge': [
+      'agents',
+      'agentDefaultModel',
+      'sessions',
+      'agentLoop',
+      'sessionQuery',
+      'aiclientPermissions',
+    ],
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
   };

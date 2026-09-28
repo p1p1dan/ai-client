@@ -9,8 +9,16 @@
  *
  *   durable `session/event`        -> message.* / tool.* / session.* events
  *   live `agent/assistant-stream`  -> message.started / message.delta / thinking.delta
- *   `approval/request` waterfall   -> permission.requested, answered by
- *                                     worker.permission.respond
+ *   this session's PermissionGate  -> permission.requested / permission.resolved,
+ *                                     answered by worker.permission.respond
+ *
+ * Permissions (P1-6b, decisions 041, 042): every tool call of the session and
+ * its delegates is judged by one `PermissionGate` (the 1.0.x gate, from
+ * src/shared/permissions) that this runtime builds at bootstrap and attaches
+ * to the `aiclient-permissions` row before it opens the agent; a host without
+ * that row refuses the bootstrap. The gate starts on the mode and gear Main
+ * sent; its cards are 1.0.x's (`cardEmitter.ts`), keyed by the tool call id.
+ * The setters, the grant sidecar and the policy files are P1-6c.
  *
  * Mapped: text, tool rows, approvals, stop, the session identity (create,
  * resume, crash restart), the history, tree and leaf, projected from the
@@ -38,7 +46,8 @@
  * (`aiclient-<id Main minted>`) and releases it for the slot Main opens next.
  */
 
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
@@ -51,12 +60,13 @@ import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
 import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
-import type {
-  PermissionDecisionId,
-  PermissionRequestAction,
-  PermissionRequestKind,
-  RuntimeEventDraft,
-} from '../../shared/types/runtimeEvents.ts';
+import {
+  createPermissionPrompt,
+  type PermissionPrompt,
+} from '../../shared/permissions/cardEmitter.ts';
+import { PermissionGate } from '../../shared/permissions/gate.ts';
+import { loadPermissionPolicy } from '../../shared/permissions/policy.ts';
+import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
@@ -83,6 +93,7 @@ import {
   type WorkerStopResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
+import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
 import {
@@ -170,16 +181,6 @@ type StreamChunk =
   | { type: 'tool-call-delta'; index: number; id: string; name?: string; argumentsDelta: string }
   | { type: string; index?: number };
 
-interface ApprovalRequest {
-  agent: { id: string };
-  toolName: string;
-  callId?: string;
-  reason?: string;
-  signal?: AbortSignal;
-}
-
-type ApprovalOutcome = 'allowed-once' | 'rejected' | 'cancelled' | 'unavailable';
-
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
 export interface DshBridgeContext {
   on(
@@ -189,13 +190,6 @@ export interface DshBridgeContext {
   on(
     name: 'agent/assistant-stream',
     listener: (payload: { agent: { id: string }; frame: StreamFrame }) => void
-  ): Dispose;
-  on(
-    name: 'approval/request',
-    listener: (
-      request: ApprovalRequest,
-      next: () => Promise<ApprovalOutcome>
-    ) => Promise<ApprovalOutcome>
   ): Dispose;
   agents: {
     create(options: {
@@ -221,6 +215,12 @@ export interface DshBridgeContext {
   sessionQuery: DshSessionQuery;
   /** A service the row does not inject, when it is there (`ctx.jobs`, for `busy`). */
   get?(name: 'jobs'): DshJobsView | undefined;
+  /**
+   * `ctx.aiclientPermissions` (P1-6b, decision 042): the permission row every
+   * session attaches its gate to. Injected by the bridge row; a runtime
+   * without it refuses to bootstrap (`WORKER_PERMISSIONS_UNAVAILABLE`).
+   */
+  aiclientPermissions?: DshPermissionHost;
 }
 
 /** DSH's `AgentSetup`: runs on the agent's own scope before it is published. */
@@ -286,6 +286,9 @@ export const INITIAL_HISTORY_LIMIT = 80;
 /** Every DSH session this bridge creates is named with it; nothing else is ever collected (decision 024). */
 export const DSH_SESSION_ID_PREFIX = 'aiclient-';
 
+/** No permission gate can be attached (the native runtime's code for a missing gate). */
+export const WORKER_PERMISSIONS_UNAVAILABLE = 'WORKER_PERMISSIONS_UNAVAILABLE';
+
 /** A tree node no session of the lineage has (the native runtime's code). */
 export const SESSION_ENTRY_NOT_FOUND = 'session_entry_not_found';
 /** A fork whose path holds no model answer (the native runtime's code). */
@@ -300,8 +303,6 @@ const REWIND_ID_ATTEMPTS = 20;
 export function dshSessionIdFor(logicalSessionId: string): string {
   return `${DSH_SESSION_ID_PREFIX}${logicalSessionId}`;
 }
-
-const DECISIONS: PermissionDecisionId[] = ['allow', 'deny'];
 
 function unsupported(operation: string): never {
   throw new PiWorkerSessionError(
@@ -365,48 +366,6 @@ function textOf(content: unknown): string {
     .join('');
 }
 
-function kindOf(tool: string): PermissionRequestKind {
-  if (tool === 'bash' || tool === 'pwsh') return 'exec';
-  if (tool === 'write' || tool === 'edit') return 'file_change';
-  return 'tool';
-}
-
-function actionOf(tool: string): PermissionRequestAction | undefined {
-  if (tool === 'bash' || tool === 'pwsh') return 'run_command';
-  if (tool === 'write') return 'write_file';
-  if (tool === 'edit') return 'edit_file';
-  if (tool === 'read') return 'read_file';
-  return undefined;
-}
-
-/** The card body native requests carry (`permissionPrompt.ts` detailOf). */
-function detailOf(tool: string, args: Record<string, unknown>, cwd: string) {
-  const path = typeof args.file_path === 'string' ? args.file_path : args.path;
-  if ((tool === 'bash' || tool === 'pwsh') && typeof args.command === 'string') {
-    return { kind: 'exec' as const, command: args.command, cwd };
-  }
-  if ((tool === 'write' || tool === 'edit') && typeof path === 'string') {
-    return {
-      kind: 'file_change' as const,
-      changes: [{ path, change: tool === 'write' ? ('add' as const) : ('update' as const) }],
-    };
-  }
-  return undefined;
-}
-
-/** DSH tool arguments -> the fields our permission card reads (`path`, `command`). */
-function cardInput(tool: string, args: Record<string, unknown>, cwd: string) {
-  const path = typeof args.file_path === 'string' ? args.file_path : args.path;
-  return {
-    ...(typeof path === 'string' ? { path } : {}),
-    ...(typeof args.command === 'string' ? { command: args.command } : {}),
-    ...(tool === 'write' && typeof args.content === 'string'
-      ? { content: args.content, contentLabel: 'Content' }
-      : {}),
-    workspace: cwd,
-  };
-}
-
 // ---- the runtime -------------------------------------------------------------
 
 interface Turn {
@@ -450,8 +409,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly toolStep = new Map<string, string>();
   private readonly toolArgs = new Map<string, Record<string, unknown>>();
   private readonly startedTools = new Set<string>();
-  private readonly pendingApprovals = new Map<string, (decision: PermissionDecisionId) => void>();
   private readonly disposers: Dispose[] = [];
+  /** The session's approval cards (1.0.x's emitter): `permission.requested` / `resolved`. */
+  private readonly prompt: PermissionPrompt;
+  /** The session's gate (P1-6b), built at bootstrap; null before and after. */
+  private gate: PermissionGate | null = null;
+  /** Its routing in the permission row; re-pointed by a rewind. */
+  private attachment: AttachedGate | null = null;
+  /** This runtime's key in the permission row: unique, so a second open never re-points a live one. */
+  private readonly gateChannel: string;
   private readonly historyCache: DshHistoryCache;
   /** The sessions earlier rewinds retired, for the tree (P1-4b). */
   private readonly retired: DshRetiredHistory;
@@ -484,6 +450,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
     this.modelId = options.model;
+    this.gateChannel = `${options.logicalSessionId}:${randomUUID()}`;
+    this.prompt = createPermissionPrompt({
+      sessionId: this.logicalSessionId,
+      cwd: this.cwd,
+      // Through `emit`, so a card raised inside a turn carries its requestId.
+      emit: (event) => {
+        const { sessionId: _sessionId, ...draft } = event;
+        this.emit(draft as BridgeDraft);
+      },
+    });
   }
 
   /**
@@ -534,8 +510,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
     if (!this.home) throw new Error('DSH_HOME is not set for the DSH bridge');
+    if (!this.ctx.aiclientPermissions) {
+      throw new PiWorkerSessionError(
+        WORKER_PERMISSIONS_UNAVAILABLE,
+        'The aiclient-permissions row is not composed in this host; no tool call could be judged'
+      );
+    }
     const selection = this.openingSelection();
     this.listen();
+    this.gate ??= await this.buildGate();
     const requested = this.options.sessionFile;
     let stubFile: string;
     try {
@@ -543,10 +526,12 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       if (requested) await this.resumeSession(requested, selection);
     } catch (error) {
       // Nothing half-open survives a failed bootstrap: the session's write lock
-      // goes with the handle.
+      // goes with the handle, and its calls stop resolving to this gate.
       const handle = this.handle;
       this.handle = null;
       await handle?.dispose().catch(() => undefined);
+      this.attachment?.detach();
+      this.attachment = null;
       throw error;
     }
     this.stubFile = stubFile;
@@ -568,10 +553,80 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         : {}),
       ...(this.options.model ? { model: this.options.model } : {}),
       projectTrusted: this.options.projectTrusted,
+      // True now (P1-6b): this bootstrap only gets here with the app's own gate
+      // attached to the session, and fails without it.
       permissionGate: 'bundled',
       capabilities: {},
     };
     return this.result;
+  }
+
+  /**
+   * The session's gate (P1-6b; design shard 03 §8): the mode and gear Main
+   * sent (a legacy tier migrated), project trust as the RPC server resolved
+   * it, and the bundled policy table, the floor 1.0.x always loads. The gate
+   * judges against the canonical workspace, the spelling every path it sees
+   * has been resolved to. Session grants live in memory until P1-6c writes
+   * them beside the stub; the user and project policy files are P1-6c too.
+   */
+  private async buildGate(): Promise<PermissionGate> {
+    let cwd: string;
+    try {
+      cwd = realpathSync(this.cwd);
+    } catch {
+      cwd = resolve(this.cwd);
+    }
+    const policy = await loadPermissionPolicy(
+      {
+        readFile: () =>
+          Promise.reject(
+            Object.assign(new Error('no policy file is read yet'), { code: 'ENOENT' })
+          ),
+      },
+      { cwd, agentDir: null, sources: { user: false, project: false, local: false } }
+    );
+    return new PermissionGate({
+      cwd,
+      ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
+      ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
+      ...(this.options.tier ? { tier: this.options.tier } : {}),
+      projectTrusted: this.options.projectTrusted,
+      policy,
+      approve: this.prompt.approve,
+      autoAllow: this.prompt.autoAllow,
+    });
+  }
+
+  /**
+   * Route `dshSessionId`'s calls (and its delegates') to this session's gate,
+   * before its agent is opened, so no call of it ever finds no gate. Called
+   * again by a rewind, which re-points the same key at the seeded child.
+   */
+  private attachGate(dshSessionId: string): void {
+    const host = this.ctx.aiclientPermissions;
+    const gate = this.gate;
+    if (!host || !gate) {
+      throw new PiWorkerSessionError(
+        WORKER_PERMISSIONS_UNAVAILABLE,
+        'No permission gate to attach'
+      );
+    }
+    try {
+      this.attachment = host.attachGate(this.gateChannel, {
+        dshSessionId,
+        gate,
+        cwd: this.cwd,
+      });
+    } catch (error) {
+      // Another channel of this host has the session open: its lock, in our words.
+      throw new PiWorkerSessionError(
+        SESSION_LOCKED,
+        `DSH session ${dshSessionId} is open in another channel of this host: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        true
+      );
+    }
   }
 
   /**
@@ -627,6 +682,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       );
     }
     const stubFile = stubPathFor(this.home, this.dshSessionId);
+    this.attachGate(this.dshSessionId);
     try {
       this.handle = await this.ctx.agents.create({
         sessionId: this.dshSessionId,
@@ -683,6 +739,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     this.dshSessionId = stub.dshSessionId;
     this.lineage = stubLineage(stub);
+    this.attachGate(stub.dshSessionId);
     await this.openDshSession(stub.dshSessionId, selection);
   }
 
@@ -703,11 +760,21 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   async dispose(): Promise<void> {
     if (this.disposed) return;
+    // Before the flag, as the native runtime does: the card on screen is
+    // answered (denied, `session_closed`) and taken down, and the call it held
+    // is refused rather than left parked.
+    this.prompt.drain('session_closed');
     this.disposed = true;
-    for (const settle of this.pendingApprovals.values()) settle('cancel');
     for (const dispose of this.disposers.splice(0)) dispose();
-    await this.handle?.dispose();
-    this.handle = null;
+    try {
+      await this.handle?.dispose();
+    } finally {
+      this.handle = null;
+      this.attachment?.detach();
+      this.attachment = null;
+      this.gate?.dispose();
+      this.gate = null;
+    }
   }
 
   // ---- turns -----------------------------------------------------------------
@@ -764,11 +831,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return { interjected: false };
   }
 
+  /** A card's answer, keyed by the tool call id; false when nothing waits on it. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean {
-    const settle = this.pendingApprovals.get(input.permissionId);
-    if (!settle) return false;
-    settle(input.decision);
-    return true;
+    return this.prompt.respond(input);
   }
 
   respondQuestion(): boolean {
@@ -779,6 +844,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return false;
   }
 
+  // P1-6c makes these three act on the gate; until then the gate keeps the
+  // mode and gear it was built with at bootstrap.
   setPermissions(): void {}
   setPermissionGear(): void {}
   setPermissionTier(): void {}
@@ -911,6 +978,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.handle = switched.handle;
     this.dshSessionId = switched.id;
     this.lineage = switched.lineage;
+    // The same gate, now routed from the child; the retired id keeps resolving
+    // to it. Past the switch nothing may throw: a failure leaves the child's
+    // calls refused (fail closed), and says so.
+    try {
+      this.attachGate(switched.id);
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] rewind could not re-point the permission gate', error);
+    }
     this.resetLiveState();
     this.historyCache.reset(switched.id);
     await this.historyCache.load();
@@ -1259,10 +1334,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         } catch (error) {
           this.options.log?.('[dsh-bridge] stream frame failed', frame.type, error);
         }
-      }),
-      this.ctx.on('approval/request', (request, next) =>
-        request.agent?.id === this.dshSessionId && !this.disposed ? this.ask(request) : next()
-      )
+      })
     );
   }
 
@@ -1477,43 +1549,5 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       default:
         return;
     }
-  }
-
-  /** One DSH approval question -> one permission card, answered by the user. */
-  private ask(request: ApprovalRequest): Promise<ApprovalOutcome> {
-    const permissionId = request.callId ?? `dsh-approval-${Date.now()}`;
-    const args = (request.callId ? this.toolArgs.get(request.callId) : undefined) ?? {};
-    const action = actionOf(request.toolName);
-    const detail = detailOf(request.toolName, args, this.cwd);
-    this.emit({
-      type: 'permission.requested',
-      payload: {
-        permissionId,
-        toolName: request.toolName,
-        ...(action ? { action } : {}),
-        input: cardInput(request.toolName, args, this.cwd),
-        kind: kindOf(request.toolName),
-        decisions: DECISIONS,
-        ...(detail ? { detail } : {}),
-        ...(request.reason ? { reason: request.reason } : {}),
-      },
-    });
-    return new Promise((resolve) => {
-      const settle = (decision: PermissionDecisionId, autoReason?: 'aborted') => {
-        if (!this.pendingApprovals.has(permissionId)) return;
-        this.pendingApprovals.delete(permissionId);
-        request.signal?.removeEventListener('abort', onAbort);
-        const allow = decision === 'allow' || decision === 'allow_session';
-        this.emit({
-          type: 'permission.resolved',
-          payload: { permissionId, allow, decision, ...(autoReason ? { autoReason } : {}) },
-        });
-        resolve(allow ? 'allowed-once' : decision === 'cancel' ? 'cancelled' : 'rejected');
-      };
-      const onAbort = () => settle('deny', 'aborted');
-      this.pendingApprovals.set(permissionId, (decision) => settle(decision));
-      if (request.signal?.aborted) onAbort();
-      else request.signal?.addEventListener('abort', onAbort, { once: true });
-    });
   }
 }

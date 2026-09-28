@@ -30,17 +30,18 @@ describe('host.ts reads no .env file (HS-01, decision 023)', () => {
 });
 
 describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
-  it('restates the required rows off after the home layer and the plan rows', () => {
-    expect(host).toContain(
-      'overlays: [...modelPlanOverlays(modelPlan), ...requiredDisabledOverlays()],'
+  it('restates the required rows off, then the permission gate on, after the home layer and the plan rows', () => {
+    expect(host).toMatch(
+      /overlays: \[\s*\.\.\.modelPlanOverlays\(modelPlan\),\s*\.\.\.requiredDisabledOverlays\(\),\s*\.\.\.requiredEnabledOverlays\(\),\s*\],/
     );
   });
 
-  it('refuses a composition without the loop guard or the credentials row on (P1-8, P1-5b)', () => {
-    expect(host).toContain(
-      "const REQUIRED_ENABLED = ['aiclient-loop-guard', 'aiclient-credentials'];"
-    );
+  it('refuses a composition without the loop guard, the credentials row or the permission gate on (P1-8, P1-5b, P1-6b)', () => {
+    expect(host).toContain('const notEnabled = REQUIRED_ENABLED.filter(');
     expect(host).toMatch(/if \(notEnabled\.length > 0\) fail\(/);
+    expect(read('lib', 'hostProfile.ts')).toMatch(
+      /export const REQUIRED_ENABLED: readonly string\[\] = \[\s*'aiclient-loop-guard',\s*'aiclient-credentials',\s*'aiclient-permissions',\s*\];/
+    );
   });
 });
 
@@ -100,6 +101,31 @@ describe('host.ts IPC (P1-3a, decision 019)', () => {
   });
 });
 
+describe('one approval answerer in the product (P1-6b part 2, decision 042 rule 4)', () => {
+  const rows = ['bridge/plugin.ts', 'bridge/dshSessionRuntime.ts', 'permissions/plugin.ts'];
+  const answerers = (file: string) =>
+    (read(...file.split('/')).match(/'approval\/request'/g) ?? []).length;
+
+  it('the bridge no longer answers approval/request; the permission row does, once', () => {
+    expect(rows.map((file) => [file, answerers(file)])).toEqual([
+      ['bridge/plugin.ts', 0],
+      ['bridge/dshSessionRuntime.ts', 0],
+      ['permissions/plugin.ts', 1],
+    ]);
+  });
+
+  it('the bridge row injects the permission row and attaches a gate before it opens an agent', () => {
+    expect(read('bridge', 'plugin.ts')).toMatch(/'aiclientPermissions',\n\];/);
+    const runtime = read('bridge', 'dshSessionRuntime.ts');
+    expect(runtime.indexOf('this.attachGate(this.dshSessionId);')).toBeLessThan(
+      runtime.indexOf('this.handle = await this.ctx.agents.create({')
+    );
+    expect(runtime.indexOf('this.attachGate(stub.dshSessionId);')).toBeLessThan(
+      runtime.indexOf('await this.openDshSession(stub.dshSessionId, selection);')
+    );
+  });
+});
+
 describe('the product bundle: one bridge row always on, the permission row, the loop guard row', () => {
   const patch = read('bundle', 'cordis.patch.yml');
   const manifest = JSON.parse(read('bundle', 'package.json')) as {
@@ -139,10 +165,20 @@ describe('the product bundle: one bridge row always on, the permission row, the 
     expect(rows).not.toContain('baseURL');
   });
 
-  it('composes aiclient-permissions off until the bridge attaches gates (P1-6b)', () => {
+  it('composes aiclient-permissions on, with no disabled switch (P1-6b part 2)', () => {
     expect(rowOf('aiclient-permissions')).toMatch(
-      /^- id: aiclient-permissions\n\s+name: '@aiclient\/dsh-app\/permissions'\n\s+disabled: true\n?$/
+      /^- id: aiclient-permissions\n\s+name: '@aiclient\/dsh-app\/permissions'\n?$/
     );
+  });
+
+  it("turns DSH's sandbox and approval into literals, and its presets off (decisions 044, 045, 047)", () => {
+    const rows = patch.replace(/#[^\n]*/g, '');
+    expect(rows).toMatch(
+      /^- id: sandbox-policy\n {2}config:\n {4}mode: danger-full-access\n {4}workspaceRoot: !!js process\.cwd\(\)$/m
+    );
+    expect(rows).toMatch(/^- id: approval\n {2}config:\n {4}policy: ask$/m);
+    expect(rows).toMatch(/^- id: permission\n {2}disabled: true$/m);
+    expect(rows).not.toContain('DSH_PERMISSION_MODE');
   });
 
   it('composes aiclient-loop-guard on, with the 500-step ceiling (P1-8)', () => {

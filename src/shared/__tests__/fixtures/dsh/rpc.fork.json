@@ -74,7 +74,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-8",
-        "fileTailEntryId": "aiclient-rec-fork-child#25"
+        "fileTailEntryId": "aiclient-rec-fork-child#22"
       },
       "nodes": [
         {
@@ -144,7 +144,7 @@
     "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fork.dsh.json",
     "leaf": {
       "activeEntryId": null,
-      "fileTailEntryId": "aiclient-rec-fork#2"
+      "fileTailEntryId": null
     },
     "projectTrusted": true,
     "permissionGate": "bundled",
@@ -159,7 +159,7 @@
     "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fork-child.dsh.json",
     "leaf": {
       "activeEntryId": "id-5",
-      "fileTailEntryId": "aiclient-rec-fork-child#16"
+      "fileTailEntryId": "aiclient-rec-fork-child#13"
     },
     "initialHistory": {
       "logicalSessionId": "rec-fork-child",
@@ -213,7 +213,7 @@
     "workspacePath": "<workspace>",
     "leaf": {
       "activeEntryId": "id-5",
-      "fileTailEntryId": "aiclient-rec-fork-child#16"
+      "fileTailEntryId": "aiclient-rec-fork-child#13"
     },
     "historyIds": ["h:id-1", "h:id-5"]
   },

@@ -33,6 +33,7 @@ import {
   type ToolPermissionRequest,
 } from '../../shared/permissions/gate.ts';
 import type { PermissionFileSystem } from '../../shared/permissions/shellPaths.ts';
+import { TURN_CEILING_REFUSAL_CODE } from '../loopGuard/constants.ts';
 import { classifyTool } from './classification.ts';
 import type {
   DshApprovalOutcome,
@@ -96,6 +97,12 @@ export interface PermissionHostOptions {
   isTrustedPath?: (path: string) => boolean;
   /** Ledger bound: call ids whose result never arrived are forgotten oldest first. */
   maxTrackedCalls?: number;
+  /**
+   * Why a call may not run at all, asked before the gate (decision 081 rule 2):
+   * the loop guard's `refusalFor`, so a call of a wrap-up step is refused
+   * without a card whatever order the rows' listeners run in.
+   */
+  refusalFor?: (exec: DshToolCall) => string | undefined;
   log?: (...args: unknown[]) => void;
 }
 
@@ -255,6 +262,14 @@ export class PermissionHost {
     const route = this.routeOf(exec.agent);
     if (!route)
       return { kind: 'deny', reason: NOT_ATTACHED, info: info('tool_denied', 'unattached') };
+    // Before any question: a call the loop guard refuses never raises a card.
+    const refusal = this.options.refusalFor?.(exec);
+    if (refusal !== undefined)
+      return {
+        kind: 'deny',
+        reason: refusal,
+        info: { name: 'LoopGuard', code: TURN_CEILING_REFUSAL_CODE },
+      };
     if (classifyTool(exec.name) === 'internal') {
       this.allowed.add(exec);
       return next();

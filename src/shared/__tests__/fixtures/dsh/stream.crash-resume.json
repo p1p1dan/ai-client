@@ -12,7 +12,7 @@
     "requestId": "turn-CRASH",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-8",
+      "messageId": "dsh-user-5",
       "role": "user",
       "attemptId": "attempt-CRASH"
     }
@@ -22,8 +22,8 @@
     "requestId": "turn-CRASH",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-8",
-      "blockId": "dsh-user-8-text",
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
       "text": "P0-SLEEPTOOL {\"token\":\"crash-resume\",\"seconds\":10} run a long command."
     }
   },
@@ -32,7 +32,7 @@
     "requestId": "turn-CRASH",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-8"
+      "messageId": "dsh-user-5"
     }
   },
   {

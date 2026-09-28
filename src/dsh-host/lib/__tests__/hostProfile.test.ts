@@ -3,8 +3,11 @@ import {
   PRODUCT_BUNDLES,
   partitionSkippedBundles,
   REQUIRED_DISABLED,
+  REQUIRED_ENABLED,
+  RESTATED_ENABLED,
   reconcileProductBundles,
   requiredDisabledOverlays,
+  requiredEnabledOverlays,
   sameBundles,
 } from '../hostProfile.ts';
 
@@ -88,6 +91,29 @@ describe('requiredDisabledOverlays (HS-02, decision 023 rule 3)', () => {
   it('keeps plugin installs off the user machine (decision 082)', () => {
     expect(REQUIRED_DISABLED).toContain('plugin-manager');
     expect(REQUIRED_DISABLED).toContain('tool-plugin-manager');
+  });
+
+  it("keeps DSH's permission presets off: one gear selector, ours (P1-6b, decision 047)", () => {
+    expect(REQUIRED_DISABLED).toContain('permission');
+  });
+});
+
+describe('required rows on (P1-8, P1-5b, P1-6b)', () => {
+  it('checks the loop guard, the credentials row and the permission gate', () => {
+    expect([...REQUIRED_ENABLED]).toEqual([
+      'aiclient-loop-guard',
+      'aiclient-credentials',
+      'aiclient-permissions',
+    ]);
+  });
+
+  it('restates only the permission gate on, after every user layer (decision 042)', () => {
+    expect([...RESTATED_ENABLED]).toEqual(['aiclient-permissions']);
+    expect(requiredEnabledOverlays()).toEqual([{ id: 'aiclient-permissions', disabled: false }]);
+    for (const id of RESTATED_ENABLED) {
+      expect(REQUIRED_ENABLED).toContain(id);
+      expect(REQUIRED_DISABLED).not.toContain(id);
+    }
   });
 });
 

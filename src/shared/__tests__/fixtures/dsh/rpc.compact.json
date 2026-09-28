@@ -9,7 +9,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-compact.dsh.json",
       "leaf": {
         "activeEntryId": null,
-        "fileTailEntryId": "aiclient-rec-compact#2"
+        "fileTailEntryId": null
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
@@ -129,7 +129,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-15",
-        "fileTailEntryId": "aiclient-rec-compact#34"
+        "fileTailEntryId": "aiclient-rec-compact#31"
       },
       "nodes": [
         {
@@ -217,7 +217,7 @@
   },
   "compact": {
     "kind": "success",
-    "text": "Compacted 6 history items (~255 tokens).",
-    "sourceEventSeq": 31
+    "text": "Compacted 6 history items (~223 tokens).",
+    "sourceEventSeq": 28
   }
 }

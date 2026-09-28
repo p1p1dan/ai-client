@@ -32,6 +32,15 @@ export function isRecord(value: unknown): value is Message {
 export const FAKE_ROUTE = 'aiclient-gateway';
 export const FAKE_MODEL = 'fake-1';
 
+/**
+ * P1-6b: the posture a driver that is not about approvals opens its bridge
+ * sessions with (`worker.bootstrap`'s `permissions`). Every bridge session has
+ * a real permission gate now; `bypass` answers every question it would ask, so
+ * a tool call never waits on a card, while its denies (bundled secrets, plan
+ * mode) still hold. Drivers that exercise the cards leave it out.
+ */
+export const BYPASS_PERMISSIONS = Object.freeze({ mode: 'agent', gear: 'bypass' } as const);
+
 /** A probe gets its answer at once: no retry, unlike the product's 3 (decision 040). */
 export const NO_RETRY: DshRetryPolicy = {
   mode: 'normal',

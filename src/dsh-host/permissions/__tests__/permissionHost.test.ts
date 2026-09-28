@@ -123,6 +123,41 @@ describe('the aiclient-permissions row', () => {
   });
 });
 
+describe('the loop guard goes first (decision 081 rule 2)', () => {
+  it("refuses a wrap-up step's call with the loop guard's words, before any card", async () => {
+    const { fake, host } = setup();
+    const { gate, asked } = realGate();
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    const refusing = new Set(['aiclient-root']);
+    fake.services.set('aiclientLoopGuard', {
+      refusalFor: (exec: { agent?: { id: string } }) =>
+        exec.agent && refusing.has(exec.agent.id) ? 'Refused: turn ceiling.' : undefined,
+    });
+    const write = { file_path: 'notes.txt', content: 'x' };
+    expect(await fake.prepare(call('write', write, root()))).toEqual({
+      kind: 'deny',
+      reason: 'Refused: turn ceiling.',
+      info: { name: 'LoopGuard', code: 'turn_ceiling' },
+    });
+    // Internal tools too: the guard's refusal is about the step, not the tool.
+    expect((await fake.prepare(call('todo_write', { todos: [] }, root()))).kind).toBe('deny');
+    expect(asked).toHaveLength(0);
+    refusing.clear();
+    expect((await fake.prepare(call('write', write, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(1);
+  });
+
+  it('gates as before on a host without the loop guard', async () => {
+    const { fake, host } = setup();
+    const { gate } = recordingGate();
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    expect(fake.services.has('aiclientLoopGuard')).toBe(false);
+    expect((await fake.prepare(call('read', { file_path: 'notes.txt' }, root()))).kind).toBe(
+      'allow'
+    );
+  });
+});
+
 describe('routing (decision 042 rule 1)', () => {
   it('refuses a call from a session nobody attached', async () => {
     const { fake } = setup();

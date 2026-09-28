@@ -149,6 +149,12 @@
  *                       subagent, a workflow and a PTC program that each end in one
  *                       bash call, a short-circuited bash call, glob + grep over a
  *                       workspace with secrets, and a bash call held at the gate.
+ *                       P1-6b part 2 adds three for the gate itself
+ *                       (tools/bridge-smoke.ts): P1-PERM-DENY reads `.env`
+ *                       through bash (refused, no card), P1-PERM-SESSION runs
+ *                       two `echo` calls (one card, answered for the session),
+ *                       P1-PERM-PLAN writes then reads a file (plan mode: the
+ *                       write is refused, the read runs).
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -332,7 +338,8 @@ function logRequest(entry) {
 const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
-const P1_MARKER = /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD))/;
+const P1_MARKER =
+  /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -789,6 +796,29 @@ const DSH_P0_2_SCRIPTS = {
     if (step === 0) return tool('glob', { pattern: '**/*' });
     if (step === 1) return tool('grep', { pattern: 'PERM-SECRET' });
     return say('P1-PERM-SEARCH finished.');
+  },
+  // dsh-rebase P1-6b part 2: the gate for real (tools/bridge-smoke.ts).
+  'P1-PERM-DENY'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'cat .env', description: 'Print the env file' });
+    }
+    return say('P1-PERM-DENY finished.');
+  },
+  'P1-PERM-SESSION'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'echo perm-session-first', description: 'First echo' });
+    }
+    if (step === 1) {
+      return tool('bash', { command: 'echo perm-session-second', description: 'Second echo' });
+    }
+    return say('P1-PERM-SESSION finished.');
+  },
+  'P1-PERM-PLAN'(_round, step) {
+    if (step === 0) {
+      return tool('write', { file_path: 'perm-plan.txt', content: 'written in plan mode\n' });
+    }
+    if (step === 1) return tool('read', { file_path: 'perm-plan-notes.txt' });
+    return say('P1-PERM-PLAN finished.');
   },
   'P1-PERM-HOLD'(_round, step) {
     if (step === 0) {

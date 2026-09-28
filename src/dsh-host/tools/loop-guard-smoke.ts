@@ -29,9 +29,10 @@
  *             in the log; the next user message opens a new count.
  * Host B  AICLIENT_RUNTIME_LOOP_GUARD=0 (same patch):
  *   G6        P8-REPEAT runs all 30 calls; a 6-step P8-LOOP is not capped.
- * Host C  guard on, ceiling 3, the route in mode `normal` with retries, and
- *         `aiclient-permissions` switched on with no gate attached (every call
- *         refused by it):
+ * Host C  guard on, ceiling 3, the route in mode `normal` with retries; the
+ *         E5b session opens with no gate attached (`permissionGate: 'none'`),
+ *         so `aiclient-permissions`, on in the product since P1-6b, refuses
+ *         every call of it:
  *   E1b       P8-REPEAT is not retried in mode normal either.
  *   E5b       the wrap-up step's call is refused by the loop guard, not by the
  *             permission row registered before it.
@@ -227,8 +228,13 @@ async function runTurn(host: Host, sessionId: string, text: string, timeoutMs = 
   return { idle: idle.idle === true, ms: Math.round(performance.now() - started) };
 }
 
-async function newSession(host: Host, sessionId: string) {
-  await call(host, 'create-session', { sessionId, cwd: host.box.workspace });
+/** A probe session; `ungated` leaves it without the probe's stand-in gate (P1-6b). */
+async function newSession(host: Host, sessionId: string, ungated = false) {
+  await call(host, 'create-session', {
+    sessionId,
+    cwd: host.box.workspace,
+    ...(ungated ? { permissionGate: 'none' } : {}),
+  });
   return sessionId;
 }
 
@@ -514,13 +520,7 @@ async function hostB(port: number, gatewayRoot: string) {
 }
 
 async function hostC(port: number, gatewayRoot: string) {
-  const host = await startHost(
-    'c',
-    port,
-    `${ceilingPatch}- id: aiclient-permissions\n  disabled: false\n`,
-    {},
-    NORMAL_RETRY
-  );
+  const host = await startHost('c', port, ceilingPatch, {}, NORMAL_RETRY);
   const facts: Line = { census: host.ready.census };
   try {
     const e1 = await newSession(host, 'p8-e1b');
@@ -535,7 +535,7 @@ async function hostC(port: number, gatewayRoot: string) {
       retries: e1View.retries,
       turnEnd: e1View.turnEnds[0],
     };
-    const e5 = await newSession(host, 'p8-e5b');
+    const e5 = await newSession(host, 'p8-e5b', true);
     facts.e5bTurn = await runTurn(host, e5, 'P8-LOOP {"tag":"e5b","wrapTool":true} keep reading.');
     const e5View = sessionView(host, e5);
     facts.e5b = {

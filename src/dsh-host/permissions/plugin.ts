@@ -6,14 +6,16 @@
  * row's Cordis context and publishes `ctx.aiclientPermissions`, the service
  * the bridge injects to attach one `PermissionGate` per chat session.
  *
- * Off in the product bundle until the bridge attaches gates (P1-6b part 2):
- * with the row on and nothing attached, every tool call is refused.
+ * Always on in the product bundle (P1-6b part 2): the bridge injects the
+ * service and attaches a gate per chat session before it opens the session's
+ * agent. A call nothing attached is refused.
  *
  * Two ways in, like the bridge row (decision 011): a source checkout loads
  * `bundle/lib/permissions.js`, a one-line re-export of this file; the packaged
  * host loads the esbuild bundle scripts/build-dsh-host.mjs writes over it.
  */
 
+import { LOOP_GUARD_SERVICE } from '../loopGuard/constants.ts';
 import type {
   DshApprovalOutcome,
   DshApprovalRequest,
@@ -46,11 +48,22 @@ export interface PermissionRowContext {
   on(name: string, listener: Listener, options?: { prepend?: boolean }): () => boolean;
   tools: { guard(guard: (exec: object) => string | undefined): () => void };
   provide(name: string, value: unknown): () => void;
+  /** A service this row reads without injecting it; `undefined` when absent. */
+  get?(name: string): unknown;
+}
+
+/** The slice of `ctx.aiclientLoopGuard` (P1-8) read here. */
+interface LoopGuardView {
+  refusalFor(exec: DshToolCall): string | undefined;
 }
 
 export function apply(ctx: PermissionRowContext): void {
   const host = new PermissionHost({
     loadParser: loadBashParser,
+    // Decision 081 rule 2: looked up per call, not injected, so neither row
+    // waits on the other and a host without the loop guard still gates.
+    refusalFor: (exec) =>
+      (ctx.get?.(LOOP_GUARD_SERVICE) as LoopGuardView | undefined)?.refusalFor(exec),
     log: (...args) => console.error(...args),
   });
   ctx.on('session/created', (session: DshSessionView | undefined) =>

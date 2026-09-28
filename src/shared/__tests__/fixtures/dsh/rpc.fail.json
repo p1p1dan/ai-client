@@ -9,7 +9,7 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail.dsh.json",
       "leaf": {
         "activeEntryId": null,
-        "fileTailEntryId": "aiclient-rec-fail#2"
+        "fileTailEntryId": null
       },
       "projectTrusted": true,
       "permissionGate": "bundled",
@@ -58,7 +58,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-1:end",
-        "fileTailEntryId": "aiclient-rec-fail#15"
+        "fileTailEntryId": "aiclient-rec-fail#12"
       },
       "nodes": [
         {

@@ -71,6 +71,7 @@ export function createFakeDsh(): FakeDsh {
       services.set(name, value);
       return () => services.delete(name);
     },
+    get: (name) => services.get(name),
   };
   return {
     ctx,

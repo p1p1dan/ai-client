@@ -40,7 +40,30 @@ export const REQUIRED_DISABLED: readonly string[] = [
   // the user's machine; the plugin allowlist ships preinstalled instead.
   'plugin-manager',
   'tool-plugin-manager',
+  // P1-6b (decision 047): dsh-permission-presets would be a second gear
+  // selector beside ai-client's own (`/permission` and the presets); the
+  // aiclient-permissions row is the only one.
+  'permission',
 ];
+
+/**
+ * Rows the composition must carry and keep on (host.ts checks them on the
+ * composed list). The loop guard and the credentials row are only checked: a
+ * layer that turns one off refuses the boot (decisions 065, 034).
+ */
+export const REQUIRED_ENABLED: readonly string[] = [
+  'aiclient-loop-guard',
+  'aiclient-credentials',
+  'aiclient-permissions',
+];
+
+/**
+ * Required rows that are also restated on after every user layer, the way
+ * `REQUIRED_DISABLED` rows are restated off: ai-client's permission gate
+ * (P1-6b, decision 042). A home patch cannot take the approval floor away;
+ * the composition check still refuses a bundle that does not carry the row.
+ */
+export const RESTATED_ENABLED: readonly string[] = ['aiclient-permissions'];
 
 export interface SkippedBundle {
   packageName: string;
@@ -82,6 +105,11 @@ export function sameBundles(left: readonly unknown[], right: readonly unknown[])
  */
 export function requiredDisabledOverlays(): Array<{ id: string; disabled: true }> {
   return REQUIRED_DISABLED.map((id) => ({ id, disabled: true as const }));
+}
+
+/** Patches restating `RESTATED_ENABLED` on; they go after `requiredDisabledOverlays()`. */
+export function requiredEnabledOverlays(): Array<{ id: string; disabled: false }> {
+  return RESTATED_ENABLED.map((id) => ({ id, disabled: false as const }));
 }
 
 /**

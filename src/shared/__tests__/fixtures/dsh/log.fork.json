@@ -8,36 +8,12 @@
     "isSeeded": true,
     "delegationDepth": 0
   },
-  "inheritedEventCount": 16,
-  "cursor": 25,
+  "inheritedEventCount": 13,
+  "cursor": 22,
   "events": [
     {
-      "type": "permission/preset",
-      "seq": 0,
-      "time": "<ms>",
-      "data": {
-        "preset": "workspace-write"
-      }
-    },
-    {
-      "type": "sandbox/mode",
-      "seq": 1,
-      "time": "<ms>",
-      "data": {
-        "mode": "workspace-write"
-      }
-    },
-    {
-      "type": "approval/policy",
-      "seq": 2,
-      "time": "<ms>",
-      "data": {
-        "policy": "ask"
-      }
-    },
-    {
       "type": "agent/inbox/spliced",
-      "seq": 3,
+      "seq": 0,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -61,7 +37,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 4,
+      "seq": 1,
       "time": "<ms>",
       "data": {
         "turn": 1
@@ -69,7 +45,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 5,
+      "seq": 2,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -80,7 +56,7 @@
     },
     {
       "type": "step/start",
-      "seq": 6,
+      "seq": 3,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -89,7 +65,7 @@
     },
     {
       "type": "system/message",
-      "seq": 7,
+      "seq": 4,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -112,7 +88,7 @@
     },
     {
       "type": "user/message",
-      "seq": 8,
+      "seq": 5,
       "time": "<ms>",
       "data": {
         "content": [
@@ -131,7 +107,7 @@
     },
     {
       "type": "user/message",
-      "seq": 9,
+      "seq": 6,
       "time": "<ms>",
       "data": {
         "content": [
@@ -146,7 +122,7 @@
           "sections": [
             {
               "name": "sandbox:policy",
-              "text": "Current DSH file policy: workspace-write. Any available operation enforced by the DSH file sandbox may modify files under the session workspace: \"<workspace>\". Some platform temporary areas may also be writable."
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
             {
               "name": "approval:policy",
@@ -161,7 +137,7 @@
     },
     {
       "type": "request/header",
-      "seq": 10,
+      "seq": 7,
       "time": "<ms>",
       "data": {
         "header": {
@@ -203,7 +179,7 @@
     },
     {
       "type": "request/context",
-      "seq": 11,
+      "seq": 8,
       "time": "<ms>",
       "data": {
         "provider": "aiclient-gateway",
@@ -213,11 +189,11 @@
     },
     {
       "type": "session/title",
-      "seq": 12,
+      "seq": 9,
       "time": "<ms>",
       "data": {
         "title": "gamma FORK-BASE-1, no scenario.",
-        "messageSeqs": [8],
+        "messageSeqs": [5],
         "source": {
           "kind": "fallback"
         }
@@ -225,7 +201,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 13,
+      "seq": 10,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -338,7 +314,7 @@
     },
     {
       "type": "step/end",
-      "seq": 14,
+      "seq": 11,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -347,7 +323,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 15,
+      "seq": 12,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -358,7 +334,7 @@
     },
     {
       "type": "session/end-seed",
-      "seq": 16,
+      "seq": 13,
       "time": "<ms>",
       "data": {
         "inherited": true
@@ -366,7 +342,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 17,
+      "seq": 14,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -390,7 +366,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 18,
+      "seq": 15,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -398,7 +374,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 19,
+      "seq": 16,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -409,7 +385,7 @@
     },
     {
       "type": "step/start",
-      "seq": 20,
+      "seq": 17,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -418,7 +394,7 @@
     },
     {
       "type": "user/message",
-      "seq": 21,
+      "seq": 18,
       "time": "<ms>",
       "data": {
         "content": [
@@ -437,7 +413,7 @@
     },
     {
       "type": "request/header",
-      "seq": 22,
+      "seq": 19,
       "time": "<ms>",
       "data": {
         "header": {
@@ -479,7 +455,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 20,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -592,7 +568,7 @@
     },
     {
       "type": "step/end",
-      "seq": 24,
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -601,7 +577,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 25,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 2,

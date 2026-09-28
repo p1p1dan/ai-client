@@ -79,8 +79,30 @@ export function apply(ctx) {
     return snapshot ? { sizeBytes: snapshot.sizeBytes ?? null, revision: snapshot.revision } : null;
   };
 
+  // P1-6b: these sessions are not the bridge's, so nothing attaches a gate to
+  // them; an allow-all stand-in keeps the permission row from refusing their
+  // tool calls (the experiments predate it and measure the engine, not the gate).
+  const standInGate = {
+    authorize: async () => {},
+    canTraverse: () => true,
+    onActivity: () => () => {},
+  };
+  const attachStandIn = (sessionId, cwd) => {
+    const permissions = ctx.get('aiclientPermissions');
+    try {
+      permissions?.attachGate(`rewind-experiment:${sessionId}`, {
+        dshSessionId: sessionId,
+        gate: standInGate,
+        cwd,
+      });
+    } catch {
+      // Already routed (a root attached elsewhere); its gate stands.
+    }
+  };
+
   const ops = {
     async create(message) {
+      attachStandIn(message.sessionId, message.cwd);
       const started = performance.now();
       const meta = {
         cwd: message.cwd,
@@ -147,6 +169,7 @@ export function apply(ctx) {
       return { ms: Math.round(performance.now() - started) };
     },
     async resume(message) {
+      attachStandIn(message.sessionId, message.cwd);
       const started = performance.now();
       try {
         const handle = await ctx.agents.resume({

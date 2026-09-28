@@ -46,7 +46,13 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
-import { fakeGatewayPlan, HostClient, isRecord, type Message } from './lib/hostClient.ts';
+import {
+  BYPASS_PERMISSIONS,
+  fakeGatewayPlan,
+  HostClient,
+  isRecord,
+  type Message,
+} from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -296,7 +302,13 @@ async function bootstrap(
   await host.client.request(
     ch,
     'worker.bootstrap',
-    { logicalSessionId, cwd, ...(sessionFile ? { sessionFile } : {}) },
+    // P1-6b: the regression measures contention, not the approval cards.
+    {
+      logicalSessionId,
+      cwd,
+      ...(sessionFile ? { sessionFile } : {}),
+      permissions: BYPASS_PERMISSIONS,
+    },
     180_000
   );
   return { ch, ms: round(performance.now() - started, 0) };

@@ -70,7 +70,13 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { fakeGatewayPlan, HostClient, isRecord, type Message } from './lib/hostClient.ts';
+import {
+  BYPASS_PERMISSIONS,
+  fakeGatewayPlan,
+  HostClient,
+  isRecord,
+  type Message,
+} from './lib/hostClient.ts';
 import { baseEnv, captureStderr, exitOf, type Sandbox, sandbox, sleep } from './lib/kit.ts';
 import { installProbeBundle } from './lib/probe-bundle.ts';
 
@@ -822,6 +828,8 @@ async function main(): Promise<number> {
         logicalSessionId,
         cwd: box.workspace,
         ...(sessionFile ? { sessionFile } : {}),
+        // P1-6b: the samples record the bridge, not the approval cards.
+        permissions: BYPASS_PERMISSIONS,
       });
       return {
         session: {

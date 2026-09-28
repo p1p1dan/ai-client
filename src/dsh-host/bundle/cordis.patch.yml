@@ -84,6 +84,33 @@
 - id: plugin-manager
   disabled: true
 
+# ---- P1-6b: approvals come from ai-client's gate alone ----------------------
+
+# Decisions 044 and 045: DSH's sandbox is off on every platform in P1, so the
+# only approval a tool call meets is aiclient-permissions' (the 1.0.x model)
+# and no operation is asked twice. Literal values: DSH_PERMISSION_MODE is
+# never read (Main strips DSH_* from the host's environment as well). An id
+# patch replaces the whole config, so the workspace root is restated. With
+# danger-full-access the sandbox provider is never called, which also keeps
+# the Windows ACL rung (and its standing ACEs) out of the picture.
+- id: sandbox-policy
+  config:
+    mode: danger-full-access
+    workspaceRoot: !!js process.cwd()
+
+# Asked only by DSH itself (a sandbox escalation, a third-party plugin's
+# `ask`); aiclient-permissions is the answerer. Never `never`: a denial must
+# stay a denial the user can see.
+- id: approval
+  config:
+    policy: ask
+
+# Decision 047: DSH's permission presets (`/permission`) would be a second
+# gear selector beside ours. host.ts restates this row off after every user
+# layer (hostProfile.ts REQUIRED_DISABLED).
+- id: permission
+  disabled: true
+
 - insert:
     # P1-5b (decision 034): ctx.credentials, read-only. A key reference of the
     # model plan resolves to the key Main hands over for that one request;
@@ -100,11 +127,11 @@
 
     # P1-6b (decisions 041, 042): ai-client's permission gate. Routes every
     # tool call to the gate the bridge attached for its chat session and
-    # refuses calls nobody attached, so it stays off until the bridge attaches
-    # gates (P1-6b part 2).
+    # refuses calls nobody attached. Always on: the bridge injects it, host.ts
+    # restates it on after every user layer and refuses a composition without
+    # it (hostProfile.ts REQUIRED_ENABLED, RESTATED_ENABLED).
     - id: aiclient-permissions
       name: '@aiclient/dsh-app/permissions'
-      disabled: true
 
     # P1-8 (decisions 065, 066): cuts a reply that keeps repeating delegation
     # or job calls while it streams, and stops an agent after `stepCeiling`

@@ -74,7 +74,7 @@ import os from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
-import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
+import { BYPASS_PERMISSIONS, fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -485,6 +485,8 @@ async function bootstrap(
     logicalSessionId: slot,
     cwd,
     ...(sessionFile ? { sessionFile } : {}),
+    // P1-6b: the probe measures the host, not the approval cards.
+    permissions: BYPASS_PERMISSIONS,
     ...extra,
   });
   return { ms: round(performance.now() - started, 1), result };

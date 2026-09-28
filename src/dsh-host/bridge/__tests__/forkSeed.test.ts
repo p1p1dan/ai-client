@@ -37,9 +37,9 @@ const at = (seq: number, type: string, data: unknown = {}): DshLogEvent => ({
 
 describe('planDshCut — rewind', () => {
   it('cuts before the turn of a prompt, and hands the prompt back', () => {
-    // The second turn's prompt: its turn starts at 17, queued at 16.
+    // The second turn's prompt: its turn starts at 14, queued at 13.
     expect(planDshCut(log('compact'), 'id-6', 'rewind')).toEqual({
-      boundary: 15,
+      boundary: 12,
       editorText: 'P0-TOOL: list the workspace.',
     });
   });
@@ -53,22 +53,22 @@ describe('planDshCut — rewind', () => {
 
   it('keeps a model step with its tool results, through its step end', () => {
     // Step 1 of two: its step/end, not the turn's.
-    expect(planDshCut(log('tool'), 'id-6', 'rewind')).toEqual({ boundary: 16 });
+    expect(planDshCut(log('tool'), 'id-6', 'rewind')).toEqual({ boundary: 13 });
   });
 
   it('keeps how the turn ended when the step was its last', () => {
-    expect(planDshCut(log('tool'), 'id-9', 'rewind')).toEqual({ boundary: 20 });
+    expect(planDshCut(log('tool'), 'id-9', 'rewind')).toEqual({ boundary: 17 });
     // A Stop: the child still reads user_stop on that step.
     const stopped = log('stop-tool');
-    expect(planDshCut(stopped, 'id-6', 'rewind')).toEqual({ boundary: 17 });
-    expect(stopped[17]?.data).toMatchObject({ reason: { kind: 'aborted' } });
+    expect(planDshCut(stopped, 'id-6', 'rewind')).toEqual({ boundary: 14 });
+    expect(stopped[14]?.data).toMatchObject({ reason: { kind: 'aborted' } });
   });
 
   it('cuts at the turn end for the rows a turn end made', () => {
     expect(planDshCut(log('crash-resume'), 'id-1:interrupted', 'rewind')).toEqual({
-      boundary: 17,
+      boundary: 14,
     });
-    expect(planDshCut(log('fail'), 'id-1:end', 'rewind')).toEqual({ boundary: 15 });
+    expect(planDshCut(log('fail'), 'id-1:end', 'rewind')).toEqual({ boundary: 12 });
   });
 
   it('keeps a compaction whole: through its end and its command', () => {
@@ -79,8 +79,8 @@ describe('planDshCut — rewind', () => {
         (event.data as { source?: { kind?: string } }).source?.kind === 'compact-checkpoint'
     );
     const id = (checkpoint?.data as { id: string }).id;
-    expect(planDshCut(events, id, 'rewind')).toEqual({ boundary: 34 });
-    expect(events[34]?.type).toBe('command/done');
+    expect(planDshCut(events, id, 'rewind')).toEqual({ boundary: 31 });
+    expect(events[31]?.type).toBe('command/done');
   });
 
   it('answers undefined for a node the log does not have', () => {
@@ -110,42 +110,42 @@ describe('planDshCut — rewind', () => {
 
 describe('planDshCut — fork', () => {
   it('keeps the prompt itself', () => {
-    expect(planDshCut(log('tool'), 'id-1', 'fork')).toEqual({ boundary: 8 });
+    expect(planDshCut(log('tool'), 'id-1', 'fork')).toEqual({ boundary: 5 });
   });
 
   it('cuts a step as a rewind does', () => {
-    expect(planDshCut(log('tool'), 'id-6', 'fork')).toEqual({ boundary: 16 });
+    expect(planDshCut(log('tool'), 'id-6', 'fork')).toEqual({ boundary: 13 });
   });
 });
 
 describe('buildDshForkSeed', () => {
   it('copies the prefix and marks the inherited cut', () => {
     const events = log('tool');
-    const seed = buildDshForkSeed(events, 20);
-    expect(seed.slice(0, 21)).toEqual(events.slice(0, 21));
+    const seed = buildDshForkSeed(events, 17);
+    expect(seed.slice(0, 18)).toEqual(events.slice(0, 18));
     // The same objects: every MessageId survives the cut.
-    expect(seed[13]).toBe(events[13]);
-    expect(seed.slice(21)).toEqual([
-      { type: 'session/end-seed', seq: 21, time: events[20]?.time, data: { inherited: true } },
+    expect(seed[10]).toBe(events[10]);
+    expect(seed.slice(18)).toEqual([
+      { type: 'session/end-seed', seq: 18, time: events[17]?.time, data: { inherited: true } },
     ]);
   });
 
   it('closes a turn the cut left open between steps', () => {
     const events = log('tool');
     expect(
-      buildDshForkSeed(events, 16)
-        .slice(16)
+      buildDshForkSeed(events, 13)
+        .slice(13)
         .map((event) => [event.seq, event.type, event.data])
     ).toEqual([
-      [16, 'step/end', { turn: 1, step: 1 }],
-      [17, 'session/end-seed', { inherited: true }],
-      [18, 'turn/end', { turn: 1, reason: { kind: 'forked' } }],
+      [13, 'step/end', { turn: 1, step: 1 }],
+      [14, 'session/end-seed', { inherited: true }],
+      [15, 'turn/end', { turn: 1, reason: { kind: 'forked' } }],
     ]);
   });
 
   it('answers a call the cut left unanswered: not started, or outcome unknown', () => {
     const events = log('tool');
-    const beforeDispatch = buildDshForkSeed(events, 13).slice(14);
+    const beforeDispatch = buildDshForkSeed(events, 10).slice(11);
     expect(beforeDispatch.map((event) => event.type)).toEqual([
       'session/end-seed',
       'tool/result',
@@ -153,17 +153,17 @@ describe('buildDshForkSeed', () => {
       'turn/end',
     ]);
     expect(beforeDispatch[1]).toMatchObject({
-      seq: 15,
+      seq: 12,
       data: {
         message: { toolCallId: 'toolu_id-4', isError: true },
         error: { code: 'TOOL_NOT_STARTED' },
       },
       surfaceOp: 'append',
     });
-    const dispatched = buildDshForkSeed(events, 14).slice(15);
+    const dispatched = buildDshForkSeed(events, 11).slice(12);
     expect(dispatched[1]).toMatchObject({
       data: { error: { code: 'TOOL_OUTCOME_UNKNOWN' } },
-      sourceEventSeqs: [14],
+      sourceEventSeqs: [11],
     });
   });
 
