@@ -258,9 +258,15 @@ const DIALOG_PADDING_MANIFEST: readonly DialogEntry[] = [
   },
   {
     file: 'components/workspace-shell/LeftDock.tsx',
-    category: 'manual',
+    category: 'panel',
     reason:
-      'The capabilities list caps itself at max-h-80 with its own overflow-y-auto, which DialogPanel’s ScrollArea would nest awkwardly under — same reasoning as AnnouncementDialog; documented inline where the manual px-6 lives.',
+      'dsh-rebase P1-16e: the capabilities dialog is down to the skill count (decision 104), so the self-scrolling list that made it manual is gone; standard DialogPanel body.',
+  },
+  {
+    file: 'components/settings/LegacyAssetNotice.tsx',
+    category: 'panel',
+    reason:
+      'dsh-rebase P1-16e: the one-time legacy asset notice lists what no longer applies in a standard DialogPanel body between header and footer.',
   },
   {
     file: 'components/worktree/CreateWorktreeDialog.tsx',

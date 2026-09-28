@@ -24,11 +24,11 @@ import type { TempWorkspaceItem } from '@shared/types';
 import { Blocks, PanelLeftClose, PanelLeftOpen, Settings } from 'lucide-react';
 import { type Ref, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
-import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
   DialogDescription,
   DialogHeader,
+  DialogPanel,
   DialogPopup,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -438,12 +438,12 @@ function RailIconButton({
 /**
  * T026 — what the active chat's own runtime brought up, with its entry point.
  *
- * This used to be U04's pi extension inventory. P6-5 retired the engine that
- * loaded pi extensions, which left the panel reporting "0 plugins" for every
- * session while the MCP servers, skills and sub-agents the session really had
- * went unmentioned (cutover-03). It now projects those instead, straight off
- * the bootstrap result — and says where installed pi extensions DO apply, which
- * is the built-in terminal.
+ * This used to be U04's pi extension inventory, then (cutover-03) MCP servers,
+ * skills, prompt templates and sub-agent definitions. dsh-rebase P1-16e
+ * (decision 104 rule 4) left only the skill count: the DSH engine has no MCP
+ * bridge, no templates and no custom sub-agent definitions, and pi extensions
+ * are gone altogether (decision 090), so those rows and the sentence about
+ * where pi extensions load went with them.
  *
  * `null` (nobody reported) still reads differently from `0` (reported none):
  * see `sessionCapabilityModel`.
@@ -469,17 +469,13 @@ function CapabilitiesDialog({
             {t('Capabilities')}
           </DialogTitle>
           <DialogDescription>
-            {/* Per session because every one of these is resolved from the
-                session's own working directory and settings — an app-wide list
-                would be wrong for any second workspace. */}
-            {t('MCP servers, skills and sub-agents this chat brought up.')}
+            {/* Per session because skills are resolved from the session's own
+                working directory — an app-wide count would be wrong for any
+                second workspace. */}
+            {t('Skills this chat can use.')}
           </DialogDescription>
         </DialogHeader>
-        {/* DialogPopup carries no padding of its own; DialogPanel's ScrollArea
-            would fight this list's own `max-h-80` cap (same reason
-            AnnouncementDialog goes manual), so the 24px the header already has
-            is replicated by hand on this wrapper instead. */}
-        <div className="px-6 pb-6">
+        <DialogPanel>
           {!view.reported ? (
             // Not "nothing": nothing has been asked yet, because this chat has no
             // running worker to have brought anything up.
@@ -487,60 +483,12 @@ function CapabilitiesDialog({
               {t('Send a message to start this chat and see what it brings up.')}
             </p>
           ) : (
-            <div className="flex max-h-80 flex-col gap-1 overflow-y-auto">
-              <CapabilityRow
-                label={t('MCP servers')}
-                value={
-                  view.mcp
-                    ? view.mcp.badge
-                    : view.mcpServers
-                      ? t('No MCP servers configured')
-                      : t('Not reported')
-                }
-              />
-              {view.mcpServers?.map((server) => (
-                <div key={server.name} className="flex flex-col px-2 py-1">
-                  <div className="flex items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate text-ui">{server.name}</span>
-                    {server.ok ? (
-                      <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
-                        {t('{{count}} tools', { count: server.toolCount })}
-                      </span>
-                    ) : (
-                      <Badge variant="error" size="sm" className="shrink-0">
-                        {t('Failed')}
-                      </Badge>
-                    )}
-                  </div>
-                  {server.error && (
-                    <span className="truncate text-meta text-muted-foreground" title={server.error}>
-                      {server.error}
-                    </span>
-                  )}
-                </div>
-              ))}
-              <CapabilityRow
-                label={t('Skills')}
-                value={view.skills === null ? t('Not reported') : String(view.skills)}
-              />
-              <CapabilityRow
-                label={t('Prompt templates')}
-                value={
-                  view.promptTemplates === null ? t('Not reported') : String(view.promptTemplates)
-                }
-              />
-              <CapabilityRow
-                label={t('Sub-agents')}
-                value={view.subagents === null ? t('Not reported') : String(view.subagents)}
-              />
-              {/* cutover-03: the sentence that stops someone reinstalling a pi
-                  extension because this panel never names it. */}
-              <p className="pt-2 text-meta text-muted-foreground">
-                {t('Pi extensions you install are loaded only by the built-in terminal.')}
-              </p>
-            </div>
+            <CapabilityRow
+              label={t('Skills')}
+              value={view.skills === null ? t('Not reported') : String(view.skills)}
+            />
           )}
-        </div>
+        </DialogPanel>
       </DialogPopup>
     </Dialog>
   );

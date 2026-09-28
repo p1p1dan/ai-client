@@ -1,22 +1,55 @@
-import type { PiResourceSettings, UpdatePiResourceSettingsRequest } from '@shared/piModelConfig';
-import { Boxes, FolderOpen, Library, TriangleAlert } from 'lucide-react';
+/**
+ * Settings → Extensions → Skills: the two skill folders and the rules a skill
+ * has to follow to load.
+ *
+ * dsh-rebase P1-16e (decision 104 rule 3) narrowed this page to what the DSH
+ * host actually reads: `<agentDir>/skills` (its `customSkillDirs`, decision
+ * 101) and `~/.agents/skills` (a DSH default root). Gone with it: the prompt
+ * template folder (templates are not supported, decision 103), the personal
+ * `~/.pi/agent` folders (never loaded since H/19; the data-migration page is
+ * where they are copied from), and the "Agent features" delegation switch
+ * (decision 105: DSH sub-agents are always available). Whatever a 1.0.x user
+ * left in those places is listed by the legacy-asset notice instead.
+ */
+
+import type { PiResourceSettings } from '@shared/piModelConfig';
+import { FolderOpen, Library, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
-import { Switch } from '@/components/ui/switch';
 import { useI18n } from '@/i18n';
-import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
+import { SettingsSectionBlock } from './SettingsPrimitives';
 
 function messageOf(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
-function ResourcePath({ label, path }: { label: string; path: string }) {
+function SkillFolder({
+  title,
+  description,
+  path,
+  opening,
+  onOpen,
+}: {
+  title: string;
+  description: string;
+  path: string;
+  opening: boolean;
+  onOpen: () => void;
+}) {
+  const { t } = useI18n();
   return (
-    <div className="grid gap-1 sm:grid-cols-[120px_1fr] sm:gap-3">
-      <span className="text-meta text-muted-foreground">{label}</span>
-      <Ident className="min-w-0 break-all">{path}</Ident>
+    <div className="space-y-2 rounded-md border p-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <h4 className="min-w-0 flex-1 truncate text-ui font-semibold">{title}</h4>
+      </div>
+      <p className="text-meta text-muted-foreground">{description}</p>
+      <Ident className="block min-w-0 break-all">{path}</Ident>
+      <Button variant="outline" size="sm" onClick={onOpen} disabled={opening} className="w-fit">
+        <FolderOpen className="h-4 w-4" />
+        {opening ? t('Opening...') : t('Open folder')}
+      </Button>
     </div>
   );
 }
@@ -24,7 +57,6 @@ function ResourcePath({ label, path }: { label: string; path: string }) {
 export function PiResourcesSettings() {
   const { t } = useI18n();
   const [snapshot, setSnapshot] = useState<PiResourceSettings | null>(null);
-  const [busy, setBusy] = useState(false);
   const [opening, setOpening] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,31 +73,12 @@ export function PiResourcesSettings() {
     void load();
   }, [load]);
 
-  /**
-   * The request is a PARTIAL update, so each switch sends only its own field —
-   * sending the whole snapshot would let a stale one overwrite whichever switch
-   * the user did not touch.
-   */
-  const update = async (patch: UpdatePiResourceSettingsRequest) => {
-    setBusy(true);
-    setError(null);
-    try {
-      setSnapshot(await window.electronAPI.piResources.updateSettings(patch));
-    } catch (cause) {
-      const message = messageOf(cause);
-      await load();
-      setError(message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const openResourceFolder = async (kind: 'skills' | 'prompts') => {
+  const openFolder = async (root: 'app' | 'shared') => {
     setOpening(true);
     setError(null);
     try {
-      if (kind === 'skills') await window.electronAPI.piResources.openSkills();
-      else await window.electronAPI.piResources.openPromptTemplates();
+      if (root === 'app') await window.electronAPI.piResources.openAppSkills();
+      else await window.electronAPI.piResources.openSkills();
     } catch (cause) {
       setError(messageOf(cause));
     } finally {
@@ -74,12 +87,12 @@ export function PiResourcesSettings() {
   };
 
   return (
-    <div className="space-y-6">
-      <SettingsSectionBlock
-        title={t('Pi Resources')}
-        description={t('Install skills and prompt templates where Pi can load them reliably.')}
-      />
-
+    <SettingsSectionBlock
+      title={t('Skills')}
+      description={t(
+        'Chats load skills from these two folders, and from .dsh/skills and .agents/skills at the root of the project’s repository.'
+      )}
+    >
       {error && (
         <div
           role="alert"
@@ -93,110 +106,44 @@ export function PiResourcesSettings() {
       {!snapshot ? (
         <p className="text-ui text-muted-foreground">{t('Loading resource settings...')}</p>
       ) : (
-        <>
-          <section className="space-y-3 border-t p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <Library className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <h4 className="text-ui font-semibold">{t('Shared skills')}</h4>
-              </div>
-              <Badge variant="success">{t('Default')}</Badge>
-            </div>
-            <p className="text-meta text-muted-foreground">
-              {t(
-                'This cross-agent location is always loaded in managed mode, local mode, and the Pi TUI.'
-              )}
-            </p>
-            <ResourcePath label={t('Skills')} path={snapshot.paths.sharedSkills} />
-            <Button
-              variant="outline"
-              onClick={() => void openResourceFolder('skills')}
-              disabled={opening}
-              className="w-fit"
-            >
-              <FolderOpen className="h-4 w-4" />
-              {opening ? t('Opening...') : t('Open skills folder')}
-            </Button>
-          </section>
-
-          <section className="space-y-4 border-t p-4">
-            <div>
-              <h4 className="text-ui font-semibold">{t('This app’s Pi directory')}</h4>
-              <p className="text-meta text-muted-foreground">
-                {/* H/19: one directory in both modes. Saying "managed mode reads
-                    this" would send a local-mode user looking for a second
-                    location that no longer exists. cutover-03 split the
-                    sentence: pi extensions live here too, but since P6-5 only
-                    the TUI loads them. */}
-                {t(
-                  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills and prompt templates from here. Installed pi extensions are loaded from here by the Pi TUI only.'
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <ResourcePath label={t('Skills')} path={snapshot.paths.appSkills} />
-              <ResourcePath
-                label={t('Prompt templates')}
-                path={snapshot.paths.appPromptTemplates}
-              />
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => void openResourceFolder('prompts')}
-              disabled={opening}
-              className="w-fit"
-            >
-              <FolderOpen className="h-4 w-4" />
-              {opening ? t('Opening...') : t('Open prompt templates folder')}
-            </Button>
-          </section>
-
-          <section className="space-y-4 border-t p-4">
-            <div>
-              <h4 className="text-ui font-semibold">{t('Your personal Pi directory')}</h4>
-              <p className="text-meta text-muted-foreground">
-                {t(
-                  'Where the Pi CLI in your own terminal reads from. This app never writes here, and no longer loads from here — use the copy step above to bring things over.'
-                )}
-              </p>
-            </div>
-            <div className="space-y-2">
-              <ResourcePath label={t('Skills')} path={snapshot.paths.userSkills} />
-              <ResourcePath
-                label={t('Prompt templates')}
-                path={snapshot.paths.userPromptTemplates}
-              />
-            </div>
-          </section>
-
-          {/* cutover-10: these switch features of THIS app's own runtime, not
-              bundled pi extensions — those were retired in T025 — and each one
-              reads the same state the runtime reads, so the page cannot show
-              "off" for a session that has the feature on. */}
-          <section className="space-y-4 border-t p-4">
-            <div className="flex min-w-0 items-center gap-2">
-              <Boxes className="h-4 w-4 shrink-0 text-muted-foreground" />
-              <h4 className="text-ui font-semibold">{t('Agent features')}</h4>
-            </div>
-            {snapshot.features.map((feature) => (
-              <SettingsRow key={feature.id} className="sm:grid-cols-[minmax(0,1fr)_auto]">
-                <div className="min-w-0 flex-1">
-                  <p className="text-ui font-medium">{t(feature.label)}</p>
-                  <p className="text-meta text-muted-foreground">{t(feature.cost)}</p>
-                </div>
-                <Switch
-                  checked={feature.enabled}
-                  disabled={busy}
-                  onCheckedChange={(checked) =>
-                    void update({ optInFeatures: { [feature.id]: checked } })
-                  }
-                  aria-label={t(feature.label)}
-                />
-              </SettingsRow>
-            ))}
-          </section>
-        </>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <SkillFolder
+            title={t('This app’s skills')}
+            description={t('Your own skills for chats in this app.')}
+            path={snapshot.paths.appSkills}
+            opening={opening}
+            onOpen={() => void openFolder('app')}
+          />
+          <SkillFolder
+            title={t('Shared skills')}
+            description={t('Also read by other agents that follow the Agent Skills convention.')}
+            path={snapshot.paths.sharedSkills}
+            opening={opening}
+            onOpen={() => void openFolder('shared')}
+          />
+        </div>
       )}
-    </div>
+
+      <div className="space-y-1">
+        <h4 className="text-ui font-semibold">{t('How a skill is found')}</h4>
+        <ul className="list-disc space-y-1 pl-5 text-meta text-muted-foreground">
+          <li>
+            {t(
+              'Each skill is one entry directly inside a skills folder: <name>/SKILL.md, or a single <name>.md. Deeper files are not scanned.'
+            )}
+          </li>
+          <li>
+            {t(
+              'Its frontmatter needs name and description. The name uses lowercase letters, digits and dashes only, such as code-review.'
+            )}
+          </li>
+          <li>
+            {t(
+              'Type /<name> anywhere in a message to use a skill. Add disable-model-invocation: true to keep the model from using it on its own.'
+            )}
+          </li>
+        </ul>
+      </div>
+    </SettingsSectionBlock>
   );
 }

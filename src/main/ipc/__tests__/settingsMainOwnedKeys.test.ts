@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CREDENTIAL_MODE_SETTING_KEY } from '@shared/credentialMode';
 import { DSH_PLUGINS_SETTING_KEY } from '@shared/dshPlugins';
+import { LEGACY_ASSET_NOTICE_SETTING_KEY } from '@shared/legacyAssets';
 import {
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
@@ -186,6 +187,35 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
       overrides: { 'dsh-office-tools': true },
     });
     expect(readDshPluginSelection()).toEqual({ 'dsh-office-tools': true });
+  });
+
+  // dsh-rebase P1-16e (decision 104): "the legacy-asset notice was seen" is
+  // Main's. A stale renderer save must not bring the notice back, and a
+  // renderer payload must not silence it before it was ever shown.
+  it('the legacy-asset notice flag survives a stale renderer save, and cannot be invented', async () => {
+    vi.useFakeTimers();
+    const settings = await loadSettingsModule();
+    const read = handlers.get(IPC_CHANNELS.SETTINGS_READ);
+    const write = handlers.get(IPC_CHANNELS.SETTINGS_WRITE);
+    if (!read || !write) throw new Error('settings handlers not registered');
+
+    await write({}, { [LEGACY_ASSET_NOTICE_SETTING_KEY]: true, theme: 'dark' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(LEGACY_ASSET_NOTICE_SETTING_KEY in readSettingsFile()).toBe(false);
+
+    await read({});
+    settings.mergeSettingsPatch({ [LEGACY_ASSET_NOTICE_SETTING_KEY]: true });
+    await rendererSave({ [LEGACY_ASSET_NOTICE_SETTING_KEY]: false, theme: 'light' });
+    await vi.advanceTimersByTimeAsync(600);
+    expect(readSettingsFile()[LEGACY_ASSET_NOTICE_SETTING_KEY]).toBe(true);
+  });
+
+  it('ipc/settings.ts spells the notice key the way the shared module does', () => {
+    const source = readFileSync(join(__dirname, '..', 'settings.ts'), 'utf8');
+    expect(source.match(/const LEGACY_ASSET_NOTICE_SETTING_KEY = '([A-Za-z]+)'/)?.[1]).toBe(
+      LEGACY_ASSET_NOTICE_SETTING_KEY
+    );
+    expect(source).toMatch(/MAIN_OWNED_SETTING_KEYS[^;]*LEGACY_ASSET_NOTICE_SETTING_KEY,/);
   });
 
   it('ipc/settings.ts spells the plugin key the way the shared module does', () => {

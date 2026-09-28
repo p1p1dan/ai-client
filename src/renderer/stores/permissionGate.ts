@@ -19,7 +19,8 @@
  * `src/runtime/plugins/permissions/` whatever the user has installed, and the
  * native runtime reports `bundled` unconditionally. A pi permission extension
  * a user installs now reaches the built-in Pi TERMINAL only — which the plugins
- * page states in words (`PiPluginsSettings`) rather than through this gate. So
+ * page used to state in words (`PiPluginsSettings`, unmounted in dsh-rebase
+ * P1-16e) rather than through this gate. So
  * `user_configured` has no producer left, and the degraded branch this store
  * feeds is unreachable by construction rather than merely unlikely.
  *

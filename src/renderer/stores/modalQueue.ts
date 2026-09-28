@@ -38,6 +38,9 @@ export const MODAL_QUEUE_PRIORITY = {
   announcement: 0,
   agentMigrationPrompt: 1,
   updateNotification: 2,
+  // dsh-rebase P1-16e: advice about files the previous version used. Nothing
+  // waits on it, so everything else goes first.
+  legacyAssetNotice: 3,
 } as const;
 
 export type ModalQueueId = keyof typeof MODAL_QUEUE_PRIORITY;

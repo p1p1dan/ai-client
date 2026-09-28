@@ -8,6 +8,8 @@
 
 修订：取消 P1-10 / P1-16 方案 §4.1 里「用户层指令：对接（小插件 `aiclient-instructions`）」这一行。
 
+修订注记（2026-09-28，P1-16e）：第 3 条的提示只列 1.0.x 实际读的那一个文件（三个里第一个有内容的），排在后面、1.0.x 也从未读过的不列，见[决策 116](116-p1-16e-legacy-asset-notice-choices.md) 第 6 条（待审批）。
+
 ## 规则
 
 1. **不再读 1.0.x 的用户层指令**：按 `~/.pilab/AGENTS.md` → `~/.claude/CLAUDE.md` → `~/.codex/AGENTS.md` 的顺序取第一个存在的（`runtime/plugins/prompt/projectInstructions.ts:95-117`）。原计划的 `aiclient-instructions` 小插件不写。

@@ -1,102 +1,44 @@
-import type { WorkerCapabilityInventory } from '@shared/types/workerRpc';
 import { describe, expect, it } from 'vitest';
 import { deriveSessionCapabilities } from '../sessionCapabilityModel';
 
 /**
- * cutover-03 — the sidebar panel's model, after it stopped projecting pi.
+ * The sidebar capability panel's model.
  *
- * It used to list the extensions a worker had loaded and read MCP readiness out
- * of `ui.setStatus` status lines. P6-5 left both producers with nobody to
- * produce: the list was permanently `[]`, which the old model rendered as a
- * definite "0 plugins", and the badge never appeared even with MCP servers
- * connected. Replaces `pluginInventoryModel.test.ts`.
+ * cutover-03 made it project the session's own inventory instead of a pi
+ * extension list; dsh-rebase P1-16e (decision 104 rule 4) narrowed it to the
+ * skill count, the only member the DSH engine reports (decisions 099 rule 12
+ * and 113). Replaces `pluginInventoryModel.test.ts`.
  *
- * The property that makes the panel honest is the three-way split — nobody
- * reported / no producer for this member / a producer that found nothing — so
- * most of what is pinned here is that split.
+ * The property that keeps the panel honest is the three-way split — nobody
+ * reported / an inventory without a skill count / a count of zero — so that is
+ * what is pinned here.
  */
 describe('deriveSessionCapabilities', () => {
   it('says "nobody reported" when there is no inventory at all', () => {
-    const view = deriveSessionCapabilities(null);
-    expect(view.reported).toBe(false);
-    expect(view.mcp).toBeNull();
-    expect(view.mcpServers).toBeNull();
-    expect(view.skills).toBeNull();
-    expect(view.promptTemplates).toBeNull();
-    expect(view.subagents).toBeNull();
+    expect(deriveSessionCapabilities(null)).toEqual({ reported: false, skills: null });
   });
 
-  it('keeps "this build has no MCP bridge" apart from "the bridge found none"', () => {
-    // The distinction cutover-03 is about: rendering the first as `0` is what
-    // made someone reinstall a plugin that was working.
-    const noBridge = deriveSessionCapabilities({ skills: 3 });
-    expect(noBridge.reported).toBe(true);
-    expect(noBridge.mcpServers).toBeNull();
-    expect(noBridge.mcp).toBeNull();
-
-    const emptyBridge = deriveSessionCapabilities({ mcpServers: [] });
-    expect(emptyBridge.reported).toBe(true);
-    expect(emptyBridge.mcpServers).toEqual([]);
-    // Still no badge: `0/0` is not a readiness fact.
-    expect(emptyBridge.mcp).toBeNull();
-  });
-
-  it('reads the DSH engine’s inventory: the skill count, everything else "not reported"', () => {
-    // dsh-rebase decisions 099 rule 12 and 113: the bridge reports `skills`
-    // alone — no MCP bridge, no templates, no custom sub-agent definitions on
-    // that engine — and those absent members must not read as zeros.
-    const view = deriveSessionCapabilities({ skills: 2 });
-    expect(view).toEqual({
-      reported: true,
-      mcpServers: null,
-      mcp: null,
-      skills: 2,
-      promptTemplates: null,
-      subagents: null,
-    });
+  it('reads the DSH engine’s inventory: the skill count', () => {
+    expect(deriveSessionCapabilities({ skills: 2 })).toEqual({ reported: true, skills: 2 });
   });
 
   it('keeps a reported zero apart from an absent count', () => {
-    const view = deriveSessionCapabilities({ skills: 0, subagents: 0 });
-    expect(view.skills).toBe(0);
-    expect(view.subagents).toBe(0);
-    expect(view.promptTemplates).toBeNull();
+    expect(deriveSessionCapabilities({ skills: 0 })).toEqual({ reported: true, skills: 0 });
+    // `{}` is what the bridge answers when the skill service is missing or
+    // could not be read: reported, but no count — rendered "not reported".
+    expect(deriveSessionCapabilities({})).toEqual({ reported: true, skills: null });
   });
 
-  it('counts readiness from the servers themselves, not from a status line', () => {
-    const inventory: WorkerCapabilityInventory = {
-      mcpServers: [
-        { name: 'alpha', ok: true, toolCount: 4 },
-        { name: 'beta', ok: false, toolCount: 0, error: 'ECONNREFUSED' },
-        { name: 'gamma', ok: true, toolCount: 1 },
-      ],
-    };
-    expect(deriveSessionCapabilities(inventory).mcp).toEqual({
-      ready: 2,
-      total: 3,
-      badge: '2/3',
+  it('projects nothing but the skill count, whatever else an inventory carries', () => {
+    // The 1.0.x engine also reported MCP servers, templates and sub-agent
+    // definitions. The panel no longer has rows for them, so they must not
+    // leak into the view either.
+    const view = deriveSessionCapabilities({
+      skills: 1,
+      promptTemplates: 3,
+      subagents: 4,
+      mcpServers: [{ name: 'alpha', ok: true, toolCount: 2 }],
     });
-  });
-
-  it('sorts failures first, then by name, so two renders agree', () => {
-    const inventory: WorkerCapabilityInventory = {
-      mcpServers: [
-        { name: 'zeta', ok: true, toolCount: 1 },
-        { name: 'alpha', ok: true, toolCount: 2 },
-        { name: 'broken', ok: false, toolCount: 0 },
-      ],
-    };
-    const names = () => deriveSessionCapabilities(inventory).mcpServers?.map((s) => s.name);
-    expect(names()).toEqual(['broken', 'alpha', 'zeta']);
-    expect(names()).toEqual(['broken', 'alpha', 'zeta']);
-  });
-
-  it('does not reorder the caller’s array in place', () => {
-    const mcpServers = [
-      { name: 'zeta', ok: true, toolCount: 1 },
-      { name: 'broken', ok: false, toolCount: 0 },
-    ];
-    deriveSessionCapabilities({ mcpServers });
-    expect(mcpServers.map((s) => s.name)).toEqual(['zeta', 'broken']);
+    expect(view).toEqual({ reported: true, skills: 1 });
   });
 });

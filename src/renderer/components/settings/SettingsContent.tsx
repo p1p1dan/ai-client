@@ -24,12 +24,11 @@ import { EditorSettings } from './EditorSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { GitSettings } from './GitSettings';
 import { KeybindingsSettings } from './KeybindingsSettings';
+import { LegacyAssetsSettings } from './LegacyAssetsSettings';
 import { NetworkSettings } from './NetworkSettings';
 import { PermissionPolicySettings } from './PermissionPolicySettings';
 import { PiModelManagementSettings } from './PiModelManagementSettings';
-import { PiPluginsSettings } from './PiPluginsSettings';
 import { PiResourcesSettings } from './PiResourcesSettings';
-import { PiSubagentsSettings } from './PiSubagentsSettings';
 import { RemoteSettings } from './RemoteSettings';
 import { SettingsPageShell } from './SettingsPrimitives';
 import { TerminalAppearanceSettings } from './TerminalAppearanceSettings';
@@ -131,11 +130,14 @@ export function SettingsContent({
               <PiModelManagementSettings />
             </>
           )}
+          {/* dsh-rebase P1-16e (decision 104): skills, then what the previous
+              version used that this one no longer loads. The sub-agent page is
+              gone (definitions are not loaded), and so is the pi extension
+              page (decision 090); P1-10c adds the DSH plugin list here. */}
           {activeCategory === 'extensions' && (
             <>
-              <PiPluginsSettings />
               <PiResourcesSettings />
-              <PiSubagentsSettings />
+              <LegacyAssetsSettings repoPath={repoPath} />
             </>
           )}
           {activeCategory === 'migration' && (

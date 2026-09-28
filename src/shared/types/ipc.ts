@@ -259,6 +259,13 @@ export const IPC_CHANNELS = {
   PI_RESOURCES_UPDATE_SETTINGS: 'piResources:updateSettings',
   PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
   PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
+  /** dsh-rebase P1-16e — `<agentDir>/skills`, DSH's `customSkillDirs` (decision 101). */
+  PI_RESOURCES_OPEN_APP_SKILLS: 'piResources:openAppSkills',
+
+  // dsh-rebase P1-16e (decision 104) — the read-only "no longer used" notice.
+  LEGACY_ASSETS_INSPECT: 'legacyAssets:inspect',
+  LEGACY_ASSETS_MARK_SEEN: 'legacyAssets:markSeen',
+  LEGACY_ASSETS_OPEN_AGENT_DIR: 'legacyAssets:openAgentDir',
 
   // P5-2-5 — managing the native subagent definitions.
   PI_SUBAGENTS_LIST: 'piSubagents:list',

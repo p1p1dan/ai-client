@@ -595,20 +595,17 @@ export const zhTranslations: Record<string, string> = {
   // T026: sidebar capability entry. Per session on purpose — MCP servers,
   // skills and sub-agents are all resolved from the session's own working
   // directory. It replaced U04's pi extension list, which P6-5 left empty.
+  // dsh-rebase P1-16e (decision 104) left the skill count as its only row.
   Capabilities: '能力',
-  'MCP servers, skills and sub-agents this chat brought up.':
-    '这个对话启用的 MCP 服务、技能与子智能体。',
-  'MCP servers': 'MCP 服务',
+  'Skills this chat can use.': '这个对话可以使用的技能。',
   'Send a message to start this chat and see what it brings up.':
     '发送一条消息启动这个对话后，才能看到它启用了什么。',
-  'Pi extensions you install are loaded only by the built-in terminal.':
-    '你安装的 pi 扩展只会被内嵌终端加载。',
   // R04: Settings → Resources. These are installation locations, not the
   // rejected pix-style Resources navigation entry.
+  // dsh-rebase P1-16e (decision 104) narrowed the page to the two skill folders
+  // the DSH host reads and DSH's skill rules; templates, the personal Pi
+  // folders and the delegation switch left with their strings.
   Resources: '资源',
-  'Pi Resources': 'Pi 资源',
-  'Install skills and prompt templates where Pi can load them reliably.':
-    '把技能与提示词模板安装到 Pi 能稳定加载的位置。',
   'Loading resource settings...': '正在读取资源设置…',
   'Shared skills': '共享技能',
   Recommended: '推荐',
@@ -618,26 +615,57 @@ export const zhTranslations: Record<string, string> = {
   // plural 'Skills' key; the two must not substitute for each other.
   Skill: '技能',
   'Prompt templates': '提示词模板',
-  'This cross-agent location is always loaded in managed mode, local mode, and the Pi TUI.':
-    '这个跨 Agent 共享位置在托管模式、本机模式与 Pi TUI 中都会加载。',
-  // H/19: 两种模式共用同一个目录，所以这里只剩「本应用的」和「你自己的」两块。
-  // 借用开关连同它的四条文案一起删掉了——机制没了，留着文案会被下一次搜索翻出来当成还在。
-  'This app\u2019s Pi directory': '本应用的 Pi 目录',
-  'Every session in this app — signed in or using your own setup, GUI or Pi TUI — loads skills and prompt templates from here. Installed pi extensions are loaded from here by the Pi TUI only.':
-    '本应用里的每个会话——无论是登录模式还是「使用我自己的配置」，无论 GUI 还是 Pi TUI——都从这里加载技能与提示词模板；已安装的 pi 扩展只有 Pi TUI 会从这里加载。',
-  'Your personal Pi directory': '你自己的 Pi 目录',
-  'Where the Pi CLI in your own terminal reads from. This app never writes here, and no longer loads from here — use the copy step above to bring things over.':
-    '你自己终端里的 Pi CLI 读取的位置。本应用从不写入这里，也不再从这里加载——要把东西搬过来，用上面的复制步骤。',
-  // cutover-10: no longer "bundled extensions" — the packages behind this
-  // section were retired in T025, and the one switch left turns a feature of
-  // this app's own runtime on and off.
-  'Agent features': '智能体功能',
-  'Sub-agents': '子智能体',
-  'Lets the model delegate work to background agents. On unless you turn it off: its tool definitions are sent with every request, so it costs tokens on every turn even when unused. Changing it reloads workers.':
-    '让模型把任务派给后台智能体。默认开启，除非你自己关掉：它的工具定义会随每次请求一起发送，即使用不到也每轮都在花 token。切换后会重新加载 worker。',
-  'Open prompt templates folder': '打开模板目录',
-  'Open skills folder': '打开技能目录',
+  'Chats load skills from these two folders, and from .dsh/skills and .agents/skills at the root of the project’s repository.':
+    '对话从下面两个目录加载技能，另外还会加载项目仓库根目录下的 .dsh/skills 和 .agents/skills。',
+  'This app’s skills': '本应用的技能',
+  'Your own skills for chats in this app.': '你为本应用的对话准备的技能。',
+  'Also read by other agents that follow the Agent Skills convention.':
+    '其他遵循 Agent Skills 约定的 Agent 也会读取这里。',
+  'How a skill is found': '技能怎样才会被加载',
+  'Each skill is one entry directly inside a skills folder: <name>/SKILL.md, or a single <name>.md. Deeper files are not scanned.':
+    '每个技能是技能目录第一层里的一项：<name>/SKILL.md，或单个 <name>.md。更深层的文件不会被扫描。',
+  'Its frontmatter needs name and description. The name uses lowercase letters, digits and dashes only, such as code-review.':
+    'frontmatter 必须写 name 和 description；name 只能用小写字母、数字和短横线，例如 code-review。',
+  'Type /<name> anywhere in a message to use a skill. Add disable-model-invocation: true to keep the model from using it on its own.':
+    '在消息任意位置输入 /<name> 即可使用技能；加上 disable-model-invocation: true，模型就不会自行调用它。',
   'Opening...': '正在打开…',
+
+  // dsh-rebase P1-16e（决策 104）：旧版资产的一次性提示与「设置 > 扩展」里的常驻入口。
+  'Some things from the previous version no longer apply': '以下内容在新版中不再生效',
+  'This version runs chats on a new engine. The items below were found on this computer, but it no longer loads them. Nothing was changed or deleted, and the previous version can still use them.':
+    '新版改用了新的对话引擎。下面这些内容在本机找到了，但新版不会再加载。这里只做列出，没有修改或删除任何文件，装回旧版仍可继续使用。',
+  'You can see this list again in Settings > Extensions.':
+    '之后可以在“设置 > 扩展”里再次查看这份清单。',
+  'Open agent folder': '打开 Agent 目录',
+  'Custom sub-agents': '自定义子代理',
+  'Sub-agent definition files are no longer loaded. Chats use the built-in sub-agents, which are always available.':
+    '子代理定义文件不再加载。对话改用内置的子代理，始终可用。',
+  'Templates are no longer expanded. To keep one, rewrite it as a skill: save it as {{path}}/<name>/SKILL.md with name and description in its frontmatter, and add disable-model-invocation: true if only you should trigger it. Then type /<name> in a message.':
+    '模板不再展开。想继续使用的，请改写成技能：存为 {{path}}/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。',
+  'Personal instruction file': '用户层指令文件',
+  'The previous version also read this file as your personal rules; this version does not. Put the rules you still want in {{path}}.':
+    '旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 {{path}}。',
+  'MCP servers': 'MCP 服务',
+  'This version does not support MCP yet, so these servers are not started. The files are left as they are.':
+    '新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。',
+  'Could not be read': '无法读取',
+  'No servers listed': '文件里没有列出服务',
+  'Skills that will not load': '不会加载的技能',
+  'A skill loads when it is <name>/SKILL.md or <name>.md directly inside a skills folder, and its frontmatter has a description and a name made of lowercase letters, digits and dashes.':
+    '技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。',
+  'No name in its frontmatter': 'frontmatter 里缺少 name',
+  'Name is not lowercase letters, digits and dashes': 'name 不是小写字母、数字和短横线',
+  'Too deep inside the folder': '目录层级太深',
+  'In a folder this version does not scan': '所在目录新版不扫描',
+  'Sub-agent delegation': '子代理委派',
+  'You had turned sub-agent delegation off. In this version sub-agents are always available.':
+    '你曾关闭子代理委派。新版的子代理始终可用。',
+  'Items from the previous version': '旧版遗留内容',
+  'What the previous version used that this version no longer loads. This only lists them: nothing is changed or deleted.':
+    '旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。',
+  'Nothing from the previous version was found.': '没有发现旧版遗留的内容。',
+  'Project files were checked in {{path}}.': '已检查 {{path}} 下的项目文件。',
+  'Open a workspace to also check its project files.': '打开一个工作区后，还会检查它的项目文件。',
 
   // P5-2-5：原生子代理的管理界面。
   Subagents: '子代理',
@@ -1901,7 +1929,6 @@ export const zhTranslations: Record<string, string> = {
   'Open Settings': '打开设置',
   // MCP Servers
   'MCP Servers': 'MCP 服务器',
-  'No MCP servers configured': '暂无 MCP 服务器',
   'MCP server removed': 'MCP 服务器已移除',
   'MCP server saved': 'MCP 服务器已保存',
   'Edit MCP Server': '编辑 MCP 服务器',

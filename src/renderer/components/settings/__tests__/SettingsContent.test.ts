@@ -6,8 +6,8 @@ import type { SettingsCategory } from '../constants';
 
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
 
-// Several `pi` category panels reach into `useSettingsStore` (e.g.
-// `PiSubagentsSettings` renders `SubagentPromptCacheTtlRow`). Importing that
+// Several panels reach into `useSettingsStore` (e.g. `AppearanceSettings`,
+// and `@/i18n` itself reads the language from it). Importing that
 // store triggers zustand persist's auto-rehydrate at module-evaluation time,
 // before any hook runs, and rehydrate hydrates through
 // `window.electronAPI.settings`. Without a stub here from the start, that
@@ -40,9 +40,8 @@ const panels = [
   'UserProvidersSettings',
   'PiModelManagementSettings',
   'PermissionPolicySettings',
-  'PiPluginsSettings',
   'PiResourcesSettings',
-  'PiSubagentsSettings',
+  'LegacyAssetsSettings',
   'KeybindingsSettings',
   'NetworkSettings',
   'RemoteSettings',
@@ -83,7 +82,9 @@ describe('settings navigation', () => {
       ['EditorSettings'],
       ['GitSettings', 'AISettings'],
       ['UserProvidersSettings', 'PiModelManagementSettings'],
-      ['PiPluginsSettings', 'PiResourcesSettings', 'PiSubagentsSettings'],
+      // dsh-rebase P1-16e (decision 104): skills, then the legacy-asset
+      // entry; no sub-agent page, no pi extension page.
+      ['PiResourcesSettings', 'LegacyAssetsSettings'],
       ['AgentMigrationSettings', 'ConversationImportSettings'],
       ['KeybindingsSettings'],
       ['NetworkSettings', 'RemoteSettings'],
@@ -99,8 +100,13 @@ describe('settings navigation', () => {
         )
       ).toEqual(expected[index]);
       expect(button.getAttribute('aria-current')).toBe('page');
-      // The policy panel is the only one scoped to a repository, and it now
-      // rides on `advanced` — the last entry.
+      // P1-16e: the legacy-asset entry checks the open workspace's project
+      // files (decision 104 rule 2), so it is scoped to the repository too.
+      if (expected[index]?.includes('LegacyAssetsSettings'))
+        expect(
+          container.querySelector('[data-panel="LegacyAssetsSettings"]')?.getAttribute('data-repo')
+        ).toBe('/workspace/repo');
+      // The policy panel rides on `advanced` — the last entry.
       if (index === expected.length - 1)
         expect(
           container

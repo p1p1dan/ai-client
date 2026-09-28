@@ -112,6 +112,21 @@ describe('Pi resource settings IPC', () => {
     );
   });
 
+  // dsh-rebase P1-16e: the Resources page's other skill root, `<agentDir>/skills`.
+  it('creates and opens this app’s own skill folder', async () => {
+    await handler(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS)({});
+    expect(existsSync(snapshot().paths.appSkills)).toBe(true);
+    expect(openPath).toHaveBeenCalledWith(snapshot().paths.appSkills);
+    expect(openPath).not.toHaveBeenCalledWith(snapshot().paths.sharedSkills);
+  });
+
+  it('reports a failed open of this app’s skill folder', async () => {
+    state.openError = 'no file manager';
+    await expect(handler(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS)({})).rejects.toThrow(
+      'no file manager'
+    );
+  });
+
   it('returns exact Main-resolved installation paths', async () => {
     await expect(handler(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS)({})).resolves.toEqual(snapshot());
   });

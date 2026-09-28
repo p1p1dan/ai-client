@@ -17,6 +17,10 @@ const CREDENTIAL_MODE_SETTING_KEY = 'credentialMode';
 // services/agent-host/dshPluginSelection.ts. Canonical definition:
 // src/shared/dshPlugins.ts (a test pins the two equal).
 const DSH_PLUGINS_SETTING_KEY = 'dshPlugins';
+// dsh-rebase P1-16e: set once the legacy-asset notice has been shown, written
+// by ipc/legacyAssets.ts. Canonical definition: src/shared/legacyAssets.ts (a
+// test pins the two equal).
+const LEGACY_ASSET_NOTICE_SETTING_KEY = 'dshLegacyAssetNoticeSeen';
 
 /**
  * The renderer's not-yet-flushed settings object, or `null` when nothing is
@@ -59,6 +63,7 @@ const MAIN_OWNED_SETTING_KEYS: readonly string[] = [
   'onboarding',
   PI_OPT_IN_FEATURE_SETTINGS_KEY,
   PI_ENABLE_SUBAGENTS_SETTING_KEY,
+  LEGACY_ASSET_NOTICE_SETTING_KEY,
   DSH_PLUGINS_SETTING_KEY,
 ];
 

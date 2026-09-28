@@ -20,6 +20,7 @@ import {
 } from './files';
 import { registerFolderHandlers } from './folder';
 import { clearAllGitServices, registerGitHandlers } from './git';
+import { registerLegacyAssetHandlers } from './legacyAssets';
 import { registerLegacyImportHandlers } from './legacyImport';
 import { registerLogHandlers } from './log';
 import { registerNotificationHandlers } from './notification';
@@ -90,6 +91,7 @@ export function registerIpcHandlers(): void {
   registerPiResourceHandlers();
   registerPiSubagentHandlers();
   registerPiPluginHandlers();
+  registerLegacyAssetHandlers();
   registerAgentMigrationHandlers();
   registerUserProviderHandlers();
   registerUsageHandlers();

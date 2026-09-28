@@ -124,4 +124,13 @@ export function registerPiResourceHandlers(): void {
     const error = await shell.openPath(skillsDir);
     if (error) throw new Error(`Failed to open skills folder: ${error}`);
   });
+
+  // dsh-rebase P1-16e: the Resources page's second skill root, `<agentDir>/skills`,
+  // which the DSH host scans as `customSkillDirs` (decision 101).
+  ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS, async (): Promise<void> => {
+    const skillsDir = getPiResourceSettings().paths.appSkills;
+    await mkdir(skillsDir, { recursive: true });
+    const error = await shell.openPath(skillsDir);
+    if (error) throw new Error(`Failed to open skills folder: ${error}`);
+  });
 }

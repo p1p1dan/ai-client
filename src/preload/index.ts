@@ -6,6 +6,7 @@ import 'electron-log/preload.js';
 import type { MigrationPlan, MigrationRequest, MigrationResult } from '@shared/agentMigration';
 import type { AnnouncementsResult } from '@shared/announcements';
 import type { Locale } from '@shared/i18n';
+import type { InspectLegacyAssetsRequest, LegacyAssetNoticeState } from '@shared/legacyAssets';
 import type {
   PiModelManagementSettings,
   PiModelSyncResult,
@@ -1252,6 +1253,22 @@ const electronAPI = {
     openPromptTemplates: (): Promise<void> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS),
     openSkills: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS),
+    /** dsh-rebase P1-16e — `<agentDir>/skills`, next to `openSkills`' `~/.agents/skills`. */
+    openAppSkills: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_APP_SKILLS),
+  },
+
+  /**
+   * dsh-rebase P1-16e (decision 104) — what 1.0.x used that this build no
+   * longer loads. `inspect` only reads; `markSeen` records that the one-time
+   * notice was shown and never touches a user file.
+   */
+  legacyAssets: {
+    inspect: (request?: InspectLegacyAssetsRequest): Promise<LegacyAssetNoticeState> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_ASSETS_INSPECT, request ?? {}),
+    markSeen: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.LEGACY_ASSETS_MARK_SEEN),
+    openAgentDir: (): Promise<void> =>
+      ipcRenderer.invoke(IPC_CHANNELS.LEGACY_ASSETS_OPEN_AGENT_DIR),
   },
 
   /**

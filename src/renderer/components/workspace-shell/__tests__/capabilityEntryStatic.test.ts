@@ -10,9 +10,10 @@ import { stripComments } from '@/components/chat/__tests__/stripComments';
  *
  * U04 put a Plugins entry here and D08 moved it from `LeftNav`'s footer to
  * `LeftDock`'s rail. cutover-03 changed what it shows: pi extensions have had
- * no loader since P6-5, so the panel now projects this app's OWN capabilities
- * (MCP servers, skills, sub-agents) and says in words where installed pi
- * extensions do apply. Replaces `pluginEntryStatic.test.ts`.
+ * no loader since P6-5, so the panel projects this app's OWN capabilities.
+ * dsh-rebase P1-16e (decision 104 rule 4) narrowed that to the skill count:
+ * the DSH engine reports nothing else, and pi extensions are gone (decision
+ * 090). Replaces `pluginEntryStatic.test.ts`.
  */
 const dockPath = path.join(process.cwd(), 'src/renderer/components/workspace-shell/LeftDock.tsx');
 const dock = stripComments(readFileSync(dockPath, 'utf8'), dockPath);
@@ -40,18 +41,22 @@ describe('sidebar capability entry', () => {
     expect(dock).not.toContain('mcpReadiness');
   });
 
-  it('projects MCP readiness from the session’s own servers', () => {
-    expect(dock).toContain("{t('MCP servers')}");
-    expect(dock).toContain('view.mcp');
-    expect(dock).toContain('view.mcpServers');
+  it('shows the skill count and nothing else (decision 104 rule 4)', () => {
+    expect(dock).toContain("label={t('Skills')}");
+    expect(dock).toContain('view.skills');
+    expect(dock).toContain("{t('Skills this chat can use.')}");
+    // No MCP bridge, no templates, no custom sub-agent definitions on the DSH
+    // engine: rows for them could only ever say "not reported".
+    expect(dock).not.toContain("t('MCP servers')");
+    expect(dock).not.toContain('view.mcp');
+    expect(dock).not.toContain("t('Prompt templates')");
+    expect(dock).not.toContain('view.promptTemplates');
+    expect(dock).not.toContain("t('Sub-agents')");
+    expect(dock).not.toContain('view.subagents');
   });
 
-  it('says where installed pi extensions actually apply', () => {
-    // The sentence that stops someone reinstalling a working extension because
-    // this panel never names it.
-    expect(dock).toContain(
-      "t('Pi extensions you install are loaded only by the built-in terminal.')"
-    );
+  it('no longer says anything about pi extensions (decision 090)', () => {
+    expect(dock).not.toMatch(/Pi extensions/i);
   });
 
   it('adds no Resources entry — Q03 ruled it names the same extensions twice', () => {

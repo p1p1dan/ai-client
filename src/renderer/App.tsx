@@ -39,6 +39,7 @@ import { GitMissingNotice } from './components/layout/GitMissingNotice';
 import { WindowTitleBar } from './components/layout/WindowTitleBar';
 import { RemoteAuthPromptHost } from './components/remote/RemoteAuthPromptHost';
 import { AgentMigrationPrompt } from './components/settings/AgentMigrationPrompt';
+import { LegacyAssetNoticePrompt } from './components/settings/LegacyAssetNotice';
 import { SettingsDialog } from './components/settings/SettingsDialog';
 import { TempWorkspaceDialogs } from './components/temp-workspace/TempWorkspaceDialogs';
 import { UpdateNotification } from './components/UpdateNotification';
@@ -1071,6 +1072,12 @@ export default function App() {
             rather than inside settings because the whole point is reaching the
             user who never opens settings (H/19 point-check). */}
         <AgentMigrationPrompt />
+
+        {/* dsh-rebase P1-16e (decision 104) — the one-time list of what the
+            previous version used and this one no longer loads. Self-gating:
+            renders nothing unless Main found something and the notice was
+            never seen. The open workspace is where project files are checked. */}
+        <LegacyAssetNoticePrompt repoPath={worktreeRepoPath ?? undefined} />
 
         {/* Unsaved Prompt Host */}
         <UnsavedPromptHost />
