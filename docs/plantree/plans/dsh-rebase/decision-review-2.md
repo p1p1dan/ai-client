@@ -58,7 +58,7 @@ Role: review-summary。生成日期：2026-09-28。第一批（005～089）已�
 
 原文：[103](decisions/103-drop-prompt-templates.md)
 
-### P1-7 / P1-11 新界面原型（请打开看）
+### P1-7 / P1-11 新界面原型（已裁决，见[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)：浮动；终端在右侧与文件编辑器同级；三处显示不算重复；不做停靠）
 
 打开 [evidence/p1-7-prototype-2026-09-28/prototype.html](evidence/p1-7-prototype-2026-09-28/prototype.html)。页面顶部可以切换场景、深浅色、子窗口形态、终端位置和画幅，截图在同目录的 `shots/`。README 末尾列了 12 个问题，最主要的几个：
 
