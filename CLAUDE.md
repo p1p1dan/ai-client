@@ -10,7 +10,8 @@
   - `src/main/services/agent-host/`：`DshHostSupervisor`、`WorkerManager`、`DshCredentialBroker`。
   - `src/shared/` 下的纯库：`dshModelPlan/`（模型计划）、`dshHistory/`（历史投影）、`legacyPiSession/`（pi 解码与迁移转换）、`permissions/`（权限）、`skills/`、`mcp/`、`subagentCatalogRoots.ts`（后三者从 runtime 搬来）、`dshPluginAllowlist.ts`（插件白名单审计）。
   - `src/runtime/` 是待退役的自有引擎，P1-12 删除。
-- **推送**：仓库是公开的，分支里有加密机现场报告，推送前先脱敏（2026-09-28 用户决定暂不推送）。
+- **推送**：仓库是公开的。加密机的原始现场报告不入库，只放脱敏摘要；2026-09-28 已改写历史删掉曾经入库的那份，见 `docs/plantree/plans/dsh-rebase/evidence/history-rewrite-2026-09-28.md`。
+- **2026-09-28 用户裁决**（决策 090）：默认跟随 DSH 的做法，不再为与 1.0.x 一致而移植；只做 Linux 与 Windows，macOS 暂不做。下一步从 `implementation-status.md` 的 Next Target 接着做。
 - **本地验证**：四套 tsc（根、`src/agent-host`、`src/runtime`、`src/dsh-host`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
 - **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写）。
 
