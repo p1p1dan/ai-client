@@ -1,6 +1,6 @@
 /**
- * The DSH host's plugin rules (dsh-rebase P1-10b; decisions 025, 058, 059 and
- * 108).
+ * The DSH host's plugin rules (dsh-rebase P1-10b; decisions 025, 058, 059,
+ * 108 and 110).
  *
  * Pure: host.ts does the I/O (the allowlist file, the installed packages'
  * manifests, real paths) and applies these at every start, the unit tests pin
@@ -9,9 +9,12 @@
  *
  *   allowlist  packaged: `dsh-host-manifest.json`'s `plugins` section, which
  *              the build audited; source checkout: `plugins/allowlist.json`
- *   enabled    Main's list (`AICLIENT_DSH_PLUGINS`); the allowlist's
- *              `defaultEnabled` when Main sent none; nothing when the list
- *              is malformed
+ *   enabled    per-plugin overrides Main sent (`AICLIENT_DSH_PLUGINS`, a JSON
+ *              object of package name -> the user's choice); a plugin absent
+ *              from it, including one the allowlist adds in a later version,
+ *              follows its own `defaultEnabled` (decision 110, revising
+ *              decision 108 rule 5's "store the whole enabled list"); nothing
+ *              enabled when the value is malformed
  *   bundles    the product bundles, the test-only probe bundle when a probe
  *              driver asks for it in a source checkout (decision 015), then
  *              every enabled allowlisted plugin found in the install
@@ -19,9 +22,11 @@
  *              listed is dropped with a warning
  *   audit      a plugin layer must resolve to the install directory and its
  *              bundle patch may only insert the rows the allowlist declares
- *              (the plugin is left out otherwise); a row that no composed
- *              bundle declares, inserted by the home layer, refuses a
- *              packaged boot
+ *              (the plugin is left out otherwise)
+ *   home layer a packaged host never reads `$DSH_HOME/cordis.patch.yml`
+ *              (decision 110, revising decision 108 rule 12 and decision 023
+ *              rule 3); it only warns when the file is there. A source
+ *              checkout still reads it, for development and the probes.
  */
 
 import {
@@ -40,8 +45,10 @@ import type {
 import { isDshPluginPackageName } from '../../shared/dshPlugins.ts';
 
 /**
- * Main's enabled list, a JSON array of package names (decision 108 rule 6).
- * Absent: nobody chose, the allowlist's defaults apply. Declared again as
+ * Main's per-plugin overrides, a JSON object of package name -> whether the
+ * user turned it on or off by hand (decision 110, revising decision 108 rule
+ * 6's "a JSON array"). Absent: nobody has touched anything, every plugin
+ * follows the allowlist's `defaultEnabled`. Declared again as
  * `DSH_HOST_PLUGINS_ENV` in src/main/services/agent-host/dshHostEnvironment.ts;
  * hostStatic.test.ts pins the two equal.
  */
@@ -53,9 +60,6 @@ export const PLUGINS_ENV = 'AICLIENT_DSH_PLUGINS';
  * sets it: the `AICLIENT_` family is never inherited by the host.
  */
 export const PROBE_BUNDLE_ENV = 'AICLIENT_DSH_PROBE_BUNDLE';
-
-/** The `fatal` code of a packaged boot refused for rows no bundle declares (decision 108 rule 12). */
-export const UNDECLARED_ROWS_CODE = 'DSH_HOST_UNDECLARED_ROWS';
 
 /** What the host needs of one allowlisted plugin. */
 export interface HostPlugin {
@@ -151,10 +155,14 @@ export function allowlistFromSource(raw: unknown): HostAllowlist {
 
 export type EnabledInput =
   | { from: 'default' }
-  | { from: 'main'; names: string[] }
+  | { from: 'main'; overrides: Record<string, boolean> }
   | { from: 'invalid'; error: string };
 
-/** `AICLIENT_DSH_PLUGINS` as the host reads it. Fail-closed: a malformed list enables nothing. */
+/**
+ * `AICLIENT_DSH_PLUGINS` as the host reads it: a JSON object mapping package
+ * name to the user's choice for it (decision 110). Fail-closed: a malformed
+ * value enables nothing, not even a plugin whose `defaultEnabled` is true.
+ */
 export function readEnabledInput(raw: string | undefined): EnabledInput {
   if (raw === undefined) return { from: 'default' };
   let parsed: unknown;
@@ -163,17 +171,31 @@ export function readEnabledInput(raw: string | undefined): EnabledInput {
   } catch {
     return { from: 'invalid', error: 'not JSON' };
   }
-  if (!Array.isArray(parsed) || !parsed.every(isDshPluginPackageName)) {
-    return { from: 'invalid', error: 'not a JSON list of package names' };
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    !Object.entries(parsed as Record<string, unknown>).every(
+      ([name, value]) => isDshPluginPackageName(name) && typeof value === 'boolean'
+    )
+  ) {
+    return { from: 'invalid', error: 'not a JSON object of package name to boolean' };
   }
-  return { from: 'main', names: [...new Set(parsed)] };
+  return { from: 'main', overrides: { ...(parsed as Record<string, boolean>) } };
 }
 
-/** The names the enabled set holds: Main's, or the allowlist's defaults. */
+/**
+ * The names the enabled set holds: each plugin follows Main's override when
+ * it has one, else the allowlist's `defaultEnabled` — so a plugin the
+ * allowlist adds later with `defaultEnabled: true` turns on for a user who
+ * has only ever touched a different plugin's switch (decision 110).
+ */
 export function enabledNames(plugins: readonly HostPlugin[], input: EnabledInput): string[] {
-  if (input.from === 'main') return [...input.names];
   if (input.from === 'invalid') return [];
-  return plugins.filter((plugin) => plugin.defaultEnabled).map((plugin) => plugin.name);
+  const overrides = input.from === 'main' ? input.overrides : {};
+  return plugins
+    .filter((plugin) => overrides[plugin.name] ?? plugin.defaultEnabled)
+    .map((plugin) => plugin.name);
 }
 
 // ---- the install directory -------------------------------------------------------
@@ -377,46 +399,34 @@ export function pluginReport(
   return { enabledFrom: input.from, plugins, dropped };
 }
 
-// ---- rows no bundle declares ---------------------------------------------------------
+// ---- the packaged host's patch composition (decision 110) ------------------------------
 
-function rowKey(row: Record<string, unknown>): string {
-  return typeof row.id === 'string' && row.id !== ''
-    ? row.id
-    : `(no id) ${typeof row.name === 'string' ? row.name : JSON.stringify(row.name ?? null)}`;
-}
-
-/** Row keys of a composed entry list, nested rows included, counted. */
-function countRows(entries: readonly unknown[]): Map<string, number> {
-  const counts = new Map<string, number>();
-  const visit = (list: readonly unknown[]): void => {
-    for (const row of list) {
-      if (!isRecord(row)) continue;
-      const key = rowKey(row);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-      // Both nestings: a loader group's config list, and an `initial` list.
-      if (row.group && Array.isArray(row.config)) visit(row.config);
-      const initial = isRecord(row.config) ? row.config.initial : undefined;
-      if (Array.isArray(initial)) visit(initial);
-    }
-  };
-  visit(entries);
-  return counts;
+/** The one shape `packagedProfilePatches` needs of a loaded/composed profile. */
+export interface PatchableProfile {
+  layers: ReadonlyArray<{ patches: readonly unknown[] }>;
+  /** The profile's own layer; always empty here (decision 058 rule 3: `userLayer: false`). */
+  patches: readonly unknown[];
 }
 
 /**
- * Rows of `composed` that `trusted` does not have, one per extra occurrence:
- * `trusted` is the composition of the bundle layers and the launch overlays
- * alone, `composed` the full one (the home layer included). Patches never
- * remove a row, so every extra is a row some other layer inserted.
+ * A packaged host's patch list, home layer left out entirely: the bundle
+ * layers' patches, the profile's own layer (always empty), then the launch
+ * overlays — the same order `appBoot.readProfilePatches` composes in, minus
+ * its `$DSH_HOME/cordis.patch.yml` read (host.ts appends the telemetry patch
+ * the same way it does). `readProfilePatches` has no option
+ * to skip that read (only `loadProfileDirectory`'s `userLayer` skips the
+ * profile's own layer), so a packaged host composes by hand instead of
+ * calling it; a source checkout still calls it, home layer and all, for
+ * development and the probes (decision 110, revising decision 108 rule 12
+ * and decision 023 rule 3).
  */
-export function undeclaredRows(
-  trusted: readonly unknown[],
-  composed: readonly unknown[]
-): string[] {
-  const allowed = countRows(trusted);
-  const extras: string[] = [];
-  for (const [key, count] of countRows(composed)) {
-    for (let index = allowed.get(key) ?? 0; index < count; index += 1) extras.push(key);
-  }
-  return extras;
+export function packagedProfilePatches(
+  profile: PatchableProfile,
+  overlays: readonly unknown[]
+): unknown[] {
+  return structuredClone([
+    ...profile.layers.flatMap((layer) => layer.patches),
+    ...profile.patches,
+    ...overlays,
+  ]);
 }

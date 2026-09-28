@@ -42,11 +42,14 @@
  * layer alone. No .env file is read, from the launch directory or from
  * DSH_HOME, and nothing is written into process.env.
  *
- * Plugins (P1-10b; decisions 058, 059, 108): the profile composes the product
- * bundles plus the allowlisted plugins Main enabled (AICLIENT_DSH_PLUGINS, or
- * the allowlist's defaults) that this host's own node_modules holds, audited
- * layer by layer (lib/hostPlugins.ts); the profile's own patch layer is never
- * read, and `ready.plugins` reports every allowlisted plugin's state.
+ * Plugins (P1-10b; decisions 058, 059, 108, 110): the profile composes the
+ * product bundles plus the allowlisted plugins Main enabled
+ * (AICLIENT_DSH_PLUGINS' per-plugin overrides, or the allowlist's defaults)
+ * that this host's own node_modules holds, audited layer by layer
+ * (lib/hostPlugins.ts); the profile's own patch layer is never read, a
+ * packaged host never reads the home layer either (a source checkout still
+ * does, for development and the probes), and `ready.plugins` reports every
+ * allowlisted plugin's state.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -78,11 +81,10 @@ import {
   judgeInstalled,
   PLUGINS_ENV,
   PROBE_BUNDLE_ENV,
+  packagedProfilePatches,
   planProfileBundles,
   pluginReport,
   readEnabledInput,
-  UNDECLARED_ROWS_CODE,
-  undeclaredRows,
   withInactiveRows,
 } from './lib/hostPlugins.ts';
 import {
@@ -409,11 +411,19 @@ for (const [name, value] of Object.entries(process.env)) {
   if (value !== undefined) processLayer[name] = value;
 }
 const environment = createLaunchEnvironmentSnapshot([{ source: 'process', values: processLayer }]);
-// Decision 023 rule 3: the home layer is still read, but the rows it could turn
-// back on are restated off after it.
+// Decision 110 (revising decision 023 rule 3 and decision 108 rule 12): a
+// packaged host never reads $DSH_HOME/cordis.patch.yml at all, and only warns
+// that it was ignored when the file is there. A source checkout still reads
+// it (below, via appBoot.readProfilePatches), for development and the
+// probes; the required-disabled overlays restate the rows it could turn back
+// on regardless.
 const homePatch = join(home, 'cordis.patch.yml');
 if (existsSync(homePatch)) {
-  warn(`${homePatch} is applied; the privacy and endpoint rows stay off regardless`);
+  warn(
+    artifact.form === 'packaged'
+      ? `${homePatch} is ignored: a packaged host never reads $DSH_HOME/cordis.patch.yml`
+      : `${homePatch} is applied; the privacy and endpoint rows stay off regardless`
+  );
 }
 // Decision 033: nothing is composed before Main's plan. A host run by hand
 // without IPC gets an empty one: no route, so no model request can go out.
@@ -456,25 +466,27 @@ const profileContext = {
   // is disabled at every start (bundle/cordis.patch.yml, REQUIRED_DISABLED),
   // so nothing ever reads this field's fallback (`?? {command: 'pnpm'}`).
 };
-const patches = appBoot.readProfilePatches(BIN, profileContext, composedProfile);
+// Decision 110 (revising decision 108 rule 12): a packaged host composes its
+// patch list without the home layer at all (lib/hostPlugins.ts, kept free of
+// DSH's own patch type); a source checkout still calls
+// appBoot.readProfilePatches, home layer included.
+const patches: ReturnType<typeof appBoot.readProfilePatches> =
+  artifact.form === 'packaged'
+    ? (packagedProfilePatches(composedProfile, profileContext.overlays) as ReturnType<
+        typeof appBoot.readProfilePatches
+      >)
+    : appBoot.readProfilePatches(BIN, profileContext, composedProfile);
+// readProfilePatches' last step, kept for parity (the row is off regardless).
+if (artifact.form === 'packaged') {
+  const telemetryPatch = appBoot.resolveTelemetryPatch(
+    profileContext.telemetryDisabledEnv,
+    appBoot.composeEntries([patches]).some((row) => row.id === 'session-telemetry-otel')
+  );
+  if (telemetryPatch !== undefined) patches.push(telemetryPatch);
+}
 
 // Static composition audit, before any plugin imports.
 const entries = appBoot.composeEntries([patches]);
-// Decision 059 rule 3 (refining 023 rule 3), decision 108 rule 12: the rows are
-// the composed bundles' and nothing else's. With the profile's own layer out,
-// only the home layer can bring another one: a packaged host refuses to boot
-// on it, naming the file; a checkout says so and goes on.
-const undeclared = undeclaredRows(
-  appBoot.composeEntries([
-    [...composedProfile.layers.flatMap((layer) => layer.patches), ...profileContext.overlays],
-  ]),
-  entries
-);
-if (undeclared.length > 0) {
-  const refusal = `${UNDECLARED_ROWS_CODE}: ${homePatch} inserts rows that no composed bundle declares: ${undeclared.join(', ')}; remove them from that file`;
-  if (artifact.form === 'packaged') fail(refusal, UNDECLARED_ROWS_CODE);
-  warn(`${refusal} (a packaged host refuses to boot on this)`);
-}
 const flat: Array<{ id?: string; name?: string; disabled?: unknown }> = [];
 const walk = (list: unknown[]): void => {
   for (const row of list as Array<Record<string, unknown>>) {

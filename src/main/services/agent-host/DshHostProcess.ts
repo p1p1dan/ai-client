@@ -140,11 +140,16 @@ export function dshPermissionAgentDir(appStateRoot: string): string {
 }
 
 /**
- * `enabledPlugins` (P1-10b, decision 108 rule 5): the user's plugin list, or
- * `undefined` when nobody chose (the host applies the allowlist's defaults).
+ * `pluginOverrides` (P1-10b, decision 110, revising decision 108 rule 5): the
+ * plugins the user has switched on or off by hand, or `undefined` when
+ * nobody has touched anything (the host applies the allowlist's
+ * `defaultEnabled` for every plugin).
  */
 export function buildDshHostLaunch(
-  input: DshHostLayoutInput & { appStateRoot: string; enabledPlugins?: readonly string[] }
+  input: DshHostLayoutInput & {
+    appStateRoot: string;
+    pluginOverrides?: Readonly<Record<string, boolean>>;
+  }
 ): DshHostLaunch {
   const layout = resolveDshHostLayout(input);
   const dshHome = resolveDshHome(input);
@@ -159,7 +164,7 @@ export function buildDshHostLaunch(
       nativeCacheDir,
       isPackaged: input.isPackaged,
       permissionAgentDir: dshPermissionAgentDir(input.appStateRoot),
-      enabledPlugins: input.enabledPlugins,
+      pluginOverrides: input.pluginOverrides,
       env: input.env,
       platform: input.platform,
     }),
@@ -169,14 +174,14 @@ export function buildDshHostLaunch(
 
 /** The launch for this running app, with the plugin selection as of now (P1-10b). */
 export function currentDshHostLaunch(
-  readPluginSelection: () => string[] | undefined = () => readDshPluginSelection()
+  readPluginSelection: () => Record<string, boolean> | undefined = () => readDshPluginSelection()
 ): DshHostLaunch {
   return buildDshHostLaunch({
     isPackaged: app.isPackaged,
     appPath: app.getAppPath(),
     resourcesPath: process.resourcesPath,
     appStateRoot: getAppStateRoot(),
-    enabledPlugins: readPluginSelection(),
+    pluginOverrides: readPluginSelection(),
   });
 }
 

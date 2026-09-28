@@ -12,10 +12,12 @@
  * entry in the manifest's `plugins` section (tools/lib/plugin-install.ts) —
  * and is then made read-only for everyone (files 0444, directories 0555).
  * Two packaged hosts on it, with Main's own environment rule:
- *   enabled   AICLIENT_DSH_PLUGINS names the fixture: `ready.plugins` reports
- *             it loaded, its row is active, it says it runs from the install
- *             directory, and a turn's model request carries one tool more
- *   disabled  AICLIENT_DSH_PLUGINS is `[]`: reported disabled, not composed
+ *   enabled   AICLIENT_DSH_PLUGINS overrides the fixture on: `ready.plugins`
+ *             reports it loaded, its row is active, it says it runs from the
+ *             install directory, and a turn's model request carries one tool
+ *             more
+ *   disabled  AICLIENT_DSH_PLUGINS overrides the fixture off (`{"<name>":
+ *             false}`, decision 110): reported disabled, not composed
  * Afterwards the install directory must be byte-for-byte what it was: no file
  * added, removed or changed. Permissions are restored before the scratch
  * directory is removed.
@@ -73,7 +75,7 @@ async function runHost(
   label: 'enabled' | 'disabled',
   install: { dir: string; entry: string },
   port: number,
-  enabledPlugins: string[]
+  pluginOverrides: Record<string, boolean>
 ) {
   const box = sandbox(scratchRoot, label);
   const cwd = join(box.root, 'host-cwd');
@@ -82,7 +84,7 @@ async function runHost(
     dshHome: box.dshHome,
     nativeCacheDir: join(box.root, 'native-cache'),
     isPackaged: true,
-    enabledPlugins,
+    pluginOverrides,
     env: {
       PATH: process.env.PATH ?? '/usr/bin:/bin',
       LANG: process.env.LANG ?? 'C.UTF-8',
@@ -161,8 +163,10 @@ async function main() {
   const results: Record<string, Awaited<ReturnType<typeof runHost>>> = {};
   let changes: string[] = [];
   try {
-    results.enabled = await runHost('enabled', install, gateway.port, [FIXTURE_PLUGIN]);
-    results.disabled = await runHost('disabled', install, gateway.port, []);
+    results.enabled = await runHost('enabled', install, gateway.port, { [FIXTURE_PLUGIN]: true });
+    results.disabled = await runHost('disabled', install, gateway.port, {
+      [FIXTURE_PLUGIN]: false,
+    });
     changes = treeChanges(snapshotBefore, snapshotTree(install.dir));
   } finally {
     gateway.child.kill();

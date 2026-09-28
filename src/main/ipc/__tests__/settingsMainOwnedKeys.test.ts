@@ -163,7 +163,8 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     expect(readSettingsFile().onboarding).toEqual({ registered: true, email: 'a@jcdz.cc' });
   });
 
-  // dsh-rebase P1-10b (decision 108 rule 5): the DSH plugin selection is Main's.
+  // dsh-rebase P1-10b (decision 110, revising decision 108 rule 5): the DSH
+  // plugin overrides are Main's.
   it('a DSH plugin selection written by Main survives a stale renderer save, and cannot be invented', async () => {
     vi.useFakeTimers();
     await loadSettingsModule();
@@ -174,12 +175,17 @@ describe('settings.json — Main-owned keys survive a renderer whole-object save
     if (!read) throw new Error('settings handlers not registered');
     await read({});
 
-    writeDshPluginSelection(['dsh-office-tools']);
-    await rendererSave({ [DSH_PLUGINS_SETTING_KEY]: { enabled: ['@evil/bundle'] }, theme: 'dark' });
+    writeDshPluginSelection({ 'dsh-office-tools': true });
+    await rendererSave({
+      [DSH_PLUGINS_SETTING_KEY]: { overrides: { '@evil/bundle': true } },
+      theme: 'dark',
+    });
     await vi.advanceTimersByTimeAsync(600);
 
-    expect(readSettingsFile()[DSH_PLUGINS_SETTING_KEY]).toEqual({ enabled: ['dsh-office-tools'] });
-    expect(readDshPluginSelection()).toEqual(['dsh-office-tools']);
+    expect(readSettingsFile()[DSH_PLUGINS_SETTING_KEY]).toEqual({
+      overrides: { 'dsh-office-tools': true },
+    });
+    expect(readDshPluginSelection()).toEqual({ 'dsh-office-tools': true });
   });
 
   it('ipc/settings.ts spells the plugin key the way the shared module does', () => {

@@ -47,10 +47,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * out, and runs the KEY-CANARY scan; the last loads the shipped catalog's plan
  * into a host and requires no route diagnostic (the drift gate).
  *
- * P1-10b (decision 108): a ninth supervisor runs packaged-form hosts from
- * scratch installs with a test-only fixture plugin preinstalled, enables and
- * disables it through WorkerManager's restart, and checks the rejected,
- * missing and refused cases. It needs the repo root's esbuild as well.
+ * P1-10b (decisions 108, 110): a ninth supervisor runs packaged-form hosts
+ * from scratch installs with a test-only fixture plugin preinstalled, enables
+ * and disables it through WorkerManager's restart, and checks the rejected,
+ * missing and (decision 110) ignored-home-layer cases. It needs the repo
+ * root's esbuild as well.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1901,14 +1902,16 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
   });
 
   /**
-   * P1-10b (decisions 058, 059, 108): plugins preinstalled the way the product
-   * ships them, on scratch host installs built from this checkout
+   * P1-10b (decisions 058, 059, 108, 110): plugins preinstalled the way the
+   * product ships them, on scratch host installs built from this checkout
    * (tools/lib/plugin-install.ts: host.js bundled by the build's own rules,
    * node_modules linked onto src/dsh-host's, the test-only fixture plugin or
    * a bad variant of it copied in and listed in the manifest's `plugins`
    * section). A real supervisor spawns every host with Main's environment
-   * rule and the plugin selection of that moment; WorkerManager restarts the
+   * rule and the plugin overrides of that moment; WorkerManager restarts the
    * host when the selection changes; the supervisor keeps each start's report.
+   * PLG-5 also covers decision 110: a packaged host never reads
+   * $DSH_HOME/cordis.patch.yml, so a home layer refusal no longer exists.
    * Nothing in the shared checkout is written.
    */
   describe('a ninth supervisor: preinstalled plugins, enabled, disabled, rejected (P1-10b)', () => {
@@ -1917,7 +1920,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     /** The host entry (`<install>/host.js`) of each scratch install. */
     const installs: Record<'good' | 'undeclared', string> = { good: '', undeclared: '' };
     let current = '';
-    let selection: string[] | undefined;
+    let selection: Record<string, boolean> | undefined;
     let supervisor: Supervisor;
     let manager: Manager;
     const base = () => join(shared.stateRoot, 'plugins');
@@ -1965,7 +1968,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         }
       ).dsh?.profile?.bundles;
     /** Main's side of a selection change: store it, reconcile, wait for the old host to go. */
-    async function select(next: string[] | undefined) {
+    async function select(next: Record<string, boolean> | undefined) {
       selection = next;
       manager.reconcileHostPlugins(dshPluginSelectionKey(next));
       expect(await until(() => supervisor.status().state !== 'ready', 30_000)).toBe(true);
@@ -2011,7 +2014,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
             dshHome: dshHome(),
             nativeCacheDir: nativeCache,
             isPackaged: true,
-            enabledPlugins: selection,
+            pluginOverrides: selection,
             env: { ...process.env, HOME: home },
           }),
           privateDirs: [dshHome(), hostCwd, nativeCache],
@@ -2026,12 +2029,12 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     }, 60_000);
 
     it('[PLG-1, PLG-2] an enabled plugin loads from the install directory and its tool reaches the model; switching it off restarts the host without it', async () => {
-      selection = [kit.FIXTURE_PLUGIN];
+      selection = { [kit.FIXTURE_PLUGIN]: true };
       const enabled = await streamTurn('pl1', 90);
       expect(enabled).toMatchObject({ settled: true, completed: true });
       expect(supervisor.status()).toMatchObject({
         state: 'ready',
-        pluginSelection: JSON.stringify([kit.FIXTURE_PLUGIN]),
+        pluginSelection: dshPluginSelectionKey({ [kit.FIXTURE_PLUGIN]: true }),
       });
       expect(supervisor.pluginReport()).toEqual({
         enabledFrom: 'main',
@@ -2053,11 +2056,16 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       ]);
 
       // Main's side of the switch (decision 059 rule 4): the running host is
-      // on another selection, nothing is in flight, so it goes at once.
-      await select([]);
+      // on another selection, nothing is in flight, so it goes at once. An
+      // explicit `false` override (decision 110), not just an untouched
+      // plugin, so the test still exercises the override path even though
+      // the fixture's own defaultEnabled is already false.
+      await select({ [kit.FIXTURE_PLUGIN]: false });
       const disabled = await streamTurn('pl2', 91);
       expect(disabled).toMatchObject({ settled: true, completed: true });
-      expect(supervisor.status().pluginSelection).toBe('[]');
+      expect(supervisor.status().pluginSelection).toBe(
+        dshPluginSelectionKey({ [kit.FIXTURE_PLUGIN]: false })
+      );
       expect(supervisor.pluginReport()?.plugins[0]).toMatchObject({
         name: kit.FIXTURE_PLUGIN,
         state: 'disabled',
@@ -2072,7 +2080,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('[PLG-3] a plugin whose patch inserts an undeclared row is rejected; the host serves without it', async () => {
       current = installs.undeclared;
-      await select([kit.FIXTURE_PLUGIN]);
+      await select({ [kit.FIXTURE_PLUGIN]: true });
       const result = await streamTurn('pl3', 92);
       expect(result).toMatchObject({ settled: true, completed: true });
       expect(supervisor.pluginReport()?.plugins).toEqual([
@@ -2088,7 +2096,7 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('[PLG-4] a plugin enabled but not installed is missing, and a stray bundle the profile lists is dropped', async () => {
       current = installs.good;
-      await select([kit.FIXTURE_PLUGIN, MISSING]);
+      await select({ [kit.FIXTURE_PLUGIN]: true, [MISSING]: true });
       const manifest = join(dshHome(), 'profiles', 'aiclient', 'package.json');
       const tampered = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
       writeFileSync(
@@ -2123,28 +2131,41 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       ]);
     }, 180_000);
 
-    it('[PLG-5] a home layer that inserts an undeclared row keeps the packaged host from starting', async () => {
+    it('[PLG-5] a packaged host ignores the home layer entirely — a new row and a !!js expression on an existing one both have no effect (decision 110)', async () => {
       await manager.invalidateAll();
       const homePatch = join(dshHome(), 'cordis.patch.yml');
       writeFileSync(
         homePatch,
-        "- insert:\n    - id: home-undeclared\n      name: '@aiclient-test/dsh-fixture-plugin'\n"
+        [
+          // Overrides an existing, always-active product row's config with a
+          // !!js expression that throws when evaluated. Decision 108's open
+          // question 3: home layer edits can't add rows, but they could still
+          // reach into an existing row's config and have DSH evaluate
+          // arbitrary JS at composition time. If this file were read at all,
+          // boot would fail resolving sandbox-policy's config.
+          '- id: sandbox-policy',
+          '  config:',
+          '    mode: danger-full-access',
+          "    workspaceRoot: !!js (() => { throw new Error('home layer !!js was evaluated'); })()",
+          // Also inserts a brand-new row naming a package that cannot
+          // resolve. If this were composed, boot would fail resolving it.
+          '- insert:',
+          '    - id: home-undeclared',
+          "      name: '@aiclient-test/this-package-does-not-exist'",
+          '',
+        ].join('\n')
       );
       try {
-        const refused = await supervisor.ensureHost({ userInitiated: true }).then(
-          () => undefined,
-          (error: unknown) => error as { code?: string; message?: string }
-        );
-        expect(refused?.code).toBe('DSH_HOST_START_FAILED');
-        expect(refused?.message).toContain(
-          `DSH_HOST_UNDECLARED_ROWS: ${homePatch} inserts rows that no composed bundle declares: home-undeclared`
-        );
+        // Reaching ready is itself the proof: a packaged host never reads
+        // $DSH_HOME/cordis.patch.yml, so neither the new row nor the !!js
+        // expression in it ever reaches the composition, let alone runs.
+        await supervisor.ensureHost({ userInitiated: true });
+        expect(supervisor.status().state).toBe('ready');
+        const result = await streamTurn('pl5', 94);
+        expect(result).toMatchObject({ settled: true, completed: true });
       } finally {
         rmSync(homePatch, { force: true });
       }
-      // Without it the next start is fine again.
-      await supervisor.ensureHost({ userInitiated: true });
-      expect(supervisor.status().state).toBe('ready');
     }, 180_000);
   });
 });

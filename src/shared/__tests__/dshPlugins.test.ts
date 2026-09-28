@@ -44,22 +44,30 @@ const report: DshPluginReport = {
   dropped: [{ name: '@evil/bundle', reason: 'not on the allowlist' }],
 };
 
-describe('the settings value (decision 108 rule 5)', () => {
+describe('the settings value (decision 110, revising decision 108 rule 5)', () => {
   it('lives under a Main-owned key', () => {
     expect(DSH_PLUGINS_SETTING_KEY).toBe('dshPlugins');
   });
 
-  it('is absent (the allowlist’s defaults) unless it holds an enabled list', () => {
-    for (const raw of [undefined, null, [], 'dsh-a', { enabled: 'dsh-a' }, { other: [] }]) {
+  it('is absent (every plugin follows its default) unless it holds an overrides object', () => {
+    for (const raw of [undefined, null, [], 'dsh-a', { overrides: ['dsh-a'] }, { other: {} }]) {
       expect(parseDshPluginSelection(raw), JSON.stringify(raw)).toBeUndefined();
     }
   });
 
-  it('keeps package names only, each once, sorted; an empty list is a choice too', () => {
+  it('keeps package name -> boolean entries only, sorted by key; an empty object is a choice too', () => {
     expect(
-      parseDshPluginSelection({ enabled: ['dsh-b', '@s/dsh-a', 'dsh-b', 7, 'Bad Name', ''] })
-    ).toEqual(['@s/dsh-a', 'dsh-b']);
-    expect(parseDshPluginSelection({ enabled: [] })).toEqual([]);
+      parseDshPluginSelection({
+        overrides: {
+          'dsh-b': true,
+          '@s/dsh-a': false,
+          'Bad Name': true,
+          '': true,
+          'dsh-c': 'yes',
+        },
+      })
+    ).toEqual({ '@s/dsh-a': false, 'dsh-b': true });
+    expect(parseDshPluginSelection({ overrides: {} })).toEqual({});
     expect(isDshPluginPackageName('@aiclient-test/dsh-fixture-plugin')).toBe(true);
     expect(isDshPluginPackageName('../evil')).toBe(false);
   });

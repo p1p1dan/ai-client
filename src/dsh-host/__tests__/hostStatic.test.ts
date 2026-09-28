@@ -238,8 +238,8 @@ describe('the product bundle: one bridge row always on, the permission row, the 
   });
 });
 
-describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108)', () => {
-  it("reads Main's enabled list from the variable Main sets", () => {
+describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108, 110)', () => {
+  it("reads Main's overrides from the variable Main sets", () => {
     const main = readFileSync(
       join(HOST_DIR, '..', 'main', 'services', 'agent-host', 'dshHostEnvironment.ts'),
       'utf8'
@@ -265,7 +265,6 @@ describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108)', (
     expect(host).toMatch(
       /layers: profile\.layers\.filter\(\(layer\) => !layerAudit\.rejected\.includes\(layer\.packageName\)\)/
     );
-    expect(host).toContain('appBoot.readProfilePatches(BIN, profileContext, composedProfile)');
     expect(host).toMatch(
       /appBoot\.createRuntimeResolution\(\{\s*installAnchor,\s*profile: composedProfile,/
     );
@@ -278,12 +277,19 @@ describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108)', (
     );
   });
 
-  it('refuses a packaged boot on rows no composed bundle declares, with a code (decision 108 rule 12)', () => {
-    expect(host).toContain(
-      "if (artifact.form === 'packaged') fail(refusal, UNDECLARED_ROWS_CODE);"
-    );
-    expect(read('lib', 'hostPlugins.ts')).toContain(
-      "export const UNDECLARED_ROWS_CODE = 'DSH_HOST_UNDECLARED_ROWS';"
+  it('a packaged host composes its patches without the home layer; a checkout still reads it (decision 110)', () => {
+    expect(host).toContain("artifact.form === 'packaged'");
+    expect(host).toContain('packagedProfilePatches(composedProfile, profileContext.overlays)');
+    expect(host).toContain('appBoot.readProfilePatches(BIN, profileContext, composedProfile)');
+    expect(host).not.toContain('UNDECLARED_ROWS_CODE');
+    expect(host).not.toContain('undeclaredRows(');
+    expect(read('lib', 'hostPlugins.ts')).not.toContain('UNDECLARED_ROWS_CODE');
+    expect(read('lib', 'hostPlugins.ts')).not.toContain('export function undeclaredRows');
+  });
+
+  it('warns, but never refuses, when the home layer is there (decision 110)', () => {
+    expect(host).toMatch(
+      /artifact\.form === 'packaged'\s*\?\s*`\$\{homePatch\} is ignored: a packaged host never reads \$DSH_HOME\/cordis\.patch\.yml`\s*:\s*`\$\{homePatch\} is applied; the privacy and endpoint rows stay off regardless`/
     );
   });
 

@@ -482,34 +482,38 @@ describe('currentDshHostLaunch', () => {
   });
 });
 
-// dsh-rebase P1-10b (decision 108 rule 6): the user's plugin list reaches the
-// host at every spawn; nobody's choice means the allowlist's defaults.
-describe('the plugin selection in the launch (P1-10b)', () => {
-  const build = (enabledPlugins?: readonly string[], env: NodeJS.ProcessEnv = SHELL_ENV) =>
+// dsh-rebase P1-10b (decision 110, revising decision 108 rule 6): the user's
+// per-plugin overrides reach the host at every spawn; a plugin nobody has
+// touched follows the allowlist's defaultEnabled.
+describe('the plugin selection in the launch (P1-10b, decision 110)', () => {
+  const build = (
+    pluginOverrides?: Readonly<Record<string, boolean>>,
+    env: NodeJS.ProcessEnv = SHELL_ENV
+  ) =>
     buildDshHostEnvironment({
       dshHome: '/state/dsh-home',
       nativeCacheDir: '/state/dsh-native-cache',
       isPackaged: true,
-      enabledPlugins,
+      pluginOverrides,
       env,
       platform: 'linux',
     });
 
-  it('sets AICLIENT_DSH_PLUGINS to the list, each name once and sorted', () => {
+  it('sets AICLIENT_DSH_PLUGINS to the overrides, keys sorted', () => {
     expect(DSH_HOST_PLUGINS_ENV).toBe('AICLIENT_DSH_PLUGINS');
-    expect(build(['dsh-b', '@s/dsh-a', 'dsh-b'])).toEqual({
+    expect(build({ 'dsh-b': true, '@s/dsh-a': false })).toEqual({
       ...INHERITED,
       ...EXPLICIT,
-      AICLIENT_DSH_PLUGINS: '["@s/dsh-a","dsh-b"]',
+      AICLIENT_DSH_PLUGINS: '{"@s/dsh-a":false,"dsh-b":true}',
     });
-    expect(build([])[DSH_HOST_PLUGINS_ENV]).toBe('[]');
+    expect(build({})[DSH_HOST_PLUGINS_ENV]).toBe('{}');
   });
 
   it('leaves it out when nobody chose, and never inherits it or the probe switch from Main', () => {
     expect(build(undefined)).toEqual({ ...INHERITED, ...EXPLICIT });
     const env = build(undefined, {
       ...SHELL_ENV,
-      AICLIENT_DSH_PLUGINS: '["@evil/bundle"]',
+      AICLIENT_DSH_PLUGINS: '{"@evil/bundle":true}',
       AICLIENT_DSH_PROBE_BUNDLE: '1',
     });
     expect(env).toEqual({ ...INHERITED, ...EXPLICIT });
@@ -520,9 +524,11 @@ describe('the plugin selection in the launch (P1-10b)', () => {
   it('gives every launch one comparable selection key', () => {
     expect(dshHostPluginsEnvValue(undefined)).toBeUndefined();
     expect(dshPluginSelectionKey(undefined)).toBe('default');
-    expect(dshPluginSelectionKey(['dsh-b', 'dsh-a'])).toBe('["dsh-a","dsh-b"]');
-    expect(dshHostPluginSelection(build(['dsh-a', 'dsh-b']))).toBe(
-      dshPluginSelectionKey(['dsh-b', 'dsh-a'])
+    expect(dshPluginSelectionKey({ 'dsh-b': true, 'dsh-a': false })).toBe(
+      '{"dsh-a":false,"dsh-b":true}'
+    );
+    expect(dshHostPluginSelection(build({ 'dsh-a': true, 'dsh-b': false }))).toBe(
+      dshPluginSelectionKey({ 'dsh-b': false, 'dsh-a': true })
     );
     expect(dshHostPluginSelection(build(undefined))).toBe('default');
   });
@@ -534,8 +540,8 @@ describe('the plugin selection in the launch (P1-10b)', () => {
       Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true });
     });
     vi.mocked(existsSync).mockReset().mockReturnValue(true);
-    const launch = currentDshHostLaunch(() => ['dsh-a']);
-    expect(launch.env[DSH_HOST_PLUGINS_ENV]).toBe('["dsh-a"]');
+    const launch = currentDshHostLaunch(() => ({ 'dsh-a': true }));
+    expect(launch.env[DSH_HOST_PLUGINS_ENV]).toBe('{"dsh-a":true}');
     expect(currentDshHostLaunch(() => undefined).env[DSH_HOST_PLUGINS_ENV]).toBeUndefined();
     const direct = buildDshHostLaunch({
       isPackaged: true,
@@ -545,8 +551,8 @@ describe('the plugin selection in the launch (P1-10b)', () => {
       platform: 'linux',
       env: SHELL_ENV,
       exists: always,
-      enabledPlugins: ['dsh-a'],
+      pluginOverrides: { 'dsh-a': true },
     });
-    expect(direct.env[DSH_HOST_PLUGINS_ENV]).toBe('["dsh-a"]');
+    expect(direct.env[DSH_HOST_PLUGINS_ENV]).toBe('{"dsh-a":true}');
   });
 });

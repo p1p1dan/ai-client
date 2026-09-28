@@ -1,15 +1,20 @@
 /**
  * The DSH plugin set between Main and the shared host (dsh-rebase P1-10b;
- * decisions 058, 059 and 108).
+ * decisions 058, 059, 108 and 110).
  *
- *   Main   keeps the user's choice under the Main-owned settings key
- *          `dshPlugins` (`{enabled: [...]}`; absent: nobody chose, the
- *          allowlist's `defaultEnabled` apply) and hands the host the enabled
- *          list at every spawn (`AICLIENT_DSH_PLUGINS`, dshHostEnvironment.ts).
- *   host   composes the product bundles plus the enabled allowlisted plugins
- *          and reports every allowlisted plugin's state in `ready`
- *          (`plugins`, {@link DshPluginReport}); Main keeps the latest report
- *          for the settings page (P1-10c).
+ *   Main   keeps the user's per-plugin overrides under the Main-owned
+ *          settings key `dshPlugins` (`{overrides: {"<name>": true|false}}`;
+ *          absent, or a plugin missing from `overrides`, means nobody has
+ *          touched it — it follows the allowlist's `defaultEnabled`, so a
+ *          plugin the allowlist adds in a later version turns on for a user
+ *          who has only ever touched a different plugin's switch) and hands
+ *          the host the overrides at every spawn (`AICLIENT_DSH_PLUGINS`,
+ *          dshHostEnvironment.ts).
+ *   host   resolves each plugin's override against the allowlist's
+ *          `defaultEnabled`, composes the product bundles plus the enabled
+ *          allowlisted plugins, and reports every allowlisted plugin's state
+ *          in `ready` (`plugins`, {@link DshPluginReport}); Main keeps the
+ *          latest report for the settings page (P1-10c).
  *
  * Import-free and erasable: Main imports it, the host only its types.
  */
@@ -59,8 +64,11 @@ export interface DshDroppedBundle {
 /** `ready.plugins`. */
 export interface DshPluginReport {
   /**
-   * Where the enabled set came from: Main's list, the allowlist's defaults
-   * (Main sent none), or nothing at all because Main's value was malformed.
+   * Where the enabled set came from: `'main'` when Main sent an overrides
+   * object (each plugin missing from it still follows the allowlist's
+   * `defaultEnabled`), `'default'` when Main sent nothing at all (the env
+   * var was absent: every plugin follows its default), or `'invalid'`
+   * because Main's value could not be parsed (fail closed: nothing enabled).
    */
   enabledFrom: 'main' | 'default' | 'invalid';
   /** Every allowlisted plugin, in allowlist order. */
@@ -110,12 +118,21 @@ export function isDshPluginReport(value: unknown): value is DshPluginReport {
 }
 
 /**
- * The enabled list a `dshPlugins` settings value holds: package names, once
- * each, sorted. `undefined` when there is no usable value — nobody chose, so
- * the allowlist's `defaultEnabled` decide. Names that are not package names
- * are dropped; the host intersects the rest with its allowlist anyway.
+ * The overrides a `dshPlugins` settings value holds: package name -> whether
+ * the user turned it on or off by hand, keys sorted. `undefined` when there
+ * is no usable value — nobody has touched any plugin, so every plugin
+ * follows the allowlist's `defaultEnabled` (decision 110). An empty object is
+ * itself a usable value (nobody has touched anything, but Main still owns the
+ * decision) and is kept, not turned into `undefined`. Entries that are not a
+ * package name mapped to a boolean are dropped; the host intersects the rest
+ * with its allowlist anyway.
  */
-export function parseDshPluginSelection(raw: unknown): string[] | undefined {
-  if (!isRecord(raw) || !Array.isArray(raw.enabled)) return undefined;
-  return [...new Set(raw.enabled.filter(isDshPluginPackageName))].sort();
+export function parseDshPluginSelection(raw: unknown): Record<string, boolean> | undefined {
+  if (!isRecord(raw) || !isRecord(raw.overrides)) return undefined;
+  const overrides: Record<string, boolean> = {};
+  for (const name of Object.keys(raw.overrides).sort()) {
+    const value = raw.overrides[name];
+    if (isDshPluginPackageName(name) && typeof value === 'boolean') overrides[name] = value;
+  }
+  return overrides;
 }

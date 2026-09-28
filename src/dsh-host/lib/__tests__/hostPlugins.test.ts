@@ -9,18 +9,18 @@ import {
   judgeInstalled,
   PLUGINS_ENV,
   PROBE_BUNDLE_ENV,
+  packagedProfilePatches,
   planProfileBundles,
   pluginReport,
   readEnabledInput,
-  UNDECLARED_ROWS_CODE,
-  undeclaredRows,
   withInactiveRows,
 } from '../hostPlugins.ts';
 
 /**
  * dsh-rebase P1-10b — the plugin rules host.ts applies at every start
- * (decisions 025 rule 5, 058, 059, 108): the allowlist it reads, the enabled
- * set, the profile's bundle list, the load audit and the undeclared-row check.
+ * (decisions 025 rule 5, 058, 059, 108, 110): the allowlist it reads, the
+ * enabled set, the profile's bundle list, the load audit and the packaged
+ * host's home-layer-free patch composition.
  */
 
 const BASE = '@deepseek-ai/dsh-base';
@@ -47,11 +47,10 @@ const ok: InstallVerdict = { ok: true };
 const allInstalled = (...plugins: HostPlugin[]) =>
   new Map<string, InstallVerdict>(plugins.map((item) => [item.name, ok]));
 
-describe('the variables (decision 108 rules 4 and 6)', () => {
-  it('reads Main’s list and the probe switch under their own names', () => {
+describe('the variables (decision 108 rules 4 and 6, decision 110)', () => {
+  it('reads Main’s overrides and the probe switch under their own names', () => {
     expect(PLUGINS_ENV).toBe('AICLIENT_DSH_PLUGINS');
     expect(PROBE_BUNDLE_ENV).toBe('AICLIENT_DSH_PROBE_BUNDLE');
-    expect(UNDECLARED_ROWS_CODE).toBe('DSH_HOST_UNDECLARED_ROWS');
   });
 });
 
@@ -108,25 +107,61 @@ describe('allowlistFromSource (checkout host)', () => {
   });
 });
 
-describe('readEnabledInput and enabledNames (decision 108 rule 6)', () => {
+describe('readEnabledInput and enabledNames (decision 110, revising decision 108 rule 6)', () => {
   it('takes the allowlist’s defaults when Main sent nothing', () => {
     expect(readEnabledInput(undefined)).toEqual({ from: 'default' });
     expect(enabledNames([A, B, C], { from: 'default' })).toEqual(['@s/dsh-b']);
   });
 
-  it('takes Main’s list as it is, each name once', () => {
-    const input = readEnabledInput('["dsh-a","dsh-a","dsh-gone"]');
-    expect(input).toEqual({ from: 'main', names: ['dsh-a', 'dsh-gone'] });
-    expect(enabledNames([A, B], input)).toEqual(['dsh-a', 'dsh-gone']);
-    expect(enabledNames([A, B], readEnabledInput('[]'))).toEqual([]);
+  it('takes Main’s overrides, and follows defaultEnabled for a plugin not overridden', () => {
+    const input = readEnabledInput('{"dsh-a":true,"dsh-gone":true,"@s/dsh-b":false}');
+    expect(input).toEqual({
+      from: 'main',
+      overrides: { 'dsh-a': true, 'dsh-gone': true, '@s/dsh-b': false },
+    });
+    // dsh-a: overridden on; @s/dsh-b: overridden off (its defaultEnabled is
+    // true); dsh-c: not overridden, follows its defaultEnabled (false).
+    expect(enabledNames([A, B, C], input)).toEqual(['dsh-a']);
+    // An empty overrides object: nobody has touched anything, so B (whose
+    // defaultEnabled is true) is still enabled — same as `{ from: 'default' }`.
+    expect(enabledNames([A, B], readEnabledInput('{}'))).toEqual(['@s/dsh-b']);
   });
 
-  it('enables nothing when the list is malformed (fail closed)', () => {
-    for (const raw of ['', 'dsh-a', '{"dsh-a":true}', '[1]', '["Bad Name"]']) {
+  it('a plugin the allowlist adds later, defaultEnabled true, turns on for a user who only touched another switch', () => {
+    const input = readEnabledInput('{"dsh-a":true}');
+    // B (@s/dsh-b, defaultEnabled: true) is not in the overrides at all.
+    expect(enabledNames([A, B], input)).toEqual(['dsh-a', '@s/dsh-b']);
+  });
+
+  it('enables nothing when the value is malformed (fail closed)', () => {
+    for (const raw of ['', 'dsh-a', '["dsh-a"]', '{"dsh-a":"yes"}', '{"Bad Name":true}']) {
       const input = readEnabledInput(raw);
       expect(input.from, raw).toBe('invalid');
       expect(enabledNames([A, B], input), raw).toEqual([]);
     }
+  });
+});
+
+describe('packagedProfilePatches (decision 110, revising decision 108 rule 12 and decision 023 rule 3)', () => {
+  it('composes the bundle layers, the (always empty) profile layer, and the overlays — home layer left out', () => {
+    const profile = {
+      layers: [{ patches: [{ id: 'a', name: 'x' }] }, { patches: [{ id: 'b', name: 'y' }] }],
+      patches: [],
+    };
+    const overlays = [{ id: 'a', disabled: true }];
+    expect(packagedProfilePatches(profile, overlays)).toEqual([
+      { id: 'a', name: 'x' },
+      { id: 'b', name: 'y' },
+      { id: 'a', disabled: true },
+    ]);
+  });
+
+  it('returns a deep copy: mutating the result does not touch the inputs', () => {
+    const layerPatch = { id: 'a', config: { nested: 1 } };
+    const profile = { layers: [{ patches: [layerPatch] }], patches: [] };
+    const result = packagedProfilePatches(profile, []) as Array<{ config: { nested: number } }>;
+    result[0].config.nested = 2;
+    expect(layerPatch.config.nested).toBe(1);
   });
 });
 
@@ -408,36 +443,5 @@ describe('withInactiveRows and pluginReport (decision 108 rule 8)', () => {
       plugins: statuses,
       dropped: [],
     });
-  });
-});
-
-describe('undeclaredRows (decision 059 rule 3, decision 108 rule 12)', () => {
-  const trusted = [
-    { id: 'fs', name: '@deepseek-ai/dsh-fs' },
-    { id: 'aiclient-bridge', name: '@aiclient/dsh-app/bridge' },
-  ];
-
-  it('finds nothing when the home layer only changes rows', () => {
-    expect(undeclaredRows(trusted, [{ ...trusted[0], config: { x: 1 } }, trusted[1]])).toEqual([]);
-  });
-
-  it('names a row inserted by the home layer, a second copy of a row, and a row without an id', () => {
-    expect(
-      undeclaredRows(trusted, [
-        ...trusted,
-        { id: 'evil', name: '/tmp/evil.js' },
-        { id: 'fs', name: '@deepseek-ai/dsh-fs' },
-        { name: 'nameless' },
-      ])
-    ).toEqual(['fs', 'evil', '(no id) nameless']);
-  });
-
-  it('looks inside groups, both nestings', () => {
-    expect(
-      undeclaredRows(trusted, [
-        { ...trusted[0], group: true, config: [{ id: 'nested-evil', name: 'x' }] },
-        { ...trusted[1], config: { initial: [{ id: 'initial-evil', name: 'y' }] } },
-      ])
-    ).toEqual(['nested-evil', 'initial-evil']);
   });
 });

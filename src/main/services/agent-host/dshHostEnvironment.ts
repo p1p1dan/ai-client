@@ -52,20 +52,30 @@ const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
 export const DSH_HOST_PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
 
 /**
- * dsh-rebase P1-10b (decision 108 rule 6): the plugins the user enabled, as a
- * JSON list of package names. Absent when nobody chose: the host then applies
- * the allowlist's `defaultEnabled`. Read by host.ts (`PLUGINS_ENV` in
- * src/dsh-host/lib/hostPlugins.ts; hostStatic.test.ts pins the two equal),
- * which intersects it with its own allowlist. A package name, not a secret.
+ * dsh-rebase P1-10b (decision 110, revising decision 108 rule 6): the
+ * plugins the user has switched on or off by hand, as a JSON object of
+ * package name -> boolean. A plugin missing from it, absent when nobody has
+ * touched anything at all, applies the allowlist's `defaultEnabled`. Read by
+ * host.ts (`PLUGINS_ENV` in src/dsh-host/lib/hostPlugins.ts;
+ * hostStatic.test.ts pins the two equal), which intersects it with its own
+ * allowlist. Package names, not secrets.
  */
 export const DSH_HOST_PLUGINS_ENV = 'AICLIENT_DSH_PLUGINS';
 
-/** What a launch that carries no plugin list runs with: the allowlist's defaults. */
+/** What a launch that carries no overrides runs with: the allowlist's defaults for every plugin. */
 export const DSH_HOST_DEFAULT_PLUGIN_SELECTION = 'default';
 
-/** `DSH_HOST_PLUGINS_ENV`'s value for an enabled list: each name once, sorted. None when nobody chose. */
-export function dshHostPluginsEnvValue(enabled: readonly string[] | undefined): string | undefined {
-  return enabled === undefined ? undefined : JSON.stringify([...new Set(enabled)].sort());
+/**
+ * `DSH_HOST_PLUGINS_ENV`'s value for a set of overrides: package name ->
+ * boolean, keys sorted. `undefined` when nobody has touched anything.
+ */
+export function dshHostPluginsEnvValue(
+  overrides: Readonly<Record<string, boolean>> | undefined
+): string | undefined {
+  if (overrides === undefined) return undefined;
+  const sorted: Record<string, boolean> = {};
+  for (const name of Object.keys(overrides).sort()) sorted[name] = overrides[name];
+  return JSON.stringify(sorted);
 }
 
 /**
@@ -77,9 +87,11 @@ export function dshHostPluginSelection(env: Readonly<Record<string, string | und
   return env[DSH_HOST_PLUGINS_ENV] ?? DSH_HOST_DEFAULT_PLUGIN_SELECTION;
 }
 
-/** The key a launch built from `enabled` would carry (`dshHostPluginSelection`). */
-export function dshPluginSelectionKey(enabled: readonly string[] | undefined): string {
-  return dshHostPluginsEnvValue(enabled) ?? DSH_HOST_DEFAULT_PLUGIN_SELECTION;
+/** The key a launch built from `overrides` would carry (`dshHostPluginSelection`). */
+export function dshPluginSelectionKey(
+  overrides: Readonly<Record<string, boolean>> | undefined
+): string {
+  return dshHostPluginsEnvValue(overrides) ?? DSH_HOST_DEFAULT_PLUGIN_SELECTION;
 }
 
 /** Whether an inherited variable stays behind (decision 022). */
@@ -119,15 +131,15 @@ export function setDshHostEnvEntry(
  *
  * `permissionAgentDir` (P1-6c) becomes AICLIENT_PERMISSION_AGENT_DIR; without
  * it the host reads no user permission policy (the packaged smoke's case).
- * `enabledPlugins` (P1-10b) becomes AICLIENT_DSH_PLUGINS; without it the host
- * enables the allowlist's defaults.
+ * `pluginOverrides` (P1-10b, decision 110) becomes AICLIENT_DSH_PLUGINS;
+ * without it the host applies the allowlist's defaults for every plugin.
  */
 export function buildDshHostEnvironment(input: {
   dshHome: string;
   nativeCacheDir: string;
   isPackaged: boolean;
   permissionAgentDir?: string;
-  enabledPlugins?: readonly string[];
+  pluginOverrides?: Readonly<Record<string, boolean>>;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
 }): Record<string, string> {
@@ -145,7 +157,7 @@ export function buildDshHostEnvironment(input: {
   if (input.permissionAgentDir) {
     explicit[DSH_HOST_PERMISSION_AGENT_DIR_ENV] = input.permissionAgentDir;
   }
-  const plugins = dshHostPluginsEnvValue(input.enabledPlugins);
+  const plugins = dshHostPluginsEnvValue(input.pluginOverrides);
   if (plugins !== undefined) explicit[DSH_HOST_PLUGINS_ENV] = plugins;
   for (const name of FORWARDED_ENV) {
     const value = source[name];
