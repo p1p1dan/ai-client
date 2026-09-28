@@ -32,6 +32,10 @@
  *       Then the load-on-use natives no L1 turn reaches on every platform: the
  *       bundled node loads sharp (with libvips) and runs node-pty (conpty on
  *       Windows, spawn-helper on macOS) straight from the artifact.
+ *       P1-10d (decision 115): L1's host runs with the allowlist's pilot plugin
+ *       (dsh-office-tools) switched on through Main's per-plugin overrides, and
+ *       a P0-OFFICE turn runs its write tool (one card, answered allow) and its
+ *       read tool (no card); L0 runs the defaults, where the pilot is off.
  *
  * Both levels also fail on: a module or native addon resolved outside the host
  * directory (a pruning mistake would otherwise fall through to the app's own
@@ -49,7 +53,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 // Main's model source, played the way the probes play it (P1-5, decisions 033, 034).
 import { fakeGatewayPlan, serveModelPlan } from '../src/dsh-host/tools/lib/hostClient.ts';
 // Main's rule itself, loaded by Node's type stripping (the module has no imports).
-import { buildDshHostEnvironment } from '../src/main/services/agent-host/dshHostEnvironment.ts';
+import {
+  buildDshHostEnvironment,
+  DSH_HOST_PLUGINS_ENV,
+  dshHostPluginsEnvValue,
+} from '../src/main/services/agent-host/dshHostEnvironment.ts';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = path.join(repoRoot, 'src', 'dsh-host', 'tools', 'lib', 'probe-hooks.mjs');
@@ -60,6 +68,10 @@ const GENERATION = 1;
 const CHANNEL = 'c1-1';
 const SESSION = 'packaged-smoke';
 const PRODUCT_BUNDLES = ['@deepseek-ai/dsh-base', '@aiclient/dsh-app'];
+/** P1-10d: the allowlist's pilot plugin (decision 115), off by default; L1 turns it on. */
+const PILOT_PLUGIN = 'dsh-office-tools';
+/** What the gateway's P0-OFFICE script writes into p0-report.docx and reads back. */
+const PILOT_PARAGRAPH = 'Written by dsh-office-tools through the fake gateway.';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '::1', '[::1]', '0.0.0.0']);
 
 function parseArgs(argv) {
@@ -571,6 +583,7 @@ async function level0(ctx) {
       artifact: ready.artifact,
       bundles: ready.bundles,
       skippedPlugins: ready.skippedPlugins,
+      plugins: ready.plugins,
       census: ready.census,
       composition: ready.composition,
       marks: ready.marks,
@@ -591,7 +604,9 @@ async function level0(ctx) {
 async function level1(ctx, gateway) {
   // One route to the local fake, and its fake key per request (P1-5).
   const plan = fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` });
-  const host = startHost(ctx, 'L1', {}, plan, 'packaged-smoke-fake-key');
+  // P1-10d: the pilot plugin on, as Main's overrides would carry it (decision 110).
+  const pilotOn = { [DSH_HOST_PLUGINS_ENV]: dshHostPluginsEnvValue({ [PILOT_PLUGIN]: true }) };
+  const host = startHost(ctx, 'L1', pilotOn, plan, 'packaged-smoke-fake-key');
   const client = new WorkerClient(host.child, CHANNEL);
   const result = { label: 'L1' };
   const marker = `P12-MARKER-${randomBytes(4).toString('hex')}`;
@@ -609,6 +624,7 @@ async function level1(ctx, gateway) {
       execPath: ready.execPath,
       artifact: ready.artifact,
       bundles: ready.bundles,
+      plugins: ready.plugins,
       census: ready.census,
       revision: ready.revision,
       routeDiagnostics: ready.routeDiagnostics,
@@ -652,6 +668,19 @@ async function level1(ctx, gateway) {
       120_000
     );
     result.approval.fileWritten = fs.existsSync(outsideFile);
+    // P1-10d: the pilot's write tool asks, its read tool in the workspace does not.
+    result.office = await runTurn(
+      client,
+      'office',
+      'P0-OFFICE: create a Word report, then read it back.',
+      120_000
+    );
+    try {
+      const docx = fs.readFileSync(path.join(ctx.workspace, 'p0-report.docx'));
+      result.office.file = { bytes: docx.length, head: docx.subarray(0, 2).toString('latin1') };
+    } catch {
+      result.office.file = null;
+    }
     result.autoAnswered = client.permissions;
     const disposed = await client.call('worker.dispose', { reason: 'slot-dispose' }, 60_000);
     result.dispose = disposed.ok ? disposed.result : { error: disposed.error };
@@ -852,6 +881,10 @@ function verdictFor(ctx, report) {
       l0.pong.rssMb > 0;
     v.l0EmptyPlan =
       typeof l0.ready?.revision === 'string' && JSON.stringify(l0.ready?.routeDiagnostics) === '[]';
+    // P1-10d: the pilot is allowlisted (the build's manifest) but off by default.
+    const pilot = l0.ready?.plugins?.plugins?.find?.((item) => item.name === PILOT_PLUGIN);
+    v.l0PilotOffByDefault =
+      l0.ready?.plugins?.enabledFrom === 'default' && pilot?.state === 'disabled';
     v.l0Stopped = l0.stopped?.type === 'stopped';
     v.l0ExitedZero = l0.exit?.code === 0 && !l0.exit?.forced;
     v.l0NoLeftovers = (l0.leftovers ?? []).length === 0;
@@ -898,6 +931,26 @@ function verdictFor(ctx, report) {
       (l1.approval?.resolved ?? []).includes('allow') &&
       l1.approval?.fileWritten === true &&
       l1.approval?.idle === true;
+    // P1-10d (decision 115): Main's override loads the pilot from the artifact
+    // (the audits pass, its row starts); its write asks, its read does not.
+    const pilot = l1.ready?.plugins?.plugins?.find?.((item) => item.name === PILOT_PLUGIN);
+    v.l1PilotLoaded =
+      l1.ready?.plugins?.enabledFrom === 'main' &&
+      pilot?.state === 'loaded' &&
+      pilot.inactiveRows === undefined &&
+      JSON.stringify(l1.ready?.bundles) === JSON.stringify([...PRODUCT_BUNDLES, PILOT_PLUGIN]) &&
+      Array.isArray(l1.ready?.census?.inactive) &&
+      l1.ready.census.inactive.length === 0;
+    const office = l1.office ?? {};
+    v.l1PilotWriteAskedReadRan =
+      office.idle === true &&
+      JSON.stringify(office.permissions) === '["word_create"]' &&
+      JSON.stringify(office.resolved) === '["allow"]' &&
+      JSON.stringify((office.tools ?? []).map((tool) => tool.name)) ===
+        '["word_create","word_read"]' &&
+      (office.tools ?? []).every((tool) => tool.ok) &&
+      String(office.tools?.[1]?.text).includes(PILOT_PARAGRAPH) &&
+      office.file?.head === 'PK';
     v.l1Disposed = l1.dispose !== undefined && !l1.dispose.error;
     v.l1ChannelClosed = l1.channelClosed === true;
     v.l1Stopped = l1.stopped?.type === 'stopped';

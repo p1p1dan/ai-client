@@ -101,6 +101,13 @@ export interface ToolPermissionRequest {
    * the card says the call asks for wider sandbox permissions.
    */
   hostAsk?: { sandbox: boolean };
+  /**
+   * dsh-rebase P1-10d: a plugin tool whose review classified it as a file
+   * write of `path` (an allowlisted plugin's `word_create`, say). `accept-edits`
+   * allows it inside the workspace exactly as it allows `write` and `edit`;
+   * `tool` keeps the plugin's own name for the card, grants and scopes.
+   */
+  fileWrite?: boolean;
 }
 /**
  * What a delegate's tool call resolves under.
@@ -619,7 +626,9 @@ export class PermissionGate implements PermissionGateService {
       return (request.trustedPath ? toolDecisions : decisions).includes('ask') ? 'ask' : 'allow';
     if (
       gear === 'accept-edits' &&
-      (['write', 'edit'].includes(request.tool) || isShellTool(request.tool))
+      (['write', 'edit'].includes(request.tool) ||
+        request.fileWrite === true ||
+        isShellTool(request.tool))
     )
       return 'allow';
     return request.trustedPath ? 'allow' : 'ask';

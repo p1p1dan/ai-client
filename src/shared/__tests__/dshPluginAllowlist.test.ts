@@ -48,13 +48,41 @@ function entry(overrides: Partial<AllowlistEntry> = {}): AllowlistEntry {
 const allowlistOf = (...plugins: AllowlistEntry[]): PluginAllowlist => ({ schema: 1, plugins });
 
 describe('parseAllowlist', () => {
-  it('accepts the committed allowlist, which stays empty until the pilot is approved (decision 060)', () => {
+  it('accepts the committed allowlist: the pilot alone, switched off by default (decisions 060, 115)', () => {
     const raw = JSON.parse(
       readFileSync(path.join(repoRoot, 'src', 'dsh-host', 'plugins', 'allowlist.json'), 'utf8')
     );
     const { allowlist, failures } = parseAllowlist(raw);
     expect(failures).toEqual([]);
-    expect(allowlist.plugins).toEqual([]);
+    expect(
+      allowlist.plugins.map(({ name, version, kind, defaultEnabled, rows }) => ({
+        name,
+        version,
+        kind,
+        defaultEnabled,
+        rows,
+      }))
+    ).toEqual([
+      {
+        name: 'dsh-office-tools',
+        version: '1.0.4',
+        kind: 'internal',
+        defaultEnabled: false,
+        rows: ['dsh-office-tools'],
+      },
+    ]);
+    const [pilot] = allowlist.plugins;
+    expect(pilot.review).toMatchObject({
+      record: 'reviews/dsh-office-tools-1.0.4.md',
+      verdict: 'conditional',
+    });
+    // Its review found five of the eight tools writing files (decision 060 rule 4).
+    expect(
+      Object.entries(pilot.tools)
+        .filter(([, value]) => typeof value === 'object' && value.class === 'write')
+        .map(([tool]) => tool)
+        .sort()
+    ).toEqual(['excel_create', 'excel_update', 'ppt_create', 'word_create', 'word_update']);
   });
 
   it('accepts a complete entry', () => {

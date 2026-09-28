@@ -376,6 +376,11 @@ describe('preflight: the allowlist against the committed host package', () => {
     const manifest = read('package.json');
     const lock = read('package-lock.json');
     const allowlist = read(PLUGIN_ALLOWLIST_REL);
+    // The committed entries' review records come along (P1-10d: the pilot's).
+    for (const committed of allowlist.plugins) {
+      const record = path.join('plugins', ...committed.review.record.split('/'));
+      write(path.join(copy, record), fs.readFileSync(path.join(sourceDir, record)));
+    }
     manifest.dependencies[PLUGIN] = '1.0.0';
     lock.packages[''].dependencies[PLUGIN] = '1.0.0';
     lock.packages[`node_modules/${PLUGIN}`] = {
@@ -400,23 +405,40 @@ describe('preflight: the allowlist against the committed host package', () => {
     return copy;
   }
 
-  it('passes the committed sources: empty allowlist, no pnpm, no stray dependency', () => {
+  it('passes the committed sources: the pilot plugin alone, no pnpm, no stray dependency', () => {
     const { allowlist, closures } = preflightDshHost(sourceDir);
-    expect(allowlist.plugins).toEqual([]);
-    expect(closures).toEqual({});
+    // P1-10d (decision 115): dsh-office-tools, with no run-time closure of its own.
+    expect(allowlist.plugins.map((item) => `${item.name}@${item.version}`)).toEqual([
+      'dsh-office-tools@1.0.4',
+    ]);
+    expect(closures).toEqual({ 'dsh-office-tools': [] });
     const manifest = JSON.parse(fs.readFileSync(path.join(sourceDir, 'package.json'), 'utf8'));
-    expect(Object.keys(manifest.dependencies).sort()).toEqual([...HOST_DEPENDENCIES].sort());
+    expect(Object.keys(manifest.dependencies).sort()).toEqual(
+      [...HOST_DEPENDENCIES, 'dsh-office-tools'].sort()
+    );
+    // Decision 082 rule 3: its @deepseek-ai peers pinned to the host's DSH, nothing else.
+    expect(manifest.overrides).toEqual({
+      'dsh-office-tools': Object.fromEntries(
+        ['dsh-agent', 'dsh-fs', 'dsh-llm', 'dsh-session', 'dsh-tools'].map((name) => [
+          `@deepseek-ai/${name}`,
+          PIN,
+        ])
+      ),
+    });
   });
 
   it('passes a fixture plugin keyed in package.json, the lockfile and the allowlist', () => {
     const { allowlist, closures } = preflightDshHost(sourcesWithPlugin());
-    expect(allowlist.plugins.map((item) => item.name)).toEqual([PLUGIN]);
+    expect(allowlist.plugins.map((item) => item.name)).toEqual(['dsh-office-tools', PLUGIN]);
     expect(closures[PLUGIN]).toEqual(['node_modules/own-dep']);
   });
 
+  /** The fixture's own entry in a copied allowlist (the committed ones come first). */
+  const fixtureOf = (allowlist) => allowlist.plugins.find((item) => item.name === PLUGIN);
+
   it('refuses a plugin dependency the allowlist does not carry', () => {
     const copy = sourcesWithPlugin(({ allowlist }) => {
-      allowlist.plugins = [];
+      allowlist.plugins = allowlist.plugins.filter((item) => item.name !== PLUGIN);
     });
     expect(() => preflightDshHost(copy)).toThrow(
       /dsh-fixture-plugin is a host dependency but neither a host package nor allowlisted/
@@ -425,7 +447,7 @@ describe('preflight: the allowlist against the committed host package', () => {
 
   it('refuses a closure package the entry does not register, and an install script', () => {
     const copy = sourcesWithPlugin(({ lock, allowlist }) => {
-      allowlist.plugins[0].dependencies = {};
+      fixtureOf(allowlist).dependencies = {};
       lock.packages['node_modules/own-dep'].hasInstallScript = true;
     });
     expect(() => preflightDshHost(copy)).toThrow(
@@ -435,11 +457,29 @@ describe('preflight: the allowlist against the committed host package', () => {
 
   it('refuses a missing review record and an integrity that differs from the lockfile', () => {
     const copy = sourcesWithPlugin(({ allowlist, copy: dir }) => {
-      allowlist.plugins[0].integrity = integrity('Q');
-      fs.rmSync(path.join(dir, 'plugins', 'reviews'), { recursive: true });
+      fixtureOf(allowlist).integrity = integrity('Q');
+      fs.rmSync(path.join(dir, 'plugins', 'reviews', `${PLUGIN}@1.0.0.md`));
+    });
+    let message = '';
+    try {
+      preflightDshHost(copy);
+    } catch (error) {
+      message = error.message;
+    }
+    expect(message).toMatch(
+      /review record reviews\/dsh-fixture-plugin@1\.0\.0\.md is missing[\s\S]*dsh-fixture-plugin@1\.0\.0: lockfile integrity differs/
+    );
+    // The committed pilot's record and key are untouched.
+    expect(message).not.toMatch(/dsh-office-tools/);
+  });
+
+  it('refuses the pilot when its lockfile integrity or its peer pin drifts', () => {
+    const copy = sourcesWithPlugin(({ manifest, lock }) => {
+      lock.packages['node_modules/dsh-office-tools'].integrity = integrity('Z');
+      manifest.overrides['dsh-office-tools']['@deepseek-ai/dsh-fs'] = '0.1.5-rc.3';
     });
     expect(() => preflightDshHost(copy)).toThrow(
-      /review record reviews\/dsh-fixture-plugin@1\.0\.0\.md is missing[\s\S]*lockfile integrity differs/
+      /dsh-office-tools@1\.0\.4: lockfile integrity differs[\s\S]*overrides\.dsh-office-tools\.@deepseek-ai\/dsh-fs is "0\.1\.5-rc\.3"/
     );
   });
 });

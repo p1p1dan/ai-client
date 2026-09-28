@@ -2,7 +2,13 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { classifyTool, DSH_TOOL_CLASSES } from '../classification.ts';
+import { parseAllowlist } from '../../../shared/dshPluginAllowlist.ts';
+import {
+  classifyTool,
+  DSH_TOOL_CLASSES,
+  PLUGIN_TOOL_CLASSES,
+  pluginToolClass,
+} from '../classification.ts';
 
 /**
  * dsh-rebase P1-6b — the classification table is a static guard (decision
@@ -137,7 +143,73 @@ describe('DSH tool classification (decision 047)', () => {
       'opaque',
       'opaque',
     ]);
-    expect(classifyTool('word_create')).toBe('unknown');
+    expect(classifyTool('fixture_ping')).toBe('unknown');
     expect(classifyTool('toString')).toBe('unknown');
+    expect(pluginToolClass('toString')).toBeUndefined();
+  });
+});
+
+/**
+ * dsh-rebase P1-10d — the allowlisted plugins' tools (decisions 059, 060):
+ * classified by the review, not by the plugin's catalog labels, and kept in
+ * step with the allowlist and with what the installed plugin registers.
+ */
+describe('allowlisted plugin tool classification (P1-10d)', () => {
+  const allowlistFile = join(hostDir, 'plugins', 'allowlist.json');
+  const { allowlist, failures } = parseAllowlist(JSON.parse(readFileSync(allowlistFile, 'utf8')));
+
+  /** Tool names a plugin's installed lib registers through dsh-tools' `defineTool`. */
+  function registeredToolNames(name: string): Set<string> {
+    const names = new Set<string>();
+    for (const file of libFiles(join(hostDir, 'node_modules', ...name.split('/'), 'lib'))) {
+      const text = readFileSync(file, 'utf8');
+      for (const match of text.matchAll(/defineTool\d*\(\{\s*name:\s*["']([a-z_]+)["']/g))
+        names.add(match[1]);
+    }
+    return names;
+  }
+
+  it('reads the committed allowlist cleanly', () => {
+    expect(failures).toEqual([]);
+    expect(allowlist.plugins.map((entry) => entry.name)).toContain('dsh-office-tools');
+  });
+
+  it("equals every allowlist entry's refined tools, and nothing else", () => {
+    const listed: Record<string, unknown> = {};
+    for (const entry of allowlist.plugins) {
+      for (const [tool, value] of Object.entries(entry.tools)) {
+        if (tool !== '*') listed[tool] = value;
+      }
+    }
+    expect(PLUGIN_TOOL_CLASSES).toEqual(listed);
+  });
+
+  it('classifies every tool each installed allowlisted plugin registers', () => {
+    for (const entry of allowlist.plugins) {
+      const registered = registeredToolNames(entry.name);
+      expect(registered.size, entry.name).toBeGreaterThan(0);
+      const refined = Object.keys(entry.tools).filter((tool) => tool !== '*');
+      // Every tool the plugin registers is refined (none falls to `'*': 'ask'`
+      // unnoticed), and nothing refined is missing from the plugin.
+      expect([...registered].sort(), entry.name).toEqual(refined.sort());
+    }
+  });
+
+  it('never overlaps a DSH tool name', () => {
+    const shared = Object.keys(PLUGIN_TOOL_CLASSES).filter((name) =>
+      Object.hasOwn(DSH_TOOL_CLASSES, name)
+    );
+    expect(shared).toEqual([]);
+  });
+
+  it("gates dsh-office-tools' writes as writes, whatever its catalog says (decision 060 rule 4)", () => {
+    expect(['word_read', 'excel_read', 'ppt_read'].map(classifyTool)).toEqual([
+      'read',
+      'read',
+      'read',
+    ]);
+    for (const name of ['word_create', 'word_update', 'excel_create', 'excel_update', 'ppt_create'])
+      expect(classifyTool(name), name).toBe('write');
+    for (const value of Object.values(PLUGIN_TOOL_CLASSES)) expect(value.path).toBe('path');
   });
 });

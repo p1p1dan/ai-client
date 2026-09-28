@@ -420,10 +420,42 @@ describe('request construction (design shard 03 §2)', () => {
       unresolvedPaths: true,
       preview: { label: 'Program', text: 'return 2' },
     });
-    const plugin = (await requestFor('word_create', { path: 'r.docx' })).seen[0];
-    expect(plugin).toMatchObject({ tool: 'word_create', policySurface: 'word_create', path: ws });
+    const plugin = (await requestFor('fixture_ping', { path: 'r.docx' })).seen[0];
+    expect(plugin).toMatchObject({ tool: 'fixture_ping', policySurface: 'fixture_ping', path: ws });
     expect(plugin?.unresolvedPaths).toBeUndefined();
+    expect(plugin?.fileWrite).toBeUndefined();
     expect(plugin?.preview?.text).toContain('r.docx');
+  });
+
+  it("gates an allowlisted plugin's reads and writes on the file its review names (P1-10d)", async () => {
+    // dsh-office-tools: reads are DSH reads of `path`...
+    expect((await requestFor('word_read', { path: 'notes.txt' })).seen).toEqual([
+      expect.objectContaining({ tool: 'read', toolCallId: 'c', path: join(ws, 'notes.txt') }),
+    ]);
+    expect((await requestFor('excel_read', { path: 'a/../notes.txt' })).seen[0]).toMatchObject({
+      tool: 'read',
+      path: join(ws, 'notes.txt'),
+    });
+    // ...writes keep their own name, carry `path` and the `write` rules, and
+    // preview the whole argument object (the content they are about to write).
+    const create = (
+      await requestFor('word_create', { path: 'report.docx', paragraphs: ['draft body'] })
+    ).seen[0];
+    expect(create).toMatchObject({
+      tool: 'word_create',
+      path: join(ws, 'report.docx'),
+      policySurface: 'write',
+      fileWrite: true,
+      preview: { label: 'Arguments' },
+    });
+    expect(create?.policyValue).toBeUndefined();
+    expect(create?.unresolvedPaths).toBeUndefined();
+    expect(create?.preview?.text).toContain('draft body');
+    expect((await requestFor('excel_update', { path: 'notes.txt' })).seen[0]).toMatchObject({
+      tool: 'excel_update',
+      path: join(ws, 'notes.txt'),
+      fileWrite: true,
+    });
   });
 
   it('matches skills on their name at a trusted path', async () => {
@@ -473,6 +505,30 @@ describe('pre-execute decisions (decision 042 rule 2)', () => {
       reason: 'downstream said no',
     });
     expect(asked).toEqual([]);
+  });
+
+  it("follows the gear for an allowlisted plugin's reads and writes like DSH's own (P1-10d)", async () => {
+    const readCall = () => call('word_read', { path: 'notes.txt' }, root());
+    const writeCall = (file = 'report.docx') =>
+      call('word_create', { path: file, paragraphs: ['x'] }, root());
+    // ask: the write raises a card naming the plugin tool; the workspace read does not.
+    const ask = attached();
+    expect((await ask.fake.prepare(readCall())).kind).toBe('allow');
+    expect((await ask.fake.prepare(writeCall())).kind).toBe('allow');
+    expect(ask.asked.map((request) => [request.tool, request.path])).toEqual([
+      ['word_create', join(ws, 'report.docx')],
+    ]);
+    // accept-edits: a workspace write goes through as write / edit do; outside still asks.
+    const edits = attached({ gear: 'accept-edits' });
+    expect((await edits.fake.prepare(writeCall())).kind).toBe('allow');
+    expect(edits.asked).toEqual([]);
+    expect((await edits.fake.prepare(writeCall(join(outside, 'far.docx')))).kind).toBe('allow');
+    expect(edits.asked.map((request) => request.path)).toEqual([join(outside, 'far.docx')]);
+    // plan: the write is refused without a card, the read runs.
+    const plan = attached({ mode: 'plan' });
+    expect((await plan.fake.prepare(writeCall())).kind).toBe('deny');
+    expect((await plan.fake.prepare(readCall())).kind).toBe('allow');
+    expect(plan.asked).toEqual([]);
   });
 
   it('refuses secrets before resolving them, in the 1.0.x words', async () => {

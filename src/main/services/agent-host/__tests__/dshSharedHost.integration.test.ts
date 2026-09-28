@@ -51,7 +51,8 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * from scratch installs with a test-only fixture plugin preinstalled, enables
  * and disables it through WorkerManager's restart, and checks the rejected,
  * missing and (decision 110) ignored-home-layer cases. It needs the repo
- * root's esbuild as well.
+ * root's esbuild as well. P1-10d adds the allowlisted pilot plugin
+ * (dsh-office-tools): off by default, loaded when Main turns it on.
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -2004,13 +2005,23 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
    * host when the selection changes; the supervisor keeps each start's report.
    * PLG-5 also covers decision 110: a packaged host never reads
    * $DSH_HOME/cordis.patch.yml, so a home layer refusal no longer exists.
+   * PLG-6 (P1-10d, decision 115) lists the committed allowlist's pilot,
+   * dsh-office-tools, the way the build does: off by default, loaded once
+   * Main's override turns it on. PLG-1 to PLG-5 list only the fixture, so the
+   * pilot never appears in their reports.
    * Nothing in the shared checkout is written.
    */
   describe('a ninth supervisor: preinstalled plugins, enabled, disabled, rejected (P1-10b)', () => {
     type PluginInstall = typeof import('../../../../dsh-host/tools/lib/plugin-install.ts');
     let kit: PluginInstall;
     /** The host entry (`<install>/host.js`) of each scratch install. */
-    const installs: Record<'good' | 'undeclared', string> = { good: '', undeclared: '' };
+    const installs: Record<'good' | 'undeclared' | 'pilot', string> = {
+      good: '',
+      undeclared: '',
+      pilot: '',
+    };
+    /** P1-10d: the committed allowlist's pilot plugin (decision 115). */
+    const PILOT = 'dsh-office-tools';
     let current = '';
     let selection: Record<string, boolean> | undefined;
     let supervisor: Supervisor;
@@ -2086,6 +2097,33 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
           base: 'source',
           plugins: [
             { dir: kit.fixtureVariant(root, 'undeclared-row'), entry: kit.fixtureManifestEntry() },
+          ],
+        })
+      ).entry;
+      // P1-10d: the pilot as the build lists it — the committed allowlist's
+      // entry in the manifest, the package itself the one src/dsh-host installed
+      // (the scratch node_modules links onto it), so nothing is copied.
+      const committed = (
+        JSON.parse(
+          readFileSync(join(REPO, 'src', 'dsh-host', 'plugins', 'allowlist.json'), 'utf8')
+        ) as { plugins: Array<Record<string, unknown>> }
+      ).plugins.find((entry) => entry.name === PILOT);
+      if (!committed) throw new Error(`${PILOT} is not on the committed allowlist`);
+      installs.pilot = (
+        await kit.assembleInstall({
+          into: join(root, 'install-pilot'),
+          base: 'source',
+          plugins: [],
+          listOnly: [
+            {
+              name: PILOT,
+              version: String(committed.version),
+              kind: committed.kind,
+              defaultEnabled: committed.defaultEnabled === true,
+              rows: committed.rows as string[],
+              tools: committed.tools,
+              replaces: [],
+            },
           ],
         })
       ).entry;
@@ -2259,5 +2297,33 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         rmSync(homePatch, { force: true });
       }
     }, 180_000);
+
+    it('[PLG-6] the allowlisted pilot is off by default, and an override on loads it with its eight tools (P1-10d)', async () => {
+      current = installs.pilot;
+      await select(undefined);
+      const off = await streamTurn('pl6', 95);
+      expect(off).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.status().pluginSelection).toBe(dshPluginSelectionKey(undefined));
+      expect(supervisor.pluginReport()).toEqual({
+        enabledFrom: 'default',
+        plugins: [{ name: PILOT, version: '1.0.4', defaultEnabled: false, state: 'disabled' }],
+        // The shared DSH home's profile still listed PLG-4's fixture, which
+        // this install's allowlist does not carry.
+        dropped: [{ name: kit.FIXTURE_PLUGIN, reason: 'not on the allowlist' }],
+      });
+      expect(profileBundles()).toEqual(['@deepseek-ai/dsh-base', '@aiclient/dsh-app']);
+
+      await select({ [PILOT]: true });
+      const on = await streamTurn('pl7', 96);
+      expect(on).toMatchObject({ settled: true, completed: true });
+      expect(supervisor.pluginReport()).toEqual({
+        enabledFrom: 'main',
+        plugins: [{ name: PILOT, version: '1.0.4', defaultEnabled: false, state: 'loaded' }],
+        dropped: [],
+      });
+      expect(profileBundles()).toEqual(['@deepseek-ai/dsh-base', '@aiclient/dsh-app', PILOT]);
+      // word_*, excel_* and ppt_*: three reads and five writes (reviews/dsh-office-tools-1.0.4.md).
+      expect(on.tools[0]).toBe(Number(off.tools[0]) + 8);
+    }, 240_000);
   });
 });

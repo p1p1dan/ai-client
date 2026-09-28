@@ -25,7 +25,7 @@ import {
   checkShellPaths,
   type PermissionFileSystem,
 } from '../../shared/permissions/shellPaths.ts';
-import { classifyTool, type DshToolClass } from './classification.ts';
+import { classifyTool, type DshToolClass, pluginToolClass } from './classification.ts';
 
 /** The part of a DSH call the mapping reads. */
 export interface GatedCallInput {
@@ -140,14 +140,27 @@ export async function authorizeCall(
     );
   };
 
+  // P1-10d: an allowlisted plugin's read or write names its file in its own argument.
+  const plugin = pluginToolClass(call.name);
   switch (toolClass) {
     case 'read':
-      await target('read', stringArg(args, 'file_path') ?? '.');
+      await target('read', stringArg(args, plugin?.path ?? 'file_path') ?? '.');
       break;
     case 'search':
       await target(call.name, stringArg(args, 'path') ?? '.');
       break;
     case 'write': {
+      if (plugin) {
+        // The card names the plugin's own tool and shows its arguments (the
+        // content it writes); `write` path rules apply to it, and accept-edits
+        // allows it inside the workspace as it does write / edit.
+        await target(call.name, stringArg(args, plugin.path) ?? '.', {
+          policySurface: 'write',
+          fileWrite: true,
+          preview: { label: 'Arguments', text: argumentsPreview(args) },
+        });
+        break;
+      }
       const content = call.name === 'write' ? stringArg(args, 'content') : undefined;
       await target(
         call.name,
@@ -198,7 +211,7 @@ export async function authorizeCall(
       break;
     }
     default:
-      // generic and unknown (plugin) tools: the policy's per-tool rule, `'*': 'ask'`.
+      // generic and unknown (unclassified plugin) tools: the policy's per-tool rule, `'*': 'ask'`.
       await target(call.name, '.', {
         policySurface: call.name,
         policyValue: call.name,

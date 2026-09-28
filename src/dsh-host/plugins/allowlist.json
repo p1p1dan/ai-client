@@ -1,5 +1,30 @@
 {
-  "$comment": "DSH plugins preinstalled in resources/dsh-host (decisions 058-060). Each entry is an exact dependency of ../package.json, locked at the same integrity; scripts/build-dsh-host.mjs audits them and writes dsh-host-manifest.json's plugins section. Review records live in reviews/. Entries change by PR together with package.json and the lockfile, after review and user approval.",
+  "$comment": "DSH plugins preinstalled in resources/dsh-host (decisions 058-060). Each entry is an exact dependency of ../package.json, locked at the same integrity; scripts/build-dsh-host.mjs audits them and writes dsh-host-manifest.json's plugins section. Review records live in reviews/. Entries change by PR together with package.json and the lockfile, after review and user approval. Tool classes must equal src/dsh-host/permissions/classification.ts PLUGIN_TOOL_CLASSES (permissionsClassification tests).",
   "schema": 1,
-  "plugins": []
+  "plugins": [
+    {
+      "name": "dsh-office-tools",
+      "version": "1.0.4",
+      "integrity": "sha512-Q1jvlhjKDHjoZBX54WkT0zCblUGACPwiCQJfS/cgU5jVLzI3q66bU/MR5QEsERd9QJQhtgOdH89opZtvga6uxA==",
+      "kind": "internal",
+      "defaultEnabled": false,
+      "rows": ["dsh-office-tools"],
+      "tools": {
+        "word_read": { "class": "read", "path": "path" },
+        "excel_read": { "class": "read", "path": "path" },
+        "ppt_read": { "class": "read", "path": "path" },
+        "word_create": { "class": "write", "path": "path" },
+        "word_update": { "class": "write", "path": "path" },
+        "excel_create": { "class": "write", "path": "path" },
+        "excel_update": { "class": "write", "path": "path" },
+        "ppt_create": { "class": "write", "path": "path" }
+      },
+      "review": {
+        "record": "reviews/dsh-office-tools-1.0.4.md",
+        "date": "2026-09-28",
+        "reviewer": "dsh-rebase P1-10d agent review, pending user approval (decision 115)",
+        "verdict": "conditional"
+      }
+    }
+  ]
 }

@@ -309,6 +309,56 @@ describe('injected filesystem', () => {
  * or the workspace boundary (`external_directory`) — the two asks trust
  * waives — while a deny, and the tool's own rule, still hold.
  */
+describe('a plugin file write (fileWrite, dsh-rebase P1-10d)', () => {
+  const officeWrite = (file: string, fileWrite = true): ToolPermissionRequest => ({
+    tool: 'word_create',
+    toolCallId: 'w',
+    path: file,
+    policySurface: 'write',
+    ...(fileWrite ? { fileWrite } : {}),
+  });
+
+  it('is allowed in the workspace under accept-edits, as write and edit are', () => {
+    const edits = new PermissionGate({ cwd: ROOT, gear: 'accept-edits' });
+    expect(edits.evaluate(officeWrite(inside('r.docx')))).toBe('allow');
+    expect(edits.evaluate(officeWrite(path.resolve('/elsewhere/r.docx')))).toBe('ask');
+    // Without the flag a plugin tool is not an edit, whatever its surface.
+    expect(edits.evaluate(officeWrite(inside('r.docx'), false))).toBe('ask');
+  });
+
+  it('still asks under ask, is refused in plan mode and meets a write rule', async () => {
+    expect(
+      new PermissionGate({ cwd: ROOT, gear: 'ask' }).evaluate(officeWrite(inside('r.docx')))
+    ).toBe('ask');
+    expect(
+      new PermissionGate({ cwd: ROOT, mode: 'plan', gear: 'accept-edits' }).evaluate(
+        officeWrite(inside('r.docx'))
+      )
+    ).toBe('deny');
+    const policy = await loadPermissionPolicy(
+      {
+        readFile: async (file: string) => {
+          if (file === path.join(path.resolve('/agent'), 'pi-permissions.jsonc'))
+            return {
+              bytes: new TextEncoder().encode(
+                '{ "permission": { "write": { "*.docx": "deny" } } }'
+              ),
+            };
+          throw Object.assign(new Error(`ENOENT ${file}`), { code: 'ENOENT' });
+        },
+      },
+      {
+        cwd: ROOT,
+        agentDir: path.resolve('/agent'),
+        sources: { user: true, project: false, local: false },
+      }
+    );
+    const ruled = new PermissionGate({ cwd: ROOT, gear: 'accept-edits', policy });
+    expect(ruled.evaluate(officeWrite(inside('r.docx')))).toBe('deny');
+    expect(ruled.evaluate(officeWrite(inside('r.xlsx')))).toBe('allow');
+  });
+});
+
 describe('a trusted read (dsh-rebase P1-4c2)', () => {
   const agentDir = path.resolve('/agent');
   const policyWith = async (userLayer?: string) =>

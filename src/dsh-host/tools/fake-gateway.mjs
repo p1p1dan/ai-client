@@ -205,7 +205,9 @@
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
  * last message in the request body, a <=200 char snippet of that message's content, and whether
  * the body contained a tool_result content block. The dsh-p0-2 plan also logs its decision
- * (scenario, round, step, tool). Every line also says what identified the client: `auth`,
+ * (scenario, round, step, tool) and the tools the request offered (`tools`, a count, and
+ * since dsh-rebase P1-10d `toolNames`: bridge-smoke checks the pilot plugin's tools are
+ * offered only while it is enabled, with P0-OFFICE as its turn). Every line also says what identified the client: `auth`,
  * the key it received as `sha256:<first 8 hex>` (never the key itself: P1-5b's canary scan
  * reads these logs too), `userAgent`, `clientHeader` (X-Pilab-Client), the model the body
  * named, the path, and the reasoning fields the body carried.
@@ -2267,6 +2269,10 @@ function main() {
                       ? `${decision.calls.length}x ${[...new Set(decision.calls.map((c) => c.name))].join('+')}`
                       : undefined,
               tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
+              // P1-10d: which tools the model was offered (a plugin's are there only when enabled).
+              toolNames: Array.isArray(parsed?.tools)
+                ? parsed.tools.map((item) => item?.name)
+                : undefined,
               calls: decision.calls,
               // P0-6: request size and what a resumed session sent.
               bodyChars: body.length,

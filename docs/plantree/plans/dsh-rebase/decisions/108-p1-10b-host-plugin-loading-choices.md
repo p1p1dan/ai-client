@@ -171,6 +171,7 @@
 - **加密机工具包**：文件清单已补，但本次没有重新构建或上机。
 - **P1-10c**：设置页与 IPC 只需要调用 `dshHostPlugins.ts` 的三个函数。「已下架」的提示可以用 `dropped` 与 Main 的设置来判断。
 - **P1-10d**：试点插件进白名单之后，打包冒烟 L1 带一个已启用插件，可以直接复用 E3 的装配方式（`tools/lib/plugin-install.ts` 的 artifact 形态）。
+  - **补记（2026-09-28，[决策 115](115-p1-10d-pilot-plugin-choices.md) 第 13 条）**：试点插件本来就装在产物里，L1 只设 `AICLIENT_DSH_PLUGINS` 开启它，没有复用 E3 的装配方式。
 - **没有做**：
   - 运行期不校验插件的 integrity（安装目录与 `app.asar` 同一信任级别，决策 059）；
   - profile 目录里 DSH 的 `compatibility.json` 豁免仍会被 DSH 读取。对白名单插件没有影响，因为构建期已经判过兼容、不许豁免；不在白名单上的 bundle 根本进不了列表。

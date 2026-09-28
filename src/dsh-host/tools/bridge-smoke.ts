@@ -67,6 +67,14 @@
  *      P1-4d2 (decision 113) reads its menu (DSH's commands, the skill by its
  *      bare name), its bootstrap's skill count, `worker.compact`'s refusal of
  *      instructions, and a `/goal` send that runs with no model turn.
+ *   I  (added by dsh-rebase P1-10d) a dedicated host with the pilot plugin
+ *      dsh-office-tools switched on through Main's per-plugin overrides
+ *      (AICLIENT_DSH_PLUGINS, decisions 108 and 110): `ready.plugins` reports
+ *      it loaded, its eight tools reach the model, and a P0-OFFICE turn in
+ *      `ask` runs its write tool (`word_create`, one card, answered allow)
+ *      and its read tool (`word_read`, no card) in the workspace. Every other
+ *      host runs the allowlist's defaults, where the pilot is off: A reports
+ *      it disabled and offers the model none of its tools (decision 115).
  *
  * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
  * and a verdict. Signals only ever go to a ChildProcess this script spawned.
@@ -86,6 +94,11 @@ import {
 import { dirname, join, relative, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
+// Main's plugin override variable itself (the module has no imports; type stripping loads it).
+import {
+  DSH_HOST_PLUGINS_ENV,
+  dshHostPluginsEnvValue,
+} from '../../main/services/agent-host/dshHostEnvironment.ts';
 import { fakeGatewayPlan, HostClient, type Message, type ServedPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
@@ -123,6 +136,18 @@ const ENV_CANARY = 'P16_ENV_CANARY=leaked-from-workspace-env';
 const CHANNEL_UNKNOWN = 'WORKER_CHANNEL_UNKNOWN';
 /** The fake key Main's stand-in hands every host, per request. */
 const SMOKE_KEY = 'p1-5-smoke-fake-key';
+/** P1-10d: the allowlist's pilot plugin (decision 115), off unless Main's overrides turn it on. */
+const PILOT_PLUGIN = 'dsh-office-tools';
+const PILOT_READ_TOOLS = ['word_read', 'excel_read', 'ppt_read'];
+const PILOT_WRITE_TOOLS = [
+  'word_create',
+  'word_update',
+  'excel_create',
+  'excel_update',
+  'ppt_create',
+];
+/** What the gateway's P0-OFFICE script writes into p0-report.docx and reads back. */
+const PILOT_PARAGRAPH = 'Written by dsh-office-tools through the fake gateway.';
 
 async function startGateway(root: string) {
   const child = spawn(
@@ -317,6 +342,8 @@ async function main() {
             message: message.message,
             revision: message.revision,
             routeDiagnostics: message.routeDiagnostics,
+            // P1-10b / P1-10d: every allowlisted plugin's state on this host.
+            plugins: message.plugins,
           }
         : null,
     };
@@ -435,6 +462,21 @@ async function main() {
     ((turns[label] as { tools?: Message[] } | undefined)?.tools ?? [])
       .map((tool) => String(tool.output ?? tool.error ?? ''))
       .join('\n');
+  /** P1-10d: the tool names each model request offered, in the gateway's order. */
+  const offeredTools = (): string[][] => {
+    const file = join(box.root, 'gateway.jsonl');
+    if (!existsSync(file)) return [];
+    return readFileSync(file, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => (JSON.parse(line) as { toolNames?: string[] }).toolNames ?? []);
+  };
+  /** Tool names offered by the model requests of one turn: `run` between two reads of the log. */
+  const offeredDuring = async (run: () => Promise<unknown>): Promise<string[][]> => {
+    const before = offeredTools().length;
+    await run();
+    return offeredTools().slice(before);
+  };
 
   const facts: Record<string, ReturnType<typeof diskFacts>> = {};
   let stubS1: string | undefined;
@@ -482,7 +524,10 @@ async function main() {
       (await a.client.control((m) => m.host === 'closed' && m.ch === 'c1-98', 10_000)) !==
       undefined;
 
-    await runTurn(a, chA, SESSION, 'STREAM', 'P0-STREAM: stream a paragraph back to me.');
+    // P1-10d: the pilot plugin is off by default, so none of its tools is offered.
+    report.offeredWithPilotOff = await offeredDuring(() =>
+      runTurn(a, chA, SESSION, 'STREAM', 'P0-STREAM: stream a paragraph back to me.')
+    );
     await runTurn(a, chA, SESSION, 'TOOL', 'P0-TOOL: list the workspace.');
     const allowTarget = join(outside, 'allowed.txt');
     await runTurn(
@@ -819,6 +864,53 @@ async function main() {
     await runTurn(h, chH, INS_SKL_SESSION, 'COMMAND-GOAL', '/goal');
     await closeSession(h, chH);
     await stopHost(h);
+
+    // ---- I: P1-10d's pilot plugin, switched on the way Main does it (decision 110).
+    const pluginWorkspace = join(box.root, 'plugin-workspace');
+    mkdirSync(pluginWorkspace, { recursive: true, mode: 0o700 });
+    const pluginChild = spawn(nodeBin, ['--expose-internals', hostEntry], {
+      cwd: hostCwd,
+      env: {
+        ...env,
+        [DSH_HOST_PLUGINS_ENV]: dshHostPluginsEnvValue({ [PILOT_PLUGIN]: true }) as string,
+      },
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+    const pluginClient = new HostClient(pluginChild);
+    const pluginHost: Host = {
+      label: 'PLUGIN',
+      child: pluginChild,
+      client: pluginClient,
+      stderr: captureStderr(pluginChild),
+      exited: exitOf(pluginChild),
+      startedAt: performance.now(),
+      served: pluginClient.configure(plan, SMOKE_KEY),
+    };
+    live.push(pluginHost);
+    await ready(pluginHost);
+    const chI = pluginHost.client.openChannel();
+    const PLUGIN_SESSION = 'bridge-smoke-plugin';
+    const bootI = await bootstrap(pluginHost, chI, {
+      logicalSessionId: PLUGIN_SESSION,
+      cwd: pluginWorkspace,
+    });
+    if (!bootI.ok) throw new Error(`I bootstrap: ${JSON.stringify(bootI.error)}`);
+    // The session opens in `ask`: the write tool's card is answered allow; the read needs none.
+    report.offeredWithPilotOn = await offeredDuring(() =>
+      runTurn(
+        pluginHost,
+        chI,
+        PLUGIN_SESSION,
+        'PLUGIN-OFFICE',
+        'P0-OFFICE: create a Word report, then read it back.'
+      )
+    );
+    const docx = join(pluginWorkspace, 'p0-report.docx');
+    report.pilotFile = existsSync(docx)
+      ? { bytes: statSync(docx).size, head: readFileSync(docx).subarray(0, 2).toString('latin1') }
+      : null;
+    await closeSession(pluginHost, chI);
+    await stopHost(pluginHost);
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   } finally {
@@ -897,6 +989,21 @@ async function main() {
   const commandGoal = turns['COMMAND-GOAL'] as
     | { idle?: boolean; completed?: boolean; sequence?: string[] }
     | undefined;
+  // P1-10d: the pilot plugin, off on A (the allowlist's default) and on for I.
+  const pilotOf = (label: string) => {
+    const plugins = (hosts[label]?.ready as Message | undefined)?.plugins as
+      | { enabledFrom?: string; plugins?: Message[] }
+      | undefined;
+    return {
+      enabledFrom: plugins?.enabledFrom,
+      status: plugins?.plugins?.find((item) => item.name === PILOT_PLUGIN),
+    };
+  };
+  const pilotTools = [...PILOT_READ_TOOLS, ...PILOT_WRITE_TOOLS];
+  const offeredOff = (report.offeredWithPilotOff as string[][] | undefined) ?? [];
+  const offeredOn = (report.offeredWithPilotOn as string[][] | undefined) ?? [];
+  const pilotTurn = turns['PLUGIN-OFFICE'] as GateTurn | undefined;
+  const pilotFile = report.pilotFile as { bytes?: number; head?: string } | null | undefined;
   /** A reopened session's first page is non-empty and repeats what the session answered before. */
   const samePage = (reopened: unknown, before: unknown) => {
     const page = (reopened as { page?: { messages?: unknown[] } } | undefined)?.page;
@@ -1110,6 +1217,38 @@ async function main() {
       commandGoal.sequence?.includes('message.started user') === true &&
       commandGoal.sequence.includes('custom.message') &&
       !commandGoal.sequence.includes('message.started assistant'),
+    // P1-10d (decisions 060, 115): the pilot plugin is allowlisted but off by
+    // default — reported disabled, none of its tools offered to the model...
+    pilotOffByDefault:
+      pilotOf('A').enabledFrom === 'default' &&
+      pilotOf('A').status?.state === 'disabled' &&
+      offeredOff.length > 0 &&
+      offeredOff.every(
+        (names) => names.length > 0 && !names.some((name) => pilotTools.includes(name))
+      ),
+    // ...and Main's override loads it from the install scope, every tool offered...
+    pilotLoadedWhenEnabled:
+      pilotOf('PLUGIN').enabledFrom === 'main' &&
+      pilotOf('PLUGIN').status?.state === 'loaded' &&
+      pilotOf('PLUGIN').status?.inactiveRows === undefined &&
+      offeredOn.length > 0 &&
+      offeredOn.every((names) => pilotTools.every((tool) => names.includes(tool))),
+    // ...its write tool raises the gate's card, its read tool in the workspace does not...
+    pilotWriteAskedReadDidNot:
+      JSON.stringify(pilotTurn?.cards) ===
+        JSON.stringify([{ toolName: 'word_create', decision: 'allow' }]) &&
+      String(
+        ((pilotTurn?.permission as Message | undefined)?.input as Message | undefined)?.path
+      ).endsWith('/p0-report.docx'),
+    // ...and the document it wrote is a real zip it reads back.
+    pilotWroteAndReadBack:
+      pilotFile?.head === 'PK' &&
+      (pilotFile.bytes ?? 0) > 0 &&
+      (pilotTurn?.tools ?? []).length === 2 &&
+      (pilotTurn?.tools ?? []).every((t) => t.ok === true) &&
+      String(pilotTurn?.tools?.[1]?.output).includes(PILOT_PARAGRAPH) &&
+      pilotTurn?.completed === true &&
+      exitOfHost('PLUGIN').code === 0,
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)
