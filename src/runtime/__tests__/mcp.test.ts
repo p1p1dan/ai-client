@@ -1,11 +1,13 @@
 /**
  * P5-3 gate — the MCP bridge, against a real server over real pipes.
  *
- * The fixture in `fixtures/mcp-echo-server.mjs` is an actual stdio MCP server
- * started through `runtimeExec.spawn`, not a mocked transport. That is the
- * point: ARD D11 says compatibility is a property of the PROCESS that runs, so
- * a test that stubbed the transport would prove the client's bookkeeping and
- * say nothing about the one thing the bridge had to be built around.
+ * The fixture at `src/shared/mcp/__tests__/fixtures/mcp-echo-server.mjs` (moved
+ * out of the runtime in dsh-rebase P1-16 prep, alongside the client and config
+ * it exercises) is an actual stdio MCP server started through
+ * `runtimeExec.spawn`, not a mocked transport. That is the point: ARD D11 says
+ * compatibility is a property of the PROCESS that runs, so a test that stubbed
+ * the transport would prove the client's bookkeeping and say nothing about the
+ * one thing the bridge had to be built around.
  *
  * The config, naming and wire halves moved to
  * `src/shared/mcp/__tests__/mcp.test.ts` with the library (dsh-rebase P1-16
@@ -23,7 +25,16 @@ import { createRuntime, type RuntimeBootstrapOptions, type RuntimeHandle } from 
 import { MCP_IMAGE_BYTES, MCP_IMAGE_TOTAL_BYTES, MCP_OUTPUT_BYTES } from '../plugins/mcp/index.ts';
 import { neverAsked } from './fixtures/approval.ts';
 
-const FIXTURE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'mcp-echo-server.mjs');
+const FIXTURE = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'shared',
+  'mcp',
+  '__tests__',
+  'fixtures',
+  'mcp-echo-server.mjs'
+);
 
 describe('P5-3 bridge against a real stdio server', () => {
   let dir: string;

@@ -7,8 +7,10 @@ import type { McpProcessLauncher, McpSpawnRequest } from '../../connect.ts';
  * A stand-in for a host's exec exit and the server it starts, with no process
  * at all: `write` parses each JSON-RPC line and the reply is pushed back through
  * the spawn request's `onStdout`, the way a real pipe delivers it. The real
- * stdio fixture (`src/runtime/__tests__/fixtures/mcp-echo-server.mjs`) stays
- * with the runtime's end-to-end suite; this one only proves the seams.
+ * stdio fixture (`src/shared/mcp/__tests__/fixtures/mcp-echo-server.mjs`, moved
+ * out of the runtime in dsh-rebase P1-16 prep) is still driven by the
+ * runtime's end-to-end suite through `runtimeExec.spawn`; this one only proves
+ * the seams.
  */
 
 export interface ScriptedTool {

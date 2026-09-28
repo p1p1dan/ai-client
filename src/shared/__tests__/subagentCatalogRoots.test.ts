@@ -1,6 +1,14 @@
 /**
  * P5-2-1 gate — SA01 (definition parsing) and SA02 (sources, inventory, caps).
  *
+ * Moved from `src/runtime/__tests__/subagentDefinitions.test.ts` (dsh-rebase
+ * P1-16 prep): every case here already exercised only pure logic — no Cordis,
+ * no real filesystem, a `fakeSource()` in-memory port stands in for the host —
+ * so unlike the skills/MCP split (some cases stayed with the runtime's Cordis
+ * wiring), the whole file moves. What is left in
+ * `src/runtime/__tests__/subagentCatalogSharedWrapper.test.ts` only checks that
+ * the runtime's re-export is this same module. Case bodies are unchanged.
+ *
  * Every rule pinned here fails SILENTLY if it breaks: a delegate that quietly
  * loses its `permission` field, a user document that stops shadowing the
  * builtin it was written to replace, a pinned model that falls back to the
@@ -11,7 +19,17 @@
 
 import { join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { BUILTIN_SUBAGENT_DOCUMENTS } from '../../shared/subagentBuiltins.ts';
+import { BUILTIN_SUBAGENT_DOCUMENTS } from '../subagentBuiltins.ts';
+import {
+  applySubagentActivation,
+  loadSubagentCatalog,
+  resolveSubagentPin,
+  type SubagentDocumentSource,
+  type SubagentFileKind,
+  type SubagentModelRef,
+  subagentPinDiagnostics,
+  subagentRoots,
+} from '../subagentCatalogRoots.ts';
 import {
   formatSubagentDefinition,
   MAX_SUBAGENT_DEFINITIONS,
@@ -24,16 +42,7 @@ import {
   type SubagentDefinition,
   subagentCanMutate,
   subagentPinnedProviders,
-} from '../../shared/subagentDefinition.ts';
-import type { RuntimeFileKind, RuntimeModelRef } from '../contracts.ts';
-import {
-  applySubagentActivation,
-  loadSubagentCatalog,
-  resolveSubagentPin,
-  type SubagentDocumentSource,
-  subagentPinDiagnostics,
-  subagentRoots,
-} from '../plugins/subagent/catalog.ts';
+} from '../subagentDefinition.ts';
 
 const AGENT_DIR = '/agent';
 const HOME = '/home/probe';
@@ -52,7 +61,7 @@ function fakeSource(files: Record<string, string>): SubagentDocumentSource {
     },
     async list(path) {
       if (!directories.has(path)) return undefined;
-      const children = new Map<string, RuntimeFileKind>();
+      const children = new Map<string, SubagentFileKind>();
       for (const file of Object.keys(files)) {
         // Keys are built with `join()`, the same way the catalog builds every
         // path it reads, so child matching has to use the native separator too.
@@ -446,7 +455,7 @@ describe('SA02 · sources, inventory and directory caps', () => {
 });
 
 describe('SA02 · model pins resolve or fail, they never fall back', () => {
-  const available: RuntimeModelRef[] = [
+  const available: SubagentModelRef[] = [
     { provider: 'anthropic', id: 'claude-sonnet-5' },
     { provider: 'openai', id: 'gpt-5' },
   ];
