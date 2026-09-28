@@ -123,9 +123,13 @@ export interface DshHostLaunch {
 }
 
 /**
- * The app's pi-agent directory, `getAppPiAgentDir()` spelled from the same
- * state root (P1-6c): the global permission policy the settings page edits
- * lives there, and every host session loads it as its user layer.
+ * The app's pi-agent directory (`<agentDir>`), `getAppPiAgentDir()` spelled
+ * from the same state root (P1-6c): the global permission policy the
+ * settings page edits lives there, and every host session loads it as its
+ * user layer. P1-16a (decision 101 rule 1) reuses this same directory, over
+ * the same `AICLIENT_PERMISSION_AGENT_DIR` variable, to build host.ts's
+ * `agent-instructions` and `skill-filesystem` overlays — one path, one
+ * source, not a second delivery channel.
  */
 export function dshPermissionAgentDir(appStateRoot: string): string {
   return path.join(appStateRoot, PI_MANAGED_AGENT_DIR_NAME);

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AGENT_DIR_ENV,
+  agentDirOverlays,
   PRODUCT_BUNDLES,
   partitionSkippedBundles,
   REQUIRED_DISABLED,
@@ -127,5 +129,23 @@ describe('partitionSkippedBundles (decision 025 rule 5)', () => {
       product: [{ packageName: APP, reason: 'missing' }],
       plugins: [{ packageName: PLUGIN, reason: 'peer mismatch' }],
     });
+  });
+});
+
+describe('agentDirOverlays (P1-16a, decision 101 rule 2)', () => {
+  it('is the one env var name P1-6c also reads (decision 101 rule 1)', () => {
+    expect(AGENT_DIR_ENV).toBe('AICLIENT_PERMISSION_AGENT_DIR');
+  });
+
+  it('restates the agent-instructions budget alongside dshHome, and points skill-filesystem at <agentDir>/skills', () => {
+    expect(agentDirOverlays('/state/pi-agent')).toEqual([
+      { id: 'agent-instructions', config: { maxBytes: 65536, dshHome: '/state/pi-agent' } },
+      { id: 'skill-filesystem', config: { customSkillDirs: ['/state/pi-agent/skills'] } },
+    ]);
+  });
+
+  it('emits nothing when the host was handed no path, so DSH keeps its own defaults', () => {
+    expect(agentDirOverlays(undefined)).toEqual([]);
+    expect(agentDirOverlays('')).toEqual([]);
   });
 });

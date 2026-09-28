@@ -33,9 +33,13 @@ import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 export const name = 'aiclient-bridge';
 
 /**
- * The app's pi-agent directory, whose policy files are the user layer of
- * every session's permission policy (P1-6c). Main sets it; the name is also
- * `DSH_HOST_PERMISSION_AGENT_DIR_ENV` in src/main/.../dshHostEnvironment.ts.
+ * The app's pi-agent directory (`<agentDir>`), whose policy files are the user
+ * layer of every session's permission policy (P1-6c). Main sets it; the name
+ * is also `DSH_HOST_PERMISSION_AGENT_DIR_ENV` in
+ * src/main/.../dshHostEnvironment.ts and `AGENT_DIR_ENV` in
+ * ../lib/hostProfile.ts, which host.ts reads from the same variable to build
+ * the `agent-instructions` / `skill-filesystem` overlays (P1-16a, decision
+ * 101 rule 1): one path, one source.
  */
 export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
 

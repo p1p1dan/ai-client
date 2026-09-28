@@ -39,11 +39,15 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
 const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
 
 /**
- * dsh-rebase P1-6c: the app's pi-agent directory, whose policy files are the
- * user layer of every session's permission policy (1.0.x's `agentDir`). Set
- * explicitly: the `AICLIENT_` family is never inherited, and neither is
- * `PI_CODING_AGENT_DIR` as a meaning (it names the user's own pi, not ours).
- * The host's bridge row reads it (`PERMISSION_AGENT_DIR_ENV` there).
+ * dsh-rebase P1-6c: the app's pi-agent directory (`<agentDir>`), whose policy
+ * files are the user layer of every session's permission policy (1.0.x's
+ * `agentDir`). Set explicitly: the `AICLIENT_` family is never inherited, and
+ * neither is `PI_CODING_AGENT_DIR` as a meaning (it names the user's own pi,
+ * not ours). The host's bridge row reads it (`PERMISSION_AGENT_DIR_ENV`
+ * there); P1-16a (decision 101 rule 1) reuses the same variable in host.ts
+ * (`AGENT_DIR_ENV` in lib/hostProfile.ts) to build the `agent-instructions`
+ * and `skill-filesystem` overlays — one path, one source, not a second
+ * delivery channel.
  */
 export const DSH_HOST_PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
 

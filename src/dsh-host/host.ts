@@ -60,6 +60,8 @@ import {
   routeDiagnostics,
 } from './lib/hostModelPlan.ts';
 import {
+  AGENT_DIR_ENV,
+  agentDirOverlays,
   PRODUCT_BUNDLES,
   partitionSkippedBundles,
   REQUIRED_DISABLED,
@@ -185,6 +187,11 @@ if (resolve(home) === resolve(os.userInfo().homedir, '.dsh'))
 for (const file of new Set([resolve(process.cwd(), '.env'), resolve(home, '.env')])) {
   if (existsSync(file)) warn(`${file} is ignored: the DSH host reads no .env file`);
 }
+// P1-16a (decision 101 rule 1): <agentDir>, the same directory P1-6c's
+// permission policy reads as its user layer. Absent when the host was handed
+// none (e.g. the packaged smoke): the two overlays below are then omitted, and
+// `agent-instructions` / `skill-filesystem` keep DSH's own defaults.
+const agentDir = process.env[AGENT_DIR_ENV]?.trim() || undefined;
 
 const appBoot = await import('@deepseek-ai/dsh-app-boot');
 const { createLaunchEnvironmentSnapshot, DSH_LAUNCH_ENVIRONMENT_KEY } = await import(
@@ -258,10 +265,12 @@ const profileContext = {
   startedBundles: profile.layers.map((layer) => layer.packageName),
   cwd: process.cwd(),
   home,
-  // The plan's two rows after every user layer, then the required rows off,
-  // then the permission gate on (P1-6b, decision 042).
+  // The plan's two rows, then <agentDir>'s two rows (P1-16a, decision 101),
+  // then the required rows off, then the permission gate on (P1-6b, decision
+  // 042) — all after every user layer.
   overlays: [
     ...modelPlanOverlays(modelPlan),
+    ...agentDirOverlays(agentDir),
     ...requiredDisabledOverlays(),
     ...requiredEnabledOverlays(),
   ],

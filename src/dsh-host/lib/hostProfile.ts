@@ -126,3 +126,44 @@ export function partitionSkippedBundles(
     plugins: skipped.filter((bundle) => !product.includes(bundle.packageName)),
   };
 }
+
+/**
+ * dsh-rebase P1-16a (decision 101 rule 1): the same variable P1-6c's
+ * permission policy reads as its user layer — `PERMISSION_AGENT_DIR_ENV` in
+ * bridge/plugin.ts, `DSH_HOST_PERMISSION_AGENT_DIR_ENV` in
+ * src/main/services/agent-host/dshHostEnvironment.ts. One path, one source:
+ * host.ts reads this instead of a second delivery channel, so the
+ * `agent-instructions` / `skill-filesystem` overlays below and the permission
+ * policy's user layer always name the same `<agentDir>`. A static test
+ * (hostStatic.test.ts) pins every declaration of the literal equal.
+ */
+export const AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
+
+/**
+ * `dsh-base`'s own `agent-instructions` budget (bundle/cordis.patch.yml).
+ * Restated by `agentDirOverlays` because a same-id patch replaces the row's
+ * whole `config` (decision 101 rule 2), never merges it.
+ */
+const AGENT_INSTRUCTIONS_MAX_BYTES = 65536;
+
+/**
+ * The `agent-instructions` and `skill-filesystem` overlays that point DSH's
+ * own instruction and skill loading at `<agentDir>` (decision 101 rule 2):
+ * `dshHome` for the workspace-instruction baseline (`<agentDir>/AGENTS.md`),
+ * `customSkillDirs` for the user's skills (`<agentDir>/skills`, rank 300 by
+ * `dsh-skill-filesystem`'s own root table). None when the host was handed no
+ * path — e.g. the packaged smoke, or a profile started outside Main — so both
+ * rows keep DSH's own `$DSH_HOME`-relative defaults unchanged.
+ */
+export function agentDirOverlays(
+  agentDir: string | undefined
+): Array<{ id: string; config: Record<string, unknown> }> {
+  if (!agentDir) return [];
+  return [
+    {
+      id: 'agent-instructions',
+      config: { maxBytes: AGENT_INSTRUCTIONS_MAX_BYTES, dshHome: agentDir },
+    },
+    { id: 'skill-filesystem', config: { customSkillDirs: [`${agentDir}/skills`] } },
+  ];
+}

@@ -57,6 +57,13 @@
  *   G  asks to CREATE S2 again, as a retry does when an earlier create reached
  *      the disk but never became Main's identity: the bridge reopens the log
  *      with the deterministic id instead of failing on it, and recalls C's turn.
+ *   H  (added by dsh-rebase P1-16a) a dedicated host with its own
+ *      AICLIENT_PERMISSION_AGENT_DIR, pointed at a scratch <agentDir> holding
+ *      an AGENTS.md and a skill (decision 101): a fresh session's first turn
+ *      only names the skill by DSH's own /name gesture, no P0/P1 marker; the
+ *      next turn's P0-RECALL confirms the agent-instructions baseline
+ *      (<agentDir>/AGENTS.md, the project CLAUDE.md) and the skill's injected
+ *      body all reached the model by the first request (INS-1, SKL-1).
  *
  * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
  * and a verdict. Signals only ever go to a ChildProcess this script spawned.
@@ -433,6 +440,12 @@ async function main() {
   /** E's own bootstrap: the side session's bootstrap on the same host overwrites `hosts.E`. */
   let resumedAfterKill: Message | undefined;
   let lockedCode: unknown;
+  // P1-16a (decision 101; INS-1, SKL-1): fixture markers for host H's
+  // <agentDir>/AGENTS.md, project CLAUDE.md and skill body, read back by the
+  // verdict below.
+  const AGENTS_DIR_MARKER = 'AICLIENT-INS1-AGENTDIR-3f7a91';
+  const PROJECT_MARKER = 'AICLIENT-INS1-PROJECT-9c2e04';
+  const SKILL_BODY_MARKER = 'AICLIENT-SKL1-BODY-5b1dc7';
   try {
     // ---- A: new session, persisted before its first turn, then the P0-3 turns
     const a = startHost('A');
@@ -713,6 +726,81 @@ async function main() {
     await runTurn(g, chG, EMPTY_SESSION, 'RECALL-RECREATED', 'P0-RECALL {"markers":["P0-STREAM"]}');
     await closeSession(g, chG);
     await stopHost(g);
+
+    // ---- H: P1-16a's <agentDir> overlays (decision 101) — agent-instructions'
+    // dshHome and skill-filesystem's customSkillDirs, the same directory P1-6c
+    // hands the host as AICLIENT_PERMISSION_AGENT_DIR (INS-1, SKL-1).
+    const insSklAgentDir = join(box.root, 'ins-skl-agent-dir');
+    const insSklSkillDir = join(insSklAgentDir, 'skills', 'ins-skl-smoke');
+    mkdirSync(insSklSkillDir, { recursive: true, mode: 0o700 });
+    writeFileSync(
+      join(insSklAgentDir, 'AGENTS.md'),
+      `# Global agent notes\n${AGENTS_DIR_MARKER}\n`
+    );
+    writeFileSync(
+      join(insSklSkillDir, 'SKILL.md'),
+      [
+        '---',
+        'name: ins-skl-smoke',
+        'description: P1-16a bridge-smoke fixture skill (SKL-1).',
+        '---',
+        '',
+        `Skill body marker: ${SKILL_BODY_MARKER}`,
+        '',
+      ].join('\n')
+    );
+    const insSklWorkspace = join(box.root, 'ins-skl-workspace');
+    // A `.git` marker pins the project root at this workspace, the same
+    // default dsh-agent-instructions and dsh-skill-filesystem both use.
+    mkdirSync(join(insSklWorkspace, '.git'), { recursive: true, mode: 0o700 });
+    writeFileSync(join(insSklWorkspace, 'CLAUDE.md'), `# Project notes\n${PROJECT_MARKER}\n`);
+    const insSklChild = spawn(nodeBin, ['--expose-internals', hostEntry], {
+      cwd: hostCwd,
+      env: { ...env, AICLIENT_PERMISSION_AGENT_DIR: insSklAgentDir },
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    });
+    const insSklClient = new HostClient(insSklChild);
+    const h: Host = {
+      label: 'INS_SKL',
+      child: insSklChild,
+      client: insSklClient,
+      stderr: captureStderr(insSklChild),
+      exited: exitOf(insSklChild),
+      startedAt: performance.now(),
+      served: insSklClient.configure(plan, SMOKE_KEY),
+    };
+    live.push(h);
+    await ready(h);
+    const chH = h.client.openChannel();
+    const INS_SKL_SESSION = 'bridge-smoke-ins-skl';
+    const bootH = await bootstrap(h, chH, {
+      logicalSessionId: INS_SKL_SESSION,
+      cwd: insSklWorkspace,
+    });
+    if (!bootH.ok) throw new Error(`H bootstrap: ${JSON.stringify(bootH.error)}`);
+    // Turn 1 carries no P0/P1 marker: it only has to be the session's first
+    // step (agent-instructions' baseline is folded in then, right after this
+    // claimed message) and name the skill by DSH's own `/name` gesture
+    // (decision 101 rule 3), not the 1.0.x `/skill:name` spelling.
+    await runTurn(
+      h,
+      chH,
+      INS_SKL_SESSION,
+      'INS-SKL-PRIME',
+      'Please use /ins-skl-smoke and say hello.'
+    );
+    // Turn 2's own request carries everything turn 1's request carried as
+    // history: the agent-instructions baseline and the skill's injected body
+    // are both part of turn 1's request by the time this P0-RECALL runs.
+    await runTurn(
+      h,
+      chH,
+      INS_SKL_SESSION,
+      'INS-SKL-RECALL',
+      `P0-RECALL {"markers":["${AGENTS_DIR_MARKER}","${PROJECT_MARKER}","${SKILL_BODY_MARKER}"]}`
+    );
+    await closeSession(h, chH);
+    await stopHost(h);
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   } finally {
@@ -965,6 +1053,13 @@ async function main() {
       !ipcHandle.sandboxed.channelVariable &&
       !ipcHandle.escalated.channelVariable &&
       ipcHandle.sandboxed.lines.length > 0,
+    // P1-16a (decision 101): <agentDir>'s AGENTS.md, the project CLAUDE.md
+    // (INS-1) and a skill's `/name`-injected body (SKL-1) all reached the
+    // model by the end of the session's first request.
+    agentDirOverlaysReachedFirstRequest:
+      (turns['INS-SKL-RECALL'] as { reply?: string } | undefined)?.reply?.includes(
+        `present=${AGENTS_DIR_MARKER},${PROJECT_MARKER},${SKILL_BODY_MARKER} missing=-`
+      ) === true,
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)

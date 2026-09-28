@@ -32,7 +32,7 @@ describe('host.ts reads no .env file (HS-01, decision 023)', () => {
 describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
   it('restates the required rows off, then the permission gate on, after the home layer and the plan rows', () => {
     expect(host).toMatch(
-      /overlays: \[\s*\.\.\.modelPlanOverlays\(modelPlan\),\s*\.\.\.requiredDisabledOverlays\(\),\s*\.\.\.requiredEnabledOverlays\(\),\s*\],/
+      /overlays: \[\s*\.\.\.modelPlanOverlays\(modelPlan\),\s*\.\.\.agentDirOverlays\(agentDir\),\s*\.\.\.requiredDisabledOverlays\(\),\s*\.\.\.requiredEnabledOverlays\(\),\s*\],/
     );
   });
 
@@ -154,6 +154,13 @@ describe('the bridge enforces the posture it reports (P1-6c; shard 04 §6 static
     const declared = /PERMISSION_AGENT_DIR_ENV = '([A-Z_]+)'/;
     expect(read('bridge', 'plugin.ts').match(declared)?.[1]).toBe('AICLIENT_PERMISSION_AGENT_DIR');
     expect(main.match(declared)?.[1]).toBe('AICLIENT_PERMISSION_AGENT_DIR');
+  });
+
+  it('P1-16a: host.ts reads <agentDir> from the same variable, one path, one source (decision 101 rule 1)', () => {
+    const hostProfile = read('lib', 'hostProfile.ts');
+    const declared = /AGENT_DIR_ENV = '([A-Z_]+)'/;
+    expect(hostProfile.match(declared)?.[1]).toBe('AICLIENT_PERMISSION_AGENT_DIR');
+    expect(host).toContain('process.env[AGENT_DIR_ENV]');
   });
 });
 
