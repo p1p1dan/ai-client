@@ -1,6 +1,6 @@
 # 决策 092：P1-6c 授权记忆、档位 setter 与 P1-6b 收尾的实现取舍
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：[P1-6 方案](../topics/p1-6-permissions.md) §1 第 5、6 条与 §4.4～4.6、[分片 03](../topics/p1-6-permissions/03-design.md) §5、§7、§8、§10；[决策 043](043-grants-sidecar-next-to-stub.md)、[044](044-dsh-sandbox-off-by-default-in-p1.md)、[088](088-permission-gate-wiring-choices.md)「留给后续」、[090](090-user-rulings-2026-09-28.md)。改动留在工作区，由编排器复跑后提交。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：[P1-6 方案](../topics/p1-6-permissions.md) §1 第 5、6 条与 §4.4～4.6、[分片 03](../topics/p1-6-permissions/03-design.md) §5、§7、§8、§10；[决策 043](043-grants-sidecar-next-to-stub.md)、[044](044-dsh-sandbox-off-by-default-in-p1.md)、[088](088-permission-gate-wiring-choices.md)「留给后续」、[090](090-user-rulings-2026-09-28.md)。改动留在工作区，由编排器复跑后提交。
 
 ## 规则
 

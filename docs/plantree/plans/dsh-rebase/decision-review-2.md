@@ -1,5 +1,7 @@
 # DSH 二开：第二批待审批决策与待答问题（091～108）
 
+> **2026-09-28 用户已裁决**：原型见[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)；其余见[决策 110](decisions/110-user-rulings-2026-09-28-batch2.md)（108 选 A、插件开关改为逐个覆盖；其他全部按建议）。本文件保留作审批时的原始材料。
+
 Role: review-summary。生成日期：2026-09-28。第一批（005～089）已由[决策 090](decisions/090-user-rulings-2026-09-28.md) 裁决，见 [decision-review.md](decision-review.md)。
 
 ## 这是什么

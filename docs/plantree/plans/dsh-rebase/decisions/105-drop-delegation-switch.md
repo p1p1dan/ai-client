@@ -1,6 +1,6 @@
 # 决策 105：1.0.x 的委派总开关与停用名单在 DSH 版作废，DSH 的子代理始终可用
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md)：总原则；062 / 070 的裁决「只用 DSH 自带的子代理」；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 16-10；
 - `src/main/services/agent-host/nativeSubagentSettings.ts:37-58`；`dsh-base/cordis.patch.yml:348-387`。

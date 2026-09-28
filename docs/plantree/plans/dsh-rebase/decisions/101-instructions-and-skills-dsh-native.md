@@ -1,6 +1,6 @@
 # 决策 101：全局指令与技能只用 DSH 原生行读取：`dshHome` 指向 `<agentDir>`，技能目录加上 `<agentDir>/skills`；技能调用改用 DSH 的 `/<name>`；不做兼容报告界面
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [决策 057](057-user-assets-stay-in-place.md)（用户资产原地对接）、[064](064-accepted-behavior-differences-extensions.md) 第 1～3 条；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 16-1、16-2、16-4～16-7；

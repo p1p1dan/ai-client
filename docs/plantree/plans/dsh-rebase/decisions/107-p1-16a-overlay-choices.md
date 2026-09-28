@@ -1,6 +1,6 @@
 # 决策 107：P1-16a 覆盖层实现取舍：沿用 P1-6c 的环境变量作单一来源，两行 overlay 放进 `hostProfile.ts`，INS-1 / SKL-1 用两轮 `P0-RECALL` 验证
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [决策 101](101-instructions-and-skills-dsh-native.md)（本任务的规则依据，第 1、2 条）；
 - [决策 092](092-p1-6c-grants-and-setters-choices.md) 第 10、11 条（P1-6c 的路径下发实现）；

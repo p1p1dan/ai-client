@@ -1,6 +1,6 @@
 # 决策 108：P1-10b 宿主装载与审计的实现取舍：启用集合经环境变量下发，插件层逐个审计、不合格只剔除，home 层多出的行让打包态拒绝启动
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 023](023-no-dotenv-private-cwd-home-patch-overlay.md) 第 3 条、[025](025-host-lifecycle.md) 第 2、5 条、[058](058-plugins-preinstalled-no-pnpm.md)、[059](059-allowlist-verification-and-audits.md)、[082](082-allowlist-implementation-choices.md) 第 6 条、[090](090-user-rulings-2026-09-28.md) 总原则；
 - [P1-10 / P1-16 方案](../topics/p1-10-p1-16-extensions.md) §4.2「启动期审计」、§4.3「启用」、§6 的 P1-10b 行、§8 实验 E1、E3；
 - [分片 03](../topics/p1-10-p1-16-extensions/03-design.md) §3.3、§4.2、§4.3，[分片 04](../topics/p1-10-p1-16-extensions/04-changes-and-tests.md) §1 P1-10b、§3、§4.2（PLG-2、PLG-3）；

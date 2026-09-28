@@ -1,6 +1,6 @@
 # 决策 097：文本附件改为 DSH 文件块，由模型按需读取（需用户拍板）
 
-日期：2026-09-28。**状态：自主决定，待用户审批（需用户拍板）。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 4c-6、§5；
 - `dsh-attachment/README.md:40,106`；`dsh-attachment/lib/types/index.d.ts:97`；`dsh-attachment/lib/types/types.d.ts:34-41,97-102`；`dsh-attachment-local/README.md:90`；`dsh-llm/lib/index.js:2268-2277`。

@@ -1,6 +1,6 @@
 # 决策 102：DSH 版不再读取用户层指令文件（`~/.pilab/AGENTS.md`、`~/.claude/CLAUDE.md`、`~/.codex/AGENTS.md`）（需用户拍板）
 
-日期：2026-09-28。**状态：自主决定，待用户审批（需用户拍板）。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 16-3、§5；
 - [P1-10 / P1-16 分片 01 §2](../topics/p1-10-p1-16-extensions/01-assets.md)、[分片 03 §2.1](../topics/p1-10-p1-16-extensions/03-design.md)；

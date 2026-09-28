@@ -1,6 +1,6 @@
 # 决策 106：P1-4d1 直播映射的实现取舍
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：[决策 099](099-p1-4d-scope-dsh-data-only.md)（逐条对照）；[P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) §4.2、§6.1 的 P1-4d1 行、§8；决策 [072](072-renderer-data-channels.md) 第 3、4 条，[081](081-loop-guard-implementation-choices.md)、[088](088-permission-gate-wiring-choices.md) 的「留给后续」；[P1-7 分片 03 §6](../topics/p1-7-renderer/03-panels.md)（轮次头与通知表）；[P1-5 分片 03 §5](../topics/p1-5-models-and-credentials/03-design.md)（失败码表，P1-5c 同批）。改动留在工作区，由编排者复跑后提交。
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：[决策 099](099-p1-4d-scope-dsh-data-only.md)（逐条对照）；[P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) §4.2、§6.1 的 P1-4d1 行、§8；决策 [072](072-renderer-data-channels.md) 第 3、4 条，[081](081-loop-guard-implementation-choices.md)、[088](088-permission-gate-wiring-choices.md) 的「留给后续」；[P1-7 分片 03 §6](../topics/p1-7-renderer/03-panels.md)（轮次头与通知表）；[P1-5 分片 03 §5](../topics/p1-5-models-and-credentials/03-design.md)（失败码表，P1-5c 同批）。改动留在工作区，由编排者复跑后提交。
 
 下面列的都是 099 没有写死、由本次实现定下的地方。
 

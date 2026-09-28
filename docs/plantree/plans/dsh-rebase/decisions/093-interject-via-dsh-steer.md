@@ -1,6 +1,6 @@
 # 决策 093：Ctrl+Enter 插话改用 DSH 的 `steer`：消息在下一个步边界并入当前回合，回合不结束，目标不暂停（需用户拍板）
 
-日期：2026-09-28。**状态：自主决定，待用户审批（需用户拍板）。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 4c-1、§5；
 - `dsh-agent/README.md:47,178`；`dsh-agent-loop/lib/index.js:800-814,983-990,1020`；`dsh-subagent/lib/index.js:1264`；`dsh-tool-goal/README.md:57,71-72`；`dsh-goal-round-driver/README.md:53,72`；`dsh-plan-mode/README.md:89`。

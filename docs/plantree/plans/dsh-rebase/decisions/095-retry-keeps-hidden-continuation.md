@@ -1,6 +1,6 @@
 # 决策 095：失败后「继续」保留决策 028 的隐藏续跑提示（总原则下的例外）
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [决策 028](028-retry-via-hidden-continuation-prompt.md)（用户 2026-09-28 已批准）；
 - runtime-hardening [决策 045](../../runtime-hardening/decisions/045-failure-card-continue-retries-last-turn.md)（T135）；

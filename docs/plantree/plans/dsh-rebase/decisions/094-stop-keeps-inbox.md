@@ -1,6 +1,6 @@
 # 决策 094：Stop 改用 DSH 停止按钮的语义：中止当前回合，保留收件箱
 
-日期：2026-09-28。**状态：自主决定，待用户审批。** 依据：
+日期：2026-09-28。**状态：用户 2026-09-28 批准（[决策 110](110-user-rulings-2026-09-28-batch2.md)）。** 依据：
 - [决策 090](090-user-rulings-2026-09-28.md) 总原则；
 - [P1-4 / P1-16 重划](../topics/p1-4-p1-16-rescope.md) 4c-2；
 - `dsh-agent/README.md:110,178`；`dsh-subagent/lib/index.js:855`；`dsh-goal-round-driver/lib/index.js:234`；`dsh-agent-loop/lib/index.js:188,815-821,854-858,887-899`。
