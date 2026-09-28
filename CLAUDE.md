@@ -5,7 +5,12 @@
 **本分支 `feat/dsh-p0-probe`：DSH 二开（B 路线）P1「分支内整体替换为 DSH」**。聊天引擎已换成 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；不做双引擎，测试完毕合入 main 即切换（决策 004）。main 只做 1.0.x 缺陷修复，本分支不推送、不发版，推送前需用户确认。
 
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
-- **代码入口**：`src/dsh-host/`（宿主、bridge、工具脚本）、`src/main/services/agent-host/`（`DshHostSupervisor`、`WorkerManager`）、`src/shared/dshHistory/`（历史投影）、`src/shared/legacyPiSession/`（pi 解码与迁移转换）、`src/shared/permissions/`（权限纯库）。`src/runtime/` 是待退役的自有引擎（P1-12 删除）。
+- **代码入口**：
+  - `src/dsh-host/`：宿主、bridge，以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
+  - `src/main/services/agent-host/`：`DshHostSupervisor`、`WorkerManager`、`DshCredentialBroker`。
+  - `src/shared/` 下的纯库：`dshModelPlan/`（模型计划）、`dshHistory/`（历史投影）、`legacyPiSession/`（pi 解码与迁移转换）、`permissions/`（权限）、`skills/`、`mcp/`、`subagentCatalogRoots.ts`（后三者从 runtime 搬来）、`dshPluginAllowlist.ts`（插件白名单审计）。
+  - `src/runtime/` 是待退役的自有引擎，P1-12 删除。
+- **推送**：仓库是公开的，分支里有加密机现场报告，推送前先脱敏（2026-09-28 用户决定暂不推送）。
 - **本地验证**：四套 tsc（根、`src/agent-host`、`src/runtime`、`src/dsh-host`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
 - **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写）。
 
