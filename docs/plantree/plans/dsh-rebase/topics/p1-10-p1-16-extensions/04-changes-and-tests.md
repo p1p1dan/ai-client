@@ -114,7 +114,7 @@ P1-12 删掉 `PiPluginService` 的安装部分、`src/main/ipc/piPlugins.ts`，�
 | E2 | 插件作为宿主依赖时，npm 怎么解析 peer | 在 `src/dsh-host` 的临时副本里加 `dsh-office-tools@1.0.4`，跑 `npm install --package-lock-only` 与 `npm ci --ignore-scripts`；记下有没有 `ERESOLVE`，有就试 `overrides`；核对锁文件的 integrity 与 registry 的 `dist.integrity` 一致。要联网，在 CI 上或经授权做 | D2 |
 | E3 | 安装范围的插件 bundle 能不能从只读的安装目录加载 | 构建出带插件的 `out-dsh-host`，profile 清单加上它，把目录设成只读后起宿主；工具清单里有 `word_*` | D2 |
 | E4 | 插件能不能把工具注册在某个会话的 scope 里 | 测试插件在会话 A 的 agent scope 里注册工具；A 看得到，B 看不到；记下 A 的子代理看不看得到 | D7 |
-| E5 | `ctx.subprocess` 能不能跑 MCP 的双向流，进程会不会被回收 | 用 `src/runtime/__tests__/fixtures/mcp-echo-server.mjs`，`stdio: 'pipe'` 往返一次；SIGKILL 宿主后没有孤儿进程（Linux 本机，Windows 在 CI） | D7 |
+| E5 | `ctx.subprocess` 能不能跑 MCP 的双向流，进程会不会被回收 | 用 `src/shared/mcp/__tests__/fixtures/mcp-echo-server.mjs`（2026-09-28 移出 runtime），`stdio: 'pipe'` 往返一次；SIGKILL 宿主后没有孤儿进程（Linux 本机，Windows 在 CI） | D7 |
 | E6 | `dshHome`、`customSkillDirs` 的 overlay 生不生效 | 假网关抓首个请求：带 `<agentDir>/AGENTS.md` 的内容；技能目录里有 `<agentDir>/skills` 下的技能 | D8、D9 |
 | E7 | 插件能不能调 `ctx.subagents.start` 并带 persona 与 toolFilter | 假网关抓子代理的请求：有 persona 段，没有被过滤掉的工具 | D11 |
 | E8 | 凭据提供者能不能认出调用方；插件能不能读到 IPC 上的凭据应答 | 测试插件调 `ctx.credentials.resolve`，看提供者能不能拿到调用方的上下文；测试插件挂 `process.on('message')`，预期能看到应答。结论转给 P1-5 | 安全 |

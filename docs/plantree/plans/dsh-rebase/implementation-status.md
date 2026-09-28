@@ -9,14 +9,15 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～086 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a / 5b 与宿主侧接线、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
+P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～087 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a / 5b 与宿主侧接线、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
 
 ## Next Target
 
-P1-6 第二部分与 P1-6c（在跑：权限接进 bridge、卡片往返、授权记忆 sidecar）→ P1-4c / d → P1-4e → P1-9c。子代理目录规则搬进 shared（在跑）。P1-13b 加密矩阵上机包已就绪，等用户上机。
+P1-6 第二部分与 P1-6c（在跑：权限接进 bridge、卡片往返、授权记忆 sidecar）→ P1-4c / d → P1-4e → P1-9c。P1-13b 加密矩阵上机包已就绪，等用户上机。
 
 ## Last Landed
 
+- 2026-09-28 P1-16 再前置：子代理目录规则（根、合并、内置、pin 解析）从 `plugins/subagent/catalog.ts` 搬进 `src/shared/subagentCatalogRoots.ts`，runtime 原位置改薄封装；MCP 真实 stdio 夹具 `mcp-echo-server.mjs` 移到 `src/shared/mcp/__tests__/fixtures/`（[决策 087](decisions/087-subagent-catalog-move-and-fixture-relocation.md)）。P1-16 方案里「删 runtime 前先搬」的三项（skills/模板、MCP、子代理目录规则）至此全部完成。子代理原测试文件（35 例，SA01+SA02）整份搬进 `src/shared/__tests__/subagentCatalogRoots.test.ts`，按用例全名比对零丢失；新增边界静态测试（5 例）与薄封装测试（2 例）。复跑：四套 tsc 通过（dsh-host 侧另一代理并行改动，未触及本次文件）；runtime 下 `subagent` 相关 20 个测试文件、314 例通过；`fe089adf` 涉及 MCP/skills 的 9 个相关测试文件、138 例通过；biome 改动文件全过。
 - 2026-09-28 P1-10a 收尾：`fc6061c6` plugin-manager 常闭，删掉宿主里的 pnpm 配置，上机包的插件检查改为不联网（[决策 082 实施补记](decisions/082-allowlist-implementation-choices.md)）。编排器复跑：dsh-host tsc 通过；相关单测 765 例通过；真宿主集成 18/18；`bridge-record --check` 9 个场景无差异；bridge-smoke 36 项；重建产物 82.1 MiB，打包冒烟 L1 共 40 项。代理另跑了上机包 Linux 预演：44 项里通过 40、失败 0。
 - 2026-09-28 P1-16 前置：`fe089adf` skills、模板与展开、MCP 的纯逻辑搬进 `src/shared`，runtime 改为薄封装（[决策 086](decisions/086-shared-skills-mcp-move-choices.md)）。编排器复跑：相关 20 个测试文件、480 例通过；根、runtime、agent-host 三套 tsc 通过。
 - 2026-09-28 P1-13b 上机包：`fd8f2ac9` 加密矩阵工具，外加第一轮现场脚本修改的回收。Linux 预演（只跑 node 那半边）通过，单测 17 例通过；PowerShell 脚本还没实跑过。包在 `/var/tmp/aiclient-p1-13b-kit/`，sha256 `4a5ea708…b652`。读代码还有一个发现：DSH 新建文件是先写临时文件再硬链接成目标名，1.0.x 是直接写目标名，所以决策 084 与 Q009 里「与 1.0.x 相同」的推断已撤回。
@@ -46,11 +47,11 @@ P1-6 第二部分与 P1-6c（在跑：权限接进 bridge、卡片往返、授�
 
 ## Active TODO
 
-1. 在跑：P1-6 第二部分与 P1-6c（权限行默认启用、bridge 卡片往返、授权记忆 sidecar、setter、冒烟与探针自动应答）；子代理目录规则与 MCP 测试夹具搬出 runtime（P1-12 前置）。
+1. 在跑：P1-6 第二部分与 P1-6c（权限行默认启用、bridge 卡片往返、授权记忆 sidecar、setter、冒烟与探针自动应答）。
 2. 之后：P1-4c / d（P1-4d 的失败码与模型 id 已随 P1-5 做掉一部分）、P1-4e、P1-9c～f、P1-15、P1-16a～d。
 3. P1-5c～e，以及真实网关验证 R1～R10，后者要用户授权。
 4. P1-2 三平台 CI 与 P1-6d 的 Windows CI 待用户确认推送。
-5. 决策 005～086 与 Q003、Q007～Q010 等用户审批或答复。
+5. 决策 005～087 与 Q003、Q007～Q010 等用户审批或答复。
 
 ## Blocked By
 
