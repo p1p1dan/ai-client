@@ -77,11 +77,12 @@
 - id: credentials
   disabled: true
 
-# Plugin installs ask npm's own registry only; no mirror fallback.
+# Decision 082 (closing decisions 016, 058): plugin installs never run on
+# the user's machine; the plugin allowlist ships preinstalled instead.
+# host.ts restates this row off after every user layer (hostProfile.ts
+# REQUIRED_DISABLED), same as credentials above.
 - id: plugin-manager
-  config:
-    registry: https://registry.npmjs.org/
-    fallbackRegistries: []
+  disabled: true
 
 - insert:
     # P1-5b (decision 034): ctx.credentials, read-only. A key reference of the

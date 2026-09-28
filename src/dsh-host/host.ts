@@ -259,16 +259,9 @@ const profileContext = {
   // The plan's two rows after every user layer, then the required rows off.
   overlays: [...modelPlanOverlays(modelPlan), ...requiredDisabledOverlays()],
   telemetryDisabledEnv: process.env.DSH_TELEMETRY_DISABLED,
-  // Plugin installs run pnpm's CLI on this same Node binary, from this host's
-  // own node_modules (the bundled copy in a packaged app), never a `pnpm` from
-  // PATH (decision 016). AICLIENT_DSH_PNPM_CLI names another pnpm.mjs / .cjs.
-  packageManager: {
-    command: process.execPath,
-    args: [
-      process.env.AICLIENT_DSH_PNPM_CLI || join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs'),
-    ],
-    env: {},
-  },
+  // No `packageManager` (decision 082, closing decision 016): plugin-manager
+  // is disabled at every start (bundle/cordis.patch.yml, REQUIRED_DISABLED),
+  // so nothing ever reads this field's fallback (`?? {command: 'pnpm'}`).
 };
 const patches = appBoot.readProfilePatches(BIN, profileContext, profile);
 

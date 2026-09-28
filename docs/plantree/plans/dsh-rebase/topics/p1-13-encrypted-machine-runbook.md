@@ -58,7 +58,7 @@ Role: topic
 
 - Git Bash：默认找 `C:\Program Files\Git\bin\bash.exe`，装在别处用 `-GitBash '<bash.exe>'` 指定。
 - PowerShell 7：装了就一起测。
-- pnpm 装插件：能访问 npm 官方源就测，访问不了自动跳过。公司不允许访问外网时，加 `-SkipPnpm`。
+- 插件：决策 082 落地后不再运行期装插件，`G-no-plugin-install`、`G-preinstalled-plugin-readback` 都不联网，无需额外参数。
 
 **顺序**：先做第 1 节主检查，再装官方 DSH Desktop 做第 2 节对照组。两者共用 `%LOCALAPPDATA%\node-addon-native-custom-loader` 缓存目录。先装对照组，B1 就会变成「沿用已有缓存」。
 
@@ -78,7 +78,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 - **参数**：
   - `-EncDir`：必填；
   - `-AppDir`：应用装在非默认位置时用；
-  - `-GitBash`、`-SkipPnpm`：见 0.8；
+  - `-GitBash`：见 0.8；
   - `-KeepWork`：保留加密目录里的工作目录。只在我们要求排查时用。
 - 遇到以下情况，停下来截图发回，不要自己绕过：
   - 执行策略被组策略锁死，`Set-ExecutionPolicy` 报错；
@@ -102,7 +102,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 | L-recall / S-log-plaintext | 会话写入后恢复；日志落盘 | 恢复后的历史里仍有明文标记；会话日志 `.jsonl.zstd` 由 node.exe 解码后含明文 |
 | P-pty-spawn / P-pty-read | node-pty / conpty 起终端，终端里的 PowerShell 读加密文件 | 通过，已加载 `conpty.node`；读到明文 |
 | SP-spill-root | `%TEMP%` 下的 spill 目录 | 通过：大输出落盘，node.exe 读回明文 |
-| G-pnpm-install | pnpm 装插件 `dsh-office-tools@1.0.4` | 通过；连不上源时「跳过」 |
+| G-no-plugin-install | plugin-manager、tool-plugin-manager 都没加载；宿主产物里没有 pnpm | 通过 |
+| G-preinstalled-plugin-readback | 预装插件由随包 node.exe 读回明文 | 白名单为空：「记录：无预装插件」；非空时按插件逐个通过 |
 | D-bash / D-powershell / D-pwsh7 | node.exe 直接起 Git Bash、Windows PowerShell、PowerShell 7，读写加密文件 | 明文，说明这类子进程拿得到明文 |
 | K-natives | 宿主实际加载的原生模块 | 只记录 |
 | 盘上形态 | PowerShell 读每个产物的头 16 字节 | 加密目录里的产物应是「TSD 容器」。`%LOCALAPPDATA%`、`%TEMP%` 下的文件是否加密取决于策略，照记 |
@@ -194,7 +195,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 - 不写注册表。
 - 在 `%TEMP%`、`%LOCALAPPDATA%` 里只删它自己新建的目录。
 - 对照组只动 DSH Desktop 的 DSH_HOME 下那两个文件，结束就还原。
-- 除了 pnpm 那一项会访问 npm 官方源，不联网。
+- 不联网（决策 082 落地：插件不再运行期安装）。
 
 ## 4. 已知限制
 
@@ -213,7 +214,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 - **权限插件**：`aiclient-permissions` 随包，但默认不启用，与当前分支一致。审批由探针自动放行，这一轮不测审批界面。
 - **bash**：DSH 在 Windows 上只有 `pwsh` 工具，没有 `bash` 工具。bash 只由 D-bash 覆盖，即 node.exe 直接起 Git Bash。
 - **白名单机制未知**：加密驱动按进程名、路径、签名还是父进程放行，仍未确认（ARD D11）。所以载体必须是装好的应用里的那个 `node.exe`，不要换成从别处拷来的 node。
-- **G-pnpm-install 只作参考。** [决策 058](../decisions/058-plugins-preinstalled-no-pnpm.md)（待审批）打算去掉 pnpm。
+- **pnpm 已去掉。** [决策 058](../decisions/058-plugins-preinstalled-no-pnpm.md)、[决策 082](../decisions/082-allowlist-implementation-choices.md) 落地：`plugin-manager`、`tool-plugin-manager` 常闭，改由 `G-no-plugin-install`、`G-preinstalled-plugin-readback` 两项不联网检查覆盖。
 - **包的来历**：
   - 上机包沿用 P0-4 的名字，从 `feat/dsh-p0-probe` 的 `b83743fe` 构建；之后分支上的改动不在包里。
   - 构建记录见交付目录（开发机 `/var/tmp/aiclient-p1-13-kit/`）的 `BUILD-INFO.txt`。

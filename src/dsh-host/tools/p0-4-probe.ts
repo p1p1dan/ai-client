@@ -2,7 +2,7 @@
  * P0-4 node-side probe for the TEC/TSD-encrypted Windows machine (dsh-rebase plan).
  *
  *   node.exe tools/p0-4-probe.ts --work <dir> --marker <text> --out <report.json>
- *            [--gateway <fake-gateway.mjs>] [--git-bash <bash.exe>] [--skip-pnpm]
+ *            [--gateway <fake-gateway.mjs>] [--git-bash <bash.exe>]
  *            [--log <file>] [--make-markers] [--self-clean]
  *   node.exe tools/p0-4-probe.ts --control --work <dir> --marker <text> --out <report.json>
  *            [--port 18484] [--shell pwsh|bash]     (official DSH Desktop control group)
@@ -18,8 +18,9 @@
  * marker, so a result is plaintext / ciphertext (`%TSD-Header-###%`) / other,
  * not just success. Model turns go only to the local fake gateway this script
  * starts (plan dsh-p0-2); the probe hooks block every non-loopback connect of
- * the host. The only other network user is pnpm during the plugin install,
- * which is skipped when the registry is unreachable.
+ * the host. Nothing else here reaches the network: plugin-manager is disabled
+ * (decision 082) and the plugin allowlist is empty, so there is no runtime
+ * install to test — see the `G-*` checks below.
  *
  * Output: one JSON report (`--out`) with `checks[]` (id, status, observed),
  * `inspect[]` (files for the PowerShell side to head-check) and `cleanup[]`
@@ -45,9 +46,10 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { zstdDecompressSync } from 'node:zlib';
+import { PRODUCT_BUNDLES } from '../lib/hostProfile.ts';
 import { fakeGatewayPlan, serveModelPlan } from './lib/hostClient.ts';
 import { captureStderr, exitOf, round, sleep, stopWithin, waitMessage } from './lib/kit.ts';
-import { installProbeBundle } from './lib/probe-bundle.ts';
+import { installProbeBundle, PROBE_BUNDLE } from './lib/probe-bundle.ts';
 
 // Kit layout (tools/p0-4/build-kit.mjs) mirrors the repo: <kit>/host/host.ts,
 // <kit>/host/tools/<this file>, <kit>/gateway/fake-gateway.mjs.
@@ -55,9 +57,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const hostDir = resolve(here, '..');
 const isWin = process.platform === 'win32';
 const TSD_MAGIC = '%TSD-Header-###%';
-const PLUGIN = 'dsh-office-tools@1.0.4';
-const REGISTRY = 'https://registry.npmjs.org/';
 const FS_STEPS = 12;
+// Decision 082: the two rows must never activate; no package manager ships.
+const PLUGIN_MANAGER_ROWS = ['plugin-manager', 'tool-plugin-manager'];
+const PACKAGE_MANAGER_NAME = /(^|[\\/])(pnpm|@pnpm)([\\/]|$)/i;
 
 // ---- arguments -------------------------------------------------------------
 
@@ -87,8 +90,6 @@ const gatewayEntry =
   '';
 const hostEntry = join(hostDir, 'host.ts');
 const hooksUrl = pathToFileURL(join(here, 'lib', 'probe-hooks.mjs')).href;
-const pnpmCli = join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
-const skipPnpm = flag('skip-pnpm');
 const logs = join(work, 'logs');
 const dshHome = join(work, 'dsh-home');
 const hostCwd = join(work, 'host-cwd');
@@ -217,7 +218,6 @@ function hostEnv(extra: Record<string, string> = {}): Record<string, string> {
     DSH_TELEMETRY_DISABLED: '1',
     AICLIENT_PROBE_EVENT_LOG: join(logs, 'events.jsonl'),
     AICLIENT_PROBE_HOOK_LOG: join(logs, 'hooks.jsonl'),
-    AICLIENT_DSH_PNPM_CLI: pnpmCli,
     ...extra,
   };
 }
@@ -729,7 +729,7 @@ function checkSessionLog(sessionId: string) {
   );
 }
 
-// ---- checks: PTY, spill, pnpm -------------------------------------------------
+// ---- checks: PTY, spill, plugin install (decision 082) -----------------------
 
 function powershellExe(): string | undefined {
   if (!isWin) return undefined;
@@ -845,62 +845,73 @@ function spillCheck(host: Host, tempBefore: Set<string>, tokens: string[]) {
   );
 }
 
-async function pnpmCheck(host: Host) {
-  if (skipPnpm) {
-    check('G-pnpm-install', 'plugin', 'pnpm 装社区插件', 'skip', '按参数跳过（-SkipPnpm）');
-    return;
-  }
-  const probe = spawnSync(
-    process.execPath,
-    [pnpmCli, 'view', PLUGIN, 'version', '--registry', REGISTRY],
-    { cwd: hostCwd, env: hostEnv(), encoding: 'utf8', timeout: 45_000, windowsHide: true }
+/**
+ * Decision 082: plugin-manager and tool-plugin-manager must never activate,
+ * and the artifact must not carry any package manager. No network access —
+ * the plugin allowlist is empty, so there is nothing to install at runtime.
+ */
+function pluginRowsOffCheck(host: Host) {
+  const composition = host.ready?.composition as
+    | { disabledLiteral?: string[]; disabledByExpression?: string[] }
+    | undefined;
+  const disabled = new Set([
+    ...(composition?.disabledLiteral ?? []),
+    ...(composition?.disabledByExpression ?? []),
+  ]);
+  const notDisabled = PLUGIN_MANAGER_ROWS.filter((id) => !disabled.has(id));
+  const pnpmFound = walk(join(hostDir, 'node_modules'), 12).filter((file) =>
+    PACKAGE_MANAGER_NAME.test(file)
   );
-  if (probe.status !== 0 || !String(probe.stdout).includes('1.0.4')) {
+  check(
+    'G-no-plugin-install',
+    'plugin',
+    'plugin-manager / tool-plugin-manager 未加载，宿主产物里没有 pnpm',
+    notDisabled.length === 0 && pnpmFound.length === 0 ? 'pass' : 'fail',
+    `未关闭的行：${notDisabled.join('、') || '无'}；pnpm 残留：${pnpmFound.length} 处${
+      pnpmFound.length > 0 ? `（${pnpmFound.slice(0, 3).join(', ')}）` : ''
+    }`,
+    { disabledRows: [...disabled], pnpmFound }
+  );
+}
+
+/**
+ * Preinstalled allowlist plugins ship in the artifact's own node_modules, so
+ * node.exe reads their package.json back the same way it reads every other
+ * tool product (decision 058). The allowlist is empty right now, so this
+ * always finds none; the read-back path stays in place for when it is not.
+ */
+function preinstalledPluginCheck(host: Host) {
+  const bundles = (host.ready?.bundles as string[] | undefined) ?? [];
+  const preinstalled = bundles.filter(
+    (name) => !PRODUCT_BUNDLES.includes(name) && name !== PROBE_BUNDLE
+  );
+  if (preinstalled.length === 0) {
     check(
-      'G-pnpm-install',
+      'G-preinstalled-plugin-readback',
       'plugin',
-      'pnpm 装社区插件',
-      'skip',
-      `连不上 npm 源，按离线跳过：${clip(probe.stderr || probe.error?.message || probe.stdout, 240)}`
+      '预装插件由随包 node.exe 读回明文',
+      'info',
+      '记录：无预装插件'
     );
     return;
   }
-  const localBefore = new Set(listDir(process.env.LOCALAPPDATA));
-  try {
-    const answer = await call(
-      host,
-      'install-bundle',
-      { spec: PLUGIN, registry: REGISTRY },
-      600_000
-    );
-    const manifests = walk(dshHome, 10).filter((file) =>
-      /[\\/]dsh-office-tools[\\/]package\.json$/.test(file)
-    );
-    const seen = manifests.map((file) => {
-      inspect.push({ path: file, role: 'G: 已装插件的 package.json' });
-      try {
-        return JSON.parse(nodeRead(file)?.toString('utf8') ?? '').name === 'dsh-office-tools'
-          ? 'plaintext'
-          : 'other';
-      } catch {
-        return classify(nodeRead(file), 'dsh-office-tools');
-      }
-    });
-    check(
-      'G-pnpm-install',
-      'plugin',
-      'pnpm 装社区插件，装好的文件 node.exe 读回明文',
-      seen.length > 0 && seen.every((item) => item === 'plaintext') ? 'pass' : 'fail',
-      manifests.length === 0 ? '装完没找到 dsh-office-tools/package.json' : seen.join('，'),
-      {
-        result: answer.result,
-        manifests,
-        newLocalAppData: listDir(process.env.LOCALAPPDATA).filter((name) => !localBefore.has(name)),
-      }
-    );
-  } catch (error) {
-    check('G-pnpm-install', 'plugin', 'pnpm 装社区插件', 'fail', clip(error, 400));
-  }
+  const seen = preinstalled.map((name) => {
+    const file = join(hostDir, 'node_modules', ...name.split('/'), 'package.json');
+    inspect.push({ path: file, role: `G: 预装插件 ${name} 的 package.json` });
+    try {
+      const parsed = JSON.parse(nodeRead(file)?.toString('utf8') ?? '{}') as { name?: string };
+      return parsed.name === name ? 'plaintext' : 'other';
+    } catch {
+      return classify(nodeRead(file), name);
+    }
+  });
+  check(
+    'G-preinstalled-plugin-readback',
+    'plugin',
+    '预装插件由随包 node.exe 读回明文',
+    seen.every((item) => item === 'plaintext') ? 'pass' : 'fail',
+    preinstalled.map((name, index) => `${name}=${seen[index]}`).join('，')
+  );
 }
 
 // ---- checks: shells spawned directly by node.exe ------------------------------
@@ -1085,7 +1096,8 @@ async function main() {
   }
   saveReport();
 
-  await pnpmCheck(hostA);
+  pluginRowsOffCheck(hostA);
+  preinstalledPluginCheck(hostA);
   const natives = ((await call(hostA, 'natives')).sharedObjects as string[]) ?? [];
   check(
     'K-natives',
@@ -1113,12 +1125,10 @@ async function main() {
           /^(dsh-|node-compile-cache|node-addon-native-custom-loader)/.test(name)
       )
       .map((name) => join(os.tmpdir(), name)),
+    // Decision 082: no package manager ever runs, so nothing but the NARB
+    // native cache can appear here.
     ...listDir(process.env.LOCALAPPDATA)
-      .filter(
-        (name) =>
-          !localBefore.has(name) &&
-          /^(node-addon-native-custom-loader|pnpm|pnpm-cache|pnpm-state)$/i.test(name)
-      )
+      .filter((name) => !localBefore.has(name) && /^node-addon-native-custom-loader$/i.test(name))
       .map((name) => join(process.env.LOCALAPPDATA ?? '', name)),
   ];
   cleanup.push(...created);

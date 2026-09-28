@@ -142,7 +142,7 @@ function buildArtifact(root, target) {
   const app = path.join(root, 'node_modules', '@aiclient', 'dsh-app');
   write(
     path.join(app, 'cordis.patch.yml'),
-    "- insert:\n    - id: aiclient-bridge\n      name: '@aiclient/dsh-app/bridge'\n"
+    "- id: plugin-manager\n  disabled: true\n\n- insert:\n    - id: aiclient-bridge\n      name: '@aiclient/dsh-app/bridge'\n"
   );
   for (const item of BRIDGE_ENTRIES) {
     write(path.join(app, 'lib', path.basename(item.out)), `export const name = '${item.row}';\n`);
@@ -503,6 +503,33 @@ describe('verifyDshArtifact rejects', () => {
     );
     write(path.join(app, 'lib', 'index.js'), "export const name = 'aiclient-probe';\n");
     failsWith(/aiclient-probe/);
+  });
+
+  it('a product bundle patch that does not disable plugin-manager (decision 082)', () => {
+    const app = path.join(tmp, 'node_modules', '@aiclient', 'dsh-app');
+    write(
+      path.join(app, 'cordis.patch.yml'),
+      "- insert:\n    - id: aiclient-bridge\n      name: '@aiclient/dsh-app/bridge'\n"
+    );
+    failsWith(/does not disable plugin-manager/);
+  });
+
+  it('a product bundle patch that leaves plugin-manager enabled', () => {
+    const app = path.join(tmp, 'node_modules', '@aiclient', 'dsh-app');
+    write(
+      path.join(app, 'cordis.patch.yml'),
+      "- id: plugin-manager\n  disabled: false\n\n- insert:\n    - id: aiclient-bridge\n      name: '@aiclient/dsh-app/bridge'\n"
+    );
+    failsWith(/does not disable plugin-manager/);
+  });
+
+  it('a product bundle patch that still configures a plugin-manager registry (decision 082)', () => {
+    const app = path.join(tmp, 'node_modules', '@aiclient', 'dsh-app');
+    write(
+      path.join(app, 'cordis.patch.yml'),
+      "- id: plugin-manager\n  disabled: true\n  config:\n    registry: https://registry.npmjs.org/\n\n- insert:\n    - id: aiclient-bridge\n      name: '@aiclient/dsh-app/bridge'\n"
+    );
+    failsWith(/plugin-manager registry/);
   });
 
   it('a host.js that still loads its TypeScript lib (P1-3a)', () => {

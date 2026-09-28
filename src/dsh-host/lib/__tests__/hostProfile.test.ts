@@ -84,6 +84,11 @@ describe('requiredDisabledOverlays (HS-02, decision 023 rule 3)', () => {
   it('keeps the plain-text credential store off (P1-5b, decision 034)', () => {
     expect(REQUIRED_DISABLED).toContain('credentials');
   });
+
+  it('keeps plugin installs off the user machine (decision 082)', () => {
+    expect(REQUIRED_DISABLED).toContain('plugin-manager');
+    expect(REQUIRED_DISABLED).toContain('tool-plugin-manager');
+  });
 });
 
 describe('partitionSkippedBundles (decision 025 rule 5)', () => {

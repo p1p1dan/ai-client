@@ -9,7 +9,7 @@
        看不到 TSD 头不代表没加密；加 -ManualEncryption 时以人工确认为准。
     3. 用 node.exe 跑 host\tools\p0-4-probe.ts：DSH 宿主启动（NARB 缓存三种）、
        read / write / edit / grep / glob、pwsh 工具（沙箱开 / 关）、会话写锁与恢复、
-       node-pty、%TEMP% spill、pnpm 装插件、Git Bash / PowerShell 直接读写。
+       node-pty、%TEMP% spill、预装插件、Git Bash / PowerShell 直接读写。
        模型回合只打到脚本自己起的本地假网关，不连任何真实模型服务。
     4. PowerShell 逐个读探针列出文件的头 16 字节（PowerShell 的读取视图，可能已被透明解密）。
     5. 删除工作目录和探针在 %TEMP% / %LOCALAPPDATA% 新建的目录，只留报告。
@@ -40,7 +40,6 @@ param(
     [Parameter(Mandatory = $true)][string]$EncDir,
     [string]$AppDir = '',
     [string]$GitBash = '',
-    [switch]$SkipPnpm,
     [switch]$KeepWork,
     [switch]$ControlGroup,
     [switch]$ManualEncryption,
@@ -187,7 +186,6 @@ $probeArgs = @((Join-Path $kit 'host\tools\p0-4-probe.ts'), '--work', $work, '--
 $dshProcesses = @()
 $probeExit = $null
 if (-not $ControlGroup) {
-    if ($SkipPnpm) { $probeArgs += '--skip-pnpm' }
     if ($GitBash -ne '') { $probeArgs += @('--git-bash', $GitBash) }
     Write-Step '开始跑 node.exe 探针（约 3～8 分钟）……'
     $ErrorActionPreference = 'Continue'
@@ -308,7 +306,7 @@ $targets = @($cleanupList)
 if (-not $KeepWork) { $targets += $work }
 foreach ($path in $targets) {
     if (-not $path -or -not (Test-Path -LiteralPath $path)) { continue }
-    # node.exe first: pnpm trees under dsh-home can exceed MAX_PATH, which
+    # node.exe first: deep trees under dsh-home (e.g. preinstalled plugin node_modules) can exceed MAX_PATH, which
     # Remove-Item in Windows PowerShell 5.1 cannot delete.
     $ErrorActionPreference = 'Continue'
     & $node -e "require('fs').rmSync(process.argv[1], { recursive: true, force: true, maxRetries: 3 })" $path

@@ -80,7 +80,7 @@ const GROUPS: Array<[string, string]> = [
   ['session', '会话写入、写锁、恢复'],
   ['pty', 'node-pty / conpty'],
   ['spill', '%TEMP% spill'],
-  ['plugin', 'pnpm 装插件'],
+  ['plugin', '预装插件（无运行期安装，决策 082）'],
   ['subprocess', 'node.exe 直接起的 shell'],
   ['native', '原生模块'],
   ['probe', '探针自身'],

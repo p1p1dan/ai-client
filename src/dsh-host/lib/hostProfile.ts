@@ -36,6 +36,10 @@ export const REQUIRED_DISABLED: readonly string[] = [
   // P1-5b (decision 034): dsh-credentials-local keeps keys in plain text in
   // $DSH_HOME/.credentials.yaml; aiclient-credentials pulls them from Main.
   'credentials',
+  // Decision 082 (closing decisions 016, 058): plugin installs never run on
+  // the user's machine; the plugin allowlist ships preinstalled instead.
+  'plugin-manager',
+  'tool-plugin-manager',
 ];
 
 export interface SkippedBundle {

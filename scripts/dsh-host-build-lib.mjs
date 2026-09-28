@@ -1236,6 +1236,27 @@ export function verifyDshArtifact({ outDir, target, requireManifest = false }) {
     if (/id:\s*aiclient-probe\b/.test(patch) || patch.includes(PROBE_BUNDLE)) {
       failures.push('product bundle patch composes the aiclient-probe row');
     }
+    // Decision 082: plugin installs never run on the user's machine, so this
+    // row's own layer must already disable it (host.ts's REQUIRED_DISABLED
+    // overlay restates it, but the static patch is the first line of defense).
+    // Row bodies aren't nested, so slice from the row's own `- id:` line to
+    // the next top-level `- ` line (or end of file) and inspect only that.
+    const rowStart = patch.search(/^- id:\s*plugin-manager\s*$/m);
+    if (rowStart === -1) {
+      failures.push('product bundle patch does not disable plugin-manager (decision 082)');
+    } else {
+      const afterStart = patch.slice(rowStart + 1);
+      const nextRow = afterStart.search(/^- /m);
+      const pluginManagerRow = nextRow === -1 ? afterStart : afterStart.slice(0, nextRow);
+      if (!/^\s*disabled:\s*true\s*$/m.test(pluginManagerRow)) {
+        failures.push('product bundle patch does not disable plugin-manager (decision 082)');
+      }
+      if (/registry:/.test(pluginManagerRow)) {
+        failures.push(
+          'product bundle patch still configures a plugin-manager registry (decision 082)'
+        );
+      }
+    }
     for (const item of BRIDGE_ENTRIES) {
       const file = path.join(app, 'lib', path.basename(item.out));
       if (!fs.existsSync(file)) continue;

@@ -17,18 +17,19 @@
  *   GOAL-PAUSE      `/goal <objective>` -> round 1 runs `sleep 8` -> `/goal pause`
  *                   mid-tool -> paused; `/goal resume` -> round 2 completes
  *   JOBS            bash run_in_background -> job_list -> job_output
- *   OFFICE          plugin-manager installs dsh-office-tools, host restarts,
- *                   word_create + word_read
+ *   PLUGIN-OFF      plugin-manager and tool-plugin-manager never activate
+ *                   (decision 082); install-bundle is refused
  *
  * Child processes are captured three ways as in P0-1: /proc tree sampling,
  * the probe-hooks spawn log, and (with --trace) `strace -f`. No real provider
- * is reachable: the host's only model route points at the fake gateway, the
- * probe hooks block every non-loopback connect, and the only other network
- * user is pnpm talking to registry.npmjs.org during the plugin install.
+ * is reachable: the host's only model route points at the fake gateway, and
+ * the probe hooks block every non-loopback connect. Nothing here reaches the
+ * network: plugin-manager is disabled (decision 082), so PLUGIN-OFF never
+ * gets past that.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
@@ -59,7 +60,6 @@ const hostDir = resolve(here, '..');
 const repoRoot = resolve(hostDir, '..', '..');
 const hostEntry = join(hostDir, 'host.ts');
 const hooksEntry = join(here, 'lib', 'probe-hooks.mjs');
-const pnpmCli = join(hostDir, 'node_modules', 'pnpm', 'bin', 'pnpm.mjs');
 const gatewayEntry = join(here, 'fake-gateway.mjs');
 const bundledNode = join(repoRoot, 'out-node-runtime', 'node');
 
@@ -130,6 +130,7 @@ interface Host {
   traceFile?: string;
   readyMs: number;
   census: unknown;
+  composition: unknown;
 }
 
 let requestSeq = 0;
@@ -164,7 +165,6 @@ async function startHost(
     DSH_HOME: box.dshHome,
     DSH_TELEMETRY_DISABLED: '1',
     AICLIENT_PROBE_EVENT_LOG: eventLog,
-    AICLIENT_DSH_PNPM_CLI: pnpmCli,
   };
   const traceFile = trace ? join(box.root, `strace-${label}.log`) : undefined;
   installProbeBundle(box.dshHome);
@@ -195,6 +195,7 @@ async function startHost(
     traceFile,
     readyMs: round(performance.now() - started, 0),
     census: ready.census,
+    composition: ready.composition,
   };
 }
 
@@ -349,7 +350,7 @@ async function main() {
   const scenarios: Record<string, Record<string, unknown>> = {};
   const hosts: Array<Record<string, unknown>> = [];
 
-  let host = await startHost('host-1', box, hostCwd, gateway, eventLog, t0);
+  const host = await startHost('host-1', box, hostCwd, gateway, eventLog, t0);
   log(`host-1 ready in ${host.readyMs} ms`);
   report.toolsBeforeInstall = (await call(host, 'tools')).names;
 
@@ -483,34 +484,37 @@ async function main() {
     scenarios.JOBS = { sessionId: id, treeWhileRunning, idle };
   }
 
-  // OFFICE: install through the plugin manager, restart, use the tools.
+  // PLUGIN-OFF (decisions 058, 082): plugin-manager and tool-plugin-manager
+  // stay off at every start; the plugin allowlist ships preinstalled instead
+  // of installing at runtime. No host restart, no network: this only checks
+  // that both rows never activate and that install-bundle is refused.
   {
-    const install = await call(
-      host,
-      'install-bundle',
-      { spec: plugin, registry: 'https://registry.npmjs.org/' },
-      600_000
-    );
-    hosts.push({
-      label: host.label,
-      readyMs: host.readyMs,
-      census: host.census,
-      ...(await stopHost(host)),
-    });
-    host = await startHost('host-2', box, hostCwd, gateway, eventLog, t0);
-    log(`host-2 ready in ${host.readyMs} ms`);
-    const tools = (await call(host, 'tools')).names as string[];
-    const id = await session('OFFICE');
-    await call(host, 'prompt', { sessionId: id, text: 'P0-OFFICE: create the report document.' });
-    const idle = await waitIdle(host, id);
-    const docx = join(box.workspace, 'p0-report.docx');
-    scenarios.OFFICE = {
-      sessionId: id,
-      install: install.result,
-      officeToolsAfterRestart: tools.filter((name) => /^(word|excel|ppt)_/.test(name)),
-      docx: existsSync(docx) ? { bytes: statSync(docx).size } : null,
-      idle,
+    const composition = host.composition as
+      | { disabledLiteral?: string[]; disabledByExpression?: string[] }
+      | undefined;
+    const disabled = new Set([
+      ...(composition?.disabledLiteral ?? []),
+      ...(composition?.disabledByExpression ?? []),
+    ]);
+    const pluginRowsOff = ['plugin-manager', 'tool-plugin-manager'].every((id) => disabled.has(id));
+    let installError: string | undefined;
+    try {
+      await call(
+        host,
+        'install-bundle',
+        { spec: plugin, registry: 'https://registry.npmjs.org/' },
+        30_000
+      );
+    } catch (error) {
+      installError = String(error);
+    }
+    scenarios['PLUGIN-OFF'] = {
+      pluginRowsOff,
+      disabledRows: [...disabled],
+      installRefused: installError !== undefined,
+      installError,
     };
+    log(`PLUGIN-OFF: rows off=${pluginRowsOff}; install refused=${installError !== undefined}`);
   }
   hosts.push({
     label: host.label,

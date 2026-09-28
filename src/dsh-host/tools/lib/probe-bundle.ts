@@ -10,9 +10,10 @@
  * `<profile>/node_modules/@aiclient/dsh-probe`, listed in the manifest's
  * dependencies, and layered right after `@aiclient/dsh-app`. The manifest is
  * written before the host's first boot because `initProfile` never touches an
- * existing one. The `file:` spec points at a second copy outside node_modules,
- * so a later `pnpm add` in the profile (the plugin manager's install path)
- * resolves it without a registry.
+ * existing one. The `file:` spec points at a second copy outside node_modules
+ * so the manifest's own dependency entry resolves without a registry; the
+ * plugin manager's install path (decision 082: permanently disabled) never
+ * runs here.
  */
 
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';

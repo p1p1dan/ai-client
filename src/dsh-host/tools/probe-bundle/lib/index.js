@@ -18,7 +18,8 @@
  *   goal           { sessionId }             -> goal { goal }                 (ctx.goals view)
  *   wait-idle      { sessionId, timeoutMs }  -> idle { idle, status }
  *   tools          {}                        -> tools { names }
- *   install-bundle { spec, registry? }       -> installed { result }          (plugin-manager)
+ *   install-bundle { spec, registry? }       -> installed { result }          (plugin-manager;
+ *                                                probe-error when it is disabled, decision 082)
  *   dispatch-counts {}                       -> dispatch-counts { counts }
  *   stats          {}                        -> stats { memory, liveAgents }
  *   natives        {}                        -> natives { sharedObjects }     (loaded native libraries)
@@ -39,15 +40,13 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm';
 /** Stable Cordis plugin name. */
 export const name = 'aiclient-probe';
 
-/** Agent registry, default route, commands, goals, tools and plugin manager. */
-export const inject = [
-  'agents',
-  'agentDefaultModel',
-  'commands',
-  'goals',
-  'tools',
-  'pluginManager',
-];
+/**
+ * Agent registry, default route, commands, goals and tools. `pluginManager`
+ * is NOT here (decision 082): plugin-manager is disabled by default in the
+ * product now, so a required inject on it would leave this whole plugin
+ * PENDING forever. `install-bundle` below resolves it optionally instead.
+ */
+export const inject = ['agents', 'agentDefaultModel', 'commands', 'goals', 'tools'];
 
 // Live Cordis events worth a timeline line (besides the per-name counts).
 const TIMELINE_EVENTS = new Set([
@@ -205,7 +204,13 @@ export function apply(ctx) {
       };
     },
     async 'install-bundle'(message) {
-      const result = await ctx.pluginManager.installBundle(message.spec, {
+      const pluginManager = ctx.get('pluginManager');
+      if (pluginManager === undefined) {
+        throw new Error(
+          'ctx.pluginManager is not available: plugin-manager is disabled (decision 082)'
+        );
+      }
+      const result = await pluginManager.installBundle(message.spec, {
         ...(message.registry ? { registry: message.registry } : {}),
       });
       return { type: 'installed', result: brief(result) };
