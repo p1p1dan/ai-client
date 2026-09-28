@@ -14,7 +14,7 @@ Role: detail shard
 | 「Start Pi TUI」按钮 | TUI 模式下还没有终端时 | 起终端 | `renderer/components/chat/ChatWorkspace.tsx:256-279` |
 | TUI 关闭 | 在 pi 里退出，或进程自己退出 | 提示「Pi TUI closed」，回到 GUI 并无条件重读 | `usePresentationSwitch.ts:221-247` |
 | 设置「扩展→插件」 | 设置页 | pi 扩展的装、卸、启停；页上注明内置终端用哪套权限扩展 | `renderer/components/settings/PiPluginsSettings.tsx`；`main/services/piPlugins/index.ts:90-141` |
-| 通用 shell 面板 | 右侧 surface，keep-alive | 2026-09-04 按用户要求撤掉顶栏按钮、Ctrl/Cmd+`、rail 数字；只剩「建 worktree 后跑初始化脚本」会打开它 | `renderer/components/workspace-shell/surfaceRegistry.ts:144-161`；`shellLayoutModel.ts:446-447`；`renderer/hooks/useWorktree.ts:170`；提交 `5fbc12b2` |
+| 通用 shell 面板 | 左栏 `LeftDock` 的 surface（`registeredOnly`，没有导轨入口），keep-alive。2026-09-28 订正：原文写「右侧」，D08（2026-09-05）之后 surface 全在左栏，右列只放文件（`surfaceRegistry.ts:31-36`） | 2026-09-04 按用户要求撤掉顶栏按钮、Ctrl/Cmd+`、rail 数字；只剩「建 worktree 后跑初始化脚本」会打开它 | `renderer/components/workspace-shell/surfaceRegistry.ts:144-161`；`shellLayoutModel.ts:446-447`；`renderer/hooks/useWorktree.ts:170`；提交 `5fbc12b2` |
 
 `presentationMode` 是全局设置，存在设置 store 里（`renderer/stores/settings/index.ts:238,278-280`；`migration.ts:208`）。GUI 与 TUI 互斥，不存在「A 会话开终端、B 会话用 GUI」的状态（`main/services/terminal/piTuiSession.ts:12-16`）。
 
