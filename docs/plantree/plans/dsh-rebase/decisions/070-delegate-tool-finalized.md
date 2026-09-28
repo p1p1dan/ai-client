@@ -1,6 +1,6 @@
 # 决策 070：自定义子代理工具定稿为单个 `delegate {agent, description, prompt, run_in_background?}`（定稿决策 062）
 
-日期：2026-09-27。**状态：待用户确认（用户 2026-09-28 提问，建议改为只用 DSH 自带子代理，见[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-7 方案 §5 U4](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[决策 062](062-custom-subagents-delegate-tool.md)。
+日期：2026-09-27。**状态：用户 2026-09-28 裁决：不做，只用 DSH 自带的子代理（见[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-7 方案 §5 U4](../topics/p1-7-renderer.md#5-需要拍板的决策点)、[决策 062](062-custom-subagents-delegate-tool.md)。
 
 ## 规则
 
