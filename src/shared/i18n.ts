@@ -3187,6 +3187,8 @@ export const zhTranslations: Record<string, string> = {
   'Write a file in the workspace': '写入工作区文件',
   'Modify a file in the workspace': '修改工作区文件',
   'Read file contents': '读取文件内容',
+  // dsh-rebase P1-6b: the DSH engine asks to run one call outside its sandbox.
+  'Run once with wider sandbox permissions': '以更宽的沙箱权限运行一次',
   'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.':
     '这段历史从 {{sourceKind}} 会话 {{sourceSessionId}} 导入。可以在这里接着聊；原来的运行状态（工具、权限）没有一起带过来。',
   // dsh-rebase decision 032: the system note of a turn the DSH engine never closed itself.

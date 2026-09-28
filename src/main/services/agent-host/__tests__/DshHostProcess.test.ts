@@ -6,8 +6,10 @@ import {
   buildDshHostLaunch,
   currentDshHostLaunch,
   DSH_HOST_MISSING,
+  DSH_HOST_PERMISSION_AGENT_DIR_ENV,
   DSH_SENSITIVE_ENV_PATTERN,
   dshHostSpawnOptions,
+  dshPermissionAgentDir,
   ensurePrivateDirectory,
   isStrippedDshHostEnvName,
   prepareDshHostDirectories,
@@ -28,6 +30,8 @@ const STATE_ROOT = '/home/u/.pilab/profile';
 const HOME_DIR = join(STATE_ROOT, 'dsh-home');
 const HOST_CWD = join(STATE_ROOT, 'dsh-host-cwd');
 const NATIVE_CACHE = join(STATE_ROOT, 'dsh-native-cache');
+/** `getAppPiAgentDir()` under the same root (PI_MANAGED_AGENT_DIR_NAME). */
+const PI_AGENT_DIR = join(STATE_ROOT, 'pi-agent');
 const always = () => true;
 
 /**
@@ -300,6 +304,19 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_LOOP_GUARD')).toBe(true);
   });
 
+  it('sets the permission agent directory only when given one, and never inherits it (P1-6c)', () => {
+    expect(build({ permissionAgentDir: '/state/pi-agent' })).toEqual({
+      ...INHERITED,
+      ...EXPLICIT,
+      AICLIENT_PERMISSION_AGENT_DIR: '/state/pi-agent',
+    });
+    expect(build({ env: { ...SHELL_ENV, AICLIENT_PERMISSION_AGENT_DIR: '/inherited' } })).toEqual({
+      ...INHERITED,
+      ...EXPLICIT,
+    });
+    expect(isStrippedDshHostEnvName(DSH_HOST_PERMISSION_AGENT_DIR_ENV)).toBe(true);
+  });
+
   // P1-3a: the shared host carries each session's generation in its channel's
   // messages; no launch ever says which session or generation it serves.
   it('never passes a session generation or a bridge switch to the shared host', () => {
@@ -331,9 +348,29 @@ describe('buildDshHostLaunch', () => {
         DSH_HOME: HOME_DIR,
         DSH_TELEMETRY_DISABLED: '1',
         NARB_NATIVE_CACHE_DIR: NATIVE_CACHE,
+        AICLIENT_PERMISSION_AGENT_DIR: PI_AGENT_DIR,
       },
       privateDirs: [HOME_DIR, HOST_CWD, NATIVE_CACHE],
     });
+  });
+
+  // P1-6c: the global permission policy the settings page edits is the user
+  // layer of every session's policy. Read-only for the host: not a private dir.
+  it("names the app's pi-agent directory for the permission policy, never the user's own pi", () => {
+    const launch = buildDshHostLaunch({
+      isPackaged: false,
+      appPath: '/repo',
+      resourcesPath: '/resources',
+      appStateRoot: STATE_ROOT,
+      platform: 'linux',
+      env: { ...SHELL_ENV, AICLIENT_PERMISSION_AGENT_DIR: '/elsewhere' },
+      exists: always,
+    });
+    expect(launch.env[DSH_HOST_PERMISSION_AGENT_DIR_ENV]).toBe(PI_AGENT_DIR);
+    expect(dshPermissionAgentDir(STATE_ROOT)).toBe(PI_AGENT_DIR);
+    // The user's own pi keeps its variable for the tools, and means nothing here.
+    expect(launch.env.PI_CODING_AGENT_DIR).toBe('/home/u/.pi/agent');
+    expect(launch.privateDirs).not.toContain(PI_AGENT_DIR);
   });
 
   it('keeps the launch directory and native cache under the state root when DSH_HOME moves', () => {
@@ -422,6 +459,7 @@ describe('currentDshHostLaunch', () => {
       DSH_HOME: HOME_DIR,
       DSH_TELEMETRY_DISABLED: '1',
       NARB_NATIVE_CACHE_DIR: NATIVE_CACHE,
+      AICLIENT_PERMISSION_AGENT_DIR: PI_AGENT_DIR,
     });
     expect(
       Object.keys(launch.env).filter((name) => /^AICLIENT_DSH_BRIDGE$|GENERATION/.test(name))

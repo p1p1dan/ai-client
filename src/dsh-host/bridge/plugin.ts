@@ -33,6 +33,13 @@ import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 export const name = 'aiclient-bridge';
 
 /**
+ * The app's pi-agent directory, whose policy files are the user layer of
+ * every session's permission policy (P1-6c). Main sets it; the name is also
+ * `DSH_HOST_PERMISSION_AGENT_DIR_ENV` in src/main/.../dshHostEnvironment.ts.
+ */
+export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
+
+/**
  * The services DshSessionRuntime reads. `sessions` is the durability barrier a
  * new session is flushed through before its identity stub is written
  * (dsh-rebase decision 007). `agentLoop` registers the factory `agents.create`
@@ -105,6 +112,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     installModelSelection: installModelSelection as unknown as NonNullable<
       DshBridgeDeps['installModelSelection']
     >,
+    // P1-6c: the user layer of the permission policy, from Main (dshHostEnvironment.ts).
+    permissionAgentDir: process.env[PERMISSION_AGENT_DIR_ENV]?.trim() || null,
   };
   const mux = new DshChannelMux({
     send,

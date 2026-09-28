@@ -87,6 +87,80 @@ describe('isShellTool', () => {
   });
 });
 
+describe("a host's own ask (hostAsk, dsh-rebase P1-6b)", () => {
+  function card(request: ToolPermissionRequest) {
+    const events: RuntimeEventDraft[] = [];
+    const prompt = createPermissionPrompt({
+      sessionId: 's',
+      cwd: ROOT,
+      emit: (event) => events.push(event),
+    });
+    const controller = new AbortController();
+    const answer = prompt.approve(request, controller.signal);
+    return { events, prompt, answer, controller };
+  }
+  const escalation: ToolPermissionRequest = {
+    tool: 'bash',
+    toolCallId: 'x',
+    path: ROOT,
+    unresolvedPaths: true,
+    hostAsk: { sandbox: true },
+  };
+
+  it('words a sandbox escalation escalate_sandbox and offers allow / deny only', async () => {
+    const { events, prompt, answer } = card(escalation);
+    expect(events[0]?.payload).toMatchObject({
+      action: 'escalate_sandbox',
+      decisions: ['allow', 'deny'],
+    });
+    expect(events[0]?.payload).not.toHaveProperty('sessionGrantScope');
+    // "For session" was never offered: an answer carrying it counts as once.
+    expect(prompt.respond({ permissionId: 'x', decision: 'allow_session' })).toBe(true);
+    expect(await answer).toBe('allow-once');
+    expect(events[1]?.payload).toEqual({ permissionId: 'x', allow: true, decision: 'allow' });
+  });
+
+  it("keeps the tool's own action for another ask of the host, still once", async () => {
+    const { events, controller, answer } = card({ ...write('y'), hostAsk: { sandbox: false } });
+    expect(events[0]?.payload).toMatchObject({
+      action: 'write_file',
+      decisions: ['allow', 'deny'],
+    });
+    controller.abort();
+    await answer;
+  });
+
+  it('leaves every other card as it was', async () => {
+    const { events, controller, answer } = card(write('z'));
+    expect(events[0]?.payload).toMatchObject({
+      action: 'write_file',
+      decisions: ['allow', 'allow_session', 'deny'],
+      sessionGrantScope: { kind: 'path', value: 'a.txt' },
+    });
+    controller.abort();
+    await answer;
+  });
+
+  it('is never remembered by the gate, whatever the approver answers', async () => {
+    const persisted: PersistedGrants[] = [];
+    const sources: string[] = [];
+    const gate = new PermissionGate(
+      { cwd: ROOT, approve: async () => 'allow-session' },
+      { persistGrants: (record) => persisted.push(record) }
+    );
+    gate.onActivity((record) => {
+      if (record.phase === 'decision') sources.push(record.source);
+    });
+    await gate.authorize({ ...write('h1'), hostAsk: { sandbox: false } });
+    expect(persisted).toEqual([]);
+    await gate.authorize(write('h2'));
+    expect(persisted).toEqual([
+      { version: 2, grants: [{ kind: 'path', tool: 'write', path: inside('a.txt') }] },
+    ]);
+    expect(sources).toEqual(['allow-once', 'allow-session']);
+  });
+});
+
 describe('PermissionGate hooks', () => {
   it('throws the host error type and still reports why', async () => {
     const records: PermissionActivityRecord[] = [];

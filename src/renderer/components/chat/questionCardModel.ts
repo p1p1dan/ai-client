@@ -865,6 +865,8 @@ export const PERMISSION_ACTION_LABELS: Readonly<Record<PermissionRequestAction, 
   write_file: 'Write a file in the workspace',
   edit_file: 'Modify a file in the workspace',
   read_file: 'Read file contents',
+  // dsh-rebase P1-6b; the wording is P1-7's to refine.
+  escalate_sandbox: 'Run once with wider sandbox permissions',
 };
 
 /**

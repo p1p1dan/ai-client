@@ -18,7 +18,11 @@
  * to the `aiclient-permissions` row before it opens the agent; a host without
  * that row refuses the bootstrap. The gate starts on the mode and gear Main
  * sent; its cards are 1.0.x's (`cardEmitter.ts`), keyed by the tool call id.
- * The setters, the grant sidecar and the policy files are P1-6c.
+ * P1-6c (decision 092): the gate judges against 1.0.x's policy layers (the
+ * bundled table, the user's under AICLIENT_PERMISSION_AGENT_DIR, the
+ * project's when trusted), starts on the grants the sidecar beside the stub
+ * kept (`grantStore.ts`, decision 043) and writes every change back there,
+ * and Main's three setters act on it.
  *
  * Mapped: text, tool rows, approvals, stop, the session identity (create,
  * resume, crash restart), the history, tree and leaf, projected from the
@@ -47,7 +51,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { copyFileSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
@@ -65,9 +70,20 @@ import {
   type PermissionPrompt,
 } from '../../shared/permissions/cardEmitter.ts';
 import { PermissionGate } from '../../shared/permissions/gate.ts';
-import { loadPermissionPolicy } from '../../shared/permissions/policy.ts';
+import type { PersistedGrants } from '../../shared/permissions/grants.ts';
+import {
+  loadPermissionPolicy,
+  type PermissionPolicyFiles,
+} from '../../shared/permissions/policy.ts';
+import { resolveSettingSources } from '../../shared/settingSources.ts';
 import type { PermissionDecisionId, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import {
+  migratePermissionTier,
+  type PermissionGear,
+  type RuntimePermissionSettings,
+} from '../../shared/types/runtimePermission.ts';
 import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
+import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
   WORKER_RETRY_UNAVAILABLE,
@@ -95,6 +111,7 @@ import {
 } from '../../shared/types/workerRpc.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
+import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
 import {
   DshRetiredHistory,
@@ -108,6 +125,7 @@ import {
   type DshModelSelection,
   type DshRoutedModel,
 } from './modelRoute.ts';
+import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
 import {
   DSH_SESSION_MISSING,
   grantsSidecarFor,
@@ -262,6 +280,18 @@ export interface DshBridgeDeps {
    * the model it was opened with.
    */
   installModelSelection?: (agentCtx: unknown, selection: DshModelSelectionRef) => () => void;
+  /**
+   * P1-6c: the app's pi-agent directory (1.0.x's `agentDir`), which holds the
+   * user layer of the permission policy. Main hands it to the host as
+   * AICLIENT_PERMISSION_AGENT_DIR; null or absent reads no user layer.
+   */
+  permissionAgentDir?: string | null;
+  /**
+   * P1-6e's writer of a session's DSH sandbox mode (`sandboxMode.ts`, decision
+   * 044). Absent in the product: every session keeps the bundle's
+   * danger-full-access and nothing is written.
+   */
+  applySandboxMode?: ApplySandboxMode;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -358,6 +388,28 @@ function removeQuietly(file: string, log?: (...args: unknown[]) => void): void {
   }
 }
 
+/**
+ * How the policy loader reads a layer (1.0.x's HostIo contract): a missing
+ * file rejects `ENOENT` and is skipped; one past `maxBytes` fails the load as
+ * 1.0.x's `io_limit` did, and so does any other read error.
+ */
+const POLICY_FILES: PermissionPolicyFiles = {
+  async readFile(path, { maxBytes }) {
+    const handle = await open(path, 'r');
+    try {
+      const { size } = await handle.stat();
+      if (size > maxBytes) {
+        throw Object.assign(new Error(`read exceeds ${maxBytes} bytes: ${path}`), {
+          code: 'io_limit',
+        });
+      }
+      return { bytes: new Uint8Array(await handle.readFile()) };
+    } finally {
+      await handle.close();
+    }
+  },
+};
+
 function textOf(content: unknown): string {
   if (!Array.isArray(content)) return '';
   return content
@@ -418,6 +470,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private attachment: AttachedGate | null = null;
   /** This runtime's key in the permission row: unique, so a second open never re-points a live one. */
   private readonly gateChannel: string;
+  /**
+   * The grant sidecar beside the stub (decision 043), fixed at bootstrap: a
+   * rewind repoints the stub, never renames it, so the grants stay put.
+   */
+  private grantsFile = '';
   private readonly historyCache: DshHistoryCache;
   /** The sessions earlier rewinds retired, for the tree (P1-4b). */
   private readonly retired: DshRetiredHistory;
@@ -518,12 +575,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     const selection = this.openingSelection();
     this.listen();
-    this.gate ??= await this.buildGate();
     const requested = this.options.sessionFile;
+    this.grantsFile ||= this.grantsSidecarPath(requested);
+    this.gate ??= await this.buildGate();
     let stubFile: string;
+    let permissionGate: WorkerBootstrapResult['permissionGate'];
     try {
       stubFile = requested ?? (await this.createSession(selection));
       if (requested) await this.resumeSession(requested, selection);
+      permissionGate = this.reportedGate();
     } catch (error) {
       // Nothing half-open survives a failed bootstrap: the session's write lock
       // goes with the handle, and its calls stop resolving to this gate.
@@ -553,21 +613,35 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         : {}),
       ...(this.options.model ? { model: this.options.model } : {}),
       projectTrusted: this.options.projectTrusted,
-      // True now (P1-6b): this bootstrap only gets here with the app's own gate
-      // attached to the session, and fails without it.
-      permissionGate: 'bundled',
+      permissionGate,
       capabilities: {},
     };
+    this.syncSandboxMode();
     return this.result;
   }
 
   /**
-   * The session's gate (P1-6b; design shard 03 §8): the mode and gear Main
-   * sent (a legacy tier migrated), project trust as the RPC server resolved
-   * it, and the bundled policy table, the floor 1.0.x always loads. The gate
-   * judges against the canonical workspace, the spelling every path it sees
-   * has been resolved to. Session grants live in memory until P1-6c writes
-   * them beside the stub; the user and project policy files are P1-6c too.
+   * Where this session's grants live (decision 043): beside the stub it
+   * resumes, or beside the stub a create writes. Empty when the logical id
+   * cannot name a session: the create refuses it before anything is read.
+   */
+  private grantsSidecarPath(requested: string | undefined): string {
+    if (requested) return grantsSidecarFor(requested);
+    const id = dshSessionIdFor(this.logicalSessionId);
+    return SAFE_SESSION_ID.test(id) ? grantsSidecarFor(stubPathFor(this.home, id)) : '';
+  }
+
+  /**
+   * The session's gate (design shard 03 §8), built as 1.0.x's bootstrap built
+   * its permissions plugin:
+   *   - the mode and gear Main sent, a legacy tier migrated (P1-6b);
+   *   - the policy: the bundled table, then the user layer under the app's
+   *     pi-agent directory, then the project's two when the workspace is
+   *     trusted (decision 008, `resolveSettingSources`); a layer that is not
+   *     valid policy fails the bootstrap, as it failed 1.0.x's;
+   *   - the grants the sidecar kept, and every change to them written back.
+   * It judges against the canonical workspace, the spelling every path it
+   * sees has been resolved to.
    */
   private async buildGate(): Promise<PermissionGate> {
     let cwd: string;
@@ -576,25 +650,55 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     } catch {
       cwd = resolve(this.cwd);
     }
-    const policy = await loadPermissionPolicy(
-      {
-        readFile: () =>
-          Promise.reject(
-            Object.assign(new Error('no policy file is read yet'), { code: 'ENOENT' })
-          ),
-      },
-      { cwd, agentDir: null, sources: { user: false, project: false, local: false } }
-    );
-    return new PermissionGate({
+    const policy = await loadPermissionPolicy(POLICY_FILES, {
       cwd,
-      ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
-      ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
-      ...(this.options.tier ? { tier: this.options.tier } : {}),
-      projectTrusted: this.options.projectTrusted,
-      policy,
-      approve: this.prompt.approve,
-      autoAllow: this.prompt.autoAllow,
+      agentDir: this.deps.permissionAgentDir ?? null,
+      sources: resolveSettingSources({ projectTrusted: this.options.projectTrusted }),
     });
+    return new PermissionGate(
+      {
+        cwd,
+        ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
+        ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
+        ...(this.options.tier ? { tier: this.options.tier } : {}),
+        projectTrusted: this.options.projectTrusted,
+        policy,
+        grants: this.grantsFile ? readGrantSidecar(this.grantsFile, this.options.log) : [],
+        approve: this.prompt.approve,
+        autoAllow: this.prompt.autoAllow,
+      },
+      { persistGrants: (record) => this.persistGrants(record) }
+    );
+  }
+
+  /** The gate's `persistGrants`: the whole set, beside the stub, after every change. */
+  private persistGrants(record: PersistedGrants): void {
+    if (this.grantsFile) writeGrantSidecar(this.grantsFile, record, this.options.log);
+  }
+
+  /**
+   * `permissionGate` as the session really has it: this runtime's own gate,
+   * attached to the permission row. Asked, not assumed — a bootstrap that
+   * reached this point without one is refused rather than reported gated.
+   */
+  private reportedGate(): WorkerBootstrapResult['permissionGate'] {
+    if (!this.gateInstalled()) {
+      throw new PiWorkerSessionError(
+        WORKER_PERMISSIONS_UNAVAILABLE,
+        'The session opened without its permission gate attached'
+      );
+    }
+    return 'bundled';
+  }
+
+  /** The gate exists and the permission row routes this runtime's channel to it. */
+  private gateInstalled(): boolean {
+    return (
+      !this.disposed &&
+      this.gate !== null &&
+      this.attachment !== null &&
+      this.ctx.aiclientPermissions?.isAttached(this.gateChannel) === true
+    );
   }
 
   /**
@@ -844,11 +948,76 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return false;
   }
 
-  // P1-6c makes these three act on the gate; until then the gate keeps the
-  // mode and gear it was built with at bootstrap.
-  setPermissions(): void {}
-  setPermissionGear(): void {}
-  setPermissionTier(): void {}
+  // ---- the posture (P1-6c) ------------------------------------------------------
+
+  /**
+   * `worker.setPermissions`, a posture change. With the agent idle it is
+   * 1.0.x's `configure`: mode and gear from scratch, every session grant
+   * forgotten and the empty set written to the sidecar, every request still
+   * parked at the gate voided. While the agent runs — a turn this bridge
+   * started, or one DSH started itself (a goal round, a job notice), which
+   * Main cannot see and so asks for the broad change — only the gear moves,
+   * as `setPermissionGear` moves it, and a new mode is refused as busy: the
+   * rule Main applies to the turns it knows of.
+   */
+  setPermissions(permissions: RuntimePermissionSettings): void {
+    const gate = this.requireGate();
+    if (this.idle()) {
+      gate.configure(permissions);
+    } else if (permissions.mode === gate.mode) {
+      gate.setGear(permissions.gear);
+    } else {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_BUSY',
+        'The mode cannot change while the agent runs; the permission level can',
+        true
+      );
+    }
+    this.syncSandboxMode();
+  }
+
+  /**
+   * The gear alone, turn or no turn: grants and parked requests stay, and a
+   * widened gear answers the card on screen when it would not have asked.
+   */
+  setPermissionGear(gear: PermissionGear): void {
+    this.requireGate().setGear(gear);
+    this.syncSandboxMode();
+  }
+
+  /** A legacy tier: migrated (D14), never carried through, then set as a posture. */
+  setPermissionTier(tier: SessionPermissionTier): void {
+    this.setPermissions(migratePermissionTier(tier));
+  }
+
+  /** This session's attached gate, or the native runtime's code for a missing one. */
+  private requireGate(): PermissionGate {
+    const gate = this.gate;
+    if (!gate || !this.gateInstalled()) {
+      throw new PiWorkerSessionError(
+        WORKER_PERMISSIONS_UNAVAILABLE,
+        'This session has no permission gate attached'
+      );
+    }
+    return gate;
+  }
+
+  /**
+   * P1-6e's hook (decision 044): hands the posture's DSH sandbox mode to the
+   * writer, when there is one. The product has none, so every session stays
+   * on the bundle's danger-full-access and nothing is written. A failed write
+   * is logged; whether it should fail the change is P1-6e's to decide.
+   */
+  private syncSandboxMode(): void {
+    const apply = this.deps.applySandboxMode;
+    const gate = this.gate;
+    if (!apply || !gate || !this.dshSessionId) return;
+    try {
+      apply(this.dshSessionId, dshSandboxModeFor({ mode: gate.mode, gear: gate.gear }));
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] sandbox mode not applied', error);
+    }
+  }
 
   // ---- reads (the projected log, historyCache.ts) ---------------------------------
 
@@ -980,12 +1149,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.lineage = switched.lineage;
     // The same gate, now routed from the child; the retired id keeps resolving
     // to it. Past the switch nothing may throw: a failure leaves the child's
-    // calls refused (fail closed), and says so.
+    // calls refused (fail closed), and says so. The grants stay with the gate,
+    // and on disk beside the stub the rewind kept (decision 043).
     try {
       this.attachGate(switched.id);
     } catch (error) {
       this.options.log?.('[dsh-bridge] rewind could not re-point the permission gate', error);
     }
+    this.syncSandboxMode();
     this.resetLiveState();
     this.historyCache.reset(switched.id);
     await this.historyCache.load();
@@ -1017,8 +1188,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    * cut at the target, with a stub of its own. It is released before this
    * returns: the slot Main opens for the fork resumes it. Until Main adopts
    * it (`acceptFork`) the stub carries a `.staged` marker, which Main's
-   * startup sweep reads (session-index-09). Session grants go with it
-   * (decision 043; P1-6c writes them).
+   * startup sweep reads (session-index-09). The session's grants go with it:
+   * the sidecar as it stands, copied beside the child's stub (decision 043).
    */
   async fork(input: WorkerForkPayload): Promise<WorkerForkResult> {
     this.assertLogicalSession(input.logicalSessionId);
@@ -1085,8 +1256,12 @@ export class DshSessionRuntime implements PiWorkerRuntime {
           },
         ],
       });
-      const grants = grantsSidecarFor(this.stubFile);
-      if (existsSync(grants)) copyFileSync(grants, grantsSidecarFor(childStub));
+      // Best effort: a fork that could not take its grants starts with none (fail closed).
+      copyGrantSidecar(
+        grantsSidecarFor(this.stubFile),
+        grantsSidecarFor(childStub),
+        this.options.log
+      );
       result = {
         logicalSessionId: this.logicalSessionId,
         sourceSessionFile: this.stubFile,
@@ -1159,10 +1334,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return undefined;
   }
 
+  /** The grants first and the marker last: whatever a crash leaves, the marker still names it. */
   private removeForkFiles(stubFile: string): void {
     for (const file of [
-      stubFile,
       grantsSidecarFor(stubFile),
+      stubFile,
       `${stubFile}${STAGED_FORK_MARKER_SUFFIX}`,
     ]) {
       removeQuietly(file, this.options.log);
@@ -1279,9 +1455,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     );
   }
 
-  /** No turn of any origin, and an idle agent. */
+  /**
+   * No turn of any origin, and an idle agent: DSH marks its agent running
+   * before a goal round or a job notice logs its `turn/start`.
+   */
+  private idle(): boolean {
+    return this.turn === null && (this.handle === null || this.handle.agent.status === 'idle');
+  }
+
   private assertIdle(action: string): void {
-    if (this.turn === null && (this.handle === null || this.handle.agent.status === 'idle')) return;
+    if (this.idle()) return;
     throw new PiWorkerSessionError(
       'WORKER_SESSION_BUSY',
       `Cannot ${action} while a turn is active`,

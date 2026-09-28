@@ -61,6 +61,8 @@ export const SESSION_STUB_VERSION = 2 as const;
 /** Directory under `$DSH_HOME` holding the identity stubs, and their suffix. */
 export const DSH_STUB_DIR = 'aiclient-sessions';
 export const DSH_STUB_SUFFIX = '.dsh.json';
+/** The session-grant sidecar beside a stub (decision 043): `<stub id>.dsh.grants.json`. */
+export const DSH_GRANTS_SUFFIX = '.dsh.grants.json';
 
 /** A stub that names nothing on disk, or a DSH session that is gone. */
 export const DSH_SESSION_MISSING = 'dsh_session_missing';
@@ -127,7 +129,7 @@ export function stubLineage(stub: SessionStub): SessionLineageEntry[] {
  */
 export function grantsSidecarFor(stubFile: string): string {
   return stubFile.endsWith(DSH_STUB_SUFFIX)
-    ? `${stubFile.slice(0, -DSH_STUB_SUFFIX.length)}.dsh.grants.json`
+    ? `${stubFile.slice(0, -DSH_STUB_SUFFIX.length)}${DSH_GRANTS_SUFFIX}`
     : `${stubFile}.grants.json`;
 }
 

@@ -8,6 +8,7 @@ import {
   readFileSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1742,6 +1743,123 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       ).toBe(false);
       console.log(`[p1-6b] Stop with a card up settled in ${elapsed} ms`);
       await manager.closeSession('g1');
+    }, 180_000);
+  });
+
+  /**
+   * P1-6c (decisions 043, 092): "allow for this session" is written beside the
+   * stub and read back by the host that reopens the session; Main's setter
+   * reaches the gate; the user policy layer comes from the directory Main
+   * names in the host's environment.
+   */
+  describe('an eighth supervisor: grants outlive the host, and the posture is Main’s (P1-6c)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const stubDir = () => join(shared.stateRoot, 'dsh-home', 'aiclient-sessions');
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    /** One P0-TOOL turn; every card it raises is answered `decision` (none: left alone). */
+    async function toolTurn(sessionId: string, owner: number, decision?: 'allow_session' | 'deny') {
+      const from = events.length;
+      attempt += 1;
+      const requestId = await manager.send({
+        sessionId,
+        attemptId: `attempt-${attempt}`,
+        text: 'P0-TOOL: list the workspace.',
+        ownerWebContentsId: owner,
+      });
+      const answered = new Set<string>();
+      const settled = await until(() => {
+        for (const card of forSession(sessionId, from)) {
+          if (card.type !== 'permission.requested' || !decision) continue;
+          const permissionId = String(card.payload?.permissionId);
+          if (answered.has(permissionId)) continue;
+          answered.add(permissionId);
+          void manager.respondPermission({ sessionId, permissionId, decision });
+        }
+        return forSession(sessionId, from).some(
+          (e) =>
+            e.requestId === requestId && e.type === 'session.status' && e.payload?.status === 'idle'
+        );
+      }, 120_000);
+      return {
+        settled,
+        cards: forSession(sessionId, from).filter((e) => e.type === 'permission.requested').length,
+        tools: forSession(sessionId, from)
+          .filter((e) => e.type === 'tool.completed')
+          .map((e) => e.payload),
+      };
+    }
+
+    it('a grant survives a SIGKILLed host; a posture change from Main then forgets it', async () => {
+      await manager.createSession({
+        sessionId: 'h1',
+        workspacePath: workspace,
+        ownerWebContentsId: 80,
+      });
+      const first = await toolTurn('h1', 80, 'allow_session');
+      expect(first).toMatchObject({ settled: true, cards: 1 });
+      expect(String(first.tools[0]?.output)).toContain('bridge tool row ok');
+      const sidecar = join(stubDir(), 'aiclient-h1.dsh.grants.json');
+      const written = JSON.parse(readFileSync(sidecar, 'utf8')) as {
+        version: number;
+        grants: Array<{ kind: string; prefix?: string }>;
+      };
+      expect(written.version).toBe(2);
+      expect(written.grants.map((grant) => `${grant.kind} ${grant.prefix}`).sort()).toEqual([
+        'command echo',
+        'command ls',
+        'command pwd',
+      ]);
+
+      const [host] = liveHosts();
+      const killedAt = events.length;
+      host.kill('SIGKILL');
+      expect(await recovered(['h1'], killedAt, 60_000)).toBeGreaterThanOrEqual(0);
+      // The host that reopened the session read the grant back: no card this time.
+      const second = await toolTurn('h1', 80);
+      expect(second).toMatchObject({ settled: true, cards: 0 });
+      expect(String(second.tools[0]?.output)).toContain('bridge tool row ok');
+
+      // Between turns, Main's setter is 1.0.x's configure: the grants go, on disk too.
+      await manager.setPermissions('h1', { mode: 'agent', gear: 'ask' });
+      expect(JSON.parse(readFileSync(sidecar, 'utf8'))).toEqual({ version: 2, grants: [] });
+      const third = await toolTurn('h1', 80, 'deny');
+      expect(third).toMatchObject({ settled: true, cards: 1 });
+      expect(String(third.tools[0]?.error)).toContain('permission denied');
+      await manager.closeSession('h1');
+    }, 300_000);
+
+    it("loads the user policy layer from the app's pi-agent directory Main names", async () => {
+      const agentDir = join(shared.stateRoot, 'pi-agent');
+      mkdirSync(agentDir, { recursive: true });
+      const policy = join(agentDir, 'pi-permissions.jsonc');
+      writeFileSync(policy, '// P1-6c integration\n{"permission": {"bash": "deny"}}\n');
+      try {
+        await manager.createSession({
+          ...BYPASS,
+          sessionId: 'h2',
+          workspacePath: workspace,
+          ownerWebContentsId: 81,
+        });
+        const turn = await toolTurn('h2', 81);
+        // Refused by the rule, even under bypass, and without a card.
+        expect(turn).toMatchObject({ settled: true, cards: 0 });
+        expect(turn.tools[0]).toMatchObject({ ok: false });
+        expect(String(turn.tools[0]?.error)).toContain('access denied: bash');
+        await manager.closeSession('h2');
+      } finally {
+        rmSync(policy, { force: true });
+      }
     }, 180_000);
   });
 

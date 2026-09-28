@@ -35,6 +35,8 @@ import { isShellTool } from './shellTools.ts';
 
 /** The three answers this runtime can act on; `cancel` is not modelled. */
 const OFFERED: PermissionDecisionId[] = ['allow', 'allow_session', 'deny'];
+/** A DSH host's own ask (`hostAsk`) grants one call: nothing to remember for the session. */
+const OFFERED_ONCE: PermissionDecisionId[] = ['allow', 'deny'];
 
 /**
  * Why the runtime answered a card instead of the user.
@@ -106,8 +108,13 @@ function kindOf(tool: string): PermissionRequestKind {
  *
  * `undefined` for anything else: an invented sentence for an unknown tool
  * would be worse than the tool's own name, which the card already shows.
+ *
+ * dsh-rebase P1-6b: a DSH sandbox escalation says so (`escalate_sandbox`)
+ * whatever the tool; the reason it gives is on the card as the model wrote it.
  */
-function actionOf(tool: string): PermissionRequestAction | undefined {
+function actionOf(request: ToolPermissionRequest): PermissionRequestAction | undefined {
+  if (request.hostAsk?.sandbox) return 'escalate_sandbox';
+  const tool = request.tool;
   if (isShellTool(tool)) return 'run_command';
   switch (tool) {
     case 'write':
@@ -181,11 +188,12 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         // already assumes (`chatSessions.ts` calls it out): one gate per call.
         const permissionId = request.toolCallId;
         const detail = detailOf(request, options.cwd);
-        const action = actionOf(request.tool);
+        const action = actionOf(request);
+        const once = request.hostAsk !== undefined;
         // What the "Allow for session" button would actually write down. The
         // matcher lives in the runtime, so the runtime is the only side that
         // can describe it without guessing — see `PermissionGrantScope`.
-        const sessionGrantScope = describeGrantScope(request, options.cwd);
+        const sessionGrantScope = once ? undefined : describeGrantScope(request, options.cwd);
         options.emit({
           type: 'permission.requested',
           sessionId: options.sessionId,
@@ -220,7 +228,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
                   agentName: request.delegation.agentName,
                 }
               : {}),
-            decisions: OFFERED,
+            decisions: once ? OFFERED_ONCE : OFFERED,
             timeoutMs: options.timeoutMs ?? PERMISSION_TIMEOUT_MS,
             // Where this card sits in the gate's line, forwarded verbatim. The
             // engine owns the queue and is the only thing that can count it:
@@ -235,9 +243,11 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
         });
 
         let settled = false;
-        const settle = (decision: PermissionDecisionId, autoReason?: AutoAnswer) => {
+        const settle = (answer: PermissionDecisionId, autoReason?: AutoAnswer) => {
           if (settled) return;
           settled = true;
+          // A card that never offered "for session" cannot be answered with it.
+          const decision = once && answer === 'allow_session' ? 'allow' : answer;
           pending.delete(permissionId);
           signal.removeEventListener('abort', onAbort);
           const allow = decision === 'allow' || decision === 'allow_session';

@@ -3,8 +3,9 @@
  * (dsh-rebase P1-6b; decisions 041, 042, 047, 048).
  *
  * The behaviour lives in `permissionHost.ts`; this file only wires it to the
- * row's Cordis context and publishes `ctx.aiclientPermissions`, the service
- * the bridge injects to attach one `PermissionGate` per chat session.
+ * row's Cordis context, publishes `ctx.aiclientPermissions`, the service the
+ * bridge injects to attach one `PermissionGate` per chat session, and
+ * registers the `aiclient:permission` prompt context (`promptContext.ts`).
  *
  * Always on in the product bundle (P1-6b part 2): the bridge injects the
  * service and attaches a gate per chat session before it opens the session's
@@ -17,6 +18,7 @@
 
 import { LOOP_GUARD_SERVICE } from '../loopGuard/constants.ts';
 import type {
+  DshAgentView,
   DshApprovalOutcome,
   DshApprovalRequest,
   DshPostToolDecision,
@@ -26,6 +28,7 @@ import type {
   DshToolResult,
 } from './dshTypes.ts';
 import { PERMISSION_HOST_SERVICE, PermissionHost } from './permissionHost.ts';
+import { PERMISSION_PROMPT_CONTEXT, PERMISSION_PROMPT_CONTEXT_AFTER } from './promptContext.ts';
 import { loadBashParser } from './treeSitter.ts';
 
 export {
@@ -50,6 +53,23 @@ export interface PermissionRowContext {
   provide(name: string, value: unknown): () => void;
   /** A service this row reads without injecting it; `undefined` when absent. */
   get?(name: string): unknown;
+  /**
+   * Cordis `inject`: runs `callback` on a scope holding `deps` once they are
+   * up (and again when they come back). Absent in a context without it.
+   */
+  inject?(deps: string[], callback: (scope: PromptRowScope) => void): unknown;
+}
+
+/** The slice of `ctx.systemPrompt` (dsh-system-prompt) the prompt context needs. */
+export interface PromptRowScope {
+  systemPrompt: {
+    context(context: {
+      name: string;
+      order: number;
+      text: (assembly: { agent?: DshAgentView }) => string;
+    }): () => void;
+    getContextOrder(name: typeof PERMISSION_PROMPT_CONTEXT_AFTER): number;
+  };
 }
 
 /** The slice of `ctx.aiclientLoopGuard` (P1-8) read here. */
@@ -92,5 +112,14 @@ export function apply(ctx: PermissionRowContext): void {
     (request: DshApprovalRequest, next: () => Promise<DshApprovalOutcome>) =>
       host.answerApproval(request, next)
   );
+  // P1-6b: the posture, for the model. Not in `inject`: the gate must not
+  // wait on prompt assembly, and a host without it still judges every call.
+  ctx.inject?.(['systemPrompt'], (scope) => {
+    scope.systemPrompt.context({
+      name: PERMISSION_PROMPT_CONTEXT,
+      order: scope.systemPrompt.getContextOrder(PERMISSION_PROMPT_CONTEXT_AFTER) + 1,
+      text: (assembly) => host.promptContext(assembly.agent),
+    });
+  });
   ctx.provide(PERMISSION_HOST_SERVICE, host.api);
 }

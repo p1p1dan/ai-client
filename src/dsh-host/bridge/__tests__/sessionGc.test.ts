@@ -55,6 +55,7 @@ afterEach(() => {
 
 const sessionDir = (id: string) => join(home, 'sessions', PROJECT, id);
 const stubFile = (id: string) => join(home, 'aiclient-sessions', `${id}.dsh.json`);
+const grantsFile = (id: string) => join(home, 'aiclient-sessions', `${id}.dsh.grants.json`);
 
 function writeStub(name: string, body: Record<string, unknown> | string): void {
   mkdirSync(join(home, 'aiclient-sessions'), { recursive: true });
@@ -175,10 +176,69 @@ describe('sessionGc — what goes (GC-02)', () => {
   it('keeps a stub that names another session, while deleting the session', async () => {
     const { persistence } = fakePersistence([session('aiclient-empty')]);
     writeStub('aiclient-empty.dsh.json', { dshSessionId: 'aiclient-other', cwd: '/work/repo' });
+    // The stub's grants belong to the chat it names now, and stay with it.
+    writeStub('aiclient-empty.dsh.grants.json', '{"version":2,"grants":[]}');
     const result = await run(persistence, ['aiclient-other']);
     expect(result.deleted).toEqual(['aiclient-empty']);
     expect(result.stubsDeleted).toBe(0);
     expect(existsSync(stubFile('aiclient-empty'))).toBe(true);
+    expect(existsSync(grantsFile('aiclient-empty'))).toBe(true);
+  });
+
+  it("deletes a session's grants with its stub, just before it (P1-6c, decision 043)", async () => {
+    const { persistence } = fakePersistence([session('aiclient-empty')]);
+    writeStub('aiclient-empty.dsh.json', { dshSessionId: 'aiclient-empty', cwd: '/work/repo' });
+    writeStub('aiclient-empty.dsh.grants.json', '{"version":2,"grants":[]}');
+    const { fs, ops } = recordingFs();
+    const result = await run(persistence, [], fs);
+    expect(result).toMatchObject({ deleted: ['aiclient-empty'], stubsDeleted: 1 });
+    expect(ops.slice(-2)).toEqual([
+      'unlink /aiclient-sessions/aiclient-empty.dsh.grants.json',
+      'unlink /aiclient-sessions/aiclient-empty.dsh.json',
+    ]);
+    expect(readdirSync(join(home, 'aiclient-sessions'))).toEqual([]);
+  });
+});
+
+describe('sessionGc — grants whose stub is gone (P1-6c)', () => {
+  function writeGrants(id: string, mtime: number): void {
+    writeStub(`${id}.dsh.grants.json`, '{"version":2,"grants":[]}');
+    utimesSync(grantsFile(id), new Date(mtime), new Date(mtime));
+  }
+
+  it('deletes them past the grace, claimed by nobody; keeps every other kind', async () => {
+    const { persistence } = fakePersistence([session('aiclient-live', { locked: true })]);
+    // A staged fork Main's startup sweep took: stub and marker gone, grants left.
+    writeGrants('aiclient-swept', OLD);
+    writeGrants('aiclient-fresh', NOW - 60_000);
+    writeGrants('aiclient-claimed', OLD);
+    // A session DSH still lists: a create that finds it reopens it with these.
+    writeGrants('aiclient-live', OLD);
+    // Beside a stub that stays: judged with the stub.
+    writeStub('aiclient-kept.dsh.json', {
+      dshSessionId: 'aiclient-kept',
+      cwd: '/work/repo',
+      createdAt: OLD,
+    });
+    writeGrants('aiclient-kept', OLD);
+    writeGrants('other-client', OLD);
+    const log = vi.fn();
+    const result = await collectOrphanSessions(
+      { persistence, home, now: () => NOW, log },
+      { claimed: ['aiclient-claimed', 'aiclient-kept'], graceMs: DAY }
+    );
+    expect(result).toMatchObject({ deleted: [], stubsDeleted: 0 });
+    expect(readdirSync(join(home, 'aiclient-sessions')).sort()).toEqual([
+      'aiclient-claimed.dsh.grants.json',
+      'aiclient-fresh.dsh.grants.json',
+      'aiclient-kept.dsh.grants.json',
+      'aiclient-kept.dsh.json',
+      'aiclient-live.dsh.grants.json',
+      'other-client.dsh.grants.json',
+    ]);
+    expect(log).toHaveBeenCalledWith(
+      'gc: deleted aiclient-swept.dsh.grants.json: its stub is gone'
+    );
   });
 });
 
@@ -356,6 +416,23 @@ describe('sessionGc — orphaned stubs', () => {
       'aiclient-hidden.dsh.json',
       'aiclient-kept.dsh.json',
       'aiclient-renamed.dsh.json',
+    ]);
+  });
+
+  it('deletes an orphaned stub with its grants, the grants first (P1-6c)', async () => {
+    const { persistence } = fakePersistence([]);
+    writeStub('aiclient-gone.dsh.json', {
+      dshSessionId: 'aiclient-gone',
+      cwd: '/work/repo',
+      createdAt: OLD,
+    });
+    writeStub('aiclient-gone.dsh.grants.json', '{"version":2,"grants":[]}');
+    const { fs, ops } = recordingFs();
+    const result = await run(persistence, [], fs);
+    expect(result.stubsDeleted).toBe(1);
+    expect(ops).toEqual([
+      'unlink /aiclient-sessions/aiclient-gone.dsh.grants.json',
+      'unlink /aiclient-sessions/aiclient-gone.dsh.json',
     ]);
   });
 

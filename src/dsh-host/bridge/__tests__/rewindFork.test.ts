@@ -11,12 +11,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DshLogEvent } from '../../../shared/dshHistory/types.ts';
+import type { PermissionGate } from '../../../shared/permissions/gate.ts';
 import {
   isWorkerForkPayload,
   isWorkerForkResult,
   isWorkerRewindResult,
   WORKER_REWIND_JOBS_RUNNING,
 } from '../../../shared/types/workerRpc.ts';
+import type { DshPermissionHost } from '../../permissions/permissionHost.ts';
 import {
   type DshBridgeContext,
   DshSessionRuntime,
@@ -570,6 +572,40 @@ describe('rewind — refusals and crash windows (plan P1-4 shard 03 §4)', () =>
   });
 });
 
+describe('rewind keeps the grants (P1-6c, decision 043)', () => {
+  it('[rewind-grants] re-points the same gate, grants and all, and leaves the sidecar beside the stub alone', async () => {
+    const stubFile = writeRootStub();
+    const grant = { kind: 'command', prefix: 'npm test', root: CWD } as const;
+    writeFileSync(grantsSidecarFor(stubFile), JSON.stringify({ version: 2, grants: [grant] }));
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
+    const attach = vi.spyOn(
+      (dsh.ctx as { aiclientPermissions: DshPermissionHost }).aiclientPermissions,
+      'attachGate'
+    );
+    const runtime = await open(dsh, stubFile);
+    const before = readFileSync(grantsSidecarFor(stubFile), 'utf8');
+
+    await rewind(runtime, 'u2');
+
+    expect(readFileSync(grantsSidecarFor(stubFile), 'utf8')).toBe(before);
+    expect(attach.mock.calls.map(([, options]) => options.dshSessionId)).toEqual([
+      ROOT,
+      `${ROOT}.r2`,
+    ]);
+    const [first, second] = attach.mock.calls.map(([, options]) => options.gate);
+    expect(second).toBe(first);
+    const shell = (command: string) => ({
+      tool: 'bash',
+      toolCallId: 'call-1',
+      path: CWD,
+      command,
+      commands: [command],
+    });
+    expect((second as PermissionGate).evaluate(shell('npm test'))).toBe('allow');
+    expect((second as PermissionGate).evaluate(shell('npm publish'))).toBe('ask');
+  });
+});
+
 describe('fork — a child for the id Main minted (decision 027 rule 4)', () => {
   const TARGET = 'session-fork-7';
   const CHILD = dshSessionIdFor(TARGET);
@@ -648,6 +684,24 @@ describe('fork — a child for the id Main minted (decision 027 rule 4)', () => 
     // Adopted: no longer the source's to discard.
     expect(await runtime.discardFork(accept)).toEqual({ discarded: false });
     expect(existsSync(childStub)).toBe(true);
+  });
+
+  it('[fork-grants-unreadable] a fork whose grants cannot be copied still forks, with none, and says so', async () => {
+    const stubFile = writeRootStub();
+    // A directory where the grants would be: neither readable nor copyable.
+    mkdirSync(grantsSidecarFor(stubFile));
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
+    const log = vi.fn();
+    const runtime = await open(dsh, stubFile, { log });
+    const result = await fork(runtime, 'a1');
+    expect(existsSync(result.sessionFile)).toBe(true);
+    expect(existsSync(grantsSidecarFor(result.sessionFile))).toBe(false);
+    expect(log).toHaveBeenCalledWith(
+      '[dsh-bridge] grants not copied',
+      grantsSidecarFor(stubFile),
+      grantsSidecarFor(result.sessionFile),
+      expect.anything()
+    );
   });
 
   it('[fork-discard] discarding a staged fork removes its stub, grants and marker', async () => {

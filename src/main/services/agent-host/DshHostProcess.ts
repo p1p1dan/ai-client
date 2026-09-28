@@ -18,12 +18,14 @@
 import type { SpawnOptions } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import path from 'node:path';
+import { PI_MANAGED_AGENT_DIR_NAME } from '@shared/piModelConfig';
 import { app } from 'electron';
 import { getAppStateRoot } from '../appStatePaths';
 import { buildDshHostEnvironment } from './dshHostEnvironment';
 
 export {
   buildDshHostEnvironment,
+  DSH_HOST_PERMISSION_AGENT_DIR_ENV,
   DSH_SENSITIVE_ENV_PATTERN,
   isStrippedDshHostEnvName,
 } from './dshHostEnvironment';
@@ -120,6 +122,15 @@ export interface DshHostLaunch {
   privateDirs: string[];
 }
 
+/**
+ * The app's pi-agent directory, `getAppPiAgentDir()` spelled from the same
+ * state root (P1-6c): the global permission policy the settings page edits
+ * lives there, and every host session loads it as its user layer.
+ */
+export function dshPermissionAgentDir(appStateRoot: string): string {
+  return path.join(appStateRoot, PI_MANAGED_AGENT_DIR_NAME);
+}
+
 export function buildDshHostLaunch(
   input: DshHostLayoutInput & { appStateRoot: string }
 ): DshHostLaunch {
@@ -135,6 +146,7 @@ export function buildDshHostLaunch(
       dshHome,
       nativeCacheDir,
       isPackaged: input.isPackaged,
+      permissionAgentDir: dshPermissionAgentDir(input.appStateRoot),
       env: input.env,
       platform: input.platform,
     }),

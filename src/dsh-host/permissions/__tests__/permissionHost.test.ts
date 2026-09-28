@@ -15,6 +15,7 @@ import {
   PermissionGate,
   type ToolPermissionRequest,
 } from '../../../shared/permissions/gate.ts';
+import { modeSegment, permissionGearSegment } from '../../../shared/permissions/promptText.ts';
 import type { PermissionGear, RuntimeMode } from '../../../shared/types/runtimePermission.ts';
 import type { DshPreToolDecision } from '../dshTypes.ts';
 import {
@@ -25,6 +26,7 @@ import {
   PERMISSION_HOST_SERVICE,
 } from '../permissionHost.ts';
 import { apply, inject, name } from '../plugin.ts';
+import { PERMISSION_PROMPT_CONTEXT } from '../promptContext.ts';
 import { authorizeCall } from '../requestBuilder.ts';
 import { agent, call, createFakeDsh, type FakeDsh } from './fakeDsh.ts';
 
@@ -120,6 +122,44 @@ describe('the aiclient-permissions row', () => {
     expect(
       typeof (fake.services.get(PERMISSION_HOST_SERVICE) as DshPermissionHost).attachGate
     ).toBe('function');
+  });
+});
+
+describe('the aiclient:permission prompt context (P1-6b; design shard 03 §8)', () => {
+  const posture = (mode: RuntimeMode, gear: PermissionGear) =>
+    `${modeSegment(mode).text}\n${permissionGearSegment(gear).text}`;
+
+  it("is registered once, right after DSH's approval policy", () => {
+    const { fake } = setup();
+    expect(fake.contexts.map((context) => [context.name, context.order])).toEqual([
+      [PERMISSION_PROMPT_CONTEXT, 116],
+    ]);
+  });
+
+  it("tells each session its own mode and gear, a delegate its root's, and follows a change", () => {
+    const { fake, host } = setup();
+    const one = realGate({ gear: 'ask' });
+    const two = realGate({ mode: 'plan', gear: 'bypass' });
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-one', gate: one.gate });
+    host.attachGate('c1-2', { dshSessionId: 'aiclient-two', gate: two.gate });
+    const text = (view?: ReturnType<typeof agent>) => fake.contexts[0]?.text({ agent: view });
+    expect(text(agent('aiclient-one', { cwd: ws }))).toBe(posture('agent', 'ask'));
+    expect(text(agent('aiclient-two'))).toBe(posture('plan', 'bypass'));
+    expect(text(agent('child-1', { parentSession: 'aiclient-one' }))).toBe(posture('agent', 'ask'));
+    // The next assembly after a change says so; DSH appends it as a new snapshot.
+    one.gate.setGear('auto');
+    expect(text(agent('aiclient-one'))).toBe(posture('agent', 'auto'));
+    one.gate.configure({ mode: 'plan', gear: 'ask' });
+    expect(text(agent('aiclient-one'))).toBe(posture('plan', 'ask'));
+  });
+
+  it('says nothing for an agent no gate owns, or a gate that does not tell its posture', () => {
+    const { fake, host } = setup();
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-quiet', gate: recordingGate().gate });
+    const text = (view?: ReturnType<typeof agent>) => fake.contexts[0]?.text({ agent: view });
+    expect(text(agent('aiclient-stranger'))).toBe('');
+    expect(text(undefined)).toBe('');
+    expect(text(agent('aiclient-quiet'))).toBe('');
   });
 });
 
@@ -709,6 +749,18 @@ describe('approval/request: one card per call id (design shard 03 §5)', () => {
     expect(await fake.approval({ ...escalate('x5'), agent: root('someone-else') })).toBe(
       'unavailable'
     );
+  });
+
+  it("marks the ask as the host's own: one answer for one call, an escalation as such (P1-6b)", async () => {
+    const { fake, asked } = attached();
+    expect(await fake.approval(escalate('x6'))).toBe('allowed-once');
+    expect(await fake.approval({ ...escalate('x7'), reason: 'a plugin wants to publish' })).toBe(
+      'allowed-once'
+    );
+    expect(asked.map((request) => request.hostAsk)).toEqual([
+      { sandbox: true },
+      { sandbox: false },
+    ]);
   });
 });
 

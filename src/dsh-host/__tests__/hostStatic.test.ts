@@ -126,6 +126,37 @@ describe('one approval answerer in the product (P1-6b part 2, decision 042 rule 
   });
 });
 
+describe('the bridge enforces the posture it reports (P1-6c; shard 04 §6 static guards)', () => {
+  const runtime = read('bridge', 'dshSessionRuntime.ts');
+
+  it('has no empty setter: each of the three acts on the gate', () => {
+    expect(runtime).not.toMatch(/\bsetPermission(s|Gear|Tier)\(\)\s*:\s*void\s*\{\s*\}/);
+    const body = (name: string) => {
+      const start = runtime.indexOf(`  ${name}(`);
+      expect(start, name).toBeGreaterThan(0);
+      return runtime.slice(start, runtime.indexOf('\n  }\n', start));
+    };
+    expect(body('setPermissions')).toContain('gate.configure(permissions)');
+    expect(body('setPermissionGear')).toContain('this.requireGate().setGear(gear)');
+    expect(body('setPermissionTier')).toContain('this.setPermissions(migratePermissionTier(tier))');
+  });
+
+  it('reports permissionGate from the attached gate, never as a literal', () => {
+    expect(runtime).not.toMatch(/permissionGate:\s*'bundled'/);
+    expect(runtime).toContain('permissionGate = this.reportedGate();');
+  });
+
+  it('reads the user policy layer from the variable Main sets', () => {
+    const main = readFileSync(
+      join(HOST_DIR, '..', 'main', 'services', 'agent-host', 'dshHostEnvironment.ts'),
+      'utf8'
+    );
+    const declared = /PERMISSION_AGENT_DIR_ENV = '([A-Z_]+)'/;
+    expect(read('bridge', 'plugin.ts').match(declared)?.[1]).toBe('AICLIENT_PERMISSION_AGENT_DIR');
+    expect(main.match(declared)?.[1]).toBe('AICLIENT_PERMISSION_AGENT_DIR');
+  });
+});
+
 describe('the product bundle: one bridge row always on, the permission row, the loop guard row', () => {
   const patch = read('bundle', 'cordis.patch.yml');
   const manifest = JSON.parse(read('bundle', 'package.json')) as {

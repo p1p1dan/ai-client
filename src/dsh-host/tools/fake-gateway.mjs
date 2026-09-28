@@ -155,6 +155,12 @@
  *                       two `echo` calls (one card, answered for the session),
  *                       P1-PERM-PLAN writes then reads a file (plan mode: the
  *                       write is refused, the read runs).
+ *                       P1-6c adds two for the recorder's perm-* scenarios
+ *                       (tools/bridge-record.ts): P1-PERM-WRITES writes two
+ *                       workspace files (one card each), P1-PERM-GRANTS runs
+ *                       `echo` twice (a grant for the session covers the
+ *                       second) and then `echo … && rm -f …` (rm was never
+ *                       granted, so it is asked).
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -339,7 +345,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN))/;
+  /P1-(FAIL|ECHOKEY|ENVDUMP|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -825,6 +831,31 @@ const DSH_P0_2_SCRIPTS = {
       return tool('bash', { command: 'echo P1-PERM-HOLD', description: 'Held at the gate' });
     }
     return say('P1-PERM-HOLD finished.');
+  },
+  // dsh-rebase P1-6c: the recorder's perm-* scenarios (tools/bridge-record.ts).
+  'P1-PERM-WRITES'(_round, step) {
+    if (step === 0) {
+      return tool('write', { file_path: 'perm-allowed.txt', content: 'first write\n' });
+    }
+    if (step === 1) {
+      return tool('write', { file_path: 'perm-denied.txt', content: 'second write\n' });
+    }
+    return say('P1-PERM-WRITES finished.');
+  },
+  'P1-PERM-GRANTS'(_round, step) {
+    if (step === 0) {
+      return tool('bash', { command: 'echo perm-grant-a', description: 'First echo' });
+    }
+    if (step === 1) {
+      return tool('bash', { command: 'echo perm-grant-b', description: 'Second echo' });
+    }
+    if (step === 2) {
+      return tool('bash', {
+        command: 'echo perm-grant-c && rm -f perm-grant-missing.txt',
+        description: 'Echo, then remove a file',
+      });
+    }
+    return say('P1-PERM-GRANTS finished.');
   },
   // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
   CRASH(_round, step, _calls, triggerText) {

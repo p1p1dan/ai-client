@@ -47,6 +47,30 @@
  *                 both. A second fork is discarded and leaves no stub. `log` is
  *                 the child's
  *
+ * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
+ * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
+ * lists or searches does not depend on which scenarios ran before it; `rpc`
+ * also carries the grant sidecar (decision 043) where the scenario has one:
+ *   perm-card     S1   ask: two workspace writes, the first card allowed once,
+ *                      the second denied (its file is never written)
+ *   perm-grants   S2/3 ask: `echo` answered for the session; the next `echo`
+ *                      asks nothing; `echo … && rm …` is asked (rm never was)
+ *   perm-deny     S4   bypass: `cat .env` refused without a card
+ *   perm-plan     S9   plan: the write refused without a card, the read runs
+ *   perm-gear     S10/14 ask, a card up: a new mode is refused as busy, the
+ *                      gear widened to auto answers the card and the call runs
+ *   perm-stop     S13  ask, a card up: Stop takes it down as aborted
+ *   perm-restart  S15  ask: `echo` answered for the session, the host
+ *                      SIGKILLed, a new host reopens the stub and asks nothing;
+ *                      `worker.setPermissions` then forgets the grant, on disk
+ *                      too, and the next `echo` is asked again
+ *   perm-subagent S16  ask: a subagent's bash call is asked on the chat's card,
+ *                      naming the delegate
+ *   perm-search   S17  bypass: glob and grep results without `.env` and
+ *                      `server.key`
+ * S5–S8, S11 and S12 (gear rules, a parallel burst, a shortened deadline) are
+ * the pure library's own suites; S18 (pwsh) is Windows CI's (P1-6d).
+ *
  * Normalized (plan P1-4 shard 05 §2): RuntimeEvent `seq` / `timestamp` dropped;
  * UUIDs renumbered `id-N` in first-seen order, one map per scenario shared by
  * its three samples (so the projection of `log` can be compared with `rpc`);
@@ -70,6 +94,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { grantsSidecarFor } from '../bridge/stub.ts';
 import {
   BYPASS_PERMISSIONS,
   fakeGatewayPlan,
@@ -341,10 +366,12 @@ interface RecordContext {
   startHost(label: string): Promise<Host>;
   stopHost(host: Host): Promise<void>;
   kill(host: Host): Promise<void>;
+  /** `options.permissions` defaults to bypass; `options.cwd` to the run's workspace. */
   openSession(
     host: Host,
     name: string,
-    sessionFile?: string
+    sessionFile?: string,
+    options?: { permissions?: Message; cwd?: string }
   ): Promise<{ session: Session; boot: Message }>;
   turn(
     session: Session,
@@ -501,6 +528,15 @@ const SCENARIOS: Record<string, Scenario> = {
   },
   rewind: rewindScenario,
   fork: forkScenario,
+  'perm-card': permCardScenario,
+  'perm-grants': permGrantsScenario,
+  'perm-deny': permDenyScenario,
+  'perm-plan': permPlanScenario,
+  'perm-gear': permGearScenario,
+  'perm-stop': permStopScenario,
+  'perm-restart': permRestartScenario,
+  'perm-subagent': permSubagentScenario,
+  'perm-search': permSearchScenario,
 };
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
@@ -635,6 +671,273 @@ async function forkScenario(context: RecordContext, host: Host): Promise<Recordi
   });
 }
 
+// ---- permission scenarios (P1-6c) ---------------------------------------------------
+
+/** Main's default posture: every gated call raises a card. */
+const ASK_PERMISSIONS = Object.freeze({ mode: 'agent', gear: 'ask' } as const);
+
+/**
+ * The scenario's own workspace under the run's: its turns list, search and
+ * write files, and must see the same tree whichever scenarios ran before.
+ */
+function scenarioWorkspace(box: Sandbox, name: string, files: Record<string, string> = {}): string {
+  const dir = join(box.workspace, name);
+  mkdirSync(dir, { recursive: true });
+  for (const [file, text] of Object.entries(files)) writeFileSync(join(dir, file), text);
+  return dir;
+}
+
+/** A `during` answering each card of turn `label` with `decide(card, index)`, until it idles. */
+function answering(
+  session: Session,
+  label: string,
+  decide: (card: Message, index: number) => string
+): (from: number) => Promise<void> {
+  const requestId = `turn-${label}`;
+  return async (from) => {
+    const { client } = session.host;
+    const answered = new Set<unknown>();
+    const idle = (events: Message[]) =>
+      events
+        .slice(from)
+        .some(
+          (event) =>
+            event.type === 'session.status' &&
+            payloadOf(event).status === 'idle' &&
+            event.requestId === requestId
+        );
+    const waiting = (events: Message[]) =>
+      events
+        .slice(from)
+        .filter(
+          (event) =>
+            event.type === 'permission.requested' && !answered.has(payloadOf(event).permissionId)
+        );
+    for (;;) {
+      const woke = await client.until(
+        session.ch,
+        (events) => idle(events) || waiting(events).length > 0,
+        120_000
+      );
+      for (const card of waiting(client.events(session.ch))) {
+        const payload = payloadOf(card);
+        const index = answered.size;
+        answered.add(payload.permissionId);
+        await client.request(session.ch, 'worker.permission.respond', {
+          logicalSessionId: session.logicalSessionId,
+          permissionId: payload.permissionId,
+          decision: decide(payload, index),
+        });
+      }
+      if (!woke || idle(client.events(session.ch))) return;
+    }
+  };
+}
+
+/** Resolves once turn `from` has its first card up. */
+async function cardUp(session: Session, from: number): Promise<void> {
+  const up = await session.host.client.until(
+    session.ch,
+    (events) => events.slice(from).some((event) => event.type === 'permission.requested'),
+    60_000
+  );
+  if (!up) throw new Error(`${session.logicalSessionId}: no card came up`);
+}
+
+/** The session's grant sidecar as it stands (decision 043), or null when it has none. */
+function grantsOf(session: Session): unknown {
+  const file = grantsSidecarFor(session.stubFile);
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as unknown) : null;
+}
+
+/** An RPC's answer without the request id, which counts every request of the host. */
+function answerOf(response: Message): Message {
+  if (response.ok) return { ok: true, result: response.result };
+  const error = (response.error ?? {}) as Message;
+  return { ok: false, code: error.code, retryable: error.retryable };
+}
+
+async function permCardScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-card');
+  const { session, boot } = await context.openSession(host, 'perm-card', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const turn = await context.turn(
+    session,
+    'PERM-CARD',
+    'P1-PERM-WRITES: write two files.',
+    answering(session, 'PERM-CARD', (_card, index) => (index === 0 ? 'allow' : 'deny'))
+  );
+  return finish(context, session, [boot], [turn], {
+    files: {
+      allowed: existsSync(join(cwd, 'perm-allowed.txt')),
+      denied: existsSync(join(cwd, 'perm-denied.txt')),
+    },
+    grants: grantsOf(session),
+  });
+}
+
+async function permGrantsScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-grants');
+  const { session, boot } = await context.openSession(host, 'perm-grants', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const turn = await context.turn(
+    session,
+    'PERM-GRANTS',
+    'P1-PERM-GRANTS: echo three times.',
+    answering(session, 'PERM-GRANTS', (_card, index) => (index === 0 ? 'allow_session' : 'deny'))
+  );
+  return finish(context, session, [boot], [turn], { grants: grantsOf(session) });
+}
+
+async function permDenyScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-deny', { '.env': 'PERM_CANARY=perm-deny\n' });
+  const { session, boot } = await context.openSession(host, 'perm-deny', undefined, { cwd });
+  const turn = await context.turn(session, 'PERM-DENY', 'P1-PERM-DENY: print the env file.');
+  return finish(context, session, [boot], [turn]);
+}
+
+async function permPlanScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-plan', {
+    'perm-plan-notes.txt': 'plan notes\n',
+  });
+  const { session, boot } = await context.openSession(host, 'perm-plan', undefined, {
+    cwd,
+    permissions: { mode: 'plan', gear: 'ask' },
+  });
+  const turn = await context.turn(session, 'PERM-PLAN', 'P1-PERM-PLAN: write, then read.');
+  return finish(context, session, [boot], [turn], {
+    written: existsSync(join(cwd, 'perm-plan.txt')),
+  });
+}
+
+async function permGearScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-gear');
+  const { session, boot } = await context.openSession(host, 'perm-gear', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const changes: Message = {};
+  const turn = await context.turn(
+    session,
+    'PERM-GEAR',
+    'P1-PERM-HOLD: run one command.',
+    async (from) => {
+      await cardUp(session, from);
+      const { client } = session.host;
+      changes.mode = answerOf(
+        await client.call(session.ch, 'worker.setPermissions', {
+          logicalSessionId: session.logicalSessionId,
+          permissions: { mode: 'plan', gear: 'ask' },
+        })
+      );
+      changes.gear = answerOf(
+        await client.call(session.ch, 'worker.setPermissionGear', {
+          logicalSessionId: session.logicalSessionId,
+          gear: 'auto',
+        })
+      );
+    }
+  );
+  return finish(context, session, [boot], [turn], { changes });
+}
+
+async function permStopScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-stop');
+  const { session, boot } = await context.openSession(host, 'perm-stop', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const turn = await context.turn(
+    session,
+    'PERM-STOP',
+    'P1-PERM-HOLD: run one command.',
+    async (from) => {
+      await cardUp(session, from);
+      await session.host.client.request(session.ch, 'worker.stop', {
+        logicalSessionId: session.logicalSessionId,
+        reason: 'user',
+      });
+    }
+  );
+  return finish(context, session, [boot], [turn]);
+}
+
+async function permRestartScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-restart');
+  const options = { cwd, permissions: ASK_PERMISSIONS };
+  const first = await context.openSession(host, 'perm-restart', undefined, options);
+  const granted = await context.turn(
+    first.session,
+    'PERM-GRANT',
+    'P1-PERM-SESSION: echo twice.',
+    answering(first.session, 'PERM-GRANT', () => 'allow_session')
+  );
+  const grants: Message = { granted: grantsOf(first.session) };
+  await context.kill(host);
+  const restarted = await context.startHost(`${host.label}-restarted`);
+  const { session, boot } = await context.openSession(
+    restarted,
+    'perm-restart',
+    first.session.stubFile,
+    options
+  );
+  // Read back by the new host: nothing to ask.
+  const covered = await context.turn(session, 'PERM-COVERED', 'P1-PERM-SESSION: echo twice.');
+  const configure = answerOf(
+    await restarted.client.call(session.ch, 'worker.setPermissions', {
+      logicalSessionId: session.logicalSessionId,
+      permissions: ASK_PERMISSIONS,
+    })
+  );
+  grants.configured = grantsOf(session);
+  const asked = await context.turn(
+    session,
+    'PERM-ASKED',
+    'P1-PERM-SESSION: echo twice.',
+    answering(session, 'PERM-ASKED', () => 'deny')
+  );
+  const recording = await finish(context, session, [first.boot, boot], [granted, covered, asked], {
+    grants,
+    configure,
+  });
+  await context.stopHost(restarted);
+  return recording;
+}
+
+async function permSubagentScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-subagent');
+  const { session, boot } = await context.openSession(host, 'perm-subagent', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const turn = await context.turn(
+    session,
+    'PERM-SUB',
+    'P1-PERM-SUB: delegate one command.',
+    answering(session, 'PERM-SUB', () => 'allow')
+  );
+  return finish(context, session, [boot], [turn]);
+}
+
+async function permSearchScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'perm-search', {
+    'notes.txt': 'PERM-SECRET in plain notes\n',
+    '.env': 'PERM-SECRET=in the env file\n',
+    'server.key': 'PERM-SECRET in a key file\n',
+  });
+  const { session, boot } = await context.openSession(host, 'perm-search', undefined, { cwd });
+  const turn = await context.turn(
+    session,
+    'PERM-SEARCH',
+    'P1-PERM-SEARCH: list and search the workspace.'
+  );
+  return finish(context, session, [boot], [turn]);
+}
+
 /** The durable `tool/call` has been appended: the call is dispatched. */
 async function waitForToolCall(session: Session, from: number): Promise<void> {
   const found = await session.host.client.until(
@@ -646,7 +949,7 @@ async function waitForToolCall(session: Session, from: number): Promise<void> {
 }
 
 /** Scenarios that manage hosts themselves (they kill the one they are given). */
-const OWN_HOST = new Set(['crash-resume']);
+const OWN_HOST = new Set(['crash-resume', 'perm-restart']);
 
 // ---- main ------------------------------------------------------------------------
 
@@ -821,15 +1124,16 @@ async function main(): Promise<number> {
         host.child.kill('SIGKILL');
       await host.exited;
     },
-    async openSession(host, name, sessionFile) {
+    async openSession(host, name, sessionFile, options = {}) {
       const ch = host.client.openChannel();
       const logicalSessionId = `rec-${name}`;
       const boot = await host.client.request(ch, 'worker.bootstrap', {
         logicalSessionId,
-        cwd: box.workspace,
+        cwd: options.cwd ?? box.workspace,
         ...(sessionFile ? { sessionFile } : {}),
-        // P1-6b: the samples record the bridge, not the approval cards.
-        permissions: BYPASS_PERMISSIONS,
+        // P1-6b: the samples record the bridge, not the approval cards; the
+        // perm-* scenarios choose their own posture (P1-6c).
+        permissions: options.permissions ?? BYPASS_PERMISSIONS,
       });
       return {
         session: {

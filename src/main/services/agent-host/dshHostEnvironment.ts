@@ -38,6 +38,15 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
  */
 const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
 
+/**
+ * dsh-rebase P1-6c: the app's pi-agent directory, whose policy files are the
+ * user layer of every session's permission policy (1.0.x's `agentDir`). Set
+ * explicitly: the `AICLIENT_` family is never inherited, and neither is
+ * `PI_CODING_AGENT_DIR` as a meaning (it names the user's own pi, not ours).
+ * The host's bridge row reads it (`PERMISSION_AGENT_DIR_ENV` there).
+ */
+export const DSH_HOST_PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
+
 /** Whether an inherited variable stays behind (decision 022). */
 export function isStrippedDshHostEnvName(name: string): boolean {
   if (DSH_SENSITIVE_ENV_PATTERN.test(name)) return true;
@@ -72,11 +81,15 @@ export function setDshHostEnvEntry(
  *
  * No key is ever added back, packaged or not (P1-5, decisions 033 and 034):
  * routes come with Main's model plan over IPC, and keys per request.
+ *
+ * `permissionAgentDir` (P1-6c) becomes AICLIENT_PERMISSION_AGENT_DIR; without
+ * it the host reads no user permission policy (the packaged smoke's case).
  */
 export function buildDshHostEnvironment(input: {
   dshHome: string;
   nativeCacheDir: string;
   isPackaged: boolean;
+  permissionAgentDir?: string;
   env?: NodeJS.ProcessEnv;
   platform?: NodeJS.Platform;
 }): Record<string, string> {
@@ -91,6 +104,9 @@ export function buildDshHostEnvironment(input: {
     DSH_TELEMETRY_DISABLED: '1',
     NARB_NATIVE_CACHE_DIR: input.nativeCacheDir,
   };
+  if (input.permissionAgentDir) {
+    explicit[DSH_HOST_PERMISSION_AGENT_DIR_ENV] = input.permissionAgentDir;
+  }
   for (const name of FORWARDED_ENV) {
     const value = source[name];
     if (value !== undefined) explicit[name] = value;

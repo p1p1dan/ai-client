@@ -1,7 +1,9 @@
 /**
  * A fake DSH context for the aiclient-permissions row: listener lists with
  * Cordis' prepend semantics, waterfall dispatch, the guard stage exactly where
- * dsh-tools runs it (only after an `allow`), and `provide`.
+ * dsh-tools runs it (only after an `allow`), `provide`, and `inject` of a
+ * `systemPrompt` that records the runtime contexts registered on it (DSH's
+ * `APPROVAL_POLICY` sits at 115, as in dsh-system-prompt).
  */
 
 import type {
@@ -18,9 +20,18 @@ import type { PermissionRowContext } from '../plugin.ts';
 type Listener = (...args: never[]) => unknown;
 type AnyListener = (...args: unknown[]) => unknown;
 
+/** One `systemPrompt.context` registration. */
+export interface FakePromptContext {
+  name: string;
+  order: number;
+  text: (assembly: { agent?: DshAgentView }) => string;
+}
+
 export interface FakeDsh {
   ctx: PermissionRowContext;
   services: Map<string, unknown>;
+  /** Runtime contexts registered through `inject(['systemPrompt'])`, in order. */
+  contexts: FakePromptContext[];
   hooks(name: string): Array<{ listener: AnyListener; prepend: boolean }>;
   /** `tools/pre-execute` + guards, as dsh-tools' prepare stage runs them. */
   prepare(exec: DshToolCall): Promise<DshPreToolDecision>;
@@ -35,6 +46,12 @@ export function createFakeDsh(): FakeDsh {
   const lists = new Map<string, Array<{ listener: AnyListener; prepend: boolean }>>();
   const guards: Array<(exec: object) => string | undefined> = [];
   const services = new Map<string, unknown>();
+  const contexts: FakePromptContext[] = [];
+  const contextOrders: Record<string, number> = {
+    SANDBOX_POLICY: 110,
+    APPROVAL_POLICY: 115,
+    SUBAGENT_DELEGATION: 120,
+  };
   const on = (name: string, listener: AnyListener, options?: { prepend?: boolean }) => {
     const list = lists.get(name) ?? [];
     const hook = { listener, prepend: options?.prepend === true };
@@ -72,10 +89,30 @@ export function createFakeDsh(): FakeDsh {
       return () => services.delete(name);
     },
     get: (name) => services.get(name),
+    inject: (deps, callback) => {
+      if (deps.length !== 1 || deps[0] !== 'systemPrompt') {
+        throw new Error(`the fake injects systemPrompt only, not ${deps.join(', ')}`);
+      }
+      callback({
+        systemPrompt: {
+          context: (context) => {
+            if (contexts.some((known) => known.name === context.name)) {
+              throw new Error(`duplicate prompt context ${context.name}`);
+            }
+            contexts.push(context);
+            return () => {
+              contexts.splice(contexts.indexOf(context), 1);
+            };
+          },
+          getContextOrder: (name) => contextOrders[name] ?? Number.NaN,
+        },
+      });
+    },
   };
   return {
     ctx,
     services,
+    contexts,
     hooks: (name) => lists.get(name) ?? [],
     async prepare(exec) {
       const decision = await waterfall<DshPreToolDecision>(

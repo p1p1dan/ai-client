@@ -460,8 +460,17 @@ export type PermissionRequestKind = 'tool' | 'exec' | 'file_change';
  * Absent means "no sentence available" — an unrecognised tool, or a Host older
  * than this field. The card then shows the tool name alone, exactly as it did
  * before any description existed.
+ *
+ * `escalate_sandbox` (dsh-rebase P1-6b): the DSH engine asks to run one call
+ * with wider sandbox permissions than the session's; its card offers allow /
+ * deny only.
  */
-export type PermissionRequestAction = 'run_command' | 'write_file' | 'edit_file' | 'read_file';
+export type PermissionRequestAction =
+  | 'run_command'
+  | 'write_file'
+  | 'edit_file'
+  | 'read_file'
+  | 'escalate_sandbox';
 
 /**
  * S2 (c): agent-neutral decision vocabulary, four wide. `decisions.ts`

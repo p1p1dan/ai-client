@@ -28,6 +28,13 @@
  * identity stub naming the session goes after it. A stub whose session
  * directory is gone, claimed by nobody and older than `graceMs`, goes too.
  *
+ * P1-6c (decision 043): a stub's grant sidecar (`<id>.dsh.grants.json`) goes
+ * with the stub, just before it, so a crash in between leaves a stub a later
+ * pass collects rather than grants nothing names. Grants whose stub is gone
+ * already (a staged fork Main's startup sweep took, say) go by the stub's own
+ * rules: ours, claimed by nobody, no session of that id listed, and last
+ * written more than `graceMs` ago.
+ *
  * Emptiness is read before the lock is taken: a write open of an older log
  * format publishes a migrated copy, which a session that turns out to hold
  * content must not get from a clean-up pass.
@@ -37,7 +44,7 @@ import { lstat, readdir, readFile, rm, stat, unlink } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import type { DshHostGcResult, DshHostGcSkipReason } from '../../shared/types/dshHostProtocol.ts';
 import { DSH_SESSION_ID_PREFIX, hasNamedError } from './dshSessionRuntime.ts';
-import { DSH_STUB_DIR, DSH_STUB_SUFFIX } from './stub.ts';
+import { DSH_GRANTS_SUFFIX, DSH_STUB_DIR, DSH_STUB_SUFFIX } from './stub.ts';
 
 /** Events DSH appends when it creates an agent, before anything is said (measured, P1-3d). */
 export const DSH_SESSION_SETUP_EVENTS: ReadonlySet<string> = new Set([
@@ -250,6 +257,20 @@ export async function collectOrphanSessions(
     return { dir, logs: logs.map((name) => join(dir, name)) };
   };
 
+  /** `file` gone; one that is gone already is not a failure. */
+  const unlinkIfPresent = async (file: string): Promise<void> => {
+    try {
+      await fs.stat(file);
+      await fs.unlink(file);
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+    }
+  };
+
+  /** The grants of the stub named after `id` (decision 043), which go just before it. */
+  const removeGrantsOf = (id: string) =>
+    unlinkIfPresent(join(stubDir, `${id}${DSH_GRANTS_SUFFIX}`));
+
   /** The stub named after `id`, when it names `id`; a stub naming another session stays. */
   const removeStubOf = async (id: string): Promise<boolean> => {
     const file = join(stubDir, `${id}${DSH_STUB_SUFFIX}`);
@@ -270,6 +291,7 @@ export async function collectOrphanSessions(
       log(`gc: kept ${basename(file)}: it does not name ${id}`);
       return false;
     }
+    await removeGrantsOf(id);
     await fs.unlink(file);
     return true;
   };
@@ -346,8 +368,25 @@ export async function collectOrphanSessions(
     } catch (error) {
       if (!isMissing(error)) throw error;
     }
+    await removeGrantsOf(id);
     await fs.unlink(file);
     return 'deleted';
+  };
+
+  /** Grants whose stub is gone: kept while anything could still need them, as a stub is. */
+  const collectGrants = async (name: string, id: string): Promise<boolean> => {
+    if (!id.startsWith(DSH_SESSION_ID_PREFIX) || claimed.has(id) || present.has(id)) return false;
+    const file = join(stubDir, name);
+    let mtimeMs: number;
+    try {
+      mtimeMs = (await fs.stat(file)).mtimeMs;
+    } catch (error) {
+      if (isMissing(error)) return false;
+      throw error;
+    }
+    if (!Number.isFinite(mtimeMs) || mtimeMs > cutoff) return false;
+    await unlinkIfPresent(file);
+    return true;
   };
 
   const count = (reason: DshHostGcSkipReason) => {
@@ -381,6 +420,18 @@ export async function collectOrphanSessions(
     }
     if (verdict === 'deleted') stubsDeleted += 1;
     else if (verdict !== null) count(verdict);
+  }
+
+  for (const name of stubNames) {
+    if (!name.endsWith(DSH_GRANTS_SUFFIX)) continue;
+    const id = name.slice(0, -DSH_GRANTS_SUFFIX.length);
+    // Grants beside a stub were judged with it: they went with it, or they stay.
+    if (stubNames.includes(`${id}${DSH_STUB_SUFFIX}`)) continue;
+    try {
+      if (await collectGrants(name, id)) log(`gc: deleted ${name}: its stub is gone`);
+    } catch (error) {
+      log(`gc: grants ${name}: ${errorText(error)}`);
+    }
   }
 
   return {

@@ -1415,6 +1415,8 @@ describe('permission action copy (T023)', () => {
     ['write_file', 'Write a file in the workspace', '写入工作区文件'],
     ['edit_file', 'Modify a file in the workspace', '修改工作区文件'],
     ['read_file', 'Read file contents', '读取文件内容'],
+    // dsh-rebase P1-6b: the DSH engine asks to run one call outside its sandbox.
+    ['escalate_sandbox', 'Run once with wider sandbox permissions', '以更宽的沙箱权限运行一次'],
   ];
 
   it.each(CASES)('%s reads English by default and Chinese under zh', (action, english, chinese) => {

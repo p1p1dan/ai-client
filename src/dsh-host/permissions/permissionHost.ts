@@ -14,8 +14,12 @@
  *                                because tool-fs-search, which runs after this
  *                                row (E3), would spill the unfiltered list
  *   approval/request             answer DSH's own asks for attached sessions:
- *                                at most one card per call id
+ *                                at most one card per call id; the card
+ *                                offers allow / deny, and an escalation says
+ *                                so (`escalate_sandbox`)
  *   session/created, /disposed   register subagent / workflow children (E1)
+ *   systemPrompt context         `aiclient:permission`: the mode and gear of
+ *                                the calling session's gate (`promptContext`)
  *
  * Gates are attached per chat session by the bridge (`attachGate`); this row
  * never builds one.
@@ -36,6 +40,7 @@ import type { PermissionFileSystem } from '../../shared/permissions/shellPaths.t
 import { TURN_CEILING_REFUSAL_CODE } from '../loopGuard/constants.ts';
 import { classifyTool } from './classification.ts';
 import type {
+  DshAgentView,
   DshApprovalOutcome,
   DshApprovalRequest,
   DshPostToolDecision,
@@ -45,6 +50,7 @@ import type {
   DshToolErrorInfo,
   DshToolResult,
 } from './dshTypes.ts';
+import { permissionPromptText } from './promptContext.ts';
 import { authorizeCall } from './requestBuilder.ts';
 import { PermissionRouter } from './router.ts';
 import { filterSearchValue } from './searchFilter.ts';
@@ -52,11 +58,15 @@ import { filterSearchValue } from './searchFilter.ts';
 /** The Cordis service name the bridge injects to reach `attachGate`. */
 export const PERMISSION_HOST_SERVICE = 'aiclientPermissions';
 
-/** The gate surface this row uses; `PermissionGate` fits as is. */
+/**
+ * The gate surface this row uses; `PermissionGate` fits as is. `mode` and
+ * `gear` feed the prompt context; a gate without them contributes none.
+ */
 export type AttachableGate = Pick<
   PermissionGateService,
   'authorize' | 'canTraverse' | 'onActivity'
->;
+> &
+  Partial<Pick<PermissionGateService, 'mode' | 'gear'>>;
 
 export interface AttachGateOptions {
   /** The chat session's root DSH session id; its delegates join it from `session/created`. */
@@ -122,6 +132,9 @@ interface CallRecord {
 const DENIAL_NAME = 'PermissionDenial';
 const NOT_ATTACHED = 'permission gate not attached';
 const GUARD_REASON = 'permission gate did not run';
+
+/** How dsh-sandbox's `approveEscalation` words the reason of an escalation it asks for. */
+const SANDBOX_ESCALATION = /^escalate sandbox to /;
 
 function processEnv(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -249,6 +262,17 @@ export class PermissionHost {
     if (session?.id) this.router.forgetSession(session.id);
   }
 
+  /**
+   * The `aiclient:permission` context for the agent a prompt is assembled
+   * for: the mode and gear of its chat session's gate (a delegate shares its
+   * root's). Empty for an agent no gate owns, which contributes nothing.
+   */
+  promptContext(agent: DshAgentView | undefined): string {
+    const gate = this.routeOf(agent)?.gate.gate;
+    if (!gate?.mode || !gate.gear) return '';
+    return permissionPromptText(gate.mode, gate.gear);
+  }
+
   // ---- tools ------------------------------------------------------------------------
 
   private routeOf(agent: DshToolCall['agent']) {
@@ -360,6 +384,8 @@ export class PermissionHost {
       path: cwd,
       // An escalation cannot be judged from arguments this row never sees.
       unresolvedPaths: true,
+      // One answer for one call: DSH has no "for this session".
+      hostAsk: { sandbox: SANDBOX_ESCALATION.test(request.reason ?? '') },
       ...(reason ? { preview: { label: 'Reason', text: reason } } : {}),
       ...(route.delegate
         ? {

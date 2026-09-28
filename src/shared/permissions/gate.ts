@@ -93,6 +93,14 @@ export interface ToolPermissionRequest {
    * with the delegation it belongs to instead of crossing into another.
    */
   delegation?: { delegationId: string; agentName: string };
+  /**
+   * dsh-rebase P1-6b: an ask the DSH host raised itself (`approval/request`:
+   * a sandbox escalation, or a third-party plugin's own question). DSH acts
+   * on one answer for one call, so the card offers allow / deny only and
+   * nothing is remembered for the session. `sandbox` marks an escalation:
+   * the card says the call asks for wider sandbox permissions.
+   */
+  hostAsk?: { sandbox: boolean };
 }
 /**
  * What a delegate's tool call resolves under.
@@ -810,7 +818,11 @@ export class PermissionGate implements PermissionGateService {
         // same order a user's own answer races a stop in.
         if (live.autoAllowed) return 'policy';
         if (decision === 'deny') throw this.denied('user-denied', 'permission denied');
-        if (decision === 'allow-session') this.remember(request);
+        if (decision === 'allow-session') {
+          // A host's own ask grants its one call (`hostAsk`): nothing to remember.
+          if (request.hostAsk) return 'allow-once';
+          this.remember(request);
+        }
         return decision;
       } finally {
         if (this.live === live) this.live = null;
