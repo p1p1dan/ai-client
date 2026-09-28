@@ -714,6 +714,7 @@ describe('bridge bundles (decision 011)', () => {
   const ROW_INJECT = {
     'aiclient-bridge': ['agents', 'agentDefaultModel', 'sessions', 'agentLoop', 'sessionQuery'],
     'aiclient-permissions': ['tools'],
+    'aiclient-loop-guard': ['tools'],
   };
 
   it('flags a permission row bundle that imports anything but web-tree-sitter', () => {
@@ -744,6 +745,33 @@ describe('bridge bundles (decision 011)', () => {
     ]);
   });
 
+  it('flags a loop guard row bundle that takes in anything but its own sources (P1-8)', () => {
+    const loopGuard = BRIDGE_ENTRIES.find((item) => item.row === 'aiclient-loop-guard');
+    const { failures } = checkBridgeMetafile(
+      {
+        inputs: {
+          'src/dsh-host/loopGuard/plugin.ts': {},
+          'src/dsh-host/loopGuard/repetition.ts': {},
+          'src/shared/types/workerRpc.ts': {},
+        },
+        outputs: {
+          'x.js': {
+            imports: [
+              { path: '@deepseek-ai/dsh-llm', external: true },
+              { path: 'web-tree-sitter', external: true },
+            ],
+          },
+        },
+      },
+      repoRoot,
+      loopGuard
+    );
+    expect(failures).toEqual([
+      'bridge bundle took in src/shared/types/workerRpc.ts',
+      'bridge bundle imports web-tree-sitter at run time',
+    ]);
+  });
+
   for (const item of BRIDGE_ENTRIES) {
     it(`builds ${item.out} that imports with only its npm externals present`, async () => {
       const outDir = path.join(tmp, 'artifact');
@@ -755,7 +783,8 @@ describe('bridge bundles (decision 011)', () => {
       });
       write(
         path.join(stubRoot, 'index.js'),
-        'export function createUserMessage(input) { return { id: "m1", ...input }; }\n'
+        'export function createUserMessage(input) { return { id: "m1", ...input }; }\n' +
+          'export function isAgentLoopRequest() { return false; }\n'
       );
       const options = bridgeBuildOptions(sourceDir, outDir, item);
       // The artifact keeps it inside the materialized bundle package.

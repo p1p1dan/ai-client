@@ -142,6 +142,18 @@
  *                       subagent, a workflow and a PTC program that each end in one
  *                       bash call, a short-circuited bash call, glob + grep over a
  *                       workspace with secrets, and a bash call held at the gate.
+ *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
+ *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
+ *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
+ *                       of N identical family calls (paced, and logs how far it got when
+ *                       the client hung up), P8-VARIED N distinct `job_output` calls,
+ *                       P8-FANOUT ten distinct `subagent` calls (children: P8-CHILD),
+ *                       P8-LOOP one tool call per step forever, P8-WAKE background jobs
+ *                       then the same loop, P8-SUBREPEAT a subagent whose own reply is a
+ *                       P8-REPEAT, P8-VICTIM a stamped paced answer for the contention
+ *                       regression (tools/contention-regression.ts). Every P8 step that
+ *                       carries the loop guard's wrap-up instruction is answered with
+ *                       text (or, with `wrapTool`, one more tool call, to see it refused).
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -310,6 +322,8 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER = /P1-(FAIL|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD))/;
+/** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
+const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
 /** DSH's compaction request ends with this instruction (dsh-compaction-basic `COMPACTION_INSTRUCTION`). */
 const COMPACTION_INSTRUCTION = /You are now acting as a compaction engine/;
@@ -874,6 +888,8 @@ function decideDshP02(parsed) {
   if (COMPACTION_INSTRUCTION.test(lastText)) {
     return { ...say(COMPACTION_SUMMARY), label: 'compaction' };
   }
+  const p8 = decideP8(messages);
+  if (p8) return p8;
   let trigger = -1;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i]?.role !== 'user') continue;
@@ -1520,6 +1536,277 @@ function sendError(res, status, message) {
   res.end(JSON.stringify({ type: 'error', error: { type: 'overloaded_error', message } }));
 }
 
+// ---- dsh-rebase P1-8: loop guard scenarios ---------------------------------------
+
+/** The loop guard's wrap-up instruction (src/dsh-host/loopGuard/constants.ts). */
+const CEILING_INSTRUCTION = /this app's ceiling for one run/;
+
+/**
+ * P1-8: decide a P8 request, or undefined when the latest scenario marker is
+ * not a P8 one. The step is the number of tool calls since the trigger; a
+ * wrap-up is any P8 request carrying the loop guard's instruction after it.
+ */
+function decideP8(messages) {
+  let trigger = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role !== 'user') continue;
+    const text = ownText(messages[i]);
+    if (P8_MARKER.test(text)) {
+      trigger = i;
+      break;
+    }
+    if (/<goal_round>/.test(text) || P0_MARKER.test(text) || P1_MARKER.test(text)) return undefined;
+  }
+  if (trigger < 0) return undefined;
+  const triggerText = ownText(messages[trigger]);
+  const scenario = triggerText.match(P8_MARKER)[1];
+  const p = firstJsonObject(triggerText) ? p04Params(triggerText) : {};
+  let calls = 0;
+  let wrapUp = false;
+  for (const message of messages.slice(trigger + 1)) {
+    if (!Array.isArray(message?.content)) {
+      if (message?.role === 'user' && CEILING_INSTRUCTION.test(String(message?.content ?? '')))
+        wrapUp = true;
+      continue;
+    }
+    for (const block of message.content) {
+      if (message.role === 'assistant' && block?.type === 'tool_use') calls += 1;
+      if (message.role === 'user' && block?.type === 'text') {
+        if (CEILING_INSTRUCTION.test(block.text ?? '')) wrapUp = true;
+      }
+    }
+  }
+  const label = (tail) => `P8-${scenario}${p.tag ? `:${p.tag}` : ''} s${calls}${tail ?? ''}`;
+  if (wrapUp) {
+    if (p.wrapTool) {
+      return {
+        ...tool('bash', {
+          command: 'echo P8-WRAP-TOOL-RAN > p8-wrap-tool.txt',
+          description: 'A call the wrap-up must refuse',
+          sandbox_permissions: 'danger-full-access',
+          justification: 'The P1-8 probe checks the wrap-up refuses this before any approval.',
+        }),
+        label: label(' wrap-up tool'),
+      };
+    }
+    return { ...say(`P8-${scenario} wrap-up summary (${calls} calls).`), label: label(' wrap-up') };
+  }
+  const burst = (list, text) => ({
+    kind: 'burst',
+    status: 200,
+    calls: list,
+    text,
+    chunkMs: p.chunkMs ?? 15,
+    label: label(),
+  });
+  switch (scenario) {
+    case 'REPEAT': {
+      if (calls > 0) return { ...say('P8-REPEAT finished.'), label: label() };
+      const count = p.count ?? 200;
+      const call = { name: p.tool ?? 'job_list', input: p.args ?? {} };
+      return burst(
+        Array.from({ length: count }, () => call),
+        'Checking the background work.'
+      );
+    }
+    case 'VARIED': {
+      if (calls > 0) return { ...say('P8-VARIED finished.'), label: label() };
+      const count = p.count ?? 40;
+      return burst(
+        Array.from({ length: count }, (_, i) => ({
+          name: 'job_output',
+          input: { job_id: `p8-job-${i}` },
+        })),
+        'Reading every job.'
+      );
+    }
+    case 'FANOUT': {
+      if (calls > 0) return { ...say('P8-FANOUT finished.'), label: label() };
+      const count = p.count ?? 10;
+      return burst(
+        Array.from({ length: count }, (_, i) => ({
+          name: 'subagent',
+          input: {
+            description: `Fan-out ${i}`,
+            prompt: `P8-CHILD ${i}: answer in one line.`,
+            run_in_background: false,
+          },
+        })),
+        'Fanning out.'
+      );
+    }
+    case 'CHILD':
+      return { ...say(`P8-CHILD done (${triggerText.slice(0, 40)}).`), label: label() };
+    // tools/contention-regression.ts: a paced answer whose every delta carries
+    // its send time, so the receiver can tell this process's own stalls apart.
+    case 'VICTIM':
+      return {
+        kind: 'stamped',
+        status: 200,
+        chunks: p.chunks ?? 60,
+        chunkMs: p.chunkMs ?? 150,
+        label: label(),
+      };
+    case 'SUBREPEAT': {
+      if (calls > 0) return { ...say('P8-SUBREPEAT finished.'), label: label() };
+      // `child: 'LOOP'` gives the child an endless tool loop instead (its step ceiling).
+      const prompt =
+        p.child === 'LOOP'
+          ? `P8-LOOP ${JSON.stringify({ tag: 'child-loop' })} keep reading.`
+          : `P8-REPEAT ${JSON.stringify({ tag: 'child', count: p.count ?? 60 })} list the jobs.`;
+      return {
+        ...tool('subagent', { description: 'Looping child', prompt, run_in_background: false }),
+        label: label(),
+      };
+    }
+    case 'WAKE':
+    case 'LOOP':
+      // WAKE starts its background jobs first, then loops like LOOP.
+      if (scenario === 'WAKE' && calls === 0) {
+        const jobs = p.jobs ?? 2;
+        return burst(
+          Array.from({ length: jobs }, (_, i) => ({
+            name: 'bash',
+            input: {
+              command: `sleep ${(p.seconds ?? 3) + i}; echo p8-wake-${i}`,
+              description: `Background job ${i}`,
+              run_in_background: true,
+            },
+          })),
+          'Starting background jobs.'
+        );
+      }
+      // `max` ends the loop by itself (the guard switched off must not hang a probe).
+      if (p.max !== undefined && calls >= p.max) {
+        return { ...say(`P8-${scenario} done after ${calls} calls.`), label: label() };
+      }
+      if (p.tool === 'bash') {
+        return {
+          ...tool('bash', { command: `echo p8-loop-${calls}`, description: 'Loop step' }),
+          label: label(),
+        };
+      }
+      return { ...tool('read', { file_path: p.file ?? 'p8-loop.txt' }), label: label() };
+    default:
+      return { ...say(`fake gateway: no P8 script for ${scenario}`), label: label() };
+  }
+}
+
+/**
+ * P1-8: one reply of a text block and `calls` tool_use blocks, paced `chunkMs`
+ * apart, stop_reason tool_use. When the client hangs up first, one log line
+ * says how many tool blocks it had been sent (the loop guard's upstream
+ * cancel, experiment E2).
+ */
+function sendBurst(res, model, decision, seq) {
+  const frames = [messageStartFrame(model)];
+  let index = 0;
+  if (decision.text) {
+    frames.push(
+      [
+        0,
+        'content_block_start',
+        { type: 'content_block_start', index, content_block: { type: 'text', text: '' } },
+      ],
+      [
+        0,
+        'content_block_delta',
+        { type: 'content_block_delta', index, delta: { type: 'text_delta', text: decision.text } },
+      ],
+      [0, 'content_block_stop', { type: 'content_block_stop', index }]
+    );
+    index += 1;
+  }
+  const toolStops = new Set();
+  for (const call of decision.calls) {
+    frames.push(
+      [
+        decision.chunkMs,
+        'content_block_start',
+        {
+          type: 'content_block_start',
+          index,
+          content_block: {
+            type: 'tool_use',
+            id: `toolu_${crypto.randomUUID()}`,
+            name: call.name,
+            input: {},
+          },
+        },
+      ],
+      [
+        0,
+        'content_block_delta',
+        {
+          type: 'content_block_delta',
+          index,
+          delta: { type: 'input_json_delta', partial_json: JSON.stringify(call.input) },
+        },
+      ]
+    );
+    toolStops.add(frames.length);
+    frames.push([0, 'content_block_stop', { type: 'content_block_stop', index }]);
+    index += 1;
+  }
+  frames.push(
+    [
+      0,
+      'message_delta',
+      {
+        type: 'message_delta',
+        delta: { stop_reason: 'tool_use', stop_sequence: null },
+        usage: { output_tokens: 20 * decision.calls.length },
+      },
+    ],
+    [0, 'message_stop', { type: 'message_stop' }]
+  );
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  let written = 0;
+  let toolBlocksSent = 0;
+  let lastToolStopAt = 0;
+  let finished = false;
+  const startedAt = Date.now();
+  res.on('close', () => {
+    if (finished) return;
+    finished = true;
+    logRequest({
+      seq,
+      event: 'client-closed',
+      framesWritten: written,
+      framesTotal: frames.length,
+      toolBlocksSent,
+      toolBlocksTotal: decision.calls.length,
+      msAfterLastToolBlock: lastToolStopAt ? Date.now() - lastToolStopAt : null,
+      msSinceStart: Date.now() - startedAt,
+    });
+  });
+  const step = () => {
+    if (finished) return;
+    if (written >= frames.length) {
+      finished = true;
+      logRequest({ seq, event: 'burst-completed', toolBlocksSent, framesWritten: written });
+      res.end();
+      return;
+    }
+    const [delayMs, event, data] = frames[written];
+    setTimeout(() => {
+      if (finished) return;
+      res.write(sseFrame(event, data));
+      if (toolStops.has(written)) {
+        toolBlocksSent += 1;
+        lastToolStopAt = Date.now();
+      }
+      written += 1;
+      step();
+    }, delayMs);
+  };
+  step();
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.log) LOG_PATH = args.log;
@@ -1585,7 +1872,9 @@ function main() {
                   ? decision.name
                   : decision.kind === 'stamped'
                     ? decision.toolName
-                    : undefined,
+                    : decision.kind === 'burst'
+                      ? `${decision.calls.length}x ${[...new Set(decision.calls.map((c) => c.name))].join('+')}`
+                      : undefined,
               auth: req.headers['x-api-key'] ?? req.headers.authorization ?? null,
               path: req.url,
               tools: Array.isArray(parsed?.tools) ? parsed.tools.length : undefined,
@@ -1613,6 +1902,8 @@ function main() {
         );
       } else if (decision.kind === 'stamped') {
         sendPaced(res, stampedFrames(model, decision));
+      } else if (decision.kind === 'burst') {
+        sendBurst(res, model, decision, seq);
       } else if (decision.kind === 'paced') {
         const frames =
           decision.flavour === 'slow-write'

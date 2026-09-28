@@ -34,6 +34,11 @@ describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
     expect(host).toContain('overlays: requiredDisabledOverlays(),');
   });
 
+  it('refuses a composition without the loop guard row on (P1-8, decision 065)', () => {
+    expect(host).toContain("const REQUIRED_ENABLED = ['aiclient-loop-guard'];");
+    expect(host).toMatch(/if \(notEnabled\.length > 0\) fail\(/);
+  });
+
   it('restates the product bundles at every start and fails only on a product bundle', () => {
     expect(host).toContain('reconcileProductBundles(listedBundles)');
     expect(host).toContain('appBoot.writeProfileBundles(profileDir, manifest, bundles)');
@@ -56,7 +61,7 @@ describe('host.ts IPC (P1-3a, decision 019)', () => {
   });
 });
 
-describe('the product bundle has one bridge row, always on, and the permission row', () => {
+describe('the product bundle: one bridge row always on, the permission row, the loop guard row', () => {
   const patch = read('bundle', 'cordis.patch.yml');
   const manifest = JSON.parse(read('bundle', 'package.json')) as {
     exports: Record<string, string>;
@@ -75,6 +80,7 @@ describe('the product bundle has one bridge row, always on, and the permission r
     expect(patch.match(/- id: aiclient-[a-z-]+/g)).toEqual([
       '- id: aiclient-bridge',
       '- id: aiclient-permissions',
+      '- id: aiclient-loop-guard',
     ]);
   });
 
@@ -84,11 +90,18 @@ describe('the product bundle has one bridge row, always on, and the permission r
     );
   });
 
+  it('composes aiclient-loop-guard on, with the 500-step ceiling (P1-8)', () => {
+    expect(rowOf('aiclient-loop-guard')).toMatch(
+      /^- id: aiclient-loop-guard\n\s+name: '@aiclient\/dsh-app\/loop-guard'\n\s+config:\n\s+stepCeiling: 500\n?$/
+    );
+  });
+
   it('exports only its rows besides its patch', () => {
     expect(Object.keys(manifest.exports).sort()).toEqual([
       '.',
       './bridge',
       './cordis.patch.yml',
+      './loop-guard',
       './package.json',
       './permissions',
     ]);

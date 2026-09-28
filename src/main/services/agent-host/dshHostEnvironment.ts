@@ -39,6 +39,13 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
  */
 const DEV_GATEWAY_ENV = ['AICLIENT_DSH_GATEWAY_URL', 'AICLIENT_DSH_GATEWAY_KEY'];
 
+/**
+ * App switches the host itself reads, forwarded packaged or not: the loop
+ * guard's emergency kill switch (dsh-rebase decision 065; `0` turns the
+ * `aiclient-loop-guard` row off), under 1.0.x's name.
+ */
+const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
+
 /** Whether an inherited variable stays behind (decision 022). */
 export function isStrippedDshHostEnvName(name: string): boolean {
   if (DSH_SENSITIVE_ENV_PATTERN.test(name)) return true;
@@ -89,6 +96,10 @@ export function buildDshHostEnvironment(input: {
     DSH_TELEMETRY_DISABLED: '1',
     NARB_NATIVE_CACHE_DIR: input.nativeCacheDir,
   };
+  for (const name of FORWARDED_ENV) {
+    const value = source[name];
+    if (value !== undefined) explicit[name] = value;
+  }
   if (!input.isPackaged) {
     for (const name of DEV_GATEWAY_ENV) {
       const value = source[name];

@@ -111,3 +111,12 @@
     - id: aiclient-permissions
       name: '@aiclient/dsh-app/permissions'
       disabled: true
+
+    # P1-8 (decisions 065, 066): cuts a reply that keeps repeating delegation
+    # or job calls while it streams, and stops an agent after `stepCeiling`
+    # steps with a tool-less wrap-up. Always on; host.ts refuses a composition
+    # that disables it. AICLIENT_RUNTIME_LOOP_GUARD=0 is the emergency switch.
+    - id: aiclient-loop-guard
+      name: '@aiclient/dsh-app/loop-guard'
+      config:
+        stepCeiling: 500

@@ -51,9 +51,10 @@ export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm'];
 
 /**
  * The product bundle's own rows, each an esbuild bundle of our TypeScript:
- * the shared host's only bridge (P1-3a, decision 019) and the permission gate
- * (P1-6b, decision 042). `inputs` are the source prefixes a row may take in,
- * `externals` the npm packages it may import at run time.
+ * the shared host's only bridge (P1-3a, decision 019), the permission gate
+ * (P1-6b, decision 042) and the loop guard (P1-8, decisions 065 and 066).
+ * `inputs` are the source prefixes a row may take in, `externals` the npm
+ * packages it may import at run time.
  */
 export const BRIDGE_ENTRIES = [
   {
@@ -71,6 +72,14 @@ export const BRIDGE_ENTRIES = [
     inputs: ['src/dsh-host/permissions/', 'src/shared/', 'src/agent-host/permissionPolicy.mjs'],
     // Loaded on the first bash call; its wasm and the bash grammar's resolve beside it.
     externals: ['web-tree-sitter'],
+  },
+  {
+    entry: 'loopGuard/plugin.ts',
+    out: 'bundle/lib/loop-guard.js',
+    row: 'aiclient-loop-guard',
+    inputs: ['src/dsh-host/loopGuard/'],
+    // isAgentLoopRequest reads a registry private to the host's own dsh-llm.
+    externals: ['@deepseek-ai/dsh-llm'],
   },
 ];
 
@@ -784,6 +793,8 @@ export function requiredFiles(target) {
     'node_modules/@aiclient/dsh-app/lib/permissions.js',
     'node_modules/web-tree-sitter/web-tree-sitter.wasm',
     'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
+    // P1-8: the loop guard row, which host.ts requires to be composed on.
+    'node_modules/@aiclient/dsh-app/lib/loop-guard.js',
   ];
   // libvips: the library list and versions travel with the binaries (licenses shard §2.3).
   if (target.platform === 'win32')

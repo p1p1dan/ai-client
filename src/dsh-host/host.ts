@@ -215,6 +215,14 @@ const notDisabled = REQUIRED_DISABLED.filter(
   (id) => flat.find((row) => row.id === id)?.disabled !== true
 );
 if (notDisabled.length > 0) fail(`rows expected disabled: ${notDisabled.join(', ')}`);
+// P1-8 (decision 065): the loop guard must be composed and on; its kill switch
+// is AICLIENT_RUNTIME_LOOP_GUARD=0, never a disabled row.
+const REQUIRED_ENABLED = ['aiclient-loop-guard'];
+const notEnabled = REQUIRED_ENABLED.filter((id) => {
+  const row = flat.find((item) => item.id === id);
+  return row === undefined || (row.disabled !== undefined && row.disabled !== false);
+});
+if (notEnabled.length > 0) fail(`rows expected enabled: ${notEnabled.join(', ')}`);
 // The auto-approving probe row may only arrive with its own test bundle.
 const probeLayered = profile.layers.some((layer) => layer.packageName === PROBE_BUNDLE);
 const probeRows = flat.filter(

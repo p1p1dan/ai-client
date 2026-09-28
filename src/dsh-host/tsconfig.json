@@ -31,6 +31,7 @@
   // next to the code they exercise. P1-2: probe drivers moved to tools/.
   // P1-3a: host.ts's pure rules live in lib/, bundled into host.js.
   // P1-6b: the aiclient-permissions row and its tests.
+  // P1-8: the aiclient-loop-guard row and its tests.
   "include": [
     "*.ts",
     "__tests__/*.ts",
@@ -40,6 +41,8 @@
     "lib/__tests__/*.ts",
     "permissions/*.ts",
     "permissions/__tests__/*.ts",
+    "loopGuard/*.ts",
+    "loopGuard/__tests__/*.ts",
     "tools/**/*.ts"
   ],
   "exclude": ["node_modules", "bundle", "tools/probe-bundle"]

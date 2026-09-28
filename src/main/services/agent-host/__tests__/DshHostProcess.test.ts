@@ -280,6 +280,19 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     });
   });
 
+  it('forwards the loop guard kill switch, packaged or not (dsh-rebase decision 065)', () => {
+    for (const isPackaged of [true, false]) {
+      const env = build({
+        isPackaged,
+        env: { ...SHELL_ENV, AICLIENT_RUNTIME_LOOP_GUARD: '0', AICLIENT_RUNTIME_OTHER: '1' },
+      });
+      expect(env.AICLIENT_RUNTIME_LOOP_GUARD, String(isPackaged)).toBe('0');
+      expect(env.AICLIENT_RUNTIME_OTHER, String(isPackaged)).toBeUndefined();
+    }
+    expect(build().AICLIENT_RUNTIME_LOOP_GUARD).toBeUndefined();
+    expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_LOOP_GUARD')).toBe(true);
+  });
+
   // P1-3a: the shared host carries each session's generation in its channel's
   // messages; no launch ever says which session or generation it serves.
   it('never passes a session generation or a bridge switch to the shared host', () => {
