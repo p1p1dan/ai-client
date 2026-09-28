@@ -9,19 +9,22 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   type PermissionActivityRecord,
   PermissionGate,
   type ToolPermissionRequest,
 } from '../../../shared/permissions/gate.ts';
+import { loadPermissionPolicy } from '../../../shared/permissions/policy.ts';
 import { modeSegment, permissionGearSegment } from '../../../shared/permissions/promptText.ts';
 import type { PermissionGear, RuntimeMode } from '../../../shared/types/runtimePermission.ts';
 import type { DshPreToolDecision } from '../dshTypes.ts';
 import {
   type AttachableGate,
   type DshPermissionHost,
+  defaultAttachmentRoot,
   denialDecision,
+  isAttachmentPath,
   isSpillPath,
   PERMISSION_HOST_SERVICE,
 } from '../permissionHost.ts';
@@ -841,5 +844,103 @@ describe('audit wiring', () => {
     expect(await fake.approval({ agent: root(), toolName: 'write', callId: 'a1' })).toBe(
       'unavailable'
     );
+  });
+});
+
+/**
+ * dsh-rebase P1-4c2 (decisions 097, 112): what the user attached lives in
+ * dsh-attachment-local's store, `<DSH_HOME>/attachments/v1`, and the model is
+ * told to read it there. Reads of it are trusted: no card, under the bundled
+ * policy too (the app keeps DSH_HOME under `~/.pilab`, outside every
+ * workspace). A deny still refuses; nothing else about the home is trusted.
+ */
+describe('the attachment store is trusted for reads (P1-4c2)', () => {
+  let home: string;
+  let store: string;
+  const file = (...parts: string[]) => join(store, ...parts);
+
+  beforeAll(() => {
+    home = realpathSync(mkdtempSync(join(tmpdir(), 'perm-row-dsh-home-')));
+    store = join(home, 'attachments', 'v1');
+    mkdirSync(file('files', 'ab', 'digest'), { recursive: true });
+    mkdirSync(file('objects', 'cd'), { recursive: true });
+    writeFileSync(file('files', 'ab', 'digest', 'notes.txt'), 'attached\n');
+    writeFileSync(file('files', 'ab', 'digest', 'secrets.env'), 'SECRET=1\n');
+    writeFileSync(file('objects', 'cd', 'cdef'), 'png');
+    writeFileSync(join(home, 'other.txt'), 'not attached\n');
+  });
+
+  afterAll(() => {
+    rmSync(home, { recursive: true, force: true });
+  });
+
+  it('is strictly below the store', () => {
+    expect(isAttachmentPath(file('files', 'ab', 'digest', 'notes.txt'), store)).toBe(true);
+    expect(isAttachmentPath(file('objects', 'cd', 'cdef'), store)).toBe(true);
+    expect(isAttachmentPath(store, store)).toBe(false);
+    expect(isAttachmentPath(join(home, 'other.txt'), store)).toBe(false);
+    expect(isAttachmentPath(join(home, 'attachments', 'v10', 'x'), store)).toBe(false);
+    expect(isAttachmentPath(join(store, '..', 'v2', 'x'), store)).toBe(false);
+    expect(isAttachmentPath(file('x'), null)).toBe(false);
+  });
+
+  it("is the canonical DSH_HOME's store, and none without a home", () => {
+    const link = join(outside, 'dsh-home-link');
+    symlinkSync(home, link);
+    try {
+      expect(defaultAttachmentRoot(link)).toBe(store);
+    } finally {
+      unlinkSync(link);
+    }
+    expect(defaultAttachmentRoot('  ')).toBeNull();
+  });
+
+  it('reads an attachment without a card; a deny, and anything else, still hold', async () => {
+    vi.stubEnv('DSH_HOME', home);
+    let wired: Setup;
+    try {
+      wired = setup();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    const policy = await loadPermissionPolicy(
+      {
+        readFile: async (path) => {
+          throw Object.assign(new Error(`ENOENT ${path}`), { code: 'ENOENT' });
+        },
+      },
+      { cwd: ws, agentDir: null, sources: { user: false, project: false, local: false } }
+    );
+    const asked: string[] = [];
+    const gate = new PermissionGate({
+      cwd: ws,
+      gear: 'ask',
+      mode: 'agent',
+      policy,
+      approve: async (request) => {
+        asked.push(request.tool);
+        return 'deny';
+      },
+    });
+    wired.host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    const run = (tool: string, args: Record<string, unknown>) =>
+      wired.fake.prepare(call(tool, args, root()));
+    const notes = file('files', 'ab', 'digest', 'notes.txt');
+
+    expect((await run('read', { file_path: notes })).kind).toBe('allow');
+    expect((await run('read_image', { file_path: file('objects', 'cd', 'cdef') })).kind).toBe(
+      'allow'
+    );
+    expect(asked).toEqual([]);
+    // Decision 097 rule 3: an explicit deny (here the bundled `*.env`) still refuses, silently.
+    expect(
+      await run('read', { file_path: file('files', 'ab', 'digest', 'secrets.env') })
+    ).toMatchObject({ kind: 'deny', info: { code: 'tool_denied', reason: 'policy-deny' } });
+    expect(asked).toEqual([]);
+    // The rest of DSH_HOME, a write into the store and a shell reading it are asked as ever.
+    await run('read', { file_path: join(home, 'other.txt') });
+    await run('write', { file_path: notes, content: 'x' });
+    await run('bash', { command: `cat ${notes}` });
+    expect(asked).toEqual(['read', 'write', 'bash']);
   });
 });

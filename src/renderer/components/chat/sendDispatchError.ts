@@ -36,22 +36,41 @@ export function parseSendDispatchErrorCode(error: unknown): RecoverableSendError
 }
 
 /**
- * dsh-rebase P1-1 (GUI point-check D2) — the DSH bridge refused the send
- * because it does not carry something yet (decision 010).
+ * dsh-rebase P1-4c2 (decision 096; the path P1-1's GUI point-check D2 built) —
+ * the engine refused an attachment of a send or a Ctrl+Enter interjection:
+ * an image DSH will not admit, or a file it could not store.
  *
- * On the `chat.send` path that is attachments and nothing else: the bridge
- * checks them before it starts a turn, so nothing was admitted. The code
- * arrives as `WorkerSlotError: WORKER_DSH_UNSUPPORTED: …` inside Electron's own
- * wrapper — `WorkerManager` passes this one through unrenamed — and is matched
- * with the same word guards as the codes above.
+ * The bridge decides it before it starts or joins a turn, so nothing was
+ * admitted. The code arrives as `WorkerSlotError: WORKER_ATTACHMENT_REJECTED:
+ * <DSH code> "<file name>": <DSH sentence>` inside Electron's own wrapper —
+ * `WorkerManager` passes it through unrenamed (`WORKER_ATTACHMENT_REJECTED`
+ * in `@shared/types/workerRpc`) — and is matched with the same word guards as
+ * the codes above. The file name is JSON-quoted and absent when the refusal
+ * is about the images as a whole (too many, too many bytes).
  *
  * Deliberately NOT one of the recoverable codes: resending the same payload is
  * refused the same way every time, so the composer hands the payload back
  * instead of retrying it (`refusedByRule` in `queueRelease.ts`).
  */
-const ENGINE_UNSUPPORTED_PATTERN = /(?:^|[^A-Za-z0-9_])WORKER_DSH_UNSUPPORTED(?![A-Za-z0-9_])/;
+const ATTACHMENT_REJECTED_PATTERN =
+  /(?:^|[^A-Za-z0-9_])WORKER_ATTACHMENT_REJECTED: ([A-Z0-9_]+)(?: ("(?:[^"\\]|\\.)*"))?/;
 
-export function isEngineUnsupportedSendError(error: unknown): boolean {
+export interface AttachmentRejection {
+  /** DSH's code, e.g. `IMAGE_DIMENSION_TOO_LARGE`. */
+  code: string;
+  /** The attachment to blame, when one is. */
+  name?: string;
+}
+
+export function parseAttachmentRejection(error: unknown): AttachmentRejection | null {
   const message = error instanceof Error ? error.message : String(error ?? '');
-  return ENGINE_UNSUPPORTED_PATTERN.test(message);
+  const match = ATTACHMENT_REJECTED_PATTERN.exec(message);
+  if (!match) return null;
+  let name: string | undefined;
+  try {
+    name = match[2] ? (JSON.parse(match[2]) as string) : undefined;
+  } catch {
+    name = undefined;
+  }
+  return { code: match[1] as string, ...(name ? { name } : {}) };
 }

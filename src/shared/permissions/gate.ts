@@ -524,20 +524,26 @@ export class PermissionGate implements PermissionGateService {
     if (!this.isToolAllowed(request.tool)) return 'deny';
     const inspectedPaths = [request.path, ...(request.paths ?? [])];
     const policy = this.config.policy;
-    const decisions = policy
+    // What the policy says about where the call lands (the path table, the
+    // workspace boundary), apart from what it says about the tool itself: a
+    // trusted path waives the former's `ask` below, never the latter's.
+    const pathDecisions = policy
       ? [
           ...inspectedPaths.map((path) => policyAction(policy, 'path', [path], this.config.cwd)),
-          ...(isShellTool(request.tool)
-            ? [request.command ?? '', ...(request.commands ?? [])]
-            : [request.policyValue ?? request.path]
-          ).map((value) =>
-            policyAction(policy, request.policySurface ?? request.tool, [value], this.config.cwd)
-          ),
           ...inspectedPaths
             .filter((path) => !containsPath(this.config.cwd, path))
             .map((path) => policyAction(policy, 'external_directory', [path], this.config.cwd)),
         ]
       : [];
+    const toolDecisions = policy
+      ? (isShellTool(request.tool)
+          ? [request.command ?? '', ...(request.commands ?? [])]
+          : [request.policyValue ?? request.path]
+        ).map((value) =>
+          policyAction(policy, request.policySurface ?? request.tool, [value], this.config.cwd)
+        )
+      : [];
+    const decisions = [...pathDecisions, ...toolDecisions];
     if (decisions.includes('deny')) return 'deny';
     const pathAction = pathPolicy(request.path);
     if (pathAction === 'deny') return 'deny';
@@ -604,8 +610,13 @@ export class PermissionGate implements PermissionGateService {
       inspectedPaths.some((path) => policyAction(policy, 'path', [path], this.config.cwd) === 'ask')
     )
       return 'ask';
+    // dsh-rebase P1-4c2 (decision 112): a trusted path's path-table and
+    // workspace-boundary `ask` (`~/.pilab/*`, `external_directory`) are the
+    // ones waived above; it must not come back here, or a read of a file the
+    // host wrote itself (a spill, an attachment) still raises a card. The
+    // tool's own rule (`read: ask`) still asks.
     if (['read', 'grep', 'glob'].includes(request.tool))
-      return decisions.includes('ask') ? 'ask' : 'allow';
+      return (request.trustedPath ? toolDecisions : decisions).includes('ask') ? 'ask' : 'allow';
     if (
       gear === 'accept-edits' &&
       (['write', 'edit'].includes(request.tool) || isShellTool(request.tool))

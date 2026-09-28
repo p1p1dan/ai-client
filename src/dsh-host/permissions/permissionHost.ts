@@ -28,7 +28,7 @@
 import { realpathSync } from 'node:fs';
 import { opendir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, relative, sep } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { analyzeBash, type BashParser } from '../../shared/permissions/bashWalker.ts';
 import { errorCode } from '../../shared/permissions/errors.ts';
 import {
@@ -103,8 +103,18 @@ export interface PermissionHostOptions {
   /** The tree-sitter bash parser, loaded on the first bash call. */
   loadParser: () => Promise<BashParser>;
   env?: Record<string, string>;
-  /** Paths the host wrote for the model to read (spill files). Defaults to `$TMPDIR/dsh-spill-*`. */
+  /**
+   * Paths the host wrote for the model to read. Defaults to the spill files
+   * (`$TMPDIR/dsh-spill-*`) and the attachment store (`attachmentRoot`).
+   */
   isTrustedPath?: (path: string) => boolean;
+  /**
+   * dsh-attachment-local's store, `<DSH_HOME>/attachments/v1` (P1-4c2,
+   * decision 097): the verbatim copies of files the user attached and the
+   * normalized images, which the model is told to read. Defaults to the
+   * canonical `$DSH_HOME` of the host; none when it is not set.
+   */
+  attachmentRoot?: string | null;
   /** Ledger bound: call ids whose result never arrived are forgotten oldest first. */
   maxTrackedCalls?: number;
   /**
@@ -157,6 +167,35 @@ export function isSpillPath(path: string, root: string = spillParent()): boolean
   return rel.split(sep)[0].startsWith('dsh-spill-');
 }
 
+/**
+ * P1-4c2 (decision 097): a path strictly below `root`, the attachment store.
+ * The gate hands over canonical paths, so `root` must be canonical too.
+ */
+export function isAttachmentPath(path: string, root: string | null | undefined): boolean {
+  if (!root) return false;
+  const rel = relative(root, path);
+  return rel !== '' && rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+/**
+ * `<DSH_HOME>/attachments/v1` of this host (dsh-attachment-local's
+ * `attachmentRoot`: the row is composed without a `dshHome` of its own, so it
+ * follows `$DSH_HOME`), on the canonical spelling of the home.
+ */
+export function defaultAttachmentRoot(
+  home: string | undefined = process.env.DSH_HOME
+): string | null {
+  const trimmed = home?.trim();
+  if (!trimmed) return null;
+  let canonical: string;
+  try {
+    canonical = realpathSync(trimmed);
+  } catch {
+    canonical = resolve(trimmed);
+  }
+  return join(canonical, 'attachments', 'v1');
+}
+
 let tmpRoot: string | undefined;
 function spillParent(): string {
   if (tmpRoot === undefined) {
@@ -206,7 +245,13 @@ export class PermissionHost {
     this.options = options;
     this.fs = options.fs ?? nodeFs;
     this.env = options.env ?? processEnv();
-    this.isTrustedPath = options.isTrustedPath ?? ((path) => isSpillPath(path));
+    const attachmentRoot =
+      options.attachmentRoot === undefined ? defaultAttachmentRoot() : options.attachmentRoot;
+    // Decision 097 rule 3: what the user attached is read without a card; an
+    // explicit deny (a secret's name, a policy rule) still refuses it.
+    this.isTrustedPath =
+      options.isTrustedPath ??
+      ((path) => isSpillPath(path) || isAttachmentPath(path, attachmentRoot));
     this.maxTrackedCalls = options.maxTrackedCalls ?? 4096;
     this.api = {
       attachGate: (channelId, attach) => this.attachGate(channelId, attach),

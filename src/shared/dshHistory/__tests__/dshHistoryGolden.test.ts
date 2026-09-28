@@ -110,7 +110,9 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'crash-resume',
     'fail',
     'fail-retry',
+    'file-attach',
     'fork',
+    'image',
     'job-notice',
     'perm-card',
     'perm-deny',
@@ -275,5 +277,30 @@ describe('what the recordings show a user', () => {
       'P0-RECALL {"markers":["FORK-BASE-1","FORK-AFTER-2"]} which markers do you see?',
       'P0-RECALL present=FORK-BASE-1 missing=FORK-AFTER-2',
     ]);
+  });
+
+  it('image (P1-4c2): the prompt carries the chip of its image, and the model got the image', () => {
+    const { messages } = project('image');
+    expect(messages[0]).toMatchObject({
+      role: 'user',
+      attachments: [{ kind: 'image', mediaType: 'image/png', name: 'dot.png' }],
+    });
+    expect(texts(messages)).toEqual([
+      'P1-IMAGE: what do you see?',
+      'P1-IMAGE saw 1 image block(s).',
+    ]);
+  });
+
+  it('file-attach (P1-4c2): the bubble keeps the words, the chip names the file, the model read it', () => {
+    const { messages } = project('file-attach');
+    expect(messages[0]).toMatchObject({
+      role: 'user',
+      attachments: [{ kind: 'text', mediaType: 'text/plain', name: 'notes.txt' }],
+    });
+    // Decision 097: the file is not merged into the prompt.
+    expect(texts(messages)[0]).toBe('P1-FILEREAD: read the attached notes.');
+    expect(texts(messages).at(-1)).toBe('P1-FILEREAD read: FILE-MARKER-NOTES.');
+    const read = blocksOf(messages).find((block) => block.type === 'tool_call');
+    expect(read).toMatchObject({ name: 'read' });
   });
 });

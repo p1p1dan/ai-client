@@ -54,6 +54,8 @@ export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
  * preview reads through `readPage` (P1-4a, decision 030).
  * `aiclientPermissions` is the permission row every session attaches its gate
  * to (P1-6b, decision 042): the bridge serves no session without it.
+ * `attachments` (dsh-attachment-local) admits a send's images and stores its
+ * text files (P1-4c2, decisions 096 and 097).
  */
 export const inject = [
   'agents',
@@ -62,6 +64,7 @@ export const inject = [
   'agentLoop',
   'sessionQuery',
   'aiclientPermissions',
+  'attachments',
 ];
 
 /** Shared with host.ts through a global symbol; filled from the host's first line. */
@@ -112,7 +115,8 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
   const deps: DshBridgeDeps = {
     // DSH's `MessageSource` is open by declaration merging; our retry source
     // (`aiclient-retry`, decisions 028 / 095) is not declared into it, as the
-    // loop guard's wrap-up source is not either.
+    // loop guard's wrap-up source is not either. The attachment references
+    // (P1-4c2) are DSH's own, read opaquely here (`attachments.ts`).
     createUserMessage: createUserMessage as unknown as DshBridgeDeps['createUserMessage'],
     // Decision 033: read per turn, so every turn routes by the plan the host runs.
     modelPlan: () => ctx.get('aiclientModelPlan'),

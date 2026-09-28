@@ -8,6 +8,13 @@
 
 修订：替换[决策 010](010-p1-1-scope-boundary.md) 第 1 条里「带附件抛 `WORKER_DSH_UNSUPPORTED`」的安全桩。
 
+**实现注记（2026-09-28，P1-4c2）**：按本决策落地，细节与自主取舍见[决策 112](112-p1-4c2-attachment-choices.md)：
+- 第 1 条「bridge 行的 `inject` 要加上 `attachments`」指 Cordis 行的服务注入列表，已加（112 第 15 条）；
+- 第 2 条的拒绝消息格式为 `<DSH 错误码> "<文件名>": <DSH 原句>`；DSH 的错误不指明哪一张，由 bridge 找出（112 第 3 条）；
+- 第 5 条：模型没声明图片输入时 bridge 不拦，DSH 换成占位文字（112 第 10 条）；
+- 第 6 条：回显与历史用同一个函数读 chip，图片的类型是 DSH 规范化后的（112 第 9 条）；
+- 影响一节的 `image` 金样本：被拒的一张用边长超限的 PNG（`IMAGE_DIMENSION_TOO_LARGE`），不用超过 20 MiB 的大图（112 第 14 条）。
+
 ## 规则
 
 1. **发图**：

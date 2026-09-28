@@ -145,7 +145,11 @@ import { ReadingColumn } from './ReadingColumn';
 import { isRetryUnavailableError, retryRunningRequestId } from './retryLastTurn';
 import { createSendWaitBudget, SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { createSendCancellation, SEND_CANCELLED, type SendCancellation } from './sendCancellation';
-import { isEngineUnsupportedSendError, parseSendDispatchErrorCode } from './sendDispatchError';
+import {
+  type AttachmentRejection,
+  parseAttachmentRejection,
+  parseSendDispatchErrorCode,
+} from './sendDispatchError';
 import { decideSendPreamble } from './sendPreamble';
 import { onSessionEnded } from './sessionEndSignal';
 import { failureCardOwnsError } from './sessionFailure';
@@ -793,6 +797,23 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const attachments = useComposerAttachments({ disabled: Boolean(disabled) });
   const { clearDrafts: clearAttachmentDrafts, dismissNotice: dismissAttachmentNotice } =
     attachments;
+  // dsh-rebase P1-4c2 (decision 096): the engine refused an attachment of a
+  // send or an interjection. Said next to the attachments, which stay in the
+  // composer with the text for the user to remove or replace.
+  const showAttachmentRejection = (rejection: AttachmentRejection) => {
+    attachments.showNotice({
+      tone: 'warning',
+      message: rejection.name
+        ? t(
+            'The engine refused the attachment {{name}} ({{code}}). Remove or replace it to send the message.',
+            { name: rejection.name, code: rejection.code }
+          )
+        : t(
+            'The engine refused the attachments ({{code}}). Remove or replace them to send the message.',
+            { code: rejection.code }
+          ),
+    });
+  };
 
   // F2 §5.3: the attachment half of the restored-draft provenance. It has to be
   // mirrored out of the hook's own state rather than counted at this
@@ -1223,15 +1244,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       return 'interjected';
     } catch (error) {
       usePendingUserMessagesStore.getState().clear(attemptId);
-      // P1-1 D2's rule, as a send's: the engine cannot carry attachments yet
-      // (P1-4c2). The draft stays for the user to drop them.
-      if (wireAttachments && isEngineUnsupportedSendError(error)) {
-        attachments.showNotice({
-          tone: 'warning',
-          message: t(
-            'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.'
-          ),
-        });
+      // P1-4c2, as a send's: the engine refused an attachment (decision 096).
+      // Nothing was steered; the draft stays for the user to fix.
+      const rejection = wireAttachments ? parseAttachmentRejection(error) : null;
+      if (rejection) {
+        showAttachmentRejection(rejection);
       } else {
         setQueueNotice(
           t('Could not add the message to the running turn: {{error}}', {
@@ -1955,10 +1972,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const retryRunningIds = new Set<string>();
     // The worker found no cut-short turn to re-run (`retry_unavailable`).
     let retryUnavailable = false;
-    // P1-1 D2: the DSH bridge refused this send's attachments
-    // (`WORKER_DSH_UNSUPPORTED`). Nothing was admitted, and the same payload
-    // is refused the same way every time.
-    let attachmentsRefused = false;
+    // P1-4c2 (decision 096, on P1-1 D2's path): the engine refused one of
+    // this send's attachments (`WORKER_ATTACHMENT_REJECTED`). Nothing was
+    // admitted, and the same payload is refused the same way every time.
+    let attachmentRejection: AttachmentRejection | null = null;
     const acceptRetry = () => {
       if (sawUserEcho) return;
       // Stands in for the echo everywhere below — the terminal gating, the
@@ -2265,11 +2282,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             retryUnavailable = true;
             return null;
           }
-          // P1-1 D2: refused by rule, before admission — the same shape as
-          // the line above. Only a send that carried attachments can be it;
-          // any other `WORKER_DSH_UNSUPPORTED` keeps the generic path.
-          if (!retryLastTurn && wireAttachments && isEngineUnsupportedSendError(error)) {
-            attachmentsRefused = true;
+          // P1-4c2: refused by rule, before admission — the same shape as
+          // the line above. Only a send that carried attachments can be it.
+          const rejection =
+            !retryLastTurn && wireAttachments ? parseAttachmentRejection(error) : null;
+          if (rejection) {
+            attachmentRejection = rejection;
             return null;
           }
           // The WorkerManager can refuse a send outright — an idle-evicted
@@ -2750,19 +2768,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         return 'skipped';
       }
 
-      // P1-1 D2 — the engine cannot carry attachments yet (decision 010).
-      // Nothing was admitted and nothing is broken: no raw error box, no
-      // `unbindHost()` (the slot that answered is healthy), and no Retry — the
-      // same payload is refused the same way every time. The text and its
+      // P1-4c2 — the engine refused an attachment (decision 096; P1-1 D2's
+      // path). Nothing was admitted and nothing is broken: no raw error box,
+      // no `unbindHost()` (the slot that answered is healthy), and no Retry —
+      // the same payload is refused the same way every time. The text and its
       // attachments go back to the composer (`refusedByRule`), where the user
-      // can drop the attachments and send; the notice says why, next to them.
-      if (attachmentsRefused) {
-        attachments.showNotice({
-          tone: 'warning',
-          message: t(
-            'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.'
-          ),
-        });
+      // can remove or replace the one refused; the notice names it, next to them.
+      if (attachmentRejection) {
+        showAttachmentRejection(attachmentRejection);
         return finalizeOutcome(
           decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
           { refusedByRule: true }

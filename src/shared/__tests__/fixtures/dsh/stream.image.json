@@ -1,0 +1,129 @@
+[
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-IMAGE",
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png",
+          "name": "dot.png"
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-IMAGE: what do you see?"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-image-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-vision"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-image-t1-s1",
+      "blockId": "dsh-aiclient-rec-image-t1-s1-b0",
+      "text": "P1-IMAGE saw 1 image block(s)."
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-image-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-image",
+    "requestId": "turn-IMAGE",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

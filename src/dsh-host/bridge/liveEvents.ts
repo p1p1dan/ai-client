@@ -24,7 +24,8 @@
  *   `user/message` the user typed       the user echo: the turn's own prompt, a
  *                                       Ctrl+Enter message the turn took in at a
  *                                       step boundary (P1-4c1, decision 093), each
- *                                       with its `attemptId`
+ *                                       with its `attemptId` and the chips of its
+ *                                       image and file blocks (P1-4c2)
  *   `user/message` nobody typed         the head of a turn the engine started, or
  *                                       a notice (`custom.message`), by the table
  *                                       the history projection reads (rules 7, 8)
@@ -37,7 +38,7 @@
 
 import { mapDshFailureCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
-import { dshToolOutcomeFlags } from '../../shared/dshHistory/projection.ts';
+import { dshMessageAttachments, dshToolOutcomeFlags } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
 import { AICLIENT_TURN_CEILING_REASON } from '../../shared/dshHistory/types.ts';
 import {
@@ -608,7 +609,7 @@ export class DshLiveEvents {
           : id !== undefined
             ? this.host.takeSteered(id)?.attemptId
             : undefined;
-      this.echoPrompt(event.seq, attemptId, textOf(data.content));
+      this.echoPrompt(event.seq, attemptId, textOf(data.content), data.content);
       return;
     }
     // Decisions 072, 099: what the engine sent itself, by the history's own table.
@@ -632,14 +633,26 @@ export class DshLiveEvents {
     });
   }
 
-  private echoPrompt(seq: number, attemptId: string | undefined, text: string): void {
+  /**
+   * What the user sent, with the chips of its attachments (P1-4c2, decisions
+   * 096 and 097): an image by the type DSH stored it as, a file as text — the
+   * history projection's own reading of the same blocks.
+   */
+  private echoPrompt(
+    seq: number,
+    attemptId: string | undefined,
+    text: string,
+    content: unknown
+  ): void {
     const messageId = `dsh-user-${seq}`;
+    const attachments = dshMessageAttachments(content);
     this.emit({
       type: 'message.started',
       payload: {
         messageId,
         role: 'user',
         ...(attemptId ? { attemptId } : {}),
+        ...(attachments.length > 0 ? { attachments } : {}),
       },
     });
     this.emit({

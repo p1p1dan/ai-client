@@ -1,0 +1,117 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-image",
+      "piSessionId": "aiclient-rec-image",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-image.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-image",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-image.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-IMAGE: what do you see?"
+            }
+          ],
+          "attachments": [
+            {
+              "kind": "image",
+              "mediaType": "image/png",
+              "name": "dot.png"
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-vision",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "P1-IMAGE saw 1 image block(s)."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-image-t1-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-image",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-image.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-5",
+        "fileTailEntryId": "aiclient-rec-image#12"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-IMAGE: what do you see?",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-IMAGE saw 1 image block(s).",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  },
+  "rejected": {
+    "ok": false,
+    "code": "WORKER_ATTACHMENT_REJECTED",
+    "retryable": false,
+    "message": "IMAGE_DIMENSION_TOO_LARGE \"wide.png\": Image exceeds the configured per-side pixel limit.",
+    "eventsAfter": 0
+  }
+}

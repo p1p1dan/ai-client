@@ -115,7 +115,10 @@ describe('one approval answerer in the product (P1-6b part 2, decision 042 rule 
   });
 
   it('the bridge row injects the permission row and attaches a gate before it opens an agent', () => {
-    expect(read('bridge', 'plugin.ts')).toMatch(/'aiclientPermissions',\n\];/);
+    // P1-4c2: `attachments` (decisions 096, 097) follows it in the same list.
+    expect(read('bridge', 'plugin.ts')).toMatch(
+      /export const inject = \[[^\]]*'aiclientPermissions',\n\s*'attachments',\n\];/
+    );
     const runtime = read('bridge', 'dshSessionRuntime.ts');
     expect(runtime.indexOf('this.attachGate(this.dshSessionId);')).toBeLessThan(
       runtime.indexOf('this.handle = await this.ctx.agents.create({')

@@ -7,6 +7,8 @@
 
 修订：P1-4 分片 04 §3 第 1 条原定「文本附件照 native 的方式并进 text，不用 FileBlock」，改为用 FileBlock。
 
+**实现注记（2026-09-28，P1-4c2）**：第 6 条的开工前实验已做（[证据](../evidence/p1-4c2-attachment-experiment-2026-09-28.md)）。DSH 这一侧成立：沙箱关闭时句柄路径就是宿主路径，`read` 读得到。我方闸原样不满足「不出卡」：除了第 3 条要扩的 `isTrustedPath`，闸在读取的最后一步还会把路径表（`~/.pilab/*`）与工作区边界的 ask 算回来。补上可信路径规则并修正闸之后实验全部通过，按本决策实现、不退回 1.0.x。详见[决策 112](112-p1-4c2-attachment-choices.md) 第 1、6、7、8 条；「实验成立」这一判断请用户确认。
+
 ## 规则
 
 1. **存成文件块**：文本附件不再并进正文。bridge 调 `ctx.attachments.saveFile({data, name})` 得到 `FileAttachmentRef`，以 `{type:'file', attachment}` 块放进这条 user 消息；`admitPromptContent` 原样放行文件块。

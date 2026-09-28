@@ -124,11 +124,12 @@ export interface PiWorkerRuntime {
   /**
    * Ctrl+Enter — hand the message to the live run (dsh-rebase decision 093:
    * the DSH bridge steers it into the running turn; the retiring native
-   * runtime still only arms a stop at its next turn boundary). Synchronous and
-   * non-promise: there is no I/O to await, and `interjected: false` is the
-   * answer for "no run was live", not a failure.
+   * runtime still only arms a stop at its next turn boundary). `interjected:
+   * false` is the answer for "no run was live", not a failure. The DSH bridge
+   * answers a promise when the message carries attachments, which it admits
+   * through the engine first (P1-4c2); the native runtime stays synchronous.
    */
-  interject(input: WorkerInterjectPayload): WorkerInterjectResult;
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult | Promise<WorkerInterjectResult>;
   /** Answer one `permission.requested`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
   /** F5 — answer one `question.requested`. */
@@ -450,7 +451,7 @@ export class PiWorkerRpcServer {
           await this.handleStop(request);
           break;
         case 'worker.interject':
-          this.handleInterject(request);
+          await this.handleInterject(request);
           break;
         case 'worker.permission.respond':
           this.handlePermissionResponse(request);
@@ -836,7 +837,7 @@ export class PiWorkerRpcServer {
     this.respondSuccess(request, await this.runtime.stop(request.payload));
   }
 
-  private handleInterject(request: WorkerRpcRequest): void {
+  private async handleInterject(request: WorkerRpcRequest): Promise<void> {
     if (!isWorkerInterjectPayload(request.payload)) {
       this.respondError(request, {
         code: 'WORKER_INVALID_PAYLOAD',
@@ -852,7 +853,7 @@ export class PiWorkerRpcServer {
       } satisfies WorkerInterjectResult);
       return;
     }
-    this.respondSuccess(request, this.runtime.interject(request.payload));
+    this.respondSuccess(request, await this.runtime.interject(request.payload));
   }
 
   private handlePermissionResponse(request: WorkerRpcRequest): void {

@@ -143,7 +143,13 @@ export function dshHistoryEntryType(message: HistoryMessage): DshHistoryEntryTyp
   return first && first.id === partId(message.id, SUMMARY_PART, 0) ? 'compaction' : 'notice';
 }
 
-function attachmentsOf(content: unknown): HistoryAttachment[] {
+/**
+ * The attachment chips of a DSH user message's content: an image block by its
+ * stored (normalized) type, a file block as text (P1-4c2, decisions 096 and
+ * 097). The live echo (`liveEvents.ts`) reads the same helper, so a message
+ * shows the same chips live and replayed.
+ */
+export function dshMessageAttachments(content: unknown): HistoryAttachment[] {
   return blocksOf(content).flatMap((block): HistoryAttachment[] => {
     const attachment = recordOf(block.attachment);
     const name = stringOf(attachment?.name);
@@ -156,8 +162,8 @@ function attachmentsOf(content: unknown): HistoryAttachment[] {
         },
       ];
     }
-    // DSH's verbatim file block. This app merges text attachments into the
-    // prompt and writes none; a session from elsewhere may carry them.
+    // DSH's verbatim file block: how a text attachment is sent (decision 097).
+    // The model reads it on demand; the bubble shows only what the user typed.
     if (block.type === 'file') {
       return [{ kind: 'text', mediaType: 'text/plain', ...(name ? { name } : {}) }];
     }
@@ -629,7 +635,7 @@ export class DshHistoryFold {
     if (kind === DSH_SOURCE_USER) {
       this.decide(false);
       const text = textOf(message.content);
-      const attachments = attachmentsOf(message.content);
+      const attachments = dshMessageAttachments(message.content);
       this.append({
         id,
         entryId: rawId,

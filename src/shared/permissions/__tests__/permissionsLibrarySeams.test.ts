@@ -1,3 +1,4 @@
+import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RuntimeEventDraft } from '../../types/runtimeEvents.ts';
@@ -298,6 +299,62 @@ describe('injected filesystem', () => {
         { cwd: ROOT, agentDir, sources: { user: true, project: false, local: false } }
       )
     ).rejects.toMatchObject({ code: 'permission_policy_invalid' });
+  });
+});
+
+/**
+ * dsh-rebase P1-4c2 (decision 112): a host-produced file the model is told to
+ * read (a spill, an attachment) is a trusted path. Its read must not come back
+ * as an ask from the path table (`~/.pilab/*`, where the app keeps DSH_HOME)
+ * or the workspace boundary (`external_directory`) — the two asks trust
+ * waives — while a deny, and the tool's own rule, still hold.
+ */
+describe('a trusted read (dsh-rebase P1-4c2)', () => {
+  const agentDir = path.resolve('/agent');
+  const policyWith = async (userLayer?: string) =>
+    loadPermissionPolicy(
+      {
+        readFile: async (file: string) => {
+          if (userLayer && file === path.join(agentDir, 'pi-permissions.jsonc'))
+            return { bytes: new TextEncoder().encode(userLayer) };
+          throw Object.assign(new Error(`ENOENT ${file}`), { code: 'ENOENT' });
+        },
+      },
+      { cwd: ROOT, agentDir, sources: { user: Boolean(userLayer), project: false, local: false } }
+    );
+  const store = path.join(os.homedir(), '.pilab', 'p', 'dsh-home', 'attachments', 'v1', 'files');
+  const read = (file: string, trustedPath?: boolean): ToolPermissionRequest => ({
+    tool: 'read',
+    toolCallId: 'r',
+    path: path.join(store, 'ab', 'digest', file),
+    ...(trustedPath ? { trustedPath } : {}),
+  });
+
+  it('is allowed without a card where the same read, untrusted, asks', async () => {
+    const gate = new PermissionGate({ cwd: ROOT, gear: 'ask', policy: await policyWith() });
+    expect(gate.evaluate(read('notes.txt'))).toBe('ask');
+    expect(gate.evaluate(read('notes.txt', true))).toBe('allow');
+    expect(gate.evaluate({ ...read('notes.txt', true), tool: 'grep' })).toBe('allow');
+  });
+
+  it("still meets a deny, and the tool's own ask", async () => {
+    const bundled = new PermissionGate({ cwd: ROOT, gear: 'ask', policy: await policyWith() });
+    expect(bundled.evaluate(read('secrets.env', true))).toBe('deny');
+    expect(bundled.evaluate(read('server.key', true))).toBe('deny');
+    const user = new PermissionGate({
+      cwd: ROOT,
+      gear: 'ask',
+      policy: await policyWith('{ "permission": { "read": "ask" } }'),
+    });
+    expect(user.evaluate(read('notes.txt', true))).toBe('ask');
+    const denying = new PermissionGate({
+      cwd: ROOT,
+      gear: 'ask',
+      policy: await policyWith(
+        '{ "permission": { "path": { "*": "allow", "*/attachments/*": "deny" } } }'
+      ),
+    });
+    expect(denying.evaluate(read('notes.txt', true))).toBe('deny');
   });
 });
 

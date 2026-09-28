@@ -10,7 +10,8 @@
  * samples per scenario under src/shared/__tests__/fixtures/dsh/. Main's model
  * source is played too (P1-5): each host is configured with a plan whose one
  * route is the probes' `aiclient-gateway` / `fake-1`, so the samples keep
- * their route names, and gets its fake key per request.
+ * their route names, and gets its fake key per request. The route also serves
+ * `fake-vision`, which declares image input; only `image` sends to it (P1-4c2).
  *
  *   stream.<scenario>.json  the RuntimeEvents the channel carried (the renderer's input)
  *   log.<scenario>.json     the session's DSH events at the end, read the way the bridge's
@@ -65,6 +66,15 @@
  *                 the turn answers; a second Continue after that success is refused
  *                 (`WORKER_RETRY_UNAVAILABLE`)
  *
+ * Attachment scenarios (P1-4c2, decisions 096 and 097), recorded last:
+ *   image         a small PNG, sent to the image-capable `fake-vision`, reaches the
+ *                 model as an image block (echo and history carry its chip); a PNG
+ *                 wider than 8192 px is refused before any event
+ *                 (`WORKER_ATTACHMENT_REJECTED`, in `rpc.rejected`)
+ *   file-attach   a text attachment is a DSH file block; in the ask posture the
+ *                 model reads the handle's path with `read` and no card comes up;
+ *                 the history row carries the file's chip
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -117,12 +127,15 @@ import { fileURLToPath } from 'node:url';
 import { grantsSidecarFor } from '../bridge/stub.ts';
 import {
   BYPASS_PERMISSIONS,
+  FAKE_MODEL,
+  FAKE_ROUTE,
   fakeGatewayPlan,
   HostClient,
   isRecord,
   type Message,
 } from './lib/hostClient.ts';
 import { baseEnv, captureStderr, exitOf, type Sandbox, sandbox, sleep } from './lib/kit.ts';
+import { solidPng } from './lib/png.ts';
 import { installProbeBundle } from './lib/probe-bundle.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -397,11 +410,13 @@ interface RecordContext {
     sessionFile?: string,
     options?: { permissions?: Message; cwd?: string }
   ): Promise<{ session: Session; boot: Message }>;
+  /** `extra` joins the `worker.send` payload (a model, attachments). */
   turn(
     session: Session,
     label: string,
     text: string,
-    during?: (from: number) => Promise<void>
+    during?: (from: number) => Promise<void>,
+    extra?: Message
   ): Promise<Message[]>;
   history(session: Session): Promise<Message>;
   tree(session: Session): Promise<Message>;
@@ -578,6 +593,10 @@ const SCENARIOS: Record<string, Scenario> = {
   'perm-restart': permRestartScenario,
   'perm-subagent': permSubagentScenario,
   'perm-search': permSearchScenario,
+  // P1-4c2 (decisions 096, 097): attachments. Last, so the scenarios above
+  // keep the host state they were recorded with.
+  image: imageScenario,
+  'file-attach': fileAttachScenario,
 };
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
@@ -828,6 +847,92 @@ async function failRetryScenario(context: RecordContext, host: Host): Promise<Re
   }
   const refused = answerOf(await retry('RETRY-AGAIN'));
   return finish(context, session, [boot], [failed, retried], { retry: { accepted, refused } });
+}
+
+// ---- attachments (P1-4c2) ----------------------------------------------------------
+
+/** The recorder's image-capable model (`input: ['text', 'image']`). */
+const VISION_MODEL = 'fake-vision';
+
+/**
+ * Decision 096: a small PNG goes through DSH's admission and reaches the
+ * model as an image block (the gateway counts them); the user echo and the
+ * history carry its chip. A PNG wider than DSH's 8192 px is then refused
+ * before anything goes out: `WORKER_ATTACHMENT_REJECTED` with DSH's code and
+ * the file's name, and no event on the channel.
+ */
+async function imageScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'image');
+  const { client } = session.host;
+  const model = `${FAKE_ROUTE}/${VISION_MODEL}`;
+  const png = (name: string, bytes: Buffer) => ({
+    kind: 'image',
+    mediaType: 'image/png',
+    data: bytes.toString('base64'),
+    name,
+  });
+  const turn = await context.turn(session, 'IMAGE', 'P1-IMAGE: what do you see?', undefined, {
+    model,
+    attachments: [png('dot.png', solidPng(2, 2))],
+  });
+  const reply = replyOf(turn);
+  if (!reply.includes('saw 1 image block(s)')) {
+    throw new Error(`image: the model did not get the image: ${reply}`);
+  }
+  const from = client.events(session.ch).length;
+  const response = await client.call(session.ch, 'worker.send', {
+    logicalSessionId: session.logicalSessionId,
+    requestId: 'turn-IMAGE-WIDE',
+    attemptId: 'attempt-IMAGE-WIDE',
+    text: 'P1-IMAGE: and this one?',
+    model,
+    attachments: [png('wide.png', solidPng(8193, 1))],
+  });
+  // Anything the refusal might have let out would be on the channel by the time it answered.
+  await sleep(300);
+  if (response.ok) throw new Error('image: the wide PNG was not refused');
+  const rejected = {
+    ...answerOf(response),
+    message: (response.error as Message | undefined)?.message,
+    eventsAfter: client.events(session.ch).length - from,
+  };
+  return finish(context, session, [boot], [turn], { rejected });
+}
+
+/**
+ * Decision 097: a text attachment is stored as a DSH file block; the model
+ * gets one handle line and reads the saved read-only path with `read`, in the
+ * ask posture without a card (the store is a trusted path; a card would be
+ * denied and show here). The bubble keeps the user's own words; the history
+ * row carries the file's chip.
+ */
+async function fileAttachScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'file-attach');
+  const { session, boot } = await context.openSession(host, 'file-attach', undefined, {
+    cwd,
+    permissions: ASK_PERMISSIONS,
+  });
+  const turn = await context.turn(
+    session,
+    'FILE-ATTACH',
+    'P1-FILEREAD: read the attached notes.',
+    answering(session, 'FILE-ATTACH', () => 'deny'),
+    {
+      attachments: [
+        {
+          kind: 'text',
+          mediaType: 'text/plain',
+          data: 'FILE-MARKER-NOTES is on the first line.\nThe second line is plain.\n',
+          name: 'notes.txt',
+        },
+      ],
+    }
+  );
+  const reply = replyOf(turn);
+  if (!reply.includes('read: FILE-MARKER-NOTES')) {
+    throw new Error(`file-attach: the model did not read the file: ${reply}`);
+  }
+  return finish(context, session, [boot], [turn]);
 }
 
 // ---- permission scenarios (P1-6c) ---------------------------------------------------
@@ -1240,7 +1345,25 @@ async function main(): Promise<number> {
     // The probe bundle's auto-approving row would answer the bridge's approvals.
     AICLIENT_DSH_PROBE_ROW: '0',
   };
-  const plan = fakeGatewayPlan({ baseUrl: `http://127.0.0.1:${gateway.port}` });
+  // `fake-1` as every probe has it, and (P1-4c2) an image-capable model for `image`.
+  const plan = fakeGatewayPlan({
+    routes: [
+      {
+        provider: FAKE_ROUTE,
+        baseUrl: `http://127.0.0.1:${gateway.port}`,
+        models: [
+          { id: FAKE_MODEL, name: 'P0 fake model', contextWindow: 200_000, maxTokens: 8192 },
+          {
+            id: VISION_MODEL,
+            name: 'P1-4c2 fake vision model',
+            contextWindow: 200_000,
+            maxTokens: 8192,
+            input: ['text', 'image'],
+          },
+        ],
+      },
+    ],
+  });
   const live: Host[] = [];
   const context: RecordContext = {
     box,
@@ -1305,7 +1428,7 @@ async function main(): Promise<number> {
         boot,
       };
     },
-    async turn(session, label, text, during) {
+    async turn(session, label, text, during, extra = {}) {
       const { client } = session.host;
       const requestId = `turn-${label}`;
       const from = client.events(session.ch).length;
@@ -1314,6 +1437,7 @@ async function main(): Promise<number> {
         requestId,
         attemptId: `attempt-${label}`,
         text,
+        ...extra,
       });
       await during?.(from);
       if (session.host.child.exitCode === null && session.host.child.signalCode === null) {

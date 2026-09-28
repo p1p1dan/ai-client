@@ -31,8 +31,11 @@
  * (P1-4d1, decision 099; `liveEvents.ts`), approvals, stop, the session
  * identity (create, resume, crash restart), the history, tree and leaf,
  * projected from the DSH log (P1-4a, decision 026; `historyCache.ts`), and
- * rewind and fork (P1-4b, decision 027). Compact and attachments refuse until
- * the rest of P1-4 fills them in (dsh-rebase decision 010).
+ * rewind and fork (P1-4b, decision 027). Compact refuses until the rest of P1-4
+ * fills it in (dsh-rebase decision 010). Attachments (P1-4c2, decisions 096 and
+ * 097) go through DSH's attachment service, a send's and an interjection's
+ * alike (`attachments.ts`): images as image blocks, text files as file blocks
+ * the model reads on demand; a refusal is `WORKER_ATTACHMENT_REJECTED`.
  *
  * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
  * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
@@ -127,6 +130,7 @@ import {
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
+import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
@@ -262,6 +266,12 @@ export interface DshBridgeContext {
   sessions: { flush(session: DshSession): Promise<boolean> };
   /** `ctx.sessionQuery` (dsh-session-query): the lock-free exact read the history cache folds. */
   sessionQuery: DshSessionQuery;
+  /**
+   * `ctx.attachments` (dsh-attachment-local): where a send's and an
+   * interjection's images are admitted and its text files stored (P1-4c2,
+   * `attachments.ts`).
+   */
+  attachments: DshAttachmentStore;
   /** A service the row does not inject, when it is there. */
   get?<K extends keyof DshBridgeOptionalServices>(
     name: K
@@ -299,10 +309,9 @@ export interface DshJobsView {
 /** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
 export interface DshBridgeDeps {
   /** `createUserMessage` from `@deepseek-ai/dsh-llm`: the id its durable echo carries. */
-  createUserMessage(input: {
-    content: Array<{ type: 'text'; text: string }>;
-    source: DshUserMessageSource;
-  }): { id: string };
+  createUserMessage(input: { content: DshUserContent[]; source: DshUserMessageSource }): {
+    id: string;
+  };
   /** `$DSH_HOME`; defaults to the host's environment. */
   home?: string;
   now?: () => number;
@@ -952,28 +961,21 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {
     if (input.mode === 'retry') return this.startRetry(input);
-    // decision 010: refuse what is not bridged yet instead of sending something
-    // else — images used to be silently dropped.
-    if (input.attachments && input.attachments.length > 0) {
-      unsupported('Sending attachments');
-    }
-    if (this.turn && !this.turn.synthetic) {
-      throw new PiWorkerSessionError(
-        'WORKER_SESSION_BUSY',
-        'Session already has an active turn',
-        true
-      );
-    }
+    this.assertNoOwnTurn();
     await this.bootstrap();
-    const agent = this.requireAgent();
     // Decisions 033, 040: this turn's model and effort, or a refusal before anything is sent.
-    this.applyRoute(
-      this.router.session(input.model ?? this.modelId, input.effort ?? this.options.effort)
+    const routed = this.router.session(
+      input.model ?? this.modelId,
+      input.effort ?? this.options.effort
     );
-    const message = this.deps.createUserMessage({
-      content: [{ type: 'text', text: input.text }],
-      source: { kind: 'user' },
-    });
+    // Decisions 096, 097: attachments through the engine's own admission; a
+    // refusal (`WORKER_ATTACHMENT_REJECTED`) comes before any event.
+    const content = await admitUserContent(this.ctx.attachments, input.text, input.attachments);
+    // The admission awaited the store: a send that came in meanwhile won.
+    this.assertNoOwnTurn();
+    const agent = this.requireAgent();
+    this.applyRoute(routed);
+    const message = this.deps.createUserMessage({ content, source: { kind: 'user' } });
     this.turn = {
       requestId: input.requestId,
       attemptId: input.attemptId,
@@ -983,6 +985,17 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.emit({ type: 'session.status', payload: { status: 'running' } });
     agent.followup(message);
     return { accepted: true, requestId: input.requestId };
+  }
+
+  /** A turn this bridge sent is running: a second send is busy (a turn DSH started is not). */
+  private assertNoOwnTurn(): void {
+    if (this.turn && !this.turn.synthetic) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_BUSY',
+        'Session already has an active turn',
+        true
+      );
+    }
   }
 
   /**
@@ -1058,22 +1071,39 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    * With no turn running nothing is sent: `turnActive: false`, and the
    * renderer sends the message the ordinary way (runtime-hardening decision
    * 046: the worker is the authority on whether a turn exists).
+   *
+   * Attachments go through a send's admission (P1-4c2, decisions 093, 096,
+   * 097): a refusal is `WORKER_ATTACHMENT_REJECTED` and nothing is steered.
+   * Only then is the answer a promise; the turn is asked again once the store
+   * answered, since it may have ended meanwhile.
    */
-  interject(input: WorkerInterjectPayload): WorkerInterjectResult {
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult | Promise<WorkerInterjectResult> {
     this.assertLogicalSession(input.logicalSessionId);
-    // decision 010, as a send's (P1-4c2 admits them through the engine).
-    if (input.attachments && input.attachments.length > 0) {
-      unsupported('Interjecting with attachments');
+    if (!this.steerable()) return { interjected: false, turnActive: false };
+    if (!input.attachments || input.attachments.length === 0) {
+      return this.steer(input.attemptId, [{ type: 'text', text: input.text }]);
     }
-    const handle = this.handle;
-    if (this.disposed || !handle || this.idle()) {
-      return { interjected: false, turnActive: false };
-    }
-    const message = this.deps.createUserMessage({
-      content: [{ type: 'text', text: input.text }],
-      source: { kind: 'user' },
-    });
-    this.steered.set(message.id, { attemptId: input.attemptId });
+    return this.interjectWithAttachments(input);
+  }
+
+  private async interjectWithAttachments(
+    input: WorkerInterjectPayload
+  ): Promise<WorkerInterjectResult> {
+    const content = await admitUserContent(this.ctx.attachments, input.text, input.attachments);
+    if (!this.steerable()) return { interjected: false, turnActive: false };
+    return this.steer(input.attemptId, content);
+  }
+
+  /** A turn of any origin is running on a live agent: what Ctrl+Enter joins. */
+  private steerable(): boolean {
+    return !this.disposed && this.handle !== null && !this.idle();
+  }
+
+  /** The message into the running turn's inbox, remembered for its echo. */
+  private steer(attemptId: string, content: DshUserContent[]): WorkerInterjectResult {
+    const handle = this.requireHandle();
+    const message = this.deps.createUserMessage({ content, source: { kind: 'user' } });
+    this.steered.set(message.id, { attemptId });
     try {
       handle.agent.steer(message);
     } catch (error) {

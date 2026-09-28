@@ -460,6 +460,16 @@ export interface WorkerSendPayload {
  */
 export const WORKER_RETRY_UNAVAILABLE = 'WORKER_RETRY_UNAVAILABLE';
 
+/**
+ * dsh-rebase P1-4c2 (decision 096): the engine refused an attachment of a
+ * send or an interjection — an image DSH will not admit (format, size, pixels,
+ * bytes that are not the declared type), or a file it could not store. Nothing
+ * was sent and no event was emitted. The message reads
+ * `<DSH code> "<file name>": <DSH sentence>`, the name JSON-quoted and absent
+ * when no single attachment is to blame (too many images, too many bytes).
+ */
+export const WORKER_ATTACHMENT_REJECTED = 'WORKER_ATTACHMENT_REJECTED';
+
 export interface WorkerSendResult {
   accepted: true;
   requestId: string;
@@ -617,8 +627,9 @@ export interface WorkerInterjectPayload {
   attemptId: string;
   text: string;
   /**
-   * Same shape as a send's. The DSH bridge refuses them until attachments are
-   * admitted through the engine (P1-4c2), as it refuses a send's.
+   * Same shape as a send's, admitted through the same entry (P1-4c2): an
+   * attachment the engine refuses answers {@link WORKER_ATTACHMENT_REJECTED}
+   * and nothing is steered.
    */
   attachments?: SessionAttachment[];
 }

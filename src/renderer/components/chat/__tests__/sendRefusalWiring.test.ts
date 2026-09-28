@@ -11,8 +11,9 @@ import { stripComments } from './stripComments';
  * D1: a legacy chat's send was refused (`legacy_session_readonly`); the text
  * vanished behind a Retry that could only be refused again, and Main's raw
  * English sentence sat in a red box under the translated card.
- * D2: a DSH send carrying an image was refused (`WORKER_DSH_UNSUPPORTED`); the
- * text and the image vanished the same way, under the same kind of raw box.
+ * D2: a DSH send carrying an image was refused (then `WORKER_DSH_UNSUPPORTED`,
+ * since P1-4c2 the engine's own `WORKER_ATTACHMENT_REJECTED`); the text and the
+ * image vanished the same way, under the same kind of raw box.
  *
  * The decisions are pure and tested where they live (`queueRelease.test.ts`,
  * `historyError.test.ts`, `sendDispatchError.test.ts`, `resumeIntent.test.ts`,
@@ -37,7 +38,12 @@ function slice(source: string, startMarker: string, endMarker: string): string {
 
 const count = (source: string, needle: string) => source.split(needle).length - 1;
 
-const ATTACHMENTS_NOTICE =
+const ATTACHMENT_NOTICES = [
+  'The engine refused the attachment {{name}} ({{code}}). Remove or replace it to send the message.',
+  'The engine refused the attachments ({{code}}). Remove or replace them to send the message.',
+];
+/** P1-1's blanket refusal, gone with P1-4c2. */
+const P1_1_NOTICE =
   'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.';
 
 describe('D1 — a read-only legacy chat (legacy_session_readonly)', () => {
@@ -81,7 +87,12 @@ describe('D1 — a read-only legacy chat (legacy_session_readonly)', () => {
   });
 });
 
-describe('D2 — attachments the DSH bridge cannot carry (WORKER_DSH_UNSUPPORTED)', () => {
+/**
+ * dsh-rebase P1-4c2 (decision 096): D2's path now carries the engine's own
+ * refusal of an attachment (`WORKER_ATTACHMENT_REJECTED`, its DSH code and the
+ * file to blame) instead of P1-1's blanket "not supported yet".
+ */
+describe('D2 — an attachment the engine refused (WORKER_ATTACHMENT_REJECTED)', () => {
   const dispatchCatch = () => {
     const dispatch = slice(
       COMPOSER,
@@ -93,28 +104,28 @@ describe('D2 — attachments the DSH bridge cannot carry (WORKER_DSH_UNSUPPORTED
 
   it('the dispatch catch records the refusal instead of throwing it to the outer catch', () => {
     const handler = dispatchCatch();
-    const refusal = handler.indexOf(
-      'if (!retryLastTurn && wireAttachments && isEngineUnsupportedSendError(error)) {'
+    const parsed = handler.indexOf(
+      '!retryLastTurn && wireAttachments ? parseAttachmentRejection(error) : null;'
     );
-    expect(refusal).toBeGreaterThan(-1);
+    expect(parsed).toBeGreaterThan(-1);
+    const refusal = handler.indexOf('if (rejection) {', parsed);
+    expect(refusal).toBeGreaterThan(parsed);
     // Absorbed before the generic path rethrows it: the outer catch is what
     // unbound a healthy slot and wrote the raw box.
     expect(refusal).toBeLessThan(handler.indexOf('if (!code) throw error;'));
     const branch = handler.slice(refusal, handler.indexOf('}', refusal));
-    expect(branch).toContain('attachmentsRefused = true;');
+    expect(branch).toContain('attachmentRejection = rejection;');
     expect(branch).toContain('return null;');
   });
 
-  it('the refusal hands text and attachments back, explains why, and arms nothing', () => {
+  it('the refusal hands text and attachments back, names the file, and arms nothing', () => {
     const body = slice(COMPOSER, 'const runSend = async (', 'useQueueRelease({');
-    const start = body.indexOf('if (attachmentsRefused) {');
+    const start = body.indexOf('if (attachmentRejection) {');
     expect(start).toBeGreaterThan(body.indexOf('if (retryUnavailable) {'));
     // Decided before a generic failure could claim it.
     expect(start).toBeLessThan(body.indexOf('if (fatalHostError) {', start));
     const branch = body.slice(start, body.indexOf('if (fatalHostError) {', start));
-    expect(branch).toContain('attachments.showNotice({');
-    expect(branch).toContain('message: t(');
-    expect(branch).toContain(`'${ATTACHMENTS_NOTICE}'`);
+    expect(branch).toContain('showAttachmentRejection(attachmentRejection);');
     expect(branch).toContain('return finalizeOutcome(');
     expect(branch).toContain('{ refusedByRule: true }');
     // The slot that refused is healthy, nothing failed, and a resend of the
@@ -125,8 +136,30 @@ describe('D2 — attachments the DSH bridge cannot carry (WORKER_DSH_UNSUPPORTED
     expect(count(COMPOSER, 'refusedByRule: true')).toBe(1);
   });
 
-  it('ships the notice in the dictionary', () => {
-    expect(zhTranslations[ATTACHMENTS_NOTICE]).toBeDefined();
+  it('a Ctrl+Enter interjection refused the same way keeps its draft and says why', () => {
+    const interject = slice(COMPOSER, 'const interjectIntoTurn = async (', 'finally {');
+    const handler = interject.slice(interject.indexOf('} catch (error) {'));
+    expect(handler).toContain('wireAttachments ? parseAttachmentRejection(error) : null;');
+    expect(handler).toContain('showAttachmentRejection(rejection);');
+    // A refusal never clears the draft: only an accepted interjection does.
+    expect(handler).not.toContain("updateValue('')");
+    expect(handler).not.toContain('removeDrafts(');
+  });
+
+  it('the notice names the file and the code, next to the attachments', () => {
+    const notice = slice(
+      COMPOSER,
+      'const showAttachmentRejection = (rejection: AttachmentRejection) => {',
+      '};'
+    );
+    expect(notice).toContain('attachments.showNotice({');
+    for (const key of ATTACHMENT_NOTICES) expect(notice).toContain(`'${key}'`);
+  });
+
+  it('ships both notices in the dictionary, and not the old one', () => {
+    for (const key of ATTACHMENT_NOTICES) expect(zhTranslations[key]).toBeDefined();
+    expect(zhTranslations[P1_1_NOTICE]).toBeUndefined();
+    expect(COMPOSER).not.toContain(P1_1_NOTICE);
   });
 });
 

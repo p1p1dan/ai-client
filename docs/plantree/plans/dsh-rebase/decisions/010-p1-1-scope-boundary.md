@@ -4,6 +4,8 @@
 
 **修订（2026-09-28，P1-4c1）**：第 1 条的重试安全桩已由[决策 095](095-retry-keeps-hidden-continuation.md) 的受理规则取代（[决策 111](111-p1-4c1-turn-semantics-choices.md) 第 9 条）；附件的安全桩仍在，插话带附件也按它拒绝，等 P1-4c2 放开。
 
+**修订（2026-09-28，P1-4c2）**：第 1 条的附件安全桩已由[决策 096](096-images-via-dsh-attachments.md) / [097](097-text-attachments-as-dsh-file-blocks.md) 的入库入口取代：发送与插话的附件都经 DSH 的附件服务入库，被拒时答 `WORKER_ATTACHMENT_REJECTED`（[决策 112](112-p1-4c2-attachment-choices.md) 第 2～5 条）。`WORKER_DSH_UNSUPPORTED` 只剩 compact / reload 与 channelMux 的未桥接操作在用。
+
 ## 规则
 
 1. P1-1 带上约 100 行 bridge 补丁，让恢复和崩溃重启在开发机上真正走通，而不只是在单测里成立：

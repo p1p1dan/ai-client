@@ -70,6 +70,62 @@ interface FakeOptions {
   /** The log `sessionQuery.observeSession` answers with. */
   events?: DshLogEvent[];
   observeError?: unknown;
+  /** P1-4c2: what `attachments.admitPromptContent` throws. */
+  admitError?: unknown;
+  /** P1-4c2: holds `admitPromptContent` until the test releases it. */
+  admitGate?: Promise<void>;
+}
+
+/** dsh-attachment's error shape: routed on `code`, recognised by `isAttachmentError`. */
+function attachmentError(code: string, message = `${code} refused`): Error {
+  return Object.assign(new Error(message), { name: 'AttachmentError', code });
+}
+
+/**
+ * `ctx.attachments` (P1-4c2): images admitted as references named after the
+ * upload, files stored as references named after the file; every call kept.
+ */
+function fakeAttachmentStore(options: FakeOptions) {
+  const admitted: unknown[][] = [];
+  const saved: Array<{ text: string; name?: string }> = [];
+  const store = {
+    imageLimits: { mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'] },
+    admitPromptContent: vi.fn(async (parts: Array<Record<string, unknown>>) => {
+      admitted.push(parts);
+      await options.admitGate;
+      if (options.admitError) throw options.admitError;
+      return parts.map((part) =>
+        part.type === 'image'
+          ? {
+              type: 'image',
+              attachment: {
+                attachmentId: `sha256:image-${String(part.name)}`,
+                mediaType: part.mediaType,
+                bytes: 4,
+                width: 1,
+                height: 1,
+                ...(part.name ? { name: part.name } : {}),
+              },
+            }
+          : part
+      );
+    }),
+    saveFile: vi.fn(async (input: { data: Uint8Array; name?: string }) => {
+      saved.push({
+        text: Buffer.from(input.data).toString('utf8'),
+        ...(input.name ? { name: input.name } : {}),
+      });
+      return {
+        attachmentId: `sha256:file-${input.name ?? 'file'}`,
+        name: input.name ?? 'file',
+        bytes: input.data.byteLength,
+      };
+    }),
+    validateImage: vi.fn(async () => undefined),
+    isAttachmentError: (error: unknown) =>
+      (error as { name?: unknown })?.name === 'AttachmentError',
+  };
+  return { store, admitted, saved };
 }
 
 /** A Cordis context narrowed to what the bridge reads, recording the order of calls. */
@@ -77,6 +133,7 @@ function fakeDsh(options: FakeOptions = {}) {
   const calls: string[] = [];
   const disposed: string[] = [];
   const followups: unknown[] = [];
+  const attachments = fakeAttachmentStore(options);
   /** P1-4c1: what the bridge steered, and how it cancelled. */
   const steers: unknown[] = [];
   const cancels: unknown[][] = [];
@@ -130,10 +187,11 @@ function fakeDsh(options: FakeOptions = {}) {
       }),
     },
     aiclientPermissions: testPermissionHost().api,
+    attachments: attachments.store,
   } as unknown as DshBridgeContext;
   /** One durable event of this session, as DSH's `session/event` delivers it. */
   const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);
-  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append };
+  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append, attachments };
 }
 
 const deps: DshBridgeDeps = {
@@ -351,12 +409,18 @@ describe('DshSessionRuntime — resume and crash restart (decisions 006, 010)', 
   });
 });
 
-describe('DshSessionRuntime — refusals until P1-4c2 (decision 010)', () => {
-  async function ready() {
-    const dsh = fakeDsh();
-    const bridge = runtime(dsh.ctx);
+describe('DshSessionRuntime — sends and their attachments (P1-4c2, decisions 096 and 097)', () => {
+  async function ready(options: FakeOptions = {}) {
+    const dsh = fakeDsh(options);
+    const emitted: Array<{ type: string }> = [];
+    const createUserMessage = vi.fn(() => ({ id: 'user-message-1' }));
+    const bridge = runtime(
+      dsh.ctx,
+      { emit: (event) => emitted.push(event as { type: string }) },
+      { createUserMessage }
+    );
     await bridge.bootstrap();
-    return { dsh, bridge };
+    return { dsh, bridge, emitted, createUserMessage };
   }
 
   const send = {
@@ -365,26 +429,113 @@ describe('DshSessionRuntime — refusals until P1-4c2 (decision 010)', () => {
     attemptId: 'attempt-1',
     text: 'hi',
   };
-
-  it('refuses attachments instead of dropping them', async () => {
-    const { dsh, bridge } = await ready();
-    const error = await refusal(
-      bridge.startSend({
-        ...send,
-        attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAAA' }],
-      })
-    );
-    expect(error.code).toBe('WORKER_DSH_UNSUPPORTED');
-    expect(dsh.followups).toEqual([]);
+  const image = (name: string) => ({
+    kind: 'image' as const,
+    mediaType: 'image/png',
+    data: 'AAAA',
+    name,
+  });
+  const textFile = (name: string, data: string) => ({
+    kind: 'text' as const,
+    mediaType: 'text/plain',
+    data,
+    name,
   });
 
-  it('sends plain text through the injected message factory', async () => {
-    const { dsh, bridge } = await ready();
+  it('sends plain text through the injected message factory, the store untouched', async () => {
+    const { dsh, bridge, createUserMessage } = await ready();
     await expect(bridge.startSend(send)).resolves.toEqual({ accepted: true, requestId: 'turn-1' });
-    expect(deps.createUserMessage).toHaveBeenCalledWith({
+    expect(createUserMessage).toHaveBeenCalledWith({
       content: [{ type: 'text', text: 'hi' }],
       source: { kind: 'user' },
     });
+    expect(dsh.followups).toEqual([{ id: 'user-message-1' }]);
+    expect(dsh.attachments.store.admitPromptContent).not.toHaveBeenCalled();
+    expect(dsh.attachments.store.saveFile).not.toHaveBeenCalled();
+  });
+
+  it('[c2-send-admit] admits images and stores text files through the engine, in the order picked', async () => {
+    const { dsh, bridge, emitted, createUserMessage } = await ready();
+    await expect(
+      bridge.startSend({
+        ...send,
+        attachments: [image('a.png'), textFile('notes.txt', 'line one\n'), image('b.png')],
+      })
+    ).resolves.toEqual({ accepted: true, requestId: 'turn-1' });
+    // Decision 097: the text file is stored verbatim, as UTF-8 bytes.
+    expect(dsh.attachments.saved).toEqual([{ text: 'line one\n', name: 'notes.txt' }]);
+    const fileRef = { attachmentId: 'sha256:file-notes.txt', name: 'notes.txt', bytes: 9 };
+    // Decision 096: one admission for the whole message; no 5 MiB check of our own.
+    expect(dsh.attachments.admitted).toEqual([
+      [
+        { type: 'text', text: 'hi' },
+        { type: 'image', mediaType: 'image/png', data: 'AAAA', name: 'a.png' },
+        { type: 'file', attachment: fileRef },
+        { type: 'image', mediaType: 'image/png', data: 'AAAA', name: 'b.png' },
+      ],
+    ]);
+    expect(createUserMessage).toHaveBeenCalledWith({
+      content: [
+        { type: 'text', text: 'hi' },
+        {
+          type: 'image',
+          attachment: expect.objectContaining({ attachmentId: 'sha256:image-a.png' }),
+        },
+        { type: 'file', attachment: fileRef },
+        {
+          type: 'image',
+          attachment: expect.objectContaining({ attachmentId: 'sha256:image-b.png' }),
+        },
+      ],
+      source: { kind: 'user' },
+    });
+    expect(dsh.followups).toEqual([{ id: 'user-message-1' }]);
+    expect(emitted.map((event) => event.type)).toEqual(['session.status']);
+  });
+
+  it('[c2-send-admit] a message may be attachments alone: no empty text block', async () => {
+    const { dsh, bridge } = await ready();
+    await bridge.startSend({ ...send, text: '', attachments: [image('only.png')] });
+    expect(dsh.attachments.admitted).toEqual([
+      [{ type: 'image', mediaType: 'image/png', data: 'AAAA', name: 'only.png' }],
+    ]);
+  });
+
+  it('[c2-send-reject] refuses before any event, naming the DSH code and the file', async () => {
+    const { dsh, bridge, emitted, createUserMessage } = await ready({
+      admitError: attachmentError(
+        'IMAGE_DIMENSION_TOO_LARGE',
+        'Image exceeds the configured per-side pixel limit.'
+      ),
+    });
+    const error = await refusal(bridge.startSend({ ...send, attachments: [image('wide.png')] }));
+    expect(error).toMatchObject({
+      code: 'WORKER_ATTACHMENT_REJECTED',
+      message:
+        'IMAGE_DIMENSION_TOO_LARGE "wide.png": Image exceeds the configured per-side pixel limit.',
+    });
+    expect(createUserMessage).not.toHaveBeenCalled();
+    expect(dsh.followups).toEqual([]);
+    expect(emitted).toEqual([]);
+    // Nothing was held: the next send goes.
+    await expect(bridge.startSend({ ...send, requestId: 'turn-2' })).resolves.toEqual({
+      accepted: true,
+      requestId: 'turn-2',
+    });
+  });
+
+  it('[c2-send-busy] a send that won while the store admitted another makes it busy', async () => {
+    let release: () => void = () => undefined;
+    const { dsh, bridge } = await ready({
+      admitGate: new Promise<void>((done) => {
+        release = done;
+      }),
+    });
+    const withImage = bridge.startSend({ ...send, attachments: [image('slow.png')] });
+    await vi.waitFor(() => expect(dsh.attachments.admitted).toHaveLength(1));
+    await bridge.startSend({ ...send, requestId: 'turn-2' });
+    release();
+    expect((await refusal(withImage)).code).toBe('WORKER_SESSION_BUSY');
     expect(dsh.followups).toEqual([{ id: 'user-message-1' }]);
   });
 
@@ -413,8 +564,8 @@ describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () 
   ];
 
   /** A bridge whose message factory mints `m1`, `m2`, …, and whose events are kept. */
-  async function opened(events?: DshLogEvent[]) {
-    const dsh = fakeDsh(events ? { events } : {});
+  async function opened(events?: DshLogEvent[], fake: FakeOptions = {}) {
+    const dsh = fakeDsh(events ? { ...fake, events } : fake);
     const emitted: Emitted[] = [];
     let minted = 0;
     const createUserMessage = vi.fn(() => {
@@ -650,31 +801,113 @@ describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () 
     ]);
   });
 
-  it('[c1-interject-refuse] refuses attachments (P1-4c2) and a foreign session, steering nothing', async () => {
+  it('[c1-interject-refuse] refuses a foreign session, steering nothing', async () => {
     const { dsh, bridge } = await opened();
     await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
-    const thrown = (run: () => unknown) => {
-      try {
-        run();
-      } catch (error) {
-        return (error as { code?: string }).code;
-      }
-      return 'nothing thrown';
-    };
-    expect(
-      thrown(() =>
-        bridge.interject({
-          ...interject('interject-1', 'see this'),
-          attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAAA' }],
-        })
-      )
-    ).toBe('WORKER_DSH_UNSUPPORTED');
-    expect(
-      thrown(() =>
-        bridge.interject({ ...interject('interject-1', 'x'), logicalSessionId: 'other' })
-      )
-    ).toBe('WORKER_SESSION_MISMATCH');
+    let code: string | undefined;
+    try {
+      bridge.interject({ ...interject('interject-1', 'x'), logicalSessionId: 'other' });
+    } catch (error) {
+      code = (error as { code?: string }).code;
+    }
+    expect(code).toBe('WORKER_SESSION_MISMATCH');
     expect(dsh.steers).toEqual([]);
+  });
+
+  // ---- P1-4c2: an interjection's attachments, through a send's admission ---------------
+
+  const picture = { kind: 'image' as const, mediaType: 'image/png', data: 'AAAA', name: 'a.png' };
+
+  it('[c2-interject-attach] admits the attachments as a send does, then steers the message', async () => {
+    const { dsh, bridge, emitted, createUserMessage } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'go'));
+    emitted.length = 0;
+
+    await expect(
+      bridge.interject({
+        ...interject('interject-1', 'see this'),
+        attachments: [picture, { kind: 'text', mediaType: 'text/plain', data: 'x', name: 'n.txt' }],
+      })
+    ).resolves.toEqual({ interjected: true, turnActive: true });
+    expect(dsh.attachments.admitted).toHaveLength(1);
+    expect(dsh.attachments.saved).toEqual([{ text: 'x', name: 'n.txt' }]);
+    expect(createUserMessage).toHaveBeenLastCalledWith({
+      content: [
+        { type: 'text', text: 'see this' },
+        { type: 'image', attachment: expect.objectContaining({ name: 'a.png' }) },
+        { type: 'file', attachment: expect.objectContaining({ name: 'n.txt' }) },
+      ],
+      source: { kind: 'user' },
+    });
+    expect(dsh.steers).toEqual([{ id: 'm2' }]);
+    expect(emitted).toEqual([]);
+  });
+
+  it('[c2-interject-reject] a refused attachment steers nothing', async () => {
+    const { dsh, bridge, emitted } = await opened(undefined, {
+      admitError: attachmentError('IMAGE_TYPE_MISMATCH', 'Declared image type does not match.'),
+    });
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    emitted.length = 0;
+    const error = await refusal(
+      Promise.resolve(
+        bridge.interject({ ...interject('interject-1', 'see this'), attachments: [picture] })
+      )
+    );
+    expect(error).toMatchObject({
+      code: 'WORKER_ATTACHMENT_REJECTED',
+      message: 'IMAGE_TYPE_MISMATCH "a.png": Declared image type does not match.',
+    });
+    expect(dsh.steers).toEqual([]);
+    expect(emitted).toEqual([]);
+  });
+
+  it('[c2-interject-late] a turn that ended while the engine admitted them is no turn', async () => {
+    let release: () => void = () => undefined;
+    const { dsh, bridge } = await opened(undefined, {
+      admitGate: new Promise<void>((done) => {
+        release = done;
+      }),
+    });
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    const answer = bridge.interject({ ...interject('interject-1', 'x'), attachments: [picture] });
+    dsh.append(at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }));
+    release();
+    await expect(answer).resolves.toEqual({ interjected: false, turnActive: false });
+    expect(dsh.steers).toEqual([]);
+  });
+
+  it('[c2-echo] the user echo carries the chips of its image and file blocks', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'look'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(
+      at(1, 'user/message', {
+        id: 'm1',
+        role: 'user',
+        content: [
+          { type: 'text', text: 'look' },
+          {
+            type: 'image',
+            attachment: { attachmentId: 'sha256:i', mediaType: 'image/jpeg', name: 'a.png' },
+          },
+          { type: 'file', attachment: { attachmentId: 'sha256:f', name: 'n.txt', bytes: 1 } },
+        ],
+        source: { kind: 'user' },
+      })
+    );
+    expect(echoes(emitted)).toEqual([['dsh-user-1', 'attempt-1', 'look']]);
+    expect(emitted.find((event) => event.type === 'message.started')?.payload?.attachments).toEqual(
+      [
+        // The stored (normalized) type, as the history projection reads it.
+        { kind: 'image', mediaType: 'image/jpeg', name: 'a.png' },
+        { kind: 'text', mediaType: 'text/plain', name: 'n.txt' },
+      ]
+    );
   });
 
   it('[c1-interject-echo] echoes what the user typed even without an attempt id', async () => {

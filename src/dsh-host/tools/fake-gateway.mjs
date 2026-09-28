@@ -176,6 +176,15 @@
  *                       and P1-FAILONCE (HTTP 500 until the request carries the
  *                       bridge's hidden retry continuation, then an answer). Scripts
  *                       get every user text of the request as a seventh argument.
+ *                       dsh-rebase P1-4c2 adds three for attachments
+ *                       (tools/attachment-experiments.ts, tools/bridge-record.ts
+ *                       `image` and `file-attach`): P1-IMAGE (one answer counting
+ *                       the image blocks of the request's user messages),
+ *                       P1-FILEREAD (a `read` of the path the DSH file handle line
+ *                       names, then an answer naming every `FILE-MARKER-<tag>` it
+ *                       read) and P1-IMAGEREAD (a `read_image` of the normalized
+ *                       copy an image handle line names). Scripts get the request's
+ *                       messages as an eighth argument.
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -360,7 +369,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -416,6 +425,42 @@ const RETRY_CONTINUATION = /The previous model request failed\. Continue from wh
 function steerNotes(text) {
   const notes = [...new Set(String(text ?? '').match(/STEER-NOTE-[A-Z0-9]+/g) ?? [])];
   return notes.length > 0 ? notes.join(',') : '-';
+}
+
+/**
+ * dsh-rebase P1-4c2: the read-only path a DSH file handle line names
+ * (dsh-llm `fileHandleText`; the path is JSON-quoted).
+ */
+const FILE_HANDLE_PATH = /verbatim read-only copy saved at ("(?:[^"\\]|\\.)*")/;
+/** P1-4c2: the normalized copy an image handle line names (dsh-llm `requestImageHandleText`). */
+const IMAGE_HANDLE_PATH =
+  /Normalized copy \(read-only; may be resized or re-encoded\): ("(?:[^"\\]|\\.)*")/;
+
+/** P1-4c2: the first path `pattern` finds in `text`, unquoted, or undefined. */
+function handlePath(text, pattern) {
+  const quoted = String(text ?? '').match(pattern)?.[1];
+  if (!quoted) return undefined;
+  try {
+    return JSON.parse(quoted);
+  } catch {
+    return undefined;
+  }
+}
+
+/** P1-4c2: image content blocks in the request's user messages (Anthropic `image`). */
+function imageBlocks(messages) {
+  let count = 0;
+  for (const message of messages ?? []) {
+    if (message?.role !== 'user' || !Array.isArray(message.content)) continue;
+    for (const block of message.content) if (block?.type === 'image') count += 1;
+  }
+  return count;
+}
+
+/** P1-4c2: the file markers (`FILE-MARKER-<tag>`) in `text`, in order, or `-`. */
+function fileMarkers(text) {
+  const markers = [...new Set(String(text ?? '').match(/FILE-MARKER-[A-Z0-9]+/g) ?? [])];
+  return markers.length > 0 ? markers.join(',') : '-';
 }
 
 const tool = (name, input) => ({ kind: 'tool_use', status: 200, name, input });
@@ -848,6 +893,44 @@ const DSH_P0_2_SCRIPTS = {
   'P1-STEER-ONE'(_round, _step, _calls, _triggerText, _history, _recent, userTexts) {
     return say(`P1-STEER-ONE heard: ${steerNotes(userTexts)}.`);
   },
+  // dsh-rebase P1-4c2 (decision 096; tools/bridge-record.ts `image`,
+  // tools/attachment-experiments.ts): one answer counting the image blocks the
+  // request carried in user messages. Scripts get the request's messages as an
+  // eighth argument.
+  'P1-IMAGE'(_round, _step, _calls, _triggerText, _history, _recent, _userTexts, messages) {
+    return say(`P1-IMAGE saw ${imageBlocks(messages)} image block(s).`);
+  },
+  // P1-4c2 (decision 097; `file-attach`): read the attached file through the
+  // path its DSH handle line names, then answer with the file markers read.
+  'P1-FILEREAD'(_round, step, calls, _triggerText, _history, _recent, userTexts) {
+    if (step === 0) {
+      const path = handlePath(userTexts, FILE_HANDLE_PATH);
+      if (!path) return say('P1-FILEREAD found no file handle.');
+      return tool('read', { file_path: path });
+    }
+    const read = calls[0];
+    return say(
+      read?.isError
+        ? `P1-FILEREAD could not read it: ${String(read.result ?? '').slice(0, 160)}`
+        : `P1-FILEREAD read: ${fileMarkers(read?.result)}.`
+    );
+  },
+  // P1-4c2 (tools/attachment-experiments.ts): read_image on the normalized copy
+  // an image handle line names, then answer with the image block count.
+  'P1-IMAGEREAD'(_round, step, calls, _triggerText, _history, _recent, userTexts, messages) {
+    if (step === 0) {
+      const path = handlePath(userTexts, IMAGE_HANDLE_PATH);
+      if (!path) return say(`P1-IMAGEREAD found no image path; ${imageBlocks(messages)} block(s).`);
+      return tool('read_image', { file_path: path });
+    }
+    const read = calls[0];
+    const seen = `${imageBlocks(messages)} image block(s)`;
+    return say(
+      read?.isError
+        ? `P1-IMAGEREAD could not read it (${seen}): ${String(read.result ?? '').slice(0, 160)}`
+        : `P1-IMAGEREAD read it; ${seen}.`
+    );
+  },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
   'P1-PERM-SUB'(_round, step) {
     if (step === 0) {
@@ -1126,7 +1209,16 @@ function decideDshP02(parsed) {
     .filter((message) => message?.role === 'user')
     .map((message) => ownText(message))
     .join('\n');
-  const decision = script(round, calls.length, calls, triggerText, history, recent, userTexts);
+  const decision = script(
+    round,
+    calls.length,
+    calls,
+    triggerText,
+    history,
+    recent,
+    userTexts,
+    messages
+  );
   const tag = decision.tag ? `:${decision.tag}` : '';
   return {
     ...decision,

@@ -768,6 +768,8 @@ describe('bridge bundles (decision 011)', () => {
       'agentLoop',
       'sessionQuery',
       'aiclientPermissions',
+      // P1-4c2 (decisions 096, 097): a send's images and text files are admitted here.
+      'attachments',
     ],
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],

@@ -1,0 +1,149 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-file-attach",
+      "piSessionId": "aiclient-rec-file-attach",
+      "cwd": "<workspace>/file-attach",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-file-attach.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-file-attach",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-file-attach.dsh.json",
+    "workspacePath": "<workspace>/file-attach",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-FILEREAD: read the attached notes."
+            }
+          ],
+          "attachments": [
+            {
+              "kind": "text",
+              "mediaType": "text/plain",
+              "name": "notes.txt"
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "read",
+              "input": {
+                "file_path": "<dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt",
+                "path": "<dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "<path><dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt</path>\n<type>file</type>\n<content>\n1: FILE-MARKER-NOTES is on the first line.\n2: The second line is plain.\n\n(End of file - total 2 lines)\n</content>"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-file-attach-t1-s1"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-9:text:0",
+              "text": "P1-FILEREAD read: FILE-MARKER-NOTES."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-file-attach-t1-s2"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 3,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-file-attach",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-file-attach.dsh.json",
+      "workspacePath": "<workspace>/file-attach",
+      "leaf": {
+        "activeEntryId": "id-9",
+        "fileTailEntryId": "aiclient-rec-file-attach#17"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-FILEREAD: read the attached notes.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-FILEREAD read: FILE-MARKER-NOTES.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 3,
+      "returnedNodes": 3,
+      "truncated": false
+    }
+  }
+}

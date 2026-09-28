@@ -1,0 +1,229 @@
+[
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-FILE-ATTACH",
+      "attachments": [
+        {
+          "kind": "text",
+          "mediaType": "text/plain",
+          "name": "notes.txt"
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-FILEREAD: read the attached notes."
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "read",
+      "input": {
+        "__streaming": {
+          "bytes": 57,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "file_path": "<dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt",
+        "path": "<dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "<path><dsh-home>/attachments/v1/files/a7/a7697c9c401a0252ae6749dbac288c53f93d1df2601d09e46f4d63b3eb11e5bf/notes.txt</path>\n<type>file</type>\n<content>\n1: FILE-MARKER-NOTES is on the first line.\n2: The second line is plain.\n\n(End of file - total 2 lines)\n</content>"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s2",
+      "blockId": "dsh-aiclient-rec-file-attach-t1-s2-b0",
+      "text": "P1-FILEREAD read: FILE-MARKER-NOTES."
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

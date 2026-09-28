@@ -984,7 +984,8 @@ describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
   /**
    * dsh-rebase P1-1, GUI point-check D1/D2. A legacy chat's resume refusal
    * (`legacy_session_readonly`) and the DSH bridge's attachment refusal
-   * (`WORKER_DSH_UNSUPPORTED`) both left an empty composer and a round Retry
+   * (then `WORKER_DSH_UNSUPPORTED`; since P1-4c2 the engine's own
+   * `WORKER_ATTACHMENT_REJECTED`) both left an empty composer and a round Retry
    * that could only be refused again — the user's text (and image) out of
    * sight. Refused by rule means: back to the composer, never a Retry.
    */
