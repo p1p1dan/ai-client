@@ -4,6 +4,7 @@
 
 **本分支 `feat/dsh-p0-probe`：DSH 二开（B 路线）P1「分支内整体替换为 DSH」**。聊天引擎已换成 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；不做双引擎，测试完毕合入 main 即切换（决策 004）。main 只做 1.0.x 缺陷修复，本分支不推送、不发版，推送前需用户确认。
 
+- **新会话先读** `docs/plantree/plans/dsh-rebase/handoff-2026-09-28.md`（交接：授权、状态、泳道、工作规则、验证命令）。
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
 - **代码入口**：
   - `src/dsh-host/`：宿主、bridge，以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
