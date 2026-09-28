@@ -9,7 +9,7 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～085 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a / 5b 与宿主侧接线、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
+P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～086 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a / 5b 与宿主侧接线、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
 
 ## Next Target
 
@@ -17,6 +17,7 @@ P1-10a 收尾（关 plugin-manager、删 `packageManager`、改上机包的 pnpm
 
 ## Last Landed
 
+- 2026-09-28 P1-16 前置：`fe089adf` skills、模板与展开、MCP 的纯逻辑搬进 `src/shared`，runtime 改为薄封装（[决策 086](decisions/086-shared-skills-mcp-move-choices.md)）。编排器复跑：相关 20 个测试文件、480 例通过；根、runtime、agent-host 三套 tsc 通过。
 - 2026-09-28 P1-13b 上机包：`fd8f2ac9` 加密矩阵工具，外加第一轮现场脚本修改的回收。Linux 预演（只跑 node 那半边）通过，单测 17 例通过；PowerShell 脚本还没实跑过。包在 `/var/tmp/aiclient-p1-13b-kit/`，sha256 `4a5ea708…b652`。读代码还有一个发现：DSH 新建文件是先写临时文件再硬链接成目标名，1.0.x 是直接写目标名，所以决策 084 与 Q009 里「与 1.0.x 相同」的推断已撤回。
 - 2026-09-28 P1-5 宿主侧接线与 P1-5b：`c8bcdab1`（[决策 085](decisions/085-model-plan-wiring-implementation-choices.md)）。编排器复跑：
   - 四套 tsc 通过；
@@ -48,7 +49,7 @@ P1-10a 收尾（关 plugin-manager、删 `packageManager`、改上机包的 pnpm
 2. P1-6 第二部分（bridge 挂接闸门、卡片往返、setter、sidecar P1-6c），之后是 P1-4c / d（P1-4d 的失败码与模型 id 已随 P1-5 做掉一部分）、P1-4e、P1-9c～f。
 3. P1-5c～e（切换与映射、协议收口、遗留明文），以及真实网关验证 R1～R10，后者要用户授权。
 4. P1-2 三平台 CI 待用户确认推送。
-5. 决策 005～085 与 Q003、Q007～Q010 等用户审批或答复。
+5. 决策 005～086 与 Q003、Q007～Q010 等用户审批或答复。
 
 ## Blocked By
 
