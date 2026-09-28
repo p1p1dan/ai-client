@@ -10,7 +10,7 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 ## Current Phase
 
 P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～089 已于 2026-09-28 由用户裁决，见[决策 090](decisions/090-user-rulings-2026-09-28.md)）。
-- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-4d3、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-8、P1-9a / 9b / 9g、P1-10a（含收尾）、P1-10b、P1-10d、P1-16a，以及 P1-12 / P1-16 的前置搬迁。
+- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-4d3、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-8、P1-9a / 9b / 9g、P1-10a（含收尾）、P1-10b、P1-10d、P1-16a、P1-16e，以及 P1-12 / P1-16 的前置搬迁。
 - **现在分支上能做到**：用界面选的模型聊天，key 每次请求时从 Main 拉取；每次工具调用都经我方审批，「本会话允许」在宿主重启后仍有效，换档立即作用到闸门。
 - **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
 - **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
@@ -34,13 +34,19 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 5. **第二批决策已裁决**（[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)）。**下一步**（本机一次只派一个代理，见下方「本机限制」）：
    1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
    2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → ~~P1-4d3（联网装 `dsh-tool-ask-user`）~~ 已落地 `4e003c1b` → P1-4e（进 CI 的 `build.yml`、`dsh-bridge-gate.yml` 改动先问用户，决策 100）；
-   3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；P1-16e 旧资产提示；
+   3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；~~P1-16e 旧资产提示~~ 已落地 `6d2fc8a0`；P1-10c 插件页（与 P1-16e 同一泳道，「扩展」页插件一节空着等它）；
    4. P1-7a～d 与 P1-11（终端在右列，开工前补示意）；之后 P1-9c～f、P1-15、P1-6d。
 
 **本机限制（2026-09-28 用户明令）**：不跑 `pnpm build`（整包 electron-vite 构建两次把系统弄崩）等庞大操作；验证只做四套 tsc、挑选的 vitest、宿主冒烟与 `bridge-record`，一次一个。**未验证项**：P1-10b 给 `DshHostProcess.ts` 加了静态导入，vite 拆块没有在本机检查，交 CI 或用户构建时看。
 
 ## Last Landed
 
+- 2026-09-28 P1-16e 旧资产提示与「扩展」页收窄 `6d2fc8a0`（决策 102～105；取舍见[决策 116](decisions/116-p1-16e-legacy-asset-notice-choices.md)，待审批，**请重点看第 6、14、19 条**：用户层指令只列 1.0.x 实际读的那一个；弹窗任何方式关闭都算看过；「插件」页整页卸下不留占位）：
+  - Main 只读检测六类 1.0.x 资产（子代理定义、模板、用户层指令、`mcp.json`、DSH 不会加载的技能、显式关过的委派开关），pi 扩展不列；首次启动有结果时弹一次，「扩展」页有常驻入口。
+  - 删「子代理」页；「资源」页只留技能目录与规则；能力弹窗只留技能数。留给 P1-12 删除的无引用文件清单见决策 116。
+  - 编排者复核补了两处漏网：能力弹窗改用 `DialogPanel` 并在 `dialogPopupPaddingStatic` 登记新弹窗；检测模块与 P1-4c2 的 `attachment-experiments.ts` 改用 `APP_STATE_DIR`（`defaultPaths.test.ts` 的全仓单一来源扫描自 `20285c58` 起一直失败，修在 `2af88a7e`）。**教训**：挑选测试时要加上全仓扫描类测试（`vitest run Static Scan Wiring` 与 `src/shared/__tests__`）。
+  - 编排器复跑：四套 tsc 通过；相关单测 137 个文件、1698 例，外加 ui / 设置 / 壳层 80 个文件、1004 例；`src/shared/__tests__` 26 个文件；全仓 Static / Scan / Wiring 测试 71 个文件、717 例，全部通过。本项不动宿主与 bridge，没跑集成与录制。
+  - 未验证：没有 GUI 点验；Main 新引入 shared 的 skills、mcp、subagent 纯库，vite 拆块交 CI 或用户构建时看。
 - 2026-09-28 P1-10d 试点插件 `a5a925f9`（决策 060；取舍见[决策 115](decisions/115-p1-10d-pilot-plugin-choices.md)，待审批，**第 6 条三项接受的风险与第 10 条共享闸门加 `fileWrite` 请重点审批**）：
   - 联网装 `dsh-office-tools@1.0.4`（[证据](evidence/p1-10d-office-tools-install-2026-09-28.md)）：是 DSH bundle，只插一行；零运行期依赖、无安装脚本、无原生件。5 个 dsh peer 写的是预发布范围，npm 不匹配，按决策 082 第 3 条用 `overrides` 钉到 0.1.7-rc.2（第一次实际用上）。锁文件只新增这一条，已有条目 0 变化，integrity 三方一致。
   - [审查记录](../../../../src/dsh-host/plugins/reviews/dsh-office-tools-1.0.4.md)：有条件通过。没有凭据、`process`、IPC、子进程、网络、eval、动态 import、钩子；目录标只读，实测 8 个工具中 5 个写文件，读写都由插件自己限制在工作区内。接受的风险：构造过的 Office 文件在共享宿主里同步解压，所有会话可能停顿、占几百 MiB；插件用了未声明的 `@deepseek-ai/schemastery`，靠宿主树顶层解析；Excel 会把 `=` 开头的字符串写成公式。
