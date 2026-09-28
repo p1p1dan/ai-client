@@ -9,14 +9,22 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～084 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a 纯函数、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
+P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～085 自主决定、待用户审批）。已落地：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-5a / 5b 与宿主侧接线、P1-6a、P1-6b 第一部分、P1-8、P1-9a / 9b / 9g、P1-10a。P1-13 加密机第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)）：`.txt` 全链路明文，不触发否决，但不能签收。
 
 ## Next Target
 
-P1-5 宿主侧接线与 P1-5b 凭据注入（在跑）→ P1-10a 收尾（关 plugin-manager、删 `packageManager`、改上机包的 pnpm 检查）→ P1-6 第二部分 → P1-4c / d → P1-9c。P1-13b 加密矩阵上机包（在做）。
+P1-10a 收尾（关 plugin-manager、删 `packageManager`、改上机包的 pnpm 检查）→ P1-6 第二部分（bridge 挂接闸门、卡片往返、sidecar）→ P1-4c / d → P1-9c。P1-13b 加密矩阵上机包已就绪，等用户上机。
 
 ## Last Landed
 
+- 2026-09-28 P1-13b 上机包：`fd8f2ac9` 加密矩阵工具，外加第一轮现场脚本修改的回收。Linux 预演（只跑 node 那半边）通过，单测 17 例通过；PowerShell 脚本还没实跑过。包在 `/var/tmp/aiclient-p1-13b-kit/`，sha256 `4a5ea708…b652`。读代码还有一个发现：DSH 新建文件是先写临时文件再硬链接成目标名，1.0.x 是直接写目标名，所以决策 084 与 Q009 里「与 1.0.x 相同」的推断已撤回。
+- 2026-09-28 P1-5 宿主侧接线与 P1-5b：`c8bcdab1`（[决策 085](decisions/085-model-plan-wiring-implementation-choices.md)）。编排器复跑：
+  - 四套 tsc 通过；
+  - 相关单测 86 个文件、1337 例通过；
+  - 真宿主集成测试 18/18，含 KEY-CANARY；
+  - bridge-smoke 36 项、loop-guard-smoke 31 项；
+  - `bridge-record --check` 只有预期中的一处差异，已重录 `stream.fail.json`；
+  - 重建产物 82.1 MiB，打包冒烟 L1 共 40 项全过。
 - 2026-09-28 P1-13 第一轮（加密机，用户现场执行）：正式轮 45 项通过、3 项记录，DSH Desktop 对照组 14 项通过。`.txt` 的读取、编辑、搜索、shell、终端、spill、会话日志都是明文；node.exe 新建的文件不加密（三组一样，[Q009](open-questions.md)）；另有两处读到密文的旁证（`.ps1`、`.yml`），要做扩展名矩阵。证据在 [p1-13-encrypted-2026-09-28/](evidence/p1-13-encrypted-2026-09-28/README.md)。
 - 2026-09-28 P1-10a：`ad999a0f` 插件白名单与构建期审计，去掉随包 pnpm，产物从 97.9 MiB 降到 82.1 MiB（[决策 082](decisions/082-allowlist-implementation-choices.md)、[083](decisions/083-host-size-budget-reset-after-pnpm.md)）。编排器在只含 P1-10a 改动的临时 worktree 里复跑：相关 5 个测试文件、165 例全过，biome 通过。代理在同样的隔离环境里重建产物，打包冒烟 L1 共 37 项全过。
 - 2026-09-27 P1-4b 与 P1-8：`36d4f84a` 回退、fork、跨 lineage 的树；`72330d1b` 防空转插件。合跑复跑：三套 tsc 通过；单测 65 + 4 个文件全过；真宿主集成 13/13；bridge-smoke 33 项、loop-guard-smoke 31 项、bridge-record 9 个场景；重建产物 97.9 MiB，打包冒烟 L1 通过。
@@ -36,11 +44,11 @@ P1-5 宿主侧接线与 P1-5b 凭据注入（在跑）→ P1-10a 收尾（关 pl
 
 ## Active TODO
 
-1. 在跑：P1-5 宿主侧接线加 P1-5b（configure 与 overlay、每轮 `resolveRoute`、`aiclient-credentials` 宿主插件与 Main 的 `DshCredentialBroker`、删掉假路由、KEY-CANARY 门禁）；P1-13b 加密矩阵上机包，同时把第一轮现场的脚本修改合回仓库。
-2. P1-10a 收尾排在 P1-5 之后：bundle 补丁里关掉 `plugin-manager`，加进 `REQUIRED_DISABLED`，删掉 `packageManager` 与 `AICLIENT_DSH_PNPM_CLI`，上机包的 G-pnpm-install 改成预装插件检查。
-3. P1-6 第二部分（bridge 挂接闸门、卡片往返、sidecar）排在 P1-5 之后，因为两者都改 bridge。之后是 P1-4c / d、P1-4e、P1-9c～f。
+1. P1-10a 收尾：bundle 补丁里关掉 `plugin-manager`，加进 `REQUIRED_DISABLED`，删掉 `packageManager` 与 `AICLIENT_DSH_PNPM_CLI`；上机包的 G-pnpm-install 改成预装插件检查。
+2. P1-6 第二部分（bridge 挂接闸门、卡片往返、setter、sidecar P1-6c），之后是 P1-4c / d（P1-4d 的失败码与模型 id 已随 P1-5 做掉一部分）、P1-4e、P1-9c～f。
+3. P1-5c～e（切换与映射、协议收口、遗留明文），以及真实网关验证 R1～R10，后者要用户授权。
 4. P1-2 三平台 CI 待用户确认推送。
-5. 决策 005～084 与 Q003、Q007～Q010 等用户审批或答复。
+5. 决策 005～085 与 Q003、Q007～Q010 等用户审批或答复。
 
 ## Blocked By
 
