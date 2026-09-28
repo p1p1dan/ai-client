@@ -15,6 +15,10 @@ import type { ChatMessage } from '@/stores/chatSessions';
  * - replay: the runtime writes an `aiclient.runStop` custom entry when a run
  *   ends that way, and the history projection folds it onto the same message.
  *
+ * Under the DSH engine Ctrl+Enter no longer ends a run (dsh-rebase decision
+ * 093: it joins the running turn), so `interjected` only comes from the
+ * history of a session carried over from 1.0.x.
+ *
  * Pure and structural (no store access), so it can run per turn inside a
  * render or a selector.
  */

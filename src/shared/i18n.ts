@@ -2515,13 +2515,9 @@ export const zhTranslations: Record<string, string> = {
   'Queue message': '加入队列',
   'Send now': '立刻发送',
   'Send now — interrupt the running turn': '立刻发送 — 打断当前回复',
-  'Interjected with Ctrl+Enter — sent at the next turn boundary':
-    'Ctrl+Enter 插话 —— 在下一个回合边界发送',
-  Next: '插话',
-  'No turn is running — the message was queued normally':
-    '当前没有正在运行的回合 —— 消息已作为普通排队等待发送',
-  'Could not send the interject signal — the message is still queued: {{error}}':
-    '插话信号发送失败 —— 消息仍在排队中：{{error}}',
+  // dsh-rebase decision 093: Ctrl+Enter joins the running turn at its next step.
+  'Awaiting delivery': '待送达',
+  'Could not add the message to the running turn: {{error}}': '插话没能送进当前回合：{{error}}',
   // Decision 046 (T145): Stop stays pressable while a stop is under way, and a
   // disabled queued "Send now" says why instead of looking broken.
   'Force stop — still stopping. Press again to resend Stop; the turn is ended within about 10 seconds.':

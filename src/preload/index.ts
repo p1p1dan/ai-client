@@ -1088,7 +1088,22 @@ const electronAPI = {
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RETRY_LAST_TURN, payload),
     stop: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_STOP, payload),
-    interject: (payload: { sessionId: string }): Promise<{ interjected: boolean }> =>
+    /**
+     * dsh-rebase decision 093 — Ctrl+Enter while a turn runs: the message
+     * joins the running turn at its next step boundary. `interjected: false`
+     * means no turn was running and nothing was sent.
+     */
+    interject: (payload: {
+      sessionId: string;
+      attemptId: string;
+      text: string;
+      attachments?: Array<{
+        kind: 'image' | 'text';
+        mediaType: string;
+        data: string;
+        name?: string;
+      }>;
+    }): Promise<{ interjected: boolean; turnActive?: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERJECT, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),

@@ -30,6 +30,7 @@ import type { ChatMessage } from '@/stores/chatSessions';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import {
+  isAwaitingDeliveryMessage,
   isPendingUserMessage,
   type PendingUserMessage,
   pendingUserToChatMessage,
@@ -1284,6 +1285,9 @@ function UserBubble({ message }: { message: ChatMessage }) {
   // to role: 'assistant' messages, live and replayed alike).
   const textBlocks = message.blocks.filter((block) => block.type === 'text');
   const pending = isPendingUserMessage(message);
+  // Decision 093: a Ctrl+Enter message the running turn has not taken in yet.
+  // Minimal on purpose; its final look is P1-7's.
+  const awaitingDelivery = isAwaitingDeliveryMessage(message);
 
   return (
     // What makes the two roles distinguishable is SHAPE on this side: the right
@@ -1344,7 +1348,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
         {pending && (
           <div className="mt-1 flex items-center justify-end gap-1 text-meta text-muted-foreground">
             <Spinner className="size-3 shrink-0" />
-            <span>{t('Sending…')}</span>
+            <span>{awaitingDelivery ? t('Awaiting delivery') : t('Sending…')}</span>
           </div>
         )}
       </div>

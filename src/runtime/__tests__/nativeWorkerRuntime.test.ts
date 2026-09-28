@@ -629,7 +629,9 @@ describe('NativeWorkerRuntime turns', () => {
     await expect(runtime.stop({ logicalSessionId: 'logical-1', reason: 'user' })).resolves.toEqual({
       stopped: false,
     });
-    expect(runtime.interject({ logicalSessionId: 'logical-1' })).toEqual({
+    expect(
+      runtime.interject({ logicalSessionId: 'logical-1', attemptId: 'i1', text: 'also' })
+    ).toEqual({
       interjected: false,
       turnActive: false,
     });
@@ -646,7 +648,9 @@ describe('NativeWorkerRuntime turns', () => {
       attemptId: 'a1',
       text: 'hello',
     });
-    expect(runtime.interject({ logicalSessionId: 'logical-1' })).toEqual({
+    expect(
+      runtime.interject({ logicalSessionId: 'logical-1', attemptId: 'i1', text: 'also' })
+    ).toEqual({
       interjected: false,
       turnActive: true,
     });

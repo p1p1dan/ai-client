@@ -17,6 +17,13 @@ export interface PendingUserMessage {
   startedAt: number;
   /** Set from the matching wire `message.started`; cleared after that id reaches chatSessions. */
   authoritativeMessageId?: string;
+  /**
+   * dsh-rebase decision 093: a Ctrl+Enter message the running turn has been
+   * handed but has not taken in yet — it goes in at the turn's next step
+   * boundary, or, after a Stop, with the next turn (decision 094). Shown as
+   * awaiting delivery rather than sending; retired by the same echo.
+   */
+  awaitingDelivery?: true;
 }
 
 interface PendingUserMessagesStore {
@@ -86,10 +93,16 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
     }),
 }));
 
+/** Id prefix of a pending row awaiting delivery (decision 093); still a `pending-user:` row. */
+const AWAITING_DELIVERY_PREFIX = 'pending-user:steer:';
+
 /** Render-only ChatMessage shape consumed by the existing turn pipeline. */
 export function pendingUserToChatMessage(pending: PendingUserMessage): ChatMessage {
+  const id = pending.awaitingDelivery
+    ? `${AWAITING_DELIVERY_PREFIX}${pending.attemptId}`
+    : `pending-user:${pending.attemptId}`;
   return {
-    id: `pending-user:${pending.attemptId}`,
+    id,
     sessionId: pending.sessionId,
     role: 'user',
     blocks: pending.text
@@ -101,4 +114,9 @@ export function pendingUserToChatMessage(pending: PendingUserMessage): ChatMessa
 
 export function isPendingUserMessage(message: ChatMessage): boolean {
   return message.id.startsWith('pending-user:');
+}
+
+/** A pending row the running turn has not taken in yet (decision 093). */
+export function isAwaitingDeliveryMessage(message: ChatMessage): boolean {
+  return message.id.startsWith(AWAITING_DELIVERY_PREFIX);
 }

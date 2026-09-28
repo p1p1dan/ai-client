@@ -168,6 +168,14 @@
  *                       `echo` twice (a grant for the session covers the
  *                       second) and then `echo … && rm -f …` (rm was never
  *                       granted, so it is asked).
+ *                       dsh-rebase P1-4c1 adds three for turn semantics
+ *                       (tools/steer-experiments.ts, tools/bridge-record.ts `steer`
+ *                       and `fail-retry`): P1-STEER (two bash steps, the first
+ *                       sleeping 2 s, then an answer naming every `STEER-NOTE-<tag>`
+ *                       the request carried), P1-STEER-ONE (one answer naming them)
+ *                       and P1-FAILONCE (HTTP 500 until the request carries the
+ *                       bridge's hidden retry continuation, then an answer). Scripts
+ *                       get every user text of the request as a seventh argument.
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -352,7 +360,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -395,6 +403,19 @@ function goalRefFrom(calls) {
   } catch {
     return { goal_id: 'unparsable-get-goal', revision: 1 };
   }
+}
+
+/**
+ * dsh-rebase P1-4c1: the hidden retry continuation the bridge follows up after a
+ * failed turn (decision 028, `DSH_RETRY_CONTINUATION_TEXT` of
+ * src/shared/dshHistory/types.ts).
+ */
+const RETRY_CONTINUATION = /The previous model request failed\. Continue from where it stopped\./;
+
+/** P1-4c1: the steering notes (`STEER-NOTE-<tag>`) in `text`, in order, or `-`. */
+function steerNotes(text) {
+  const notes = [...new Set(String(text ?? '').match(/STEER-NOTE-[A-Z0-9]+/g) ?? [])];
+  return notes.length > 0 ? notes.join(',') : '-';
 }
 
 const tool = (name, input) => ({ kind: 'tool_use', status: 200, name, input });
@@ -793,6 +814,40 @@ const DSH_P0_2_SCRIPTS = {
       message: 'P1-FAIL: the fake upstream failed this request',
     };
   },
+  // dsh-rebase P1-4c1 (decision 095, tools/bridge-record.ts `fail-retry`): the
+  // first request fails upstream; once the bridge's hidden retry continuation
+  // (decision 028) reached the model, the turn answers.
+  'P1-FAILONCE'(_round, _step, _calls, _triggerText, _history, _recent, userTexts) {
+    if (RETRY_CONTINUATION.test(userTexts ?? '')) {
+      return say('P1-FAILONCE recovered after the retry.');
+    }
+    return {
+      kind: 'error',
+      status: 500,
+      message: 'P1-FAILONCE: the fake upstream failed this request once',
+    };
+  },
+  // dsh-rebase P1-4c1 (decision 093; tools/steer-experiments.ts, tools/bridge-record.ts
+  // `steer`): two tool steps, then an answer naming every steering note the model
+  // was sent (`STEER-NOTE-<tag>` anywhere in a user message of the request).
+  // The first command sleeps, so a driver can steer while it runs.
+  'P1-STEER'(_round, step, _calls, _triggerText, _history, _recent, userTexts) {
+    if (step === 0) {
+      return tool('bash', {
+        command: 'sleep 2; echo steer-step-1',
+        description: 'First step',
+      });
+    }
+    if (step === 1) {
+      return tool('bash', { command: 'echo steer-step-2', description: 'Second step' });
+    }
+    return say(`P1-STEER finished; heard: ${steerNotes(userTexts)}.`);
+  },
+  // P1-4c1: one text step naming the steering notes it was sent; answered
+  // again when a note is steered in after it.
+  'P1-STEER-ONE'(_round, _step, _calls, _triggerText, _history, _recent, userTexts) {
+    return say(`P1-STEER-ONE heard: ${steerNotes(userTexts)}.`);
+  },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).
   'P1-PERM-SUB'(_round, step) {
     if (step === 0) {
@@ -1065,7 +1120,13 @@ function decideDshP02(parsed) {
     .slice(lastReply + 1)
     .map((message) => ownText(message))
     .join('\n');
-  const decision = script(round, calls.length, calls, triggerText, history, recent);
+  // P1-4c1: every user text of the request (tool results excluded), for scripts
+  // that report what reached the model wherever it landed (steering, a retry).
+  const userTexts = messages
+    .filter((message) => message?.role === 'user')
+    .map((message) => ownText(message))
+    .join('\n');
+  const decision = script(round, calls.length, calls, triggerText, history, recent, userTexts);
   const tag = decision.tag ? `:${decision.tag}` : '';
   return {
     ...decision,

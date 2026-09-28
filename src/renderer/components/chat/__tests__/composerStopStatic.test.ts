@@ -1006,8 +1006,13 @@ describe('admitted-timeout branch neither judges nor replays (F2 S3 §4.2)', () 
  * dropped; `disabled` and a stale session binding were ignored; and a draft
  * with only attachments did nothing at all. The guard below pins the fix as a
  * structure rather than a list of re-implemented checks: there is exactly ONE
- * place that writes an interjection into the queue, and it sits after every
- * check `handleSend` runs.
+ * place that hands a Ctrl+Enter message to the running turn, and it sits
+ * after every check `handleSend` runs.
+ *
+ * dsh-rebase decision 093 moved that place: the message no longer jumps the
+ * queue with a stop signal behind it — it goes straight to the running turn
+ * (`interjectIntoTurn`), and only a worker with no turn sends it on to the
+ * queue, as Enter would.
  */
 describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
   it('[I-1] handleInterject is handleSend in interject mode, not a second send path', () => {
@@ -1016,13 +1021,16 @@ describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
     expect(definition).toBe("const handleInterject = () => handleSend('interject');");
   });
 
-  it('[I-1] the only queue interjection happens after every pre-send check', () => {
+  it('[I-1] the only Ctrl+Enter hand-off happens after every pre-send check', () => {
     const sendAt = only('const handleSend = async (');
     const body = source.slice(sendAt, matchingBraceEnd(source, source.indexOf('=>', sendAt)));
-    // One writer, and it is inside handleSend.
-    const writerAt = only('.interject(queued)');
+    // One caller, and it is inside handleSend.
+    const writerAt = only('await interjectIntoTurn(');
     expect(writerAt).toBeGreaterThan(sendAt);
     expect(writerAt).toBeLessThan(sendAt + body.length);
+    // Decision 093: nothing writes a Ctrl+Enter message into the queue any more.
+    expect(source).not.toContain('.interject(queued)');
+    expect(source).not.toContain('signalInterjection');
 
     const order = [
       'runBuiltinSlash(trimmed)',
@@ -1030,7 +1038,8 @@ describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
       'decideSendAction({',
       "if (action === 'blocked') return;",
       "if (action === 'send') {",
-      '.interject(queued)',
+      'await interjectIntoTurn(',
+      'useMessageQueueStore.getState().enqueue(queued)',
     ].map((needle) => {
       const index = body.indexOf(needle);
       expect(index, `handleSend must contain ${needle}`).toBeGreaterThan(-1);
@@ -1046,13 +1055,45 @@ describe('Ctrl+Enter shares the Enter pre-send gate ([I-1])', () => {
     expect(gate).toContain('hasContent: Boolean(trimmed) || attachments.drafts.length > 0');
   });
 
-  it('[I-1] the stop signal is sent only after the entry is committed', () => {
-    const sendAt = only('const handleSend = async (');
-    const body = source.slice(sendAt, matchingBraceEnd(source, source.indexOf('=>', sendAt)));
-    const committed = body.indexOf("updateValue('');");
-    const signalled = body.indexOf("if (mode === 'interject') await signalInterjection(");
-    expect(committed).toBeGreaterThan(-1);
-    expect(signalled).toBeGreaterThan(committed);
+  it('[I-1] the bubble goes up before the hand-off, the draft goes only once the turn has it', () => {
+    const at = only('const interjectIntoTurn = async (');
+    const body = source.slice(at, matchingBraceEnd(source, source.indexOf('=>', at)));
+    // Ahead of the IPC: the turn may take the message in, and echo it, before
+    // the IPC answers — a bubble published after that would never be retired.
+    const published = body.indexOf('awaitingDelivery: true');
+    const handedOff = body.indexOf('window.electronAPI.chat.interject(');
+    const notTaken = body.indexOf('if (!interjected) {');
+    const committed = body.indexOf("updateValue('')");
+    expect(published).toBeGreaterThan(-1);
+    expect(handedOff).toBeGreaterThan(published);
+    expect(notTaken).toBeGreaterThan(handedOff);
+    expect(committed).toBeGreaterThan(notTaken);
+    // A refusal takes the bubble down again and leaves the draft as typed.
+    const refusal = body.slice(body.indexOf('} catch (error) {'));
+    expect(refusal).toContain('usePendingUserMessagesStore.getState().clear(attemptId)');
+    expect(refusal).not.toContain('updateValue(');
+  });
+});
+
+/**
+ * dsh-rebase decision 106 item 43 (P1-4c1): a turn the engine ended in failure
+ * leaves a healthy slot, so the binding stays and the failure card's Continue
+ * goes straight to it — no warm resume. Only that failure: a host that died or
+ * restarted (Main's codes) and every pre-admission failure still unbind.
+ */
+describe('decision 106 item 43 — an engine turn failure keeps the binding', () => {
+  it('unbinds on a fatal failure unless the engine failed an admitted turn', () => {
+    expect(source).toContain('if (!failedInEngine) unbindHost();');
+    const set = source.slice(only('failedInEngine = sawUserEcho && isEngineTurnFailure('));
+    expect(
+      set.startsWith('failedInEngine = sawUserEcho && isEngineTurnFailure(event.payload);')
+    ).toBe(true);
+    // Set only from this session's own `session.failed`, beside `fatalHostError`.
+    const listener = source.slice(
+      only('if (isSessionFailedForSend(event, sessionId)) {'),
+      only('failedInEngine = sawUserEcho && isEngineTurnFailure(')
+    );
+    expect(listener).toContain('fatalHostError = readSessionFailedError(event.payload);');
   });
 });
 

@@ -1,0 +1,224 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-steer",
+      "piSessionId": "aiclient-rec-steer",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-steer.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-steer",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-steer.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-STEER: two tool steps."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "sleep 2; echo steer-step-1",
+                "description": "First step"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-8:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "steer-step-1\n"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-steer-t1-s1"
+        },
+        {
+          "id": "h:id-7",
+          "entryId": "id-7",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-7:text:0",
+              "text": "STEER-NOTE-A also report the step count."
+            }
+          ],
+          "liveMessageId": "dsh-user-17"
+        },
+        {
+          "id": "h:id-11",
+          "entryId": "id-11",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-11:tool-call:toolu_id-9",
+              "toolCallId": "toolu_id-9",
+              "name": "bash",
+              "input": {
+                "command": "echo steer-step-2",
+                "description": "Second step"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-12:tool-result:toolu_id-9",
+              "toolCallId": "toolu_id-9",
+              "ok": true,
+              "output": "steer-step-2\n"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-steer-t1-s2"
+        },
+        {
+          "id": "h:id-14",
+          "entryId": "id-14",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-14:text:0",
+              "text": "P1-STEER finished; heard: STEER-NOTE-A."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-steer-t1-s3"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 5,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-steer",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-steer.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-14",
+        "fileTailEntryId": "aiclient-rec-steer#25"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-STEER: two tool steps.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-7",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "STEER-NOTE-A also report the step count.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-11",
+          "parentId": "id-7",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-14",
+          "parentId": "id-11",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-STEER finished; heard: STEER-NOTE-A.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 5,
+      "returnedNodes": 5,
+      "truncated": false
+    }
+  },
+  "interject": {
+    "running": {
+      "ok": true,
+      "result": {
+        "interjected": true,
+        "turnActive": true
+      }
+    },
+    "idle": {
+      "ok": true,
+      "result": {
+        "interjected": false,
+        "turnActive": false
+      }
+    }
+  }
+}

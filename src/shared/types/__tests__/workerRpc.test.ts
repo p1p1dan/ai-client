@@ -7,6 +7,7 @@ import {
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
   isWorkerInspectImportedSessionPayload,
+  isWorkerInterjectPayload,
   isWorkerInterjectResult,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
@@ -337,6 +338,35 @@ describe('worker RPC boundary guards', () => {
     expect(isWorkerInterjectResult({ interjected: false })).toBe(true);
     expect(isWorkerInterjectResult({ interjected: false, turnActive: false })).toBe(true);
     expect(isWorkerInterjectResult({ interjected: false, turnActive: 'no' })).toBe(false);
+  });
+
+  it('[P1-4c1] an interjection carries its message and attempt id (decision 093)', () => {
+    const interject = {
+      logicalSessionId: 'logical-1',
+      attemptId: 'interject-1',
+      text: 'also this',
+    };
+    expect(isWorkerInterjectPayload(interject)).toBe(true);
+    expect(
+      isWorkerInterjectPayload({
+        ...interject,
+        text: '',
+        attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAAA', name: 'a.png' }],
+      })
+    ).toBe(true);
+    // The old bare signal is no longer a valid request.
+    expect(isWorkerInterjectPayload({ logicalSessionId: 'logical-1' })).toBe(false);
+    expect(isWorkerInterjectPayload({ ...interject, attemptId: ' ' })).toBe(false);
+    expect(isWorkerInterjectPayload({ ...interject, logicalSessionId: '' })).toBe(false);
+    // Nothing to say: no text and no attachment.
+    expect(isWorkerInterjectPayload({ ...interject, text: '   ' })).toBe(false);
+    expect(isWorkerInterjectPayload({ ...interject, text: 42 })).toBe(false);
+    expect(
+      isWorkerInterjectPayload({
+        ...interject,
+        attachments: [{ kind: 'binary', mediaType: 'x', data: 'x' }],
+      })
+    ).toBe(false);
   });
 
   it('[T135] admits a retry only without a prompt of its own', () => {

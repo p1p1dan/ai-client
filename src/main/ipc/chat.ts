@@ -712,15 +712,36 @@ export function registerChatHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.CHAT_INTERJECT,
-    async (e, payload: { sessionId: string }): Promise<{ interjected: boolean }> => {
+    async (
+      e,
+      payload: {
+        sessionId: string;
+        attemptId: string;
+        text: string;
+        attachments?: Array<{
+          kind: 'image' | 'text';
+          mediaType: string;
+          data: string;
+          name?: string;
+        }>;
+      }
+    ): Promise<{ interjected: boolean; turnActive?: boolean }> => {
       // Same claim CHAT_STOP makes above. It is NOT an ownership check — any
       // window may interject any session id it names. It routes this
       // session's events (approval cards included) to the window that sent
-      // the signal, so the turn it is about to end, and the queued message
-      // that follows, report back to the window the user is looking at.
+      // the message, so the turn it joins reports back to the window the user
+      // is looking at (dsh-rebase decision 093: the message is steered into
+      // the running turn).
       claimSessionForSender(e, payload.sessionId);
-      const interjected = await workerManager.interject(payload.sessionId);
-      return { interjected };
+      try {
+        return await workerManager.interject(payload.sessionId, {
+          attemptId: payload.attemptId,
+          text: payload.text,
+          ...(payload.attachments ? { attachments: payload.attachments } : {}),
+        });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
     }
   );
 

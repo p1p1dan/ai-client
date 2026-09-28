@@ -32,7 +32,14 @@ interface Emitted {
 }
 
 function harness(
-  options: { turn?: LiveTurn | null; usage?: DshUsageView; steps?: number; rounds?: number } = {}
+  options: {
+    turn?: LiveTurn | null;
+    usage?: DshUsageView;
+    steps?: number;
+    rounds?: number;
+    /** P1-4c1: Ctrl+Enter messages the runtime steered in, by message id. */
+    steered?: Map<string, { attemptId: string }>;
+  } = {}
 ) {
   const events: Emitted[] = [];
   let turn: LiveTurn | null =
@@ -54,6 +61,11 @@ function harness(
     },
     closeTurn: () => {
       turn = null;
+    },
+    takeSteered: (messageId) => {
+      const steered = options.steered?.get(messageId);
+      options.steered?.delete(messageId);
+      return steered;
     },
     usageView: () => options.usage,
     usageSteps: () => options.steps ?? 0,
@@ -530,6 +542,54 @@ describe('DshLiveEvents — notices and turn heads (decisions 072, 081, 099 rule
       'message.completed',
     ]);
     expect(h.of('message.started')[0]?.payload).not.toHaveProperty('origin');
+  });
+
+  it('[C1-STEER-ECHO] a message steered into the turn echoes with its own attempt id (P1-4c1)', () => {
+    const steered = new Map([['s1', { attemptId: 'interject-1' }]]);
+    const h = harness({
+      turn: { requestId: 'turn-1', attemptId: 'attempt-1', synthetic: false, userMessageId: 'u1' },
+      steered,
+    });
+    const typed = (id: string, text: string) => ({
+      id,
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind: 'user' },
+    });
+    h.durable('turn/start', { turn: 1 });
+    h.durable('step/start', { turn: 1, step: 1 });
+    h.durable('user/message', typed('u1', 'list the files'));
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: { id: 'a1', role: 'assistant', content: [{ type: 'text', text: 'listing' }] },
+    });
+    h.durable('step/end', { turn: 1, step: 1 });
+    h.durable('step/start', { turn: 1, step: 2 });
+    h.durable('user/message', typed('s1', 'also count them'));
+    // Typed by the user, but its attempt id did not survive (a host restart).
+    h.durable('user/message', typed('x1', 'from before'));
+    const users = h
+      .of('message.started')
+      .filter((event) => event.payload.role === 'user')
+      .map((event) => [event.payload.messageId, event.payload.attemptId]);
+    expect(users).toEqual([
+      ['dsh-user-3', 'attempt-1'],
+      ['dsh-user-7', 'interject-1'],
+      ['dsh-user-8', undefined],
+    ]);
+    // Taken once: the id is forgotten with its echo.
+    expect(steered.size).toBe(0);
+    // Same turn, same request: the interjection never ends it.
+    expect(h.events.every((event) => event.requestId === 'turn-1')).toBe(true);
+    // The history shows the same user rows under the same live ids.
+    const rows = projectDshHistory(h.log, { liveSessionId: SID });
+    expect(rows.filter((row) => row.role === 'user').map((row) => row.liveMessageId)).toEqual([
+      'dsh-user-3',
+      'dsh-user-7',
+      'dsh-user-8',
+    ]);
   });
 
   it('[D1-HEAD-PARITY] the live ids are the ones the history names on its rows', () => {

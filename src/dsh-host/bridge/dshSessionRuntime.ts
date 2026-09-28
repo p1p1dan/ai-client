@@ -31,8 +31,17 @@
  * (P1-4d1, decision 099; `liveEvents.ts`), approvals, stop, the session
  * identity (create, resume, crash restart), the history, tree and leaf,
  * projected from the DSH log (P1-4a, decision 026; `historyCache.ts`), and
- * rewind and fork (P1-4b, decision 027). Compact, retry and attachments
- * refuse until the rest of P1-4 fills them in (dsh-rebase decision 010).
+ * rewind and fork (P1-4b, decision 027). Compact and attachments refuse until
+ * the rest of P1-4 fills them in (dsh-rebase decision 010).
+ *
+ * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
+ * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
+ * in at its next step boundary, echoed with the renderer's attempt id; with no
+ * turn running the bridge answers `turnActive: false` and sends nothing. Stop
+ * is DSH's stop button, `cancel({kind:'user'}, {keepInbox:true})`: input the
+ * turn has not taken in yet stays for the next one. The failure card's
+ * Continue follows up a hidden continuation prompt (`aiclient-retry`), only
+ * after a turn that ended in error, was interrupted or was stopped.
  *
  * Model and effort (P1-5a, decisions 033, 035, 040): each turn resolves the
  * model and effort Main sent (or the session's current model) against the
@@ -67,7 +76,11 @@ import type {
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
-import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
+import {
+  DSH_RETRY_CONTINUATION_TEXT,
+  DSH_SOURCE_AICLIENT_RETRY,
+  type DshLogEvent,
+} from '../../shared/dshHistory/types.ts';
 import {
   createPermissionPrompt,
   type PermissionPrompt,
@@ -102,6 +115,7 @@ import {
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
+  type WorkerInterjectPayload,
   type WorkerInterjectResult,
   type WorkerReloadResult,
   type WorkerRewindPayload,
@@ -177,6 +191,13 @@ interface DshAgent {
   readonly status: unknown;
   readonly session: DshSession;
   followup(message: unknown): void;
+  /**
+   * Input for the nearest step boundary of the running turn (P1-4c1). An idle
+   * agent would start a turn for it; the bridge only steers a running one.
+   * Must not be called from inside a `session/event` listener: DSH refuses a
+   * re-entrant append (measured, P1-4c1 experiment E2s).
+   */
+  steer(message: unknown): void;
   cancel(cause: { kind: 'user' | 'disposed' }, options?: { keepInbox?: boolean }): void;
   /**
    * Holds the idle agent for `task`: input that would wake it waits in the
@@ -253,6 +274,14 @@ export interface DshBridgeContext {
   aiclientPermissions?: DshPermissionHost;
 }
 
+/**
+ * The sources this bridge writes: what the user typed, and the hidden retry
+ * continuation (decisions 028 and 095), a notice the timeline never shows.
+ */
+export type DshUserMessageSource =
+  | { kind: 'user' }
+  | { kind: typeof DSH_SOURCE_AICLIENT_RETRY; form: 'notice'; summary: string };
+
 /** DSH's `AgentSetup`: runs on the agent's own scope before it is published. */
 export type DshAgentSetup = (agentCtx: unknown) => void;
 
@@ -272,7 +301,7 @@ export interface DshBridgeDeps {
   /** `createUserMessage` from `@deepseek-ai/dsh-llm`: the id its durable echo carries. */
   createUserMessage(input: {
     content: Array<{ type: 'text'; text: string }>;
-    source: { kind: 'user' };
+    source: DshUserMessageSource;
   }): { id: string };
   /** `$DSH_HOME`; defaults to the host's environment. */
   home?: string;
@@ -333,6 +362,14 @@ export const SESSION_FORK_UNMATERIALIZED = 'session_fork_unmaterialized';
 const DISPOSE_TIMEOUT_MS = 3_000;
 /** A failed rewind may leave its child under the next id; skip that many at most. */
 const REWIND_ID_ATTEMPTS = 20;
+
+/**
+ * How the last turn must have ended for the failure card's Continue to be
+ * taken (decisions 028 and 095): it failed, the host died under it, or it was
+ * stopped. A turn that completed — or was blocked, or ran out of tokens — has
+ * nothing to re-run.
+ */
+const RETRYABLE_TURN_ENDS: ReadonlySet<string> = new Set(['error', 'interrupted', 'aborted']);
 
 /** Ours, not DSH's in-process counter, so a lost stub can be found again (decision 006). */
 export function dshSessionIdFor(logicalSessionId: string): string {
@@ -466,6 +503,12 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private lineage: SessionLineageEntry[] = [];
   /** Fork stubs written here that Main has not adopted yet -> their DSH session. */
   private readonly stagedForks = new Map<string, string>();
+  /**
+   * Ctrl+Enter messages steered in and not yet taken in by a turn: message id
+   * -> the renderer's attempt id, for the echo (P1-4c1). One that a Stop left
+   * in the inbox waits here until a later turn takes it in.
+   */
+  private readonly steered = new Map<string, { attemptId: string }>();
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
@@ -508,6 +551,11 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       },
       closeTurn: () => {
         this.turn = null;
+      },
+      takeSteered: (messageId) => {
+        const steered = this.steered.get(messageId);
+        this.steered.delete(messageId);
+        return steered;
       },
       usageView: () => this.usageView(),
       usageSteps: () => this.historyCache.usageSteps(),
@@ -887,6 +935,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     // is refused rather than left parked.
     this.prompt.drain('session_closed');
     this.disposed = true;
+    this.steered.clear();
     for (const dispose of this.disposers.splice(0)) dispose();
     try {
       await this.handle?.dispose();
@@ -902,15 +951,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   // ---- turns -----------------------------------------------------------------
 
   async startSend(input: WorkerSendPayload): Promise<WorkerSendResult> {
+    if (input.mode === 'retry') return this.startRetry(input);
     // decision 010: refuse what is not bridged yet instead of sending something
-    // else — a retry used to go out as an empty new message, and images were
-    // silently dropped.
-    if (input.mode === 'retry') {
-      throw new PiWorkerSessionError(
-        WORKER_RETRY_UNAVAILABLE,
-        'Retrying the last turn is not bridged to the DSH engine yet'
-      );
-    }
+    // else — images used to be silently dropped.
     if (input.attachments && input.attachments.length > 0) {
       unsupported('Sending attachments');
     }
@@ -942,15 +985,102 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return { accepted: true, requestId: input.requestId };
   }
 
+  /**
+   * The failure card's Continue (decisions 028 and 095). Taken only when the
+   * session is idle and its last turn ended in error, was interrupted (the
+   * host died under it) or was stopped; anything else is refused with
+   * `WORKER_RETRY_UNAVAILABLE` before a single event goes out, and the
+   * renderer puts the prompt back in the composer.
+   *
+   * Taken, it follows up one continuation prompt the model reads and the user
+   * never sees (source `aiclient-retry`: no echo live, hidden in the history)
+   * and reports `running`, the renderer's evidence of admission. Nothing is
+   * forked: DSH kept the failed attempt out of the model's context
+   * (`assistant/attempt`), and the turn's finished tool rounds stay.
+   */
+  private async startRetry(input: WorkerSendPayload): Promise<WorkerSendResult> {
+    await this.bootstrap();
+    const current = await this.historyCache.ready();
+    const lastEnd = current ? this.historyCache.lastTurnEnd() : undefined;
+    if (!this.idle()) {
+      throw new PiWorkerSessionError(
+        WORKER_RETRY_UNAVAILABLE,
+        'A turn is running; there is nothing to retry'
+      );
+    }
+    if (lastEnd === undefined || !RETRYABLE_TURN_ENDS.has(lastEnd)) {
+      throw new PiWorkerSessionError(
+        WORKER_RETRY_UNAVAILABLE,
+        lastEnd === undefined
+          ? 'No ended turn is on record; there is nothing to retry'
+          : `The last turn ended ${lastEnd}; there is nothing to retry`
+      );
+    }
+    const agent = this.requireAgent();
+    this.applyRoute(
+      this.router.session(input.model ?? this.modelId, input.effort ?? this.options.effort)
+    );
+    const message = this.deps.createUserMessage({
+      content: [{ type: 'text', text: DSH_RETRY_CONTINUATION_TEXT }],
+      source: {
+        kind: DSH_SOURCE_AICLIENT_RETRY,
+        form: 'notice',
+        summary: 'Retry after a failed request',
+      },
+    });
+    // No `userMessageId`: the continuation is not the user's, so nothing echoes.
+    this.turn = { requestId: input.requestId, attemptId: input.attemptId, synthetic: false };
+    this.emit({ type: 'session.status', payload: { status: 'running' } });
+    agent.followup(message);
+    return { accepted: true, requestId: input.requestId };
+  }
+
+  /**
+   * DSH's stop button (decision 094): the turn ends, and input it has not
+   * taken in yet — a Ctrl+Enter message, a job's completion notice — stays in
+   * the inbox for the next turn. The Stop opens no turn by itself.
+   */
   async stop(_input: WorkerStopPayload): Promise<WorkerStopResult> {
     if (!this.turn || !this.handle) return { stopped: false };
     this.emit({ type: 'session.status', payload: { status: 'stopping' } });
-    this.handle.agent.cancel({ kind: 'user' });
+    this.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });
     return { stopped: true };
   }
 
-  interject(): WorkerInterjectResult {
-    return { interjected: false };
+  /**
+   * Ctrl+Enter (decision 093): the message goes to the running turn, which
+   * takes it in at its next step boundary and carries on — nothing stops,
+   * and a goal keeps running. A turn DSH started itself (a goal round, a job
+   * or subagent wake-up) counts as running. Its echo carries `attemptId` once
+   * the turn took it in (`liveEvents.ts`); a Stop before then leaves it in the
+   * inbox for the next turn (decision 094).
+   *
+   * With no turn running nothing is sent: `turnActive: false`, and the
+   * renderer sends the message the ordinary way (runtime-hardening decision
+   * 046: the worker is the authority on whether a turn exists).
+   */
+  interject(input: WorkerInterjectPayload): WorkerInterjectResult {
+    this.assertLogicalSession(input.logicalSessionId);
+    // decision 010, as a send's (P1-4c2 admits them through the engine).
+    if (input.attachments && input.attachments.length > 0) {
+      unsupported('Interjecting with attachments');
+    }
+    const handle = this.handle;
+    if (this.disposed || !handle || this.idle()) {
+      return { interjected: false, turnActive: false };
+    }
+    const message = this.deps.createUserMessage({
+      content: [{ type: 'text', text: input.text }],
+      source: { kind: 'user' },
+    });
+    this.steered.set(message.id, { attemptId: input.attemptId });
+    try {
+      handle.agent.steer(message);
+    } catch (error) {
+      this.steered.delete(message.id);
+      throw error;
+    }
+    return { interjected: true, turnActive: true };
   }
 
   /** A card's answer, keyed by the tool call id; false when nothing waits on it. */

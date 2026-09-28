@@ -51,6 +51,7 @@ import {
   collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
   hasNewAssistantMessage,
+  isEngineTurnFailure,
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
@@ -190,6 +191,15 @@ let queuedMessageSeq = 0;
 function nextQueuedMessageId(): string {
   queuedMessageSeq += 1;
   return `queued-${Date.now().toString(36)}-${queuedMessageSeq}`;
+}
+
+// dsh-rebase decision 093: a Ctrl+Enter message's attempt id, echoed back on
+// its user `message.started` once the running turn takes it in.
+let interjectionSeq = 0;
+
+function nextInterjectionAttemptId(sessionId: string): string {
+  interjectionSeq += 1;
+  return `${sessionId}:interject:${Date.now().toString(36)}-${interjectionSeq}`;
 }
 
 // M6 fix: delegate to queueRelease.ts's exported `isStoppableStatus` instead of
@@ -382,10 +392,11 @@ type WaitResult =
   | 'ceiling';
 
 /**
- * What a queued draft does once `handleSend`'s shared gate says "enqueue":
+ * What a draft does once `handleSend`'s shared gate says a turn is running:
  * `queue` waits its turn (Enter), `sendNow` jumps the queue and stops the
- * running turn at once, `interject` (Ctrl+Enter) jumps the queue and asks the
- * running turn to stop at its next boundary.
+ * running turn at once, `interject` (Ctrl+Enter) joins the running turn at its
+ * next step boundary (dsh-rebase decision 093) — the turn goes on, and the
+ * queue is not involved.
  */
 type ComposerSendMode = 'queue' | 'sendNow' | 'interject';
 
@@ -571,6 +582,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // non-empty and skip a restore it owed), a real two-direction race the
   // synchronous write closes.
   const valueRef = useRef(value);
+  /** A Ctrl+Enter message is on its way to the running turn (decision 093). */
+  const interjectingRef = useRef(false);
   const updateValue = useCallback((next: string) => {
     valueRef.current = next;
     // F2 §5.3: bumped on EVERY write, including our own restore — the marker
@@ -1064,9 +1077,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
    * does.
    *
    * `interject` (Ctrl+Enter while a turn runs) differs only after that gate:
-   * the entry jumps the queue as `priority: 'next'` and the running turn is
-   * asked to stop at its next boundary. If the turn already ended, the gate
-   * returns `'send'` and Ctrl+Enter is an ordinary send.
+   * the message goes straight to the running turn, which takes it in at its
+   * next step boundary and carries on (dsh-rebase decision 093;
+   * `interjectIntoTurn`). If the turn already ended, the gate returns `'send'`
+   * and Ctrl+Enter is an ordinary send; if the worker finds no turn after all,
+   * the message is queued like an Enter.
    */
   const handleSend = async (mode: ComposerSendMode = 'queue') => {
     const trimmed = value.trim();
@@ -1115,16 +1130,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // the queue instead of racing it. `decideSendAction`'s `hasTarget` check
     // already guarantees `activeSessionId` is non-null here.
     if (!activeSessionId) return;
+    if (mode === 'interject') {
+      // Decision 093: straight into the running turn. Only a worker with no
+      // turn at all sends the message on to the queue, as Enter would.
+      if ((await interjectIntoTurn(activeSessionId, trimmed)) !== 'no-turn') return;
+    }
     const queued: QueuedMessage = {
       id: nextQueuedMessageId(),
       sessionId: activeSessionId,
       text: trimmed,
       attachments: attachments.drafts,
       queuedAt: Date.now(),
-      ...(mode === 'interject' ? { priority: 'next' as const } : {}),
     };
-    const queue = useMessageQueueStore.getState();
-    const result = mode === 'interject' ? queue.interject(queued) : queue.enqueue(queued);
+    const result = useMessageQueueStore.getState().enqueue(queued);
     if (!result.ok) {
       // Decision 1/7: reject and keep the draft exactly as typed — never
       // silently drop it.
@@ -1144,29 +1162,86 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
-    if (mode === 'interject') await signalInterjection(activeSessionId);
   };
 
   /**
-   * Ctrl+Enter's second half: ask the running turn to stop at its next
-   * boundary so the entry just queued goes next.
+   * Ctrl+Enter while a turn runs (dsh-rebase decision 093): hand the message
+   * to the running turn, which takes it in at its next step boundary and
+   * carries on — nothing is stopped, and a goal keeps running.
    *
-   * The queue entry is already committed, so a failure here cannot drop the
-   * message — it only means the stop signal did not land. Say so rather than
-   * leaving the user waiting on a turn that is never going to end early.
+   * The bubble goes up first, marked as awaiting delivery, so the echo can
+   * never beat it: the turn may take the message in before this IPC answers.
+   * The echo (its user `message.started`, carrying this attempt id) retires
+   * it as it retires a send's. A Stop before the turn took it in leaves it in
+   * the engine's inbox for the next turn (decision 094), and the bubble waits
+   * with it.
+   *
+   * `'no-turn'`: the worker had no turn after all; nothing was sent, the
+   * bubble goes, and the caller queues the message as Enter would. The draft
+   * is committed (cleared) only once the turn has it; a refusal leaves it in
+   * the composer exactly as typed.
    */
-  const signalInterjection = async (sessionId: string) => {
+  const interjectIntoTurn = async (
+    sessionId: string,
+    text: string
+  ): Promise<'interjected' | 'no-turn' | 'failed'> => {
+    if (interjectingRef.current) return 'failed';
+    interjectingRef.current = true;
+    const drafts = attachments.drafts;
+    const attemptId = nextInterjectionAttemptId(sessionId);
+    const pending = usePendingUserMessagesStore.getState();
+    pending.publish({
+      attemptId,
+      sessionId,
+      text,
+      attachments: drafts.map((draft) => ({
+        kind: draft.kind,
+        mediaType: draft.mediaType,
+        ...(draft.name ? { name: draft.name } : {}),
+      })),
+      startedAt: Date.now(),
+      awaitingDelivery: true,
+    });
+    const wireAttachments = toWireAttachments(drafts);
     try {
-      const { interjected } = await window.electronAPI.chat.interject({ sessionId });
+      const { interjected } = await window.electronAPI.chat.interject({
+        sessionId,
+        attemptId,
+        text,
+        ...(wireAttachments ? { attachments: wireAttachments } : {}),
+      });
       if (!interjected) {
-        setQueueNotice(t('No turn is running — the message was queued normally'));
+        usePendingUserMessagesStore.getState().clear(attemptId);
+        return 'no-turn';
       }
+      setQueueNotice(null);
+      onSendStart?.('direct');
+      // Committed: the running turn has it. Only what was sent is cleared —
+      // anything typed while the IPC was in flight stays.
+      if (valueRef.current.trim() === text) updateValue('');
+      attachments.removeDrafts(drafts.map((draft) => draft.id));
+      return 'interjected';
     } catch (error) {
-      setQueueNotice(
-        t('Could not send the interject signal — the message is still queued: {{error}}', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-      );
+      usePendingUserMessagesStore.getState().clear(attemptId);
+      // P1-1 D2's rule, as a send's: the engine cannot carry attachments yet
+      // (P1-4c2). The draft stays for the user to drop them.
+      if (wireAttachments && isEngineUnsupportedSendError(error)) {
+        attachments.showNotice({
+          tone: 'warning',
+          message: t(
+            'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.'
+          ),
+        });
+      } else {
+        setQueueNotice(
+          t('Could not add the message to the running turn: {{error}}', {
+            error: error instanceof Error ? error.message : String(error),
+          })
+        );
+      }
+      return 'failed';
+    } finally {
+      interjectingRef.current = false;
     }
   };
 
@@ -1842,6 +1917,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     let sawNetworkRetry = false;
     let fatalHostError: string | null = null;
     let fatalHostErrorCode: string | null = null;
+    // dsh-rebase decision 106 item 43: the failure is the engine's own account
+    // of an admitted turn (a provider error, retries used up), not a host that
+    // died. The binding is healthy, so it is kept: the failure card's Continue
+    // then goes straight to the slot instead of through a warm resume.
+    let failedInEngine = false;
     // F3: requestId of the IPC call THIS attempt is currently waiting on —
     // lets the listener correlate a session-less host.error (send()'s
     // session_not_found, deliberately emitted before the Host knows which
@@ -2001,6 +2081,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       if (isSessionFailedForSend(event, sessionId)) {
         fatalHostErrorCode = null;
         fatalHostError = readSessionFailedError(event.payload);
+        // Decision 106 item 43: the engine ended THIS admitted turn in failure
+        // and its slot is healthy — unless Main says the host went down.
+        failedInEngine = sawUserEcho && isEngineTurnFailure(event.payload);
       }
 
       // Stop-hang fix (2026-08-10): deliberately NOT folded into
@@ -2690,7 +2773,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // the listener's `isSessionFailedForSend` branch above, which already
       // folded THIS session's own `session.failed` into `fatalHostError`.
       if (fatalHostError) {
-        unbindHost();
+        if (!failedInEngine) unbindHost();
         // Round-2 P0 hardening: a fatal host.error the Host raised BEFORE it
         // ever admitted this turn (no echo, no beginTurn — e.g. session_busy
         // surviving the bounded retry above) must not be reported the same

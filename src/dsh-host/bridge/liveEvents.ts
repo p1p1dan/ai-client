@@ -21,6 +21,10 @@
  *   `turn/end`                          session.completed / stopped / failed:
  *                                       DSH's failure sentence and our code, the
  *                                       step ceiling's cut as `turn_limit` (rule 4)
+ *   `user/message` the user typed       the user echo: the turn's own prompt, a
+ *                                       Ctrl+Enter message the turn took in at a
+ *                                       step boundary (P1-4c1, decision 093), each
+ *                                       with its `attemptId`
  *   `user/message` nobody typed         the head of a turn the engine started, or
  *                                       a notice (`custom.message`), by the table
  *                                       the history projection reads (rules 7, 8)
@@ -122,6 +126,11 @@ export interface DshLiveEventsHost {
   openSyntheticTurn(turn: number): void;
   /** The turn ended; the runtime drops it. */
   closeTurn(): void;
+  /**
+   * P1-4c1: a Ctrl+Enter message the runtime steered in, by its message id,
+   * with the renderer's attempt id; taken (and forgotten) as its echo goes out.
+   */
+  takeSteered(messageId: string): { attemptId: string } | undefined;
   /** dsh-token-meter's usage views of the session, when the host composes them. */
   usageView(): DshUsageView | undefined;
   /** Model steps of the log with reported usage (the session total's turn count). */
@@ -588,7 +597,18 @@ export class DshLiveEvents {
     const source = data.source;
     const kind = dshSourceKind(source);
     if (kind === 'user') {
-      if (data.id === turn.userMessageId) this.echoPrompt(event.seq, turn, textOf(data.content));
+      // What the user typed, wherever the turn took it in: its own prompt, or
+      // a Ctrl+Enter message at a step boundary — the history shows both as
+      // user rows, so the live timeline does too. Anything else the user
+      // typed (sent before a restart dropped its attempt id) goes without one.
+      const id = typeof data.id === 'string' ? data.id : undefined;
+      const attemptId =
+        id !== undefined && id === turn.userMessageId
+          ? turn.attemptId
+          : id !== undefined
+            ? this.host.takeSteered(id)?.attemptId
+            : undefined;
+      this.echoPrompt(event.seq, attemptId, textOf(data.content));
       return;
     }
     // Decisions 072, 099: what the engine sent itself, by the history's own table.
@@ -612,14 +632,14 @@ export class DshLiveEvents {
     });
   }
 
-  private echoPrompt(seq: number, turn: LiveTurn, text: string): void {
+  private echoPrompt(seq: number, attemptId: string | undefined, text: string): void {
     const messageId = `dsh-user-${seq}`;
     this.emit({
       type: 'message.started',
       payload: {
         messageId,
         role: 'user',
-        ...(turn.attemptId ? { attemptId: turn.attemptId } : {}),
+        ...(attemptId ? { attemptId } : {}),
       },
     });
     this.emit({

@@ -1,3 +1,7 @@
+import {
+  SESSION_FAILED_ENGINE_RESTARTED,
+  SESSION_FAILED_HOST_CRASHED,
+} from '@shared/types/runtimeEvents';
 import { HISTORY_MESSAGE_ID_PREFIX } from '@shared/types/sessionHistory';
 
 export interface ProgressEvent {
@@ -166,6 +170,19 @@ export function isSessionFailedForSend(event: ProgressEvent, sessionId: string):
 /** Best-effort human-readable message off a `session.failed` payload. */
 export function readSessionFailedError(payload: unknown): string {
   return readStringField(payload, 'error') || 'Session failed';
+}
+
+/**
+ * dsh-rebase P1-4c1 (decision 106 item 43): whether a `session.failed` is the
+ * engine's own account of a turn that failed — a provider error, the step's
+ * retries used up — rather than Main's report that the shared host died or
+ * restarted under it. After the former the session's slot is healthy: the
+ * binding stays, and the failure card's Continue goes straight to it instead
+ * of through a resume.
+ */
+export function isEngineTurnFailure(payload: unknown): boolean {
+  const code = readStringField(payload, 'errorCode');
+  return code !== SESSION_FAILED_HOST_CRASHED && code !== SESSION_FAILED_ENGINE_RESTARTED;
 }
 
 /**

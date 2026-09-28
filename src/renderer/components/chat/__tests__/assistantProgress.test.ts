@@ -5,6 +5,7 @@ import {
   collectAssistantMessageIds,
   countAssistantMessagesWithBlocks,
   hasNewAssistantMessage,
+  isEngineTurnFailure,
   isHostErrorForSend,
   isSessionCompletedForSend,
   isSessionFailedForSend,
@@ -322,6 +323,16 @@ describe('isSessionFailedForSend / readSessionFailedError (R3, round-2 iteration
     expect(readSessionFailedError(undefined)).toBe('Session failed');
     expect(readSessionFailedError({})).toBe('Session failed');
     expect(readSessionFailedError({ error: '' })).toBe('Session failed');
+  });
+});
+
+describe('isEngineTurnFailure (dsh-rebase decision 106 item 43)', () => {
+  it("is the engine's own account of a failed turn, not Main's report of a lost host", () => {
+    expect(isEngineTurnFailure({ error: 'upstream 500', errorCode: 'PROVIDER_ERROR' })).toBe(true);
+    expect(isEngineTurnFailure({ error: 'upstream 500' })).toBe(true);
+    expect(isEngineTurnFailure(undefined)).toBe(true);
+    expect(isEngineTurnFailure({ error: 'x', errorCode: 'dsh_host_crashed' })).toBe(false);
+    expect(isEngineTurnFailure({ error: 'x', errorCode: 'dsh_engine_restarted' })).toBe(false);
   });
 });
 

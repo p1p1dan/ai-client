@@ -1,0 +1,350 @@
+[
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-STEER"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-STEER: two tool steps."
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 23,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "sleep 2; echo steer-step-1",
+        "description": "First step"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "steer-step-1\n"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "role": "user",
+      "attemptId": "interject-STEER"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-17",
+      "blockId": "dsh-user-17-text",
+      "text": "STEER-NOTE-A also report the step count."
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-17"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2",
+      "toolCallId": "toolu_id-9",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 20,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2",
+      "toolCallId": "toolu_id-9",
+      "input": {
+        "command": "echo steer-step-2",
+        "description": "Second step"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2",
+      "toolCallId": "toolu_id-9",
+      "ok": true,
+      "output": "steer-step-2\n"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s3",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s3",
+      "blockId": "dsh-aiclient-rec-steer-t1-s3-b0",
+      "text": "P1-STEER finished; heard: STEER-NOTE-A."
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s3"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

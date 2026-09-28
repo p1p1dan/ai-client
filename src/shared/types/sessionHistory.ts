@@ -127,7 +127,8 @@ export interface SubagentHistorySummary {
  * Why a run ended when the USER ended it, rather than the model finishing.
  *
  * - `interjected`: Ctrl+Enter stopped the run at a turn boundary so the queued
- *   message could go next.
+ *   message could go next. Only 1.0.x runs carry it (a migrated session's
+ *   history); under DSH Ctrl+Enter steers the running turn (decision 093).
  * - `user_stop`: the run was aborted (the Stop button, "send now", or the
  *   session closing mid-run — all of them abort the same run signal).
  *

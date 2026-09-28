@@ -116,6 +116,11 @@ export class DshHistoryCache {
     return this.fold.goalMaxRounds;
   }
 
+  /** How the session's last turn ended (`turn/end.reason.kind`); undefined before any did (P1-4c1). */
+  lastTurnEnd(): string | undefined {
+    return this.fold.lastTurnEnd;
+  }
+
   page(offset?: number, limit?: number): SessionHistoryPage {
     return paginateHistory(this.fold.messages(), offset, limit);
   }

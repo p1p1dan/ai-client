@@ -143,6 +143,6 @@
 40. P1-7a：轮次头 `AutoTurnHead`、通知轻量行；`PromptNavRail`、`turnCopy` 认 `origin`。
 41. P1-7b：`execStartedAt`、`goalActivation`、`jobs`、子代理的用量与重试。
 42. P1-7c：`PROVIDER_UNAUTHORIZED`、`PROVIDER_RATE_LIMITED`、`NETWORK_ERROR`、`PROVIDER_ERROR` 的失败卡文案。
-43. P1-4c1：输入框在 DSH 回合失败后不必 `unbindHost()`，slot 是好的；那样「继续」就不会触发暖 resume。本次没有改 `ChatComposer.tsx`。
+43. P1-4c1：输入框在 DSH 回合失败后不必 `unbindHost()`，slot 是好的；那样「继续」就不会触发暖 resume。本次没有改 `ChatComposer.tsx`。**已在 P1-4c1 落地**（[决策 111](111-p1-4c1-turn-semantics-choices.md) 第 14 条）。
 44. 同一步里一次失败的尝试已经流出了文字、DSH 自动重试时，直播里旧的半截文字会留在同一块里，后面接上新尝试的文字；历史里是对的。pi-ai 的失败多在出字之前，本次没有处理。
 45. 金样本：18 个既有场景的 `stream.*`、`rpc.*` 全部要重录，`log.*` 不变；三个新场景第一次录。差异清单见交回报告。

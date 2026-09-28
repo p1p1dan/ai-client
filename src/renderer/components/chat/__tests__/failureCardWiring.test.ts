@@ -9,7 +9,8 @@
  *
  *  1. the queue and "Send now" read `statusForNextTurn`, so a failed run the
  *     runtime has closed still releases queued messages exactly as the plain
- *     idle used to (a Ctrl+Enter interjection included);
+ *     idle used to (a Ctrl+Enter that found no turn, queued like an Enter under
+ *     dsh-rebase decision 093, included);
  *  2. a new send retires the stale `failed` at its commit point, before its own
  *     wait (`status === 'failed'` is one of its release conditions) can read
  *     the previous run's failure as this one's;

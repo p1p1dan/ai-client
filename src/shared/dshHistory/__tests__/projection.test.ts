@@ -1188,4 +1188,21 @@ describe('DshHistoryFold — what the live bridge reads off it (P1-4d1)', () => 
     expect(fold.usageSteps).toBe(2);
     expect(fold.goalMaxRounds).toBe(9);
   });
+
+  it('[C1-LAST-TURN-END] reports how the last turn ended, for the retry rule (P1-4c1)', () => {
+    const fold = new DshHistoryFold();
+    expect(fold.lastTurnEnd).toBeUndefined();
+    const { events } = log()
+      .turn(1)
+      .user('u1', 'go')
+      .end(1, { kind: 'error', error: { code: 'SERVER', message: 'upstream 500' } })
+      .turn(2)
+      .user('u2', 'again')
+      .end(2, { kind: 'completed' });
+    const firstEnd = events.findIndex((event) => event.type === 'turn/end');
+    for (const event of events.slice(0, firstEnd + 1)) fold.push(event);
+    expect(fold.lastTurnEnd).toBe('error');
+    for (const event of events.slice(firstEnd + 1)) fold.push(event);
+    expect(fold.lastTurnEnd).toBe('completed');
+  });
 });

@@ -3453,7 +3453,9 @@ describe('WorkerManager Stop always settles (decision 046)', () => {
     // Stop and interject on the ended session stay answerable.
     h.events.length = 0;
     await h.manager.stop('s1');
-    await expect(h.manager.interject('s1')).resolves.toBe(false);
+    await expect(h.manager.interject('s1', { attemptId: 'i1', text: 'also' })).resolves.toEqual({
+      interjected: false,
+    });
     expect(sequence(h.events)).toEqual(['session.stopped(no_active_turn)', 'status:idle']);
   });
 
@@ -3515,16 +3517,23 @@ describe('WorkerManager Stop always settles (decision 046)', () => {
     h.records[0].request.mockImplementation(async (type: string, payload: unknown) =>
       type === 'worker.interject' ? answer : original(type, payload)
     );
+    const input = { attemptId: 'i1', text: 'also this' };
 
-    // Too late for this turn: its own terminal is on the way, nothing to do.
-    await expect(h.manager.interject('s1')).resolves.toBe(false);
+    // A turn the worker still holds: nothing to settle.
+    await expect(h.manager.interject('s1', input)).resolves.toEqual({
+      interjected: false,
+      turnActive: true,
+    });
     expect(h.events).toEqual([]);
 
-    // No turn at all: the latch goes, and the queued message can be released.
+    // No turn at all: the latch goes, and the renderer's ordinary send is admitted.
     answer = { interjected: false, turnActive: false };
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     try {
-      await expect(h.manager.interject('s1')).resolves.toBe(false);
+      await expect(h.manager.interject('s1', input)).resolves.toEqual({
+        interjected: false,
+        turnActive: false,
+      });
     } finally {
       warn.mockRestore();
     }
@@ -3533,6 +3542,50 @@ describe('WorkerManager Stop always settles (decision 046)', () => {
     await expect(
       h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'queued', ownerWebContentsId: 7 })
     ).resolves.toMatch(/^send-/);
+  });
+
+  it('[P1-4c1-wm-01] Ctrl+Enter carries the message to the worker and keeps the running turn', async () => {
+    const h = createHarness();
+    await running(h);
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    const payloads: unknown[] = [];
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type !== 'worker.interject') return original(type, payload);
+      payloads.push(payload);
+      return { interjected: true, turnActive: true };
+    });
+    h.events.length = 0;
+
+    await expect(
+      h.manager.interject('s1', { attemptId: 'i1', text: 'also check the tests' })
+    ).resolves.toEqual({ interjected: true, turnActive: true });
+    // decision 093: the message itself, with the renderer's attempt id.
+    expect(payloads).toEqual([
+      { logicalSessionId: 's1', attemptId: 'i1', text: 'also check the tests' },
+    ]);
+    // Nothing settles and the latch stays with the running turn: a send is still busy.
+    expect(h.events).toEqual([]);
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'next', ownerWebContentsId: 7 })
+    ).rejects.toMatchObject({ code: 'session_busy' });
+  });
+
+  it('[P1-4c1-wm-02] an interject the worker answers badly is an invalid acknowledgement', async () => {
+    const h = createHarness();
+    await running(h);
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) =>
+      type === 'worker.interject' ? { interjected: 'yes' } : original(type, payload)
+    );
+    await expect(
+      h.manager.interject('s1', { attemptId: 'i1', text: 'also' })
+    ).rejects.toMatchObject({ code: 'worker_invalid_interject_ack' });
   });
 
   it('[T144-wm-11] a send the worker refused up front does not pin the latch', async () => {

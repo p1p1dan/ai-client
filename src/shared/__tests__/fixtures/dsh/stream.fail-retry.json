@@ -1,0 +1,165 @@
+[
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-FAILONCE"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-FAILONCE: this request fails once."
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-retry-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-retry-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "session.failed",
+    "payload": {
+      "error": "500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAILONCE: the fake upstream failed this request once\"}}",
+      "errorCode": "PROVIDER_ERROR"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-FAILONCE",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-retry-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-retry-t2-s1",
+      "blockId": "dsh-aiclient-rec-fail-retry-t2-s1-b0",
+      "text": "P1-FAILONCE recovered after the retry."
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fail-retry-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-fail-retry",
+    "requestId": "turn-RETRY",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

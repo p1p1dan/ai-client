@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
+  isAwaitingDeliveryMessage,
   isPendingUserMessage,
   type PendingUserMessage,
   pendingUserToChatMessage,
@@ -86,6 +87,24 @@ describe('pending user message reconciliation', () => {
 
     expect(usePendingUserMessagesStore.getState().bySession).toEqual({
       s2: [expect.objectContaining({ attemptId: 'attempt-2' })],
+    });
+  });
+
+  it('[P1-4c1] a Ctrl+Enter message awaiting delivery is still a pending row, told apart', () => {
+    const sending = pendingUserToChatMessage(pending());
+    const awaiting = pendingUserToChatMessage(
+      pending({ attemptId: 'interject-1', text: 'also this', awaitingDelivery: true })
+    );
+    expect(isPendingUserMessage(awaiting)).toBe(true);
+    expect(isAwaitingDeliveryMessage(awaiting)).toBe(true);
+    expect(isAwaitingDeliveryMessage(sending)).toBe(false);
+    // Retired by its echo exactly like a send's bubble.
+    const store = usePendingUserMessagesStore.getState();
+    store.publish(pending({ attemptId: 'interject-1', awaitingDelivery: true }));
+    usePendingUserMessagesStore.getState().acknowledgeAttempt('s1', 'interject-1', 'dsh-user-7');
+    expect(usePendingUserMessagesStore.getState().bySession.s1?.[0]).toMatchObject({
+      authoritativeMessageId: 'dsh-user-7',
+      awaitingDelivery: true,
     });
   });
 });

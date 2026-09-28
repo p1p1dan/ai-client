@@ -2,6 +2,8 @@
 
 日期：2026-09-26。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-4 方案 §5 D3](../topics/p1-4-bridge-parity.md#5-需要拍板的决策点)、[runtime-hardening 决策 045](../../runtime-hardening/decisions/045-failure-card-continue-retries-last-turn.md)、[分片 04](../topics/p1-4-bridge-parity/04-turn-semantics.md)。
 
+**修订（2026-09-28，P1-4c1）**：按[决策 095](095-retry-keeps-hidden-continuation.md) 落地，替换了决策 010 的重试安全桩。续跑提示的文字、受理顺序与 `lastTurnEnd` 的来源见[决策 111](111-p1-4c1-turn-semantics-choices.md) 第 9 条。
+
 ## 规则
 
 1. 只有同时满足以下条件才受理：会话空闲，且最后一个 `turn/end` 是 `error`、`interrupted` 或 `aborted`。否则在发出任何事件之前抛 `WORKER_RETRY_UNAVAILABLE`，渲染层沿用 045 的处理：把提示放回输入框，由用户确认。

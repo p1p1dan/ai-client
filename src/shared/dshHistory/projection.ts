@@ -352,6 +352,8 @@ export class DshHistoryFold {
   private goalRounds: number | undefined;
   /** Model steps the provider reported usage for. */
   private reportedSteps = 0;
+  /** `reason.kind` of the last `turn/end` pushed. */
+  private lastTurnEndKind: string | undefined;
 
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
@@ -374,6 +376,16 @@ export class DshHistoryFold {
   /** The current goal's round budget, when the log recorded one. */
   get goalMaxRounds(): number | undefined {
     return this.goalRounds;
+  }
+
+  /**
+   * How the log's last turn ended (`turn/end.reason.kind`: `completed`,
+   * `blocked`, `max-tokens`, `aborted`, `error`, `interrupted`), or undefined
+   * before the first turn ended. P1-4c1 (decision 095): a retry is accepted
+   * only after `error`, `interrupted` or `aborted`.
+   */
+  get lastTurnEnd(): string | undefined {
+    return this.lastTurnEndKind;
   }
 
   /** The visible timeline, oldest first. Do not mutate: the array is reused until the next push. */
@@ -499,6 +511,7 @@ export class DshHistoryFold {
     this.settleOpenCalls(turn);
     const reason = recordOf(recordOf(event.data)?.reason);
     const kind = reason?.kind;
+    this.lastTurnEndKind = typeof kind === 'string' ? kind : undefined;
     const last = turn.steps.at(-1);
     const hideable: number[] = [];
     if (kind === 'aborted') {

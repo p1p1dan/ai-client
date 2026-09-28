@@ -55,6 +55,16 @@
  *   job-notice    a background job outlives its turn; its completion notice wakes
  *                 the agent into a turn nobody sent, headed by `origin: job`
  *
+ * Turn-semantics scenarios (P1-4c1, decisions 093 and 095):
+ *   steer         two tool steps; while the first command runs, `worker.interject`
+ *                 hands the turn a message, which it takes in at the next step
+ *                 boundary (echoed with its attempt id) and goes on; once idle,
+ *                 a second `worker.interject` finds no turn (`turnActive: false`)
+ *   fail-retry    the only request of the turn fails upstream; the failure card's
+ *                 Continue (`mode: 'retry'`) follows up the hidden continuation and
+ *                 the turn answers; a second Continue after that success is refused
+ *                 (`WORKER_RETRY_UNAVAILABLE`)
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -556,6 +566,9 @@ const SCENARIOS: Record<string, Scenario> = {
     return finish(context, session, [boot], [first, second]);
   },
   'job-notice': jobNoticeScenario,
+  // P1-4c1 (decisions 093, 095): turn semantics.
+  steer: steerScenario,
+  'fail-retry': failRetryScenario,
   'perm-card': permCardScenario,
   'perm-grants': permGrantsScenario,
   'perm-deny': permDenyScenario,
@@ -739,6 +752,82 @@ async function jobNoticeScenario(context: RecordContext, host: Host): Promise<Re
       events.filter((event) => event.requestId === wake),
     ]
   );
+}
+
+// ---- turn semantics (P1-4c1) ------------------------------------------------------
+
+/**
+ * Decision 093: Ctrl+Enter while the first of two commands runs. The message
+ * waits in DSH's inbox and the turn takes it in at its next step boundary —
+ * one turn, one requestId, the echo carrying the interjection's attempt id —
+ * and the model's answer names it. Once idle, an interjection finds no turn.
+ */
+async function steerScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'steer');
+  const { client } = session.host;
+  const interject = (attemptId: string, text: string) =>
+    client.call(session.ch, 'worker.interject', {
+      logicalSessionId: session.logicalSessionId,
+      attemptId,
+      text,
+    });
+  const answers: Message = {};
+  const turn = await context.turn(session, 'STEER', 'P1-STEER: two tool steps.', async (from) => {
+    await waitForToolCall(session, from);
+    // Inside the first command's two-second sleep.
+    await sleep(500);
+    answers.running = answerOf(
+      await interject('interject-STEER', 'STEER-NOTE-A also report the step count.')
+    );
+  });
+  const reply = replyOf(turn);
+  if (!reply.includes('heard: STEER-NOTE-A')) {
+    throw new Error(`steer: the model never saw the interjection: ${reply}`);
+  }
+  answers.idle = answerOf(await interject('interject-IDLE', 'STEER-NOTE-B nobody is running.'));
+  return finish(context, session, [boot], [turn], { interject: answers });
+}
+
+/**
+ * Decision 095: the turn fails upstream (no retry on the probes' route); the
+ * failure card's Continue follows up the hidden continuation, which the
+ * gateway answers. A second Continue, after that success, is refused before
+ * anything goes out.
+ */
+async function failRetryScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'fail-retry');
+  const { client } = session.host;
+  const failed = await context.turn(session, 'FAILONCE', 'P1-FAILONCE: this request fails once.');
+  const retry = (label: string) =>
+    client.call(session.ch, 'worker.send', {
+      logicalSessionId: session.logicalSessionId,
+      requestId: `turn-${label}`,
+      attemptId: `attempt-${label}`,
+      text: '',
+      mode: 'retry',
+    });
+  const from = client.events(session.ch).length;
+  const accepted = answerOf(await retry('RETRY'));
+  const idle = await client.until(
+    session.ch,
+    (events) =>
+      events
+        .slice(from)
+        .some(
+          (event) =>
+            event.type === 'session.status' &&
+            payloadOf(event).status === 'idle' &&
+            event.requestId === 'turn-RETRY'
+        ),
+    120_000
+  );
+  if (!idle) throw new Error(`${session.logicalSessionId}: the retry never went idle`);
+  const retried = client.events(session.ch).slice(from);
+  if (!replyOf(retried).includes('recovered after the retry')) {
+    throw new Error(`fail-retry: the retry did not recover: ${replyOf(retried)}`);
+  }
+  const refused = answerOf(await retry('RETRY-AGAIN'));
+  return finish(context, session, [boot], [failed, retried], { retry: { accepted, refused } });
 }
 
 // ---- permission scenarios (P1-6c) ---------------------------------------------------

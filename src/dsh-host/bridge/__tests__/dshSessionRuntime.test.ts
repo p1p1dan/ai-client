@@ -15,7 +15,7 @@ import {
   type PiWorkerRuntimeOptions,
 } from '../../../agent-host/piWorkerRpcServer.ts';
 import { INTERRUPTED_TURN_NOTICE_KEY } from '../../../shared/dshHistory/projection.ts';
-import type { DshLogEvent } from '../../../shared/dshHistory/types.ts';
+import { DSH_RETRY_CONTINUATION_TEXT, type DshLogEvent } from '../../../shared/dshHistory/types.ts';
 import {
   isWorkerBootstrapResult,
   isWorkerHistoryResult,
@@ -77,6 +77,9 @@ function fakeDsh(options: FakeOptions = {}) {
   const calls: string[] = [];
   const disposed: string[] = [];
   const followups: unknown[] = [];
+  /** P1-4c1: what the bridge steered, and how it cancelled. */
+  const steers: unknown[] = [];
+  const cancels: unknown[][] = [];
   const listeners = new Map<string, (...args: unknown[]) => unknown>();
   const stubFile = stubPathFor(home, DSH_ID);
   const handle = (id: string, cwd: string | undefined) => ({
@@ -85,7 +88,8 @@ function fakeDsh(options: FakeOptions = {}) {
       status: 'idle',
       session: { header: { cwd } },
       followup: (message: unknown) => followups.push(message),
-      cancel: () => undefined,
+      steer: (message: unknown) => steers.push(message),
+      cancel: (...args: unknown[]) => cancels.push(args),
     },
     dispose: async () => {
       disposed.push(id);
@@ -129,7 +133,7 @@ function fakeDsh(options: FakeOptions = {}) {
   } as unknown as DshBridgeContext;
   /** One durable event of this session, as DSH's `session/event` delivers it. */
   const append = (event: DshLogEvent) => listeners.get('session/event')?.({ id: DSH_ID }, event);
-  return { ctx, calls, disposed, followups, stubFile, append };
+  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append };
 }
 
 const deps: DshBridgeDeps = {
@@ -140,7 +144,8 @@ const deps: DshBridgeDeps = {
 
 function runtime(
   ctx: DshBridgeContext,
-  extra: Partial<PiWorkerRuntimeOptions> = {}
+  extra: Partial<PiWorkerRuntimeOptions> = {},
+  depsOverride: Partial<DshBridgeDeps> = {}
 ): DshSessionRuntime {
   return new DshSessionRuntime(
     ctx,
@@ -151,7 +156,7 @@ function runtime(
       emit: () => undefined,
       ...extra,
     },
-    { ...deps, home }
+    { ...deps, home, ...depsOverride }
   );
 }
 
@@ -346,7 +351,7 @@ describe('DshSessionRuntime — resume and crash restart (decisions 006, 010)', 
   });
 });
 
-describe('DshSessionRuntime — safe refusals until P1-4 (decision 010)', () => {
+describe('DshSessionRuntime — refusals until P1-4c2 (decision 010)', () => {
   async function ready() {
     const dsh = fakeDsh();
     const bridge = runtime(dsh.ctx);
@@ -360,13 +365,6 @@ describe('DshSessionRuntime — safe refusals until P1-4 (decision 010)', () => 
     attemptId: 'attempt-1',
     text: 'hi',
   };
-
-  it('refuses a retry instead of sending an empty message', async () => {
-    const { dsh, bridge } = await ready();
-    const error = await refusal(bridge.startSend({ ...send, text: '', mode: 'retry' }));
-    expect(error.code).toBe(WORKER_RETRY_UNAVAILABLE);
-    expect(dsh.followups).toEqual([]);
-  });
 
   it('refuses attachments instead of dropping them', async () => {
     const { dsh, bridge } = await ready();
@@ -391,6 +389,306 @@ describe('DshSessionRuntime — safe refusals until P1-4 (decision 010)', () => 
   });
 
   // Fork, accept and discard are bridged since P1-4b: rewindFork.test.ts.
+});
+
+describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () => {
+  type Emitted = { type: string; requestId?: string; payload?: Record<string, unknown> };
+  const at = (seq: number, type: string, data: unknown): DshLogEvent => ({
+    type,
+    seq,
+    time: seq,
+    data,
+  });
+  const userMessage = (seq: number, id: string, text: string, kind = 'user') =>
+    at(seq, 'user/message', {
+      id,
+      role: 'user',
+      content: [{ type: 'text', text }],
+      source: { kind },
+    });
+  const ended = (kind: string) => [
+    at(0, 'turn/start', { turn: 1 }),
+    userMessage(1, 'u1', 'run it'),
+    at(2, 'turn/end', { turn: 1, reason: { kind } }),
+  ];
+
+  /** A bridge whose message factory mints `m1`, `m2`, …, and whose events are kept. */
+  async function opened(events?: DshLogEvent[]) {
+    const dsh = fakeDsh(events ? { events } : {});
+    const emitted: Emitted[] = [];
+    let minted = 0;
+    const createUserMessage = vi.fn(() => {
+      minted += 1;
+      return { id: `m${minted}` };
+    });
+    const bridge = runtime(
+      dsh.ctx,
+      { emit: (event) => emitted.push(event as Emitted) },
+      { createUserMessage }
+    );
+    await bridge.bootstrap();
+    return { dsh, bridge, emitted, createUserMessage };
+  }
+
+  const send = (requestId: string, attemptId: string, text: string) => ({
+    logicalSessionId: LOGICAL,
+    requestId,
+    attemptId,
+    text,
+  });
+  const retry = { ...send('turn-retry', 'attempt-retry', ''), mode: 'retry' as const };
+  const interject = (attemptId: string, text: string) => ({
+    logicalSessionId: LOGICAL,
+    attemptId,
+    text,
+  });
+  /** The user echoes that went out, as `[messageId, attemptId, text]`. */
+  const echoes = (emitted: Emitted[]) =>
+    emitted
+      .filter((event) => event.type === 'message.started' && event.payload?.role === 'user')
+      .map((event) => {
+        const messageId = event.payload?.messageId;
+        const delta = emitted.find(
+          (other) => other.type === 'message.delta' && other.payload?.messageId === messageId
+        );
+        return [messageId, event.payload?.attemptId, delta?.payload?.text];
+      });
+
+  // ---- decision 095: the failure card's Continue ----------------------------------
+
+  for (const kind of ['error', 'interrupted', 'aborted']) {
+    it(`[c1-retry-accept] takes a retry after a turn that ended ${kind}`, async () => {
+      const { dsh, bridge, emitted, createUserMessage } = await opened(ended(kind));
+
+      await expect(bridge.startSend(retry)).resolves.toEqual({
+        accepted: true,
+        requestId: 'turn-retry',
+      });
+
+      // One hidden continuation, followed up; not the user's, so nothing echoes.
+      expect(createUserMessage).toHaveBeenCalledWith({
+        content: [{ type: 'text', text: DSH_RETRY_CONTINUATION_TEXT }],
+        source: { kind: 'aiclient-retry', form: 'notice', summary: 'Retry after a failed request' },
+      });
+      expect(dsh.followups).toEqual([{ id: 'm1' }]);
+      expect(dsh.steers).toEqual([]);
+      expect(emitted).toEqual([
+        {
+          sessionId: LOGICAL,
+          requestId: 'turn-retry',
+          type: 'session.status',
+          payload: { status: 'running' },
+        },
+      ]);
+      // When DSH takes it in, the continuation stays out of the timeline.
+      dsh.append(at(3, 'turn/start', { turn: 2 }));
+      dsh.append(userMessage(4, 'm1', DSH_RETRY_CONTINUATION_TEXT, 'aiclient-retry'));
+      expect(echoes(emitted)).toEqual([]);
+      expect(emitted.some((event) => event.type === 'custom.message')).toBe(false);
+    });
+  }
+
+  for (const kind of ['completed', 'blocked', 'max-tokens']) {
+    it(`[c1-retry-refuse] refuses a retry after a turn that ended ${kind}, before any event`, async () => {
+      const { dsh, bridge, emitted, createUserMessage } = await opened(ended(kind));
+      const error = await refusal(bridge.startSend(retry));
+      expect(error.code).toBe(WORKER_RETRY_UNAVAILABLE);
+      expect(error.message).toContain(kind);
+      expect(createUserMessage).not.toHaveBeenCalled();
+      expect(dsh.followups).toEqual([]);
+      expect(emitted).toEqual([]);
+    });
+  }
+
+  it('[c1-retry-refuse] refuses a retry when no turn ever ended', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    const error = await refusal(bridge.startSend(retry));
+    expect(error.code).toBe(WORKER_RETRY_UNAVAILABLE);
+    expect(dsh.followups).toEqual([]);
+    expect(emitted).toEqual([]);
+  });
+
+  it('[c1-retry-refuse] refuses a retry while a turn runs', async () => {
+    const { dsh, bridge, emitted } = await opened(ended('error'));
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    emitted.length = 0;
+    const error = await refusal(bridge.startSend(retry));
+    expect(error.code).toBe(WORKER_RETRY_UNAVAILABLE);
+    expect(dsh.followups).toHaveLength(1);
+    expect(emitted).toEqual([]);
+  });
+
+  it('[c1-retry-live] reads the ending of a turn that just failed live', async () => {
+    const { dsh, bridge } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'go'));
+    dsh.append(
+      at(2, 'turn/end', { turn: 1, reason: { kind: 'error', error: { code: 'SERVER' } } })
+    );
+    await expect(bridge.startSend(retry)).resolves.toEqual({
+      accepted: true,
+      requestId: 'turn-retry',
+    });
+    expect(dsh.followups).toEqual([{ id: 'm1' }, { id: 'm2' }]);
+  });
+
+  // ---- decision 094: Stop keeps the inbox ------------------------------------------
+
+  it("[c1-stop] Stop is DSH's stop button: cancel as the user, keeping the inbox", async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await expect(bridge.stop({ logicalSessionId: LOGICAL, reason: 'user' })).resolves.toEqual({
+      stopped: false,
+    });
+    expect(dsh.cancels).toEqual([]);
+
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    await expect(bridge.stop({ logicalSessionId: LOGICAL, reason: 'user' })).resolves.toEqual({
+      stopped: true,
+    });
+    expect(dsh.cancels).toEqual([[{ kind: 'user' }, { keepInbox: true }]]);
+    expect(emitted.at(-1)).toMatchObject({
+      type: 'session.status',
+      requestId: 'turn-1',
+      payload: { status: 'stopping' },
+    });
+  });
+
+  // ---- decision 093: Ctrl+Enter steers the running turn ------------------------------
+
+  it('[c1-interject] steers the running turn and echoes the message once DSH takes it in', async () => {
+    const { dsh, bridge, emitted, createUserMessage } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'list the files'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'list the files'));
+    emitted.length = 0;
+
+    expect(bridge.interject(interject('interject-1', 'also count them'))).toEqual({
+      interjected: true,
+      turnActive: true,
+    });
+    expect(createUserMessage).toHaveBeenLastCalledWith({
+      content: [{ type: 'text', text: 'also count them' }],
+      source: { kind: 'user' },
+    });
+    expect(dsh.steers).toEqual([{ id: 'm2' }]);
+    expect(dsh.followups).toEqual([{ id: 'm1' }]);
+    // Nothing is said until the turn takes it in: the renderer shows it awaiting delivery.
+    expect(emitted).toEqual([]);
+
+    dsh.append(at(2, 'step/end', { turn: 1, step: 1 }));
+    dsh.append(userMessage(3, 'm2', 'also count them'));
+    expect(echoes(emitted)).toEqual([['dsh-user-3', 'interject-1', 'also count them']]);
+    expect(emitted.every((event) => event.requestId === 'turn-1')).toBe(true);
+
+    // The turn goes on and ends as itself: no `interjected` stop cause.
+    dsh.append(at(4, 'turn/end', { turn: 1, reason: { kind: 'completed' } }));
+    expect(emitted.find((event) => event.type === 'session.completed')).toMatchObject({
+      payload: {},
+    });
+    expect(JSON.stringify(emitted)).not.toContain('interjected');
+  });
+
+  it('[c1-interject-idle] with no turn running sends nothing and says so', async () => {
+    const { dsh, bridge, emitted, createUserMessage } = await opened();
+    expect(bridge.interject(interject('interject-1', 'hello?'))).toEqual({
+      interjected: false,
+      turnActive: false,
+    });
+    expect(createUserMessage).not.toHaveBeenCalled();
+    expect(dsh.steers).toEqual([]);
+    expect(emitted).toEqual([]);
+  });
+
+  it('[c1-interject-idle] a turn that already ended is no turn', async () => {
+    const { dsh, bridge } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(at(1, 'turn/end', { turn: 1, reason: { kind: 'completed' } }));
+    expect(bridge.interject(interject('interject-1', 'late'))).toEqual({
+      interjected: false,
+      turnActive: false,
+    });
+    expect(dsh.steers).toEqual([]);
+  });
+
+  it('[c1-interject-synthetic] a turn DSH started itself counts as running', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    // A goal round or a job notice: DSH opens the turn, the bridge names it.
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    expect(bridge.interject(interject('interject-1', 'and this'))).toEqual({
+      interjected: true,
+      turnActive: true,
+    });
+    expect(dsh.steers).toEqual([{ id: 'm1' }]);
+    dsh.append(userMessage(1, 'm1', 'and this'));
+    expect(echoes(emitted)).toEqual([['dsh-user-1', 'interject-1', 'and this']]);
+    expect(emitted.at(-1)?.requestId).toBe(`dsh-turn-${DSH_ID}-1`);
+  });
+
+  it('[c1-interject-stop] a message Stop left in the inbox goes out with the next turn', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'long job'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'long job'));
+    bridge.interject(interject('interject-1', 'then this'));
+    await bridge.stop({ logicalSessionId: LOGICAL, reason: 'user' });
+    dsh.append(
+      at(2, 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+    );
+    expect(emitted.some((event) => event.type === 'session.stopped')).toBe(true);
+    emitted.length = 0;
+
+    // The next send: DSH takes the waiting message in first, then the prompt.
+    await bridge.startSend(send('turn-2', 'attempt-2', 'next thing'));
+    dsh.append(at(3, 'turn/start', { turn: 2 }));
+    dsh.append(userMessage(4, 'm2', 'then this'));
+    dsh.append(userMessage(5, 'm3', 'next thing'));
+    expect(echoes(emitted)).toEqual([
+      ['dsh-user-4', 'interject-1', 'then this'],
+      ['dsh-user-5', 'attempt-2', 'next thing'],
+    ]);
+  });
+
+  it('[c1-interject-refuse] refuses attachments (P1-4c2) and a foreign session, steering nothing', async () => {
+    const { dsh, bridge } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    const thrown = (run: () => unknown) => {
+      try {
+        run();
+      } catch (error) {
+        return (error as { code?: string }).code;
+      }
+      return 'nothing thrown';
+    };
+    expect(
+      thrown(() =>
+        bridge.interject({
+          ...interject('interject-1', 'see this'),
+          attachments: [{ kind: 'image', mediaType: 'image/png', data: 'AAAA' }],
+        })
+      )
+    ).toBe('WORKER_DSH_UNSUPPORTED');
+    expect(
+      thrown(() =>
+        bridge.interject({ ...interject('interject-1', 'x'), logicalSessionId: 'other' })
+      )
+    ).toBe('WORKER_SESSION_MISMATCH');
+    expect(dsh.steers).toEqual([]);
+  });
+
+  it('[c1-interject-echo] echoes what the user typed even without an attempt id', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'go'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    // A message the engine kept across a restart: its attempt id is gone.
+    dsh.append(userMessage(1, 'kept-from-before', 'from before the restart'));
+    dsh.append(userMessage(2, 'm1', 'go'));
+    expect(echoes(emitted)).toEqual([
+      ['dsh-user-1', undefined, 'from before the restart'],
+      ['dsh-user-2', 'attempt-1', 'go'],
+    ]);
+  });
 });
 
 describe('DshSessionRuntime — history, tree and leaf (P1-4a, decision 026)', () => {

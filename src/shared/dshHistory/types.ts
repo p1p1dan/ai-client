@@ -37,6 +37,12 @@ export const DSH_SOURCE_COMPACT_CHECKPOINT = 'compact-checkpoint';
  */
 export const DSH_SOURCE_AICLIENT_RETRY = 'aiclient-retry';
 /**
+ * The text of that continuation prompt (P1-4c1, decisions 028 and 095): one
+ * English sentence the model reads after a failed turn; the user never sees it.
+ */
+export const DSH_RETRY_CONTINUATION_TEXT =
+  'The previous model request failed. Continue from where it stopped.';
+/**
  * `MessageSource.kind` of a pi branch summary a migration seed carries (P1-9,
  * `SEED_SOURCE_KIND.piBranchSummary`): model context wrapped in pi's framing,
  * shown as "Context summary" the way 1.0.x showed its `branch_summary` entry.
@@ -55,8 +61,11 @@ export const PI_BRANCH_SUMMARY_SUFFIX = '</summary>';
 /** `ContextForm` of a one-off account of something that happened (`dsh-llm`). */
 export const DSH_FORM_NOTICE = 'notice';
 /**
- * `AgentCancelCause` reason of the Ctrl+Enter stop at a step boundary (P1-4c,
- * decision 029): `cancel({kind: 'hook', reason: AICLIENT_INTERJECT_REASON})`.
+ * `AgentCancelCause` reason of a 1.0.x Ctrl+Enter stop at a turn boundary, as
+ * the migration converter writes it (`legacyPiSession/convert/seed.ts`), so a
+ * migrated session still shows "interjected". The bridge never cancels with
+ * it: under DSH Ctrl+Enter steers the running turn (P1-4c1, decision 093,
+ * which replaced decision 029's cancel at a step boundary).
  */
 export const AICLIENT_INTERJECT_REASON = 'aiclient-interject';
 /**

@@ -122,10 +122,11 @@ export interface PiWorkerRuntime {
   acceptFork(input: WorkerAcceptForkPayload): Promise<WorkerAcceptForkResult>;
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   /**
-   * Ctrl+Enter — ask the loop to stop at its next turn boundary. Synchronous
-   * and non-promise because it only arms a flag on the live run: there is no
-   * I/O to await, and `interjected: false` is the answer for "no run was live",
-   * not a failure.
+   * Ctrl+Enter — hand the message to the live run (dsh-rebase decision 093:
+   * the DSH bridge steers it into the running turn; the retiring native
+   * runtime still only arms a stop at its next turn boundary). Synchronous and
+   * non-promise: there is no I/O to await, and `interjected: false` is the
+   * answer for "no run was live", not a failure.
    */
   interject(input: WorkerInterjectPayload): WorkerInterjectResult;
   /** Answer one `permission.requested`. */
@@ -839,7 +840,7 @@ export class PiWorkerRpcServer {
     if (!isWorkerInterjectPayload(request.payload)) {
       this.respondError(request, {
         code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.interject requires logicalSessionId',
+        message: 'worker.interject requires logicalSessionId, attemptId and a message',
         retryable: false,
       });
       return;

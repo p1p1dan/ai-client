@@ -2299,12 +2299,31 @@ export class WorkerManager {
     return requestId;
   }
 
-  async interject(sessionId: string): Promise<boolean> {
+  /**
+   * Ctrl+Enter while a turn runs (dsh-rebase decision 093): hand the message
+   * to the worker, which steers it into the running turn. No latch is taken
+   * or changed — the turn it joins is the one already running, and its echo
+   * rides that turn's requestId.
+   *
+   * `interjected: false` means nothing was sent and the renderer sends the
+   * message the ordinary way. When the worker reports no turn at all
+   * (`turnActive: false`, decision 046), a latch Main still holds is settled
+   * the way a Stop that found nothing is, so that ordinary send is admitted.
+   */
+  async interject(
+    sessionId: string,
+    input: { attemptId: string; text: string; attachments?: SessionAttachment[] }
+  ): Promise<WorkerInterjectResult> {
     const entry = this.entriesBySession.get(sessionId);
-    if (!entry?.slot || entry.state !== 'ready') return false;
+    if (!entry?.slot || entry.state !== 'ready') return { interjected: false };
     entry.lastUsedAt = this.now();
     const slot = entry.slot;
-    const payload: WorkerInterjectPayload = { logicalSessionId: entry.logicalSessionId };
+    const payload: WorkerInterjectPayload = {
+      logicalSessionId: entry.logicalSessionId,
+      attemptId: input.attemptId,
+      text: input.text,
+      ...(input.attachments ? { attachments: input.attachments } : {}),
+    };
     const result = await slot.request<WorkerInterjectResult, WorkerInterjectPayload>(
       'worker.interject',
       payload
@@ -2315,14 +2334,13 @@ export class WorkerManager {
         'Pi worker returned an invalid interject acknowledgement'
       );
     }
-    // decision 046: `false` because the turn is already past its last boundary
-    // needs nothing — its terminal is on the way. `false` because the worker has
-    // no turn at all is settled the way a Stop that found nothing is, so a
-    // stale latch cannot outlive it and the queued message can go.
     if (!result.interjected && result.turnActive === false && this.ownsLiveSlot(entry, slot)) {
       this.settleWithoutTurn(sessionId, entry, nextRequestId('interject'));
     }
-    return result.interjected;
+    return {
+      interjected: result.interjected,
+      ...(result.turnActive !== undefined ? { turnActive: result.turnActive } : {}),
+    };
   }
 
   /** `slot` is still the one this session's live, ready entry runs on. */

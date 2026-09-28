@@ -110,7 +110,10 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     });
   };
   const deps: DshBridgeDeps = {
-    createUserMessage,
+    // DSH's `MessageSource` is open by declaration merging; our retry source
+    // (`aiclient-retry`, decisions 028 / 095) is not declared into it, as the
+    // loop guard's wrap-up source is not either.
+    createUserMessage: createUserMessage as unknown as DshBridgeDeps['createUserMessage'],
     // Decision 033: read per turn, so every turn routes by the plan the host runs.
     modelPlan: () => ctx.get('aiclientModelPlan'),
     installModelSelection: installModelSelection as unknown as NonNullable<

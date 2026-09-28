@@ -7,7 +7,6 @@ import { describe, expect, it } from 'vitest';
 import {
   createEmptyState,
   enqueue,
-  interject,
   prioritizeEntry,
   type QueuedMessage,
   selectSessionQueue,
@@ -681,19 +680,15 @@ describe('deriveQueueStripModel', () => {
     ).toEqual({ visible: false, entries: [], pausedLabel: null, permissionHint: null });
   });
 
-  it('flags only the Ctrl+Enter interjections as `interjection`', () => {
+  it('marks no row as an interjection: Ctrl+Enter no longer queues (decision 093)', () => {
     const model = deriveQueueStripModel({
-      entries: [
-        entry({ id: 'q-1', priority: 'next' }),
-        entry({ id: 'q-2' }),
-        entry({ id: 'q-3', priority: 'later' }),
-      ],
+      entries: [entry({ id: 'q-1' }), entry({ id: 'q-2' })],
       paused: null,
       hasPendingPermissionHere: false,
     });
-    // The absent tag and an explicit `'later'` mean the same thing here: only
-    // `'next'` earns the marker, which is what the strip renders.
-    expect(model.entries.map((e) => e.interjection)).toEqual([true, false, false]);
+    // Every row is an ordinary follow-up; the Ctrl+Enter message joins the
+    // running turn instead, so the strip has nothing to tell apart.
+    for (const row of model.entries) expect(row).not.toHaveProperty('interjection');
   });
 
   it('numbers entries from 1 and derives adjacent-move boundaries', () => {
@@ -1664,15 +1659,8 @@ describe('shouldRevokeRestoredDraft (F2 S3 §5.3, D1 provenance)', () => {
  */
 describe('decision 046 — stoppable stopping, releasable disconnected', () => {
   const SID = 's1';
-  function queued(id: string, text: string, priority?: 'next'): QueuedMessage {
-    return {
-      id,
-      sessionId: SID,
-      text,
-      attachments: [],
-      queuedAt: 1,
-      ...(priority ? { priority } : {}),
-    };
+  function queued(id: string, text: string): QueuedMessage {
+    return { id, sessionId: SID, text, attachments: [], queuedAt: 1 };
   }
   const readyGate = {
     hasTarget: true,
@@ -1742,11 +1730,12 @@ describe('decision 046 — stoppable stopping, releasable disconnected', () => {
         hasQueuedEntries: true,
       }).map((spec) => spec.kind)
     ).toEqual(['enqueue']);
-    // Two stranded entries (a Ctrl+Enter and a plain one) release in order.
+    // Two stranded entries release in the order they were queued (a Ctrl+Enter
+    // that found no turn is queued like an Enter, decision 093).
     const first = enqueue(createEmptyState(), queued('later1', 'plain queued'));
     if (!first.ok) throw new Error('enqueue');
-    const second = interject(first.state, queued('next1', 'ctrl+enter', 'next'));
-    if (!second.ok) throw new Error('interject');
+    const second = enqueue(first.state, queued('later2', 'ctrl+enter, no turn'));
+    if (!second.ok) throw new Error('enqueue');
     const both = selectSessionQueue(second.state, SID);
     expect(
       decideQueueRelease({
@@ -1756,7 +1745,7 @@ describe('decision 046 — stoppable stopping, releasable disconnected', () => {
         ...readyGate,
         status: 'disconnected',
       })
-    ).toEqual({ type: 'release', entryId: 'next1' });
+    ).toEqual({ type: 'release', entryId: 'later1' });
   });
 
   it("a 'stopping' that never resolves keeps Stop (as force stop), Esc and Send now", () => {

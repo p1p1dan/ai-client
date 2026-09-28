@@ -605,17 +605,29 @@ export interface WorkerStopResult {
 }
 
 /**
- * Ctrl+Enter interjection signal. Tells the agent loop to finish its current
- * iteration and then stop gracefully — does NOT abort mid-turn. The actual
- * message content travels through the renderer's queue; this RPC is purely a
- * "stop at the next boundary" signal.
+ * Ctrl+Enter while a turn runs (dsh-rebase decision 093): the message itself.
+ * The worker hands it to the running turn, which takes it in at its next step
+ * boundary and carries on — nothing is stopped. Its user echo
+ * (`message.started`, role user) carries `attemptId` once the turn took it in;
+ * until then the renderer shows it as awaiting delivery.
  */
 export interface WorkerInterjectPayload {
   logicalSessionId: string;
+  /** Renderer-owned identity of this message, echoed on its `message.started`. */
+  attemptId: string;
+  text: string;
+  /**
+   * Same shape as a send's. The DSH bridge refuses them until attachments are
+   * admitted through the engine (P1-4c2), as it refuses a send's.
+   */
+  attachments?: SessionAttachment[];
 }
 
 export interface WorkerInterjectResult {
-  /** False when no turn was active to interject into. */
+  /**
+   * The running turn took the message. False when no turn was running: nothing
+   * was sent, and the caller sends it the ordinary way.
+   */
   interjected: boolean;
   /**
    * decision 046 — whether the worker holds a turn at all. `false` lets Main
@@ -1421,7 +1433,21 @@ export function isWorkerStopResult(value: unknown): value is WorkerStopResult {
 }
 
 export function isWorkerInterjectPayload(value: unknown): value is WorkerInterjectPayload {
-  return isRecord(value) && typeof value.logicalSessionId === 'string';
+  if (!isRecord(value)) return false;
+  if (
+    typeof value.logicalSessionId !== 'string' ||
+    value.logicalSessionId.trim().length === 0 ||
+    typeof value.attemptId !== 'string' ||
+    value.attemptId.trim().length === 0 ||
+    typeof value.text !== 'string'
+  ) {
+    return false;
+  }
+  if (value.attachments !== undefined) {
+    if (!Array.isArray(value.attachments) || !value.attachments.every(isAttachment)) return false;
+  }
+  // Something to say: the text, or at least one attachment.
+  return value.text.trim().length > 0 || (value.attachments?.length ?? 0) > 0;
 }
 
 export function isWorkerInterjectResult(value: unknown): value is WorkerInterjectResult {

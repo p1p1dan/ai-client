@@ -1,0 +1,117 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-fail-retry",
+      "piSessionId": "aiclient-rec-fail-retry",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail-retry.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-fail-retry",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail-retry.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-FAILONCE: this request fails once."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P1-FAILONCE recovered after the retry."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-fail-retry-t2-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 2,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-fail-retry",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-fail-retry.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-6",
+        "fileTailEntryId": "aiclient-rec-fail-retry#20"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-FAILONCE: this request fails once.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-FAILONCE recovered after the retry.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 2,
+      "returnedNodes": 2,
+      "truncated": false
+    }
+  },
+  "retry": {
+    "accepted": {
+      "ok": true,
+      "result": {
+        "accepted": true,
+        "requestId": "turn-RETRY"
+      }
+    },
+    "refused": {
+      "ok": false,
+      "code": "WORKER_RETRY_UNAVAILABLE",
+      "retryable": false
+    }
+  }
+}

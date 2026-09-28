@@ -794,7 +794,9 @@ export interface SessionTerminalEvent extends RuntimeEventBase {
      * `interjected`: Ctrl+Enter ended the run at a turn boundary so the queued
      * message can go next. Delegates the run started may still be working in
      * the background, so a reader must not treat their lanes or their pending
-     * approval cards as over.
+     * approval cards as over. The DSH engine never ends a run this way
+     * (dsh-rebase decision 093: Ctrl+Enter steers the running turn); only
+     * sessions carried over from 1.0.x still show it, from their history.
      *
      * Optional-field addition, the same compatibility precedent as
      * `SessionLivenessNote`: a renderer that predates it reads a plain
