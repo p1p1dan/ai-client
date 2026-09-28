@@ -13,42 +13,61 @@
  *                                     worker.permission.respond
  *
  * Mapped: text, tool rows, approvals, stop, the session identity (create,
- * resume, crash restart), and the history, tree and leaf, projected from the
- * DSH log (P1-4a, decision 026; `historyCache.ts`). Fork, rewind, compact,
- * retry and attachments refuse until the rest of P1-4 fills them in
- * (dsh-rebase decision 010).
+ * resume, crash restart), the history, tree and leaf, projected from the
+ * DSH log (P1-4a, decision 026; `historyCache.ts`), and rewind and fork
+ * (P1-4b, decision 027). Compact, retry and attachments refuse until the rest
+ * of P1-4 fills them in (dsh-rebase decision 010).
  *
  * Identity (decisions 006 and 007): Main's durable `sessionFile` is a small
  * stub, `$DSH_HOME/aiclient-sessions/<dshSessionId>.dsh.json`, naming the DSH
  * session `aiclient-<logical id>`. A new session is flushed to disk BEFORE the
  * stub is written, so a committed identity always names a log that exists.
+ *
+ * Rewind and fork (decision 027): DSH has no rewind and no tree inside a
+ * session, so both cut a seeded child session (`forkSeed.ts`). A rewind
+ * repoints the stub at the child (`aiclient-<logical id>.r<n>`) and appends
+ * it to the stub's lineage; the session it leaves is retired and stays in the
+ * tree (`lineage.ts`). A fork writes a new stub for the child
+ * (`aiclient-<id Main minted>`) and releases it for the slot Main opens next.
  */
 
-import { resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
   PiWorkerRuntime,
   PiWorkerRuntimeOptions,
 } from '../../agent-host/piWorkerRpcServer.ts';
+import { paginateHistory } from '../../shared/dshHistory/page.ts';
+import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
+import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
+import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
 import type {
   PermissionDecisionId,
   PermissionRequestAction,
   PermissionRequestKind,
   RuntimeEventDraft,
 } from '../../shared/types/runtimeEvents.ts';
+import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import {
+  STAGED_FORK_MARKER_SUFFIX,
   WORKER_RETRY_UNAVAILABLE,
+  WORKER_REWIND_JOBS_RUNNING,
+  type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
   type WorkerBootstrapResult,
   type WorkerCommandsResult,
   type WorkerCompactResult,
+  type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
+  type WorkerForkPayload,
   type WorkerForkResult,
   type WorkerHistoryPayload,
   type WorkerHistoryResult,
   type WorkerInterjectResult,
   type WorkerReloadResult,
+  type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerSendPayload,
   type WorkerSendResult,
@@ -56,11 +75,24 @@ import {
   type WorkerStopResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
+import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
 import {
+  DshRetiredHistory,
+  readSessionEvents,
+  retiredSessionIds,
+  rewindSessionId,
+} from './lineage.ts';
+import {
   DSH_SESSION_MISSING,
+  grantsSidecarFor,
   readStub,
   SAFE_SESSION_ID,
+  SESSION_INVALID,
+  SESSION_STUB_VERSION,
+  type SessionLineageEntry,
+  type SessionStub,
+  stubLineage,
   stubPathFor,
   writeStubAtomically,
 } from './stub.ts';
@@ -72,6 +104,7 @@ export {
   DSH_STUB_DIR,
   DSH_STUB_SUFFIX,
   SESSION_INVALID,
+  type SessionLineageEntry,
   type SessionStub,
   stubPathFor,
 } from './stub.ts';
@@ -90,7 +123,14 @@ interface DshAgent {
   readonly status: unknown;
   readonly session: DshSession;
   followup(message: unknown): void;
-  cancel(cause: { kind: 'user' }): void;
+  cancel(cause: { kind: 'user' | 'disposed' }, options?: { keepInbox?: boolean }): void;
+  /**
+   * Holds the idle agent for `task`: input that would wake it waits in the
+   * inbox and is replayed when the task ends — unless the task cancelled it
+   * with the `disposed` cause (measured, P1-4b E2). Throws synchronously when
+   * the agent is not idle.
+   */
+  runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;
 }
 
 interface DshAgentHandle {
@@ -146,7 +186,10 @@ export interface DshBridgeContext {
   agents: {
     create(options: {
       sessionId: string;
-      meta: { cwd: string };
+      meta: { cwd: string; parentSession?: string; isSeeded?: boolean };
+      /** A cut of another session (`buildDshForkSeed`), with the length it inherited. */
+      seed?: readonly DshLogEvent[];
+      inheritedEventCount?: number;
       agentOptions: { provider: string; model: string };
     }): Promise<DshAgentHandle>;
     resume(options: {
@@ -178,6 +221,10 @@ export interface DshBridgeDeps {
   /** `$DSH_HOME`; defaults to the host's environment. */
   home?: string;
   now?: () => number;
+  /** The stub writer; tests inject failures here. */
+  writeStub?: (file: string, stub: SessionStub) => void;
+  /** How long a retired agent may take to dispose before the rewind moves on (3 s). */
+  disposeTimeoutMs?: number;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -201,6 +248,16 @@ export const INITIAL_HISTORY_LIMIT = 80;
 
 /** Every DSH session this bridge creates is named with it; nothing else is ever collected (decision 024). */
 export const DSH_SESSION_ID_PREFIX = 'aiclient-';
+
+/** A tree node no session of the lineage has (the native runtime's code). */
+export const SESSION_ENTRY_NOT_FOUND = 'session_entry_not_found';
+/** A fork whose path holds no model answer (the native runtime's code). */
+export const SESSION_FORK_UNMATERIALIZED = 'session_fork_unmaterialized';
+
+/** Plan P1-4 shard 03 §4: a retired agent that will not dispose is left to the host's restart. */
+const DISPOSE_TIMEOUT_MS = 3_000;
+/** A failed rewind may leave its child under the next id; skip that many at most. */
+const REWIND_ID_ATTEMPTS = 20;
 
 /** Ours, not DSH's in-process counter, so a lost stub can be found again (decision 006). */
 export function dshSessionIdFor(logicalSessionId: string): string {
@@ -248,10 +305,19 @@ export function mapOpenError(error: unknown, dshSessionId: string): unknown {
   return error;
 }
 
-function sameCwd(a: string, b: string): boolean {
+function samePath(a: string, b: string): boolean {
   const left = resolve(a);
   const right = resolve(b);
   return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/** Removes `file`; a file that is already gone is not a failure. */
+function removeQuietly(file: string, log?: (...args: unknown[]) => void): void {
+  try {
+    rmSync(file, { force: true });
+  } catch (error) {
+    log?.('[dsh-bridge] could not remove', file, error);
+  }
 }
 
 function textOf(content: unknown): string {
@@ -344,6 +410,17 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly pendingApprovals = new Map<string, (decision: PermissionDecisionId) => void>();
   private readonly disposers: Dispose[] = [];
   private readonly historyCache: DshHistoryCache;
+  /** The sessions earlier rewinds retired, for the tree (P1-4b). */
+  private readonly retired: DshRetiredHistory;
+  private readonly query: DshSessionQuery;
+  private readonly writeStub: (file: string, stub: SessionStub) => void;
+  private readonly disposeTimeoutMs: number;
+  /** Main's `sessionFile`: the stub path never changes, what it names does. */
+  private stubFile = '';
+  /** Every DSH session of this chat, oldest first, the current one last. */
+  private lineage: SessionLineageEntry[] = [];
+  /** Fork stubs written here that Main has not adopted yet -> their DSH session. */
+  private readonly stagedForks = new Map<string, string>();
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
@@ -354,14 +431,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.cwd = options.cwd;
     this.home = deps.home ?? process.env.DSH_HOME ?? '';
     this.now = deps.now ?? Date.now;
+    this.writeStub = deps.writeStub ?? writeStubAtomically;
+    this.disposeTimeoutMs = deps.disposeTimeoutMs ?? DISPOSE_TIMEOUT_MS;
     // Looked up per read: the service belongs to the Cordis context, not to this runtime.
-    this.historyCache = new DshHistoryCache(
-      {
-        observeSession: (sessionId, query) =>
-          this.ctx.sessionQuery.observeSession(sessionId, query),
-      },
-      options.log
-    );
+    this.query = {
+      observeSession: (sessionId, query) => this.ctx.sessionQuery.observeSession(sessionId, query),
+    };
+    this.historyCache = new DshHistoryCache(this.query, options.log);
+    this.retired = new DshRetiredHistory(this.query, options.log);
   }
 
   /**
@@ -428,6 +505,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       await handle?.dispose().catch(() => undefined);
       throw error;
     }
+    this.stubFile = stubFile;
     // Folded once from the open session, then kept current from session/event.
     // A failed read leaves an empty, legal page and is retried by the next one.
     this.historyCache.reset(this.dshSessionId);
@@ -482,20 +560,23 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       // retry forever; the log is this chat's own, so reopen it instead.
       await this.openDshSession(this.dshSessionId, selection);
       const cwd = this.handle?.agent.session.header?.cwd;
-      if (cwd !== undefined && !sameCwd(cwd, this.cwd)) {
+      if (cwd !== undefined && !samePath(cwd, this.cwd)) {
         throw new PiWorkerSessionError(
           SESSION_CWD_MISMATCH,
           `DSH session ${this.dshSessionId} belongs to ${cwd}, not ${this.cwd}`
         );
       }
     }
-    writeStubAtomically(stubFile, {
+    const createdAt = this.now();
+    this.lineage = [{ dshSessionId: this.dshSessionId, reason: 'create', at: createdAt }];
+    this.writeStub(stubFile, {
       engine: 'dsh',
-      version: 1,
+      version: SESSION_STUB_VERSION,
       dshSessionId: this.dshSessionId,
       logicalSessionId: this.logicalSessionId,
       cwd: this.cwd,
-      createdAt: this.now(),
+      createdAt,
+      lineage: this.lineage,
     });
     return stubFile;
   }
@@ -508,7 +589,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const stub = readStub(stubFile);
     // DSH keeps the cwd in the session header and every tool reads it from
     // there, so a different workspace cannot be honoured — only refused.
-    if (!sameCwd(stub.cwd, this.cwd)) {
+    if (!samePath(stub.cwd, this.cwd)) {
       throw new PiWorkerSessionError(
         SESSION_CWD_MISMATCH,
         `DSH session ${stub.dshSessionId} belongs to ${stub.cwd}, not ${this.cwd}`
@@ -518,6 +599,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       this.options.log?.('[dsh-bridge] forceTakeover ignored: DSH write locks are kernel locks');
     }
     this.dshSessionId = stub.dshSessionId;
+    this.lineage = stubLineage(stub);
     await this.openDshSession(stub.dshSessionId, selection);
   }
 
@@ -634,13 +716,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   async tree(): Promise<WorkerTreeResult> {
     const boot = await this.bootstrap();
     await this.historyCache.ready();
-    return {
-      snapshot: this.historyCache.tree({
-        logicalSessionId: this.logicalSessionId,
-        sessionFile: boot.sessionFile ?? '',
-        workspacePath: this.cwd,
-      }),
-    };
+    return { snapshot: await this.treeSnapshot(boot.sessionFile ?? '') };
+  }
+
+  /** This session's timeline merged with every session the lineage retired (decision 026). */
+  private async treeSnapshot(sessionFile: string): Promise<SessionTreeSnapshot> {
+    const retired = await this.retired.chains(retiredSessionIds(this.lineage, this.dshSessionId));
+    return this.historyCache.tree(
+      { logicalSessionId: this.logicalSessionId, sessionFile, workspacePath: this.cwd },
+      retired.map((chain) => chain.messages)
+    );
   }
 
   async commands(): Promise<WorkerCommandsResult> {
@@ -650,20 +735,399 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   async compact(): Promise<WorkerCompactResult> {
     return unsupported('compact');
   }
-  async rewind(): Promise<WorkerRewindResult> {
-    return unsupported('rewind');
-  }
   async reload(): Promise<WorkerReloadResult> {
     return unsupported('reload');
   }
-  async fork(): Promise<WorkerForkResult> {
-    return unsupported('fork');
+
+  // ---- rewind and fork (P1-4b, decision 027) ------------------------------------
+
+  /**
+   * The chat continues in a child cut from the target's session at the
+   * target, and the stub is repointed at it. The order, and what a crash
+   * between two steps leaves (plan P1-4 shard 03 §4):
+   *
+   *   1. the old agent is held idle (`runMaintenance`)
+   *   2. the child is created from the seed and flushed    crash: the stub still
+   *                                                          names the old session,
+   *                                                          the child is an orphan
+   *   3. the stub is rewritten, the lineage appended        atomic: old or new
+   *   4. the old agent is cancelled as disposed, so a wake  crash: a restart resumes
+   *      it held back cannot run on it; then disposed, and  the child; the old
+   *      events are followed on the child                   lock died with the host
+   *   5. history, tree and leaf of the child
+   *
+   * Refused while a turn runs, and while a background job of the session
+   * runs: disposing its agent would end the job (decision 027 rule 3).
+   */
+  async rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    await this.bootstrap();
+    this.assertIdle('rewind the session');
+    if (this.hasLiveJobs()) {
+      throw new PiWorkerSessionError(
+        WORKER_REWIND_JOBS_RUNNING,
+        'A background job of this session is still running; rewinding now would end it',
+        true
+      );
+    }
+    await this.historyCache.ready();
+    const cut = await this.cutFor(input.targetEntryId, 'rewind');
+    const previous = this.requireHandle();
+    const previousId = this.dshSessionId;
+    const stub = readStub(this.stubFile);
+    if (stub.dshSessionId !== previousId) {
+      throw new PiWorkerSessionError(
+        SESSION_INVALID,
+        `DSH session identity ${this.stubFile} names ${stub.dshSessionId}, not ${previousId}`
+      );
+    }
+    const lineage = stubLineage(stub);
+    const base = dshSessionIdFor(this.logicalSessionId);
+
+    const switched = await this.holdIdle(previous.agent, async () => {
+      const created = await this.createChild(
+        (attempt) => rewindSessionId(base, lineage, attempt),
+        REWIND_ID_ATTEMPTS,
+        cut
+      );
+      const entry: SessionLineageEntry = {
+        dshSessionId: created.id,
+        reason: 'rewind',
+        parentDshSessionId: cut.sourceId,
+        ...(cut.plan.boundary !== null ? { cutSeq: cut.plan.boundary } : {}),
+        at: this.now(),
+      };
+      try {
+        await this.ctx.sessions.flush(created.handle.agent.session);
+        this.writeStub(this.stubFile, {
+          ...stub,
+          version: SESSION_STUB_VERSION,
+          dshSessionId: created.id,
+          lineage: [...lineage, entry],
+        });
+      } catch (error) {
+        await created.handle.dispose().catch(() => undefined);
+        throw error;
+      }
+      // The stub names the child now: a wake this task held back must not
+      // open a turn on the old agent when the task ends (P1-4b E2).
+      previous.agent.cancel({ kind: 'disposed' }, { keepInbox: true });
+      return { ...created, lineage: [...lineage, entry] };
+    });
+
+    // Past the pointer switch: nothing below may leave this runtime on the old session.
+    // Its fold is the retired timeline, unless it missed an event: then it is read cold later.
+    if (this.historyCache.isCurrent()) {
+      this.retired.remember(previousId, this.historyCache.messages());
+    }
+    this.handle = switched.handle;
+    this.dshSessionId = switched.id;
+    this.lineage = switched.lineage;
+    this.resetLiveState();
+    this.historyCache.reset(switched.id);
+    await this.historyCache.load();
+    const leaf = this.historyCache.leaf();
+    const history = this.historyResult(this.stubFile, 0, INITIAL_HISTORY_LIMIT);
+    if (this.result) {
+      this.result = {
+        ...this.result,
+        piSessionId: switched.id,
+        leaf,
+        ...(this.result.initialHistory ? { initialHistory: history } : {}),
+      };
+    }
+    await this.disposeWithin(previous, previousId);
+    return {
+      logicalSessionId: this.logicalSessionId,
+      sessionFile: this.stubFile,
+      workspacePath: this.cwd,
+      targetEntryId: input.targetEntryId,
+      ...(cut.plan.editorText !== undefined ? { editorText: cut.plan.editorText } : {}),
+      leaf,
+      history,
+      tree: { snapshot: await this.treeSnapshot(this.stubFile) },
+    };
   }
-  async discardFork(): Promise<WorkerDiscardForkResult> {
-    return unsupported('discardFork');
+
+  /**
+   * A child session for the logical id Main minted (`targetLogicalSessionId`),
+   * cut at the target, with a stub of its own. It is released before this
+   * returns: the slot Main opens for the fork resumes it. Until Main adopts
+   * it (`acceptFork`) the stub carries a `.staged` marker, which Main's
+   * startup sweep reads (session-index-09). Session grants go with it
+   * (decision 043; P1-6c writes them).
+   */
+  async fork(input: WorkerForkPayload): Promise<WorkerForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    await this.bootstrap();
+    this.assertIdle('fork the session');
+    const target = input.targetLogicalSessionId;
+    const childId = target ? dshSessionIdFor(target) : '';
+    if (!target || !SAFE_SESSION_ID.test(childId)) {
+      throw new PiWorkerSessionError(
+        'WORKER_INVALID_PAYLOAD',
+        'A DSH fork needs a usable logical id minted by Main (targetLogicalSessionId)'
+      );
+    }
+    await this.historyCache.ready();
+    const cut = await this.cutFor(input.entryId, 'fork');
+    const boundary = cut.plan.boundary;
+    if (
+      boundary === null ||
+      !projectDshHistory(cut.events.slice(0, boundary + 1)).some(
+        (message) => message.role === 'assistant'
+      )
+    ) {
+      throw new PiWorkerSessionError(
+        SESSION_FORK_UNMATERIALIZED,
+        'fork requires an assistant on the selected path'
+      );
+    }
+    const childStub = stubPathFor(this.home, childId);
+    const marker = `${childStub}${STAGED_FORK_MARKER_SUFFIX}`;
+    mkdirSync(dirname(childStub), { recursive: true, mode: 0o700 });
+    // The intent first: whatever a crash leaves, the marker names it.
+    writeFileSync(
+      marker,
+      `${JSON.stringify({
+        kind: 'staged-fork',
+        sessionFile: childStub,
+        parentSessionId: cut.sourceId,
+        createdAt: new Date(this.now()).toISOString(),
+      })}\n`,
+      { mode: 0o600 }
+    );
+    let created: { handle: DshAgentHandle; id: string } | null = null;
+    let result: WorkerForkResult;
+    try {
+      created = await this.createChild(() => childId, 1, cut);
+      await this.ctx.sessions.flush(created.handle.agent.session);
+      const events = await readSessionEvents(this.query, childId);
+      const messages = projectDshHistory(events);
+      const at = this.now();
+      this.writeStub(childStub, {
+        engine: 'dsh',
+        version: SESSION_STUB_VERSION,
+        dshSessionId: childId,
+        logicalSessionId: target,
+        cwd: this.cwd,
+        createdAt: at,
+        lineage: [
+          {
+            dshSessionId: childId,
+            reason: 'fork',
+            parentDshSessionId: cut.sourceId,
+            cutSeq: boundary,
+            at,
+          },
+        ],
+      });
+      const grants = grantsSidecarFor(this.stubFile);
+      if (existsSync(grants)) copyFileSync(grants, grantsSidecarFor(childStub));
+      result = {
+        logicalSessionId: this.logicalSessionId,
+        sourceSessionFile: this.stubFile,
+        sessionFile: childStub,
+        piSessionId: childId,
+        workspacePath: this.cwd,
+        leaf: dshLeafCheckpoint(messages, childId, events.at(-1)?.seq ?? -1),
+        history: {
+          logicalSessionId: this.logicalSessionId,
+          sessionFile: childStub,
+          workspacePath: this.cwd,
+          page: paginateHistory(messages, 0, INITIAL_HISTORY_LIMIT),
+        },
+      };
+    } catch (error) {
+      // The child's log, if it reached the disk, is left to the orphan collection (decision 024).
+      this.removeForkFiles(childStub);
+      throw error;
+    } finally {
+      // The write lock goes to the slot Main opens next (measured: a resume right after works).
+      await created?.handle.dispose().catch((error: unknown) => {
+        this.options.log?.('[dsh-bridge] fork child dispose failed', childId, error);
+      });
+    }
+    this.stagedForks.set(childStub, childId);
+    return result;
   }
-  async acceptFork(): Promise<WorkerAcceptForkResult> {
-    return unsupported('acceptFork');
+
+  /** Main committed the fork's index row: the stub is a session now, not ours to delete. */
+  async acceptFork(input: WorkerAcceptForkPayload): Promise<WorkerAcceptForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    const staged = this.stagedFork(input.sessionFile);
+    if (!staged) return { accepted: false };
+    this.stagedForks.delete(staged);
+    removeQuietly(`${staged}${STAGED_FORK_MARKER_SUFFIX}`, this.options.log);
+    return { accepted: true };
+  }
+
+  /**
+   * Main did not adopt the fork: its stub, grants and marker go; its log is
+   * left to the orphan collection (DSH has no delete). The slot Main opened
+   * on the fork may be the one asking, for the stub it holds: it ends here.
+   */
+  async discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    const staged = this.stagedFork(input.sessionFile);
+    if (staged) {
+      this.stagedForks.delete(staged);
+      this.removeForkFiles(staged);
+      return { discarded: true };
+    }
+    // Only a stub a fork wrote: never the identity of a chat of its own.
+    if (
+      !this.stubFile ||
+      !samePath(this.stubFile, input.sessionFile) ||
+      this.lineage[0]?.reason !== 'fork'
+    ) {
+      return { discarded: false };
+    }
+    try {
+      await this.dispose();
+    } finally {
+      this.removeForkFiles(this.stubFile);
+    }
+    return { discarded: true };
+  }
+
+  private stagedFork(sessionFile: string): string | undefined {
+    for (const file of this.stagedForks.keys()) if (samePath(file, sessionFile)) return file;
+    return undefined;
+  }
+
+  private removeForkFiles(stubFile: string): void {
+    for (const file of [
+      stubFile,
+      grantsSidecarFor(stubFile),
+      `${stubFile}${STAGED_FORK_MARKER_SUFFIX}`,
+    ]) {
+      removeQuietly(file, this.options.log);
+    }
+  }
+
+  /**
+   * Where a rewind or a fork cuts: the newest session of the lineage whose
+   * timeline has the node (the current one first), its events, and the cut.
+   */
+  private async cutFor(
+    entryId: string,
+    operation: 'rewind' | 'fork'
+  ): Promise<{ sourceId: string; events: DshLogEvent[]; plan: DshCutPlan }> {
+    let sourceId: string | undefined;
+    if (this.historyCache.messages().some((message) => dshTreeNodeId(message) === entryId)) {
+      sourceId = this.dshSessionId;
+    } else {
+      const chains = await this.retired.chains(retiredSessionIds(this.lineage, this.dshSessionId));
+      sourceId = [...chains]
+        .reverse()
+        .find((chain) =>
+          chain.messages.some((message) => dshTreeNodeId(message) === entryId)
+        )?.dshSessionId;
+    }
+    const events = sourceId ? await readSessionEvents(this.query, sourceId) : [];
+    const plan = sourceId ? planDshCut(events, entryId, operation) : undefined;
+    if (!sourceId || !plan) {
+      throw new PiWorkerSessionError(SESSION_ENTRY_NOT_FOUND, `entry not found: ${entryId}`);
+    }
+    return { sourceId, events, plan };
+  }
+
+  /** The child session a cut starts; `idOf(attempt)` names it, the next one when DSH already has one. */
+  private async createChild(
+    idOf: (attempt: number) => string,
+    attempts: number,
+    cut: { sourceId: string; events: readonly DshLogEvent[]; plan: DshCutPlan }
+  ): Promise<{ handle: DshAgentHandle; id: string }> {
+    const boundary = cut.plan.boundary;
+    // Nothing before the first turn: an empty child, still naming where it came from.
+    const seed = boundary !== null ? buildDshForkSeed(cut.events, boundary) : undefined;
+    const selection = this.ctx.agentDefaultModel.currentSelection();
+    for (let attempt = 0; ; attempt += 1) {
+      const id = idOf(attempt);
+      if (!SAFE_SESSION_ID.test(id)) {
+        throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', `Cannot name a DSH session ${id}`);
+      }
+      try {
+        const handle = await this.ctx.agents.create({
+          sessionId: id,
+          meta: { cwd: this.cwd, parentSession: cut.sourceId, ...(seed ? { isSeeded: true } : {}) },
+          ...(seed && boundary !== null ? { seed, inheritedEventCount: boundary + 1 } : {}),
+          agentOptions: { provider: selection.provider, model: selection.model },
+        });
+        return { handle, id };
+      } catch (error) {
+        if (attempt + 1 < attempts && hasNamedError(error, 'SessionAlreadyExistsError')) continue;
+        throw error;
+      }
+    }
+  }
+
+  /** `runMaintenance`, answering an agent that turns out not to be idle as busy. */
+  private holdIdle<T>(agent: DshAgent, task: () => Promise<T>): Promise<T> {
+    try {
+      return agent.runMaintenance(() => task());
+    } catch (error) {
+      throw new PiWorkerSessionError(
+        'WORKER_SESSION_BUSY',
+        `The DSH agent is not idle: ${error instanceof Error ? error.message : String(error)}`,
+        true
+      );
+    }
+  }
+
+  /** A retired agent's dispose, given `disposeTimeoutMs`; past it the host's next restart reclaims it. */
+  private async disposeWithin(handle: DshAgentHandle, dshSessionId: string): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const settled = await Promise.race([
+      handle.dispose().then(
+        () => true,
+        (error: unknown) => {
+          this.options.log?.('[dsh-bridge] retired agent dispose failed', dshSessionId, error);
+          return true;
+        }
+      ),
+      new Promise<boolean>((done) => {
+        timer = setTimeout(() => done(false), this.disposeTimeoutMs);
+      }),
+    ]);
+    clearTimeout(timer);
+    if (!settled) {
+      this.options.log?.('[dsh-bridge] retired agent did not dispose in time', dshSessionId);
+    }
+  }
+
+  /** Per-turn translation state; empty between turns, dropped when the session changes. */
+  private resetLiveState(): void {
+    this.turn = null;
+    this.steps.clear();
+    this.toolStep.clear();
+    this.toolArgs.clear();
+    this.startedTools.clear();
+    this.currentStream = null;
+  }
+
+  private assertLogicalSession(id: string): void {
+    if (id === this.logicalSessionId) return;
+    throw new PiWorkerSessionError(
+      'WORKER_SESSION_MISMATCH',
+      `This worker owns ${this.logicalSessionId}, not ${id}`
+    );
+  }
+
+  /** No turn of any origin, and an idle agent. */
+  private assertIdle(action: string): void {
+    if (this.turn === null && (this.handle === null || this.handle.agent.status === 'idle')) return;
+    throw new PiWorkerSessionError(
+      'WORKER_SESSION_BUSY',
+      `Cannot ${action} while a turn is active`,
+      true
+    );
+  }
+
+  private requireHandle(): DshAgentHandle {
+    if (!this.handle) throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'No DSH agent');
+    return this.handle;
   }
 
   // ---- translation -------------------------------------------------------------

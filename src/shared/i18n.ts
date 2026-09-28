@@ -2821,15 +2821,17 @@ export const zhTranslations: Record<string, string> = {
   'Rewinding changes the active path. Later messages stay in this tree and are not deleted.':
     '回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。',
   '{{shown}} of {{total}} nodes': '共 {{total}} 个节点，显示 {{shown}} 个',
-  'Load the Pi-native session tree': '加载 Pi 原生会话树',
+  'Load the session tree': '加载会话树',
   'Showing a bounded window; {{count}} nodes are hidden.':
     '只显示有限范围，另有 {{count}} 个节点未显示。',
   active: '当前',
   'Rewind here': '回退到这里',
   Rewind: '回退',
   'Rewind this session?': '确认回退这个会话？',
-  'The active conversation will move to “{{node}}”. Later messages remain available as another branch and the Pi session file is not truncated.':
-    '当前对话会切到「{{node}}」。之后的消息会保留为另一条分支，Pi 的会话文件不会被截断。',
+  'The active conversation will move to “{{node}}”. Later messages remain available as another branch; nothing is deleted.':
+    '当前对话会切到「{{node}}」。之后的消息会保留为另一条分支，不会被删除。',
+  'A background task of this session is still running. Wait for it to finish, or stop it, before rewinding.':
+    '这个会话还有后台任务在运行。请等它结束或先停止它，再回退。',
   'Fork from here': '从这里分叉',
   'Fork becomes available after the first assistant response': '要等助手给出第一条回复后才能分叉',
   'Fork was created, but its workspace could not be materialized in this window':

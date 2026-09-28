@@ -52,6 +52,76 @@ describe('claimedDshSessionIds (GC-01)', () => {
     ]);
   });
 
+  it('claims every session of a version 2 stub as the bridge writes it (P1-4b rewind and fork)', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'aiclient-stub-v2-'));
+    try {
+      const rewound = join(dir, 'aiclient-r.dsh.json');
+      const forked = join(dir, 'aiclient-session-fork-1.dsh.json');
+      // Rewound twice: the stub path stays, it names the newest child.
+      writeFileSync(
+        rewound,
+        JSON.stringify({
+          engine: 'dsh',
+          version: 2,
+          dshSessionId: 'aiclient-r.r3',
+          logicalSessionId: 'r',
+          cwd: '/repo',
+          createdAt: 1,
+          lineage: [
+            { dshSessionId: 'aiclient-r', reason: 'create', at: 1 },
+            {
+              dshSessionId: 'aiclient-r.r2',
+              reason: 'rewind',
+              parentDshSessionId: 'aiclient-r',
+              cutSeq: 8,
+              at: 2,
+            },
+            {
+              dshSessionId: 'aiclient-r.r3',
+              reason: 'rewind',
+              parentDshSessionId: 'aiclient-r',
+              cutSeq: 16,
+              at: 3,
+            },
+          ],
+        })
+      );
+      // A fork names only itself: its parent belongs to the source's row.
+      writeFileSync(
+        forked,
+        JSON.stringify({
+          engine: 'dsh',
+          version: 2,
+          dshSessionId: 'aiclient-session-fork-1',
+          logicalSessionId: 'session-fork-1',
+          cwd: '/repo',
+          createdAt: 4,
+          lineage: [
+            {
+              dshSessionId: 'aiclient-session-fork-1',
+              reason: 'fork',
+              parentDshSessionId: 'aiclient-r',
+              cutSeq: 8,
+              at: 4,
+            },
+          ],
+        })
+      );
+      const claimed = await claimedDshSessionIds([
+        row('r', { runtimeIdentity: rewound }),
+        row('session-fork-1', { runtimeIdentity: forked }),
+      ]);
+      expect(claimed.sort()).toEqual([
+        'aiclient-r',
+        'aiclient-r.r2',
+        'aiclient-r.r3',
+        'aiclient-session-fork-1',
+      ]);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('a stub that is gone or unreadable still claims what its row implies', async () => {
     const claimed = await claimedDshSessionIds(
       [

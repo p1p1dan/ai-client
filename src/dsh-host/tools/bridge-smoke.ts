@@ -709,7 +709,10 @@ async function main() {
     persistedBeforeFirstTurn:
       (fresh?.log?.bytes ?? 0) > 0 &&
       stub?.engine === 'dsh' &&
-      stub?.version === 1 &&
+      // P1-4b: version 2, whose lineage starts with the session itself.
+      stub?.version === 2 &&
+      JSON.stringify((stub?.lineage as Message[] | undefined)?.map((item) => item.reason)) ===
+        '["create"]' &&
       stub?.dshSessionId === `aiclient-${SESSION}` &&
       stub?.logicalSessionId === SESSION &&
       stub?.cwd === box.workspace &&

@@ -485,6 +485,13 @@ export interface WorkerRewindPayload {
   confirmed: true;
 }
 
+/**
+ * dsh-rebase P1-4b (decision 027 rule 3): a DSH rewind retires the agent the
+ * session runs on, and a background job of that agent would end with it, so
+ * the worker refuses while one runs. Nothing changed; retry once it settles.
+ */
+export const WORKER_REWIND_JOBS_RUNNING = 'WORKER_REWIND_JOBS_RUNNING';
+
 export interface WorkerRewindResult {
   logicalSessionId: string;
   sessionFile: string;
@@ -526,6 +533,13 @@ export interface WorkerReloadResult {
 export interface WorkerForkPayload {
   logicalSessionId: string;
   entryId: string;
+  /**
+   * dsh-rebase P1-4b (decision 027 rule 4): the logical id Main minted for the
+   * fork before asking, so a DSH worker names the child session after it
+   * (`aiclient-<id>`) and a lost stub can still be found from the id. The
+   * native runtime ignores it.
+   */
+  targetLogicalSessionId?: string;
 }
 
 export interface WorkerForkResult {
@@ -1278,7 +1292,10 @@ export function isWorkerForkPayload(value: unknown): value is WorkerForkPayload 
   return (
     isLogicalSessionPayload(value) &&
     typeof value.entryId === 'string' &&
-    value.entryId.trim().length > 0
+    value.entryId.trim().length > 0 &&
+    (value.targetLogicalSessionId === undefined ||
+      (typeof value.targetLogicalSessionId === 'string' &&
+        value.targetLogicalSessionId.trim().length > 0))
   );
 }
 

@@ -1,0 +1,193 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-rewind",
+      "piSessionId": "aiclient-rec-rewind",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-rewind.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": "aiclient-rec-rewind#2"
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {}
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-rewind",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-rewind.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "alpha REWIND-KEEP-1, no scenario."
+            }
+          ]
+        },
+        {
+          "id": "h:id-5",
+          "entryId": "id-5",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-5:text:0",
+              "text": "fake gateway: no P0 scenario marker"
+            }
+          ]
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-6:text:0",
+              "text": "P0-RECALL {\"markers\":[\"REWIND-KEEP-1\",\"REWIND-DROP-2\"]} which markers do you see?"
+            }
+          ]
+        },
+        {
+          "id": "h:id-8",
+          "entryId": "id-8",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-8:text:0",
+              "text": "P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2"
+            }
+          ]
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 4,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-rewind",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-rewind.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-8",
+        "fileTailEntryId": "aiclient-rec-rewind.r2#25"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "alpha REWIND-KEEP-1, no scenario.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-5",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "fake gateway: no P0 scenario marker",
+          "timestamp": "<ms>",
+          "childCount": 2,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "beta REWIND-DROP-2, no scenario.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": false,
+          "leaf": false
+        },
+        {
+          "id": "id-11",
+          "parentId": "id-9",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "fake gateway: no P0 scenario marker",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": false,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-5",
+          "depth": 2,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P0-RECALL {\"markers\":[\"REWIND-KEEP-1\",\"REWIND-DROP-2\"]} which markers do you see?",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-8",
+          "parentId": "id-6",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 6,
+      "returnedNodes": 6,
+      "truncated": false
+    }
+  },
+  "rewind": {
+    "logicalSessionId": "rec-rewind",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-rewind.dsh.json",
+    "workspacePath": "<workspace>",
+    "targetEntryId": "id-9",
+    "editorText": "beta REWIND-DROP-2, no scenario.",
+    "leaf": {
+      "activeEntryId": "id-5",
+      "fileTailEntryId": "aiclient-rec-rewind.r2#16"
+    },
+    "historyIds": ["h:id-1", "h:id-5"],
+    "treeNodes": ["id-1", "id-5 *", "id-9 (retired)", "id-11 (retired)"]
+  }
+}

@@ -3896,6 +3896,52 @@ describe('WorkerManager P1-1: every spawn path runs on DSH', () => {
     );
   });
 
+  it('[P1-4b-fork-premint] mints the fork id before asking, so the child stub is named after it', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    await create(h.manager, 'source');
+    const answer = h.records[0].request.getMockImplementation();
+    const asked: unknown[] = [];
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type !== 'worker.fork') return answer?.(type, payload);
+      asked.push(payload);
+      // The bridge names the child DSH session and its stub after the id it is handed.
+      const child = stubFor(
+        String((payload as { targetLogicalSessionId?: unknown }).targetLogicalSessionId)
+      );
+      return {
+        logicalSessionId: 'source',
+        sourceSessionFile: stubFor('source'),
+        sessionFile: child,
+        piSessionId: 'aiclient-child',
+        workspacePath: norm('/repo'),
+        leaf: EMPTY_LEAF,
+        history: {
+          logicalSessionId: 'source',
+          sessionFile: child,
+          workspacePath: norm('/repo'),
+          page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
+        },
+      };
+    });
+
+    const forked = await h.manager.forkSession({
+      sourceSessionId: 'source',
+      entryId: 'e1',
+      sourceTitle: 'Source',
+    });
+
+    const id = forked.session.sessionId;
+    expect(id).toMatch(/^session-fork-[0-9a-f-]{36}$/);
+    expect(asked).toEqual([
+      { logicalSessionId: 'source', entryId: 'e1', targetLogicalSessionId: id },
+    ]);
+    expect(forked.session.runtimeIdentity).toBe(stubFor(id));
+    expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+      logicalSessionId: id,
+      sessionFile: stubFor(id),
+    });
+  });
+
   it('[P1-1-fork-refused] surfaces the bridge refusal and never spawns a target', async () => {
     const h = createHarness({ bootstrapFile: dshBootstrap });
     await create(h.manager, 'source');

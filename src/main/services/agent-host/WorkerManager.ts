@@ -1953,9 +1953,13 @@ export class WorkerManager {
 
         const sourceSlot = source.slot;
         const sourceGeneration = source.generation;
+        // dsh-rebase P1-4b (decision 027 rule 4): minted before asking, so the
+        // DSH worker names the child session after it (`aiclient-<id>`).
+        const sessionId = `session-fork-${randomUUID()}`;
         const fork = await sourceSlot?.request<WorkerForkResult, WorkerForkPayload>('worker.fork', {
           logicalSessionId: source.logicalSessionId,
           entryId: input.entryId,
+          targetLogicalSessionId: sessionId,
         });
         if (!isWorkerForkResult(fork)) {
           throw new WorkerManagerError(
@@ -1976,7 +1980,6 @@ export class WorkerManager {
           );
         }
 
-        const sessionId = `session-fork-${randomUUID()}`;
         const sessionFile = normalizeWorkerPath(fork.sessionFile, 'Fork Pi session file');
         const durableKey = sessionWorkerKey(sessionFile);
         if (this.entriesByKey.has(durableKey) || this.entriesBySession.has(sessionId)) {

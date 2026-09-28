@@ -1,0 +1,236 @@
+[
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "role": "user",
+      "attemptId": "attempt-KEEP"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "blockId": "dsh-user-8-text",
+      "text": "alpha REWIND-KEEP-1, no scenario."
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-8"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t1-s1",
+      "blockId": "dsh-aiclient-rec-rewind-t1-s1-b0",
+      "text": "fake gateway: no P0 scenario marker"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-KEEP",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "role": "user",
+      "attemptId": "attempt-DROP"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "blockId": "dsh-user-20-text",
+      "text": "beta REWIND-DROP-2, no scenario."
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-20"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t2-s1",
+      "blockId": "dsh-aiclient-rec-rewind-t2-s1-b0",
+      "text": "fake gateway: no P0 scenario marker"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-DROP",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-21",
+      "role": "user",
+      "attemptId": "attempt-RECALL"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-21",
+      "blockId": "dsh-user-21-text",
+      "text": "P0-RECALL {\"markers\":[\"REWIND-KEEP-1\",\"REWIND-DROP-2\"]} which markers do you see?"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-21"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1",
+      "blockId": "dsh-aiclient-rec-rewind.r2-t2-s1-b0",
+      "text": "P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-rewind",
+    "requestId": "turn-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

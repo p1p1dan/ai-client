@@ -33,8 +33,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * (decision 020: 3 per 5 min) is per supervisor: the app's singleton takes
  * three SIGKILLs inside a minute, and a fresh one takes the SIGSTOP hang and
  * Stop ladder B. They never overlap: one DSH home, one host at a time. Later
- * phases add a close that never lands and the idle stop (P1-3d), and Main's
- * read-only preview (`readPage`, P1-4a, decision 030).
+ * phases add a close that never lands and the idle stop (P1-3d), Main's
+ * read-only preview (`readPage`, P1-4a, decision 030), and rewind and fork
+ * through seeded child sessions (P1-4b, decision 027).
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1096,5 +1097,140 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       expect(resumeWrote).toBe(true);
       await successorManager.closeSession('r2');
     }, 180_000);
+  });
+
+  describe('a fifth supervisor: rewind and fork (P1-4b, decision 027)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    let sequence = 0;
+    const RECALL = 'P0-RECALL {"markers":["IT-KEEP-1","IT-DROP-2"]} which markers do you see?';
+
+    const tree = async (id: string) =>
+      (
+        await manager.getSessionTree({
+          sessionId: id,
+          requestSequence: ++sequence,
+          ownerWebContentsId: 50,
+        })
+      ).snapshot;
+    const nodeWith = (
+      snapshot: { nodes: Array<{ id: string; preview?: string }> },
+      text: string
+    ) => {
+      const index = snapshot.nodes.findIndex((node) => node.preview?.includes(text));
+      expect(index, text).toBeGreaterThanOrEqual(0);
+      return { node: snapshot.nodes[index], next: snapshot.nodes[index + 1] };
+    };
+    const stubOf = (id: string) =>
+      String(manager.getSlotSnapshots().find((slot) => slot.logicalSessionId === id)?.sessionFile);
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0 });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('rewinds: the next turn does not see what was cut off, and the tree keeps it as a branch', async () => {
+      await manager.createSession({
+        sessionId: 'w1',
+        workspacePath: workspace,
+        ownerWebContentsId: 50,
+      });
+      for (const text of ['alpha IT-KEEP-1, no scenario.', 'beta IT-DROP-2, no scenario.']) {
+        expect(await turn(manager, 'w1', text, 50)).toMatchObject({
+          settled: true,
+          completed: true,
+        });
+      }
+      const stubFile = stubOf('w1');
+      const target = nodeWith(await tree('w1'), 'IT-DROP-2').node;
+
+      const rewound = await manager.rewindSession({
+        sessionId: 'w1',
+        entryId: String(target?.id),
+        confirmed: true,
+        ownerWebContentsId: 50,
+      });
+
+      expect(rewound.editorText).toBe('beta IT-DROP-2, no scenario.');
+      expect(rewound.leaf.fileTailEntryId).toMatch(/^aiclient-w1\.r2#\d+$/);
+      // Same identity for Main: the stub path did not move, it points at the child.
+      expect(stubOf('w1')).toBe(stubFile);
+      const stub = JSON.parse(readFileSync(stubFile, 'utf8'));
+      expect(stub).toMatchObject({ version: 2, dshSessionId: 'aiclient-w1.r2' });
+      expect(stub.lineage.map((entry: { dshSessionId: string }) => entry.dshSessionId)).toEqual([
+        'aiclient-w1',
+        'aiclient-w1.r2',
+      ]);
+
+      const recall = await turn(manager, 'w1', RECALL, 50);
+      expect(recall).toMatchObject({ settled: true, completed: true });
+      expect(recall.reply).toContain('P0-RECALL present=IT-KEEP-1 missing=IT-DROP-2');
+      const after = await tree('w1');
+      const retired = after.nodes.filter((node) => !node.active).map((node) => node.preview);
+      expect(retired).toContain('beta IT-DROP-2, no scenario.');
+      expect(after.nodes.find((node) => node.leaf)?.preview).toContain(
+        'P0-RECALL present=IT-KEEP-1'
+      );
+
+      // Reopened from its stub: the child, with the retired branch still in the tree.
+      await manager.closeSession('w1');
+      const page = await supervisor.readPage({ stubFile, logicalSessionId: 'w1', limit: 80 });
+      expect(page.messages.map((message) => message.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+        'assistant',
+      ]);
+      await manager.resumeSession({
+        sessionId: 'w1',
+        sessionFile: stubFile,
+        workspacePath: workspace,
+        ownerWebContentsId: 50,
+      });
+      const reopened = await tree('w1');
+      expect(reopened.nodes.filter((node) => !node.active).map((node) => node.preview)).toEqual(
+        retired
+      );
+      console.log(
+        `[p1-4b] rewind: ${after.totalNodes} nodes after, ${retired.length} on the retired branch; ` +
+          `the model saw ${recall.reply.trim()}`
+      );
+    }, 240_000);
+
+    it('forks: the child answers from the fork point, the source goes on with its own history', async () => {
+      const answer = nodeWith(await tree('w1'), 'IT-KEEP-1').next;
+      const forked = await manager.forkSession({
+        sourceSessionId: 'w1',
+        entryId: String(answer?.id),
+        sourceTitle: 'W1',
+        ownerWebContentsId: 50,
+      });
+      const child = forked.session.sessionId;
+      expect(forked.session).toMatchObject({ agent: 'dsh', title: 'W1 (fork)' });
+      // Named after the id Main minted before asking (decision 027 rule 4), and adopted.
+      expect(forked.session.runtimeIdentity).toMatch(
+        new RegExp(`aiclient-sessions/aiclient-${child}\\.dsh\\.json$`)
+      );
+      expect(existsSync(`${forked.session.runtimeIdentity}.staged`)).toBe(false);
+
+      const childRecall = await turn(manager, child, RECALL, 50);
+      expect(childRecall).toMatchObject({ settled: true, completed: true });
+      expect(childRecall.reply).toContain('P0-RECALL present=IT-KEEP-1 missing=IT-DROP-2');
+      expect(await turn(manager, 'w1', 'gamma after the fork, no scenario.', 50)).toMatchObject({
+        settled: true,
+        completed: true,
+      });
+      expect((await tree(child)).nodes.map((node) => node.active)).not.toContain(false);
+      console.log(
+        `[p1-4b] fork: the child saw ${childRecall.reply.trim()}; the source took a turn after`
+      );
+      await manager.closeSession(child);
+      await manager.closeSession('w1');
+    }, 240_000);
   });
 });

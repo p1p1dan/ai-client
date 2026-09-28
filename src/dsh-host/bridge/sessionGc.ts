@@ -8,8 +8,11 @@
  *
  *   ours      the id starts `aiclient-` (`dshSessionIdFor`): never a subagent
  *             child, never a session another client wrote
- *   orphaned  not claimed by Main's index, nor a descendant of a claimed
- *             session through its header's `parentSession`
+ *   orphaned  not claimed by Main's index, nor named by the stub of a claimed
+ *             session — its `dshSessionId` and its whole `lineage`, the
+ *             sessions rewinds retired (P1-4b, decision 027) — nor a
+ *             descendant of a claimed session through its header's
+ *             `parentSession`
  *   old       its header was created more than `graceMs` ago (24 h)
  *   empty     its log holds nothing but the setup events DSH writes when it
  *             creates an agent (measured in P1-3d: a session bootstrapped and
@@ -119,12 +122,33 @@ function isMissing(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT';
 }
 
-/** Claimed ids plus every session descending from one through `parentSession`. */
+/** The sessions a stub names: its current one and every one of its lineage. */
+function stubSessionIds(stub: unknown): string[] {
+  const record = stub as { dshSessionId?: unknown; lineage?: unknown } | undefined;
+  const ids: unknown[] = [record?.dshSessionId];
+  if (Array.isArray(record?.lineage)) {
+    for (const entry of record.lineage)
+      ids.push((entry as { dshSessionId?: unknown })?.dshSessionId);
+  }
+  return ids.filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
+
+/**
+ * Claimed ids, plus what the stubs of claimed sessions name (Main reads the
+ * same stubs; this holds when it could not), plus every session descending
+ * from one through `parentSession`.
+ */
 function expandClaimed(
   snapshots: readonly GcSessionSnapshot[],
-  claimedIds: readonly string[]
+  claimedIds: readonly string[],
+  stubs: ReadonlyArray<{ id: string; names: readonly string[] }>
 ): Set<string> {
   const claimed = new Set(claimedIds);
+  for (const stub of stubs) {
+    if (claimed.has(stub.id) || stub.names.some((id) => claimed.has(id))) {
+      for (const id of stub.names) claimed.add(id);
+    }
+  }
   const children = new Map<string, string[]>();
   for (const { header } of snapshots) {
     if (typeof header.parentSession !== 'string') continue;
@@ -181,7 +205,24 @@ export async function collectOrphanSessions(
   // A list that fails ends the pass: nothing is judged orphaned without it.
   const snapshots = await persistence.list();
   const present = new Set(snapshots.map((snapshot) => snapshot.header.id));
-  const claimed = expandClaimed(snapshots, request.claimed);
+
+  let stubNames: string[] = [];
+  try {
+    stubNames = await fs.readdir(stubDir);
+  } catch (error) {
+    if (!isMissing(error)) log(`gc: cannot read ${stubDir}: ${errorText(error)}`);
+  }
+  const stubs: Array<{ id: string; names: string[] }> = [];
+  for (const name of stubNames) {
+    if (!name.endsWith(DSH_STUB_SUFFIX)) continue;
+    try {
+      const names = stubSessionIds(JSON.parse(await fs.readFile(join(stubDir, name), 'utf8')));
+      stubs.push({ id: name.slice(0, -DSH_STUB_SUFFIX.length), names });
+    } catch {
+      // An unreadable stub claims nothing beyond its own name, which Main claims.
+    }
+  }
+  const claimed = expandClaimed(snapshots, request.claimed, stubs);
 
   /** `<root>/<project>/<session>`, a real directory holding logs and the lock only. */
   const verifiedSessionDir = async (
@@ -325,12 +366,6 @@ export async function collectOrphanSessions(
     else count(verdict);
   }
 
-  let stubNames: string[] = [];
-  try {
-    stubNames = await fs.readdir(stubDir);
-  } catch (error) {
-    if (!isMissing(error)) log(`gc: cannot read ${stubDir}: ${errorText(error)}`);
-  }
   for (const name of stubNames) {
     // Temp files of an interrupted stub write are not stubs.
     if (!name.endsWith(DSH_STUB_SUFFIX)) continue;

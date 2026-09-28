@@ -1,0 +1,314 @@
+[
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "role": "user",
+      "attemptId": "attempt-BASE"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-8",
+      "blockId": "dsh-user-8-text",
+      "text": "gamma FORK-BASE-1, no scenario."
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-8"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t1-s1",
+      "blockId": "dsh-aiclient-rec-fork-t1-s1-b0",
+      "text": "fake gateway: no P0 scenario marker"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-BASE",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "role": "user",
+      "attemptId": "attempt-AFTER"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-20",
+      "blockId": "dsh-user-20-text",
+      "text": "delta FORK-AFTER-2, no scenario."
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-20"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t2-s1",
+      "blockId": "dsh-aiclient-rec-fork-t2-s1-b0",
+      "text": "fake gateway: no P0 scenario marker"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-AFTER",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-21",
+      "role": "user",
+      "attemptId": "attempt-CHILD-RECALL"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-21",
+      "blockId": "dsh-user-21-text",
+      "text": "P0-RECALL {\"markers\":[\"FORK-BASE-1\",\"FORK-AFTER-2\"]} which markers do you see?"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-21"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-child-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-child-t2-s1",
+      "blockId": "dsh-aiclient-rec-fork-child-t2-s1-b0",
+      "text": "P0-RECALL present=FORK-BASE-1 missing=FORK-AFTER-2"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-child-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-fork-child",
+    "requestId": "turn-CHILD-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-28",
+      "role": "user",
+      "attemptId": "attempt-SOURCE-RECALL"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-28",
+      "blockId": "dsh-user-28-text",
+      "text": "P0-RECALL {\"markers\":[\"FORK-BASE-1\",\"FORK-AFTER-2\"]} which markers do you see?"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-28"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t3-s1",
+      "blockId": "dsh-aiclient-rec-fork-t3-s1-b0",
+      "text": "P0-RECALL present=FORK-BASE-1,FORK-AFTER-2 missing=-"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-fork-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-fork",
+    "requestId": "turn-SOURCE-RECALL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

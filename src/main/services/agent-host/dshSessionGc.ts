@@ -8,9 +8,12 @@
  *   - `aiclient-<its logical id>`, the id its stub would name (decision 006:
  *     a lost stub is found again from the logical id);
  *   - for a DSH identity (`<DSH_HOME>/aiclient-sessions/<id>.dsh.json`), the id
- *     in the file name, and what the stub itself names: `dshSessionId` and,
- *     once P1-4b writes one, its `lineage` (read with or without it).
- * A stub that cannot be read still claims the two ids its row implies.
+ *     in the file name, and what the stub itself names: `dshSessionId` and
+ *     its `lineage` (stub version 2, P1-4b), every session a rewind retired —
+ *     they carry the tree's other branches (decisions 026, 027). A version 1
+ *     stub has no lineage.
+ * A stub that cannot be read still claims the two ids its row implies; the
+ * host expands claimed stubs' lineage again on its side (`bridge/sessionGc.ts`).
  */
 
 import { readFile } from 'node:fs/promises';
@@ -32,7 +35,7 @@ export async function readDshSessionStub(file: string): Promise<unknown> {
   return text.length > MAX_STUB_BYTES ? undefined : JSON.parse(text);
 }
 
-/** The sessions a stub names: its own and, when present, its lineage (P1-4b, decision 027). */
+/** The sessions a stub names: its own and its lineage (P1-4b, decision 027). */
 function stubSessionIds(stub: unknown): string[] {
   if (typeof stub !== 'object' || stub === null) return [];
   const record = stub as { dshSessionId?: unknown; lineage?: unknown };

@@ -186,13 +186,15 @@ describe('DshSessionRuntime — a new session (decisions 006, 007)', () => {
     expect(dsh.calls).toEqual([`create ${DSH_ID} stub=false`, 'flush stub=false']);
     expect(dsh.ctx.sessions.flush).toHaveBeenCalledTimes(1);
     const stub = JSON.parse(readFileSync(dsh.stubFile, 'utf8')) as SessionStub;
+    // Version 2 (P1-4b): the lineage starts with the session itself.
     expect(stub).toEqual({
       engine: 'dsh',
-      version: 1,
+      version: 2,
       dshSessionId: 'aiclient-session-1',
       logicalSessionId: LOGICAL,
       cwd: CWD,
       createdAt: 1_700_000_000_000,
+      lineage: [{ dshSessionId: 'aiclient-session-1', reason: 'create', at: 1_700_000_000_000 }],
     });
     // Atomic: the temp file was renamed into place, nothing left beside it.
     expect(readdirSync(join(home, 'aiclient-sessions'))).toEqual(['aiclient-session-1.dsh.json']);
@@ -383,15 +385,7 @@ describe('DshSessionRuntime — safe refusals until P1-4 (decision 010)', () => 
     expect(dsh.followups).toEqual([{ id: 'user-message-1' }]);
   });
 
-  it.each([
-    'fork',
-    'acceptFork',
-    'discardFork',
-  ] as const)('keeps %s unsupported, with no native fallback', async (method) => {
-    const { bridge } = await ready();
-    const error = await refusal((bridge[method] as () => Promise<unknown>)());
-    expect(error.code).toBe('WORKER_DSH_UNSUPPORTED');
-  });
+  // Fork, accept and discard are bridged since P1-4b: rewindFork.test.ts.
 });
 
 describe('DshSessionRuntime — history, tree and leaf (P1-4a, decision 026)', () => {

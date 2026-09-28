@@ -38,6 +38,12 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+/**
+ * dsh-rebase P1-4b: a DSH rewind retires the agent a background job runs
+ * under, so the worker refuses while one runs (`WORKER_REWIND_JOBS_RUNNING`).
+ */
+const REWIND_JOBS_RUNNING = 'WORKER_REWIND_JOBS_RUNNING';
+
 export function SessionTreeDialog({
   sessionId,
   open,
@@ -113,7 +119,14 @@ export function SessionTreeDialog({
       setSnapshot(result.tree);
       setRewindTarget(null);
     } catch (cause) {
-      setError(errorMessage(cause));
+      const message = errorMessage(cause);
+      setError(
+        message.includes(REWIND_JOBS_RUNNING)
+          ? t(
+              'A background task of this session is still running. Wait for it to finish, or stop it, before rewinding.'
+            )
+          : message
+      );
     } finally {
       setMutationPending(false);
     }
@@ -167,7 +180,7 @@ export function SessionTreeDialog({
                       shown: snapshot.returnedNodes,
                       total: snapshot.totalNodes,
                     })
-                  : t('Load the Pi-native session tree')}
+                  : t('Load the session tree')}
               </span>
               <Button
                 type="button"
@@ -261,7 +274,7 @@ export function SessionTreeDialog({
             <AlertDialogTitle>{t('Rewind this session?')}</AlertDialogTitle>
             <AlertDialogDescription>
               {t(
-                'The active conversation will move to “{{node}}”. Later messages remain available as another branch and the Pi session file is not truncated.',
+                'The active conversation will move to “{{node}}”. Later messages remain available as another branch; nothing is deleted.',
                 { node: rewindTarget ? sessionTreeNodeTitle(rewindTarget) : '' }
               )}
             </AlertDialogDescription>

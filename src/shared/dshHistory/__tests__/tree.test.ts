@@ -196,4 +196,57 @@ describe('buildDshSessionTree — chains of a lineage (P1-4b input)', () => {
     expect(snapshot.nodes.find((node) => node.id === 'a1')?.childCount).toBe(2);
     expect(snapshot.totalNodes).toBe(5);
   });
+
+  it('merges three sessions of two rewinds: a return to the first branch makes it active again', () => {
+    const original = [
+      user('u1', 'first'),
+      assistant('a1', 'one'),
+      user('u2', 'second'),
+      assistant('a2', 'two'),
+    ];
+    const detour = [user('u1', 'first'), assistant('a1', 'one'), user('u3', 'detour')];
+    const current = [...original, user('u4', 'on from two')];
+    const snapshot = buildDshSessionTree({
+      ...META,
+      chains: [
+        { messages: original, current: false },
+        { messages: detour, current: false },
+        { messages: current, current: true },
+      ],
+      leaf: dshLeafCheckpoint(current, 's.r3', 30),
+    });
+    expect(
+      snapshot.nodes.map((node) => [
+        node.id,
+        node.parentId,
+        node.active,
+        node.leaf,
+        node.childCount,
+      ])
+    ).toEqual([
+      ['u1', null, true, false, 1],
+      ['a1', 'u1', true, false, 2],
+      ['u2', 'a1', true, false, 1],
+      ['a2', 'u2', true, false, 1],
+      ['u4', 'a2', true, true, 0],
+      ['u3', 'a1', false, false, 0],
+    ]);
+    expect(snapshot.leaf).toEqual({ activeEntryId: 'u4', fileTailEntryId: 's.r3#30' });
+  });
+
+  it('holds at most 4000 nodes across the lineage, the leaf always among them', () => {
+    const retired = Array.from({ length: 3_000 }, (_, index) => user(`old${index}`, `o${index}`));
+    const current = Array.from({ length: 1_500 }, (_, index) => user(`new${index}`, `n${index}`));
+    const snapshot = buildDshSessionTree({
+      ...META,
+      chains: [
+        { messages: retired, current: false },
+        { messages: current, current: true },
+      ],
+      leaf: dshLeafCheckpoint(current, 's.r2', 9_999),
+      limit: 10_000,
+    });
+    expect(snapshot).toMatchObject({ totalNodes: 4_500, returnedNodes: 4_000, truncated: true });
+    expect(snapshot.nodes.at(-1)).toMatchObject({ id: 'new1499', leaf: true });
+  });
 });

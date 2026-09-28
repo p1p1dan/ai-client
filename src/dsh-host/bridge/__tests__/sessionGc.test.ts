@@ -223,6 +223,44 @@ describe('sessionGc — what stays (GC-02)', () => {
     expect(opened.every((item) => item.closed)).toBe(true);
   });
 
+  it('keeps every session a claimed stub names: its current one and its lineage (P1-4b)', async () => {
+    // A chat rewound twice to its first prompt: three empty sessions, none a
+    // child of another by header, only the first claimed by Main (as when Main
+    // could not read the stub). The stub still names all three.
+    const sessions = [
+      session('aiclient-x'),
+      session('aiclient-x.r2'),
+      session('aiclient-x.r3'),
+      session('aiclient-y'),
+    ];
+    writeStub('aiclient-x.dsh.json', {
+      engine: 'dsh',
+      version: 2,
+      dshSessionId: 'aiclient-x.r3',
+      cwd: '/work/repo',
+      lineage: [
+        { dshSessionId: 'aiclient-x', reason: 'create', at: OLD },
+        { dshSessionId: 'aiclient-x.r2', reason: 'rewind', at: OLD },
+        { dshSessionId: 'aiclient-x.r3', reason: 'rewind', at: OLD },
+      ],
+    });
+    // A stub nobody claims protects nothing.
+    writeStub('aiclient-y.dsh.json', {
+      engine: 'dsh',
+      version: 2,
+      dshSessionId: 'aiclient-y',
+      cwd: '/work/repo',
+      lineage: [{ dshSessionId: 'aiclient-y', reason: 'create', at: OLD }],
+    });
+    const { persistence } = fakePersistence(sessions);
+    const result = await run(persistence, ['aiclient-x']);
+    expect(result).toMatchObject({ deleted: ['aiclient-y'], skipped: { claimed: 3 } });
+    for (const id of ['aiclient-x', 'aiclient-x.r2', 'aiclient-x.r3']) {
+      expect(existsSync(sessionDir(id)), id).toBe(true);
+    }
+    expect(existsSync(stubFile('aiclient-x'))).toBe(true);
+  });
+
   it('re-reads under the lock: content that landed meanwhile keeps the session', async () => {
     const { persistence } = fakePersistence([
       session('aiclient-racing', { eventsUnderLock: [...SETUP, 'turn/start'] }),

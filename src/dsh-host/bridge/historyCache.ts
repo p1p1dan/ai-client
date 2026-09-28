@@ -92,6 +92,11 @@ export class DshHistoryCache {
     return this.state === 'ready';
   }
 
+  /** Whether the fold holds the whole log, with no read pending and no gap. */
+  isCurrent(): boolean {
+    return this.state === 'ready';
+  }
+
   messages(): readonly HistoryMessage[] {
     return this.fold.messages();
   }
@@ -104,15 +109,25 @@ export class DshHistoryCache {
     return dshLeafCheckpoint(this.fold.messages(), this.sessionId, this.fold.cursor);
   }
 
-  tree(meta: {
-    logicalSessionId: string;
-    sessionFile: string;
-    workspacePath: string;
-  }): SessionTreeSnapshot {
+  /**
+   * The tree of this session merged with `retired`, the timelines of the
+   * sessions earlier rewinds left behind (P1-4b, decision 026), oldest first:
+   * an inherited prefix shares its ids, the rest becomes sibling branches.
+   */
+  tree(
+    meta: {
+      logicalSessionId: string;
+      sessionFile: string;
+      workspacePath: string;
+    },
+    retired: ReadonlyArray<readonly HistoryMessage[]> = []
+  ): SessionTreeSnapshot {
     return buildDshSessionTree({
       ...meta,
-      // P1-4b adds the retired sessions of the stub's lineage here.
-      chains: [{ messages: this.fold.messages(), current: true }],
+      chains: [
+        ...retired.map((messages) => ({ messages, current: false })),
+        { messages: this.fold.messages(), current: true },
+      ],
       leaf: this.leaf(),
     });
   }

@@ -34,6 +34,15 @@
  *   crash-resume  SIGKILL while a bash call sleeps; a new host resumes the stub and
  *                 its first page carries the interrupted-turn note and the
  *                 outcome-unknown tool row (decision 032)
+ *   rewind        (P1-4b) two turns, `worker.rewind` to the second prompt, then a
+ *                 turn that asks the model which markers it sees: only the first
+ *                 turn's. `log` is the child session the stub names now, and
+ *                 `log.retired` the session the rewind retired; the tree merges them
+ *   fork          (P1-4b) two turns, `worker.fork` at the first answer for a minted
+ *                 id, accepted; a second channel opens the child and asks which
+ *                 markers it sees (only the first turn's), the source still sees
+ *                 both. A second fork is discarded and leaves no stub. `log` is
+ *                 the child's
  *
  * Normalized (plan P1-4 shard 05 §2): RuntimeEvent `seq` / `timestamp` dropped;
  * UUIDs renumbered `id-N` in first-seen order, one map per scenario shared by
@@ -311,6 +320,8 @@ interface Session {
 interface Recording {
   stream: Message[];
   observation: Message;
+  /** Sessions the stub's lineage retired (P1-4b rewind), oldest first. */
+  retired?: Message[];
   rpc: Message;
   /** Unnormalized facts for the report: delta counts and event totals. */
   facts: Message;
@@ -479,7 +490,141 @@ const SCENARIOS: Record<string, Scenario> = {
     await context.stopHost(restarted);
     return recording;
   },
+  rewind: rewindScenario,
+  fork: forkScenario,
 };
+
+/** The id of the first tree node whose preview contains `text`, and the node after it. */
+function nodeAfter(tree: Message, text: string): { node: string; next?: string } {
+  const nodes = ((tree.snapshot as Message | undefined)?.nodes ?? []) as Message[];
+  const index = nodes.findIndex((node) => String(node.preview ?? '').includes(text));
+  if (index < 0) throw new Error(`no tree node previews ${text}`);
+  return {
+    node: String(nodes[index]?.id),
+    ...(nodes[index + 1] ? { next: String(nodes[index + 1]?.id) } : {}),
+  };
+}
+
+/** The last assistant text of a turn's events. */
+function replyOf(events: readonly Message[]): string {
+  const assistant = new Set(
+    events
+      .filter((event) => event.type === 'message.started' && payloadOf(event).role === 'assistant')
+      .map((event) => payloadOf(event).messageId)
+  );
+  return events
+    .filter((event) => event.type === 'message.delta' && assistant.has(payloadOf(event).messageId))
+    .map((event) => String(payloadOf(event).text))
+    .join('');
+}
+
+/** What a rewind or fork answered, without the pages the scenario records anyway. */
+function idsOf(result: Message): Message {
+  const { history, tree, ...rest } = result;
+  const page = (history as Message | undefined)?.page as Message | undefined;
+  const nodes = ((tree as Message | undefined)?.snapshot as Message | undefined)?.nodes;
+  return {
+    ...rest,
+    historyIds: ((page?.messages ?? []) as Message[]).map((message) => message.id),
+    ...(Array.isArray(nodes)
+      ? {
+          treeNodes: (nodes as Message[]).map(
+            (node) => `${String(node.id)}${node.active ? '' : ' (retired)'}${node.leaf ? ' *' : ''}`
+          ),
+        }
+      : {}),
+  };
+}
+
+/** The DSH session a stub names now. */
+function stubTarget(stubFile: string): string {
+  return String((JSON.parse(readFileSync(stubFile, 'utf8')) as Message).dshSessionId);
+}
+
+const REWIND_RECALL =
+  'P0-RECALL {"markers":["REWIND-KEEP-1","REWIND-DROP-2"]} which markers do you see?';
+const FORK_RECALL =
+  'P0-RECALL {"markers":["FORK-BASE-1","FORK-AFTER-2"]} which markers do you see?';
+
+async function rewindScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'rewind');
+  const first = await context.turn(session, 'KEEP', 'alpha REWIND-KEEP-1, no scenario.');
+  const second = await context.turn(session, 'DROP', 'beta REWIND-DROP-2, no scenario.');
+  const target = nodeAfter(await context.tree(session), 'REWIND-DROP-2').node;
+  const retiredId = session.dshSessionId;
+  const rewound = await host.client.request(session.ch, 'worker.rewind', {
+    logicalSessionId: session.logicalSessionId,
+    targetEntryId: target,
+    confirmed: true,
+  });
+  session.dshSessionId = stubTarget(session.stubFile);
+  const recall = await context.turn(session, 'RECALL', REWIND_RECALL);
+  const reply = replyOf(recall);
+  if (!reply.includes('present=REWIND-KEEP-1 missing=REWIND-DROP-2')) {
+    throw new Error(`rewind: the model saw what the rewind dropped: ${reply}`);
+  }
+  const retired = await host.client.probe('observe', { sessionId: retiredId }, 60_000);
+  const recording = await finish(context, session, [boot], [first, second, recall], {
+    rewind: idsOf(rewound),
+  });
+  return { ...recording, retired: [retired] };
+}
+
+async function forkScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session: source, boot: sourceBoot } = await context.openSession(host, 'fork');
+  const first = await context.turn(source, 'BASE', 'gamma FORK-BASE-1, no scenario.');
+  const second = await context.turn(source, 'AFTER', 'delta FORK-AFTER-2, no scenario.');
+  const answer = nodeAfter(await context.tree(source), 'FORK-BASE-1').next;
+  if (!answer) throw new Error('fork: no answer after the first prompt');
+  const forked = await host.client.request(source.ch, 'worker.fork', {
+    logicalSessionId: source.logicalSessionId,
+    entryId: answer,
+    targetLogicalSessionId: 'rec-fork-child',
+  });
+  const childStub = String(forked.sessionFile);
+  const accept = await host.client.request(source.ch, 'worker.fork.accept', {
+    logicalSessionId: source.logicalSessionId,
+    sessionFile: childStub,
+  });
+  // The child's lock went with the source's handle: another channel resumes it at once.
+  const { session: child, boot: childBoot } = await context.openSession(
+    host,
+    'fork-child',
+    childStub
+  );
+  const childRecall = await context.turn(child, 'CHILD-RECALL', FORK_RECALL);
+  const sourceRecall = await context.turn(source, 'SOURCE-RECALL', FORK_RECALL);
+  const childReply = replyOf(childRecall);
+  const sourceReply = replyOf(sourceRecall);
+  if (!childReply.includes('present=FORK-BASE-1 missing=FORK-AFTER-2')) {
+    throw new Error(`fork: the child saw past the fork point: ${childReply}`);
+  }
+  if (!sourceReply.includes('present=FORK-BASE-1,FORK-AFTER-2 missing=-')) {
+    throw new Error(`fork: the source lost its own history: ${sourceReply}`);
+  }
+  // A fork Main does not adopt: its stub and marker go.
+  const dropped = await host.client.request(source.ch, 'worker.fork', {
+    logicalSessionId: source.logicalSessionId,
+    entryId: answer,
+    targetLogicalSessionId: 'rec-fork-dropped',
+  });
+  const discard = await host.client.request(source.ch, 'worker.fork.discard', {
+    logicalSessionId: source.logicalSessionId,
+    sessionFile: String(dropped.sessionFile),
+  });
+  const droppedLeft = [String(dropped.sessionFile), `${String(dropped.sessionFile)}.staged`].filter(
+    (file) => existsSync(file)
+  );
+  await context.close(source);
+  return finish(context, child, [], [first, second, childRecall, sourceRecall], {
+    sourceBootstrap: sourceBoot,
+    childBootstrap: childBoot,
+    fork: idsOf(forked),
+    accept,
+    stagedMarkerLeft: existsSync(`${childStub}.staged`),
+    discard: { ...discard, filesLeft: droppedLeft },
+  });
+}
 
 /** The durable `tool/call` has been appended: the call is dispatched. */
 async function waitForToolCall(session: Session, from: number): Promise<void> {
@@ -755,8 +900,12 @@ async function main(): Promise<number> {
         [scratchRoot]: '<scratch>',
       });
       // One id map: the log first, so the projection of `log` meets `rpc` on the same ids.
+      const log = normalizer.log(recording.observation) as Message;
+      if (recording.retired) {
+        log.retired = recording.retired.map((observation) => normalizer.log(observation));
+      }
       const samples = {
-        log: normalizer.log(recording.observation),
+        log,
         rpc: normalizer.value(withoutKeys(recording.rpc, TIMING_KEYS)),
         stream: normalizer.stream(recording.stream),
       };

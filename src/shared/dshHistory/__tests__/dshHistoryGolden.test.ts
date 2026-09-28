@@ -42,6 +42,8 @@ interface LogSample {
   header: { id: string };
   cursor: number;
   events: Array<Omit<DshLogEvent, 'time'> & { time: unknown }>;
+  /** P1-4b rewind: the sessions the stub's lineage retired, oldest first. */
+  retired?: LogSample[];
 }
 
 interface RpcSample {
@@ -80,11 +82,16 @@ const scenarios = readdirSync(FIXTURES)
   .map((file) => file.slice('log.'.length, -'.json'.length))
   .sort();
 
+function projectLog(log: LogSample): HistoryMessage[] {
+  return projectDshHistory(
+    log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent)
+  );
+}
+
 function project(name: string) {
   const log = read<LogSample>(`log.${name}.json`);
   const rpc = read<RpcSample>(`rpc.${name}.json`);
-  const events = log.events.map((event) => ({ ...event, time: T0 + event.seq }) as DshLogEvent);
-  return { log, rpc, messages: projectDshHistory(events) };
+  return { log, rpc, messages: projectLog(log) };
 }
 
 function blocksOf(messages: readonly HistoryMessage[]) {
@@ -96,6 +103,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'compact',
     'crash-resume',
     'fail',
+    'fork',
+    'rewind',
     'stop-stream',
     'stop-tool',
     'stream',
@@ -118,7 +127,14 @@ describe.each(scenarios)('the %s recording', (name) => {
     const { log, rpc, messages } = project(name);
     const { logicalSessionId, sessionFile, workspacePath } = rpc.tree.snapshot;
     const snapshot = buildDshSessionTree({
-      chains: [{ messages, current: true }],
+      // A rewound session's tree merges the sessions it retired (decision 026).
+      chains: [
+        ...(log.retired ?? []).map((retired) => ({
+          messages: projectLog(retired),
+          current: false,
+        })),
+        { messages, current: true },
+      ],
       logicalSessionId,
       sessionFile,
       workspacePath,
@@ -201,5 +217,42 @@ describe('what the recordings show a user', () => {
     expect(messages[1]).toMatchObject({ incomplete: true, stopReason: 'interrupted' });
     expect(messages[1]?.blocks.at(-1)).toMatchObject({ ok: false, outcomeUnknown: true });
     expect(messages[2]?.blocks[0]).toMatchObject({ notice: { key: INTERRUPTED_TURN_NOTICE_KEY } });
+  });
+
+  function texts(messages: readonly HistoryMessage[]): string[] {
+    return messages.map((message) =>
+      message.blocks.flatMap((block) => (block.type === 'text' ? [block.text] : [])).join('')
+    );
+  }
+
+  it('rewind (P1-4b): the timeline goes on from the first answer; the dropped turn is a retired branch', () => {
+    const { log, rpc, messages } = project('rewind');
+    expect(texts(messages)).toEqual([
+      'alpha REWIND-KEEP-1, no scenario.',
+      'fake gateway: no P0 scenario marker',
+      'P0-RECALL {"markers":["REWIND-KEEP-1","REWIND-DROP-2"]} which markers do you see?',
+      'P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2',
+    ]);
+    // The child inherited the first turn with the same ids.
+    const retired = projectLog(log.retired?.[0] as LogSample);
+    expect(retired.slice(0, 2).map((message) => message.id)).toEqual(
+      messages.slice(0, 2).map((message) => message.id)
+    );
+    const dropped = rpc.tree.snapshot.nodes.filter((node) => !node.active);
+    expect(dropped.map((node) => node.preview)).toEqual([
+      'beta REWIND-DROP-2, no scenario.',
+      'fake gateway: no P0 scenario marker',
+    ]);
+  });
+
+  it('fork (P1-4b): the child holds the path to the fork point, then its own turn', () => {
+    const { log, messages } = project('fork');
+    expect(log.header).toMatchObject({ id: 'aiclient-rec-fork-child', isSeeded: true });
+    expect(texts(messages)).toEqual([
+      'gamma FORK-BASE-1, no scenario.',
+      'fake gateway: no P0 scenario marker',
+      'P0-RECALL {"markers":["FORK-BASE-1","FORK-AFTER-2"]} which markers do you see?',
+      'P0-RECALL present=FORK-BASE-1 missing=FORK-AFTER-2',
+    ]);
   });
 });
