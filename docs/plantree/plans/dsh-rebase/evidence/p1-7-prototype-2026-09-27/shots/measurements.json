@@ -1,0 +1,254 @@
+[
+  {
+    "file": "A-three-strips-expanded-light.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "A",
+    "theme": "light",
+    "strips": 3,
+    "expanded": ["todo", "jobs"],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 154
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      },
+      {
+        "strip": "jobs",
+        "px": 90
+      }
+    ],
+    "stripsPx": 280,
+    "gapBelowPx": 8,
+    "addedPx": 288,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 423
+  },
+  {
+    "file": "B-three-strips-collapsed-light.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "B",
+    "theme": "light",
+    "strips": 3,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      },
+      {
+        "strip": "jobs",
+        "px": 28
+      }
+    ],
+    "stripsPx": 92,
+    "gapBelowPx": 8,
+    "addedPx": 100,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 611
+  },
+  {
+    "file": "C-goal-paused-after-interject-light.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "C",
+    "theme": "light",
+    "strips": 1,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 28,
+    "gapBelowPx": 8,
+    "addedPx": 36,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 675
+  },
+  {
+    "file": "D-background-only-done-and-failed-light.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "D",
+    "theme": "light",
+    "strips": 1,
+    "expanded": ["jobs"],
+    "perStripPx": [
+      {
+        "strip": "jobs",
+        "px": 277
+      }
+    ],
+    "stripsPx": 277,
+    "gapBelowPx": 8,
+    "addedPx": 285,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 426
+  },
+  {
+    "file": "E-subagent-list-in-run-panel-light.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "E",
+    "theme": "light",
+    "strips": 1,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "jobs",
+        "px": 28
+      }
+    ],
+    "stripsPx": 28,
+    "gapBelowPx": 8,
+    "addedPx": 36,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 675
+  },
+  {
+    "file": "A-three-strips-expanded-dark.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "A",
+    "theme": "dark",
+    "strips": 3,
+    "expanded": ["todo", "jobs"],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 154
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      },
+      {
+        "strip": "jobs",
+        "px": 90
+      }
+    ],
+    "stripsPx": 280,
+    "gapBelowPx": 8,
+    "addedPx": 288,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 423
+  },
+  {
+    "file": "B-three-strips-collapsed-dark.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "B",
+    "theme": "dark",
+    "strips": 3,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      },
+      {
+        "strip": "jobs",
+        "px": 28
+      }
+    ],
+    "stripsPx": 92,
+    "gapBelowPx": 8,
+    "addedPx": 100,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 611
+  },
+  {
+    "file": "C-goal-paused-after-interject-dark.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "C",
+    "theme": "dark",
+    "strips": 1,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 28,
+    "gapBelowPx": 8,
+    "addedPx": 36,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 675
+  },
+  {
+    "file": "D-background-only-done-and-failed-dark.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "D",
+    "theme": "dark",
+    "strips": 1,
+    "expanded": ["jobs"],
+    "perStripPx": [
+      {
+        "strip": "jobs",
+        "px": 277
+      }
+    ],
+    "stripsPx": 277,
+    "gapBelowPx": 8,
+    "addedPx": 285,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 426
+  },
+  {
+    "file": "E-subagent-list-in-run-panel-dark.png",
+    "size": {
+      "width": 1400,
+      "height": 900
+    },
+    "scene": "E",
+    "theme": "dark",
+    "strips": 1,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "jobs",
+        "px": 28
+      }
+    ],
+    "stripsPx": 28,
+    "gapBelowPx": 8,
+    "addedPx": 36,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 675
+  }
+]
