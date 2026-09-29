@@ -13,6 +13,7 @@ import { DSH_AGENT, PI_AGENT } from '@shared/types/agentWire';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionMigrationCommit } from '../SessionIndexService';
 
 let userDataDir = '';
 
@@ -1122,6 +1123,259 @@ describe('SessionIndexService', () => {
       const raw = readFileSync(indexPath(), 'utf8');
       expect(Array.isArray(JSON.parse(raw))).toBe(true);
       expect(readdirSync(userDataDir).some((name) => name.endsWith('.tmp'))).toBe(false);
+    });
+  });
+
+  /**
+   * dsh-rebase P1-9d (decision 051): the migration's index transaction, and
+   * what the sidebar and the row cap make of the pair it leaves.
+   */
+  describe('legacy migration (P1-9d, decision 051)', () => {
+    const indexPath = (): string => join(userDataDir, 'session-index.json');
+    const persisted = (): SessionIndexEntry[] =>
+      JSON.parse(readFileSync(indexPath(), 'utf8')) as SessionIndexEntry[];
+    const STUB = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+    const PI_FILE = '/profile/pi-agent/sessions/s1.jsonl';
+    const SOURCE = { sha256: 'b'.repeat(64), bytes: 2048, mtimeMs: 1_700_000_000_456.25 };
+    const legacyRow: SessionIndexEntry = {
+      sessionId: 's1',
+      agent: PI_AGENT,
+      runtimeIdentity: PI_FILE,
+      piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+      legacyImport: { sourceKind: 'codex', targetPiSessionId: 'import-1', dedupeKey: 'codex:1' },
+      workspacePath: '/ws/a',
+      title: 'Before the switch',
+      model: 'glm/glm-5',
+      updatedAt: 10,
+      archived: true,
+    };
+    const commit = (extra: Partial<SessionMigrationCommit> = {}): SessionMigrationCommit => ({
+      sessionId: 's1',
+      legacyRuntimeIdentity: PI_FILE,
+      stubFile: STUB,
+      workspacePath: '/ws/a',
+      source: SOURCE,
+      converterVersion: 2,
+      ...extra,
+    });
+
+    /** 1.0.3's sidebar rule (`d23d72aa:…/sessionIndexMerge.ts`): only `pi` rows are shown. */
+    const visibleIn103 = (rows: SessionIndexEntry[]) => rows.filter((row) => row.agent === 'pi');
+
+    async function serviceWith(rows: SessionIndexEntry[], options: Record<string, unknown> = {}) {
+      writeFileSync(indexPath(), JSON.stringify(rows), 'utf8');
+      const { SessionIndexService } = await import('../SessionIndexService');
+      return new SessionIndexService(options);
+    }
+
+    it('commits the pair in one write: the pi row kept under `<id>_pi`, the chat now DSH', async () => {
+      const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+        writeFileSync(targetPath, JSON.stringify(data));
+      });
+      const other: SessionIndexEntry = {
+        sessionId: 'other',
+        agent: DSH_AGENT,
+        runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-other.dsh.json',
+        workspacePath: '/ws/b',
+        title: 'Untouched',
+        updatedAt: 5,
+        archived: false,
+      };
+      const service = await serviceWith([legacyRow, other], { writeAtomically });
+
+      const migrated = await service.commitMigrated(commit());
+
+      expect(writeAtomically).toHaveBeenCalledTimes(1);
+      const rows = persisted();
+      const kept = rows.find((row) => row.sessionId === 's1_pi');
+      // Field for field what it was, `updatedAt` included, plus the pointer.
+      expect(kept).toEqual({ ...legacyRow, sessionId: 's1_pi', migratedTo: 's1' });
+      const chat = rows.find((row) => row.sessionId === 's1');
+      expect(chat).toEqual(migrated);
+      expect(chat).toMatchObject({
+        agent: 'dsh',
+        runtimeIdentity: STUB,
+        workspacePath: '/ws/a',
+        title: 'Before the switch',
+        model: 'glm/glm-5',
+        archived: true,
+        legacyImport: legacyRow.legacyImport,
+        migratedFrom: {
+          legacySessionId: 's1_pi',
+          runtimeIdentity: PI_FILE,
+          sourceSha256: SOURCE.sha256,
+          sourceBytes: SOURCE.bytes,
+          sourceMtimeMs: SOURCE.mtimeMs,
+          converter: 'pi-dsh/2',
+        },
+      });
+      expect(chat).not.toHaveProperty('piLeaf');
+      expect(chat).not.toHaveProperty('migratedTo');
+      expect(rows.find((row) => row.sessionId === 'other')).toEqual(other);
+      // Still a bare array (older builds read it with a plain for-of).
+      expect(Array.isArray(JSON.parse(readFileSync(indexPath(), 'utf8')))).toBe(true);
+
+      // Rolled back to 1.0.3, whose sidebar shows `pi` rows only: every chat it
+      // showed before is still there, under some key, with the same fields.
+      const before = visibleIn103([legacyRow, other]);
+      const after = visibleIn103(rows);
+      expect(after).toHaveLength(before.length);
+      for (const row of before) {
+        const found = after.find((candidate) => candidate.runtimeIdentity === row.runtimeIdentity);
+        const { sessionId: _a, migratedTo: _b, ...rest } = found as SessionIndexEntry;
+        const { sessionId: _c, ...expected } = row;
+        expect(rest).toEqual(expected);
+      }
+
+      // The same commit again answers the row it made and writes nothing.
+      await expect(service.commitMigrated(commit())).resolves.toEqual(migrated);
+      expect(writeAtomically).toHaveBeenCalledTimes(1);
+    });
+
+    it('refuses a row that changed and a key that is taken, writing nothing', async () => {
+      const writeAtomically = vi.fn(async (targetPath: string, data: unknown) => {
+        writeFileSync(targetPath, JSON.stringify(data));
+      });
+      const taken: SessionIndexEntry = {
+        sessionId: 's2_pi',
+        workspacePath: '/ws/c',
+        title: 'Someone else',
+        updatedAt: 1,
+        archived: false,
+      };
+      const service = await serviceWith(
+        [legacyRow, { ...legacyRow, sessionId: 's2', runtimeIdentity: '/p/s2.jsonl' }, taken],
+        { writeAtomically }
+      );
+
+      await expect(
+        service.commitMigrated(commit({ legacyRuntimeIdentity: '/profile/other.jsonl' }))
+      ).rejects.toMatchObject({ code: 'index_row_changed' });
+      await expect(service.commitMigrated(commit({ sessionId: 'gone' }))).rejects.toMatchObject({
+        code: 'index_row_changed',
+      });
+      await expect(
+        service.commitMigrated(commit({ sessionId: 's2', legacyRuntimeIdentity: '/p/s2.jsonl' }))
+      ).rejects.toMatchObject({ code: 'legacy_key_taken' });
+      expect(writeAtomically).not.toHaveBeenCalled();
+      expect((await service.get('s1'))?.agent).toBe('pi');
+      expect(await service.get('s1_pi')).toBeUndefined();
+    });
+
+    it('restores both rows when the write fails', async () => {
+      const writeAtomically = vi.fn(async () => {
+        throw new Error('disk full');
+      });
+      const service = await serviceWith([legacyRow], { writeAtomically });
+
+      await expect(service.commitMigrated(commit())).rejects.toThrow('disk full');
+
+      expect(await service.get('s1')).toEqual(legacyRow);
+      expect(await service.get('s1_pi')).toBeUndefined();
+    });
+
+    it('keeps the pair linked through a re-record of either row', async () => {
+      const service = await serviceWith([legacyRow]);
+      await service.commitMigrated(commit());
+
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: DSH_AGENT });
+      await service.recordCreated({ sessionId: 's1_pi', workspacePath: '/ws/a' });
+
+      expect((await service.get('s1'))?.migratedFrom?.legacySessionId).toBe('s1_pi');
+      expect((await service.get('s1_pi'))?.migratedTo).toBe('s1');
+    });
+
+    it('lists the kept pi row only once 1.0.x wrote to its file, flagged; `list()` keeps every row', async () => {
+      let size = SOURCE.bytes;
+      let mtimeMs = SOURCE.mtimeMs;
+      let missing = false;
+      const statFile = vi.fn(async (file: string) => {
+        if (missing) throw Object.assign(new Error(`ENOENT: ${file}`), { code: 'ENOENT' });
+        return { size, mtimeMs };
+      });
+      const plain: SessionIndexEntry = {
+        sessionId: 'plain',
+        agent: PI_AGENT,
+        runtimeIdentity: '/p/plain.jsonl',
+        workspacePath: '/ws/d',
+        title: 'Never migrated',
+        updatedAt: 3,
+        archived: false,
+      };
+      const service = await serviceWith([legacyRow, plain], { statFile });
+      await service.commitMigrated(commit());
+      const shown = async () =>
+        (await service.listForDisplay()).map((row) =>
+          row.migrationDiverged ? `${row.sessionId}!` : row.sessionId
+        );
+
+      expect(await shown()).toEqual(['s1', 'plain']);
+      expect(statFile).toHaveBeenCalledWith(PI_FILE);
+      expect((await service.list()).map((row) => row.sessionId).sort()).toEqual([
+        'plain',
+        's1',
+        's1_pi',
+      ]);
+
+      // Continued in 1.0.x after a rollback: the file grew.
+      size += 100;
+      expect(await shown()).toEqual(['s1', 's1_pi!', 'plain']);
+      size = SOURCE.bytes;
+      mtimeMs += 1;
+      expect(await shown()).toEqual(['s1', 's1_pi!', 'plain']);
+      mtimeMs = SOURCE.mtimeMs;
+
+      // A file that cannot be looked at proves nothing: still hidden.
+      missing = true;
+      expect(await shown()).toEqual(['s1', 'plain']);
+      missing = false;
+
+      // 1.0.x rebound the row to another file (its native copy of a legacy one).
+      await service.bindRuntimeIdentity('s1_pi', `${PI_FILE}.native-v4.jsonl`);
+      expect((await shown()).filter((id) => id.startsWith('s1_pi'))).toEqual(['s1_pi!']);
+
+      // Nothing derived is ever written.
+      expect(persisted().some((row) => 'migrationDiverged' in row)).toBe(false);
+    });
+
+    it('never trims a kept pi row on its own; it goes with the chat that references it', async () => {
+      const row = (sessionId: string, updatedAt: number, archived = false): SessionIndexEntry => ({
+        sessionId,
+        agent: DSH_AGENT,
+        runtimeIdentity: `/stub/${sessionId}.dsh.json`,
+        workspacePath: '/ws',
+        title: '',
+        updatedAt,
+        archived,
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      try {
+        // The kept row is the oldest and archived: first in line, were it not protected.
+        const service = await serviceWith(
+          [{ ...legacyRow, updatedAt: 0, archived: true }, row('live-1', 20), row('live-2', 30)],
+          { maxEntries: 4 }
+        );
+        await service.commitMigrated(commit());
+        await service.setArchived('s1', false);
+        // Five rows now; one over.
+        await service.recordCreated({ sessionId: 'newest', workspacePath: '/ws' });
+        expect(
+          persisted()
+            .map((entry) => entry.sessionId)
+            .sort()
+        ).toEqual(['live-2', 'newest', 's1', 's1_pi']);
+
+        // The migrated chat itself becomes the oldest live row: it goes, and its pair with it.
+        await service.setArchived('s1', true);
+        const aged = await service.get('s1');
+        expect(aged?.archived).toBe(true);
+        await service.recordCreated({ sessionId: 'newer', workspacePath: '/ws' });
+        const ids = persisted().map((entry) => entry.sessionId);
+        expect(ids).not.toContain('s1');
+        expect(ids).not.toContain('s1_pi');
+      } finally {
+        warn.mockRestore();
+      }
     });
   });
 });

@@ -99,6 +99,8 @@ import type {
 import { IPC_CHANNELS } from '@shared/types';
 import type { AgentModelCatalog, ListPiModelsRequest } from '@shared/types/agentCatalog';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
+import type { LegacyMigrationSummary } from '@shared/types/legacyMigration';
+import type { SessionIndexListEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
 import type {
   SubagentCatalogView,
@@ -1053,7 +1055,13 @@ const electronAPI = {
        * looks held. Main validates it and only honours a literal `true`.
        */
       forceTakeover?: boolean;
-    }): Promise<{ requestId: string }> =>
+      /**
+       * dsh-rebase P1-9d: `migration` is present when this resume moved a
+       * legacy chat to the current engine first (decision 050). A failed
+       * migration rejects with `legacy_migration_failed:<stage>/<code>`
+       * (`parseLegacyMigrationFailure`).
+       */
+    }): Promise<{ requestId: string; migration?: LegacyMigrationSummary }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
     /**
      * Re-read this session's Pi file after the embedded TUI wrote to it and
@@ -1142,7 +1150,8 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.CHAT_RUNTIME_EVENT, handler);
     },
-    listSessions: (): Promise<SessionIndexEntry[]> =>
+    /** P1-9d: rows a migrated chat came from are left out, or flagged `migrationDiverged`. */
+    listSessions: (): Promise<SessionIndexListEntry[]> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_LIST_SESSIONS),
     /** T026 — what this session's runtime brought up; `null` = nobody reported. */
     listSessionCapabilities: (payload: {

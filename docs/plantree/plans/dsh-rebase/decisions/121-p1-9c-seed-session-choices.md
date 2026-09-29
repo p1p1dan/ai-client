@@ -116,3 +116,7 @@
 - **开发机上的旧回退会话**：id 仍是 `.r<n>`，projection cache 对它们照旧告警、缓存失效，不影响功能。
 - **实验 E3 没做**：决策 054 要求量 2000 条消息和 32 MiB 两档会话的耗时与内存，这次只做了 E1、E2。
 - **金样本**：`legacy-pi-dsh` 与 `rewind` 的金样本由编排者重录。
+
+## 补记（2026-09-29，P1-9d）
+
+上面交给 P1-9d 的三项已由 [决策 122](122-p1-9d-migration-orchestration-choices.md) 接走：Main 侧的发送、等待与 120 s 超时（第 1～3 条）；`legacy_migration_failed:<阶段>/<码>` 与 `retryable` 的重试（第 5～7 条）；索引事务的 `migratedFrom` 取 `result.source`、首次恢复的 `legacyPermissions`（第 9、13 条）。第 17 条照办：交给渲染层的错误只含阶段和码，宿主的 `message` 脱敏后只进 Main 日志。

@@ -79,6 +79,15 @@ const removeUncommittedCreated = vi.fn(async () => true);
 const getSessionCapabilities = vi.fn((_sessionId: string) => null as unknown);
 const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
 const handleRuntimeEvent = vi.fn();
+/** P1-9d — the sidebar's rows (decision 051). */
+const listForDisplay = vi.fn(async () => [] as unknown[]);
+/**
+ * P1-9d (decision 050) — the resume's migration step. Passes every row through
+ * by default, as the real one does for any row that is not a legacy `pi` one.
+ */
+const prepareResume = vi.fn(async (row: Record<string, unknown>, _cwd: string) => ({
+  row,
+})) as ReturnType<typeof vi.fn>;
 
 vi.mock('electron', () => ({
   app: { isPackaged: false, getPath: vi.fn(() => '/tmp'), getAppPath: vi.fn(() => '/app') },
@@ -152,9 +161,16 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
     recordCreated,
     removeUncommittedCreated,
     list: vi.fn(async () => []),
+    listForDisplay,
     rename: vi.fn(async () => true),
     setArchived: vi.fn(async () => true),
     handleRuntimeEvent,
+  },
+}));
+
+vi.mock('../../services/chat/LegacyMigrationService', () => ({
+  legacyMigrationService: {
+    prepareResume: (row: Record<string, unknown>, cwd: string) => prepareResume(row, cwd),
   },
 }));
 
@@ -205,6 +221,8 @@ beforeEach(async () => {
   // `clearAllMocks` forgets calls, not implementations, and one case here makes
   // the gate throw.
   assertHostPromptAllowed.mockReset();
+  prepareResume.mockReset();
+  prepareResume.mockImplementation(async (row: Record<string, unknown>) => ({ row }));
   const { registerChatHandlers } = await import('../chat');
   registerChatHandlers();
 });
@@ -1047,11 +1065,14 @@ describe('Pi WorkerSlot chat routing', () => {
   });
 
   /**
-   * dsh-rebase decision 005 — a session the retired engine wrote is read-only
-   * until P1-9: Main refuses every way of continuing it, before it claims a
-   * slot, recreates a directory or spawns anything.
+   * dsh-rebase P1-9d (decision 050) — a session the retired engine wrote is
+   * migrated on its first continue: the resume migrates it (the migration
+   * service is faked here), then opens the DSH session it became. Anything
+   * else that needs the engine asks the renderer to resume it first.
    */
-  describe('legacy pi sessions are read-only (decision 005)', () => {
+  describe('legacy pi sessions migrate on their first continue (decision 050)', () => {
+    const LEGACY_FILE = '/sessions/legacy.jsonl';
+    const STUB = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
     const legacyRow = {
       sessionId: 's1',
       agent: 'pi',
@@ -1060,8 +1081,31 @@ describe('Pi WorkerSlot chat routing', () => {
       title: 'Before the switch',
       updatedAt: 1,
       archived: false,
-      runtimeIdentity: '/sessions/legacy.jsonl',
+      runtimeIdentity: LEGACY_FILE,
       piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+    };
+    const migratedRow = {
+      ...legacyRow,
+      agent: 'dsh',
+      runtimeIdentity: STUB,
+      piLeaf: undefined,
+      migratedFrom: {
+        legacySessionId: 's1_pi',
+        runtimeIdentity: LEGACY_FILE,
+        sourceSha256: 'd'.repeat(64),
+        sourceBytes: 10,
+        sourceMtimeMs: 1,
+        migratedAt: 2,
+        converter: 'pi-dsh/2',
+      },
+    };
+    const summary = {
+      legacySessionId: 's1_pi',
+      reused: false,
+      converted: 'source',
+      images: { admitted: 0, refused: 0 },
+      grants: 1,
+      legacyPermissions: { mode: 'plan', gear: 'auto' },
     };
 
     async function legacyRowOnce(row: Record<string, unknown> = legacyRow): Promise<void> {
@@ -1069,26 +1113,117 @@ describe('Pi WorkerSlot chat routing', () => {
       vi.mocked(sessionIndexService.get).mockResolvedValueOnce(row as never);
     }
 
-    it('refuses to resume one, with nothing adopted, claimed or spawned', async () => {
+    function migratesOnce(): void {
+      prepareResume.mockImplementationOnce(async () => ({ row: migratedRow, migration: summary }));
+    }
+
+    const resumeLegacy = (extra: Record<string, unknown> = {}) =>
+      invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: LEGACY_FILE,
+        workspacePath: SCRATCH_DIR,
+        ...extra,
+      });
+
+    it('migrates it into the resume’s workspace, then resumes the DSH session it became', async () => {
       await legacyRowOnce();
-      await expect(
-        invoke('chat:resumeSession', {
-          sessionId: 's1',
-          runtimeIdentity: '/sessions/legacy.jsonl',
-          workspacePath: SCRATCH_DIR,
-        })
-      ).rejects.toThrow(/^legacy_session_readonly: /);
-      expect(adoptScratch).not.toHaveBeenCalled();
-      expect(resumeSession).not.toHaveBeenCalled();
+      migratesOnce();
+
+      await expect(resumeLegacy()).resolves.toEqual({
+        requestId: 'resume-1',
+        migration: { ...summary, legacyPermissionsApplied: true },
+      });
+
+      // The directory first (the DSH session's cwd is fixed), then the migration.
+      expect(adoptScratch).toHaveBeenCalledWith('s1', SCRATCH_DIR);
+      expect(prepareResume).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's1', agent: 'pi', runtimeIdentity: LEGACY_FILE }),
+        SCRATCH_DIR
+      );
+      expect(adoptScratch.mock.invocationCallOrder[0]).toBeLessThan(
+        prepareResume.mock.invocationCallOrder[0]
+      );
+      // The stub, not the file the renderer named; the file's last posture,
+      // because the renderer named none (decision 121).
+      expect(resumeSession).toHaveBeenCalledWith({
+        sessionId: 's1',
+        sessionFile: STUB,
+        workspacePath: SCRATCH_DIR,
+        permissions: { mode: 'plan', gear: 'auto' },
+        ownerWebContentsId: 7,
+        unbound: true,
+      });
       expect(createSession).not.toHaveBeenCalled();
       expect(clearUnwrittenRuntimeIdentity).not.toHaveBeenCalled();
     });
 
-    it('refuses to create or register over one, and writes nothing', async () => {
+    it.each([
+      ['permissions', { permissions: { mode: 'agent', gear: 'ask' } }],
+      ['a tier', { tier: 'readonly' }],
+    ])('keeps the posture the renderer named (%s) over the file’s', async (_label, extra) => {
+      await legacyRowOnce();
+      migratesOnce();
+
+      await expect(resumeLegacy(extra)).resolves.toMatchObject({
+        migration: { legacyPermissionsApplied: false },
+      });
+
+      const spawned = resumeSession.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(spawned.permissions).toEqual('permissions' in extra ? extra.permissions : undefined);
+    });
+
+    it('drops a legacy posture that is not a valid one', async () => {
+      await legacyRowOnce();
+      prepareResume.mockImplementationOnce(async () => ({
+        row: migratedRow,
+        migration: { ...summary, legacyPermissions: { mode: 'goal', gear: 'auto' } },
+      }));
+
+      await expect(resumeLegacy()).resolves.toMatchObject({
+        migration: { legacyPermissionsApplied: false },
+      });
+      expect(resumeSession.mock.calls[0]?.[0]).not.toHaveProperty('permissions');
+    });
+
+    it('a failed migration rejects with its stage and code, and resumes nothing', async () => {
+      await legacyRowOnce();
+      prepareResume.mockImplementationOnce(async () => {
+        throw new Error(
+          'legacy_migration_failed:read/source_busy: Session s1 could not be moved to the current chat engine (retryable)'
+        );
+      });
+
+      await expect(resumeLegacy()).rejects.toThrow(
+        /^legacy_migration_failed:read\/source_busy: .*\(retryable\)$/
+      );
+      expect(resumeSession).not.toHaveBeenCalled();
+      expect(createSession).not.toHaveBeenCalled();
+    });
+
+    it('resumes a chat migrated meanwhile by the stub, when the renderer still names the old file', async () => {
+      await legacyRowOnce(migratedRow);
+
+      await expect(resumeLegacy()).resolves.toEqual({ requestId: 'resume-1' });
+
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's1', sessionFile: STUB })
+      );
+      // Still refused: a file the row never named.
+      await legacyRowOnce(migratedRow);
+      await expect(
+        invoke('chat:resumeSession', {
+          sessionId: 's1',
+          runtimeIdentity: '/sessions/other.jsonl',
+          workspacePath: SCRATCH_DIR,
+        })
+      ).rejects.toThrow(/pi_session_identity_mismatch/);
+    });
+
+    it('asks for a resume before a create or a registration over one, and writes nothing', async () => {
       await legacyRowOnce();
       await expect(
         invoke('chat:createSession', { sessionId: 's1', workspacePath: '/repo' })
-      ).rejects.toThrow(/legacy_session_readonly/);
+      ).rejects.toThrow(/^legacy_migration_required: /);
       await legacyRowOnce();
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       try {
@@ -1108,10 +1243,17 @@ describe('Pi WorkerSlot chat routing', () => {
       ['chat:getSessionTree', { sessionId: 's1', requestSequence: 1 }, getSessionTree],
       ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }, rewindSession],
       ['chat:forkSession', { sessionId: 's1', entryId: 'e1' }, forkSession],
-    ])('refuses %s on one', async (channel, payload, worker) => {
+    ])('asks for a resume first on %s', async (channel, payload, worker) => {
       await legacyRowOnce();
-      await expect(invoke(channel, payload)).rejects.toThrow(/legacy_session_readonly/);
+      await expect(invoke(channel, payload)).rejects.toThrow(/^legacy_migration_required: /);
       expect(worker).not.toHaveBeenCalled();
+      expect(prepareResume).not.toHaveBeenCalled();
+    });
+
+    it('lists the sidebar’s rows, which leave out the legacy rows kept for a rollback', async () => {
+      listForDisplay.mockResolvedValueOnce([migratedRow]);
+      await expect(invoke('chat:listSessions')).resolves.toEqual([migratedRow]);
+      expect(listForDisplay).toHaveBeenCalledTimes(1);
     });
 
     it('lets a pi row that never ran become a DSH session', async () => {

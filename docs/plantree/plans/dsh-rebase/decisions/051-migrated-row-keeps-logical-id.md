@@ -23,3 +23,9 @@ v1.0.3 只认 `agent: pi`，`dsh` 行一律隐藏（`d23d72aa:…/sessionIndexMe
 - 代价：
   - 旧 pi 行换了键，回装后 1.0.x 对这类导入会话的去重会失效，重新导入会多出一份；
   - 索引超过 2000 行时，1.0.x 的裁剪可能删掉 dsh 行。
+
+## 补记（2026-09-29，P1-9d，决策 122）
+
+- 新键的字面量定为 `<逻辑 id>_pi`，不用示意里的 `~pi`：分叉的旧行以后会以这个键为逻辑 id 再迁移，`~` 做不了 DSH 会话 id（[决策 122](122-p1-9d-migration-orchestration-choices.md) 第 8 条）。
+- 第 2 条的「隐藏」在 Main 的 `listForDisplay()` 里做，`chat:listSessions` 不再返回这些行；分叉的行带 `migrationDiverged` 返回（决策 122 第 10 条）。
+- 第 3 条的偏好复制仍归 P1-9e：恢复的答复里给出 `migration.legacySessionId`。

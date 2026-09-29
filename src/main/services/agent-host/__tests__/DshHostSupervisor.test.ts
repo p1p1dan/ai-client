@@ -1188,6 +1188,181 @@ describe('DshHostSupervisor readPage (P1-4a, decision 030)', () => {
   });
 });
 
+/**
+ * P1-9d (decisions 054, 122): Main's half of `seedSession`. A host answer is
+ * resolved as it came, failed migrations included; only the transport fails
+ * the call, each way with its own code.
+ */
+describe('DshHostSupervisor seedSession (P1-9d, decision 054)', () => {
+  const input = {
+    sourceFile: '/fake/profile/sessions/s1.jsonl',
+    logicalSessionId: 's1',
+    cwd: '/fake/workspace',
+    expect: { bytes: 1234, mtimeMs: 1_700_000_000_123.5 },
+  };
+  const result = {
+    stubFile: '/fake/state/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+    dshSessionId: 'aiclient-s1',
+    reused: false,
+    source: { sha256: 'a'.repeat(64), bytes: 1234, mtimeMs: 1_700_000_000_123.5 },
+    converted: 'source',
+    legacyPermissions: { mode: 'agent', gear: 'ask' },
+    grants: 0,
+    images: { admitted: 1, refused: 0 },
+    report: { converterVersion: 2, source: {} },
+  };
+  const seeded = (id: number, extra: Record<string, unknown> = { ok: true, result }) => ({
+    host: 'seeded',
+    id,
+    ms: 42,
+    ...extra,
+  });
+  const seeds = (child: FakeChild) =>
+    child
+      .controls()
+      .filter((message) => (message as { host?: unknown }).host === 'seedSession') as Array<{
+      id: number;
+    }>;
+  const idOf = (child: FakeChild) => seeds(child).at(-1)?.id ?? 0;
+
+  it('starts a host when none is up, sends one seedSession and resolves with the matching answer', async () => {
+    const h = createFakeHostHarness();
+    const migration = h.supervisor.seedSession(input, { userInitiated: true });
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    expect(seeds(child)).toEqual([{ host: 'seedSession', id: 1, kind: 'pi-file', ...input }]);
+    // Another id is not this migration's answer.
+    child.post(seeded(9));
+    child.post(seeded(1));
+    await expect(migration).resolves.toEqual(seeded(1));
+    // No channel was opened for it.
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready', channels: 0 });
+  });
+
+  it('omits `expect` when Main has none, and hands a failed migration back as the host answered it', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const { expect: _none, ...bare } = input;
+    const migration = h.supervisor.seedSession(bare);
+    await flushMicrotasks();
+    expect(seeds(child).at(-1)).not.toHaveProperty('expect');
+    const failed = seeded(idOf(child), {
+      ok: false,
+      error: {
+        stage: 'read',
+        code: 'source_busy',
+        message: '/fake/profile/sessions/s1.jsonl changed while it was read',
+        retryable: true,
+      },
+    });
+    child.post(failed);
+    await expect(migration).resolves.toEqual(failed);
+  });
+
+  it('fails a migration in flight when the host exits, and when Main restarts it', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const dying = h.supervisor.seedSession(input);
+    await flushMicrotasks();
+    child.die(null, 'SIGKILL');
+    await expect(dying).rejects.toMatchObject({ code: 'DSH_HOST_SEED_INTERRUPTED' });
+
+    const replacement = await startReadyHost(h);
+    const restarted = settlement(h.supervisor.seedSession(input));
+    await flushMicrotasks();
+    expect(seeds(replacement)).toHaveLength(1);
+    const next = h.supervisor.restart('user', { userInitiated: true });
+    await flushMicrotasks();
+    expect(replacement.controls()).toContainEqual({ type: 'shutdown' });
+    replacement.post({ type: 'stopped' });
+    replacement.die(0);
+    await flushMicrotasks();
+    expect(restarted.value()).toMatchObject({ code: 'DSH_HOST_SEED_INTERRUPTED' });
+    h.child().ready();
+    await next;
+    // The late answer of the dead host is nobody's: dropped.
+    replacement.post(seeded(1));
+  });
+
+  it('gives up after its timeout; a late answer is dropped', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const slow = settlement(h.supervisor.seedSession(input));
+    await flushMicrotasks();
+    for (let at = 0; at < T.seedSessionTimeoutMs; at += T.heartbeatIntervalMs) {
+      child.post(pong(child.pings().length));
+      await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+    }
+    await flushMicrotasks();
+    expect(slow.value()).toMatchObject({ code: 'DSH_HOST_SEED_TIMEOUT' });
+    child.post(seeded(1));
+    await flushMicrotasks();
+    expect(consoleWarn.mock.calls.map((call) => String(call[0]))).toContain(
+      '[dsh-host] dropped seeded 1'
+    );
+    // The host itself is fine.
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready' });
+  });
+
+  it('fails at once on a malformed answer to its id, instead of waiting out the timeout', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const migration = h.supervisor.seedSession(input);
+    await flushMicrotasks();
+    child.post({ host: 'seeded', id: idOf(child), ok: true, ms: 1 });
+    await expect(migration).rejects.toMatchObject({ code: 'DSH_HOST_SEED_MALFORMED' });
+  });
+
+  it('comes out of failed only for a user-initiated migration', async () => {
+    const h = createFakeHostHarness();
+    await startReadyHost(h);
+    for (let fault = 1; fault <= DSH_HOST_RESTART_BUDGET.restarts; fault += 1) {
+      h.child().die(null, 'SIGKILL');
+      const next = h.supervisor.ensureHost();
+      h.child().ready();
+      await next;
+    }
+    h.child().die(null, 'SIGKILL');
+    const spawned = h.spawn.mock.calls.length;
+    await expect(h.supervisor.seedSession(input)).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+    });
+    expect(h.spawn).toHaveBeenCalledTimes(spawned);
+    const migration = h.supervisor.seedSession(input, { userInitiated: true });
+    expect(h.spawn).toHaveBeenCalledTimes(spawned + 1);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    child.post(seeded(idOf(child)));
+    await expect(migration).resolves.toMatchObject({ ok: true });
+  });
+
+  it('holds off the idle stop while a migration runs, and arms it once it is answered', async () => {
+    const IDLE = T.seedSessionTimeoutMs / 4;
+    const h = createFakeHostHarness({ idleStopMs: IDLE });
+    const migration = h.supervisor.seedSession(input);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    const advance = async (ms: number) => {
+      for (let at = 0; at < ms; at += T.heartbeatIntervalMs) {
+        child.post(pong(child.pings().length || 1));
+        await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+      }
+    };
+    await advance(IDLE + T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    child.post(seeded(idOf(child)));
+    await expect(migration).resolves.toMatchObject({ ok: true });
+    await advance(IDLE - T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    await advance(T.heartbeatIntervalMs);
+    expect(child.controls()).toContainEqual({ type: 'shutdown' });
+  });
+});
+
 describe('DshHostSupervisor model plan and keys (P1-5, decisions 033 and 034)', () => {
   const plan = buildDshModelPlan({
     models: {

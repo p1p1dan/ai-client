@@ -36,6 +36,10 @@
  *   - A history read (`readPage`, decision 030) starts a host on demand like a
  *     channel does, and holds off the idle stop while it runs; it opens no
  *     channel, so the host it started stops once idle.
+ *   - A migration (`seedSession`, decision 054, P1-9d) does the same, and may
+ *     start a host out of `failed` for the user's continue it serves. A host
+ *     that exits under it fails it with `DSH_HOST_SEED_INTERRUPTED`; nothing
+ *     retries it here (the migration service decides).
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -69,6 +73,8 @@ import {
   type DshHostGcResult,
   type DshHostPage,
   type DshHostPong,
+  type DshHostSeeded,
+  type DshHostSeedSessionRequest,
   type DshMainToHostMessage,
   type DshRouteDiagnostic,
   dshHostControlKind,
@@ -81,6 +87,7 @@ import {
   isDshHostPage,
   isDshHostPong,
   isDshHostReady,
+  isDshHostSeeded,
   isDshHostStopped,
 } from '@shared/types/dshHostProtocol';
 import type { SessionHistoryPage } from '@shared/types/sessionHistory';
@@ -130,6 +137,15 @@ export const DSH_HOST_TIMINGS = {
    * under a second (P1-4a); the rest covers a busy 2-core box.
    */
   readPageTimeoutMs: 20_000,
+  /**
+   * A migration (`seedSession`, decision 054; P1-9d, decision 122) not
+   * answered in this long is given up on. The host runs one at a time, so the
+   * wait includes any queued ahead; a 32 MiB session is estimated at 5-10 s
+   * of conversion plus its images (plan P1-9 shard 03 §7), and a busy 2-core
+   * box can triple that. The host's answer is idempotent, so a continue after
+   * a timeout reuses what the late migration made.
+   */
+  seedSessionTimeoutMs: 120_000,
 } as const;
 
 /**
@@ -167,7 +183,13 @@ export type DshHostSupervisorErrorCode =
   | 'DSH_HOST_DISPOSED'
   | 'DSH_HOST_UNAVAILABLE'
   /** The host answered a history read with an error; its code leads the message. */
-  | 'DSH_HOST_READ_FAILED';
+  | 'DSH_HOST_READ_FAILED'
+  /** A migration (`seedSession`) was not answered within `seedSessionTimeoutMs`. */
+  | 'DSH_HOST_SEED_TIMEOUT'
+  /** The host exited while a migration was in flight (crash, hang, restart, stop). */
+  | 'DSH_HOST_SEED_INTERRUPTED'
+  /** The host answered a migration with a `seeded` message the protocol does not allow. */
+  | 'DSH_HOST_SEED_MALFORMED';
 
 export class DshHostSupervisorError extends Error {
   constructor(
@@ -364,6 +386,16 @@ interface PendingRead {
   readonly timer: NodeJS.Timeout;
 }
 
+/** What `seedSession` asks the host to migrate; see `DshHostSeedSessionRequest`. */
+export type DshHostSeedInput = Omit<DshHostSeedSessionRequest, 'host' | 'id' | 'kind'>;
+
+interface PendingSeed {
+  readonly host: HostRecord;
+  readonly resolve: (answer: DshHostSeeded) => void;
+  readonly reject: (error: Error) => void;
+  readonly timer: NodeJS.Timeout;
+}
+
 interface HostRecord {
   readonly generation: number;
   readonly child: ChildProcess;
@@ -470,6 +502,10 @@ export class DshHostSupervisor {
   private readonly pendingReadPages = new Map<number, PendingRead>();
   /** `readPage` calls in flight, host start included: a host about to be read is not idle. */
   private pendingReads = 0;
+  private seedSequence = 0;
+  private readonly pendingSeedSessions = new Map<number, PendingSeed>();
+  /** `seedSession` calls in flight, host start included: a host migrating a chat is not idle. */
+  private pendingSeeds = 0;
   /** P1-10b: the plugin report of the latest `ready`, kept past that host's exit. */
   private lastPluginReport: DshPluginReport | null = null;
 
@@ -717,6 +753,83 @@ export class DshHostSupervisor {
           new DshHostSupervisorError(
             'DSH_HOST_UNAVAILABLE',
             'the readPage request could not be sent'
+          )
+        );
+      }
+    });
+  }
+
+  /**
+   * Decision 054 (P1-9d): one legacy pi session file made a DSH session by
+   * the host, with no channel. A host is started when none is up, out of
+   * `failed` too when `userInitiated` (a migration runs for the user's
+   * continue). Resolves with the host's `seeded` answer as it came, a failed
+   * migration included: where it stopped is the host's to say. Rejects when
+   * no host can be had (`DSH_HOST_UNAVAILABLE` and the start codes), when the
+   * host exits before answering (`DSH_HOST_SEED_INTERRUPTED`: a crash, a hang,
+   * any restart or stop), when it does not answer within
+   * `seedSessionTimeoutMs` (`DSH_HOST_SEED_TIMEOUT`), and when its answer is
+   * not a `seeded` message (`DSH_HOST_SEED_MALFORMED`). Holds off the idle
+   * stop while it runs.
+   */
+  async seedSession(
+    input: DshHostSeedInput,
+    options: DshHostEnsureOptions = {}
+  ): Promise<DshHostSeeded> {
+    this.pendingSeeds += 1;
+    this.disarmIdleStop();
+    try {
+      const info = await this.ensureHost(options);
+      const host = this.host;
+      if (
+        this.state !== 'ready' ||
+        !host ||
+        host.generation !== info.generation ||
+        host.exitInfo ||
+        !host.connected
+      ) {
+        throw new DshHostSupervisorError(
+          'DSH_HOST_UNAVAILABLE',
+          'the DSH host went away before the migration'
+        );
+      }
+      return await this.sendSeedSession(host, input);
+    } finally {
+      this.pendingSeeds -= 1;
+      this.armIdleStop();
+    }
+  }
+
+  private sendSeedSession(host: HostRecord, input: DshHostSeedInput): Promise<DshHostSeeded> {
+    const id = ++this.seedSequence;
+    return new Promise<DshHostSeeded>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingSeedSessions.delete(id);
+        reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_SEED_TIMEOUT',
+            `seedSession ${id} was not answered within ${DSH_HOST_TIMINGS.seedSessionTimeoutMs}ms`
+          )
+        );
+      }, DSH_HOST_TIMINGS.seedSessionTimeoutMs);
+      timer.unref?.();
+      this.pendingSeedSessions.set(id, { host, resolve, reject, timer });
+      const sent = this.sendControl(host, {
+        host: 'seedSession',
+        id,
+        kind: 'pi-file',
+        sourceFile: input.sourceFile,
+        logicalSessionId: input.logicalSessionId,
+        cwd: input.cwd,
+        ...(input.expect
+          ? { expect: { bytes: input.expect.bytes, mtimeMs: input.expect.mtimeMs } }
+          : {}),
+      });
+      if (!sent) {
+        this.settleSeed(id)?.reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_UNAVAILABLE',
+            'the seedSession request could not be sent'
           )
         );
       }
@@ -1118,6 +1231,14 @@ export class DshHostSupervisor {
       this.onPage(host, message);
       return;
     }
+    if (isDshHostSeeded(message)) {
+      this.onSeeded(host, message);
+      return;
+    }
+    if (dshHostControlKind(message) === 'seeded') {
+      this.onMalformedSeeded(host, message as Record<string, unknown>);
+      return;
+    }
     if (isDshHostCredentialRequest(message)) {
       this.onCredentialRequest(host, message);
       return;
@@ -1236,6 +1357,7 @@ export class DshHostSupervisor {
     }
     this.rejectGc(host);
     this.rejectReads(host);
+    this.rejectSeeds(host);
     host.resolveExited();
     const channels = this.host === host ? this.takeChannels() : [];
     if (!host.readySettled) {
@@ -1523,7 +1645,8 @@ export class DshHostSupervisor {
       this.host !== null &&
       this.channels.size === 0 &&
       this.pendingOpens === 0 &&
-      this.pendingReads === 0
+      this.pendingReads === 0 &&
+      this.pendingSeeds === 0
     );
   }
 
@@ -1613,6 +1736,56 @@ export class DshHostSupervisor {
         new DshHostSupervisorError(
           'DSH_HOST_UNAVAILABLE',
           `the DSH host exited during readPage ${id}`
+        )
+      );
+    }
+  }
+
+  // ---- seedSession (decision 054, P1-9d) ------------------------------------------
+
+  private onSeeded(host: HostRecord, message: DshHostSeeded): void {
+    const pending = this.pendingSeedSessions.get(message.id);
+    if (pending?.host !== host) {
+      // Too late (timed out) or never asked: the host's work is idempotent,
+      // so the next continue reuses whatever this migration made.
+      this.warnRateLimited('stale-seeded', `[dsh-host] dropped seeded ${message.id}`);
+      return;
+    }
+    this.settleSeed(message.id)?.resolve(message);
+  }
+
+  /** A `seeded` the protocol does not allow: the migration waiting on its id fails now, not at the timeout. */
+  private onMalformedSeeded(host: HostRecord, message: Record<string, unknown>): void {
+    const id = message.id;
+    const pending = typeof id === 'number' ? this.pendingSeedSessions.get(id) : undefined;
+    if (typeof id !== 'number' || pending?.host !== host) {
+      this.warnRateLimited('malformed-seeded', '[dsh-host] dropped a malformed seeded message');
+      return;
+    }
+    this.settleSeed(id)?.reject(
+      new DshHostSupervisorError(
+        'DSH_HOST_SEED_MALFORMED',
+        `seedSession ${id} was answered with a malformed seeded message`
+      )
+    );
+  }
+
+  /** Takes a pending migration out of the table, its timer with it. */
+  private settleSeed(id: number): PendingSeed | undefined {
+    const pending = this.pendingSeedSessions.get(id);
+    if (!pending) return undefined;
+    this.pendingSeedSessions.delete(id);
+    clearTimeout(pending.timer);
+    return pending;
+  }
+
+  private rejectSeeds(host: HostRecord): void {
+    for (const [id, pending] of [...this.pendingSeedSessions]) {
+      if (pending.host !== host) continue;
+      this.settleSeed(id)?.reject(
+        new DshHostSupervisorError(
+          'DSH_HOST_SEED_INTERRUPTED',
+          `the DSH host exited during seedSession ${id}`
         )
       );
     }

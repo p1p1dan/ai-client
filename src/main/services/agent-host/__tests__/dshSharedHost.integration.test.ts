@@ -1,6 +1,8 @@
 import type { ChildProcess } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -108,7 +110,12 @@ vi.mock('node:child_process', async (importOriginal) => {
   };
 });
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getAppPath: () => REPO },
+  // P1-9d: the migration phase's session index lives in this run's state root.
+  app: {
+    isPackaged: false,
+    getAppPath: () => REPO,
+    getPath: () => `${shared.stateRoot}/user-data`,
+  },
   powerMonitor: { on: () => undefined, removeListener: () => undefined },
 }));
 vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => shared.stateRoot }));
@@ -116,6 +123,9 @@ vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => shared.stateRoot 
 const { DshHostSupervisor, DSH_HOST_TIMINGS, dshHostSupervisor } = await import(
   '../DshHostSupervisor'
 );
+// P1-9d: Main's migration of a legacy chat, and the index it commits to.
+const { LegacyMigrationService } = await import('../../chat/LegacyMigrationService');
+const { SessionIndexService } = await import('../../chat/SessionIndexService');
 const { WorkerManager } = await import('../WorkerManager');
 const { createPiWorkerSlot } = await import('../createPiWorkerSlot');
 const { DshCredentialBroker } = await import('../DshCredentialBroker');
@@ -1962,6 +1972,143 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         rmSync(policy, { force: true });
       }
     }, 180_000);
+  });
+
+  /**
+   * P1-9d (decisions 050, 051, 054, 122): a 1.0.x pi chat continued for the
+   * first time, through Main's resume path. `LegacyMigrationService` stats the
+   * file, has the host migrate it (`seedSession`), commits the index pair; the
+   * resume then opens the DSH session it became, and the next turn sees the
+   * old conversation. The source is a committed corpus file
+   * (src/shared/__tests__/fixtures/legacy-pi), copied read-only into this
+   * run's scratch profile; the index is a scratch `session-index.json`.
+   */
+  describe('a migration supervisor: a legacy pi chat migrated on its first continue (P1-9d)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const corpus = join(REPO, 'src', 'shared', '__tests__', 'fixtures', 'legacy-pi');
+    const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('migrates the file, commits the pair, resumes the DSH session and continues it', async () => {
+      const sessions = join(shared.stateRoot, 'pi-profile', 'sessions');
+      mkdirSync(sessions, { recursive: true, mode: 0o700 });
+      const source = join(sessions, 'v4-basic.jsonl');
+      copyFileSync(join(corpus, 'v4-basic.jsonl'), source);
+      chmodSync(source, 0o444);
+      const fingerprint = () => {
+        const stats = statSync(source);
+        return `${sha256(readFileSync(source))}:${stats.size}:${stats.mtimeMs}:${(stats.mode & 0o777).toString(8)}`;
+      };
+      const before = fingerprint();
+
+      const userData = join(shared.stateRoot, 'user-data');
+      mkdirSync(userData, { recursive: true, mode: 0o700 });
+      const legacy = {
+        sessionId: 'mig1',
+        agent: 'pi',
+        runtimeIdentity: source,
+        piLeaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
+        workspacePath: workspace,
+        title: 'From 1.0.x',
+        model: 'aiclient-gateway/fake-1',
+        updatedAt: 1,
+        archived: false,
+      };
+      const indexFile = join(userData, 'session-index.json');
+      writeFileSync(indexFile, JSON.stringify([legacy]));
+      const index = new SessionIndexService();
+      const migration = new LegacyMigrationService({ host: supervisor, index });
+
+      // The resume path's first step (chat.ts): the row it opens.
+      const row = await index.get('mig1');
+      const started = Date.now();
+      const prepared = await migration.prepareResume(
+        row as typeof legacy & { runtimeIdentity: string },
+        workspace
+      );
+      const migrateMs = Date.now() - started;
+      expect(prepared.migration).toMatchObject({
+        legacySessionId: 'mig1_pi',
+        reused: false,
+        converted: 'source',
+      });
+      expect(prepared.row).toMatchObject({
+        sessionId: 'mig1',
+        agent: 'dsh',
+        runtimeIdentity: join(
+          shared.stateRoot,
+          'dsh-home',
+          'aiclient-sessions',
+          'aiclient-mig1.dsh.json'
+        ),
+        workspacePath: workspace,
+        migratedFrom: {
+          legacySessionId: 'mig1_pi',
+          runtimeIdentity: source,
+          sourceSha256: sha256(readFileSync(join(corpus, 'v4-basic.jsonl'))),
+          sourceBytes: statSync(source).size,
+          sourceMtimeMs: statSync(source).mtimeMs,
+        },
+      });
+      expect(prepared.row).not.toHaveProperty('piLeaf');
+      const onDisk = JSON.parse(readFileSync(indexFile, 'utf8')) as Array<Record<string, unknown>>;
+      expect(onDisk.find((entry) => entry.sessionId === 'mig1_pi')).toEqual({
+        ...legacy,
+        sessionId: 'mig1_pi',
+        migratedTo: 'mig1',
+      });
+      expect(onDisk.find((entry) => entry.sessionId === 'mig1')).toEqual(prepared.row);
+      expect((await index.listForDisplay()).map((entry) => entry.sessionId)).toEqual(['mig1']);
+
+      // The resume that follows opens the stub as any DSH chat, and the next
+      // turn sees the migrated history.
+      const from = events.length;
+      await manager.resumeSession({
+        ...BYPASS,
+        sessionId: 'mig1',
+        sessionFile: prepared.row.runtimeIdentity,
+        workspacePath: workspace,
+        ownerWebContentsId: 90,
+      });
+      const history = forSession('mig1', from).find((e) => e.type === 'session.history');
+      expect((history?.payload?.messages as unknown[] | undefined)?.length ?? 0).toBeGreaterThan(0);
+      const present = ['What do the notes say?', 'Wrote out/summary.md.'];
+      const absent = ['notes answer'];
+      const recall = await turn(
+        manager,
+        'mig1',
+        `P0-RECALL ${JSON.stringify({ markers: [...present, ...absent] })} which markers do you see?`,
+        90
+      );
+      expect(recall).toMatchObject({ settled: true, completed: true });
+      const [seen = '', missed = ''] = recall.reply.split(' missing=');
+      for (const marker of present) expect(seen).toContain(marker);
+      for (const marker of absent) expect(missed).toContain(marker);
+
+      // The file is as it was; a second continue finds a DSH row and migrates nothing.
+      expect(fingerprint()).toBe(before);
+      const again = await migration.prepareResume(
+        (await index.get('mig1')) as typeof legacy & { runtimeIdentity: string },
+        workspace
+      );
+      expect(again.migration).toBeUndefined();
+      console.log(
+        `[p1-9d] first continue of a legacy chat: migrated in ${migrateMs} ms, ` +
+          `${String((history?.payload?.messages as unknown[] | undefined)?.length)} rows resumed; ` +
+          `the model saw ${recall.reply.trim()}`
+      );
+      await manager.closeSession('mig1');
+    }, 240_000);
   });
 
   /** The drift gate (plan P1-5 shard 05 §3): the shipped catalog's plan, as DSH takes it. */

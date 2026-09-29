@@ -92,4 +92,39 @@ export interface SessionIndexEntry {
   /** Epoch ms of last meaningful activity (create/resume/turn end/rename/archive). */
   updatedAt: number;
   archived: boolean;
+  /**
+   * dsh-rebase P1-9d (decision 051): this `dsh` row is a legacy pi chat
+   * migrated on its first continue. The pi row it was is kept, field for
+   * field, under `legacySessionId` (with `migratedTo` naming this row), so a
+   * 1.0.x build rolled back to still shows and continues it.
+   */
+  migratedFrom?: SessionMigratedFrom;
+  /**
+   * dsh-rebase P1-9d (decision 051): on the kept legacy pi row, the logical id
+   * its chat continues under as a DSH session. Written by the migration only.
+   */
+  migratedTo?: string;
 }
+
+/** Where a migrated chat came from (decision 051); the source as the host read it. */
+export interface SessionMigratedFrom {
+  /** Key of the kept legacy pi row (`legacyRowKeyFor`). */
+  legacySessionId: string;
+  /** The pi file the legacy row names, which was converted (or its 1.0.x copy was). */
+  runtimeIdentity: string;
+  sourceSha256: string;
+  sourceBytes: number;
+  sourceMtimeMs: number;
+  /** Epoch ms of the index transaction. */
+  migratedAt: number;
+  /** `pi-dsh/<converter version>`. */
+  converter: string;
+}
+
+/**
+ * A row as `chat:listSessions` answers it (P1-9d, decision 051). Legacy pi
+ * rows a migrated chat came from are left out while their file is as it was
+ * migrated; one whose file changed since (continued in 1.0.x after a rollback)
+ * is listed with `migrationDiverged`. Derived on every list, never written.
+ */
+export type SessionIndexListEntry = SessionIndexEntry & { migrationDiverged?: true };

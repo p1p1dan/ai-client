@@ -16,9 +16,13 @@ import {
   PI_AGENT,
   resolveAgentWireName,
 } from '@shared/types/agentWire';
+import {
+  LEGACY_MIGRATION_REQUIRED,
+  type LegacyMigrationSummary,
+} from '@shared/types/legacyMigration';
 import type { PermissionDecisionId, RuntimeEvent } from '@shared/types/runtimeEvents';
 import type { SessionHistoryPage } from '@shared/types/sessionHistory';
-import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import type { SessionIndexEntry, SessionIndexListEntry } from '@shared/types/sessionIndex';
 import {
   isSessionPermissionTier,
   type SessionPermissionTier,
@@ -30,6 +34,7 @@ import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspace
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
+import { legacyMigrationService } from '../services/chat/LegacyMigrationService';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
 import {
   readSessionReplayPage,
@@ -130,13 +135,15 @@ function agentMismatch(sessionId: string): Error {
 }
 
 /**
- * decision 005 — a session the retired native engine wrote. It stays readable
- * (the main-process replay still decodes it), but nothing resumes, continues or
- * branches it until P1-9 migrates it; there is no native fallback.
+ * dsh-rebase decision 050 (P1-9d) — a session the retired native engine wrote,
+ * asked for by anything but a resume. It stays readable (the main-process
+ * replay still decodes it), and its first resume migrates it to DSH; a fork,
+ * a rewind, a compaction or the tree waits for that: the renderer resumes the
+ * chat, then asks again. Decision 005's read-only refusal ends here.
  */
-function legacyReadonly(sessionId: string): Error {
+function legacyMigrationRequired(sessionId: string): Error {
   return new Error(
-    `legacy_session_readonly: Session ${sessionId} was written by the previous chat engine and is read-only until it is migrated`
+    `${LEGACY_MIGRATION_REQUIRED}: Session ${sessionId} was written by the previous chat engine; resume it first, which moves it to the current engine`
   );
 }
 
@@ -144,8 +151,9 @@ function legacyReadonly(sessionId: string): Error {
  * Refuse to create a session over a row this build may not run.
  *
  * An unknown binding is somebody else's session. A `pi` row that names a
- * transcript is a legacy session and stays read-only (decision 005); a `pi` row
- * with no identity never ran, so it simply becomes a DSH session.
+ * transcript is a legacy session, continued by resuming it (which migrates it,
+ * decision 050), never overwritten by a create; a `pi` row with no identity
+ * never ran, so it simply becomes a DSH session.
  *
  * Hands back the row it read (D15), so a caller can tell "this row existed
  * before I touched it" from "I am the one who just wrote it" without a second
@@ -157,7 +165,7 @@ async function assertCreatableIndexRow(sessionId: string): Promise<SessionIndexE
   if (!row) return row;
   const agent = resolveAgentWireName(row.agent);
   if (agent === null) throw agentMismatch(sessionId);
-  if (agent === PI_AGENT && row.runtimeIdentity) throw legacyReadonly(sessionId);
+  if (agent === PI_AGENT && row.runtimeIdentity) throw legacyMigrationRequired(sessionId);
   return row;
 }
 
@@ -328,13 +336,50 @@ async function requireIndexedSession(sessionId: string): Promise<{
   return { row: row as SessionIndexEntry & { runtimeIdentity: string }, agent };
 }
 
-/** An indexed session a worker may act on: the live engine only (decision 005). */
+/**
+ * An indexed session a worker may act on: the live engine only. A legacy row
+ * is migrated by its resume first (decision 050), so this asks for one.
+ */
 async function requireLiveSession(
   sessionId: string
 ): Promise<SessionIndexEntry & { runtimeIdentity: string }> {
   const { row, agent } = await requireIndexedSession(sessionId);
-  if (agent !== DSH_AGENT) throw legacyReadonly(sessionId);
+  if (agent !== DSH_AGENT) throw legacyMigrationRequired(sessionId);
   return row;
+}
+
+/**
+ * The identity a resume request names is the row's, or — once the chat was
+ * migrated (P1-9d) — the legacy file it was migrated from: a renderer that
+ * listed the chat before its migration still holds that path, and the row it
+ * resumes is the DSH one either way.
+ */
+function namesIndexedIdentity(
+  row: SessionIndexEntry & { runtimeIdentity: string },
+  agent: AgentWireName,
+  requested: string
+): boolean {
+  return (
+    row.runtimeIdentity === requested ||
+    (agent === DSH_AGENT && row.migratedFrom?.runtimeIdentity === requested)
+  );
+}
+
+/**
+ * Decision 121: the posture a migrated chat's first resume comes up on when
+ * the renderer names none — the last one its file recorded, as 1.0.x applied
+ * `{...file, ...payload}`. Dropped when it is not a valid posture: the default
+ * then asks about everything.
+ */
+function legacyPosture(
+  migration: Omit<LegacyMigrationSummary, 'legacyPermissionsApplied'> | undefined,
+  payload: { tier?: unknown; permissions?: unknown }
+): RuntimePermissionSettings | undefined {
+  if (!migration || payload.tier !== undefined || payload.permissions !== undefined)
+    return undefined;
+  return isRuntimePermissionSettings(migration.legacyPermissions)
+    ? migration.legacyPermissions
+    : undefined;
 }
 
 export function registerChatHandlers(): void {
@@ -524,9 +569,10 @@ export function registerChatHandlers(): void {
          */
         forceTakeover?: boolean;
       }
-    ): Promise<{ requestId: string }> => {
-      const { row, agent } = await requireIndexedSession(payload.sessionId);
-      if (row.runtimeIdentity !== payload.runtimeIdentity) {
+    ): Promise<{ requestId: string; migration?: LegacyMigrationSummary }> => {
+      const indexed = await requireIndexedSession(payload.sessionId);
+      let { row } = indexed;
+      if (!namesIndexedIdentity(row, indexed.agent, payload.runtimeIdentity)) {
         throw new Error(
           'pi_session_identity_mismatch: Indexed session file does not match the resume request'
         );
@@ -536,12 +582,11 @@ export function registerChatHandlers(): void {
           'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
         );
       }
-      // decision 005: a legacy row that names a real transcript is read-only.
-      // Refused before anything below recreates a directory or claims a slot.
-      // One whose transcript was never written lost nothing, so the repair
-      // further down turns it into a DSH session instead.
-      const unwrittenLegacy = agent === PI_AGENT && (await isUnwrittenPiSession(row));
-      if (agent === PI_AGENT && !unwrittenLegacy) throw legacyReadonly(payload.sessionId);
+      // A legacy row whose transcript was never written lost nothing: the
+      // repair further down turns it into a new DSH session. One that names a
+      // real transcript is migrated below, on this its first continue
+      // (decision 050, P1-9d), before the resume opens it.
+      const unwrittenLegacy = indexed.agent === PI_AGENT && (await isUnwrittenPiSession(row));
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // U05-a: an unbound chat's directory was wiped when the app last quit,
       // so recreate it (empty) at the exact path the index still names before
@@ -606,19 +651,33 @@ export function registerChatHandlers(): void {
         });
         return { requestId: repaired };
       }
+      // Decision 050: the first continue of a legacy chat migrates it, into
+      // the workspace this resume uses (the DSH session's cwd is fixed). A
+      // failure rejects with `legacy_migration_failed:<stage>/<code>` and
+      // leaves the row `pi` and its preview as they were.
+      const prepared = await legacyMigrationService.prepareResume(row, workspacePath);
+      row = prepared.row;
+      const posture = legacyPosture(prepared.migration, payload);
       const requestId = await workerManager.resumeSession({
         sessionId: payload.sessionId,
-        sessionFile: payload.runtimeIdentity,
+        // The row's own identity: after a migration, the stub, whatever the
+        // renderer still held.
+        sessionFile: row.runtimeIdentity,
         workspacePath,
         ...(payload.model ? { model: payload.model } : {}),
         ...(payload.effort ? { effort: payload.effort } : {}),
         ...spawnTier(payload.tier),
-        ...spawnPermissions(payload.permissions),
+        ...spawnPermissions(payload.permissions ?? posture),
         ...spawnForceTakeover(payload.forceTakeover),
         ownerWebContentsId,
         ...(unbound ? { unbound: true } : {}),
       });
-      return { requestId };
+      return prepared.migration
+        ? {
+            requestId,
+            migration: { ...prepared.migration, legacyPermissionsApplied: posture !== undefined },
+          }
+        : { requestId };
     }
   );
 
@@ -814,8 +873,10 @@ export function registerChatHandlers(): void {
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexEntry[]> => {
-    return sessionIndexService.list();
+  // P1-9d (decision 051): the legacy rows migrated chats came from stay in the
+  // index for a rollback, not in the sidebar, unless 1.0.x wrote to them since.
+  ipcMain.handle(IPC_CHANNELS.CHAT_LIST_SESSIONS, async (): Promise<SessionIndexListEntry[]> => {
+    return sessionIndexService.listForDisplay();
   });
 
   /**
