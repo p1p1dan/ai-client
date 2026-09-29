@@ -25,7 +25,15 @@
  * risks) an extra `isEncryptionAvailable()` round trip (S1 spec §2.2).
  */
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { UserModelMeta } from '@shared/userProviders';
 
@@ -153,7 +161,7 @@ export type VaultReadResult =
 
 export type VaultSaveResult =
   | { ok: true }
-  | { ok: false; reason: 'crypto_not_ready' | 'unsupported_version' };
+  | { ok: false; reason: 'crypto_not_ready' | 'unsupported_version' | 'backup_failed' };
 
 /**
  * T082 — which mutation just committed. Carried so a subscriber that logs or
@@ -281,6 +289,33 @@ function parseFailureNote(error: unknown, bytes: number): string {
   return `${kind}, ${bytes} bytes read`;
 }
 
+/**
+ * Whether unparseable vault bytes still look like our own JSON.
+ *
+ * Tells a truncated write (starts like JSON) from a file something else
+ * rewrote — a transparent file-encryption agent leaves its own binary header
+ * where `{` should be. Says nothing about the content itself.
+ */
+function leadingBytesNote(raw: string): string {
+  const shape = raw.trimStart().startsWith('{') ? 'starts like JSON' : 'does not start like JSON';
+  // NUL, or the replacement character utf-8 decoding leaves for invalid bytes.
+  const binary = raw.includes(String.fromCharCode(0)) || raw.includes(String.fromCharCode(0xfffd));
+  return binary ? `${shape}, binary` : shape;
+}
+
+/**
+ * The OSCrypt version tag a safeStorage ciphertext opens with (`v10`, `v11`).
+ *
+ * The tag names the scheme that wrote the blob, so a group this platform can
+ * never open is visible from the log alone — Windows writes `v10` and cannot
+ * read the `v11` a Linux keyring build writes. Public metadata, never key
+ * material.
+ */
+function ciphertextTagNote(base64: string): string {
+  const tag = Buffer.from(base64.slice(0, 4), 'base64').subarray(0, 3).toString('latin1');
+  return /^v\d\d$/.test(tag) ? `tagged ${tag}` : 'untagged';
+}
+
 export interface CredentialVaultOptions {
   baseDir: string;
   crypto: VaultCrypto;
@@ -296,6 +331,12 @@ export class CredentialVault {
   private writeQueue: Promise<unknown> = Promise.resolve();
   /** T082 — subscribers notified after a successful `save`/`saveUserProviders`/`clear`. */
   private readonly changeListeners = new Set<VaultChangeListener>();
+  /**
+   * The last unreadable-group verdict logged. `readUserProviders()` runs on
+   * every settings render and every runtime catalog build, so a broken vault
+   * is logged once per distinct verdict rather than once per read.
+   */
+  private lastUserGroupFailure: string | null = null;
 
   constructor(options: CredentialVaultOptions) {
     this.baseDir = options.baseDir;
@@ -504,22 +545,27 @@ export class CredentialVault {
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
-    } catch {
-      return { status: 'invalid', reason: 'malformed_json' };
+    } catch (error) {
+      return this.userGroupFailure(
+        'malformed_json',
+        `${parseFailureNote(error, raw.length)}, ${leadingBytesNote(raw)}`
+      );
     }
 
     const validation = validateEnvelopeShape(parsed);
     if (!validation.ok) {
-      return { status: 'invalid', reason: 'schema_invalid' };
+      return this.userGroupFailure('schema_invalid', 'envelope');
     }
     const envelope = validation.envelope;
 
     if (envelope.version > SCHEMA_VERSION) {
+      this.noteUserGroupFailure(`unsupported (schema v${envelope.version})`);
       return { status: 'unsupported' };
     }
     // A v1 vault, or one nobody has added a service to yet. Both are "no
     // services", not an error.
     if (envelope.userProviders === undefined || envelope.userProviders === null) {
+      this.noteUserGroupFailure(null);
       return { status: 'ok', providers: [] };
     }
 
@@ -529,24 +575,58 @@ export class CredentialVault {
         return { status: 'locked' };
       }
       if (typeof envelope.userProviders !== 'string') {
-        return { status: 'invalid', reason: 'schema_invalid' };
+        return this.userGroupFailure('schema_invalid', 'encrypted group is not a string');
+      }
+      // Two steps so the log can tell a key that no longer opens the group
+      // (safeStorage's key lives in `<userData>/Local State`, not here) from
+      // a group that decrypts to garbage. Neither note carries the text.
+      let decrypted: string;
+      try {
+        decrypted = this.crypto.decrypt(envelope.userProviders);
+      } catch (error) {
+        const kind = error instanceof Error ? error.name : typeof error;
+        return this.userGroupFailure(
+          'decrypt_failed',
+          `safeStorage refused the group (${kind}, ${ciphertextTagNote(envelope.userProviders)})`
+        );
       }
       try {
-        rows = JSON.parse(this.crypto.decrypt(envelope.userProviders));
-      } catch {
-        return { status: 'invalid', reason: 'decrypt_failed' };
+        rows = JSON.parse(decrypted);
+      } catch (error) {
+        return this.userGroupFailure(
+          'decrypt_failed',
+          `decrypted group is not JSON (${parseFailureNote(error, decrypted.length)})`
+        );
       }
     } else {
       rows = envelope.userProviders;
     }
 
     if (!Array.isArray(rows)) {
-      return { status: 'invalid', reason: 'schema_invalid' };
+      return this.userGroupFailure('schema_invalid', 'group is not a list');
     }
+    this.noteUserGroupFailure(null);
     // One corrupt row must not take the rest of the list down with it: the
     // user would lose every service they configured because of a single bad
     // record. Dropped rows are reported so the caller can say so.
     return { status: 'ok', providers: rows.filter(isUserProvider) };
+  }
+
+  private userGroupFailure(
+    reason: 'malformed_json' | 'schema_invalid' | 'decrypt_failed',
+    detail: string
+  ): UserProvidersReadResult {
+    this.noteUserGroupFailure(`${reason} (${detail})`);
+    return { status: 'invalid', reason };
+  }
+
+  /** `null` records a healthy read, so the next failure is logged again. */
+  private noteUserGroupFailure(verdict: string | null): void {
+    if (verdict === this.lastUserGroupFailure) return;
+    this.lastUserGroupFailure = verdict;
+    if (verdict) {
+      console.warn(`[CredentialVault] user service group unreadable: ${verdict}`);
+    }
   }
 
   /**
@@ -559,10 +639,27 @@ export class CredentialVault {
    * has real content to store.
    */
   saveUserProviders(providers: readonly UserProvider[]): Promise<VaultSaveResult> {
-    return this.runSerialized(() => this.saveUserProvidersInternal(providers));
+    return this.runSerialized(() => this.saveUserProvidersInternal(providers, false));
   }
 
-  private saveUserProvidersInternal(providers: readonly UserProvider[]): VaultSaveResult {
+  /**
+   * Replace a user group that reads `invalid`, keeping a copy of the file first.
+   *
+   * The way out of a group no key will ever open again — safeStorage's key
+   * rotated under it, or a file-encryption agent rewrote the file. Refusing
+   * every save there left the user unable to add any service at all. The copy
+   * (`vault.json.unreadable-<time>.bak`, beside the vault) is what makes that
+   * acceptable: the old bytes may open again once the cause is fixed, and
+   * restoring them is a rename.
+   */
+  replaceUnreadableUserProviders(providers: readonly UserProvider[]): Promise<VaultSaveResult> {
+    return this.runSerialized(() => this.saveUserProvidersInternal(providers, true));
+  }
+
+  private saveUserProvidersInternal(
+    providers: readonly UserProvider[],
+    backupFirst: boolean
+  ): VaultSaveResult {
     if (!this.promoted) {
       console.warn(
         '[CredentialVault] saveUserProviders refused: crypto not promoted yet (crypto_not_ready)'
@@ -576,6 +673,23 @@ export class CredentialVault {
         '[CredentialVault] saveUserProviders refused: on-disk vault is a newer, unsupported schema'
       );
       return { ok: false, reason: 'unsupported_version' };
+    }
+
+    if (backupFirst && existsSync(this.vaultPath)) {
+      const backupPath = `${this.vaultPath}.unreadable-${new Date().toISOString().replace(/[:.]/g, '-')}.bak`;
+      try {
+        copyFileSync(this.vaultPath, backupPath);
+        chmodSync(backupPath, 0o600);
+      } catch (error) {
+        console.warn(
+          '[CredentialVault] replaceUnreadableUserProviders refused: could not keep a copy of the unreadable vault',
+          error
+        );
+        return { ok: false, reason: 'backup_failed' };
+      }
+      console.warn(
+        `[CredentialVault] replacing an unreadable user service group; previous file kept at ${backupPath}`
+      );
     }
 
     const available = this.isCryptoAvailable();

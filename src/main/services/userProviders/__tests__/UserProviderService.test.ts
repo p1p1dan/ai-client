@@ -22,6 +22,8 @@ interface FakeStore extends UserProviderStore {
   rows: UserProvider[];
   readStatus: 'ok' | 'absent' | 'locked' | 'unsupported' | 'invalid';
   saved: UserProvider[][];
+  /** Saves that went through the replace-unreadable path. */
+  replaced: UserProvider[][];
 }
 
 function fakeStore(initial: UserProvider[] = []): FakeStore {
@@ -29,6 +31,7 @@ function fakeStore(initial: UserProvider[] = []): FakeStore {
     rows: [...initial],
     readStatus: 'ok',
     saved: [],
+    replaced: [],
     encryptionAvailable: () => true,
     readUserProviders: () =>
       store.readStatus === 'ok'
@@ -39,6 +42,12 @@ function fakeStore(initial: UserProvider[] = []): FakeStore {
     saveUserProviders: async (providers) => {
       store.saved.push([...providers]);
       store.rows = [...providers];
+      return { ok: true };
+    },
+    replaceUnreadableUserProviders: async (providers) => {
+      store.replaced.push([...providers]);
+      store.rows = [...providers];
+      store.readStatus = 'ok';
       return { ok: true };
     },
   };
@@ -198,6 +207,67 @@ describe('UserProviderService — upsert', () => {
     ).rejects.toThrow('keyring');
     // The real damage this guards: saving [] would delete every stored service.
     expect(store.saved).toHaveLength(0);
+    expect(store.replaced).toHaveLength(0);
+  });
+
+  it('lets a new service replace a group that reads invalid, through the backup path', async () => {
+    // The field report: a vault whose group no key opens any more refused
+    // every add with "could not be read", while the page said adding again
+    // would replace the record.
+    store.readStatus = 'invalid';
+    await expect(
+      service().upsert({
+        name: 'Fresh',
+        baseUrl: 'https://example.com/v1',
+        api: 'openai-completions',
+        apiKey: 'K',
+      })
+    ).resolves.toMatchObject({ name: 'Fresh' });
+    expect(store.saved).toHaveLength(0);
+    expect(store.replaced).toHaveLength(1);
+    expect(store.replaced[0].map((row) => row.name)).toEqual(['Fresh']);
+  });
+
+  it('still refuses to edit, remove or toggle while the group reads invalid', async () => {
+    store.readStatus = 'invalid';
+    await expect(
+      service().upsert({
+        id: 'svc-1',
+        name: 'X',
+        baseUrl: 'https://example.com/v1',
+        api: 'openai-completions',
+      })
+    ).rejects.toThrow('could not be read (decrypt_failed)');
+    await expect(service().remove('svc-1')).rejects.toThrow('decrypt_failed');
+    await expect(service().setEnabled('svc-1', false)).rejects.toThrow('decrypt_failed');
+    expect(store.saved).toHaveLength(0);
+    expect(store.replaced).toHaveLength(0);
+  });
+
+  it('validates a replacing add before touching the unreadable group', async () => {
+    store.readStatus = 'invalid';
+    await expect(
+      service().upsert({
+        name: 'X',
+        baseUrl: 'https://example.com/v1',
+        api: 'openai-completions',
+        apiKey: '  ',
+      })
+    ).rejects.toThrow('API key');
+    expect(store.replaced).toHaveLength(0);
+  });
+
+  it('names the newer schema instead of replacing a vault it cannot interpret', async () => {
+    store.readStatus = 'unsupported';
+    await expect(
+      service().upsert({
+        name: 'X',
+        baseUrl: 'https://example.com/v1',
+        api: 'openai-completions',
+        apiKey: 'K',
+      })
+    ).rejects.toThrow('could not be read (unsupported)');
+    expect(store.replaced).toHaveLength(0);
   });
 
   it('notifies the derived-config writer after a successful save', async () => {
