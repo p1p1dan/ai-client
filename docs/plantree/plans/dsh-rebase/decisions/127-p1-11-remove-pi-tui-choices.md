@@ -115,3 +115,9 @@
 - [决策 116](116-p1-16e-legacy-asset-notice-choices.md)「留给 P1-12 的无引用清单」、[决策 117](117-p1-10c-plugin-settings-choices.md) 第 72 行：`piPlugins:*` 4 条、`services/piPlugins/`、`src/shared/piPlugins.ts`、`PiPluginsSettings.tsx` 及其翻译提前在 P1-11 删除（本决策第 4、13 条）。
 - [决策 122](122-p1-9d-migration-orchestration-choices.md) 第 16 条：`handOverFromTui` 已删除（本决策第 2 条）。
 - [决策 063](063-drop-pi-extensions-with-notice.md) 第 1 条：产品里不再有任何地方拉起 pi CLI；pi CLI 产物本身仍随 P1-12 去掉。
+
+## 用户裁决（2026-09-29）
+
+- **第 4 条（pi 插件管理提前删除）**：同意。
+- **第 8 条（旧 `auth.json` 启动时不删，只停写；登出照旧删）**：同意，维持默认。
+- 第 11 条用户询问了含义，编排者已说明只涉及 `presentationMode` 一个设置，其他显示设置不受影响；待用户确认。
