@@ -1,6 +1,10 @@
 import { buildDshModelPlan } from '@shared/dshModelPlan';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
-import { DSH_HOST_RESTART_BUDGET, DSH_HOST_TIMINGS } from '../DshHostSupervisor';
+import {
+  DSH_HOST_RESTART_BUDGET,
+  DSH_HOST_TIMINGS,
+  type DshHostSeedImportInput,
+} from '../DshHostSupervisor';
 import {
   createFakeHostHarness,
   FAKE_PID,
@@ -1337,6 +1341,92 @@ describe('DshHostSupervisor seedSession (P1-9d, decision 054)', () => {
     await flushMicrotasks();
     child.post(seeded(idOf(child)));
     await expect(migration).resolves.toMatchObject({ ok: true });
+  });
+
+  /**
+   * P1-9f (decision 056): an import is the same message with its own source
+   * kind; each call takes only its own kind's result back.
+   */
+  describe('an import (P1-9f, decision 056)', () => {
+    const conversation = {
+      schemaVersion: 1,
+      importerVersion: 'b4-legacy-v2',
+      sourceKind: 'codex',
+      stableSourceIdentity: 'rollout',
+      sourceSessionId: 'r1',
+      workspacePath: '/fake/workspace',
+      title: 'hello',
+      sourceFingerprint: {
+        stableSourceIdentity: 'rollout',
+        contentHash: 'c'.repeat(64),
+        size: 1,
+        mode: 0o100644,
+        mtimeMs: 1,
+      },
+      entries: [{ kind: 'user', text: 'hello' }],
+      diagnostics: [],
+    } as const;
+    const importInput = {
+      conversation: conversation as unknown as DshHostSeedImportInput['conversation'],
+      logicalSessionId: 'session-import-codex-1',
+      cwd: '/fake/workspace',
+    };
+    const importResult = {
+      kind: 'imported-conversation',
+      stubFile: '/fake/state/dsh-home/aiclient-sessions/aiclient-session-import-codex-1.dsh.json',
+      dshSessionId: 'aiclient-session-import-codex-1',
+      reused: false,
+      images: { admitted: 0, refused: 0 },
+      report: { converterVersion: 2, source: {} },
+    };
+
+    it('sends the conversation as an import and resolves with the import’s result', async () => {
+      const h = createFakeHostHarness();
+      const child = await startReadyHost(h);
+      const imported = h.supervisor.seedImportedConversation(importInput, { userInitiated: true });
+      await flushMicrotasks();
+      expect(seeds(child).at(-1)).toEqual({
+        host: 'seedSession',
+        id: idOf(child),
+        kind: 'imported-conversation',
+        ...importInput,
+      });
+      const answer = seeded(idOf(child), { ok: true, result: importResult });
+      child.post(answer);
+      await expect(imported).resolves.toEqual(answer);
+    });
+
+    it('fails at once when an import is answered with a migration’s result, and the reverse', async () => {
+      const h = createFakeHostHarness();
+      const child = await startReadyHost(h);
+      const imported = h.supervisor.seedImportedConversation(importInput);
+      await flushMicrotasks();
+      child.post(seeded(idOf(child)));
+      await expect(imported).rejects.toMatchObject({ code: 'DSH_HOST_SEED_MALFORMED' });
+
+      const migration = h.supervisor.seedSession(input);
+      await flushMicrotasks();
+      child.post(seeded(idOf(child), { ok: true, result: importResult }));
+      await expect(migration).rejects.toMatchObject({ code: 'DSH_HOST_SEED_MALFORMED' });
+    });
+
+    it('hands a refused import back as the host answered it', async () => {
+      const h = createFakeHostHarness();
+      const child = await startReadyHost(h);
+      const imported = h.supervisor.seedImportedConversation(importInput);
+      await flushMicrotasks();
+      const refused = seeded(idOf(child), {
+        ok: false,
+        error: {
+          stage: 'request',
+          code: 'seed_conversation_invalid',
+          message: 'not a conversation',
+          retryable: false,
+        },
+      });
+      child.post(refused);
+      await expect(imported).resolves.toEqual(refused);
+    });
   });
 
   it('holds off the idle stop while a migration runs, and arms it once it is answered', async () => {

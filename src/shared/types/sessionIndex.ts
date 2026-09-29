@@ -55,6 +55,11 @@ export interface SessionIndexEntry {
   /** T34 immutable import ownership proof used by crash reconciliation. */
   legacyImport?: {
     sourceKind: 'claude-code' | 'codex';
+    /**
+     * The name is ABI. The pi session id of a 1.0.x import; since P1-9f (decision
+     * 056) the id the DSH session of the import and its stub are named after,
+     * `aiclient-<logical id>`.
+     */
     targetPiSessionId: string;
     dedupeKey: string;
   };

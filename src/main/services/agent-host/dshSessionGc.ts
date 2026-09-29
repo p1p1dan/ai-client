@@ -24,8 +24,11 @@ import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 export const DSH_SESSION_GC_GRACE_MS = 24 * 60 * 60_000;
 
 /** `dshSessionIdFor` in the bridge (decision 006). */
-const DSH_SESSION_ID_PREFIX = 'aiclient-';
-const DSH_STUB_SUFFIX = '.dsh.json';
+export const DSH_SESSION_ID_PREFIX = 'aiclient-';
+/** The bridge's stub directory under `DSH_HOME`, and its stub and grant-sidecar suffixes (`bridge/stub.ts`). */
+export const DSH_STUB_DIR = 'aiclient-sessions';
+export const DSH_STUB_SUFFIX = '.dsh.json';
+export const DSH_GRANTS_SUFFIX = '.dsh.grants.json';
 /** A stub is a few hundred bytes; anything far larger is not one. */
 const MAX_STUB_BYTES = 64 * 1024;
 

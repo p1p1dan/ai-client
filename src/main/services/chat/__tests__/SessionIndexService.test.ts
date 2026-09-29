@@ -1378,4 +1378,112 @@ describe('SessionIndexService', () => {
       }
     });
   });
+
+  /**
+   * dsh-rebase P1-9f (decision 056): a Claude Code / Codex import is a DSH
+   * chat from the start. The index refuses an import row of any other engine,
+   * and takes back an uncommitted DSH import row as it took back a pi one;
+   * a chat a migration committed is never taken back as an import.
+   */
+  describe('conversation imports (P1-9f, decision 056)', () => {
+    const STUB = '/dsh-home/aiclient-sessions/aiclient-imp1.dsh.json';
+    const importRow = (extra: Partial<SessionIndexEntry> = {}): SessionIndexEntry => ({
+      sessionId: 'imp1',
+      agent: DSH_AGENT,
+      runtimeIdentity: STUB,
+      legacyImport: {
+        sourceKind: 'claude-code',
+        targetPiSessionId: 'aiclient-imp1',
+        dedupeKey: 'claude-code:1',
+      },
+      workspacePath: '/ws/a',
+      title: 'Imported',
+      updatedAt: 3,
+      archived: false,
+      ...extra,
+    });
+
+    it('creates a DSH import row and refuses a pi one', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await expect(service.createImported(importRow())).resolves.toMatchObject({ agent: 'dsh' });
+      await expect(
+        service.createImported(
+          importRow({ sessionId: 'imp2', agent: PI_AGENT, runtimeIdentity: '/p/imp2.jsonl' })
+        )
+      ).rejects.toThrow(/must be a dsh session/);
+      expect((await service.list()).map((row) => row.sessionId)).toEqual(['imp1']);
+    });
+
+    it('still indexes a row with no import record, of either engine (a terminal-created pi chat)', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      const { legacyImport: _none, ...plain } = importRow({
+        sessionId: 'tui1',
+        agent: PI_AGENT,
+        runtimeIdentity: '/p/tui1.jsonl',
+      });
+      await expect(service.createImported(plain)).resolves.toMatchObject({ agent: 'pi' });
+    });
+
+    it('takes back an uncommitted DSH import row, and only the exact one', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.createImported(importRow());
+      expect(await service.removeImported('imp1', '/elsewhere.dsh.json', 'aiclient-imp1')).toBe(
+        false
+      );
+      expect(await service.removeImported('imp1', STUB, 'aiclient-other')).toBe(false);
+      expect(await service.removeImported('imp1', STUB, 'aiclient-imp1')).toBe(true);
+      expect(await service.get('imp1')).toBeUndefined();
+    });
+
+    it('still takes back a pi import row 1.0.x left', async () => {
+      writeFileSync(
+        join(userDataDir, 'session-index.json'),
+        JSON.stringify([
+          importRow({
+            agent: PI_AGENT,
+            runtimeIdentity: '/p/import-1.jsonl',
+            legacyImport: {
+              sourceKind: 'codex',
+              targetPiSessionId: 'import-1',
+              dedupeKey: 'codex:1',
+            },
+          }),
+        ])
+      );
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      expect(await service.removeImported('imp1', '/p/import-1.jsonl', 'import-1')).toBe(true);
+    });
+
+    it('never takes back a chat a migration committed, though it keeps the import record', async () => {
+      writeFileSync(
+        join(userDataDir, 'session-index.json'),
+        JSON.stringify([
+          importRow({
+            legacyImport: {
+              sourceKind: 'codex',
+              targetPiSessionId: 'import-1',
+              dedupeKey: 'codex:1',
+            },
+            migratedFrom: {
+              legacySessionId: 'imp1_pi',
+              runtimeIdentity: '/p/import-1.jsonl',
+              sourceSha256: 'a'.repeat(64),
+              sourceBytes: 1,
+              sourceMtimeMs: 1,
+              migratedAt: 4,
+              converter: 'pi-dsh/2',
+            },
+          }),
+        ])
+      );
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      expect(await service.removeImported('imp1', STUB, 'import-1')).toBe(false);
+      expect(await service.get('imp1')).toBeDefined();
+    });
+  });
 });

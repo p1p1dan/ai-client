@@ -464,6 +464,38 @@ describe('DshChannelMux — seedSession (P1-9c, decision 054)', () => {
     expect(h.mux.status()).toEqual([]);
   });
 
+  it('hands an import over the same way, and answers with the import’s result (P1-9f)', async () => {
+    const imported = {
+      kind: 'imported-conversation' as const,
+      stubFile: '/dsh-home/aiclient-sessions/aiclient-imp1.dsh.json',
+      dshSessionId: 'aiclient-imp1',
+      reused: false,
+      images: { admitted: 0, refused: 0 },
+      report: {
+        converterVersion: 2,
+        source: { kind: 'imported-conversation' as const, generation: 'codex', entries: {} },
+      },
+    };
+    const seedSession = vi.fn(async () => structuredClone(imported));
+    const h = migrator(seedSession);
+    const importRequest = {
+      host: 'seedSession',
+      id: 9,
+      kind: 'imported-conversation',
+      conversation: { schemaVersion: 1, entries: [{ kind: 'user', text: 'hi' }] },
+      logicalSessionId: 'imp1',
+      cwd: '/work',
+    } as const;
+    expect(h.mux.receive(importRequest)).toBe(true);
+    await settle();
+    const { host: _host, id: _id, ...fields } = importRequest;
+    expect(seedSession).toHaveBeenCalledWith(fields);
+    expect(h.sent).toEqual([
+      { host: 'seeded', id: 9, ok: true, result: imported, ms: expect.any(Number) },
+    ]);
+    expect(isDshHostSeeded(h.sent[0])).toBe(true);
+  });
+
   it('answers where it stopped: the failure’s stage, code and retryable, or create / seed_failed', async () => {
     const seedSession = vi
       .fn<NonNullable<DshChannelMuxOptions['seedSession']>>()

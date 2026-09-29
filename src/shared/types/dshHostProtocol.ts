@@ -28,8 +28,9 @@
  * must carry. The host composes nothing, and serves no session, before it.
  *
  * A control kind one side does not know yet is dropped with a diagnostic.
- * `seedSession` takes one source kind today, `pi-file`; P1-9f adds
- * `imported-conversation` (decision 056).
+ * `seedSession` takes two source kinds: `pi-file` (P1-9c, a 1.0.x chat) and
+ * `imported-conversation` (P1-9f, decision 056: a Claude Code / Codex
+ * conversation Main read); `seeded` answers each with its own result.
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
  * which a source checkout loads under Node's type stripping and the packaged
@@ -38,6 +39,7 @@
 
 import type { DshModelPlan } from '../dshModelPlan/types';
 import type { SeedReport } from '../legacyPiSession/convert/types';
+import type { ImportedConversation } from './legacyImport';
 import type { RuntimePermissionSettings } from './runtimePermission';
 import type { SessionHistoryPage } from './sessionHistory';
 import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
@@ -132,11 +134,19 @@ export interface DshHostReadPageRequest {
  * the stub it already has (`reused`). Nothing in the index changes: Main
  * commits the migration itself (P1-9d). One at a time per host; answered
  * `seeded` with the same id.
+ *
+ * P1-9f (decision 056) adds a second source: a Claude Code / Codex
+ * conversation Main already read and cleaned (`DshSeedImportSource`), seeded
+ * the same way under a chat id Main minted for it. Main commits the index row
+ * of the import itself.
  */
-export interface DshHostSeedSessionRequest {
-  host: 'seedSession';
-  id: number;
-  /** P1-9c: a pi session file. P1-9f adds `imported-conversation`. */
+export type DshHostSeedSessionRequest = { host: 'seedSession'; id: number } & DshSeedSessionSource;
+
+/** What a `seedSession` makes a DSH session of: its fields without the envelope. */
+export type DshSeedSessionSource = DshSeedPiFileSource | DshSeedImportSource;
+
+/** P1-9c: a 1.0.x pi session file, migrated on the chat's first continue. */
+export interface DshSeedPiFileSource {
   kind: 'pi-file';
   /** The file the index row names (`runtimeIdentity`). */
   sourceFile: string;
@@ -149,6 +159,21 @@ export interface DshHostSeedSessionRequest {
    * matches is being written (`source_busy`, retryable).
    */
   expect?: { bytes: number; mtimeMs: number };
+}
+
+/**
+ * P1-9f (decision 056): a Claude Code / Codex conversation, as Main's scanner
+ * read and cleaned it. The host checks its shape again
+ * (`seed_conversation_invalid`), converts it (P1-9b `convertImportedConversation`)
+ * and seeds it; the chat is new, so a stub already there is a conflict.
+ */
+export interface DshSeedImportSource {
+  kind: 'imported-conversation';
+  conversation: ImportedConversation;
+  /** The chat Main minted for the import: `aiclient-<id>`, its stub named after it. */
+  logicalSessionId: string;
+  /** The workspace the import resolved (the recorded one, or a scratch directory). */
+  cwd: string;
 }
 
 /**
@@ -185,7 +210,13 @@ export const DSH_SEED_REQUEST_INVALID = 'seed_request_invalid';
 /** A host with no migration (no DSH services for it). */
 export const DSH_SEED_UNAVAILABLE = 'seed_unavailable';
 
-/** What a migration made (or found already made), for Main's index transaction. */
+/** A `seedSession` whose conversation is not what Main's scanner makes (P1-9f). */
+export const DSH_SEED_CONVERSATION_INVALID = 'seed_conversation_invalid';
+
+/**
+ * What a migration (`pi-file`) made (or found already made), for Main's index
+ * transaction. An import answers `DshSeedImportResult` instead.
+ */
 export interface DshSeedSessionResult {
   /** The identity stub: the migrated row's `runtimeIdentity`. */
   stubFile: string;
@@ -203,6 +234,24 @@ export interface DshSeedSessionResult {
   /** Images admitted, and images the store refused (kept as placeholder text). */
   images: { admitted: number; refused: number };
   /** Counts only (plan P1-9 shard 02 §5): no text, title or path. */
+  report: SeedReport;
+}
+
+/**
+ * What an import (`imported-conversation`, P1-9f) made, for Main's index row:
+ * the stub is the row's `runtimeIdentity`. Tagged, where a migration's result
+ * is not, so neither can pass for the other.
+ */
+export interface DshSeedImportResult {
+  kind: 'imported-conversation';
+  /** The identity stub, `<DSH_HOME>/aiclient-sessions/aiclient-<logical id>.dsh.json`. */
+  stubFile: string;
+  /** The DSH session in it: `aiclient-<logical id>`, or `…_m<n>` past a log already there. */
+  dshSessionId: string;
+  /** An earlier attempt of this same conversation for this chat was found complete. */
+  reused: boolean;
+  images: { admitted: number; refused: number };
+  /** Counts only: no text, title or path. */
   report: SeedReport;
 }
 
@@ -368,13 +417,17 @@ export interface DshHostPage {
   ms: number;
 }
 
-/** Answer to `seedSession`, echoing its id: what the migration made, or where it stopped. */
-export interface DshHostSeeded {
+/**
+ * Answer to `seedSession`, echoing its id: what the migration or import made,
+ * or where it stopped. `R` is the result of the request's kind; the message
+ * on the wire may carry either (`DshHostToMainMessage`).
+ */
+export interface DshHostSeeded<R = DshSeedSessionResult> {
   host: 'seeded';
   id: number;
   ok: boolean;
   /** Present exactly when `ok`. */
-  result?: DshSeedSessionResult;
+  result?: R;
   /**
    * Present exactly when not `ok`. `retryable`: the same request may succeed
    * later unchanged (the file was being written, the session was locked).
@@ -408,7 +461,7 @@ export type DshHostToMainMessage =
   | DshHostChannelClosed
   | DshHostGcResult
   | DshHostPage
-  | DshHostSeeded
+  | DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>
   | DshHostCredentialRequest;
 
 /** How long a host waits for `configure` before it refuses to boot. */
@@ -628,21 +681,62 @@ function isFileStat(value: unknown, sizeKey: 'bytes'): boolean {
   );
 }
 
+/**
+ * The envelope and each kind's own fields. The conversation of an import is only
+ * checked to be a conversation-shaped record here: its full check
+ * (`isImportedConversation`) is a value import this module may not make, and
+ * the host runs it before converting (`seed_conversation_invalid`).
+ */
 export function isDshHostSeedSessionRequest(value: unknown): value is DshHostSeedSessionRequest {
+  if (
+    !isRecord(value) ||
+    value.host !== 'seedSession' ||
+    !isPositiveSafeInteger(value.id) ||
+    !isNonEmptyString(value.logicalSessionId) ||
+    !isNonEmptyString(value.cwd)
+  ) {
+    return false;
+  }
+  if (value.kind === 'imported-conversation') {
+    return (
+      isPlainRecord(value.conversation) &&
+      Array.isArray(value.conversation.entries) &&
+      value.sourceFile === undefined
+    );
+  }
   return (
-    isRecord(value) &&
-    value.host === 'seedSession' &&
-    isPositiveSafeInteger(value.id) &&
     value.kind === 'pi-file' &&
     isNonEmptyString(value.sourceFile) &&
-    isNonEmptyString(value.logicalSessionId) &&
-    isNonEmptyString(value.cwd) &&
     (value.expect === undefined || isFileStat(value.expect, 'bytes'))
   );
 }
 
-function isSeedResult(value: unknown): value is DshSeedSessionResult {
+/** Whose result a `seeded` carries: an import result is tagged, a migration result is not. */
+export function dshSeedResultKind(
+  result: DshSeedSessionResult | DshSeedImportResult
+): DshSeedSessionSource['kind'] {
+  return (result as { kind?: unknown }).kind === 'imported-conversation'
+    ? 'imported-conversation'
+    : 'pi-file';
+}
+
+function isSeedImportResult(value: Record<string, unknown>): boolean {
+  const images = value.images;
+  return (
+    value.kind === 'imported-conversation' &&
+    isNonEmptyString(value.stubFile) &&
+    isNonEmptyString(value.dshSessionId) &&
+    typeof value.reused === 'boolean' &&
+    isPlainRecord(images) &&
+    isCount(images.admitted, 0, Number.MAX_SAFE_INTEGER) &&
+    isCount(images.refused, 0, Number.MAX_SAFE_INTEGER) &&
+    isPlainRecord(value.report)
+  );
+}
+
+function isSeedResult(value: unknown): value is DshSeedSessionResult | DshSeedImportResult {
   if (!isPlainRecord(value)) return false;
+  if (value.kind !== undefined) return isSeedImportResult(value);
   const { source, images, legacyPermissions } = value;
   return (
     isNonEmptyString(value.stubFile) &&
@@ -662,7 +756,9 @@ function isSeedResult(value: unknown): value is DshSeedSessionResult {
   );
 }
 
-export function isDshHostSeeded(value: unknown): value is DshHostSeeded {
+export function isDshHostSeeded(
+  value: unknown
+): value is DshHostSeeded<DshSeedSessionResult | DshSeedImportResult> {
   if (
     !isRecord(value) ||
     value.host !== 'seeded' ||

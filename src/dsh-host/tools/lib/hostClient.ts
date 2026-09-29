@@ -336,6 +336,26 @@ export class HostClient {
     return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
   }
 
+  /**
+   * Decision 056's import (`{host:'seedSession', kind:'imported-conversation'}`,
+   * P1-9f): a Claude Code / Codex conversation as Main's scanner makes it,
+   * answered with the host's `seeded` message as it came, plus the round trip.
+   */
+  async seedImport(
+    payload: { conversation: unknown; logicalSessionId: string; cwd: string },
+    timeoutMs = 120_000
+  ): Promise<Message & { roundTripMs: number }> {
+    const id = 2_000_000 + ++this.requestSeq;
+    const started = performance.now();
+    this.child.send({ host: 'seedSession', id, kind: 'imported-conversation', ...payload });
+    const reply = await this.control(
+      (message) => message.host === 'seeded' && message.id === id,
+      timeoutMs
+    );
+    if (!reply) throw new Error(`seedSession ${id} timed out`);
+    return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
+  }
+
   /** Resolve once `predicate` holds over the channel's events so far. */
   until(
     ch: string,

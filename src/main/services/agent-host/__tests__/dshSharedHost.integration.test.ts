@@ -2111,6 +2111,216 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     }, 240_000);
   });
 
+  /**
+   * P1-9f (decision 056): Claude Code / Codex imports are DSH chats from the
+   * start. Main's own importer (`LegacyImportService`: scanner, manifest,
+   * index) runs over this repo's Codex rollout fixture and a Claude Code
+   * transcript in the unit tests' shape, both placed in scratch directories
+   * (never a real `~/.claude` or `~/.codex`); the engine half is the product's
+   * `DshLegacyImportHost` on a real host, with its production `DSH_HOME`
+   * rule. The rows are `dsh`, name the host's stubs, and a second import finds
+   * both done; the Claude chat resumes and its next turn sees the prompt and
+   * the reply, not the display-only tool row. No source file changes.
+   */
+  describe('an import supervisor: CC / Codex conversations imported as DSH chats (P1-9f)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const sha256 = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('imports both as DSH chats, finds them done the second time, and continues the Claude one', async () => {
+      const { LegacyImportService } = await import('../../legacyImport/LegacyImportService');
+      const { LegacyImportManifest } = await import('../../legacyImport/LegacyImportManifest');
+      const { DshLegacyImportHost } = await import('../../legacyImport/DshLegacyImportHost');
+      const { ClaudeSessionScanner } = await import('../../legacyImport/ClaudeSessionScanner');
+      const { CodexSessionScanner } = await import('../../legacyImport/CodexSessionScanner');
+      const { claudeSourceImporter, codexSourceImporter } = await import(
+        '../../legacyImport/LegacyImportSources'
+      );
+
+      // Sources in scratch directories: the repo's Codex rollout, and a Claude
+      // Code transcript whose tool call and result are display-only rows.
+      const claudeRoot = join(shared.stateRoot, 'import-sources', 'claude');
+      const claudeFile = join(claudeRoot, 'projects', 'project-a', 'session-a.jsonl');
+      mkdirSync(dirname(claudeFile), { recursive: true, mode: 0o700 });
+      const cwd = workspace;
+      writeFileSync(
+        claudeFile,
+        [
+          { type: 'system', subtype: 'init', cwd },
+          {
+            type: 'user',
+            uuid: 'u1',
+            cwd,
+            message: { role: 'user', content: 'IMPORT-USER-MARKER what is in the notes?' },
+          },
+          {
+            type: 'assistant',
+            uuid: 'a1',
+            message: {
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'tool_use', id: 'call-1', name: 'Bash', input: { command: 'ls' } }],
+            },
+          },
+          {
+            type: 'user',
+            uuid: 'u2',
+            cwd,
+            message: {
+              role: 'user',
+              content: [
+                { type: 'tool_result', tool_use_id: 'call-1', content: 'IMPORT-TOOL-OUTPUT' },
+              ],
+            },
+          },
+          {
+            type: 'assistant',
+            uuid: 'a2',
+            message: {
+              role: 'assistant',
+              model: 'claude-test',
+              content: [{ type: 'text', text: 'IMPORT-REPLY-MARKER the notes are empty.' }],
+            },
+          },
+        ]
+          .map((line) => JSON.stringify(line))
+          .join('\n')
+          .concat('\n')
+      );
+      const codexRoot = join(shared.stateRoot, 'import-sources', 'codex');
+      mkdirSync(codexRoot, { recursive: true, mode: 0o700 });
+      const codexFile = join(codexRoot, 'rollout.jsonl');
+      copyFileSync(
+        join(
+          REPO,
+          'src',
+          'agent-host',
+          '__tests__',
+          'fixtures',
+          'codex',
+          'codex-rollout-redacted.jsonl'
+        ),
+        codexFile
+      );
+      const sourcesBefore = [claudeFile, codexFile].map((file) => sha256(readFileSync(file)));
+
+      const userData = join(shared.stateRoot, 'user-data');
+      mkdirSync(userData, { recursive: true, mode: 0o700 });
+      const scratch = join(shared.stateRoot, 'import-scratch');
+      const index = new SessionIndexService();
+      // The product's engine half, on this phase's host, with the production DSH_HOME rule.
+      const engine = new DshLegacyImportHost({ host: supervisor });
+      const claude = claudeSourceImporter(
+        new ClaudeSessionScanner({ resolveRoots: () => [{ dir: claudeRoot, kind: 'legacy' }] })
+      );
+      const codex = codexSourceImporter(new CodexSessionScanner(() => codexRoot));
+      const service = new LegacyImportService({
+        importers: [claude, codex],
+        manifest: new LegacyImportManifest({
+          manifestPath: join(userData, 'legacy-import-manifest.json'),
+          integrityKey: Buffer.alloc(32, 9),
+        }),
+        sessionIndex: index,
+        createImport: (payload) => engine.create(payload),
+        inspectImport: (target) => engine.inspect(target),
+        reconcileImport: (target) => engine.reconcile(target),
+        workspaceFallback: {
+          ensure: async (id) => {
+            const dir = join(scratch, id);
+            mkdirSync(dir, { recursive: true, mode: 0o700 });
+            return dir;
+          },
+          isScratchPath: (candidate) => candidate.startsWith(`${scratch}/`),
+        },
+      });
+
+      const projects = await service.listProjects();
+      const refs = await Promise.all(
+        projects.map(async (project) => {
+          const kind = project.sourceKind ?? 'claude-code';
+          const [session] = await service.listSessions(project.id, kind);
+          return { sourceKind: kind, projectId: project.id, sourceSessionId: String(session?.id) };
+        })
+      );
+      expect(refs.map((ref) => ref.sourceKind).sort()).toEqual(['claude-code', 'codex']);
+      const started = Date.now();
+      const first = await service.importBatch(refs);
+      const importMs = Date.now() - started;
+      expect(
+        first.results.map((item) => [item.source.sourceKind, item.status, item.error])
+      ).toEqual(refs.map((ref) => [ref.sourceKind, 'imported', undefined]));
+      const stubs = join(shared.stateRoot, 'dsh-home', 'aiclient-sessions');
+      for (const item of first.results) {
+        const row = item.session;
+        expect(row).toMatchObject({
+          agent: 'dsh',
+          runtimeIdentity: join(stubs, `aiclient-${String(row?.sessionId)}.dsh.json`),
+          legacyImport: {
+            sourceKind: item.source.sourceKind,
+            targetPiSessionId: `aiclient-${String(row?.sessionId)}`,
+          },
+        });
+        expect(row).not.toHaveProperty('piLeaf');
+        expect(existsSync(String(row?.runtimeIdentity))).toBe(true);
+        expect(await index.get(String(row?.sessionId))).toEqual(row);
+      }
+
+      // Imported once: the same sources again are found done, and nothing is added.
+      const again = await service.importBatch(refs);
+      expect(again.results.map((item) => item.status)).toEqual([
+        'already-imported',
+        'already-imported',
+      ]);
+      expect((await index.list()).filter((row) => row.legacyImport)).toHaveLength(2);
+
+      // The Claude chat resumes as any DSH chat, and the next turn sees the import.
+      const chat = first.results.find((item) => item.source.sourceKind === 'claude-code')?.session;
+      const sessionId = String(chat?.sessionId);
+      const from = events.length;
+      await manager.resumeSession({
+        ...BYPASS,
+        sessionId,
+        sessionFile: String(chat?.runtimeIdentity),
+        workspacePath: String(chat?.workspacePath),
+        ownerWebContentsId: 91,
+      });
+      const history = forSession(sessionId, from).find((e) => e.type === 'session.history');
+      expect((history?.payload?.messages as unknown[] | undefined)?.length ?? 0).toBeGreaterThan(0);
+      const present = ['IMPORT-USER-MARKER', 'IMPORT-REPLY-MARKER'];
+      const absent = ['IMPORT-TOOL-OUTPUT'];
+      const recall = await turn(
+        manager,
+        sessionId,
+        `P0-RECALL ${JSON.stringify({ markers: [...present, ...absent] })} which markers do you see?`,
+        91
+      );
+      expect(recall).toMatchObject({ settled: true, completed: true });
+      const [seen = '', missed = ''] = recall.reply.split(' missing=');
+      for (const marker of present) expect(seen).toContain(marker);
+      for (const marker of absent) expect(missed).toContain(marker);
+
+      expect([claudeFile, codexFile].map((file) => sha256(readFileSync(file)))).toEqual(
+        sourcesBefore
+      );
+      console.log(
+        `[p1-9f] imported ${first.results.length} conversations as DSH chats in ${importMs} ms; ` +
+          `${String((history?.payload?.messages as unknown[] | undefined)?.length)} rows resumed; ` +
+          `the model saw ${recall.reply.trim()}`
+      );
+      await manager.closeSession(sessionId);
+    }, 240_000);
+  });
+
   /** The drift gate (plan P1-5 shard 05 §3): the shipped catalog's plan, as DSH takes it. */
   describe('the drift gate: the P1-5a plan golden loads with no route diagnostic', () => {
     it('registers every route of the shipped catalog', async () => {

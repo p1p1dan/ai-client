@@ -13,13 +13,18 @@ import type {
   SessionIndexEntry,
 } from '@shared/types';
 import { legacyImportDedupeKey } from '@shared/types';
-import { PI_AGENT } from '@shared/types/agentWire';
+import { DSH_AGENT } from '@shared/types/agentWire';
 import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 import { scratchWorkspaceService } from '../agent-host/ScratchWorkspaceService';
-import { workerManager } from '../agent-host/WorkerManager';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from './ClaudeSessionScanner';
 import { ClaudeImportSourceError } from './ClaudeSourceAdapter';
+import {
+  type CreatedLegacyImport,
+  DshLegacyImportHost,
+  dshImportTargetId,
+  type LegacyImportEngine,
+} from './DshLegacyImportHost';
 import { LegacyImportManifest, type LegacyImportManifestRecord } from './LegacyImportManifest';
 import {
   type ConvertedLegacySource,
@@ -28,7 +33,6 @@ import {
   type LegacySourceImporter,
   scanAllLegacySources,
 } from './LegacyImportSources';
-import type { createPiImport, inspectPiImport, reconcilePiImport } from './PiImportProcess';
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -57,6 +61,32 @@ function sameFilePath(left: string, right: string): boolean {
   return process.platform === 'win32'
     ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
     : normalizedLeft === normalizedRight;
+}
+
+/**
+ * Whether an index row is the chat an import record made (P1-9f, plan P1-9
+ * shard 04 §5): its import record matches, and it lives in the file the
+ * record names, or it is the DSH chat a 1.0.x import of that file was
+ * migrated into on its first continue (decision 051: `migratedFrom` names the
+ * pi file, and the row keeps its `legacyImport`). Without the second arm a
+ * migrated import would be imported again as a second chat. Answers which
+ * arm held: `own` (the row names the file) or `migrated`.
+ */
+function rowHoldsImport(
+  row: SessionIndexEntry | undefined,
+  record: Pick<LegacyImportManifestRecord, 'dedupeKey' | 'targetPiSessionId'>,
+  file: string
+): 'own' | 'migrated' | null {
+  if (
+    !row?.runtimeIdentity ||
+    row.legacyImport?.targetPiSessionId !== record.targetPiSessionId ||
+    row.legacyImport.dedupeKey !== record.dedupeKey
+  ) {
+    return null;
+  }
+  if (sameFilePath(row.runtimeIdentity, file)) return 'own';
+  const from = row.agent === DSH_AGENT ? row.migratedFrom?.runtimeIdentity : undefined;
+  return typeof from === 'string' && sameFilePath(from, file) ? 'migrated' : null;
 }
 
 export interface LegacyImportSessionIndex {
@@ -88,9 +118,13 @@ export interface LegacyImportServiceOptions {
   importers?: LegacySourceImporter[];
   manifest?: LegacyImportManifest;
   sessionIndex?: LegacyImportSessionIndex;
-  createImport?: typeof createPiImport;
-  inspectImport?: typeof inspectPiImport;
-  reconcileImport?: typeof reconcilePiImport;
+  /**
+   * P1-9f (decision 056): the engine's three calls, the shared DSH host's by
+   * default (`DshLegacyImportHost`). Replaceable one by one for tests.
+   */
+  createImport?: LegacyImportEngine['create'];
+  inspectImport?: LegacyImportEngine['inspect'];
+  reconcileImport?: LegacyImportEngine['reconcile'];
   createId?: () => string;
   now?: () => number;
   workspaceFallback?: LegacyImportWorkspaceFallback;
@@ -110,9 +144,9 @@ export class LegacyImportService {
   private readonly importers: LegacySourceImporter[];
   private readonly manifest: LegacyImportManifest;
   private readonly sessionIndex: LegacyImportSessionIndex;
-  private readonly createImport: typeof createPiImport;
-  private readonly inspectImport: typeof inspectPiImport;
-  private readonly reconcileImport: typeof reconcilePiImport;
+  private readonly createImport: LegacyImportEngine['create'];
+  private readonly inspectImport: LegacyImportEngine['inspect'];
+  private readonly reconcileImport: LegacyImportEngine['reconcile'];
   private readonly createId: () => string;
   private readonly now: () => number;
   private readonly workspaceFallback: LegacyImportWorkspaceFallback;
@@ -131,12 +165,14 @@ export class LegacyImportService {
     ];
     this.manifest = options.manifest ?? new LegacyImportManifest();
     this.sessionIndex = options.sessionIndex ?? sessionIndexService;
-    this.createImport =
-      options.createImport ?? ((payload) => workerManager.createLegacyImport(payload));
-    this.inspectImport =
-      options.inspectImport ?? ((payload) => workerManager.inspectLegacyImport(payload));
-    this.reconcileImport =
-      options.reconcileImport ?? ((payload) => workerManager.reconcileLegacyImport(payload));
+    let engine: LegacyImportEngine | undefined;
+    const dsh = () => {
+      engine ??= new DshLegacyImportHost();
+      return engine;
+    };
+    this.createImport = options.createImport ?? ((payload) => dsh().create(payload));
+    this.inspectImport = options.inspectImport ?? ((target) => dsh().inspect(target));
+    this.reconcileImport = options.reconcileImport ?? ((target) => dsh().reconcile(target));
     this.createId = options.createId ?? randomUUID;
     this.now = options.now ?? Date.now;
     this.workspaceFallback = options.workspaceFallback ?? scratchWorkspaceService;
@@ -158,8 +194,8 @@ export class LegacyImportService {
    * Keeping the recorded directory is the good outcome: the conversation stays
    * attached to the project it is about. The fallback is an isolated scratch
    * directory, i.e. exactly what an "unbound" chat already uses. The
-   * conversation itself is unaffected — the JSONL lives under the agent
-   * directory, not under the cwd.
+   * conversation itself is unaffected — the DSH session lives under
+   * `DSH_HOME`, not under the cwd; the cwd is only fixed into it.
    *
    * Reports which of the two it took, because the renderer has to tell the user
    * afterwards and could not have known beforehand.
@@ -294,27 +330,30 @@ export class LegacyImportService {
     read: ConvertedLegacySource
   ): Promise<LegacyImportItemResult> {
     const existing = await this.manifest.get(dedupeKey);
-    if (existing?.status === 'complete' && existing.targetSessionFile) {
+    const recordedFile = existing?.targetSessionFile;
+    if (existing?.status === 'complete' && recordedFile) {
       const [indexed, inspected] = await Promise.all([
         this.sessionIndex.get(existing.logicalSessionId),
         this.inspectImport({
           logicalSessionId: existing.logicalSessionId,
           workspacePath: existing.workspacePath,
           targetPiSessionId: existing.targetPiSessionId,
+          targetSessionFile: recordedFile,
         }),
       ]);
       if (
-        indexed?.runtimeIdentity === existing.targetSessionFile &&
-        indexed.legacyImport?.targetPiSessionId === existing.targetPiSessionId &&
-        indexed.legacyImport.dedupeKey === dedupeKey &&
-        inspected.sessionFiles.some((file) => sameFilePath(file, existing.targetSessionFile ?? ''))
+        indexed &&
+        rowHoldsImport(indexed, existing, recordedFile) &&
+        inspected.sessionFiles.some((file) => sameFilePath(file, recordedFile))
       ) {
         return { source, status: 'already-imported', session: indexed };
       }
     }
 
     const logicalSessionId = `session-import-${source.sourceKind}-${this.createId()}`;
-    const targetPiSessionId = `import-${source.sourceKind}-${this.createId()}`;
+    // Decision 056: the ABI field keeps its name and now carries the id the
+    // DSH session and its stub are named after.
+    const targetPiSessionId = dshImportTargetId(logicalSessionId);
     const recordedWorkspacePath = read.conversation.workspacePath;
     let resolved: { workspacePath: string; workspace: LegacyImportWorkspaceOutcome };
     try {
@@ -333,9 +372,9 @@ export class LegacyImportService {
       ...(recordedWorkspacePath.trim() ? { recordedWorkspacePath } : {}),
       workspacePath,
     };
-    // Everything downstream — the worker cwd, the Pi session directory, the
-    // index row, crash reconciliation — must agree on one path, so the
-    // conversation carries the resolved one from here on.
+    // Everything downstream — the DSH session's fixed cwd, the index row,
+    // crash reconciliation — must agree on one path, so the conversation
+    // carries the resolved one from here on.
     const conversation = { ...read.conversation, workspacePath };
     const unbound = this.workspaceFallback.isScratchPath(workspacePath);
     const record: LegacyImportManifestRecord = {
@@ -362,7 +401,7 @@ export class LegacyImportService {
       return { source, status: 'failed', error: errorMessage(error) };
     }
 
-    let imported: Awaited<ReturnType<typeof createPiImport>> | null = null;
+    let imported: CreatedLegacyImport | null = null;
     let indexCommitted = false;
     try {
       imported = await this.createImport({
@@ -371,19 +410,20 @@ export class LegacyImportService {
         conversation,
       });
       await this.manifest.updateImporting(dedupeKey, {
-        targetSessionFile: imported.result.finalSessionFile,
+        targetSessionFile: imported.sessionFile,
       });
       await read.assertUnchanged();
+      // Decision 056: the chat is a DSH session from the start, its stub its
+      // identity. No `piLeaf`: the first resume writes the leaf DSH reports.
       const row: SessionIndexEntry = {
         sessionId: logicalSessionId,
-        runtimeIdentity: imported.result.finalSessionFile,
-        piLeaf: imported.result.leaf,
+        runtimeIdentity: imported.sessionFile,
         legacyImport: {
           sourceKind: source.sourceKind,
           targetPiSessionId,
           dedupeKey,
         },
-        agent: PI_AGENT,
+        agent: DSH_AGENT,
         // U05-c: only Main may call a session unbound, and it says so only
         // because it is the one that put the session in a scratch directory.
         ...(unbound ? { unbound: true } : {}),
@@ -394,13 +434,7 @@ export class LegacyImportService {
       };
       const indexed = await this.sessionIndex.createImported(row);
       indexCommitted = true;
-      await this.manifest.complete(dedupeKey, imported.result.finalSessionFile);
-      await imported.dispose().catch((disposeError) => {
-        console.warn(
-          '[legacy-import] Committed import worker disposal failed:',
-          errorMessage(disposeError)
-        );
-      });
+      await this.manifest.complete(dedupeKey, imported.sessionFile);
       return { source, status: 'imported', session: indexed, outcome };
     } catch (error) {
       const cleanupErrors: string[] = [];
@@ -409,7 +443,7 @@ export class LegacyImportService {
           try {
             const removed = await this.sessionIndex.removeImported(
               logicalSessionId,
-              imported.result.finalSessionFile,
+              imported.sessionFile,
               targetPiSessionId
             );
             if (!removed) cleanupErrors.push('failed to remove the committed import index row');
@@ -419,13 +453,10 @@ export class LegacyImportService {
         }
         try {
           const discarded = await imported.discard();
-          if (!discarded) cleanupErrors.push('import worker did not confirm target cleanup');
+          if (!discarded) cleanupErrors.push('the chat engine did not confirm target cleanup');
         } catch (cleanupError) {
           cleanupErrors.push(`target cleanup: ${errorMessage(cleanupError)}`);
         }
-        await imported.dispose().catch((cleanupError) => {
-          cleanupErrors.push(`worker disposal: ${errorMessage(cleanupError)}`);
-        });
       }
       let remainingFiles = 0;
       try {
@@ -433,10 +464,11 @@ export class LegacyImportService {
           logicalSessionId,
           workspacePath,
           targetPiSessionId,
+          ...(imported ? { targetSessionFile: imported.sessionFile } : {}),
         });
         remainingFiles = reconciled.remainingFiles;
       } catch (cleanupError) {
-        cleanupErrors.push(`worker reconciliation: ${errorMessage(cleanupError)}`);
+        cleanupErrors.push(`engine reconciliation: ${errorMessage(cleanupError)}`);
       }
       const remainingRow = await this.sessionIndex.get(logicalSessionId);
       if (remainingRow) cleanupErrors.push('import index row remains discoverable');
@@ -473,16 +505,18 @@ export class LegacyImportService {
         continue;
       }
 
+      const target = {
+        logicalSessionId: record.logicalSessionId,
+        workspacePath: record.workspacePath,
+        targetPiSessionId: record.targetPiSessionId,
+        ...(record.targetSessionFile ? { targetSessionFile: record.targetSessionFile } : {}),
+      };
       let ownedFiles: string[];
       try {
-        const inspected = await this.inspectImport({
-          logicalSessionId: record.logicalSessionId,
-          workspacePath: record.workspacePath,
-          targetPiSessionId: record.targetPiSessionId,
-        });
+        const inspected = await this.inspectImport(target);
         ownedFiles = inspected.sessionFiles;
       } catch (error) {
-        const detail = `worker inspection: ${errorMessage(error)}`;
+        const detail = `engine inspection: ${errorMessage(error)}`;
         await this.manifest.fail(record.dedupeKey, `Import cleanup pending: ${detail}`, true);
         unresolved.push(`${record.dedupeKey}: ${detail}`);
         continue;
@@ -491,13 +525,27 @@ export class LegacyImportService {
         typeof candidate === 'string' && ownedFiles.some((owned) => sameFilePath(owned, candidate));
       const row = await this.sessionIndex.get(record.logicalSessionId);
 
+      const held = record.targetSessionFile
+        ? rowHoldsImport(row, record, record.targetSessionFile)
+        : null;
+      // P1-9f: a 1.0.x import migrated since was continued once already, so
+      // the chat is the user's: never cleaned up, whatever the record says.
+      if (held === 'migrated' && record.targetSessionFile) {
+        if (record.status === 'importing') {
+          await this.manifest.complete(record.dedupeKey, record.targetSessionFile);
+        } else {
+          await this.manifest.fail(
+            record.dedupeKey,
+            'Kept an interrupted import that was continued since',
+            false
+          );
+        }
+        continue;
+      }
       if (
         record.status === 'importing' &&
-        row?.runtimeIdentity &&
-        row.legacyImport?.targetPiSessionId === record.targetPiSessionId &&
-        row.legacyImport.dedupeKey === record.dedupeKey &&
         record.targetSessionFile &&
-        sameFilePath(row.runtimeIdentity, record.targetSessionFile) &&
+        held === 'own' &&
         ownsFile(record.targetSessionFile)
       ) {
         await this.manifest.complete(record.dedupeKey, record.targetSessionFile);
@@ -510,7 +558,7 @@ export class LegacyImportService {
           row.legacyImport?.targetPiSessionId !== record.targetPiSessionId ||
           row.legacyImport.dedupeKey !== record.dedupeKey
         ) {
-          cleanupErrors.push('manifest index row is not owned by the target Pi import id');
+          cleanupErrors.push('manifest index row is not owned by the import target id');
         } else {
           try {
             const removed = await this.sessionIndex.removeImported(
@@ -527,14 +575,10 @@ export class LegacyImportService {
 
       let remainingFiles = ownedFiles.length;
       try {
-        const reconciled = await this.reconcileImport({
-          logicalSessionId: record.logicalSessionId,
-          workspacePath: record.workspacePath,
-          targetPiSessionId: record.targetPiSessionId,
-        });
+        const reconciled = await this.reconcileImport(target);
         remainingFiles = reconciled.remainingFiles;
       } catch (error) {
-        cleanupErrors.push(`worker reconciliation: ${errorMessage(error)}`);
+        cleanupErrors.push(`engine reconciliation: ${errorMessage(error)}`);
       }
 
       const remainingRow = await this.sessionIndex.get(record.logicalSessionId);

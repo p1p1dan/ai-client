@@ -120,3 +120,7 @@
 ## 补记（2026-09-29，P1-9d）
 
 上面交给 P1-9d 的三项已由 [决策 122](122-p1-9d-migration-orchestration-choices.md) 接走：Main 侧的发送、等待与 120 s 超时（第 1～3 条）；`legacy_migration_failed:<阶段>/<码>` 与 `retryable` 的重试（第 5～7 条）；索引事务的 `migratedFrom` 取 `result.source`、首次恢复的 `legacyPermissions`（第 9、13 条）。第 17 条照办：交给渲染层的错误只含阶段和码，宿主的 `message` 脱敏后只进 Main 日志。
+
+## 补记（2026-09-29，P1-9f）
+
+第 7 条说 `imported-conversation` 归 P1-9f：已由[决策 124](124-p1-9f-imports-produce-dsh-choices.md) 第 1～6 条落地。迁移的请求与答复不变；桩的 `origin`（第 15 条）改成两支，迁移那支字段不变，导入那支记 `importedAt`、没有 `file`。

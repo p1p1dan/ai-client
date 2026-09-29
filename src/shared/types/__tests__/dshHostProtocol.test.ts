@@ -4,6 +4,7 @@ import {
   DSH_CONFIGURE_TIMEOUT_MS,
   DSH_CREDENTIAL_TIMEOUT_MS,
   dshHostControlKind,
+  dshSeedResultKind,
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshChannelId,
@@ -261,7 +262,8 @@ describe('dshHostProtocol seedSession (P1-9c, decision 054)', () => {
   it.each([
     ['another host kind', { ...request, host: 'readPage' }],
     ['no id', { ...request, id: 0 }],
-    ['a source kind not served yet', { ...request, kind: 'imported-conversation' }],
+    ['an import without its conversation', { ...request, kind: 'imported-conversation' }],
+    ['an unknown source kind', { ...request, kind: 'claude-file' }],
     ['an empty source file', { ...request, sourceFile: '' }],
     ['no logical id', { ...request, logicalSessionId: undefined }],
     ['an empty cwd', { ...request, cwd: '' }],
@@ -369,6 +371,67 @@ describe('dshHostProtocol seedSession (P1-9c, decision 054)', () => {
     ])
       expect(isDshSeedStage(stage), stage).toBe(true);
     expect(isDshSeedStage('commit')).toBe(false);
+  });
+});
+
+/**
+ * P1-9f (decision 056): the same message for a Claude Code / Codex
+ * conversation. Its full shape is the host's to check; here only that it is
+ * one, and that an import's answer cannot pass for a migration's.
+ */
+describe('dshHostProtocol seedSession for an import (P1-9f, decision 056)', () => {
+  const request = {
+    host: 'seedSession',
+    id: 4,
+    kind: 'imported-conversation',
+    conversation: { schemaVersion: 1, entries: [{ kind: 'user', text: 'hi' }] },
+    logicalSessionId: 'session-import-codex-1',
+    cwd: '/work',
+  };
+  const result = {
+    kind: 'imported-conversation',
+    stubFile: '/h/aiclient-sessions/aiclient-session-import-codex-1.dsh.json',
+    dshSessionId: 'aiclient-session-import-codex-1',
+    reused: false,
+    images: { admitted: 0, refused: 0 },
+    report: { converterVersion: 2, source: { kind: 'imported-conversation', generation: 'codex' } },
+  };
+
+  it('accepts an import request', () => {
+    expect(isDshHostSeedSessionRequest(request)).toBe(true);
+  });
+
+  it.each([
+    ['no conversation', { ...request, conversation: undefined }],
+    ['a conversation without entries', { ...request, conversation: { schemaVersion: 1 } }],
+    ['a conversation that is a list', { ...request, conversation: [] }],
+    ['a source file beside it', { ...request, sourceFile: '/p/s1.jsonl' }],
+    ['no logical id', { ...request, logicalSessionId: '' }],
+    ['no cwd', { ...request, cwd: undefined }],
+  ])('refuses an import request with %s', (_label, bad) => {
+    expect(isDshHostSeedSessionRequest(bad)).toBe(false);
+  });
+
+  it('accepts an import answer and tells it from a migration answer', () => {
+    const answer = { host: 'seeded', id: 4, ok: true, result, ms: 3 };
+    expect(isDshHostSeeded(answer)).toBe(true);
+    expect(dshSeedResultKind(result as never)).toBe('imported-conversation');
+    expect(
+      dshSeedResultKind({
+        stubFile: '/h/aiclient-sessions/aiclient-s1.dsh.json',
+        dshSessionId: 'aiclient-s1',
+      } as never)
+    ).toBe('pi-file');
+  });
+
+  it.each([
+    ['an unknown kind', { ...result, kind: 'claude-file' }],
+    ['no stub', { ...result, stubFile: '' }],
+    ['no reused flag', { ...result, reused: undefined }],
+    ['a negative image count', { ...result, images: { admitted: 0, refused: -1 } }],
+    ['no report', { ...result, report: undefined }],
+  ])('refuses an import answer with %s', (_label, bad) => {
+    expect(isDshHostSeeded({ host: 'seeded', id: 4, ok: true, result: bad, ms: 1 })).toBe(false);
   });
 });
 

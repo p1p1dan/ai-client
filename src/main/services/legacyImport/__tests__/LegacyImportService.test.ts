@@ -11,15 +11,18 @@ import {
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type {
-  SessionIndexEntry,
-  WorkerImportConversationPayload,
-  WorkerImportConversationResult,
-} from '@shared/types';
+import { legacyImportDedupeKey, type SessionIndexEntry } from '@shared/types';
+import type { DshHostSeeded, DshSeedImportResult } from '@shared/types/dshHostProtocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ClaudeSessionScanner } from '../ClaudeSessionScanner';
 import { ClaudeImportSourceError } from '../ClaudeSourceAdapter';
 import { CodexSessionScanner } from '../CodexSessionScanner';
+import {
+  DshLegacyImportHost,
+  type DshLegacyImportSeeder,
+  dshImportStubPath,
+  type LegacyImportCreatePayload,
+} from '../DshLegacyImportHost';
 import { LegacyImportManifest } from '../LegacyImportManifest';
 import { LegacyImportService, type LegacyImportSessionIndex } from '../LegacyImportService';
 import {
@@ -33,6 +36,7 @@ let configDir: string;
 let workspacePath: string;
 let sourceFile: string;
 let manifestPath: string;
+let dshHome: string;
 const TEST_INTEGRITY_KEY = Buffer.alloc(32, 7);
 
 beforeEach(async () => {
@@ -41,6 +45,7 @@ beforeEach(async () => {
   workspacePath = path.join(root, 'workspace');
   sourceFile = path.join(configDir, 'projects', 'project-a', 'session-a.jsonl');
   manifestPath = path.join(root, 'manifest.json');
+  dshHome = path.join(root, 'dsh-home');
   await mkdir(path.dirname(sourceFile), { recursive: true });
   // The recorded cwd has to exist for the import to keep it (H/21 C3).
   await mkdir(workspacePath, { recursive: true });
@@ -83,12 +88,80 @@ class FakeIndex implements LegacyImportSessionIndex {
   }
 }
 
+/**
+ * dsh-rebase P1-9f: the shared host's `seedSession {kind:'imported-conversation'}`,
+ * as far as Main sees it. It writes the identity stub where the bridge would
+ * (`<DSH_HOME>/aiclient-sessions/aiclient-<logical id>.dsh.json`) and answers
+ * `seeded`; the DSH log itself is the host's and never Main's to see.
+ */
+function fakeSeeder(options: { refuse?: boolean } = {}) {
+  const seeded: Array<{ logicalSessionId: string; cwd: string; userInitiated?: boolean }> = [];
+  const seeder: DshLegacyImportSeeder = {
+    seedImportedConversation: vi.fn(
+      async (input, opts): Promise<DshHostSeeded<DshSeedImportResult>> => {
+        seeded.push({
+          logicalSessionId: input.logicalSessionId,
+          cwd: input.cwd,
+          userInitiated: opts?.userInitiated,
+        });
+        if (options.refuse) {
+          return {
+            host: 'seeded',
+            id: seeded.length,
+            ok: false,
+            error: {
+              stage: 'build',
+              code: 'WORKER_IMPORT_VALIDATION_FAILED',
+              message: `nothing kept from ${input.cwd}`,
+              retryable: false,
+            },
+            ms: 1,
+          };
+        }
+        const dshSessionId = `aiclient-${input.logicalSessionId}`;
+        const stubFile = dshImportStubPath(dshHome, dshSessionId);
+        await mkdir(path.dirname(stubFile), { recursive: true });
+        await writeFile(
+          stubFile,
+          JSON.stringify({
+            engine: 'dsh',
+            version: 2,
+            dshSessionId,
+            logicalSessionId: input.logicalSessionId,
+            cwd: input.cwd,
+            createdAt: 1,
+            origin: { kind: 'imported-conversation', importedAt: 1 },
+          })
+        );
+        return {
+          host: 'seeded',
+          id: seeded.length,
+          ok: true,
+          result: {
+            kind: 'imported-conversation',
+            stubFile,
+            dshSessionId,
+            reused: false,
+            images: { admitted: 0, refused: 0 },
+            report: {
+              converterVersion: 2,
+              source: { kind: 'imported-conversation', generation: 'claude-code', entries: {} },
+            },
+          },
+          ms: 1,
+        };
+      }
+    ),
+  };
+  return { seeder, seeded };
+}
+
 function harness(
   options: {
     manifest?: LegacyImportManifest;
     importers?: LegacySourceImporter[];
-    disposeFails?: boolean;
     mutateSourceAfterImport?: boolean;
+    refuse?: boolean;
   } = {}
 ) {
   const index = new FakeIndex();
@@ -96,62 +169,22 @@ function harness(
     options.manifest ??
     new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY });
   let id = 0;
-  const createImport = vi.fn(async (payload: WorkerImportConversationPayload) => {
-    // Native naming (NativeLegacyImportWriter.fileFor): bare `${id}.jsonl`, no
-    // timestamp prefix. import-catalog-01/-11: a `probe_` prefix here used to
-    // accidentally satisfy the manifest's pi-era `_<id>.jsonl` suffix check
-    // and hide the fact that real native output never does.
-    const finalSessionFile = path.join(root, `${payload.targetPiSessionId}.jsonl`);
-    await writeFile(finalSessionFile, 'native-pi-session\n', 'utf8');
+  const { seeder, seeded } = fakeSeeder({ refuse: options.refuse });
+  const engine = new DshLegacyImportHost({
+    host: seeder,
+    dshHome: () => dshHome,
+    log: { warn: () => undefined },
+  });
+  const createImport = vi.fn(async (payload: LegacyImportCreatePayload) => {
+    const created = await engine.create(payload);
     if (options.mutateSourceAfterImport) {
-      await writeFile(
-        sourceFile,
-        `${await import('node:fs/promises').then(({ readFile }) => readFile(sourceFile, 'utf8'))}changed\n`,
-        'utf8'
-      );
+      await writeFile(sourceFile, `${await readFile(sourceFile, 'utf8')}changed\n`, 'utf8');
     }
-    const result: WorkerImportConversationResult = {
-      logicalSessionId: payload.logicalSessionId,
-      piSessionId: payload.targetPiSessionId,
-      workspacePath: payload.conversation.workspacePath,
-      stagedSessionFile: `${finalSessionFile}.staged`,
-      finalSessionFile,
-      leaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
-      history: {
-        logicalSessionId: payload.logicalSessionId,
-        sessionFile: finalSessionFile,
-        workspacePath: payload.conversation.workspacePath,
-        page: { messages: [], offset: 0, limit: 80, totalCount: 0, hasMore: false },
-      },
-    };
-    let disposed = false;
-    return {
-      result,
-      pid: 123,
-      discard: vi.fn(async () => {
-        if (disposed) return false;
-        await unlink(finalSessionFile).catch(() => undefined);
-        return true;
-      }),
-      dispose: vi.fn(async () => {
-        disposed = true;
-        if (options.disposeFails) throw new Error('dispose failed');
-      }),
-      forceKillNow: vi.fn(() => {
-        disposed = true;
-        return true;
-      }),
-    };
+    return created;
   });
-  const inspectImport = vi.fn(async (payload: { targetPiSessionId: string }) => {
-    const candidate = path.join(root, `${payload.targetPiSessionId}.jsonl`);
-    try {
-      await import('node:fs/promises').then(({ stat }) => stat(candidate));
-      return { sessionFiles: [candidate] };
-    } catch {
-      return { sessionFiles: [] };
-    }
-  });
+  const inspectImport = vi.fn((target: Parameters<DshLegacyImportHost['inspect']>[0]) =>
+    engine.inspect(target)
+  );
   // Stands in for ScratchWorkspaceService: same contract (allocate a directory
   // we own, recognise it later), inside the test's temp root.
   const scratchRoot = path.join(root, 'unbound-sessions');
@@ -173,16 +206,32 @@ function harness(
     sessionIndex: index,
     createImport,
     inspectImport,
-    reconcileImport: vi.fn(async (payload) => {
-      const inspected = await inspectImport(payload);
-      for (const file of inspected.sessionFiles) await unlink(file).catch(() => undefined);
-      return { removedFiles: inspected.sessionFiles.length, remainingFiles: 0 };
-    }),
+    reconcileImport: vi.fn((target) => engine.reconcile(target)),
     createId: () => `id-${++id}`,
     now: () => 100,
   });
-  return { service, manifest, index, createImport, inspectImport, workspaceFallback, scratchRoot };
+  return {
+    service,
+    manifest,
+    index,
+    engine,
+    seeded,
+    createImport,
+    inspectImport,
+    workspaceFallback,
+    scratchRoot,
+  };
 }
+
+/** Where the harness's host writes the stub of the chat `session-import-claude-code-<id>`. */
+const stubOf = (logicalSessionId: string) =>
+  dshImportStubPath(dshHome, `aiclient-${logicalSessionId}`);
+
+const exists = (file: string) =>
+  stat(file).then(
+    () => true,
+    () => false
+  );
 
 const source = {
   sourceKind: 'claude-code' as const,
@@ -227,6 +276,12 @@ describe('LegacyImportService transaction', () => {
     expect(reloadedRecords).toHaveLength(1);
     expect(reloadedRecords[0]?.status).toBe('complete');
     expect(reloadedRecords[0]?.dedupeKey).toBe((await h.manifest.list())[0]?.dedupeKey);
+    // P1-9f: the record names the DSH identity stub, `<target id>.dsh.json`,
+    // and the naming check still takes it after the restart.
+    expect(reloadedRecords[0]?.targetSessionFile).toBe(first.results[0]?.session?.runtimeIdentity);
+    expect(path.basename(reloadedRecords[0]?.targetSessionFile ?? '')).toBe(
+      `${reloadedRecords[0]?.targetPiSessionId}.dsh.json`
+    );
 
     const restarted = new LegacyImportService({
       scanner: new ClaudeSessionScanner({
@@ -461,16 +516,36 @@ describe('LegacyImportService transaction', () => {
     ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
-  it('does not roll back a committed import when worker disposal fails after manifest completion', async () => {
-    const h = harness({ disposeFails: true });
+  it('commits a DSH chat: the row names the stub, the manifest the same file (P1-9f)', async () => {
+    const h = harness();
     const result = await h.service.importBatch([source]);
     expect(result.results[0]?.status).toBe('imported');
-    expect(h.index.rows.size).toBe(1);
+    const session = result.results[0]?.session;
+    const logicalSessionId = session?.sessionId ?? '';
+    expect(logicalSessionId).toMatch(/^session-import-claude-code-/);
+    // Decision 056: agent dsh, the stub as identity, no pi leaf; the ABI field
+    // keeps its name and carries the id the stub is named after.
+    expect(session).toMatchObject({
+      agent: 'dsh',
+      runtimeIdentity: stubOf(logicalSessionId),
+      workspacePath,
+      legacyImport: {
+        sourceKind: 'claude-code',
+        targetPiSessionId: `aiclient-${logicalSessionId}`,
+      },
+    });
+    expect(session).not.toHaveProperty('piLeaf');
+    expect(h.index.rows.get(logicalSessionId)).toEqual(session);
+    // The host was asked for this chat, in the resolved workspace, for the user.
+    expect(h.seeded).toEqual([{ logicalSessionId, cwd: workspacePath, userInitiated: true }]);
     const record = (await h.manifest.list())[0];
-    expect(record?.status).toBe('complete');
-    expect(
-      await import('node:fs/promises').then(({ stat }) => stat(record?.targetSessionFile ?? ''))
-    ).toMatchObject({ size: expect.any(Number) });
+    expect(record).toMatchObject({
+      status: 'complete',
+      logicalSessionId,
+      targetPiSessionId: `aiclient-${logicalSessionId}`,
+      targetSessionFile: stubOf(logicalSessionId),
+    });
+    expect(await exists(stubOf(logicalSessionId))).toBe(true);
   });
 
   it('quarantines a tampered manifest without unlinking or de-indexing an unowned file', async () => {
@@ -540,12 +615,206 @@ describe('LegacyImportService transaction', () => {
     const result = await h.service.importBatch([source]);
     expect(result.results[0]).toMatchObject({ status: 'failed' });
     const call = h.createImport.mock.results[0];
-    const imported = await call.value;
-    await expect(
-      import('node:fs/promises').then(({ stat }) => stat(imported.result.finalSessionFile))
-    ).rejects.toMatchObject({ code: 'ENOENT' });
-    expect((await h.manifest.list())[0]?.status).toBe('failed');
+    const imported = await call?.value;
+    await expect(stat(imported.sessionFile)).rejects.toMatchObject({ code: 'ENOENT' });
+    const record = (await h.manifest.list())[0];
+    expect(record?.status).toBe('failed');
+    // Nothing is left to clean: the next import is not blocked.
+    expect(record?.cleanupPending).toBe(false);
     expect(h.index.rows.size).toBe(0);
+
+    h.index.failCreate = false;
+    const retried = await h.service.importBatch([source]);
+    expect(retried.results[0]?.status).toBe('imported');
+    expect(retried.results[0]?.session?.sessionId).not.toBe(
+      path.basename(imported.sessionFile, '.dsh.json').slice('aiclient-'.length)
+    );
+  });
+
+  it('fails an import the engine refuses, with its stage and code only, and leaves nothing', async () => {
+    const h = harness({ refuse: true });
+    const result = await h.service.importBatch([source]);
+    expect(result.results[0]).toMatchObject({ status: 'failed' });
+    expect(result.results[0]?.error).toContain('(build/WORKER_IMPORT_VALIDATION_FAILED)');
+    // The host's message named a path; the item's error does not.
+    expect(result.results[0]?.error).not.toContain(workspacePath);
+    expect(h.index.rows.size).toBe(0);
+    const record = (await h.manifest.list())[0];
+    expect(record).toMatchObject({ status: 'failed', cleanupPending: false });
+  });
+});
+
+/**
+ * dsh-rebase P1-9f (plan P1-9 shard 04 §5, decision 056 rule 4): an import
+ * 1.0.x made is a pi chat, and on its first continue it became a DSH chat
+ * under the same logical id, the pi row kept under `<id>_pi` (decision 051).
+ * Either way the conversation is already here and is not imported again;
+ * and an interrupted record never takes a migrated chat away.
+ */
+describe('LegacyImportService and 1.0.x imports (P1-9f)', () => {
+  const legacyId = 'session-import-claude-code-old';
+  const legacyTarget = 'import-claude-code-old';
+  let piFile: string;
+
+  beforeEach(async () => {
+    piFile = path.join(root, 'pi-agent', 'sessions', `${legacyTarget}.jsonl`);
+    await mkdir(path.dirname(piFile), { recursive: true });
+    await writeFile(piFile, 'a 1.0.x import\n', 'utf8');
+  });
+
+  /** The manifest record 1.0.x wrote for the source as it is now. */
+  async function legacyRecord(
+    manifest: LegacyImportManifest,
+    status: 'complete' | 'importing' | 'failed'
+  ): Promise<string> {
+    const read = await claudeSourceImporter(
+      new ClaudeSessionScanner({ resolveRoots: () => [{ dir: configDir, kind: 'legacy' }] })
+    ).convert(source);
+    const dedupeKey = legacyImportDedupeKey(read.conversation);
+    await manifest.reserve({
+      dedupeKey,
+      status: 'importing',
+      source,
+      sourcePath: read.sourcePath,
+      sourceFingerprint: read.conversation.sourceFingerprint,
+      workspacePath,
+      title: read.conversation.title,
+      logicalSessionId: legacyId,
+      targetPiSessionId: legacyTarget,
+      startedAt: 1,
+    });
+    await manifest.updateImporting(dedupeKey, { targetSessionFile: piFile });
+    if (status === 'complete') await manifest.complete(dedupeKey, piFile);
+    if (status === 'failed') await manifest.fail(dedupeKey, 'index cleanup failed', true);
+    return dedupeKey;
+  }
+
+  function piRow(dedupeKey: string): SessionIndexEntry {
+    return {
+      sessionId: legacyId,
+      agent: 'pi',
+      runtimeIdentity: piFile,
+      piLeaf: { activeEntryId: 'leaf', fileTailEntryId: 'leaf' },
+      legacyImport: { sourceKind: 'claude-code', targetPiSessionId: legacyTarget, dedupeKey },
+      workspacePath,
+      title: 'hello',
+      updatedAt: 1,
+      archived: false,
+    };
+  }
+
+  /** The pair `commitMigrated` leaves (decision 051). */
+  function migratedPair(dedupeKey: string): SessionIndexEntry[] {
+    const legacy = piRow(dedupeKey);
+    const { piLeaf: _leaf, ...carried } = legacy;
+    return [
+      { ...legacy, sessionId: `${legacyId}_pi`, migratedTo: legacyId },
+      {
+        ...carried,
+        agent: 'dsh',
+        runtimeIdentity: stubOf(legacyId),
+        updatedAt: 2,
+        migratedFrom: {
+          legacySessionId: `${legacyId}_pi`,
+          runtimeIdentity: piFile,
+          sourceSha256: 'a'.repeat(64),
+          sourceBytes: 16,
+          sourceMtimeMs: 1,
+          migratedAt: 2,
+          converter: 'pi-dsh/2',
+        },
+      },
+    ];
+  }
+
+  it('does not import again a conversation 1.0.x imported and nobody continued (decision 056 rule 4)', async () => {
+    const h = harness();
+    const dedupeKey = await legacyRecord(h.manifest, 'complete');
+    h.index.rows.set(legacyId, piRow(dedupeKey));
+    const result = await h.service.importBatch([source]);
+    expect(result.results[0]).toMatchObject({
+      status: 'already-imported',
+      session: { sessionId: legacyId, agent: 'pi' },
+    });
+    expect(h.createImport).not.toHaveBeenCalled();
+  });
+
+  it('does not import again a 1.0.x import migrated to DSH since: the migration pair is recognised', async () => {
+    const h = harness();
+    const dedupeKey = await legacyRecord(h.manifest, 'complete');
+    for (const row of migratedPair(dedupeKey)) h.index.rows.set(row.sessionId, row);
+    const result = await h.service.importBatch([source]);
+    expect(result.results[0]).toMatchObject({
+      status: 'already-imported',
+      session: { sessionId: legacyId, agent: 'dsh', runtimeIdentity: stubOf(legacyId) },
+    });
+    expect(h.createImport).not.toHaveBeenCalled();
+    expect(h.index.rows.size).toBe(2);
+  });
+
+  it('completes an interrupted 1.0.x record whose row was migrated, and keeps the chat', async () => {
+    const h = harness();
+    const dedupeKey = await legacyRecord(h.manifest, 'importing');
+    for (const row of migratedPair(dedupeKey)) h.index.rows.set(row.sessionId, row);
+    // Even with the pi file gone: the chat lives in DSH now.
+    await rm(piFile);
+    await h.service.reconcile();
+    expect((await h.manifest.list())[0]?.status).toBe('complete');
+    expect(h.index.rows.get(legacyId)?.agent).toBe('dsh');
+  });
+
+  it('keeps a migrated chat a failed 1.0.x record still wanted cleaned, and unblocks imports', async () => {
+    const h = harness();
+    const dedupeKey = await legacyRecord(h.manifest, 'failed');
+    for (const row of migratedPair(dedupeKey)) h.index.rows.set(row.sessionId, row);
+    await h.service.reconcile();
+    expect((await h.manifest.list())[0]).toMatchObject({ status: 'failed', cleanupPending: false });
+    expect(h.index.rows.size).toBe(2);
+    expect(await exists(piFile)).toBe(true);
+  });
+
+  it('cleans a failed 1.0.x record: the pi row goes, the pi file is left in place', async () => {
+    const h = harness();
+    const dedupeKey = await legacyRecord(h.manifest, 'failed');
+    h.index.rows.set(legacyId, piRow(dedupeKey));
+    await h.service.reconcile();
+    expect(h.index.rows.size).toBe(0);
+    expect((await h.manifest.list())[0]).toMatchObject({ status: 'failed', cleanupPending: false });
+    // This build never deletes a 1.0.x file; unindexed, it shows nowhere.
+    expect(await exists(piFile)).toBe(true);
+  });
+
+  it('takes back the stub of an import the host finished and Main never recorded', async () => {
+    const h = harness();
+    const logicalSessionId = 'session-import-claude-code-crashed';
+    const target = `aiclient-${logicalSessionId}`;
+    await h.manifest.reserve({
+      dedupeKey: 'crashed-key',
+      status: 'importing',
+      source,
+      sourcePath: sourceFile,
+      sourceFingerprint: {
+        stableSourceIdentity: 'x',
+        contentHash: 'y',
+        size: 1,
+        mode: 0o100644,
+        mtimeMs: 1,
+      },
+      workspacePath,
+      title: 'crashed',
+      logicalSessionId,
+      targetPiSessionId: target,
+      startedAt: 1,
+    });
+    // The host wrote the stub; Main died before `updateImporting`.
+    await mkdir(path.dirname(stubOf(logicalSessionId)), { recursive: true });
+    await writeFile(
+      stubOf(logicalSessionId),
+      JSON.stringify({ engine: 'dsh', version: 2, dshSessionId: target, logicalSessionId })
+    );
+    await h.service.reconcile();
+    expect(await exists(stubOf(logicalSessionId))).toBe(false);
+    expect((await h.manifest.list())[0]).toMatchObject({ status: 'failed', cleanupPending: false });
   });
 });
 

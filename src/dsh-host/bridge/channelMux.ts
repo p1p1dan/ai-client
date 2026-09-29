@@ -28,7 +28,8 @@
  *                       `page` with its id, the page or the error's code.
  *   {host:'seedSession', id, …}
  *                       a legacy pi session file made a DSH session (decision
- *                       054, `seedSession.ts`): one migration at a time,
+ *                       054, `seedSession.ts`), or a Claude Code / Codex
+ *                       conversation (P1-9f, decision 056): one at a time,
  *                       queued behind any still running, answered `seeded`
  *                       with the same id, what was made or where it stopped.
  *                       A request with a usable id and bad fields is answered
@@ -57,7 +58,9 @@ import {
   type DshHostSeeded,
   type DshHostSeedSessionRequest,
   type DshHostToMainMessage,
+  type DshSeedImportResult,
   type DshSeedSessionResult,
+  type DshSeedSessionSource,
   dshHostControlKind,
   isDshChannelEnvelope,
   isDshHostCloseChannel,
@@ -102,13 +105,11 @@ export interface DshChannelMuxOptions {
     limit?: number;
   }): Promise<SessionHistoryPage>;
   /**
-   * Decision 054's migration; without it a `seedSession` is answered
-   * `seed_unavailable`. A rejection carrying `stage`, `code` and `retryable`
-   * (`SeedSessionError`) is answered with them.
+   * Decision 054's migration and decision 056's import, by `kind`; without it
+   * a `seedSession` is answered `seed_unavailable`. A rejection carrying
+   * `stage`, `code` and `retryable` (`SeedSessionError`) is answered with them.
    */
-  seedSession?(
-    request: Omit<DshHostSeedSessionRequest, 'host' | 'id'>
-  ): Promise<DshSeedSessionResult>;
+  seedSession?(request: DshSeedSessionSource): Promise<DshSeedSessionResult | DshSeedImportResult>;
   log(...args: unknown[]): void;
 }
 
@@ -141,11 +142,13 @@ function unsupported(what: string): Error {
   });
 }
 
+type AnySeeded = DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>;
+
 function seedFailure(
   id: number,
   ms: number,
   error: NonNullable<DshHostSeeded['error']>
-): DshHostSeeded {
+): AnySeeded {
   return { host: 'seeded', id, ok: false, error, ms };
 }
 
@@ -418,7 +421,7 @@ export class DshChannelMux {
   private seedSession(request: DshHostSeedSessionRequest): void {
     const queued = performance.now();
     const elapsed = () => Math.round((performance.now() - queued) * 10) / 10;
-    const run = async (): Promise<DshHostSeeded> => {
+    const run = async (): Promise<AnySeeded> => {
       const migrate = this.options.seedSession;
       if (!migrate) {
         return seedFailure(request.id, elapsed(), {

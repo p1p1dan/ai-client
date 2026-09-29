@@ -39,7 +39,9 @@
  *   - A migration (`seedSession`, decision 054, P1-9d) does the same, and may
  *     start a host out of `failed` for the user's continue it serves. A host
  *     that exits under it fails it with `DSH_HOST_SEED_INTERRUPTED`; nothing
- *     retries it here (the migration service decides).
+ *     retries it here (the migration service decides). An import
+ *     (`seedImportedConversation`, decision 056, P1-9f) is the same message
+ *     with the other source kind, and the same rules.
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -74,10 +76,15 @@ import {
   type DshHostPage,
   type DshHostPong,
   type DshHostSeeded,
-  type DshHostSeedSessionRequest,
   type DshMainToHostMessage,
   type DshRouteDiagnostic,
+  type DshSeedImportResult,
+  type DshSeedImportSource,
+  type DshSeedPiFileSource,
+  type DshSeedSessionResult,
+  type DshSeedSessionSource,
   dshHostControlKind,
+  dshSeedResultKind,
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshHostChannelClosed,
@@ -386,12 +393,19 @@ interface PendingRead {
   readonly timer: NodeJS.Timeout;
 }
 
-/** What `seedSession` asks the host to migrate; see `DshHostSeedSessionRequest`. */
-export type DshHostSeedInput = Omit<DshHostSeedSessionRequest, 'host' | 'id' | 'kind'>;
+/** What `seedSession` asks the host to migrate; see `DshSeedPiFileSource`. */
+export type DshHostSeedInput = Omit<DshSeedPiFileSource, 'kind'>;
+
+/** What `seedImportedConversation` asks the host to import (P1-9f); see `DshSeedImportSource`. */
+export type DshHostSeedImportInput = Omit<DshSeedImportSource, 'kind'>;
+
+type AnySeeded = DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>;
 
 interface PendingSeed {
   readonly host: HostRecord;
-  readonly resolve: (answer: DshHostSeeded) => void;
+  /** The request's source kind: an answer carrying the other kind's result is malformed. */
+  readonly kind: DshSeedSessionSource['kind'];
+  readonly resolve: (answer: AnySeeded) => void;
   readonly reject: (error: Error) => void;
   readonly timer: NodeJS.Timeout;
 }
@@ -775,7 +789,44 @@ export class DshHostSupervisor {
   async seedSession(
     input: DshHostSeedInput,
     options: DshHostEnsureOptions = {}
-  ): Promise<DshHostSeeded> {
+  ): Promise<DshHostSeeded<DshSeedSessionResult>> {
+    const request: DshSeedPiFileSource = {
+      kind: 'pi-file',
+      sourceFile: input.sourceFile,
+      logicalSessionId: input.logicalSessionId,
+      cwd: input.cwd,
+      ...(input.expect
+        ? { expect: { bytes: input.expect.bytes, mtimeMs: input.expect.mtimeMs } }
+        : {}),
+    };
+    return (await this.seed(request, options)) as DshHostSeeded<DshSeedSessionResult>;
+  }
+
+  /**
+   * Decision 056 (P1-9f): one Claude Code / Codex conversation Main read
+   * made a DSH session by the host, for the chat Main minted for it. The
+   * same message and the same rules as `seedSession`, with the source kind
+   * `imported-conversation`; resolves with a `seeded` whose result, when
+   * there is one, is `DshSeedImportResult` (an answer carrying a migration
+   * result is `DSH_HOST_SEED_MALFORMED`).
+   */
+  async seedImportedConversation(
+    input: DshHostSeedImportInput,
+    options: DshHostEnsureOptions = {}
+  ): Promise<DshHostSeeded<DshSeedImportResult>> {
+    const request: DshSeedImportSource = {
+      kind: 'imported-conversation',
+      conversation: input.conversation,
+      logicalSessionId: input.logicalSessionId,
+      cwd: input.cwd,
+    };
+    return (await this.seed(request, options)) as DshHostSeeded<DshSeedImportResult>;
+  }
+
+  private async seed(
+    request: DshSeedSessionSource,
+    options: DshHostEnsureOptions
+  ): Promise<AnySeeded> {
     this.pendingSeeds += 1;
     this.disarmIdleStop();
     try {
@@ -793,16 +844,16 @@ export class DshHostSupervisor {
           'the DSH host went away before the migration'
         );
       }
-      return await this.sendSeedSession(host, input);
+      return await this.sendSeedSession(host, request);
     } finally {
       this.pendingSeeds -= 1;
       this.armIdleStop();
     }
   }
 
-  private sendSeedSession(host: HostRecord, input: DshHostSeedInput): Promise<DshHostSeeded> {
+  private sendSeedSession(host: HostRecord, request: DshSeedSessionSource): Promise<AnySeeded> {
     const id = ++this.seedSequence;
-    return new Promise<DshHostSeeded>((resolve, reject) => {
+    return new Promise<AnySeeded>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingSeedSessions.delete(id);
         reject(
@@ -813,18 +864,8 @@ export class DshHostSupervisor {
         );
       }, DSH_HOST_TIMINGS.seedSessionTimeoutMs);
       timer.unref?.();
-      this.pendingSeedSessions.set(id, { host, resolve, reject, timer });
-      const sent = this.sendControl(host, {
-        host: 'seedSession',
-        id,
-        kind: 'pi-file',
-        sourceFile: input.sourceFile,
-        logicalSessionId: input.logicalSessionId,
-        cwd: input.cwd,
-        ...(input.expect
-          ? { expect: { bytes: input.expect.bytes, mtimeMs: input.expect.mtimeMs } }
-          : {}),
-      });
+      this.pendingSeedSessions.set(id, { host, kind: request.kind, resolve, reject, timer });
+      const sent = this.sendControl(host, { host: 'seedSession', id, ...request });
       if (!sent) {
         this.settleSeed(id)?.reject(
           new DshHostSupervisorError(
@@ -1743,12 +1784,17 @@ export class DshHostSupervisor {
 
   // ---- seedSession (decision 054, P1-9d) ------------------------------------------
 
-  private onSeeded(host: HostRecord, message: DshHostSeeded): void {
+  private onSeeded(host: HostRecord, message: AnySeeded): void {
     const pending = this.pendingSeedSessions.get(message.id);
     if (pending?.host !== host) {
       // Too late (timed out) or never asked: the host's work is idempotent,
       // so the next continue reuses whatever this migration made.
       this.warnRateLimited('stale-seeded', `[dsh-host] dropped seeded ${message.id}`);
+      return;
+    }
+    if (message.result && dshSeedResultKind(message.result) !== pending.kind) {
+      // P1-9f: a migration answered with an import result, or the reverse.
+      this.onMalformedSeeded(host, message as unknown as Record<string, unknown>);
       return;
     }
     this.settleSeed(message.id)?.resolve(message);

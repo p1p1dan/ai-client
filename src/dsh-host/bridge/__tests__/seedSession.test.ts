@@ -18,18 +18,23 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { DshLogEvent } from '../../../shared/dshHistory/types.ts';
 import {
   checkSeed,
+  convertImportedConversation,
   convertPiSessionBytes,
   type DshSeedEvent,
   SEED_CONVERTER_VERSION,
 } from '../../../shared/legacyPiSession/convert/index.ts';
 import { decodeGrants } from '../../../shared/permissions/grants.ts';
+import type { ImportedConversation } from '../../../shared/types/legacyImport.ts';
 import type { DshAttachmentStore } from '../attachments.ts';
 import {
   holdsExactlySeed,
+  type SeedImportRequest,
   type SeedSessionDeps,
   SeedSessionError,
   type SeedSessionRequest,
+  seedImportedConversation,
   seedPiSession,
+  seedSession,
 } from '../seedSession.ts';
 import { grantsSidecarFor, readStub, type SessionStub, stubPathFor } from '../stub.ts';
 
@@ -587,7 +592,9 @@ describe('seedPiSession — the same chat again (decision 054 rule 5)', () => {
     expect(result).toMatchObject({ dshSessionId: 'aiclient-s1_m2', reused: false });
     const stub = readStub(stubFile());
     expect(stub.dshSessionId).toBe('aiclient-s1_m2');
-    expect(stub.origin?.file.sha256).toBe(result.source.sha256);
+    expect(stub.origin?.kind === 'pi-session' && stub.origin.file.sha256).toBe(
+      result.source.sha256
+    );
   });
 
   it('redoes a migration whose session no longer reads (an older converter’s)', async () => {
@@ -630,6 +637,155 @@ describe('seedPiSession — the same chat again (decision 054 rule 5)', () => {
     writeFileSync(grantsSidecarFor(stubFile()), '{"version":2,"grants":[]}');
     await seedPiSession(deps(new FakeDsh()), request(place('v4-basic.jsonl')));
     expect(existsSync(grantsSidecarFor(stubFile()))).toBe(false);
+  });
+});
+
+/**
+ * P1-9f (decision 056): a Claude Code / Codex conversation Main read, seeded
+ * the same way from `admit` on. The chat is one Main just minted.
+ */
+describe('seedImportedConversation (P1-9f)', () => {
+  const LOGICAL = 'session-import-claude-code-1';
+  const importStub = () => stubPathFor(home, `aiclient-${LOGICAL}`);
+  const conversation = (text = 'IMPORT-USER-MARKER'): ImportedConversation => ({
+    schemaVersion: 1,
+    importerVersion: 'b4-legacy-v2',
+    sourceKind: 'claude-code',
+    stableSourceIdentity: 'claude-project/session-1',
+    sourceSessionId: 'session-1',
+    workspacePath: CWD,
+    title: 'Imported',
+    startedAt: 1_790_000_000_000,
+    sourceFingerprint: {
+      stableSourceIdentity: 'claude-project/session-1',
+      contentHash: sha256(text),
+      size: 10,
+      mode: 0o100644,
+      mtimeMs: 1_790_000_000_000,
+    },
+    entries: [
+      { kind: 'user', text, timestamp: 1_790_000_000_001 },
+      {
+        kind: 'display',
+        displayKind: 'tool',
+        title: 'Legacy tool call: Bash',
+        toolCallId: 'call-1',
+        toolName: 'Bash',
+        input: { command: 'ls' },
+        redacted: true,
+        timestamp: 1_790_000_000_002,
+      },
+      {
+        kind: 'assistant',
+        blocks: [{ type: 'text', text: 'IMPORT-REPLY-MARKER' }],
+        model: 'claude-test',
+        timestamp: 1_790_000_000_003,
+      },
+    ],
+    diagnostics: [],
+  });
+  const importRequest = (
+    input = conversation(),
+    logicalSessionId = LOGICAL
+  ): SeedImportRequest => ({
+    kind: 'imported-conversation',
+    conversation: input,
+    logicalSessionId,
+    cwd: CWD,
+  });
+
+  it('seeds exactly what the import converter makes, and writes a stub whose origin is the conversation', async () => {
+    const dsh = new FakeDsh();
+    const input = conversation();
+    const result = await seedImportedConversation(deps(dsh), importRequest(input));
+    const expected = convertImportedConversation(input);
+    if (!expected.ok) throw new Error(expected.message);
+    expect(result).toEqual({
+      kind: 'imported-conversation',
+      stubFile: importStub(),
+      dshSessionId: `aiclient-${LOGICAL}`,
+      reused: false,
+      images: { admitted: 0, refused: 0 },
+      report: expected.report,
+    });
+    const log = dsh.logs.get(`aiclient-${LOGICAL}`) as DshLogEvent[];
+    expect(holdsExactlySeed(log, expected.seed)).toBe(true);
+    // The display row is an ignorable record, never a model-visible message.
+    expect(log.some((event) => event.type === 'aiclient/legacy-display')).toBe(true);
+    expect(checkSeed(expected.seed)).toEqual([]);
+    const stub = readStub(importStub());
+    expect(stub).toMatchObject({
+      dshSessionId: `aiclient-${LOGICAL}`,
+      logicalSessionId: LOGICAL,
+      cwd: CWD,
+      lineage: [{ dshSessionId: `aiclient-${LOGICAL}`, reason: 'create', at: NOW }],
+      origin: {
+        kind: 'imported-conversation',
+        converterVersion: SEED_CONVERTER_VERSION,
+        sourceKind: 'claude-code',
+        contentHash: input.sourceFingerprint.contentHash,
+        importedAt: NOW,
+      },
+    });
+    expect(existsSync(grantsSidecarFor(importStub()))).toBe(false);
+    expect(dsh.disposed).toBe(1);
+  });
+
+  it('answers the stub it made for the same conversation again, and writes nothing', async () => {
+    const dsh = new FakeDsh();
+    await seedImportedConversation(deps(dsh), importRequest());
+    const before = readFileSync(importStub(), 'utf8');
+    const again = await seedImportedConversation(deps(dsh), importRequest());
+    expect(again).toMatchObject({ reused: true, dshSessionId: `aiclient-${LOGICAL}` });
+    expect(dsh.created).toEqual([`aiclient-${LOGICAL}`]);
+    expect(readFileSync(importStub(), 'utf8')).toBe(before);
+  });
+
+  it('refuses a stub already there that is not this import, and writes nothing', async () => {
+    const dsh = new FakeDsh();
+    await seedImportedConversation(deps(dsh), importRequest(conversation('first')));
+    const other = await failure(
+      seedImportedConversation(deps(dsh), importRequest(conversation('second')))
+    );
+    expect([other.stage, other.code]).toEqual(['stub', 'seed_stub_conflict']);
+    // A migration's stub under the chat's id is not one to replace either.
+    rmSync(importStub());
+    await seedPiSession(deps(dsh), request(place('v4-basic.jsonl'), LOGICAL));
+    const migrated = await failure(seedImportedConversation(deps(dsh), importRequest()));
+    expect([migrated.stage, migrated.code]).toEqual(['stub', 'seed_stub_conflict']);
+  });
+
+  it('refuses what is not a conversation, an id DSH cannot take, and one the converter cannot keep', async () => {
+    const dsh = new FakeDsh();
+    const shape = await failure(
+      seedImportedConversation(
+        deps(dsh),
+        importRequest({ ...conversation(), entries: [] } as ImportedConversation)
+      )
+    );
+    expect([shape.stage, shape.code]).toEqual(['request', 'seed_conversation_invalid']);
+    const id = await failure(
+      seedImportedConversation(deps(dsh), importRequest(conversation(), 'bad/id'))
+    );
+    expect([id.stage, id.code]).toEqual(['request', 'seed_logical_id_invalid']);
+    const noReply = await failure(
+      seedImportedConversation(
+        deps(dsh),
+        importRequest({ ...conversation(), entries: [{ kind: 'user', text: 'alone' }] })
+      )
+    );
+    expect([noReply.stage, noReply.code]).toEqual(['build', 'WORKER_IMPORT_VALIDATION_FAILED']);
+    expect(dsh.created).toEqual([]);
+    expect(existsSync(importStub())).toBe(false);
+  });
+
+  it('is what the host’s seedSession runs for the import kind', async () => {
+    const dsh = new FakeDsh();
+    const result = await seedSession(deps(dsh), importRequest());
+    expect(result).toMatchObject({ kind: 'imported-conversation', reused: false });
+    const migrated = await seedSession(deps(dsh), request(place('v4-basic.jsonl')));
+    expect(migrated).not.toHaveProperty('kind');
+    expect(migrated).toMatchObject({ converted: 'source' });
   });
 });
 

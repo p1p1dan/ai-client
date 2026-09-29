@@ -56,19 +56,29 @@ export interface SessionStub {
   lineage?: SessionLineageEntry[];
   /**
    * P1-9c (decision 054): the chat was migrated from a 1.0.x pi session, and
-   * this is what was converted. Absent for a chat that began on DSH, and for
-   * a fork (its own chat, even when cut from a migrated one); a rewind keeps it.
+   * this is what was converted; P1-9f (decision 056): or imported from a
+   * Claude Code / Codex conversation. Absent for a chat that began on DSH, and
+   * for a fork (its own chat, even when cut from a seeded one); a rewind keeps it.
    */
   origin?: SessionStubOrigin;
 }
 
-/** A migrated chat's source (`seedSession.ts`): what was converted, from which file, when. */
-export type SessionStubOrigin = SeedOrigin & {
-  /** Epoch milliseconds. */
-  migratedAt: number;
-  /** The file Main named and what it held when read; for a legacy file, the file itself, not its copy. */
-  file: { path: string; sha256: string; bytes: number; mtimeMs: number };
-};
+/**
+ * A seeded chat's source (`seedSession.ts`): for a migration, what was
+ * converted, from which file, when; for an import (P1-9f, decision 056), the
+ * conversation it was made of and when.
+ */
+export type SessionStubOrigin =
+  | (Extract<SeedOrigin, { kind: 'pi-session' }> & {
+      /** Epoch milliseconds. */
+      migratedAt: number;
+      /** The file Main named and what it held when read; for a legacy file, the file itself, not its copy. */
+      file: { path: string; sha256: string; bytes: number; mtimeMs: number };
+    })
+  | (Extract<SeedOrigin, { kind: 'imported-conversation' }> & {
+      /** Epoch milliseconds. */
+      importedAt: number;
+    });
 
 /** The version this build writes. */
 export const SESSION_STUB_VERSION = 2 as const;

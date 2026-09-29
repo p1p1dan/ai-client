@@ -563,12 +563,31 @@ export class SessionIndexService {
     return this.createIndependent(input, 'Fork');
   }
 
-  /** Insert one complete imported Pi session row with a single atomic flush. */
+  /**
+   * Insert one complete row this app did not create a session for, with a
+   * single atomic flush: a Claude Code / Codex import, or a chat pi created
+   * in the terminal (`piTui.ts`).
+   *
+   * P1-9f (decision 056): a conversation import is a DSH session from the
+   * start, so a row carrying `legacyImport` must be `dsh`; a `pi` one is
+   * refused, and the import path cannot make a pi chat again.
+   */
   async createImported(input: SessionIndexEntry): Promise<SessionIndexEntry> {
+    if (input.legacyImport && input.agent !== DSH_AGENT) {
+      throw new Error(
+        `Imported conversation must be a ${DSH_AGENT} session, not ${String(input.agent)}: ${input.sessionId}`
+      );
+    }
     return this.createIndependent(input, 'Imported');
   }
 
-  /** Remove only the exact uncommitted/failed import row; never retarget another session. */
+  /**
+   * Remove only the exact uncommitted/failed import row; never retarget
+   * another session. P1-9f: the row of an import is `dsh` now; a `pi` one is still
+   * one 1.0.x wrote and may need cleaning after an upgrade. A `dsh` row a
+   * migration committed (`migratedFrom`) is a chat that was continued, never
+   * an import to take back.
+   */
   async removeImported(
     sessionId: string,
     runtimeIdentity: string,
@@ -580,7 +599,8 @@ export class SessionIndexService {
       if (
         !existing ||
         existing.runtimeIdentity !== runtimeIdentity ||
-        existing.agent !== 'pi' ||
+        (existing.agent !== DSH_AGENT && existing.agent !== PI_AGENT) ||
+        existing.migratedFrom ||
         existing.legacyImport?.targetPiSessionId !== targetPiSessionId
       ) {
         return false;

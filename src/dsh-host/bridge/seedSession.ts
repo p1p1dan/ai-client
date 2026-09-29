@@ -34,6 +34,13 @@
  * stub, which the next attempt takes or steps past. A stub already there is
  * replaced only when it is an earlier migration nothing was said in since;
  * any other one is `seed_stub_conflict`.
+ *
+ * P1-9f (decision 056): a Claude Code / Codex conversation Main read goes
+ * the same way from `admit` on (`seedImportedConversation`). There is no file
+ * to read: the conversation's shape is checked again (`request`), the P1-9b
+ * import converter makes the seed, and the stub's `origin` records the
+ * conversation. The chat is one Main just minted, so a stub already there is
+ * reused only when it is this very import, and is a conflict otherwise.
  */
 
 import { createHash } from 'node:crypto';
@@ -44,18 +51,24 @@ import { SESSION_MAX_BYTES } from '../../shared/legacyPiSession/codec.ts';
 import {
   bindSeedImages,
   checkSeed,
+  convertImportedConversation,
   convertPiSessionBytes,
   type DshSeedEvent,
   SEED_CONVERTER_VERSION,
   type SeedConversion,
   type SeedImage,
+  type SeedOrigin,
 } from '../../shared/legacyPiSession/convert/index.ts';
 import type { PersistedGrants } from '../../shared/permissions/grants.ts';
 import type {
-  DshHostSeedSessionRequest,
+  DshSeedImportResult,
+  DshSeedImportSource,
+  DshSeedPiFileSource,
   DshSeedSessionResult,
+  DshSeedSessionSource,
   DshSeedStage,
 } from '../../shared/types/dshHostProtocol.ts';
+import { isImportedConversation } from '../../shared/types/legacyImport.ts';
 import { WORKER_ATTACHMENT_REJECTED } from '../../shared/types/workerRpc.ts';
 import { admitUserContent, type DshAttachmentStore } from './attachments.ts';
 import { dshSessionIdFor, hasNamedError } from './dshSessionRuntime.ts';
@@ -74,8 +87,11 @@ import {
   writeStubAtomically,
 } from './stub.ts';
 
-/** The request's own fields: `seedSession` without its envelope. */
-export type SeedSessionRequest = Omit<DshHostSeedSessionRequest, 'host' | 'id'>;
+/** A migration's own fields: `seedSession {kind:'pi-file'}` without its envelope. */
+export type SeedSessionRequest = DshSeedPiFileSource;
+
+/** An import's own fields (P1-9f): `seedSession {kind:'imported-conversation'}` without its envelope. */
+export type SeedImportRequest = DshSeedImportSource;
 
 /** Where a migration stopped, in the protocol's words (`DshHostSeeded.error`). */
 export class SeedSessionError extends Error {
@@ -104,6 +120,8 @@ export const SOURCE_UNREADABLE = 'source_unreadable';
 export const SESSION_IMPORT_SOURCE_CHANGED = 'session_import_source_changed';
 /** The logical id cannot name a DSH session. */
 export const SEED_LOGICAL_ID_INVALID = 'seed_logical_id_invalid';
+/** An import's conversation is not what Main's scanner makes (P1-9f; `DSH_SEED_CONVERSATION_INVALID`). */
+export const SEED_CONVERSATION_INVALID = 'seed_conversation_invalid';
 /** A stub for this chat that is not an earlier migration of it nothing was said in. */
 export const SEED_STUB_CONFLICT = 'seed_stub_conflict';
 /** DSH refused the seed or the create failed. */
@@ -489,6 +507,124 @@ async function createSession(
   );
 }
 
+// ---- seeding, shared by a migration and an import ------------------------------------
+
+/** What `seedAndStub` needs besides the deps: where, as whom, and what. */
+interface SeedTarget {
+  /** `aiclient-<logical id>`: the first candidate id, and the stub's name. */
+  base: string;
+  stubFile: string;
+  logicalSessionId: string;
+  cwd: string;
+  conversion: SeedConversion;
+  /** Ids an earlier attempt's stub names, never to be taken again. */
+  avoid: ReadonlySet<string>;
+  /** The stub's `origin`, stamped with the commit time. */
+  origin: (at: number) => SessionStubOrigin;
+}
+
+/**
+ * From `admit` to `stub` (see the module comment): the images admitted, the
+ * seed bound and checked again, the session created and read back, the
+ * sidecar, and last the stub. Throws `SeedSessionError`.
+ */
+async function seedAndStub(
+  deps: SeedSessionDeps,
+  target: SeedTarget
+): Promise<{ dshSessionId: string; images: { admitted: number; refused: number } }> {
+  const { conversion, stubFile } = target;
+  const admission = await admitImages(deps.attachments, conversion.images);
+  const bound = bindSeedImages(conversion.seed, admission.refs);
+  const violations = checkSeed(bound.events, { images: 'bound' });
+  if (violations.length > 0) {
+    const first = violations[0];
+    throw new SeedSessionError(
+      'verify',
+      'seed_invariant_violated',
+      `${first?.rule} at ${String(first?.seq)}: ${first?.message}`
+    );
+  }
+  await yieldTurn();
+
+  const dshSessionId = await createSession(
+    deps,
+    target.base,
+    target.avoid,
+    target.cwd,
+    bound.events
+  );
+  await yieldTurn();
+
+  const events = await tryReadSession(deps.query, dshSessionId);
+  if (!Array.isArray(events)) {
+    throw new SeedSessionError(
+      'verify',
+      SEED_READBACK_FAILED,
+      `DSH cannot read ${dshSessionId} back (${events})`
+    );
+  }
+  if (!holdsExactlySeed(events, bound.events)) {
+    throw new SeedSessionError(
+      'verify',
+      SEED_READBACK_MISMATCH,
+      `DSH read ${dshSessionId} back as other than its seed`
+    );
+  }
+
+  const sidecar = grantsSidecarFor(stubFile);
+  if (conversion.grants) {
+    const writeGrants =
+      deps.writeGrants ??
+      ((file: string, record: PersistedGrants) => writeGrantSidecar(file, record, deps.log));
+    if (!writeGrants(sidecar, conversion.grants)) {
+      throw new SeedSessionError(
+        'sidecar',
+        SEED_SIDECAR_FAILED,
+        `The session grants could not be written beside ${stubFile}`,
+        true
+      );
+    }
+  } else {
+    // A sidecar an unfinished attempt left must not grant anything now.
+    rmSync(sidecar, { force: true });
+  }
+
+  const at = (deps.now ?? Date.now)();
+  try {
+    (deps.writeStub ?? writeStubAtomically)(stubFile, {
+      engine: 'dsh',
+      version: SESSION_STUB_VERSION,
+      dshSessionId,
+      logicalSessionId: target.logicalSessionId,
+      cwd: target.cwd,
+      createdAt: at,
+      lineage: [{ dshSessionId, reason: 'create', at }],
+      origin: target.origin(at),
+    });
+  } catch (error) {
+    throw new SeedSessionError(
+      'stub',
+      SEED_STUB_FAILED,
+      `The identity stub could not be written: ${error instanceof Error ? error.message : String(error)}`,
+      true
+    );
+  }
+  return { dshSessionId, images: { admitted: admission.admitted, refused: admission.refused } };
+}
+
+/** `aiclient-<logical id>`, or `seed_logical_id_invalid` when that cannot name a DSH session. */
+function baseIdFor(logicalSessionId: string): string {
+  const base = dshSessionIdFor(logicalSessionId);
+  if (!SAFE_SESSION_ID.test(base)) {
+    throw new SeedSessionError(
+      'request',
+      SEED_LOGICAL_ID_INVALID,
+      `Logical session id cannot name a DSH session: ${logicalSessionId}`
+    );
+  }
+  return base;
+}
+
 // ---- the migration -----------------------------------------------------------------
 
 /** One pi session file made a DSH session (see the module comment); throws `SeedSessionError`. */
@@ -496,16 +632,8 @@ export async function seedPiSession(
   deps: SeedSessionDeps,
   request: SeedSessionRequest
 ): Promise<DshSeedSessionResult> {
-  const now = deps.now ?? Date.now;
   const maxBytes = deps.maxSourceBytes ?? SESSION_MAX_BYTES;
-  const base = dshSessionIdFor(request.logicalSessionId);
-  if (!SAFE_SESSION_ID.test(base)) {
-    throw new SeedSessionError(
-      'request',
-      SEED_LOGICAL_ID_INVALID,
-      `Logical session id cannot name a DSH session: ${request.logicalSessionId}`
-    );
-  }
+  const base = baseIdFor(request.logicalSessionId);
 
   const named = await readSourceBytes(request.sourceFile, maxBytes, request.expect);
   const { converted, from, realSource } = await resolveConverted(named, maxBytes);
@@ -519,6 +647,10 @@ export async function seedPiSession(
       conversion.failure.code,
       conversion.message
     );
+  }
+  const piOrigin = conversion.origin;
+  if (piOrigin.kind !== 'pi-session') {
+    throw new SeedSessionError('build', 'seed_build_failed', 'the converter made no pi origin');
   }
   const source = { sha256: named.sha256, bytes: named.bytes.length, mtimeMs: named.mtimeMs };
   const answer = (
@@ -578,83 +710,117 @@ export async function seedPiSession(
     for (const entry of lineage) avoid.add(entry.dshSessionId);
   }
 
-  const admission = await admitImages(deps.attachments, conversion.images);
-  const bound = bindSeedImages(conversion.seed, admission.refs);
-  const violations = checkSeed(bound.events, { images: 'bound' });
-  if (violations.length > 0) {
-    const first = violations[0];
+  const seeded = await seedAndStub(deps, {
+    base,
+    stubFile,
+    logicalSessionId: request.logicalSessionId,
+    cwd: request.cwd,
+    conversion,
+    avoid,
+    origin: (at) => ({ ...piOrigin, migratedAt: at, file: { path: named.path, ...source } }),
+  });
+  return answer(stubFile, seeded.dshSessionId, false, seeded.images);
+}
+
+// ---- the import (P1-9f) --------------------------------------------------------------
+
+type ImportOrigin = Extract<SeedOrigin, { kind: 'imported-conversation' }>;
+
+/** A stub this very import wrote: same converter, same conversation snapshot. */
+function sameImport(origin: SessionStubOrigin | undefined, conversion: ImportOrigin): boolean {
+  return (
+    origin?.kind === 'imported-conversation' &&
+    origin.converterVersion === SEED_CONVERTER_VERSION &&
+    origin.idPrefix === conversion.idPrefix &&
+    origin.contentHash === conversion.contentHash
+  );
+}
+
+/**
+ * Decision 056: one Claude Code / Codex conversation made a DSH session for
+ * the chat Main minted for it (see the module comment); throws
+ * `SeedSessionError`. Nothing is read from disk: Main read the source.
+ */
+export async function seedImportedConversation(
+  deps: SeedSessionDeps,
+  request: SeedImportRequest
+): Promise<DshSeedImportResult> {
+  const base = baseIdFor(request.logicalSessionId);
+  if (!isImportedConversation(request.conversation)) {
     throw new SeedSessionError(
-      'verify',
-      'seed_invariant_violated',
-      `${first?.rule} at ${String(first?.seq)}: ${first?.message}`
+      'request',
+      SEED_CONVERSATION_INVALID,
+      'The imported conversation is not what the import scanner makes'
     );
   }
+  const conversion = convertImportedConversation(request.conversation);
+  if (!conversion.ok) {
+    throw new SeedSessionError(
+      conversion.failure.stage,
+      conversion.failure.code,
+      conversion.message
+    );
+  }
+  const importOrigin = conversion.origin;
+  if (importOrigin.kind !== 'imported-conversation') {
+    throw new SeedSessionError('build', 'seed_build_failed', 'the converter made no import origin');
+  }
+  const answer = (
+    stubFile: string,
+    dshSessionId: string,
+    reused: boolean,
+    images: { admitted: number; refused: number }
+  ): DshSeedImportResult => ({
+    kind: 'imported-conversation',
+    stubFile,
+    dshSessionId,
+    reused,
+    images,
+    report: conversion.report,
+  });
   await yieldTurn();
 
-  const dshSessionId = await createSession(deps, base, avoid, request.cwd, bound.events);
-  await yieldTurn();
-
-  const events = await tryReadSession(deps.query, dshSessionId);
-  if (!Array.isArray(events)) {
-    throw new SeedSessionError(
-      'verify',
-      SEED_READBACK_FAILED,
-      `DSH cannot read ${dshSessionId} back (${events})`
-    );
-  }
-  if (!holdsExactlySeed(events, bound.events)) {
-    throw new SeedSessionError(
-      'verify',
-      SEED_READBACK_MISMATCH,
-      `DSH read ${dshSessionId} back as other than its seed`
-    );
-  }
-
-  const sidecar = grantsSidecarFor(stubFile);
-  if (conversion.grants) {
-    const writeGrants =
-      deps.writeGrants ??
-      ((file: string, record: PersistedGrants) => writeGrantSidecar(file, record, deps.log));
-    if (!writeGrants(sidecar, conversion.grants)) {
-      throw new SeedSessionError(
-        'sidecar',
-        SEED_SIDECAR_FAILED,
-        `The session grants could not be written beside ${stubFile}`,
-        true
-      );
+  // The chat is new: a stub under its id is this import done before, or not ours.
+  const stubFile = stubPathFor(deps.home, base);
+  const earlier = existingStub(stubFile);
+  if (earlier) {
+    const events =
+      earlier.logicalSessionId === request.logicalSessionId
+        ? await tryReadSession(deps.query, earlier.dshSessionId)
+        : 'missing';
+    if (
+      earlier.logicalSessionId === request.logicalSessionId &&
+      sameImport(earlier.origin, importOrigin) &&
+      samePath(earlier.cwd, request.cwd) &&
+      Array.isArray(events)
+    ) {
+      return answer(stubFile, earlier.dshSessionId, true, { admitted: 0, refused: 0 });
     }
-  } else {
-    // A sidecar an unfinished attempt left must not grant anything now.
-    rmSync(sidecar, { force: true });
-  }
-
-  const at = now();
-  const origin: SessionStubOrigin = {
-    ...conversion.origin,
-    migratedAt: at,
-    file: { path: named.path, ...source },
-  };
-  try {
-    (deps.writeStub ?? writeStubAtomically)(stubFile, {
-      engine: 'dsh',
-      version: SESSION_STUB_VERSION,
-      dshSessionId,
-      logicalSessionId: request.logicalSessionId,
-      cwd: request.cwd,
-      createdAt: at,
-      lineage: [{ dshSessionId, reason: 'create', at }],
-      origin,
-    });
-  } catch (error) {
     throw new SeedSessionError(
       'stub',
-      SEED_STUB_FAILED,
-      `The identity stub could not be written: ${error instanceof Error ? error.message : String(error)}`,
-      true
+      SEED_STUB_CONFLICT,
+      `${stubFile} is there already and is not this import`
     );
   }
-  return answer(stubFile, dshSessionId, false, {
-    admitted: admission.admitted,
-    refused: admission.refused,
+
+  const seeded = await seedAndStub(deps, {
+    base,
+    stubFile,
+    logicalSessionId: request.logicalSessionId,
+    cwd: request.cwd,
+    conversion,
+    avoid: new Set(),
+    origin: (at) => ({ ...importOrigin, importedAt: at }),
   });
+  return answer(stubFile, seeded.dshSessionId, false, seeded.images);
+}
+
+/** The host's `seedSession`, by source kind (`plugin.ts`). */
+export function seedSession(
+  deps: SeedSessionDeps,
+  request: DshSeedSessionSource
+): Promise<DshSeedSessionResult | DshSeedImportResult> {
+  return request.kind === 'imported-conversation'
+    ? seedImportedConversation(deps, request)
+    : seedPiSession(deps, request);
 }

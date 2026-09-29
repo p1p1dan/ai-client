@@ -10,6 +10,8 @@ import { app, safeStorage } from 'electron';
 
 const MANIFEST_VERSION = 1 as const;
 const MANIFEST_FILENAME = 'legacy-import-manifest.json';
+/** A DSH identity stub's suffix (`bridge/stub.ts`): what a P1-9f import records. */
+const DSH_IMPORT_STUB_SUFFIX = '.dsh.json';
 
 export type LegacyImportManifestStatus = 'importing' | 'complete' | 'failed';
 
@@ -81,15 +83,20 @@ function integrityPayload(record: LegacyImportManifestRecord): string {
 }
 
 /**
- * Accepts both session-file naming schemes seen in the wild: pi's writer used
+ * Accepts every session-file naming scheme seen in the wild: pi's writer used
  * `${fileTimestamp}_${id}.jsonl`, the native writer (NativeLegacyImportWriter)
- * uses a bare `${id}.jsonl`. A manifest written by either backend must still
- * load after a restart, or every cross-restart guarantee (dedupe, interrupted
- * cleanup) silently stops applying to whichever backend wrote the record.
+ * uses a bare `${id}.jsonl`, and a DSH import (P1-9f, decision 056) records
+ * its identity stub, `${id}.dsh.json`. A manifest written by any of them must
+ * still load after a restart, or every cross-restart guarantee (dedupe,
+ * interrupted cleanup) silently stops applying to whichever wrote the record.
  */
 function matchesImportSessionFileName(basename: string, targetPiSessionId: unknown): boolean {
   const id = String(targetPiSessionId);
-  return basename === `${id}.jsonl` || basename.endsWith(`_${id}.jsonl`);
+  return (
+    basename === `${id}.jsonl` ||
+    basename.endsWith(`_${id}.jsonl`) ||
+    basename === `${id}${DSH_IMPORT_STUB_SUFFIX}`
+  );
 }
 
 function parseRecord(value: unknown): LegacyImportManifestRecord | null {

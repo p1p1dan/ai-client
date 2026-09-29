@@ -27,7 +27,7 @@ import {
 } from './dshSessionRuntime.ts';
 import type { DshBridgeModelPlan } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
-import { type SeedSessionDeps, seedPiSession } from './seedSession.ts';
+import { type SeedSessionDeps, seedSession } from './seedSession.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 
 /** Stable Cordis plugin name. */
@@ -57,7 +57,8 @@ export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
  * to (P1-6b, decision 042): the bridge serves no session without it.
  * `attachments` (dsh-attachment-local) admits a send's images and stores its
  * text files (P1-4c2, decisions 096 and 097). A migration (`seedSession`,
- * P1-9c) uses the same four: agents, sessions, sessionQuery, attachments.
+ * P1-9c) and an import (P1-9f) use the same four: agents, sessions,
+ * sessionQuery, attachments.
  */
 export const inject = [
   'agents',
@@ -154,11 +155,12 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     },
     // Decision 030: Main's preview, read without a channel.
     readPage: (request) => readSessionPage(ctx.sessionQuery, request),
-    // Decision 054 (P1-9c): a legacy pi session made a DSH session, without a channel.
+    // Decision 054 (P1-9c): a legacy pi session made a DSH session, without a channel;
+    // decision 056 (P1-9f): a Claude Code / Codex conversation, the same way.
     seedSession: (request) => {
       const home = process.env.DSH_HOME;
       if (!home) return Promise.reject(new Error('no DSH_HOME in this host'));
-      return seedPiSession(
+      return seedSession(
         {
           home,
           agents: ctx.agents as unknown as SeedSessionDeps['agents'],

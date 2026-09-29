@@ -84,7 +84,10 @@
  *      two resume as any DSH chat, their first page the preview's, and a
  *      P0-RECALL turn sees what 1.0.x's model context held and not what it
  *      did not. The same file again answers the same stub, untouched; an
- *      empty file is refused at decode; no source file changes.
+ *      empty file is refused at decode; no source file changes. P1-9f adds a
+ *      Claude Code conversation seeded as a new chat (`kind:
+ *      'imported-conversation'`, decision 056): previewed, resumed, recalled
+ *      without its display-only tool row, and reused when seeded again.
  *
  * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
  * and a verdict. Signals only ever go to a ChildProcess this script spawned.
@@ -114,7 +117,10 @@ import {
   dshHostPluginsEnvValue,
 } from '../../main/services/agent-host/dshHostEnvironment.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
-import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
+import {
+  convertImportedConversation,
+  convertPiSessionBytes,
+} from '../../shared/legacyPiSession/convert/index.ts';
 import { fakeGatewayPlan, HostClient, type Message, type ServedPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
@@ -1182,6 +1188,119 @@ async function main() {
       cwd: box.workspace,
     });
     migrate.damaged = { ok: damaged.ok, error: damaged.error };
+    // P1-9f (decision 056): a Claude Code conversation as Main's scanner makes it,
+    // seeded by the host as a new chat; its preview is the converter's timeline,
+    // its resume sees the prompt and the reply and not the display-only tool row.
+    const importLogical = 'session-import-claude-code-smoke';
+    const importedConversation = {
+      schemaVersion: 1,
+      importerVersion: 'b4-legacy-v2',
+      sourceKind: 'claude-code',
+      stableSourceIdentity: 'smoke-project/session-1',
+      sourceSessionId: 'session-1',
+      workspacePath: box.workspace,
+      title: 'Imported in the smoke',
+      startedAt: 1_790_000_000_000,
+      sourceFingerprint: {
+        stableSourceIdentity: 'smoke-project/session-1',
+        contentHash: createHash('sha256').update('smoke-import').digest('hex'),
+        size: 12,
+        mode: 0o100644,
+        mtimeMs: 1_790_000_000_000,
+      },
+      entries: [
+        { kind: 'user', text: 'IMPORT-USER-MARKER what is here?', timestamp: 1_790_000_000_001 },
+        {
+          kind: 'display',
+          displayKind: 'tool',
+          title: 'Legacy tool result: Bash',
+          toolCallId: 'call-1',
+          toolName: 'Bash',
+          output: 'IMPORT-DISPLAY-MARKER',
+          isError: false,
+          redacted: true,
+          timestamp: 1_790_000_000_002,
+        },
+        {
+          kind: 'assistant',
+          blocks: [{ type: 'text', text: 'IMPORT-REPLY-MARKER nothing much.' }],
+          model: 'claude-test',
+          timestamp: 1_790_000_000_003,
+        },
+      ],
+      diagnostics: [],
+    } as const;
+    const importSeeded = await j.client.seedImport({
+      conversation: importedConversation,
+      logicalSessionId: importLogical,
+      cwd: box.workspace,
+    });
+    const importResult = importSeeded.result as Message | undefined;
+    const expectedImport = convertImportedConversation(
+      structuredClone(importedConversation) as unknown as Parameters<
+        typeof convertImportedConversation
+      >[0]
+    );
+    const expectedImportIds = expectedImport.ok
+      ? projectDshHistory(expectedImport.seed).map((row) => row.id)
+      : [];
+    const importPage = importResult
+      ? await j.client.readPage({
+          stubFile: String(importResult.stubFile),
+          logicalSessionId: importLogical,
+        })
+      : undefined;
+    const importPageIds = idsOf(importPage?.page);
+    const importRow: Message = {
+      ok: importSeeded.ok,
+      error: importSeeded.error,
+      roundTripMs: importSeeded.roundTripMs,
+      kind: importResult?.kind,
+      reused: importResult?.reused,
+      dshSessionId: importResult?.dshSessionId,
+      pageOk: importPage?.ok,
+      messages: importPageIds.length,
+      pageIdsMatch:
+        importPageIds.length > 0 &&
+        JSON.stringify(importPageIds) === JSON.stringify(expectedImportIds),
+    };
+    if (importResult) {
+      const chImport = j.client.openChannel();
+      const boot = await bootstrap(j, chImport, {
+        logicalSessionId: importLogical,
+        cwd: box.workspace,
+        sessionFile: String(importResult.stubFile),
+      });
+      importRow.bootOk = boot.ok;
+      const present = ['IMPORT-USER-MARKER', 'IMPORT-REPLY-MARKER'];
+      const absent = ['IMPORT-DISPLAY-MARKER'];
+      const turn = await runTurn(
+        j,
+        chImport,
+        importLogical,
+        'IMPORTED-claude',
+        `P0-RECALL ${JSON.stringify({ markers: [...present, ...absent] })} which markers do you see?`
+      );
+      const [seen = '', missed = ''] = turn.reply.split(' missing=');
+      importRow.recall = turn.reply;
+      importRow.recallOk =
+        turn.completed &&
+        present.every((marker) => seen.includes(marker)) &&
+        absent.every((marker) => missed.includes(marker));
+      await closeSession(j, chImport);
+      // The same conversation for the same chat again: the stub it made, nothing new.
+      const importAgain = await j.client.seedImport({
+        conversation: importedConversation,
+        logicalSessionId: importLogical,
+        cwd: box.workspace,
+      });
+      const againResult = importAgain.result as Message | undefined;
+      importRow.againReused =
+        importAgain.ok === true &&
+        againResult?.reused === true &&
+        againResult?.dshSessionId === importResult.dshSessionId;
+    }
+    migrate.imported = importRow;
     migrate.sourcesUntouched = {
       same:
         JSON.stringify([...migrations.map((m) => m.file), v3Copy].map(fingerprint)) ===
@@ -1603,6 +1722,18 @@ async function main() {
       migrated('again').reused === true &&
       migrated('again').sameSession === true &&
       migrated('again').stubUntouched === true,
+    // ...a Claude Code conversation imported as a DSH chat (P1-9f): previewed,
+    // resumed with what reached 1.0.x's model and not its display rows, and
+    // the same import again answered with the stub it made...
+    importedConversationSeeded:
+      migrated('imported').ok === true &&
+      migrated('imported').kind === 'imported-conversation' &&
+      migrated('imported').reused === false &&
+      migrated('imported').pageOk === true &&
+      migrated('imported').pageIdsMatch === true &&
+      migrated('imported').bootOk === true &&
+      migrated('imported').recallOk === true &&
+      migrated('imported').againReused === true,
     // ...an unreadable one refused where 1.0.x refused it, and no source changed.
     migrationRefusesAndTouchesNothing:
       migrated('damaged').ok === false &&
