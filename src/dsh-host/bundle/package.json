@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row, the read-only credentials row, the permission gate row, the loop guard row, and the row mounting DSH's ask_user_question tool.",
+  "description": "ai-client worker-engine bundle over dsh-base: host-only composition, DeepSeek official endpoints and telemetry off, the worker-RPC bridge row, the read-only credentials row, the permission gate row, the loop guard row, the encrypted-read fallback row, and the row mounting DSH's ask_user_question tool.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -12,6 +12,7 @@
     "./credentials": "./lib/credentials.js",
     "./permissions": "./lib/permissions.js",
     "./loop-guard": "./lib/loop-guard.js",
+    "./encrypted-read": "./lib/encrypted-read.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },
@@ -24,6 +25,7 @@
     "@deepseek-ai/cordis": "~4.0.4",
     "@deepseek-ai/dsh-agent": "0.1.7-rc.2",
     "@deepseek-ai/dsh-credentials": "0.1.7-rc.2",
+    "@deepseek-ai/dsh-fs": "0.1.7-rc.2",
     "@deepseek-ai/dsh-llm": "0.1.7-rc.2"
   }
 }

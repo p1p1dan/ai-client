@@ -775,6 +775,7 @@ describe('bridge bundles (decision 011)', () => {
     ],
     'aiclient-permissions': ['tools'],
     'aiclient-loop-guard': ['tools'],
+    'aiclient-encrypted-read': ['fs'],
   };
   /** Rows that are a Cordis service class (the default export) instead of `apply`. */
   const SERVICE_ROWS = new Set(['aiclient-credentials']);
@@ -787,6 +788,10 @@ describe('bridge bundles (decision 011)', () => {
     '@deepseek-ai/dsh-agent': 'export function installModelSelection() { return () => {}; }\n',
     '@deepseek-ai/dsh-credentials':
       'export class CredentialProvider { constructor(ctx) { this.ctx = ctx; } }\n',
+    '@deepseek-ai/dsh-fs':
+      'export class FsError extends Error {\n' +
+      '  constructor(message, code, options) { super(message, options); this.code = code; }\n' +
+      '}\n',
   };
 
   it('flags a credentials row bundle that takes in more than its sources and the key rules (P1-5b)', () => {

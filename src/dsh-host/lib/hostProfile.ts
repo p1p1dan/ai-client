@@ -49,12 +49,16 @@ export const REQUIRED_DISABLED: readonly string[] = [
 /**
  * Rows the composition must carry and keep on (host.ts checks them on the
  * composed list). The loop guard and the credentials row are only checked: a
- * layer that turns one off refuses the boot (decisions 065, 034).
+ * layer that turns one off refuses the boot (decisions 065, 034). The
+ * encrypted-read row is checked the same way: it is inert outside Windows,
+ * and a composition without it would silently lose the P1-13c fallback
+ * (decision 091).
  */
 export const REQUIRED_ENABLED: readonly string[] = [
   'aiclient-loop-guard',
   'aiclient-credentials',
   'aiclient-permissions',
+  'aiclient-encrypted-read',
 ];
 
 /**

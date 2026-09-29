@@ -100,12 +100,13 @@ describe('requiredDisabledOverlays (HS-02, decision 023 rule 3)', () => {
   });
 });
 
-describe('required rows on (P1-8, P1-5b, P1-6b)', () => {
-  it('checks the loop guard, the credentials row and the permission gate', () => {
+describe('required rows on (P1-8, P1-5b, P1-6b, P1-13c)', () => {
+  it('checks the loop guard, the credentials row, the permission gate and the encrypted-read fallback', () => {
     expect([...REQUIRED_ENABLED]).toEqual([
       'aiclient-loop-guard',
       'aiclient-credentials',
       'aiclient-permissions',
+      'aiclient-encrypted-read',
     ]);
   });
 

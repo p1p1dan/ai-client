@@ -36,11 +36,11 @@ describe('host.ts composition (HS-02, HS-03, decisions 023 and 025)', () => {
     );
   });
 
-  it('refuses a composition without the loop guard, the credentials row or the permission gate on (P1-8, P1-5b, P1-6b)', () => {
+  it('refuses a composition without the loop guard, the credentials row, the permission gate or the encrypted-read fallback on (P1-8, P1-5b, P1-6b, P1-13c)', () => {
     expect(host).toContain('const notEnabled = REQUIRED_ENABLED.filter(');
     expect(host).toMatch(/if \(notEnabled\.length > 0\) fail\(/);
     expect(read('lib', 'hostProfile.ts')).toMatch(
-      /export const REQUIRED_ENABLED: readonly string\[\] = \[\s*'aiclient-loop-guard',\s*'aiclient-credentials',\s*'aiclient-permissions',\s*\];/
+      /export const REQUIRED_ENABLED: readonly string\[\] = \[\s*'aiclient-loop-guard',\s*'aiclient-credentials',\s*'aiclient-permissions',\s*'aiclient-encrypted-read',\s*\];/
     );
   });
 });
@@ -188,6 +188,7 @@ describe('the product bundle: one bridge row always on, the permission row, the 
       '- id: aiclient-bridge',
       '- id: aiclient-permissions',
       '- id: aiclient-loop-guard',
+      '- id: aiclient-encrypted-read',
     ]);
   });
 
@@ -239,12 +240,19 @@ describe('the product bundle: one bridge row always on, the permission row, the 
     );
   });
 
+  it('composes aiclient-encrypted-read on, with no config and no disabled switch (P1-13c)', () => {
+    expect(rowOf('aiclient-encrypted-read')).toMatch(
+      /^- id: aiclient-encrypted-read\n\s+name: '@aiclient\/dsh-app\/encrypted-read'\n?$/
+    );
+  });
+
   it('exports only its rows besides its patch', () => {
     expect(Object.keys(manifest.exports).sort()).toEqual([
       '.',
       './bridge',
       './cordis.patch.yml',
       './credentials',
+      './encrypted-read',
       './loop-guard',
       './package.json',
       './permissions',
