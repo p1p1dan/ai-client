@@ -10,7 +10,7 @@ Role: implementation-status。更新日期：2026-09-28。只放当前阶段、�
 ## Current Phase
 
 P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～089 已于 2026-09-28 由用户裁决，见[决策 090](decisions/090-user-rulings-2026-09-28.md)）。
-- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-4d3、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-7a、P1-7b、P1-7c、P1-8、P1-9a / 9b / 9c / 9g、P1-10a（含收尾）、P1-10b、P1-10c、P1-10d、P1-16a、P1-16e，以及 P1-12 / P1-16 的前置搬迁。
+- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-4d3、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a、P1-6b、P1-6c、P1-7a、P1-7b、P1-7c、P1-8、P1-9a / 9b / 9c / 9d / 9g、P1-10a（含收尾）、P1-10b、P1-10c、P1-10d、P1-16a、P1-16e，以及 P1-12 / P1-16 的前置搬迁。
 - **现在分支上能做到**：用界面选的模型聊天，key 每次请求时从 Main 拉取；每次工具调用都经我方审批，「本会话允许」在宿主重启后仍有效，换档立即作用到闸门。
 - **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
 - **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
@@ -35,12 +35,17 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
    1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
    2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → ~~P1-4d3（联网装 `dsh-tool-ask-user`）~~ 已落地 `4e003c1b` → P1-4e（进 CI 的 `build.yml`、`dsh-bridge-gate.yml` 改动先问用户，决策 100）；
    3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；~~P1-16e 旧资产提示~~ 已落地 `6d2fc8a0`；~~P1-10c 插件页~~ 已落地 `0bd912f3`；
-   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（**原型场景 G 右列终端已出 `3c47c0b1`，等用户确认三个问题后开工**）；之后 ~~P1-9c~~ 已落地 `01c57b52` → P1-9d～f、P1-15、P1-6d。
+   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（**原型场景 G 右列终端已出 `3c47c0b1`，等用户确认三个问题后开工**）；之后 ~~P1-9c~~ 已落地 `01c57b52` → ~~P1-9d~~ 已落地 `7f6bef13` → P1-9e～f、P1-15、P1-6d。
 
 **本机限制（2026-09-28 用户明令）**：不跑 `pnpm build`（整包 electron-vite 构建两次把系统弄崩）等庞大操作；验证只做四套 tsc、挑选的 vitest、宿主冒烟与 `bridge-record`，一次一个。**未验证项**：P1-10b 给 `DshHostProcess.ts` 加了静态导入，vite 拆块没有在本机检查，交 CI 或用户构建时看。
 
 ## Last Landed
 
+- 2026-09-29 P1-9d 旧会话迁移的 Main 编排与索引 `7f6bef13`（取舍见[决策 122](decisions/122-p1-9d-migration-orchestration-choices.md)，待审批，**请重点看第 1、6、7、13、14 条**：`seedSession` 超时 120 s 是估算；错误码 `legacy_migration_failed:<阶段>/<码>` 只含阶段和码；宿主标可重试的失败自动再试两次；未给档位时沿用旧会话权限；需要引擎的操作对旧行改报 `legacy_migration_required`）：
+  - 首次继续时 Main 先迁移再恢复（决策 050）；`commitMigrated` 原子写两行，旧 pi 行改键 `<逻辑 id>_pi`（`~` 做不了 DSH 会话 id）；侧栏隐藏已迁移的 pi 行，1.0.x 里续写过的标分叉；裁剪保护被引用的 pi 行。不做 TUI 交接。
+  - **过渡状态**：Main 不再产出 `legacy_session_readonly`，渲染层的只读卡片、重试与迁移中显示要等 P1-9e 改写；分支未发布，中间态可接受。
+  - 编排器复跑：四套 tsc 通过；`src/main`、`src/shared/types`、bridge、`src/shared/__tests__`、全仓 Static / Scan / Wiring 共 243 个文件、3245 例，渲染层 chat 与 stores 171 个文件、3444 例，全部通过；真宿主集成 31/31（新增迁移阶段：只读语料首次继续触发迁移、续聊成功、源文件不变、二次继续不再迁移）；bridge-smoke 60 项；`--check` 28 个场景无差异。
+  - 遗留：P1-9f 之前，迁移过的导入会话再导一次会多出一份；实验 E3 仍未做，120 s 超时待复核。
 - 2026-09-29 P1-9c 旧 pi 会话迁移的宿主执行 `01c57b52`（取舍见[决策 121](decisions/121-p1-9c-seed-session-choices.md)，第 1～5 条编排者裁定，第 6～20 条待审批）：
   - **开工实验 E1 推翻了方案假设**（[证据](evidence/p1-9c-seed-experiments-2026-09-28.md)）：含压缩的 8 份语料，种子写得进去、dispose 后冷读报 `compaction checkpoint has no matching compaction/start`，会话从此打不开。DSH 读盘要求检查点落在 `compaction/start` → `summary` → `end` 事务里，创建时不查；P1-9b 的 `checkSeed` 也没有这条。编排者裁定按 DSH 实时压缩的写法修转换器（版本 2），修后 27 份可转换语料全部通过，E2 成立。
   - `shadowedTokenCount` 用照搬的 `dsh-token-meter` 估算器（MIT，已登记 `THIRD_PARTY_NOTICES.md`，漂移测试逐条比对 DSH 原函数）；`provider` / `model` 取前一条回复的（pi 压缩条目不记）。
