@@ -23,6 +23,13 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   2. CI 在跑时派代理做 P1-4e（录制门禁进 CI）；
   3. P1-7d GUI 点验与真实网关 R1～R10 一起做，期间不跑代理；R1～R10 要用户在开发版里登录公司账号，编排者不经手凭据；
   4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。
+- **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
+  - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
+  - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
+    - `l1PilotWriteAskedReadRan`：工作区内的 read / grep / glob / pwsh 全都弹了审批。推断：闸门的 `cwd` 没有规范化，runner 的临时目录是 8.3 短名（`RUNNER~1`），目标路径经 `fs/promises` 的 `realpath` 展开成长名，于是判成「工作区外」；
+    - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
+    - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
+  - 下一步：P1-4e 代理交回后，派代理修这三项，另建只打包宿主的 Windows 冒烟工作流加快迭代。
 - **在等**：Windows 端的 P1-13c（决策 091）。用户已让它从 `eda6c248` 开分支开工，合并冲突由编排者解决。
 - 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
 
