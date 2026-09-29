@@ -767,6 +767,8 @@ describe('bridge bundles (decision 011)', () => {
       'sessions',
       'agentLoop',
       'sessionQuery',
+      // P1-15 (decision 125): one-shot completions stream through the host's llm.
+      'llm',
       'aiclientPermissions',
       // P1-4c2 (decisions 096, 097): a send's images and text files are admitted here.
       'attachments',
