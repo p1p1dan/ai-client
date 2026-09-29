@@ -7,3 +7,7 @@
 *.mjs text eol=lf
 *.cjs text eol=lf
 *.json text eol=lf
+# YAML too: static tests match cordis.patch.yml rows line by line (P1-13c found
+# CRLF checkouts on core.autocrlf=true machines failing them).
+*.yml text eol=lf
+*.yaml text eol=lf
