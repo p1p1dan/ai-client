@@ -158,6 +158,15 @@ export interface ChatSession {
    */
   unbound?: { workspacePath: string };
   /**
+   * dsh-rebase P1-9e (decision 051, optional-field addition): this is the
+   * legacy `pi` row a migrated chat came from, and its file changed after the
+   * migration — the chat was continued in 1.0.x after a rollback. Main lists
+   * such a row again (`migrationDiverged`) instead of hiding it; continuing it
+   * moves that newer copy over as a chat of its own. Set from the index row by
+   * `mergeSessionIndex`, never by the runtime.
+   */
+  legacyDiverged?: true;
+  /**
    * a1 (2026-07-30 net-visibility batch, optional-field addition): the CLI's
    * own transport-retry loop, when session.status last carried one. Cleared
    * (set back to undefined) on every session.status WITHOUT a retry payload

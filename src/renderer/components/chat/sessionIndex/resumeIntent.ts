@@ -103,10 +103,11 @@ export function shouldResumeSession(
   if (!session.unbound && !workspace) {
     return { shouldResume: false, reason: 'no-workspace' };
   }
-  // dsh-rebase P1-1: a legacy `pi` session is still sent to Main, which is the
-  // only side that can tell a transcript that was never written (repaired into
-  // a DSH session, decision 005 rule 4) from a real one (refused with
-  // `legacy_session_readonly`, which the history card then shows).
+  // dsh-rebase P1-1 / P1-9d: a legacy `pi` session is sent to Main like any
+  // other, which is the only side that can tell a transcript that was never
+  // written (repaired into a new DSH session) from a real one (moved to the
+  // current engine on this resume, decision 050; a failure rejects with
+  // `legacy_migration_failed:<stage>/<code>`, which the history card shows).
   const agent = sessionAgent(session);
   if (!isAgentWireName(agent)) {
     return { shouldResume: false, reason: `unsupported-agent:${agent}` };
@@ -144,16 +145,18 @@ export function shouldResumeSession(
 }
 
 /**
- * dsh-rebase P1-1 (GUI point-check D1) — a chat the previous engine wrote,
- * which Main keeps read-only until P1-9 migrates it (decision 005).
+ * dsh-rebase P1-9e (decisions 050, 122 rule 15) — a chat the previous engine
+ * wrote, which the next resume moves to the current engine before it opens it.
  *
- * The same rule Main applies (`assertCreatableIndexRow`): a `pi` binding that
- * names a transcript. It is a prediction, for the composer to say so BEFORE a
- * send is refused: Main alone can tell a transcript that was never written,
- * and repairs that row into a DSH session on its first resume — at which point
- * `session.created` rebinds the row here and this turns false.
+ * The same rule Main applies (`assertCreatableIndexRow`, `prepareResume`): a
+ * `pi` binding that names a transcript. It is a prediction, which is all the
+ * renderer needs it for — saying "moving this chat" while that resume is in
+ * flight, and "your first message moves it" before: Main alone can tell a
+ * transcript that was never written (it repairs that row into a new DSH
+ * session instead), and once either has happened `session.created` /
+ * `session.resumed` rebinds the row here to `dsh` and this turns false.
  */
-export function isLegacyReadOnlySession(
+export function willMigrateOnResume(
   session: Pick<ChatSession, 'agent' | 'runtimeIdentity'> | undefined
 ): boolean {
   return (

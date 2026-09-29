@@ -1,3 +1,4 @@
+import { zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
@@ -6,6 +7,7 @@ import {
   chipForWorkspace,
   deriveRecentRows,
   formatRelativeAge,
+  LEGACY_DIVERGED_HINT,
   RECENT_DEFAULT_LIMIT,
   RECENT_WINDOW_MS,
   resolveActiveProjectId,
@@ -507,6 +509,43 @@ describe('sidebar rows are Pi-only', () => {
       ['s2', 'feat/x'],
     ]);
     expect(rows.every((row) => !('agentChip' in row))).toBe(true);
+  });
+});
+
+/**
+ * dsh-rebase P1-9e (decision 051): the legacy copy of a migrated chat that
+ * 1.0.x wrote to since is listed next to the migrated chat, under the same
+ * title; its row carries the `1.0.x` mark while it is still that copy.
+ */
+describe('the diverged legacy row (P1-9e)', () => {
+  const rowsOf = (sessions: ChatSession[]) =>
+    buildSidebarFolders({ projects, workspaces, sessions }).find(
+      (folder) => folder.projectId === 'p-ai'
+    )?.rows ?? [];
+
+  it('marks the legacy copy and nothing else', () => {
+    const rows = rowsOf([
+      session({ id: 's1', agent: 'dsh', updatedAt: NOW }),
+      session({ id: 's1_pi', agent: 'pi', legacyDiverged: true, updatedAt: NOW - 1 }),
+      session({ id: 's2', agent: 'pi', runtimeIdentity: '/p/s2.jsonl', updatedAt: NOW - 2 }),
+    ]);
+    expect(rows.map((row) => [row.sessionId, row.legacyDiverged ?? null])).toEqual([
+      ['s1', null],
+      ['s1_pi', true],
+      ['s2', null],
+    ]);
+    // Present only when true, like `unbound`.
+    expect('legacyDiverged' in (rows[0] ?? {})).toBe(false);
+  });
+
+  it('drops the mark the moment the copy is moved over and rebound to DSH', () => {
+    const rows = rowsOf([session({ id: 's1_pi', agent: 'dsh', legacyDiverged: true })]);
+    expect(rows[0]?.legacyDiverged).toBeUndefined();
+  });
+
+  it('ships the mark’s explanation in the dictionary', () => {
+    // A constant, not a `t('…')` literal: the catalog scan cannot see it.
+    expect(zhTranslations[LEGACY_DIVERGED_HINT]).toBeDefined();
   });
 });
 

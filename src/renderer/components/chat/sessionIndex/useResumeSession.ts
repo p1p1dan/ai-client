@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
 import { useChatSessionsStore } from '@/stores/chatSessions';
-import { encodePiResumeError, isReadOnlyResumeRefusal } from '../historyError';
+import { encodePiResumeError, isLegacyMigrationRefusal } from '../historyError';
 import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
+import { resumeSessionWithMigration } from './legacyMigration';
 import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
 
 /**
@@ -14,81 +14,86 @@ import { shouldApplyResumeResult, shouldResumeSession } from './resumeIntent';
  *
  * Renderer-only: does not read Pi JSONL. Session metadata comes from the
  * durable index; branch history arrives only through WorkerSlot RuntimeEvents.
+ *
+ * dsh-rebase P1-9e: a legacy chat is moved to the current engine by this very
+ * resume (decision 050); `resumeSessionWithMigration` shows that while it runs
+ * and applies what the answer reports.
  */
 
-export interface UseResumeSessionResult {
-  resume: (
-    sessionId: string,
-    options?: {
-      persistedRuntimeIdentity?: string;
-      model?: string;
-      /**
-       * concurrency-02 — reopen a session whose writer lock still looks held.
-       * Passed only by the `session_locked` notice's "Restart engine" button;
-       * on DSH, Main restarts the shared engine before it reopens (P1-3c).
-       */
-      forceTakeover?: boolean;
-    }
-  ) => Promise<boolean>;
+export interface ResumeSessionOptions {
+  persistedRuntimeIdentity?: string;
+  model?: string;
+  /**
+   * concurrency-02 — reopen a session whose writer lock still looks held.
+   * Passed only by the `session_locked` notice's "Restart engine" button;
+   * on DSH, Main restarts the shared engine before it reopens (P1-3c).
+   */
+  forceTakeover?: boolean;
 }
 
-export function useResumeSession(): UseResumeSessionResult {
-  const resume = useCallback(
-    async (
-      sessionId: string,
-      options: {
-        persistedRuntimeIdentity?: string;
-        model?: string;
-        forceTakeover?: boolean;
-      } = {}
-    ): Promise<boolean> => {
-      const state = useChatSessionsStore.getState();
-      const session = state.sessions.find((item) => item.id === sessionId);
-      const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
-      // U12 fix: read from the same per-session store the composer chip writes.
-      // Without it a sidebar resume spawns a worker on the default tier while
-      // the chip still shows the tier the user chose.
-      const storedPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions();
-      const intent = shouldResumeSession(session, workspace, {
-        persistedRuntimeIdentity: options.persistedRuntimeIdentity,
-        model: options.model,
-        ...(options.forceTakeover ? { forceTakeover: true } : {}),
-        ...(storedPermissions ? { permissions: storedPermissions } : {}),
+export interface UseResumeSessionResult {
+  resume: (sessionId: string, options?: ResumeSessionOptions) => Promise<boolean>;
+}
+
+/**
+ * The resume action itself, outside React: it reads the store at call time and
+ * holds no component state, so the hook below only hands it out. Exported for
+ * callers that re-run an operation after moving a legacy chat
+ * (`runAfterLegacyMigration`).
+ */
+export async function resumeSessionById(
+  sessionId: string,
+  options: ResumeSessionOptions = {}
+): Promise<boolean> {
+  const state = useChatSessionsStore.getState();
+  const session = state.sessions.find((item) => item.id === sessionId);
+  const workspace = state.workspaces.find((ws) => ws.id === session?.workspaceId);
+  // U12 fix: read from the same per-session store the composer chip writes.
+  // Without it a sidebar resume spawns a worker on the default tier while
+  // the chip still shows the tier the user chose.
+  const storedPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions();
+  const intent = shouldResumeSession(session, workspace, {
+    persistedRuntimeIdentity: options.persistedRuntimeIdentity,
+    model: options.model,
+    ...(options.forceTakeover ? { forceTakeover: true } : {}),
+    ...(storedPermissions ? { permissions: storedPermissions } : {}),
+  });
+  if (!intent.shouldResume || !intent.args) return false;
+
+  try {
+    await resumeSessionWithMigration(intent.args);
+    // F2 (D29 adversarial-review, major): guard against the race where
+    // the user selects a different session while resumeSession is in
+    // flight (see shouldApplyResumeResult's doc comment — most visible on
+    // a cold-start resume). Both callers already set activeSessionId to
+    // sessionId synchronously before calling resume(), so this write is a
+    // redundant backstop; skipping it here is zero-risk when the guard
+    // fails and prevents dragging the user back to a session they left.
+    if (shouldApplyResumeResult(useChatSessionsStore.getState().activeSessionId, sessionId)) {
+      useChatSessionsStore.setState({
+        activeSessionId: sessionId,
+        lastError: null,
       });
-      if (!intent.shouldResume || !intent.args) return false;
+    }
+    return true;
+  } catch (error) {
+    const encodedError = encodePiResumeError(error);
+    useChatSessionsStore.setState((current) => ({
+      // dsh-rebase P1-9e: a legacy chat that could not be moved (or has to be
+      // moved first) is reported by its history card alone; no raw copy of
+      // Main's sentence above the composer.
+      lastError: isLegacyMigrationRefusal(encodedError.code) ? null : encodedError.message,
+      historyErrors: {
+        ...current.historyErrors,
+        [sessionId]: encodedError.encoded,
+      },
+    }));
+    return false;
+  }
+}
 
-      try {
-        await window.electronAPI.chat.resumeSession(intent.args);
-        // F2 (D29 adversarial-review, major): guard against the race where
-        // the user selects a different session while resumeSession is in
-        // flight (see shouldApplyResumeResult's doc comment — most visible on
-        // a cold-start resume). Both callers already set activeSessionId to
-        // sessionId synchronously before calling resume(), so this write is a
-        // redundant backstop; skipping it here is zero-risk when the guard
-        // fails and prevents dragging the user back to a session they left.
-        if (shouldApplyResumeResult(useChatSessionsStore.getState().activeSessionId, sessionId)) {
-          useChatSessionsStore.setState({
-            activeSessionId: sessionId,
-            lastError: null,
-          });
-        }
-        return true;
-      } catch (error) {
-        const encodedError = encodePiResumeError(error);
-        useChatSessionsStore.setState((current) => ({
-          // dsh-rebase P1-1 (D1): a read-only legacy chat's history card is the
-          // whole report; no raw copy of Main's sentence above the composer.
-          lastError: isReadOnlyResumeRefusal(encodedError.code) ? null : encodedError.message,
-          historyErrors: {
-            ...current.historyErrors,
-            [sessionId]: encodedError.encoded,
-          },
-        }));
-        return false;
-      }
-    },
-    []
-  );
+const RESULT: UseResumeSessionResult = { resume: resumeSessionById };
 
-  return { resume };
+export function useResumeSession(): UseResumeSessionResult {
+  return RESULT;
 }

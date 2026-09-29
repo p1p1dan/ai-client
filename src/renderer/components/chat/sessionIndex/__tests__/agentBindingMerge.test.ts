@@ -1,6 +1,6 @@
 import { DSH_AGENT, PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import type { SessionCreatedEvent } from '@shared/types/runtimeEvents';
-import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import type { SessionIndexListEntry } from '@shared/types/sessionIndex';
 import { describe, expect, it } from 'vitest';
 import {
   applyRuntimeEvent,
@@ -20,7 +20,10 @@ import { mergeSessionIndex } from '../sessionIndexMerge';
  * whole tree quietly disagrees with them.
  */
 
-function entry(sessionId: string, opts: Partial<SessionIndexEntry> = {}): SessionIndexEntry {
+function entry(
+  sessionId: string,
+  opts: Partial<SessionIndexListEntry> = {}
+): SessionIndexListEntry {
   return {
     sessionId,
     workspacePath: '/repo',
@@ -149,6 +152,86 @@ describe('T32 — legacy index bindings never re-enter live execution', () => {
     );
     expect(sessions).toEqual([]);
     expect(orphaned).toEqual([]);
+  });
+});
+
+/**
+ * dsh-rebase P1-9e (decisions 051, 122 rules 10 and 15, 123). Main hides the
+ * legacy rows migrated chats came from, and lists one again, flagged
+ * `migrationDiverged`, once 1.0.x has written to its file since. The merge
+ * turns the flag into `legacyDiverged`, and lets a migrated row's binding
+ * replace a live row that still holds the legacy one.
+ */
+describe('P1-9e — migrated chats and their legacy rows', () => {
+  const PI_FILE = '/profile/pi-agent/sessions/s1.jsonl';
+  const STUB = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
+  const MIGRATED_FROM = {
+    legacySessionId: 's1_pi',
+    runtimeIdentity: PI_FILE,
+    sourceSha256: 'a'.repeat(64),
+    sourceBytes: 10,
+    sourceMtimeMs: 1,
+    migratedAt: 2,
+    converter: 'pi-dsh/2',
+  };
+
+  it('marks a diverged legacy row, new or live, and clears the mark with the flag', () => {
+    const diverged = entry('s1_pi', {
+      runtimeIdentity: PI_FILE,
+      migratedTo: 's1',
+      migrationDiverged: true,
+    });
+    const fresh = mergeSessionIndex([], [diverged], { workspaces }).sessions;
+    expect(fresh[0]).toMatchObject({ id: 's1_pi', agent: PI_AGENT, legacyDiverged: true });
+
+    const live = mergeSessionIndex(fresh, [diverged], { workspaces }).sessions;
+    expect(live[0].legacyDiverged).toBe(true);
+
+    // Moved over since (or its file put back): Main lists it without the flag.
+    const settled = mergeSessionIndex(
+      live,
+      [entry('s1_pi', { runtimeIdentity: PI_FILE, migratedTo: 's1' })],
+      { workspaces }
+    ).sessions;
+    expect(settled[0].legacyDiverged).toBeUndefined();
+  });
+
+  it('never marks an ordinary row', () => {
+    const { sessions } = mergeSessionIndex(
+      [],
+      [entry('s1', { runtimeIdentity: PI_FILE }), entry('s2', { agent: DSH_AGENT })],
+      { workspaces }
+    );
+    expect(sessions.map((row) => 'legacyDiverged' in row)).toEqual([false, false]);
+  });
+
+  it('lets a migration replace the legacy binding a live row still holds', () => {
+    // The move committed, and the resume after it failed: no `session.resumed`
+    // ever rebound the live row.
+    const live = [session('s1', { agent: PI_AGENT, runtimeIdentity: PI_FILE })];
+    const { sessions } = mergeSessionIndex(
+      live,
+      [entry('s1', { agent: DSH_AGENT, runtimeIdentity: STUB, migratedFrom: MIGRATED_FROM })],
+      { workspaces }
+    );
+    expect(sessions[0]).toMatchObject({ agent: DSH_AGENT, runtimeIdentity: STUB });
+  });
+
+  it('reverse: a live binding still wins over a DSH row that was never migrated', () => {
+    const live = [session('s1', { agent: DSH_AGENT, runtimeIdentity: 'rt-live' })];
+    const { sessions } = mergeSessionIndex(
+      live,
+      [entry('s1', { agent: DSH_AGENT, runtimeIdentity: STUB, migratedFrom: MIGRATED_FROM })],
+      { workspaces }
+    );
+    expect(sessions[0]).toMatchObject({ agent: DSH_AGENT, runtimeIdentity: 'rt-live' });
+    const legacyLive = [session('s2', { agent: PI_AGENT, runtimeIdentity: PI_FILE })];
+    const plain = mergeSessionIndex(
+      legacyLive,
+      [entry('s2', { agent: DSH_AGENT, runtimeIdentity: STUB })],
+      { workspaces }
+    ).sessions;
+    expect(plain[0]).toMatchObject({ agent: PI_AGENT, runtimeIdentity: PI_FILE });
   });
 });
 

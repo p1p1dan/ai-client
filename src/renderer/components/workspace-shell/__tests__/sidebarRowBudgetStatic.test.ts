@@ -63,6 +63,22 @@ describe('sidebar session row width budget', () => {
     expect(CODE.split(sharedWidthExpr).length - 1).toBe(2);
   });
 
+  /**
+   * dsh-rebase P1-9e: the `1.0.x` mark on a diverged legacy row. It is what
+   * tells that row from the migrated chat of the same title, so it never
+   * yields; and at the small badge's 10px it carries no CJK (design system,
+   * CJK cascade) — the sentence is its tooltip, translated.
+   */
+  it('keeps the 1.0.x mark whole, Latin-only, and explained by a translated tooltip', () => {
+    const start = CODE.indexOf('{row.legacyDiverged && (');
+    expect(start).toBeGreaterThan(CODE.indexOf('{row.title}</span>'));
+    const badge = CODE.slice(start, CODE.indexOf('</Badge>', start));
+    expect(badge).toContain('className="shrink-0"');
+    expect(badge).toContain('title={t(LEGACY_DIVERGED_HINT)}');
+    expect(badge).toContain('1.0.x');
+    expect(badge).not.toMatch(/[\u4e00-\u9fff]/);
+  });
+
   it('keeps the derivation of the numbers in the source', () => {
     // Asserted on RAW: this one is about the reasoning surviving the next edit.
     expect(RAW).toContain('SIDEBAR_DEFAULT_WIDTH');

@@ -6,10 +6,10 @@ import {
   ChevronRight,
   Clock3,
   Copy,
-  Eye,
   FileQuestion,
   FileSearch,
   FileText,
+  History,
   Image as ImageIcon,
   Lock,
   PackageSearch,
@@ -30,6 +30,7 @@ import { stopChatSession } from '@/stores/chatSessionActions';
 import type { ChatMessage } from '@/stores/chatSessions';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
+import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import {
   isAwaitingDeliveryMessage,
   isPendingUserMessage,
@@ -125,6 +126,10 @@ import { deriveRetryBanner, type RetryBannerView } from './retryBanner';
 import { continueBlockedReason } from './retryLastTurn';
 import { SEND_SILENCE_CEILING_MS } from './sendBudgets';
 import { canContinueSession, deriveSessionFailure } from './sessionFailure';
+import {
+  LEGACY_MIGRATION_PROGRESS_DETAIL,
+  LEGACY_MIGRATION_PROGRESS_TITLE,
+} from './sessionIndex/legacyMigration';
 import { useResumeSession } from './sessionIndex/useResumeSession';
 import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
@@ -350,6 +355,9 @@ export function MessageTimeline({
   const historyError = useChatSessionsStore((state) =>
     selectHistoryError(state.historyErrors, sessionId)
   );
+  // dsh-rebase P1-9e: this window's resume is moving the legacy chat to the
+  // current engine. A boolean selector, so only a change re-renders.
+  const migrating = useLegacyMigrationStore((state) => selectIsMigrating(state, sessionId));
   const historyPagination = useChatSessionsStore((state) =>
     sessionId ? state.historyPagination?.[sessionId] : undefined
   );
@@ -482,8 +490,9 @@ export function MessageTimeline({
         sessionId,
         messageCount: sessionMessages.length,
         error: historyError,
+        migrating,
       }),
-    [sessionId, sessionMessages.length, historyError]
+    [sessionId, sessionMessages.length, historyError, migrating]
   );
 
   // F12 used to fan a second predicate (`thinkingCard.isTurnActive`, which
@@ -803,6 +812,7 @@ export function MessageTimeline({
                   status={status}
                 />
               )}
+              {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
               {historyNotice.kind === 'empty' && pendingSendStatus == null ? (
                 <p className="text-ui text-muted-foreground">
                   No messages yet. Send a prompt to stream from the Agent Host.
@@ -1067,12 +1077,37 @@ const HISTORY_ERROR_ICON = {
   // H/21 P0: nothing on disk is missing or damaged — a model this app does not
   // have is a configuration gap, so it gets neither of the file icons.
   model_missing: PackageSearch,
-  // dsh-rebase decision 005: viewable, not continuable — nothing is wrong with it.
-  legacy_session_readonly: Eye,
+  // dsh-rebase P1-9e: the move to the current engine failed — a real failure,
+  // though nothing on disk changed.
+  legacy_migration_failed: TriangleAlert,
+  // dsh-rebase P1-9e: a chat from the previous version, not moved yet —
+  // nothing is wrong with it.
+  legacy_migration_required: History,
   // dsh-rebase P1-3c: the engine is down, not the chat.
   engine_unavailable: TriangleAlert,
   unknown: TriangleAlert,
 } as const;
+
+/**
+ * dsh-rebase P1-9e (decisions 050, 123): a chat from the previous version is
+ * being moved to the current engine by this window's resume. Sits where the
+ * history card sits, and replaces it while the move runs: the card of an
+ * earlier attempt is what its answer will replace. Nothing to press — the
+ * move cannot be cancelled halfway, and Stop on the send that started it only
+ * stops waiting for it.
+ */
+function LegacyMigrationProgressNotice() {
+  const { t } = useI18n();
+  return (
+    <Alert variant="info" role="status">
+      <Spinner />
+      <AlertTitle className="min-w-0 truncate">{t(LEGACY_MIGRATION_PROGRESS_TITLE)}</AlertTitle>
+      <AlertDescription className="text-meta">
+        <p className="break-words">{t(LEGACY_MIGRATION_PROGRESS_DETAIL)}</p>
+      </AlertDescription>
+    </Alert>
+  );
+}
 
 /**
  * T-03: non-fatal per-session history read failure.
@@ -1163,6 +1198,16 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
       <AlertTitle className="min-w-0 truncate">{t(view.title)}</AlertTitle>
       <AlertDescription className="gap-1 text-meta">
         <p className="break-words">{t(view.guidance)}</p>
+        {/* dsh-rebase P1-9e: what stopped the move, and the code Main gave it
+            (stage and code only — never a path), for anyone reporting it. */}
+        {view.migrationFailure && (
+          <>
+            <p className="break-words">{t(view.migrationFailure.reason)}</p>
+            <p className="break-words">
+              {t('Error code: {{code}}', { code: view.migrationFailure.failureCode })}
+            </p>
+          </>
+        )}
         {/* concurrency-02: who holds it and for how long is how a user judges
             whether that writer can still be real — the question the takeover
             below asks them to answer. */}

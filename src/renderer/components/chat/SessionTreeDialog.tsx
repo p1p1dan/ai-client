@@ -1,6 +1,6 @@
 import type { SessionTreeNode, SessionTreeSnapshot } from '@shared/types/sessionHistory';
 import { GitBranch, RefreshCw, RotateCcw, Split } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogDescription,
@@ -25,7 +25,14 @@ import { cn } from '@/lib/utils';
 import { materializeForkedChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { resetSessionScopedRendererState } from '@/stores/sessionLifecycle';
+import {
+  isLegacyMigrationRequiredError,
+  LEGACY_MIGRATION_OPERATION_FAILED,
+  runAfterLegacyMigration,
+} from './sessionIndex/legacyMigration';
+import { useResumeSession } from './sessionIndex/useResumeSession';
 import { capSessionTreeForDisplay, sessionTreeNodeTitle } from './sessionTree';
+import { useResolvedSessionModel } from './useResolvedSessionModel';
 
 interface SessionTreeDialogProps {
   sessionId: string;
@@ -36,6 +43,17 @@ interface SessionTreeDialogProps {
 
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
+}
+
+/**
+ * The dialog's error line. A chat that still could not be moved to the current
+ * engine gets the dictionary key (translated where it is shown, so the effect
+ * below needs no translator), everything else the sentence it came with.
+ */
+function failureText(cause: unknown): string {
+  return isLegacyMigrationRequiredError(cause)
+    ? LEGACY_MIGRATION_OPERATION_FAILED
+    : errorMessage(cause);
 }
 
 /**
@@ -61,6 +79,20 @@ export function SessionTreeDialog({
     (state) => state.historyBranchRevisions?.[sessionId] ?? 0
   );
   const requestSequence = useRef(0);
+  const { resume } = useResumeSession();
+  const resolveSessionModel = useResolvedSessionModel();
+  // dsh-rebase P1-9e (decision 122 rule 14): the tree, a rewind and a fork
+  // need the chat on the current engine. A chat from the previous version is
+  // moved first — by resuming it, with the model its composer would use — and
+  // asked again; a move that fails puts its card in the conversation. Both
+  // hooks hand out stable functions, so this changes with the session only.
+  const afterMigration = useCallback(
+    <T,>(operation: () => Promise<T>): Promise<T> =>
+      runAfterLegacyMigration(sessionId, operation, (id) =>
+        resume(id, { model: resolveSessionModel(id) })
+      ),
+    [sessionId, resume, resolveSessionModel]
+  );
 
   useEffect(() => {
     // The explicit Refresh action advances this request generation.
@@ -76,8 +108,9 @@ export function SessionTreeDialog({
     setMutationPending(false);
     setLoading(true);
     setError(null);
-    void window.electronAPI.chat
-      .getSessionTree({ sessionId, requestSequence: sequence })
+    void afterMigration(() =>
+      window.electronAPI.chat.getSessionTree({ sessionId, requestSequence: sequence })
+    )
       .then((result) => {
         if (
           requestSequence.current !== sequence ||
@@ -91,12 +124,12 @@ export function SessionTreeDialog({
       })
       .catch((cause) => {
         if (requestSequence.current !== sequence) return;
-        setError(errorMessage(cause));
+        setError(failureText(cause));
       })
       .finally(() => {
         if (requestSequence.current === sequence) setLoading(false);
       });
-  }, [branchRevision, open, refreshNonce, sessionId]);
+  }, [afterMigration, branchRevision, open, refreshNonce, sessionId]);
 
   const display = useMemo(
     () => (snapshot ? capSessionTreeForDisplay(snapshot) : { nodes: [], hiddenCount: 0 }),
@@ -110,16 +143,18 @@ export function SessionTreeDialog({
     setError(null);
     requestSequence.current += 1;
     try {
-      const result = await window.electronAPI.chat.rewindSession({
-        sessionId,
-        entryId: target.id,
-        confirmed: true,
-      });
+      const result = await afterMigration(() =>
+        window.electronAPI.chat.rewindSession({
+          sessionId,
+          entryId: target.id,
+          confirmed: true,
+        })
+      );
       resetSessionScopedRendererState(sessionId);
       setSnapshot(result.tree);
       setRewindTarget(null);
     } catch (cause) {
-      const message = errorMessage(cause);
+      const message = failureText(cause);
       setError(
         message.includes(REWIND_JOBS_RUNNING)
           ? t(
@@ -138,10 +173,12 @@ export function SessionTreeDialog({
     setError(null);
     requestSequence.current += 1;
     try {
-      const result = await window.electronAPI.chat.forkSession({
-        sessionId,
-        entryId: node.id,
-      });
+      const result = await afterMigration(() =>
+        window.electronAPI.chat.forkSession({
+          sessionId,
+          entryId: node.id,
+        })
+      );
       if (!materializeForkedChatSession(result.session)) {
         // Thrown, then caught two lines down and painted into this dialog's own
         // error line — so it is user copy, not a log message.
@@ -151,7 +188,7 @@ export function SessionTreeDialog({
       }
       onOpenChange(false);
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(failureText(cause));
     } finally {
       setMutationPending(false);
     }
@@ -195,7 +232,7 @@ export function SessionTreeDialog({
             </div>
             {error && (
               <p className="mb-2 rounded-sm border border-destructive/40 bg-destructive/10 px-2 py-1.5 text-meta text-destructive">
-                {error}
+                {error === LEGACY_MIGRATION_OPERATION_FAILED ? t(error) : error}
               </p>
             )}
             {display.hiddenCount > 0 && (

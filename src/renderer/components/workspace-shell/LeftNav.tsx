@@ -67,6 +67,7 @@ import {
   buildUnboundFolder,
   deriveRecentRows,
   formatRelativeAge,
+  LEGACY_DIVERGED_HINT,
   RECENT_DEFAULT_LIMIT,
   resolveActiveProjectId,
   resolveFolderClickActivation,
@@ -1186,6 +1187,23 @@ function SessionRow({
           the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
           the agent chip alone claims ~63 of it. */}
           <span className="min-w-20 flex-1 truncate">{row.title}</span>
+          {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated
+              chat, continued in 1.0.x since. It sits next to the migrated
+              chat under the same title, so the mark is what tells the two
+              apart; the tooltip says what continuing it does. The label is
+              the version alone — no CJK at this badge's 10px (design system,
+              CJK cascade). */}
+          {row.legacyDiverged && (
+            <Badge
+              variant="warning"
+              size="sm"
+              className="shrink-0"
+              title={t(LEGACY_DIVERGED_HINT)}
+              aria-label={t(LEGACY_DIVERGED_HINT)}
+            >
+              1.0.x
+            </Badge>
+          )}
           {pendingApprovalCount > 0 && (
             <Badge
               variant="warning"

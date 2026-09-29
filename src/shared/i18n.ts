@@ -2849,8 +2849,6 @@ export const zhTranslations: Record<string, string> = {
   'Send follow-up…': '继续输入…',
   'Message Pi…': '给 Pi 发消息…',
   'Cannot send right now…': '现在无法发送…',
-  // dsh-rebase P1-1 (D1): a chat the previous engine wrote, before any send.
-  'Read-only until migration — start a new chat to continue': '迁移前只能查看，要继续请新建对话',
   'Move queued message up': '把排队消息上移',
   'Move queued message down': '把排队消息下移',
   'Edit queued message': '编辑排队消息',
@@ -3034,13 +3032,6 @@ export const zhTranslations: Record<string, string> = {
   // concurrency-02: another process holds the writer lock. The pid and the age
   // are what let a user judge whether that writer can still be real.
   'Session is locked by another writer': '会话被另一个写入者锁定',
-  // dsh-rebase decision 005: a chat the previous engine wrote is viewable but
-  // cannot be continued until it is migrated.
-  'Read-only until migration': '迁移前只能查看',
-  'This chat was created with the previous chat engine. Until it is migrated it can be viewed here, but not continued.':
-    '这个对话由之前的聊天引擎创建。迁移完成之前，这里只能查看，不能继续对话。',
-  'Start a new chat to carry on; this one stays as it is.':
-    '要继续工作请新建一个对话；这个对话会原样保留。',
   'Sign up': '注册',
   'Sign-in required': '需要重新登录',
   'Signed in': '登录完成',
@@ -3769,4 +3760,40 @@ Object.assign(zhTranslations, {
     '模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。',
   'Continue to try again. If it fails the same way, send the detail below or pick another model.':
     '点继续再试一次。如果还是一样失败，请把下面的详情发给我们，或者换一个模型。',
+});
+
+// dsh-rebase P1-9e (decisions 050, 051, 122, 123): moving a chat from the
+// previous version to the current engine — the composer, the progress notice,
+// the failure card and its reasons, and the 1.0.x mark in the sidebar.
+Object.assign(zhTranslations, {
+  'Send to continue — this chat moves to the current engine first':
+    '发送即可继续，这个对话会先迁移到当前引擎',
+  'Moving this chat to the current engine…': '正在把这个对话迁移到当前引擎…',
+  'A chat from the previous version is moved once, the first time it continues. Its original file is not changed.':
+    '旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。',
+  'This chat could not be moved to the current engine': '这个对话没能迁移到当前引擎',
+  'Chats from the previous version move to the current engine the first time they continue. This one could not be moved, so it was not opened. It can still be viewed, and its original file was not changed.':
+    '旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。',
+  'Start a new chat to carry on; this one stays viewable as it is.':
+    '要继续工作请新建一个对话；这个对话会原样保留，仍然可以查看。',
+  'Retry to move it again, or send your message again: either one tries the move once more.':
+    '点「重试」或再发一次消息，都会重新尝试迁移。',
+  'This chat has not been moved to the current engine yet': '这个对话还没有迁移到当前引擎',
+  'Chats from the previous version move to the current engine the first time they continue; until then, actions that need the engine are not available for them.':
+    '旧版本的对话会在第一次继续时迁移到当前引擎；在那之前，需要引擎的操作都不可用。',
+  'Retry, or send a message: either one moves it.': '点「重试」或直接发消息，都会迁移它。',
+  'The file this chat was saved in is no longer on disk.': '保存这个对话的文件已经不在磁盘上。',
+  'Its file was being written by another program at the time.': '当时有其他程序正在写入它的文件。',
+  'Its file is larger than this version can move.': '它的文件太大，这个版本无法迁移。',
+  'Its file could not be read.': '它的文件无法读取。',
+  'Its file could not be converted for the current engine.': '它的文件无法转换成当前引擎的格式。',
+  'The chat engine could not be reached, or did not finish in time.':
+    '对话引擎连不上，或者没能按时完成。',
+  'The chat list could not be updated.': '对话列表没能更新。',
+  'The current engine could not store the converted chat.': '当前引擎没能保存转换后的对话。',
+  'Error code: {{code}}': '错误码：{{code}}',
+  'This chat could not be moved to the current engine; the notice in the conversation says why.':
+    '这个对话没能迁移到当前引擎，原因见对话里的提示。',
+  'This chat was continued in version 1.0.x after it moved to the current engine. Continuing it here moves that newer copy over as a chat of its own.':
+    '这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。在这里继续它，会把那份较新的内容迁成一个单独的对话。',
 });

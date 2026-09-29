@@ -3,11 +3,11 @@ import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { describe, expect, it } from 'vitest';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
-  isLegacyReadOnlySession,
   isSessionBusy,
   resumeDisplayTitle,
   shouldApplyResumeResult,
   shouldResumeSession,
+  willMigrateOnResume,
 } from '../resumeIntent';
 
 const BUSY_STATUSES: SessionRuntimeStatus[] = [
@@ -99,11 +99,12 @@ describe('shouldResumeSession (T-03)', () => {
   });
 
   /**
-   * dsh-rebase decision 005, and why the renderer does not decide it: a legacy
+   * dsh-rebase P1-1 / P1-9d, and why the renderer does not decide it: a legacy
    * `pi` identity may name a transcript that was never written, which Main
-   * repairs into a DSH session (rule 4), or a real one, which Main refuses with
-   * `legacy_session_readonly` before touching anything. Only Main can stat the
-   * file, so the resume goes out and the refusal becomes the history card.
+   * repairs into a new DSH session, or a real one, which Main moves to the
+   * current engine on this very resume (decision 050; a failure rejects with
+   * `legacy_migration_failed`, which becomes the history card). Only Main can
+   * stat the file, so the resume goes out either way.
    */
   it('[P1-1] leaves a legacy pi session to Main, which alone can tell never-written from real', () => {
     expect(
@@ -217,28 +218,26 @@ describe('shouldResumeSession (T-03)', () => {
 });
 
 /**
- * dsh-rebase P1-1, GUI point-check D1: a legacy chat's composer looked fully
- * usable until its first send was refused. This is the composer's prediction
- * of that refusal — Main's own rule (`assertCreatableIndexRow`), read off the
- * row the store already has.
+ * dsh-rebase P1-9e (decisions 050, 122 rule 15): the renderer's prediction
+ * that the next resume moves this chat to the current engine — Main's own rule
+ * (`assertCreatableIndexRow`, `prepareResume`), read off the row the store
+ * already has. What "migrating" and "your first message moves it" hang off.
  */
-describe('isLegacyReadOnlySession (P1-1 D1)', () => {
+describe('willMigrateOnResume (P1-9e)', () => {
   it('is a pi binding that names a transcript', () => {
     expect(
-      isLegacyReadOnlySession(session({ agent: PI_AGENT, runtimeIdentity: '/sessions/pi.jsonl' }))
+      willMigrateOnResume(session({ agent: PI_AGENT, runtimeIdentity: '/sessions/pi.jsonl' }))
     ).toBe(true);
   });
 
-  it('reverse: a DSH chat, an unset binding, or a pi row that never ran can still run', () => {
+  it('reverse: a DSH chat, an unset binding, or a pi row that never ran moves nothing', () => {
     const stub = '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
-    expect(isLegacyReadOnlySession(session({ agent: DSH_AGENT, runtimeIdentity: stub }))).toBe(
-      false
-    );
+    expect(willMigrateOnResume(session({ agent: DSH_AGENT, runtimeIdentity: stub }))).toBe(false);
     // No binding yet: a chat this build created, which is DSH.
-    expect(isLegacyReadOnlySession(session({ runtimeIdentity: stub }))).toBe(false);
-    // Main turns this one into a DSH session on its first send.
-    expect(isLegacyReadOnlySession(session({ agent: PI_AGENT }))).toBe(false);
-    expect(isLegacyReadOnlySession(undefined)).toBe(false);
+    expect(willMigrateOnResume(session({ runtimeIdentity: stub }))).toBe(false);
+    // Main turns this one into a new DSH session on its first send instead.
+    expect(willMigrateOnResume(session({ agent: PI_AGENT }))).toBe(false);
+    expect(willMigrateOnResume(undefined)).toBe(false);
   });
 });
 

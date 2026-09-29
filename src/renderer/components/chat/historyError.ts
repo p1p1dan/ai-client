@@ -1,4 +1,10 @@
 import type { Translate } from '@shared/i18n';
+import {
+  LEGACY_MIGRATION_FAILED,
+  LEGACY_MIGRATION_REQUIRED,
+  type LegacyMigrationFailure,
+  parseLegacyMigrationFailure,
+} from '@shared/types/legacyMigration';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { HistoryReadErrorCode } from '@shared/types/sessionHistory';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
@@ -27,7 +33,8 @@ export type HistoryErrorCode =
   | 'model_missing'
   | 'session_locked'
   | 'session_too_large'
-  | 'legacy_session_readonly'
+  | 'legacy_migration_failed'
+  | 'legacy_migration_required'
   | 'engine_unavailable';
 
 /**
@@ -69,9 +76,13 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // dsh-rebase P1-1. The DSH bridge found neither its identity stub nor the
   // session log it names: the same dead-session card as a missing JSONL.
   dsh_session_missing: 'jsonl_not_found',
-  // dsh-rebase decision 005: Main refuses to resume a chat the previous engine
-  // wrote. Spelled the same on both sides, like `session_locked`.
-  legacy_session_readonly: 'legacy_session_readonly',
+  // dsh-rebase P1-9d (decision 122 rule 14): an operation other than a resume
+  // asked for a chat that has not been moved to the current engine yet; a
+  // resume moves it. Spelled the same on both sides, like `session_locked`.
+  // (`legacy_migration_failed` is read before this table, by
+  // `parseLegacyMigrationFailure`: its host code can be any word, including
+  // one of the keys here.)
+  [LEGACY_MIGRATION_REQUIRED]: 'legacy_migration_required',
   // dsh-rebase P1-3c (decision 020 rule 6): the shared DSH engine could not be
   // brought up for this open. Main's code for it (`WorkerManager.ts`).
   dsh_host_unavailable: 'engine_unavailable',
@@ -105,6 +116,16 @@ export function encodePiResumeError(error: unknown): {
   encoded: string;
 } {
   const message = error instanceof Error ? error.message : String(error);
+  // dsh-rebase P1-9d/e (decision 122 rule 6): a failed migration names its
+  // stage and the host's or Main's own code, which may spell a word this
+  // table knows. Recognised first, and whole.
+  if (parseLegacyMigrationFailure(message)) {
+    return {
+      code: LEGACY_MIGRATION_FAILED,
+      message,
+      encoded: `${LEGACY_MIGRATION_FAILED}: ${message}`,
+    };
+  }
   const carried = carriedCode(error);
   const byField = carried ? RESUME_ERROR_CODES[carried] : undefined;
   const byText = RESUME_ERROR_PATTERNS.find(([pattern]) => pattern.test(message))?.[1];
@@ -119,22 +140,26 @@ export function encodePiResumeError(error: unknown): {
 }
 
 /**
- * dsh-rebase P1-1 (GUI point-check D1) — Main refused the resume because the
- * chat is read-only until it is migrated (decision 005).
+ * dsh-rebase P1-9e (decisions 050, 122, 123) — Main could not open a legacy
+ * chat because moving it to the current engine failed
+ * (`legacy_migration_failed`), or an engine operation was asked of it before
+ * it was moved (`legacy_migration_required`).
  *
- * Not a fault, and every resume call site treats it the same two ways:
- *  - the history card is the whole report. It says, translated, that the chat
- *    can be viewed and how to carry on, and keeps Main's English sentence under
+ * Every resume call site treats both the same two ways, as P1-1 treated the
+ * read-only refusal they replace:
+ *  - the history card is the whole report. It says, translated, what happened
+ *    and names the failure's code, and keeps Main's English sentence under
  *    Details; copying that sentence into `lastError` as well put a second, raw
  *    box above the composer;
- *  - a send it cut short was refused by rule, so its payload goes back to the
- *    composer instead of behind a Retry that can only be refused again
- *    (`refusedByRule` in `queueRelease.ts`).
+ *  - a send it cut short goes back to the composer (`refusedByRule` in
+ *    `queueRelease.ts`) rather than behind the composer's own Retry: the
+ *    card's Retry, when the failure can pass at all, is what moves the chat,
+ *    and the text is then waiting in the box to be sent.
  *
  * Every other code keeps its old route.
  */
-export function isReadOnlyResumeRefusal(code: HistoryErrorCode): boolean {
-  return code === 'legacy_session_readonly';
+export function isLegacyMigrationRefusal(code: HistoryErrorCode): boolean {
+  return code === 'legacy_migration_failed' || code === 'legacy_migration_required';
 }
 
 /**
@@ -196,6 +221,12 @@ export interface HistoryErrorView {
    * parse carries no owner at all.
    */
   lock?: { pid?: number; host?: string; heldFor?: string };
+  /**
+   * dsh-rebase P1-9e — `legacy_migration_failed` only: where the move stopped
+   * as Main reported it (`<stage>/<code>`, never a path), and a dictionary key
+   * saying what that stage means to the user.
+   */
+  migrationFailure?: { failureCode: string; reason: string };
   /**
    * concurrency-02 — the action that resolves this code, when one exists.
    *
@@ -354,16 +385,29 @@ const CODE_COPY: Record<HistoryErrorCode, HistoryErrorCopy> = {
     retryable: false,
     continuationHint: 'Start a new chat to carry on; the original record stays where it is.',
   },
-  // dsh-rebase decision 005. Nothing is missing or damaged: chats now run on
-  // DSH, and one the previous engine wrote stays viewable until P1-9 migrates
-  // it. A warning rather than an error, and nothing a retry could change.
-  legacy_session_readonly: {
-    severity: 'warning',
-    title: 'Read-only until migration',
+  // dsh-rebase P1-9e (decision 050). A chat the previous engine wrote is moved
+  // on its first continue, and this one's move failed: nothing on disk
+  // changed, the chat stays viewable, and its index row is still the legacy
+  // one. `retryable` and `continuationHint` here are the non-retryable
+  // defaults; `parseHistoryError` takes both from the failure itself.
+  legacy_migration_failed: {
+    severity: 'error',
+    title: 'This chat could not be moved to the current engine',
     guidance:
-      'This chat was created with the previous chat engine. Until it is migrated it can be viewed here, but not continued.',
+      'Chats from the previous version move to the current engine the first time they continue. This one could not be moved, so it was not opened. It can still be viewed, and its original file was not changed.',
     retryable: false,
-    continuationHint: 'Start a new chat to carry on; this one stays as it is.',
+    continuationHint: 'Start a new chat to carry on; this one stays viewable as it is.',
+  },
+  // dsh-rebase P1-9d (decision 122 rule 14). Not a fault: the chat has not
+  // been continued in this version yet, and continuing it is what moves it —
+  // which is exactly what Retry (a resume) does.
+  legacy_migration_required: {
+    severity: 'warning',
+    title: 'This chat has not been moved to the current engine yet',
+    guidance:
+      'Chats from the previous version move to the current engine the first time they continue; until then, actions that need the engine are not available for them.',
+    retryable: true,
+    continuationHint: 'Retry, or send a message: either one moves it.',
   },
   // H/21 P0. Not retryable: the model directory will not have grown between
   // one press and the next, so a Retry button here could only fail again.
@@ -484,13 +528,81 @@ export function parseHistoryError(raw: string | null | undefined): HistoryErrorV
         ? ''
         : trimmed.slice(separatorIndex + 1).trim();
 
+  if (code === 'legacy_migration_failed') return legacyMigrationFailureView(message);
   const lock = code === 'session_locked' ? parseSessionLockOwner(message) : undefined;
   return { code, message, ...CODE_COPY[code], ...(lock ? { lock } : {}) };
+}
+
+/** P1-9e: a retryable migration failure's hint; a dictionary key. */
+export const LEGACY_MIGRATION_RETRY_HINT =
+  'Retry to move it again, or send your message again: either one tries the move once more.';
+
+/**
+ * dsh-rebase P1-9e — the card of a legacy chat whose move failed.
+ *
+ * Retry is offered exactly when Main marked the failure ` (retryable)`
+ * (decision 122 rule 7): a file another program was writing, the engine down
+ * or slow, an index write that did not land. The others (the file gone, too
+ * large, not convertible) fail the same way on every attempt, and a Retry
+ * there would be a button that cannot work.
+ */
+function legacyMigrationFailureView(message: string): HistoryErrorView {
+  const copy = CODE_COPY.legacy_migration_failed;
+  const failure = parseLegacyMigrationFailure(message);
+  if (!failure) return { code: 'legacy_migration_failed', message, ...copy };
+  return {
+    code: 'legacy_migration_failed',
+    message,
+    ...copy,
+    retryable: failure.retryable,
+    continuationHint: failure.retryable ? LEGACY_MIGRATION_RETRY_HINT : copy.continuationHint,
+    migrationFailure: {
+      failureCode: `${failure.stage}/${failure.code}`,
+      reason: legacyMigrationFailureReason(failure),
+    },
+  };
+}
+
+/**
+ * What the stage a move stopped at means to the user; dictionary keys. Grouped
+ * by what the user can make of it rather than one sentence per stage: the code
+ * line under the reason names the exact stage for anyone reporting it.
+ */
+export function legacyMigrationFailureReason(failure: LegacyMigrationFailure): string {
+  switch (failure.stage) {
+    case 'read':
+      if (failure.code === 'source_missing') {
+        return 'The file this chat was saved in is no longer on disk.';
+      }
+      if (failure.code === 'source_busy') {
+        return 'Its file was being written by another program at the time.';
+      }
+      if (failure.code === 'source_too_large') {
+        return 'Its file is larger than this version can move.';
+      }
+      return 'Its file could not be read.';
+    case 'decode':
+    case 'build':
+      return 'Its file could not be converted for the current engine.';
+    case 'host':
+      return 'The chat engine could not be reached, or did not finish in time.';
+    case 'index':
+      return 'The chat list could not be updated.';
+    case 'request':
+    case 'admit':
+    case 'create':
+    case 'verify':
+    case 'sidecar':
+    case 'stub':
+      return 'The current engine could not store the converted chat.';
+  }
 }
 
 export type TimelineHistoryNotice =
   | { kind: 'none'; error: null }
   | { kind: 'empty'; error: null }
+  /** dsh-rebase P1-9e: this window is moving the legacy chat to the current engine. */
+  | { kind: 'migrating'; error: null }
   | { kind: 'error'; error: HistoryErrorView };
 
 export interface TimelineHistoryNoticeInput {
@@ -498,6 +610,8 @@ export interface TimelineHistoryNoticeInput {
   messageCount: number;
   /** Raw `historyErrors[sessionId]`, as returned by selectHistoryError. */
   error: string | undefined;
+  /** dsh-rebase P1-9e: a resume that moves this chat is in flight (`selectIsMigrating`). */
+  migrating?: boolean;
 }
 
 /**
@@ -526,6 +640,10 @@ export function selectHistoryError(
 export function deriveHistoryNotice(input: TimelineHistoryNoticeInput): TimelineHistoryNotice {
   const { sessionId, messageCount } = input;
   if (!sessionId) return { kind: 'none', error: null };
+
+  // P1-9e: the move in flight outranks the card of an earlier attempt — that
+  // card's Retry is usually what started it, and its answer replaces the card.
+  if (input.migrating) return { kind: 'migrating', error: null };
 
   const error = parseHistoryError(input.error);
   if (error) return { kind: 'error', error };

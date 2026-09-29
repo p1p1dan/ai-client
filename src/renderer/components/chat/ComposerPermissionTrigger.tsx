@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { addToast } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
+import { useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { isTierControlDegraded, usePermissionGateStore } from '@/stores/permissionGate';
 import { type HostStatus, isHostUsable } from './hostStatus';
 import {
@@ -100,11 +101,19 @@ export function ComposerPermissionTrigger({
   const menuActions = useRef<MenuPrimitive.Root.Actions | null>(null);
   const currentSession = useRef(sessionId);
   currentSession.current = sessionId;
+  // dsh-rebase P1-9e (decision 121, 122 rule 13): a chat from the previous
+  // version came up on the posture its 1.0.x file recorded, and the migration
+  // wrote it to this chat's storage; the revision is what makes the chip read
+  // it again without a session switch.
+  const postureRevision = useLegacyMigrationStore((state) =>
+    sessionId ? (state.postureRevisions[sessionId] ?? 0) : 0
+  );
   useEffect(() => {
+    void postureRevision;
     setSettings(readPermissionsFor(sessionId));
     setConfirming(null);
     setError(null);
-  }, [sessionId]);
+  }, [sessionId, postureRevision]);
 
   const apply = async (next: RuntimePermissionSettings) => {
     if (pending) return;

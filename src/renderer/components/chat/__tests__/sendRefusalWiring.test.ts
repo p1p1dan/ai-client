@@ -8,9 +8,10 @@ import { stripComments } from './stripComments';
  * dsh-rebase P1-1, GUI point-check 2026-09-26 D1/D2 — the `.tsx` half of
  * "a send refused by rule gives the user their message back".
  *
- * D1: a legacy chat's send was refused (`legacy_session_readonly`); the text
- * vanished behind a Retry that could only be refused again, and Main's raw
- * English sentence sat in a red box under the translated card.
+ * D1: a legacy chat's send was refused (then `legacy_session_readonly`; since
+ * P1-9e a move to the current engine that failed, `legacy_migration_failed`);
+ * the text vanished behind a Retry the composer could not make pass, and Main's
+ * raw English sentence sat in a red box under the translated card.
  * D2: a DSH send carrying an image was refused (then `WORKER_DSH_UNSUPPORTED`,
  * since P1-4c2 the engine's own `WORKER_ATTACHMENT_REJECTED`); the text and the
  * image vanished the same way, under the same kind of raw box.
@@ -46,44 +47,85 @@ const ATTACHMENT_NOTICES = [
 const P1_1_NOTICE =
   'The current engine does not support attachments yet; they will return in a later version. Remove them to send the message.';
 
-describe('D1 — a read-only legacy chat (legacy_session_readonly)', () => {
-  it('both resume sites keep the raw sentence out of lastError and hand the payload back', () => {
-    const resume = slice(
+/**
+ * dsh-rebase P1-9e (decisions 050, 122): D1's path now carries a legacy chat
+ * whose move to the current engine failed (`legacy_migration_failed`) or had
+ * to happen first (`legacy_migration_required`), instead of P1-1's read-only
+ * refusal, which Main no longer produces.
+ */
+describe('D1 — a legacy chat that could not be moved (legacy_migration_failed)', () => {
+  const resumeBranch = () =>
+    slice(
       COMPOSER,
       "} else if (preamble.action === 'resume') {",
       "if (preamble.action === 'direct' && fatalHostErrorCode === 'session_not_found')"
     );
-    const reopen = slice(
+  const reopenBranch = () =>
+    slice(
       COMPOSER,
       "if (preamble.action === 'direct' && fatalHostErrorCode === 'session_not_found')",
       'if (retryUnavailable) {'
     );
+
+  it('both resume sites keep the raw sentence out of lastError and hand the payload back', () => {
     for (const [name, branch] of [
-      ['resume', resume],
-      ['reopen', reopen],
+      ['resume', resumeBranch()],
+      ['reopen', reopenBranch()],
     ] as const) {
       expect(branch, name).toContain(
-        'const readOnly = isReadOnlyResumeRefusal(encodedError.code);'
+        'const migrationRefused = isLegacyMigrationRefusal(encodedError.code);'
       );
-      expect(branch, name).toContain('lastError: readOnly ? null : encodedError.message,');
+      expect(branch, name).toContain('lastError: migrationRefused ? null : encodedError.message,');
       // The card still gets its code: it is the report that remains.
       expect(branch, name).toContain('[sessionId]: encodedError.encoded,');
-      expect(branch, name).toContain('{ refusedByRule: readOnly }');
+      expect(branch, name).toContain('{ refusedByRule: migrationRefused }');
       // No raw write slipped in beside the guarded one.
       expect(count(branch, 'lastError: encodedError.message'), name).toBe(0);
     }
-    expect(count(COMPOSER, '{ refusedByRule: readOnly }')).toBe(2);
+    expect(count(COMPOSER, '{ refusedByRule: migrationRefused }')).toBe(2);
+  });
+
+  it('both resume sites go through the wrapper that shows the move and applies its answer', () => {
+    for (const [name, branch] of [
+      ['resume', resumeBranch()],
+      ['reopen', reopenBranch()],
+    ] as const) {
+      expect(branch, name).toContain('resumeSessionWithMigration({');
+      expect(branch, name).not.toContain('window.electronAPI.chat.resumeSession(');
+    }
+    // Nowhere else either: a resume that skipped the wrapper would move a chat
+    // without showing it, and drop the answer's preference copy.
+    expect(count(COMPOSER, 'window.electronAPI.chat.resumeSession(')).toBe(0);
+    expect(count(RESUME_HOOK, 'window.electronAPI.chat.resumeSession(')).toBe(0);
+    expect(RESUME_HOOK).toContain('await resumeSessionWithMigration(intent.args);');
   });
 
   it('opening a session reports it through the card alone', () => {
     expect(RESUME_HOOK).toContain(
-      'lastError: isReadOnlyResumeRefusal(encodedError.code) ? null : encodedError.message,'
+      'lastError: isLegacyMigrationRefusal(encodedError.code) ? null : encodedError.message,'
     );
     expect(count(RESUME_HOOK, 'lastError: encodedError.message')).toBe(0);
   });
 
-  it('the composer says the chat is read-only before any send is refused', () => {
-    expect(COMPOSER).toContain('readOnly: isLegacyReadOnlySession(activeSession),');
+  it('the composer says the first send moves the chat, and says so while it does', () => {
+    expect(COMPOSER).toContain('movesOnSend: willMigrateOnResume(activeSession),');
+    expect(COMPOSER).toContain('migrating: migratingHere,');
+    expect(COMPOSER).toContain('selectIsMigrating(state, activeSessionId)');
+  });
+
+  it('/compact on a chat not moved yet moves it first', () => {
+    const compact = slice(COMPOSER, "case 'compact': {", "if (outcome.kind === 'turn-running')");
+    expect(compact).toContain('runAfterLegacyMigration(');
+    expect(compact).toContain('window.electronAPI.chat.compactSession({');
+    expect(compact).toContain('resumeSessionById(sessionId, {');
+  });
+
+  it('leaves no trace of the read-only refusal it replaced', () => {
+    for (const source of [COMPOSER, RESUME_HOOK]) {
+      expect(source).not.toContain('isReadOnlyResumeRefusal');
+      expect(source).not.toContain('isLegacyReadOnlySession');
+      expect(source).not.toContain('legacy_session_readonly');
+    }
   });
 });
 

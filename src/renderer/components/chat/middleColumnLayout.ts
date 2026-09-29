@@ -1093,9 +1093,16 @@ export function roundActionButtonKindClass(kind: RoundActionButtonKind): string 
 /** T-05: pending-question follow-up copy (A07 screen 6 group E — same lifecycle as the collapsed dock strip). */
 export const PENDING_QUESTION_PLACEHOLDER = 'Add more optional details…';
 
-/** dsh-rebase P1-1 (D1): a legacy chat is viewable only, until it is migrated. */
-export const READ_ONLY_SESSION_PLACEHOLDER =
-  'Read-only until migration — start a new chat to continue';
+/**
+ * dsh-rebase P1-9e (decision 050): a chat from the previous version, which its
+ * first send moves to the current engine before the message goes out — said
+ * up front, because that first send takes a moment longer.
+ */
+export const MOVES_ON_SEND_PLACEHOLDER =
+  'Send to continue — this chat moves to the current engine first';
+
+/** dsh-rebase P1-9e: this window's resume is moving the chat right now. */
+export const MIGRATING_SESSION_PLACEHOLDER = 'Moving this chat to the current engine…';
 
 /**
  * Composer placeholder text. Sending/busy/no-session/no-workspace states are
@@ -1150,12 +1157,16 @@ export function composerPlaceholder(
      */
     isCreatingSession?: boolean;
     /**
-     * dsh-rebase P1-1 (GUI point-check D1): a chat the previous engine wrote,
-     * read-only until it is migrated (`isLegacyReadOnlySession`). Said before
-     * the user types rather than after Main refuses the send; the box stays
-     * enabled, since Main is the one that decides.
+     * dsh-rebase P1-9e: a chat the previous engine wrote, which the next
+     * resume moves to the current engine (`willMigrateOnResume`). A
+     * prediction, so it only rewords the ordinary prompt; Main decides.
      */
-    readOnly?: boolean;
+    movesOnSend?: boolean;
+    /**
+     * dsh-rebase P1-9e: this window's resume is moving the chat to the
+     * current engine right now (`selectIsMigrating`).
+     */
+    migrating?: boolean;
   },
   t: Translate = englishTranslate
 ): string {
@@ -1173,6 +1184,12 @@ export function composerPlaceholder(
   // workspace" case this guard exists for does not apply to it.
   const hasReleasableQueue =
     (input.queuedCount ?? 0) > 0 && (input.hasWorkspace || input.unbound === true);
+  // P1-9e: first of all. A send waiting on the move would otherwise say
+  // "Sending to Agent Host…" for as long as the move takes, and a move started
+  // by the history card's Retry has no send to report at all.
+  if (input.migrating) {
+    return t(MIGRATING_SESSION_PLACEHOLDER);
+  }
   if (input.sending && !hasReleasableQueue) {
     if (input.isCreatingSession) {
       return t('Creating session with Agent Host (first message only)…');
@@ -1183,12 +1200,6 @@ export function composerPlaceholder(
         : t('Sending {{count}} attachments to Agent Host…', { count: input.attachmentCount });
     }
     return t('Sending to Agent Host…');
-  }
-  // After `sending` (the handshake that ends in the refusal is still true to
-  // report) and ahead of everything else: none of the rungs below can apply
-  // to a chat that cannot run a turn at all.
-  if (input.readOnly) {
-    return t(READ_ONLY_SESSION_PLACEHOLDER);
   }
   if (input.pendingQuestion) {
     return t(PENDING_QUESTION_PLACEHOLDER);
@@ -1228,6 +1239,10 @@ export function composerPlaceholder(
     return t('Choose a working directory to start…');
   }
   if (input.canSend) {
+    // P1-9e: only the ordinary prompt is reworded. Every rung above it names
+    // something the user has to deal with first, which a legacy chat can meet
+    // like any other (its workspace gone, a queue waiting).
+    if (input.movesOnSend) return t(MOVES_ON_SEND_PLACEHOLDER);
     return input.mode === 'session' ? t('Send follow-up…') : t('Message Pi…');
   }
   return t('Cannot send right now…');

@@ -354,14 +354,15 @@ export type FailureAffordance = 'resend' | 'restore-draft' | 'none';
 export interface FailureAffordanceContext {
   sessionNeverCreated?: boolean;
   /**
-   * dsh-rebase P1-1 (GUI point-check D1/D2) — the engine refused this attempt
-   * by rule before admitting anything: Main will not resume a chat the
-   * previous engine wrote (`legacy_session_readonly`, decision 005), or the DSH
-   * bridge cannot carry attachments yet (decision 010). Sending the same
-   * payload again is refused the same way every time, so the one-click Retry
-   * the old answer armed was a button that cannot work, next to an empty
-   * composer. The payload goes back to the composer, where the user can edit
-   * it (drop the image) or take it to a new chat.
+   * dsh-rebase P1-1 (GUI point-check D1/D2), P1-4c2, P1-9e — this attempt was
+   * refused before anything was admitted, for a reason the composer's own
+   * one-click Retry cannot get past: the engine refused an attachment
+   * (decision 096), or Main could not move a chat from the previous version
+   * to the current engine (`legacy_migration_failed`, decision 050). The
+   * payload goes back to the composer, where the user can edit it (drop the
+   * image) and send it again, or take it to a new chat; a move that can pass
+   * later is retried from its history card, which leaves the text waiting in
+   * the box.
    */
   refusedByRule?: boolean;
 }
@@ -422,10 +423,10 @@ export function decideFailureAffordance(
  *    visibility rather than data, and arming a resend there would re-introduce
  *    exactly the double send A1 removed.
  *
- * P1-1 `refusedByRule` falls back the same way. That Retry can only be refused
+ * `refusedByRule` falls back the same way. That Retry is usually refused
  * again, but it is the one surface left holding the payload, and pressing it
  * once the composer is empty puts the payload back there — losing the text
- * would be worse than a button that cannot send it.
+ * would be worse than a button that may not send it.
  */
 export function decideDeclinedRestore(
   outcome: RunEntryOutcome,

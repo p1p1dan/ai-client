@@ -982,12 +982,13 @@ describe('decideFailureAffordance (A1, round-4 point-check fix)', () => {
   });
 
   /**
-   * dsh-rebase P1-1, GUI point-check D1/D2. A legacy chat's resume refusal
-   * (`legacy_session_readonly`) and the DSH bridge's attachment refusal
-   * (then `WORKER_DSH_UNSUPPORTED`; since P1-4c2 the engine's own
-   * `WORKER_ATTACHMENT_REJECTED`) both left an empty composer and a round Retry
-   * that could only be refused again — the user's text (and image) out of
-   * sight. Refused by rule means: back to the composer, never a Retry.
+   * dsh-rebase P1-1, GUI point-check D1/D2; P1-4c2; P1-9e. The DSH bridge's
+   * attachment refusal (since P1-4c2 the engine's own
+   * `WORKER_ATTACHMENT_REJECTED`) and a legacy chat Main could not move to the
+   * current engine (`legacy_migration_failed`, which replaced P1-1's read-only
+   * refusal) both left an empty composer and a round Retry the composer could
+   * not make pass — the user's text (and image) out of sight. Refused by rule
+   * means: back to the composer, never the composer's Retry.
    */
   describe('P1-1 — refused by rule before admission', () => {
     const REFUSED = { refusedByRule: true } as const;

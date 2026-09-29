@@ -29,3 +29,7 @@ Main 这一侧的只读限制已解除（[决策 122](122-p1-9d-migration-orches
 - 恢复带真实文件的 `pi` 行时先迁移再恢复（[决策 050](050-migrate-on-first-continue.md)），失败报 `legacy_migration_failed:<阶段>/<码>`；
 - 其他需要引擎的操作与对旧行的新建报 `legacy_migration_required`，由渲染层先恢复；
 - Main 不再产出 `legacy_session_readonly`。渲染层的只读卡片与相关文案还在，由 P1-9e 改成「无法迁移」卡片后，本决策整体失效。
+
+## 补记（2026-09-29，P1-9e，决策 123）
+
+渲染层这一侧也已解除：只读卡片、只读占位、`isReadOnlyResumeRefusal` 与相关文案都已删去，改为「迁移中」提示与「无法迁移」卡片（[决策 123](123-p1-9e-migration-renderer-choices.md) 第 1～8 条）。**本决策整体失效。**

@@ -11,9 +11,17 @@
  * `addRepositoryEntry.ts` / `hostStatus.ts`.
  */
 
+import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isUsableWorkspace } from './addRepositoryEntry';
+
+/**
+ * dsh-rebase P1-9e: what the `1.0.x` mark on a diverged legacy row means
+ * (`SidebarSessionRow.legacyDiverged`); a dictionary key, shown as its tooltip.
+ */
+export const LEGACY_DIVERGED_HINT =
+  'This chat was continued in version 1.0.x after it moved to the current engine. Continuing it here moves that newer copy over as a chat of its own.';
 
 /** Recent keeps a session visible while active or touched within 48h (openchamber rule). */
 export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -41,6 +49,13 @@ export interface SidebarSessionRow {
   /** Failure stays visible after the per-row status badge was dropped. */
   failed: boolean;
   status: SessionRuntimeStatus;
+  /**
+   * dsh-rebase P1-9e (decision 051): the legacy copy of a migrated chat, with
+   * content 1.0.x added after the migration. Present only when true, and only
+   * while the row is still that legacy copy: continuing it moves it over, and
+   * `session.resumed` rebinding it to DSH clears the mark before any refresh.
+   */
+  legacyDiverged?: true;
 }
 
 export interface SidebarFolder {
@@ -176,6 +191,9 @@ function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): Side
     busy: isBusySessionStatus(session.status),
     failed: session.status === 'failed',
     status: session.status,
+    ...(session.legacyDiverged && sessionAgent(session) === PI_AGENT
+      ? { legacyDiverged: true as const }
+      : {}),
   };
 }
 

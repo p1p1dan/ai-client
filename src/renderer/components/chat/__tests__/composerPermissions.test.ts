@@ -3,8 +3,13 @@ import { translate } from '@shared/i18n';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { ComposerPermissionTrigger } from '../ComposerPermissionTrigger';
-import { readDefaultPermissions, readSessionPermissions } from '../sessionPreferenceStore';
+import {
+  readDefaultPermissions,
+  readSessionPermissions,
+  writeSessionPermissions,
+} from '../sessionPreferenceStore';
 
 /**
  * The REAL zh translator, not `(key) => key`.
@@ -259,5 +264,27 @@ describe('bypass gear · the composer side', () => {
     const trigger = container.querySelector('button');
     expect(trigger?.textContent).toContain('完全放行');
     expect(trigger?.className).toContain('text-destructive');
+  });
+});
+
+/**
+ * dsh-rebase P1-9e (decisions 121, 122 rule 13): a chat from the previous
+ * version whose resume named no posture comes up on the one its 1.0.x file
+ * recorded; the migration writes it to this chat's storage and bumps the
+ * revision the chip listens to, so the chip shows it without a session switch.
+ */
+describe('P1-9e — the posture a migration brought the chat up on', () => {
+  it('re-reads the chat’s posture when a migration wrote it, and only for that chat', async () => {
+    useLegacyMigrationStore.setState({ migrating: {}, postureRevisions: {} });
+    await render('s1');
+    expect(container.textContent).toContain('执行 · 每次询问');
+
+    writeSessionPermissions('s1', { mode: 'plan', gear: 'accept-edits' });
+    await act(async () => useLegacyMigrationStore.getState().notePostureSynced('s2'));
+    expect(container.textContent).toContain('执行 · 每次询问');
+
+    await act(async () => useLegacyMigrationStore.getState().notePostureSynced('s1'));
+    expect(container.textContent).toContain('规划 · 自动接受编辑');
+    expect(setPermissions).not.toHaveBeenCalled();
   });
 });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  copySessionPreferences,
   DEFAULT_PERMISSIONS_STORAGE_KEY,
   DEFAULT_TIER_STORAGE_KEY,
   readDefaultPermissions,
@@ -12,6 +13,7 @@ import {
   SESSION_EFFORT_STORAGE_KEY,
   SESSION_MODEL_STORAGE_KEY,
   SESSION_PERMISSIONS_STORAGE_KEY,
+  SESSION_PREFERENCE_STORAGE_KEYS,
   SESSION_TIER_STORAGE_KEY,
   writeDefaultPermissions,
   writeSessionEffort,
@@ -140,5 +142,61 @@ describe('D14 permission preferences', () => {
     storage.set(SESSION_TIER_STORAGE_KEY, JSON.stringify({ s1: { pi: 'readonly' } }));
     expect(readDefaultPermissions()).toEqual({ mode: 'plan', gear: 'ask' });
     expect(readSessionPermissions('s1')).toEqual({ mode: 'plan', gear: 'ask' });
+  });
+});
+
+/**
+ * dsh-rebase P1-9e (decision 051 rule 3): a migrated chat keeps its id and its
+ * legacy pi row moves to `<id>_pi`; a 1.0.x build rolled back to looks that
+ * row's model and posture up under the new key.
+ */
+describe('copySessionPreferences (P1-9e)', () => {
+  const map = (key: string) => JSON.parse(storage.get(key) ?? '{}') as Record<string, unknown>;
+
+  it('copies all four per-session maps to the new key, verbatim', () => {
+    writeSessionModel('s1', 'glm/glm-5');
+    writeSessionEffort('s1', 'high');
+    writeSessionPermissions('s1', { mode: 'plan', gear: 'accept-edits' });
+    // An old per-agent row, in the shape 1.0.x itself may have left: copied
+    // as it is, because 1.0.x is the one that reads it back.
+    storage.set(SESSION_TIER_STORAGE_KEY, JSON.stringify({ s1: { pi: 'handsoff' } }));
+    expect(SESSION_PREFERENCE_STORAGE_KEYS).toEqual([
+      SESSION_MODEL_STORAGE_KEY,
+      SESSION_EFFORT_STORAGE_KEY,
+      SESSION_PERMISSIONS_STORAGE_KEY,
+      SESSION_TIER_STORAGE_KEY,
+    ]);
+
+    expect(copySessionPreferences('s1', 's1_pi')).toBe(4);
+
+    expect(map(SESSION_MODEL_STORAGE_KEY).s1_pi).toBe('glm/glm-5');
+    expect(map(SESSION_EFFORT_STORAGE_KEY).s1_pi).toBe('high');
+    expect(map(SESSION_PERMISSIONS_STORAGE_KEY).s1_pi).toEqual({
+      mode: 'plan',
+      gear: 'accept-edits',
+    });
+    expect(map(SESSION_TIER_STORAGE_KEY).s1_pi).toEqual({ pi: 'handsoff' });
+    // Nothing is taken from the chat, which goes on using its own id.
+    expect(readSessionModel('s1')).toBe('glm/glm-5');
+    expect(readSessionPermissions('s1')).toEqual({ mode: 'plan', gear: 'accept-edits' });
+  });
+
+  it('only adds: a value the new key already has stays, and a done copy is a no-op', () => {
+    writeSessionModel('s1', 'glm/glm-5');
+    writeSessionModel('s1_pi', 'kept/model');
+    writeSessionEffort('s1', 'low');
+    expect(copySessionPreferences('s1', 's1_pi')).toBe(1);
+    expect(readSessionModel('s1_pi')).toBe('kept/model');
+    expect(readSessionEffort('s1_pi')).toBe('low');
+    const before = [...storage.entries()];
+    expect(copySessionPreferences('s1', 's1_pi')).toBe(0);
+    expect([...storage.entries()]).toEqual(before);
+  });
+
+  it('writes nothing for a chat that stored nothing, or onto itself', () => {
+    expect(copySessionPreferences('s1', 's1_pi')).toBe(0);
+    expect(storage.size).toBe(0);
+    writeSessionModel('s1', 'glm/glm-5');
+    expect(copySessionPreferences('s1', 's1')).toBe(0);
   });
 });

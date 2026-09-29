@@ -37,6 +37,18 @@ import { SessionBar } from '../SessionBar';
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/i18n', () => ({ useI18n: () => ({ t: zh }) }));
+// dsh-rebase P1-9e: the tree dialog behind this button moves a legacy chat
+// first (resume, with the model its composer would use). Stubbed with stable
+// functions, as the app's are, so the real settings store (persisted, and
+// rehydrated through `electronAPI` at import) never loads in this test.
+vi.mock('@/components/chat/useResolvedSessionModel', () => {
+  const resolve = () => undefined;
+  return { useResolvedSessionModel: () => resolve };
+});
+vi.mock('@/components/chat/sessionIndex/useResumeSession', () => {
+  const result = { resume: async () => false };
+  return { useResumeSession: () => result };
+});
 
 const BRANCHES = zh('Session branches');
 

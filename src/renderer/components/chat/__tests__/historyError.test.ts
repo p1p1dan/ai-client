@@ -23,7 +23,9 @@ import {
   HISTORY_TAKEOVER_FAILED_HINT,
   type HistoryErrorCode,
   isEngineUnavailableError,
-  isReadOnlyResumeRefusal,
+  isLegacyMigrationRefusal,
+  LEGACY_MIGRATION_RETRY_HINT,
+  legacyMigrationFailureReason,
   parseHistoryError,
   parseSessionLockOwner,
   selectHistoryError,
@@ -925,57 +927,12 @@ describe('historyErrors encoding contract (store → parseHistoryError)', () => 
 });
 
 /**
- * dsh-rebase P1-1. Two new refusals reach the resume card: Main's
- * `legacy_session_readonly` for a chat the retired engine wrote (decision 005),
- * and the DSH bridge's `dsh_session_missing` when neither the identity stub nor
- * the log it names is on disk.
+ * dsh-rebase P1-1: the DSH bridge's `dsh_session_missing` reaches the resume
+ * card when neither the identity stub nor the log it names is on disk. (P1-1's
+ * other refusal, the legacy read-only one, has no producer since P1-9d; its
+ * successors are covered in "moving a legacy chat" below.)
  */
 describe('DSH resume refusals (P1-1)', () => {
-  const LEGACY =
-    "Error invoking remote method 'chat:resumeSession': Error: legacy_session_readonly: Session s1 was written by the previous chat engine and is read-only until it is migrated";
-
-  it('gives a legacy session its own read-only card: a warning, nothing to retry', () => {
-    const view = parseHistoryError(encodePiResumeError(new Error(LEGACY)).encoded);
-    expect(view?.code).toBe('legacy_session_readonly');
-    expect(view?.severity).toBe('warning');
-    expect(view?.retryable).toBe(false);
-    expect(view?.forceTakeover).toBeUndefined();
-    // Nothing is missing or damaged; the copy must not say either.
-    expect(view?.guidance).not.toContain('damaged');
-    expect(view?.guidance).not.toContain('No history was found');
-    expect(view?.continuationHint).not.toBe(HISTORY_ERROR_NON_FATAL_HINT);
-  });
-
-  it('ships the read-only card in the dictionary', () => {
-    const view = parseHistoryError(encodePiResumeError(new Error(LEGACY)).encoded);
-    for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
-      expect(key && zhTranslations[key], key).toBeDefined();
-    }
-    expect(zhTranslations['Read-only until migration']).toBe('迁移前只能查看');
-  });
-
-  /**
-   * GUI point-check D1 (2026-09-26). The card rendered, and under it a raw red
-   * box with Main's English sentence; the send's text was parked behind a
-   * Retry that could only be refused again. The resume call sites read this
-   * one predicate for both decisions.
-   */
-  it('names the read-only refusal for the resume call sites, and nothing else', () => {
-    const encoded = encodePiResumeError(new Error(LEGACY));
-    expect(encoded.code).toBe('legacy_session_readonly');
-    expect(isReadOnlyResumeRefusal(encoded.code)).toBe(true);
-    for (const other of [
-      'session_locked: held',
-      'dsh_session_missing: gone',
-      'WORKER_WORKSPACE_MISSING: gone',
-      'WORKER_RPC_TIMEOUT: slow',
-    ]) {
-      expect(isReadOnlyResumeRefusal(encodePiResumeError(new Error(other)).code), other).toBe(
-        false
-      );
-    }
-  });
-
   it('files a missing DSH session under the dead-session card', () => {
     const message =
       'WorkerSlotError: dsh_session_missing: DSH session identity is missing: /dsh-home/aiclient-sessions/aiclient-s1.dsh.json';
@@ -1142,7 +1099,7 @@ describe('the shared engine (P1-3c)', () => {
     // The chat is fine; the copy must not say otherwise.
     expect(view?.guidance).not.toContain('damaged');
     expect(view?.continuationHint).not.toBe(HISTORY_ERROR_DEAD_SESSION_HINT);
-    expect(isReadOnlyResumeRefusal(encoded.code)).toBe(false);
+    expect(isLegacyMigrationRefusal(encoded.code)).toBe(false);
     for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
       expect(key && zhTranslations[key], key).toBeDefined();
     }
@@ -1173,5 +1130,156 @@ describe('the shared engine (P1-3c)', () => {
       expect(isEngineUnavailableError(message), String(message)).toBe(false);
     }
     expect(zhTranslations[ENGINE_UNAVAILABLE_HINT]).toBeDefined();
+  });
+});
+
+/**
+ * dsh-rebase P1-9e (decisions 050, 122, 123) — moving a legacy chat. Main
+ * rejects the resume with `legacy_migration_failed:<stage>/<code>: …`, marked
+ * ` (retryable)` when the same continue may get past it later (decision 122
+ * rules 6–7), and any other engine operation on a chat not moved yet with
+ * `legacy_migration_required`. Both arrive inside Electron's wrapper.
+ */
+describe('moving a legacy chat (P1-9e)', () => {
+  const wrapped = (message: string) =>
+    new Error(`Error invoking remote method 'chat:resumeSession': Error: ${message}`);
+  const FAILED_BUSY =
+    'legacy_migration_failed:read/source_busy: Session s1 could not be moved to the current chat engine (retryable)';
+  const FAILED_MISSING =
+    'legacy_migration_failed:read/source_missing: Session s1 could not be moved to the current chat engine';
+  const REQUIRED =
+    'legacy_migration_required: Session s1 was written by the previous chat engine; resume it first, which moves it to the current engine';
+
+  it('files a failed move under its own card, which offers Retry exactly when Main said it may pass', () => {
+    const busy = parseHistoryError(encodePiResumeError(wrapped(FAILED_BUSY)).encoded);
+    expect(busy).toMatchObject({
+      code: 'legacy_migration_failed',
+      severity: 'error',
+      retryable: true,
+      continuationHint: LEGACY_MIGRATION_RETRY_HINT,
+      migrationFailure: {
+        failureCode: 'read/source_busy',
+        reason: 'Its file was being written by another program at the time.',
+      },
+    });
+    const missing = parseHistoryError(encodePiResumeError(wrapped(FAILED_MISSING)).encoded);
+    expect(missing).toMatchObject({
+      code: 'legacy_migration_failed',
+      retryable: false,
+      migrationFailure: {
+        failureCode: 'read/source_missing',
+        reason: 'The file this chat was saved in is no longer on disk.',
+      },
+    });
+    expect(missing?.continuationHint).not.toBe(LEGACY_MIGRATION_RETRY_HINT);
+    // Main's sentence stays under Details, whole.
+    expect(missing?.message).toContain('legacy_migration_failed:read/source_missing');
+    // Nothing on disk changed; the copy must not say the history is gone.
+    expect(missing?.guidance).toContain('original file was not changed');
+    expect(missing?.forceTakeover).toBeUndefined();
+  });
+
+  it('reads the failure before the code table, whose words a host code can spell', () => {
+    // A host code that happens to be one of the table's own words must not
+    // turn a failed move into, say, the lock card.
+    const encoded = encodePiResumeError(
+      wrapped(
+        'legacy_migration_failed:create/session_locked: Session s1 could not be moved to the current chat engine (retryable)'
+      )
+    );
+    expect(encoded.code).toBe('legacy_migration_failed');
+    expect(parseHistoryError(encoded.encoded)?.migrationFailure?.failureCode).toBe(
+      'create/session_locked'
+    );
+  });
+
+  it('keeps a bare or malformed failure on the card, without a Retry it cannot back', () => {
+    const view = parseHistoryError('legacy_migration_failed');
+    expect(view).toMatchObject({ code: 'legacy_migration_failed', retryable: false });
+    expect(view?.migrationFailure).toBeUndefined();
+  });
+
+  it('files an operation asked of a chat not moved yet under a warning whose Retry moves it', () => {
+    const encoded = encodePiResumeError(wrapped(REQUIRED));
+    expect(encoded.code).toBe('legacy_migration_required');
+    const view = parseHistoryError(encoded.encoded);
+    expect(view).toMatchObject({
+      code: 'legacy_migration_required',
+      severity: 'warning',
+      retryable: true,
+    });
+    expect(view?.migrationFailure).toBeUndefined();
+  });
+
+  it('names both for the resume call sites, and nothing else', () => {
+    expect(isLegacyMigrationRefusal(encodePiResumeError(wrapped(FAILED_BUSY)).code)).toBe(true);
+    expect(isLegacyMigrationRefusal(encodePiResumeError(wrapped(REQUIRED)).code)).toBe(true);
+    for (const other of [
+      'session_locked: held',
+      'dsh_session_missing: gone',
+      'WORKER_WORKSPACE_MISSING: gone',
+      'dsh_host_unavailable: down',
+      // The retired read-only refusal has no producer and no card of its own.
+      'legacy_session_readonly: Session s1 is read-only',
+    ]) {
+      expect(isLegacyMigrationRefusal(encodePiResumeError(new Error(other)).code), other).toBe(
+        false
+      );
+    }
+  });
+
+  it('gives every stage a reason, and ships every sentence in the dictionary', () => {
+    const stages = [
+      'request',
+      'read',
+      'decode',
+      'build',
+      'admit',
+      'create',
+      'verify',
+      'sidecar',
+      'stub',
+      'host',
+      'index',
+    ] as const;
+    const reasons = new Set<string>();
+    for (const stage of stages) {
+      const reason = legacyMigrationFailureReason({ stage, code: 'x', retryable: false });
+      expect(zhTranslations[reason], `${stage}: ${reason}`).toBeDefined();
+      reasons.add(reason);
+    }
+    for (const code of ['source_missing', 'source_busy', 'source_too_large']) {
+      const reason = legacyMigrationFailureReason({ stage: 'read', code, retryable: false });
+      expect(zhTranslations[reason], reason).toBeDefined();
+      reasons.add(reason);
+    }
+    expect(reasons.size).toBeGreaterThanOrEqual(8);
+    for (const raw of [FAILED_BUSY, FAILED_MISSING, REQUIRED]) {
+      const view = parseHistoryError(encodePiResumeError(wrapped(raw)).encoded);
+      for (const key of [view?.title, view?.guidance, view?.continuationHint]) {
+        expect(key && zhTranslations[key], key).toBeDefined();
+      }
+    }
+    expect(zhTranslations['Error code: {{code}}']).toBeDefined();
+    // The read-only card's copy left with it.
+    expect(zhTranslations['Read-only until migration']).toBeUndefined();
+  });
+
+  it('lets the move in flight replace the card of an earlier attempt', () => {
+    const error = encodePiResumeError(wrapped(FAILED_BUSY)).encoded;
+    expect(
+      deriveHistoryNotice({ sessionId: 's1', messageCount: 4, error, migrating: true })
+    ).toEqual({ kind: 'migrating', error: null });
+    expect(
+      deriveHistoryNotice({ sessionId: 's1', messageCount: 0, migrating: true, error: undefined })
+    ).toEqual({ kind: 'migrating', error: null });
+    // Reverse: once the move settles, the answer is what shows.
+    expect(
+      deriveHistoryNotice({ sessionId: 's1', messageCount: 4, error, migrating: false }).kind
+    ).toBe('error');
+    expect(
+      deriveHistoryNotice({ sessionId: null, messageCount: 0, error: undefined, migrating: true })
+        .kind
+    ).toBe('none');
   });
 });

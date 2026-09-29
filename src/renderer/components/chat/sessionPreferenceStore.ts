@@ -174,6 +174,42 @@ export function readDefaultPermissions(): RuntimePermissionSettings | null {
   return legacy ? migratePermissionTier(legacy) : null;
 }
 /**
+ * dsh-rebase P1-9e (decision 051 rule 3): the four per-session maps a chat's
+ * model, effort and posture live in, under its logical id.
+ */
+export const SESSION_PREFERENCE_STORAGE_KEYS = [
+  SESSION_MODEL_STORAGE_KEY,
+  SESSION_EFFORT_STORAGE_KEY,
+  SESSION_PERMISSIONS_STORAGE_KEY,
+  SESSION_TIER_STORAGE_KEY,
+] as const;
+
+/**
+ * dsh-rebase P1-9e (decision 051 rule 3) — a migrated chat keeps its logical
+ * id, and the pi row it was moves to a new key (`<id>_pi`). A 1.0.x build
+ * rolled back to shows that row, and looks its model and posture up under the
+ * new key; so the values stored under the chat's id are copied there.
+ *
+ * Only adds: an entry the target already has is left as it is (a migration
+ * done twice, or the target's own later choice), and nothing is removed from
+ * the source, which the DSH chat goes on using. Values are copied verbatim, in
+ * whatever shape they were stored, because 1.0.x is the reader. Returns how
+ * many maps received a value.
+ */
+export function copySessionPreferences(fromSessionId: string, toSessionId: string): number {
+  if (fromSessionId === toSessionId) return 0;
+  let copied = 0;
+  for (const storageKey of SESSION_PREFERENCE_STORAGE_KEYS) {
+    const map = loadMap(storageKey);
+    if (!Object.hasOwn(map, fromSessionId) || Object.hasOwn(map, toSessionId)) continue;
+    map[toSessionId] = map[fromSessionId];
+    saveMap(storageKey, map);
+    copied += 1;
+  }
+  return copied;
+}
+
+/**
  * Remember the gear new chats start on — except `bypass`.
  *
  * `bypass` turns off every approval prompt, and a default is the one setting

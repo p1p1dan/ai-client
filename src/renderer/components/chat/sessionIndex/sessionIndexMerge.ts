@@ -1,5 +1,5 @@
-import { resolveAgentWireName } from '@shared/types/agentWire';
-import type { SessionIndexEntry } from '@shared/types/sessionIndex';
+import { DSH_AGENT, PI_AGENT, resolveAgentWireName } from '@shared/types/agentWire';
+import type { SessionIndexListEntry } from '@shared/types/sessionIndex';
 import { canonicalPathKey } from '@shared/utils/path';
 import { workspacePathMatchRank } from '@/components/chat/composerTarget';
 import type { ChatSession, ChatWorkspace } from '@/stores/chatSessions';
@@ -38,7 +38,8 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   guessed into a group.
  * - S2 (b): this is the ONE place a persisted `agent` is read into a live row.
  *   Only an explicit known slug survives (`dsh`, or a legacy `pi` row, which
- *   is shown but read-only until P1-9 — dsh-rebase decision 005); a missing
+ *   is shown, and moved to DSH on its first continue — dsh-rebase decision
+ *   050); a missing
  *   binding predates the field (it meant Claude back then) and an unknown one
  *   was written by a newer build, so both are hidden rather than guessed into
  *   execution. Main agrees — `assertCreatableIndexRow` refuses to start the
@@ -48,6 +49,15 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   map, so the next unrelated rename would stamp `agent` onto every legacy
  *   row — a compatible read turned into an irreversible write migration.
  *   Coverage lives in `agentBindingMerge.test.ts`.
+ * - dsh-rebase P1-9e (decisions 051, 123): Main leaves out the legacy rows
+ *   migrated chats came from, so they never reach this merge — except one
+ *   whose file changed since (continued in 1.0.x after a rollback), which
+ *   arrives flagged `migrationDiverged` and becomes `legacyDiverged`, re-derived
+ *   on every merge like `unbound`. And a live row still bound to `pi` whose
+ *   index row is now a migrated `dsh` one (the migration committed, the resume
+ *   after it did not) takes the index's binding and stub: a migration is a
+ *   durable rebind, the one case where the persisted binding outranks the one
+ *   on the live row.
  */
 
 /**
@@ -70,7 +80,7 @@ export interface MergeResult {
 
 export function mergeSessionIndex(
   prevSessions: ChatSession[],
-  entries: SessionIndexEntry[],
+  entries: SessionIndexListEntry[],
   options: {
     workspaces: ChatWorkspace[];
     /** Initial status for sessions not yet live-bound (default 'idle'). */
@@ -125,22 +135,32 @@ export function mergeSessionIndex(
     // clears the marker instead of leaving it stuck on forever.
     const unbound =
       entry.unbound && entry.workspacePath ? { workspacePath: entry.workspacePath } : undefined;
+    // P1-9e: see the header. Present only when true, like the flag it mirrors.
+    const legacyDiverged = entry.migrationDiverged === true ? (true as const) : undefined;
 
     if (existing) {
       seenIds.add(existing.id);
+      // P1-9e: Main moved this chat to DSH, and the live row never heard
+      // (no `session.resumed` followed). The row it holds is the legacy one.
+      const migratedUnderneath =
+        agent === DSH_AGENT && entry.migratedFrom !== undefined && existing.agent === PI_AGENT;
       next.push({
         ...existing,
         unbound,
+        legacyDiverged,
         // Persisted title is authoritative only when non-empty; an unnamed
         // persisted entry must not blank out the UI seed title.
         title: entry.title || existing.title || fallbackSessionTitle(entry.sessionId),
         projectId: projectId || existing.projectId,
         workspaceId: workspaceId || existing.workspaceId,
-        runtimeIdentity: existing.runtimeIdentity ?? entry.runtimeIdentity,
+        runtimeIdentity: migratedUnderneath
+          ? entry.runtimeIdentity
+          : (existing.runtimeIdentity ?? entry.runtimeIdentity),
         // A binding already on the live row wins: it came from the runtime's
         // own `session.created` echo this run, which is the only report of
-        // what is actually running. The persisted value is the fallback.
-        agent: existing.agent ?? agent,
+        // what is actually running. The persisted value is the fallback —
+        // except over a legacy binding a migration has since replaced.
+        agent: migratedUnderneath ? agent : (existing.agent ?? agent),
         updatedAt:
           typeof entry.updatedAt === 'number' && entry.updatedAt > existing.updatedAt
             ? entry.updatedAt
@@ -165,6 +185,7 @@ export function mergeSessionIndex(
         runtimeIdentity: entry.runtimeIdentity,
         agent,
         unbound,
+        ...(legacyDiverged ? { legacyDiverged } : {}),
       });
       continue;
     }
@@ -194,6 +215,7 @@ export function mergeSessionIndex(
       updatedAt: entry.updatedAt,
       runtimeIdentity: entry.runtimeIdentity,
       agent,
+      ...(legacyDiverged ? { legacyDiverged } : {}),
     });
   }
 

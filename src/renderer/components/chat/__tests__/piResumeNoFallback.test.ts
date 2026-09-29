@@ -26,8 +26,12 @@ describe('T32 known-file resume safety', () => {
     const end = SOURCE.indexOf('// R3: no `useChatSessionsStore', start);
     const branch = SOURCE.slice(start, end);
     expect(branch).toContain('if (knownIdentity)');
-    expect(branch).toContain('.resumeSession({');
-    expect(branch.indexOf('.resumeSession({')).toBeLessThan(branch.indexOf('runCreateSequence('));
+    // dsh-rebase P1-9e: the resume goes through the wrapper that shows a
+    // legacy chat's move to the current engine (`sendRefusalWiring.test.ts`).
+    expect(branch).toContain('resumeSessionWithMigration({');
+    expect(branch.indexOf('resumeSessionWithMigration({')).toBeLessThan(
+      branch.indexOf('runCreateSequence(')
+    );
     expect(branch).toContain('sole safe create fallback');
   });
 });

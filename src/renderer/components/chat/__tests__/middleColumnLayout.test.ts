@@ -29,12 +29,13 @@ import {
   composerRowsClass,
   composerTextareaClass,
   deriveMiddleColumnMode,
+  MIGRATING_SESSION_PLACEHOLDER,
   type MiddleColumnMode,
   type MiddleColumnModeInput,
+  MOVES_ON_SEND_PLACEHOLDER,
   mentionPopupPlacementClass,
   middleColumnHostClass,
   queueStripWrapperClass,
-  READ_ONLY_SESSION_PLACEHOLDER,
   rememberSendAttempt,
   resolveComposerPopupPlacement,
   resolveIdleStatusText,
@@ -1601,11 +1602,12 @@ describe('composerPlaceholder', () => {
   });
 
   /**
-   * dsh-rebase P1-1 (GUI point-check D1): a legacy chat said nothing until its
-   * first send was refused — the box looked fully usable. The copy now says so
-   * up front, in both modes and whatever else the ladder would have picked.
+   * dsh-rebase P1-9e (decision 050): a chat from the previous version is moved
+   * to the current engine by its first send. The box says so before (the
+   * first send takes a moment longer), and while the move runs — which
+   * otherwise read "Sending to Agent Host…" for as long as it took.
    */
-  describe('read-only legacy chat (P1-1 D1)', () => {
+  describe('legacy chat moved on its first send (P1-9e)', () => {
     const idle = {
       canSend: true,
       busy: false,
@@ -1616,39 +1618,62 @@ describe('composerPlaceholder', () => {
       attachmentCount: 0,
     };
 
-    it('says the chat is read-only instead of asking for a message', () => {
+    it('rewords the ordinary prompt, in both modes', () => {
       for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
-        expect(composerPlaceholder({ ...idle, mode, readOnly: true })).toBe(
-          READ_ONLY_SESSION_PLACEHOLDER
+        expect(composerPlaceholder({ ...idle, mode, movesOnSend: true })).toBe(
+          MOVES_ON_SEND_PLACEHOLDER
         );
       }
-      // Ahead of the setup rungs, which cannot help a chat that cannot run.
+    });
+
+    it('leaves the rungs that name something to fix first ahead of it', () => {
+      // The chat can run now; a missing workspace still has to be dealt with.
       expect(
         composerPlaceholder({
           ...idle,
           mode: 'session',
           canSend: false,
           hasWorkspace: false,
-          readOnly: true,
+          movesOnSend: true,
         })
-      ).toBe(READ_ONLY_SESSION_PLACEHOLDER);
+      ).toBe('Active session has no workspace…');
+      expect(
+        composerPlaceholder({ ...idle, mode: 'session', sending: true, movesOnSend: true })
+      ).toBe('Sending to Agent Host…');
     });
 
-    it('still reports the send while it is in flight', () => {
-      expect(composerPlaceholder({ ...idle, mode: 'session', sending: true, readOnly: true })).toBe(
-        'Sending to Agent Host…'
+    it('says the move is running while it runs, ahead of the send waiting on it', () => {
+      for (const mode of ['empty', 'session'] satisfies MiddleColumnMode[]) {
+        expect(
+          composerPlaceholder({
+            ...idle,
+            mode,
+            sending: true,
+            isCreatingSession: true,
+            movesOnSend: true,
+            migrating: true,
+          })
+        ).toBe(MIGRATING_SESSION_PLACEHOLDER);
+      }
+      // A move started from the history card's Retry: no send at all.
+      expect(composerPlaceholder({ ...idle, mode: 'session', migrating: true })).toBe(
+        MIGRATING_SESSION_PLACEHOLDER
       );
     });
 
     it('reverse: an ordinary chat keeps its prompt', () => {
-      expect(composerPlaceholder({ ...idle, mode: 'session', readOnly: false })).toBe(
-        'Send follow-up…'
-      );
+      expect(
+        composerPlaceholder({ ...idle, mode: 'session', movesOnSend: false, migrating: false })
+      ).toBe('Send follow-up…');
       expect(composerPlaceholder({ ...idle, mode: 'session' })).toBe('Send follow-up…');
     });
 
-    it('ships the copy in the dictionary', () => {
-      expect(zhTranslations[READ_ONLY_SESSION_PLACEHOLDER]).toBeDefined();
+    it('ships the copy in the dictionary, and not the read-only one it replaced', () => {
+      expect(zhTranslations[MOVES_ON_SEND_PLACEHOLDER]).toBeDefined();
+      expect(zhTranslations[MIGRATING_SESSION_PLACEHOLDER]).toBeDefined();
+      expect(
+        zhTranslations['Read-only until migration — start a new chat to continue']
+      ).toBeUndefined();
     });
   });
 });

@@ -38,6 +38,7 @@ import {
 } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
@@ -91,7 +92,7 @@ import {
   ENGINE_UNAVAILABLE_HINT,
   encodePiResumeError,
   isEngineUnavailableError,
-  isReadOnlyResumeRefusal,
+  isLegacyMigrationRefusal,
 } from './historyError';
 import { ModelMissingNotice } from './ModelMissingNotice';
 import { type QueuedMessage, selectSessionQueue } from './messageQueue';
@@ -154,8 +155,13 @@ import { decideSendPreamble } from './sendPreamble';
 import { onSessionEnded } from './sessionEndSignal';
 import { failureCardOwnsError } from './sessionFailure';
 import { captureSessionGenerationPreferences } from './sessionGenerationPreferences';
-import { isLegacyReadOnlySession } from './sessionIndex/resumeIntent';
+import {
+  resumeSessionWithMigration,
+  runAfterLegacyMigration,
+} from './sessionIndex/legacyMigration';
+import { willMigrateOnResume } from './sessionIndex/resumeIntent';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
+import { resumeSessionById } from './sessionIndex/useResumeSession';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
 import { readDefaultPermissions, readSessionPermissions } from './sessionPreferenceStore';
 import {
@@ -656,6 +662,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const pendingQuestionHere = useChatSessionsStore((state) =>
     state.pendingQuestions.some((item) => item.sessionId === state.activeSessionId)
   );
+  // dsh-rebase P1-9e: this window's resume is moving the chat on screen to the
+  // current engine — what the placeholder says while the send waits on it.
+  const migratingHere = useLegacyMigrationStore((state) =>
+    selectIsMigrating(state, activeSessionId)
+  );
   // T-19 decision 4: a pending permission is never auto-answered, only hinted
   // at — this scopes that hint (and the "don't deny for the user" rule) to
   // THIS session, same pattern as pendingQuestionHere above.
@@ -1057,11 +1068,26 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // so one Enter after the turn ends runs it — see `compactCommand.ts`.
         const outcome = await runCompactCommand({
           turnRunning: canStop || stoppingRef.current || activeSession?.status === 'stopping',
+          // dsh-rebase P1-9e (decision 122 rule 14): a chat from the previous
+          // version is moved to the current engine (by resuming it) before it
+          // can be compacted; a failed move puts its card in the timeline.
           compact: () =>
-            window.electronAPI.chat.compactSession({
-              sessionId: activeSessionId,
-              ...(action.instructions ? { instructions: action.instructions } : {}),
-            }),
+            runAfterLegacyMigration(
+              activeSessionId,
+              () =>
+                window.electronAPI.chat.compactSession({
+                  sessionId: activeSessionId,
+                  ...(action.instructions ? { instructions: action.instructions } : {}),
+                }),
+              (sessionId) =>
+                resumeSessionById(sessionId, {
+                  model: resolveResumeModel(
+                    getSessionModel,
+                    sessionId,
+                    agentDefaultModel(chatAgentDefaults)
+                  ),
+                })
+            ),
         });
         if (outcome.kind === 'turn-running') {
           toastManager.add({
@@ -2521,7 +2547,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         let resumeDispatchError: string | null = null;
         const resumeResult = await cancellation
           .race(
-            window.electronAPI.chat.resumeSession({
+            // dsh-rebase P1-9e: a legacy chat is moved to the current engine by
+            // this resume (decision 050); the wrapper shows that while it runs
+            // and applies the answer's `migration` summary.
+            resumeSessionWithMigration({
               sessionId,
               runtimeIdentity: preamble.runtimeIdentity,
               workspacePath,
@@ -2558,12 +2587,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             fatalHostError ??
             'Pi session resume timed out before history hydration completed.';
           const encodedError = encodePiResumeError(message);
-          // P1-1 D1: a read-only legacy chat. Its history card is the whole
-          // report (no raw copy above the composer), and the refused payload
-          // goes back to the composer rather than behind a Retry.
-          const readOnly = isReadOnlyResumeRefusal(encodedError.code);
+          // P1-9e: a legacy chat that could not be moved to the current
+          // engine. Its history card is the whole report (no raw copy above
+          // the composer), and the payload goes back to the composer rather
+          // than behind a Retry — the card's own Retry is what moves the chat.
+          const migrationRefused = isLegacyMigrationRefusal(encodedError.code);
           useChatSessionsStore.setState((state) => ({
-            lastError: readOnly ? null : encodedError.message,
+            lastError: migrationRefused ? null : encodedError.message,
             historyErrors: {
               ...state.historyErrors,
               [sessionId]: encodedError.encoded,
@@ -2572,7 +2602,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           unbindHost();
           return finalizeOutcome(
             decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
-            { refusedByRule: readOnly }
+            { refusedByRule: migrationRefused }
           );
         } else {
           useChatSessionsStore.setState((state) => ({
@@ -2673,7 +2703,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           let reopenError: string | null = null;
           const reopen = await cancellation
             .race(
-              window.electronAPI.chat.resumeSession({
+              // Same wrapper as the resume branch above (P1-9e).
+              resumeSessionWithMigration({
                 sessionId,
                 runtimeIdentity: knownIdentity,
                 workspacePath,
@@ -2701,10 +2732,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 fatalHostError ??
                 'Pi session resume timed out before history hydration completed.'
             );
-            // P1-1 D1, same as the resume branch above.
-            const readOnly = isReadOnlyResumeRefusal(encodedError.code);
+            // P1-9e, same as the resume branch above.
+            const migrationRefused = isLegacyMigrationRefusal(encodedError.code);
             useChatSessionsStore.setState((state) => ({
-              lastError: readOnly ? null : encodedError.message,
+              lastError: migrationRefused ? null : encodedError.message,
               historyErrors: {
                 ...state.historyErrors,
                 [sessionId]: encodedError.encoded,
@@ -2712,7 +2743,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             }));
             return finalizeOutcome(
               decideRunEntryOutcome({ fatalHostError: true, sawAssistantProgress, sawUserEcho }),
-              { refusedByRule: readOnly }
+              { refusedByRule: migrationRefused }
             );
           }
           useChatSessionsStore.setState((state) => ({
@@ -3655,8 +3686,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
           pendingQuestion: pendingQuestionHere,
           queuedCount,
           isCreatingSession,
-          // P1-1 D1: say so before a send is refused; the box stays usable.
-          readOnly: isLegacyReadOnlySession(activeSession),
+          // P1-9e: a chat from the previous version is moved to the current
+          // engine by its first send; said before, and while it runs.
+          migrating: migratingHere,
+          movesOnSend: willMigrateOnResume(activeSession),
         },
         t
       )}

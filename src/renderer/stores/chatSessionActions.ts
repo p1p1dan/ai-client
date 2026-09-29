@@ -159,7 +159,8 @@ export function createUnboundChatSession(title = 'New chat'): string {
 
 /**
  * Materialize a committed indexed session and select it, bound to the engine
- * its row names: a DSH fork runs, a legacy `pi` row stays read-only (P1-1).
+ * its row names: a DSH fork runs, a legacy `pi` row is moved to DSH on its
+ * first continue (P1-9, decision 050).
  */
 export function materializeIndexedPiChatSession(
   entry: SessionIndexEntry,

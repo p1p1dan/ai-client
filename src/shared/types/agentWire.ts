@@ -43,8 +43,9 @@ export function isAgentWireName(value: unknown): value is AgentWireName {
  *
  * Missing and unknown bindings are kept hidden by callers and remain on disk
  * for migration/import tooling or a newer build to understand. Only an
- * explicit known value authorizes a persisted row at all; which of those may
- * still run is the caller's rule (`pi` rows are read-only).
+ * explicit known value authorizes a persisted row at all; what a row may do is
+ * the caller's rule (a `pi` row runs only once its first continue has moved
+ * it to `dsh`).
  */
 export function resolveAgentWireName(raw: string | null | undefined): AgentWireName | null {
   return isAgentWireName(raw) ? raw : null;
