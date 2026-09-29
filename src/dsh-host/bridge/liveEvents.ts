@@ -32,6 +32,9 @@
  *   `command/run` / `command/done` of   the send's `running`, the line as its user
  *   a command line one of our sends     echo, and the command's answer as a notice
  *   carried                             (P1-4d2, rule 9); no turn is opened
+ *   a call entering `tools/execute`     tool.updated with `execStartedAt`: its
+ *                                       approval is behind it (P1-7b, rule 15)
+ *   a running command's job output      tool.output, the tail (P1-7b, `jobs.ts`)
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
  * `dsh-notice-<seq>`, `dsh-<session>-t<turn>-s<step>` — and the history
@@ -332,6 +335,8 @@ export class DshLiveEvents {
   private readonly startedTools = new Set<string>();
   private readonly argStreams = new Map<string, ArgsStream>();
   private currentStream: { attemptId: string; message: StepMessage } | null = null;
+  /** P1-7b: calls that entered `tools/execute` before their row was opened, and when. */
+  private readonly execStarted = new Map<string, number>();
   /**
    * The turn is still taking in its first batch of input (until its first
    * model event), and whether a head came out of it (P1-4d1, decision 072).
@@ -351,7 +356,48 @@ export class DshLiveEvents {
     this.startedTools.clear();
     this.argStreams.clear();
     this.currentStream = null;
+    this.execStarted.clear();
     this.batch = { first: false, headed: false };
+  }
+
+  // ---- P1-7b: execution start and live output ----------------------------------------
+
+  /**
+   * Decision 099 rule 15 (T146): the call left its approval and entered
+   * `tools/execute` at `at` — the row's clock counts from here, not from the
+   * call's appearance. A row not opened yet gets it when it opens.
+   */
+  onExecStarted(callId: string, at: number): void {
+    const messageId = this.toolStep.get(callId);
+    if (!messageId || !this.startedTools.has(callId)) {
+      this.execStarted.set(callId, at);
+      return;
+    }
+    this.emit({
+      type: 'tool.updated',
+      payload: { messageId, toolCallId: callId, execStartedAt: at },
+    });
+  }
+
+  /** The stamp a row that opened late was owed. */
+  private flushExecStarted(callId: string): void {
+    const at = this.execStarted.get(callId);
+    if (at === undefined) return;
+    this.execStarted.delete(callId);
+    this.onExecStarted(callId, at);
+  }
+
+  /** P1-7b (`jobs.ts`): the newest output of a running command, on its row. */
+  emitToolOutput(output: {
+    toolCallId: string;
+    jobId: string;
+    tail: string;
+    omittedBytes: number;
+    totalBytes: number;
+  }): void {
+    const messageId = this.toolStep.get(output.toolCallId);
+    if (!messageId) return;
+    this.emit({ type: 'tool.output', payload: { messageId, ...output } });
   }
 
   private emit(event: BridgeDraft): void {
@@ -516,6 +562,7 @@ export class DshLiveEvents {
           input: { [STREAMING_TOOL_ARGS_KEY]: summary },
         },
       });
+      this.flushExecStarted(id);
       return;
     }
     if (summary.bytes === stream.lastBytes || now - stream.lastEmitAt < TOOL_ARG_COALESCE_MS) {
@@ -556,6 +603,7 @@ export class DshLiveEvents {
         type: 'tool.started',
         payload: { messageId: message.messageId, toolCallId: id, name, input: toolRowInput(args) },
       });
+      this.flushExecStarted(id);
       return;
     }
     this.emit({
@@ -810,6 +858,7 @@ export class DshLiveEvents {
         type: 'tool.started',
         payload: { messageId, toolCallId: callId, name, input: toolRowInput(args) },
       });
+      this.flushExecStarted(callId);
       return;
     }
     // The stream's block end already sent these very arguments.

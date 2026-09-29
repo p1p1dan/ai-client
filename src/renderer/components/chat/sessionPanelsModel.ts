@@ -1,6 +1,7 @@
 import type {
   DshGoalActivation,
   DshGoalProjection,
+  DshJobSummary,
   DshSubagentCatalogEntry,
   DshTodoItem,
   RuntimeEvent,
@@ -35,6 +36,8 @@ export interface SessionPanels {
   goal?: DshGoalProjection | null;
   goalActivation?: DshGoalActivation | null;
   subagentCatalog?: DshSubagentCatalogEntry[];
+  /** P1-7b: the session's background jobs (the bridge's `jobs`); the jobs window reads them. */
+  jobs?: DshJobSummary[];
   /**
    * A live worker spoke for this session: an event came in, or a rehydration
    * answered with something. Cleared when the session's connection goes. The
@@ -102,6 +105,27 @@ function readActivation(view: unknown): DshGoalActivation | null | undefined {
   return view as unknown as DshGoalActivation;
 }
 
+const JOB_STATUSES: ReadonlySet<string> = new Set([
+  'running',
+  'stopping',
+  'completed',
+  'killed',
+  'failed',
+]);
+
+function readJobs(view: unknown): DshJobSummary[] | undefined {
+  if (!Array.isArray(view)) return undefined;
+  return view.filter(
+    (job): job is DshJobSummary =>
+      isRecord(job) &&
+      typeof job.id === 'string' &&
+      typeof job.kind === 'string' &&
+      typeof job.label === 'string' &&
+      JOB_STATUSES.has(String(job.status)) &&
+      typeof job.startedAt === 'number'
+  );
+}
+
 function readCatalog(view: unknown): DshSubagentCatalogEntry[] | undefined {
   if (!Array.isArray(view)) return undefined;
   return view.filter(
@@ -127,6 +151,10 @@ function withProjection(panels: SessionPanels, payload: SessionProjectionPayload
     case 'subagentCatalog': {
       const subagentCatalog = readCatalog(payload.view);
       return subagentCatalog === undefined ? panels : { ...panels, subagentCatalog };
+    }
+    case 'jobs': {
+      const jobs = readJobs(payload.view);
+      return jobs === undefined ? panels : { ...panels, jobs };
     }
     default:
       return panels;

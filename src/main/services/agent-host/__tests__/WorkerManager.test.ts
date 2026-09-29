@@ -3028,6 +3028,86 @@ describe('WorkerManager goal bar and panels (P1-7a)', () => {
 });
 
 /**
+ * dsh-rebase P1-7b (decision 119): the jobs and subagents windows. A kill and
+ * an interrupt act on a ready session and are claimed for the window; the
+ * output read answers `null`, not an error, for a session whose worker went.
+ */
+describe('WorkerManager jobs and subagents windows (P1-7b)', () => {
+  it('[P7B-WM-KILL] forwards a kill to the ready slot and claims the session', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.job.kill' ? { outcome: 'requested' } : {}
+    );
+    await expect(
+      h.manager.killSessionJob({ sessionId: 's1', jobId: 'bash-2', ownerWebContentsId: 11 })
+    ).resolves.toEqual({ outcome: 'requested' });
+    expect(record?.request).toHaveBeenCalledWith('worker.job.kill', {
+      logicalSessionId: 's1',
+      jobId: 'bash-2',
+    });
+  });
+
+  it('[P7B-WM-KILL-REFUSED] no ready slot, or a malformed answer, is an error', async () => {
+    const h = createHarness();
+    await expect(
+      h.manager.killSessionJob({ sessionId: 'never-started', jobId: 'bash-2' })
+    ).rejects.toMatchObject({ code: 'session_not_found' });
+    await expect(
+      h.manager.interruptSubagent({ sessionId: 'never-started', childId: 'kid' })
+    ).rejects.toMatchObject({ code: 'session_not_found' });
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async () => ({ outcome: 'maybe', interrupted: 'yes' }));
+    await expect(
+      h.manager.killSessionJob({ sessionId: 's1', jobId: 'bash-2' })
+    ).rejects.toMatchObject({ code: 'worker_job_failed' });
+    await expect(
+      h.manager.interruptSubagent({ sessionId: 's1', childId: 'kid' })
+    ).rejects.toMatchObject({ code: 'worker_subagent_failed' });
+  });
+
+  it('[P7B-WM-READ] reads through the ready slot, sanitized; no slot answers null', async () => {
+    const h = createHarness();
+    await expect(
+      h.manager.readSessionJob({ sessionId: 'never-started', jobId: 'bash-2' })
+    ).resolves.toBeNull();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.job.read'
+        ? { text: 'out', from: 3, next: 6, omittedBytes: 3, lossy: false, extra: 1 }
+        : {}
+    );
+    await expect(
+      h.manager.readSessionJob({ sessionId: 's1', jobId: 'bash-2', from: 3 })
+    ).resolves.toEqual({ text: 'out', from: 3, next: 6, omittedBytes: 3, lossy: false });
+    expect(record?.request).toHaveBeenCalledWith('worker.job.read', {
+      logicalSessionId: 's1',
+      jobId: 'bash-2',
+      from: 3,
+    });
+  });
+
+  it('[P7B-WM-INTERRUPT] forwards an interrupt to the ready slot', async () => {
+    const h = createHarness();
+    await create(h.manager, 's1', 11);
+    const record = h.records.find((entry) => entry.sessionId === 's1');
+    record?.request.mockImplementation(async (type: string) =>
+      type === 'worker.subagent.interrupt' ? { interrupted: true } : {}
+    );
+    await expect(
+      h.manager.interruptSubagent({ sessionId: 's1', childId: 'kid', ownerWebContentsId: 11 })
+    ).resolves.toEqual({ interrupted: true });
+    expect(record?.request).toHaveBeenCalledWith('worker.subagent.interrupt', {
+      logicalSessionId: 's1',
+      childId: 'kid',
+    });
+  });
+});
+
+/**
  * P5-2-3 — `preview.requested` is answered by Main, not by a card.
  *
  * The preview surface is an Electron window, so this event is the one blocking

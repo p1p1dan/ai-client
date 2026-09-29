@@ -258,6 +258,16 @@
   {
     "sessionId": "rec-perm-plan",
     "requestId": "turn-PERM-PLAN",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-plan",
+    "requestId": "turn-PERM-PLAN",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-plan-t1-s2",

@@ -31,6 +31,7 @@ export type RuntimeEventType =
   | 'tool.started'
   | 'tool.updated'
   | 'tool.completed'
+  | 'tool.output'
   | 'custom.message'
   | 'custom.entry'
   | 'permission.requested'
@@ -431,6 +432,38 @@ export interface ToolCompletedEvent extends RuntimeEventBase {
     error?: string;
   };
 }
+
+/**
+ * dsh-rebase P1-7b (decisions 072 rule 5, 119; plan P1-7 shard 03 §4.1): the
+ * live tail of a running command's output. DSH registers every foreground
+ * `bash` / `pwsh` call as a job from its start; the bridge reads that job's
+ * output ring (without moving the model's cursor) and sends the tail at most
+ * four times a second while the call runs.
+ *
+ * Whole, not a delta: each event replaces the previous tail of its call, so a
+ * renderer that missed one loses nothing. Memory only: never persisted, never
+ * part of the history or of `chatSessions`; the settled `tool.completed`
+ * output is still the row's record.
+ */
+export interface ToolOutputEvent extends RuntimeEventBase {
+  type: 'tool.output';
+  sessionId: string;
+  payload: {
+    messageId: string;
+    toolCallId: string;
+    /** The job DSH registered the command as (`bash-3`). */
+    jobId: string;
+    /** The newest output, at most `TOOL_OUTPUT_TAIL_BYTES`, as the command wrote it (ANSI included). */
+    tail: string;
+    /** Bytes written before `tail` that this event does not carry. */
+    omittedBytes: number;
+    /** Every byte the command wrote so far. */
+    totalBytes: number;
+  };
+}
+
+/** The most output one `tool.output` carries (UTF-8 bytes). */
+export const TOOL_OUTPUT_TAIL_BYTES = 16_384;
 
 interface CustomTimelinePayload {
   messageId: string;
@@ -1129,6 +1162,13 @@ export interface SubagentReport {
   totalTokens?: number;
   totalToolUseCount?: number;
   toolStats?: SubagentToolStats;
+  /**
+   * dsh-rebase P1-7b (decision 119): DSH's own stop reason for the run
+   * (`completed`, `aborted`, `error`, `max-tokens`, `refusal`), which `status`
+   * folds — `refusal` and `error` both read `failed` there, and a reader
+   * should still be told the child declined rather than broke.
+   */
+  stopReason?: string;
 }
 
 /** Every activity must land on a delegation carrier. */
@@ -1178,7 +1218,13 @@ export type SubagentActivityPayload =
     })
   | (SubagentActivityBase & { kind: 'report'; report: SubagentReport })
   /** Per-delegation event cap hit; the carrier goes silent after this. */
-  | (SubagentActivityBase & { kind: 'capped'; limit: number });
+  | (SubagentActivityBase & { kind: 'capped'; limit: number })
+  /**
+   * dsh-rebase P1-7b (decision 119): a continuable DSH subagent whose run had
+   * ended began another one in the same lane (its parent sent it a message):
+   * the lane is live again. `at` is when, in epoch ms.
+   */
+  | (SubagentActivityBase & { kind: 'resumed'; at?: number });
 
 export interface SubagentActivityEvent extends RuntimeEventBase {
   type: 'subagent.activity';
@@ -1199,9 +1245,11 @@ export const SESSION_PROJECTION_KEYS = ['todos', 'goal', 'subagentCatalog'] as c
  * dsh-rebase decision 072 rule 1, P1-7a (decision 118): keys no DSH
  * projection unit produces — the bridge makes them. `goalActivation` is the
  * process-local armed state DSH's `goal` projection deliberately leaves out
- * (`goal/activation-changed`, `ctx.goals.get`). P1-7b adds `jobs`.
+ * (`goal/activation-changed`, `ctx.goals.get`). `jobs` (P1-7b, decision 119)
+ * is the session's background jobs as DSH's job registry (`ctx.jobs`) holds
+ * them — process-local too: they end with the host.
  */
-export const BRIDGE_PROJECTION_KEYS = ['goalActivation'] as const;
+export const BRIDGE_PROJECTION_KEYS = ['goalActivation', 'jobs'] as const;
 
 export type SessionProjectionKey =
   | (typeof SESSION_PROJECTION_KEYS)[number]
@@ -1251,21 +1299,50 @@ export interface DshGoalActivation {
   activation: 'armed' | 'disarmed';
 }
 
+/**
+ * One entry of `jobs` (bridge-made, P1-7b, decision 119): a background job of
+ * the session, as dsh-jobs' `JobView` describes it, minus the ring offsets
+ * (they move with every byte; the window reads output on demand through
+ * `worker.job.read`). A foreground command the model is still waiting on is
+ * not listed: its output goes to its own row (`tool.output`). Settled jobs
+ * stay listed (the newest few) until the host drops them.
+ */
+export interface DshJobSummary {
+  /** `<kind>-N`, the registry's id (`bash-3`, `subagent-1`). */
+  id: string;
+  /** The producer: `bash`, `pwsh`, `subagent`, `workflow`, or one a plugin adds. */
+  kind: string;
+  /** The command, or the delegation's description. */
+  label: string;
+  status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed';
+  /** The producer's live progress line (a workflow's phase); cleared at settlement. */
+  progress?: string;
+  /** Why it ended (`exit code: 3`), a kill reason merged in. */
+  detail?: string;
+  startedAt: number;
+  finishedAt?: number;
+  /** A foreground command that outlived its timeout and moved to the background. */
+  promoted?: true;
+}
+
 /** The whole current value of one key; `null` before the first write (todos) or with no goal. */
 export type SessionProjectionPayload =
   | { key: 'todos'; view: DshTodoItem[] | null }
   | { key: 'goal'; view: DshGoalProjection | null }
   | { key: 'subagentCatalog'; view: DshSubagentCatalogEntry[] }
-  | { key: 'goalActivation'; view: DshGoalActivation | null };
+  | { key: 'goalActivation'; view: DshGoalActivation | null }
+  | { key: 'jobs'; view: DshJobSummary[] };
 
 /**
  * A DSH session projection's current value. A later event of the same key
  * replaces the earlier one. The bridge sends the three keys once ahead of the
  * first event after a bootstrap (or right after a rewind), then each change;
  * `goalActivation` goes with them only while the session has a goal, and then
- * on every activation edge. A renderer that missed them (a reload, a session
- * reopened with no event since) asks `worker.panels` for the same values.
- * Consumed by the renderer's `sessionPanels` store (P1-7a).
+ * on every activation edge; `jobs` only while the session has a job, and then
+ * on every lifecycle change of one (at most once a second). A renderer that
+ * missed them (a reload, a session reopened with no event since) asks
+ * `worker.panels` for the same values. Consumed by the renderer's
+ * `sessionPanels` store (P1-7a, P1-7b).
  */
 export interface SessionProjectionEvent extends RuntimeEventBase {
   type: 'session.projection';
@@ -1374,6 +1451,7 @@ export type RuntimeEvent =
   | ToolStartedEvent
   | ToolUpdatedEvent
   | ToolCompletedEvent
+  | ToolOutputEvent
   | CustomMessageEvent
   | CustomEntryEvent
   | PermissionRequestedEvent

@@ -248,6 +248,9 @@ it('merges the delegate and agent headers, starts closed and reveals operations 
     agentType: 'explore',
     description: 'inspect files',
     status: 'running',
+    taskType: null,
+    startedAt: null,
+    endedAt: null,
     rows: [
       {
         kind: 'tool',

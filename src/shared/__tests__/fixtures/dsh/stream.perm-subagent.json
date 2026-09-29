@@ -147,6 +147,16 @@
   {
     "sessionId": "rec-perm-subagent",
     "requestId": "turn-PERM-SUB",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-subagent-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
     "type": "session.projection",
     "payload": {
       "key": "subagentCatalog",
@@ -158,6 +168,58 @@
           "createdAt": "<ms>"
         }
       ]
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "started",
+      "description": "Permission probe child",
+      "taskType": "subagent"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "status",
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "progress",
+      "usage": {
+        "totalTokens": 0,
+        "toolUses": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "tool.started",
+      "toolCallId": "toolu_id-11",
+      "name": "bash",
+      "input": {
+        "command": "echo perm-child-call"
+      }
     }
   },
   {
@@ -199,6 +261,76 @@
       "permissionId": "toolu_id-11",
       "allow": true,
       "decision": "allow"
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "tool.completed",
+      "toolCallId": "toolu_id-11",
+      "ok": true
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "text",
+      "id": "id-7-17-0",
+      "text": "P1-PERM-CHILD finished."
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "progress",
+      "usage": {
+        "totalTokens": 0,
+        "toolUses": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "status",
+      "status": "completed",
+      "endedAt": "<ms>",
+      "usage": {
+        "totalTokens": 0,
+        "toolUses": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-perm-subagent",
+    "requestId": "turn-PERM-SUB",
+    "type": "subagent.activity",
+    "payload": {
+      "parentToolCallId": "toolu_id-4",
+      "agentId": "id-7",
+      "kind": "report",
+      "report": {
+        "status": "completed",
+        "totalTokens": 63,
+        "totalToolUseCount": 1,
+        "stopReason": "completed"
+      }
     }
   },
   {

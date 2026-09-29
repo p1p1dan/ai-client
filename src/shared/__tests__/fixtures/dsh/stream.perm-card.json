@@ -191,6 +191,16 @@
   {
     "sessionId": "rec-perm-card",
     "requestId": "turn-PERM-CARD",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-card-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-card",
+    "requestId": "turn-PERM-CARD",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-card-t1-s1",

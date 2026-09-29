@@ -3626,3 +3626,47 @@ Object.assign(zhTranslations, {
   'Hide the full text': '收起全文',
   'Joins the running turn at its next step': '会在当前回合的下一步并入',
 });
+
+// dsh-rebase P1-7b (decision 119): the background jobs and subagents
+// sub-windows the session bar opens, a running command's live output, and
+// the divider a continued subagent run leaves in its lane.
+Object.assign(zhTranslations, {
+  'Drag to move; double-click to put it back': '拖动可移动；双击放回原处',
+  'Background tasks': '后台任务',
+  'Background work': '后台工作',
+  '{{running}} running · {{ended}} ended': '{{running}} 运行中 · {{ended}} 已结束',
+  '{{running}} running': '{{running}} 运行中',
+  '{{count}} in all': '共 {{count}} 个',
+  'No background tasks right now': '当前没有后台任务',
+  'No subagents yet': '当前没有子代理',
+  'Stop all': '全部停止',
+  'Stop all background tasks?': '停止全部后台任务？',
+  'Every running command and one-shot subagent stops; running subagents are interrupted and can be continued.':
+    '运行中的命令与一次性子代理都会停止；运行中的子代理会被打断，之后还能续聊。',
+  'Engine restarted; the task ended': '引擎重启，任务已结束',
+  Interrupted: '已打断',
+  'Timed out into the background': '超时转入',
+  'Exit code {{code}}': '退出码 {{code}}',
+  Output: '输出',
+  Activity: '活动',
+  Stages: '阶段',
+  Interrupt: '打断',
+  Locate: '定位',
+  'Delegated subagent': '子代理',
+  Workflow: '工作流',
+  Fork: '分叉',
+  '{{count}} calls': '{{count}} 次调用',
+  'Declined the task': '拒绝了任务',
+  'Cut off': '已截断',
+  Ended: '已结束',
+  'Earlier run': '此前运行',
+  'The task was not stopped': '任务没有停下',
+  'The subagent was not interrupted': '子代理没有被打断',
+  'Recent activity': '最近活动',
+  'No output yet': '还没有输出',
+  'Earlier {{size}} not shown': '已省略前 {{size}}',
+  'Output unavailable: the engine that ran it is gone': '输出不可用：运行它的引擎已经不在了',
+  'Full output: {{path}}': '完整输出：{{path}}',
+  'Live output': '实时输出',
+  Continued: '续聊',
+});

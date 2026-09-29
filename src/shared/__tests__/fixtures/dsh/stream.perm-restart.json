@@ -185,6 +185,16 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-GRANT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t1-s1",
@@ -280,6 +290,16 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "execStartedAt": "<ms>"
     }
   },
   {
@@ -532,6 +552,16 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-COVERED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
+      "toolCallId": "toolu_id-13",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
@@ -627,6 +657,16 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
+      "toolCallId": "toolu_id-17",
+      "execStartedAt": "<ms>"
     }
   },
   {

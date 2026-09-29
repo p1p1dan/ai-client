@@ -6,6 +6,8 @@
 
 修订注记（2026-09-28，P1-7a）：第 36 条的空气泡过渡态已由轮次头替换，第 27 条的通知行与第 40 条的 `AutoTurnHead`、提示词导航条跳过轮次头已落地；第 41 条里的 `goalActivation` 提前在 P1-7a 做了（`execStartedAt`、`jobs`、子代理用量与重试仍归 P1-7b）。见[决策 118](118-p1-7a-goal-todo-round-choices.md) 第 9、21～23 条（待审批）。
 
+修订注记（2026-09-28，P1-7b）：第 41 条里的 `execStartedAt`、`jobs` 已落地；子代理的用量（`usage.updated.delegated`）与重试横幅（第 21 条）没有做，记为遗留。见[决策 119](119-p1-7b-jobs-subagents-choices.md) 第 10、13 条（待审批）。
+
 ## 规则
 
 ### 一、模块

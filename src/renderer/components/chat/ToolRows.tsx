@@ -30,6 +30,7 @@ import {
 } from '@/stores/toolExpansion';
 import { thoughtBodyMaxHeightClass, turnProcessToneClass } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
+import { LiveToolOutput } from './LiveToolOutput';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
 import {
   type FileLinkTarget,
@@ -156,12 +157,19 @@ function ToolRowIcon({ kind }: { kind?: string }) {
 export function ToolRow(props: ToolRowProps) {
   const { view } = props;
   if (view.toolName && isDelegationTool(view.toolName) && view.toolCallId) {
+    // dsh-rebase P1-7b: `data-tool-call-id` is how the subagents window's
+    // 「定位」 finds this row (`locateToolRow`), which marks it for a moment.
     return (
-      <SubagentActivity
-        {...props}
-        parentToolCallId={view.toolCallId}
-        parentRunning={view.running}
-      />
+      <div
+        data-tool-call-id={view.toolCallId}
+        className="rounded-sm transition-colors duration-300 data-[located]:bg-selection"
+      >
+        <SubagentActivity
+          {...props}
+          parentToolCallId={view.toolCallId}
+          parentRunning={view.running}
+        />
+      </div>
     );
   }
   return <ToolRowContent {...props} />;
@@ -634,6 +642,9 @@ function ToolRowBody({
       {view.input && (
         <ToolRowInputSegment input={view.input} maxHeightClass={view.inputMaxHeightClass} />
       )}
+      {/* dsh-rebase P1-7b: a running command's live tail (`tool.output`),
+          only while it runs; the settled output below replaces it. */}
+      {view.running && view.toolCallId && <LiveToolOutput toolCallId={view.toolCallId} />}
       <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
     </>
   );

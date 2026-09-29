@@ -1,0 +1,631 @@
+[
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-SUBCONT"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-SUBCONT: delegate to a continuable subagent."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "subagent",
+      "input": {
+        "__streaming": {
+          "bytes": 27,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "description": "Continuable probe",
+        "prompt": "P1-SUBCHILD: answer in one line."
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": [
+        {
+          "mode": "continuable",
+          "label": "Continuable probe",
+          "id": "id-7",
+          "createdAt": "<ms>"
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "started subagent id-7"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s2",
+      "blockId": "dsh-aiclient-rec-sub-cont-t1-s2-b0",
+      "text": "Delegated; the subagent reports back when it is done."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "turn-SUBCONT",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-23",
+      "role": "user",
+      "origin": {
+        "kind": "subagent",
+        "childSessionId": "id-7"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-23",
+      "blockId": "dsh-user-23-text",
+      "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-23"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1",
+      "toolCallId": "toolu_id-12",
+      "name": "send_message",
+      "input": {
+        "__streaming": {
+          "bytes": 30,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1",
+      "toolCallId": "toolu_id-12",
+      "input": {
+        "agent_id": "id-7",
+        "message": "Please report once more."
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1",
+      "toolCallId": "toolu_id-12",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1",
+      "toolCallId": "toolu_id-12",
+      "ok": true,
+      "output": "message delivered to agent id-7"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s2",
+      "blockId": "dsh-aiclient-rec-sub-cont-t2-s2-b0",
+      "text": "Sent the subagent one more message."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-2",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-36",
+      "role": "user",
+      "origin": {
+        "kind": "subagent",
+        "childSessionId": "id-7"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-36",
+      "blockId": "dsh-user-36-text",
+      "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-36"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t3-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t3-s1",
+      "blockId": "dsh-aiclient-rec-sub-cont-t3-s1-b0",
+      "text": "Both runs of the subagent reported back."
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-sub-cont-t3-s1"
+    }
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-sub-cont",
+    "requestId": "dsh-turn-aiclient-rec-sub-cont-3",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

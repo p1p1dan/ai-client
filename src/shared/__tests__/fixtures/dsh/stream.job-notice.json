@@ -147,6 +147,33 @@
   {
     "sessionId": "rec-job-notice",
     "requestId": "turn-JOBNOTICE",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-job-notice-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
+    "type": "session.projection",
+    "payload": {
+      "key": "jobs",
+      "view": [
+        {
+          "id": "bash-2",
+          "kind": "bash",
+          "label": "sleep 3; echo job-notice-done",
+          "status": "running",
+          "startedAt": "<ms>"
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-job-notice",
+    "requestId": "turn-JOBNOTICE",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-job-notice-t1-s1",

@@ -188,6 +188,13 @@
  *                       dsh-rebase P1-4d3 adds P1-QUESTION (tools/bridge-record.ts
  *                       `question`): one `ask_user_question` call, then an answer
  *                       quoting the tool result the model got back.
+ *                       dsh-rebase P1-7b adds three for the recorder's `jobs-kill` and
+ *                       `sub-cont`: P1-JOBKILL (a background ticker the window stops;
+ *                       the kill's notice wakes the agent), P1-SUBCONT (a continuable
+ *                       subagent in the background; its settlement wakes the agent,
+ *                       which sends it one more message; the second settlement wakes
+ *                       it again) and P1-SUBCHILD (the child: one paced answer, 1 s,
+ *                       so the parent's own step is over before the child speaks).
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -374,7 +381,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -862,6 +869,54 @@ const DSH_P0_2_SCRIPTS = {
       kind: 'error',
       status: 500,
       message: 'P1-FAIL: the fake upstream failed this request',
+    };
+  },
+  // dsh-rebase P1-7b (tools/bridge-record.ts `jobs-kill`): a background ticker
+  // that would run a minute; the jobs window stops it, and the kill's
+  // completion notice wakes the agent into a turn nobody sent.
+  'P1-JOBKILL'(_round, step, _calls, _triggerText, _history, recent) {
+    if (/background job \S+ .*finished/.test(recent ?? '')) {
+      return say('P1-JOBKILL: the ticker was stopped.');
+    }
+    if (step === 0) {
+      return tool('bash', {
+        command: 'for i in $(seq 1 600); do echo tick $i; sleep 0.1; done',
+        description: 'Background ticker',
+        run_in_background: true,
+      });
+    }
+    return say('P1-JOBKILL: started the ticker.');
+  },
+  // P1-7b (`sub-cont`): a continuable subagent in the background. Its first
+  // settlement wakes the agent, which sends it one more message
+  // (`send_message`); the second settlement wakes it again. No reply here or
+  // in the child's carries a marker, so a notice quoting one decides nothing.
+  'P1-SUBCONT'(_round, step, calls, _triggerText, _history, recent, userTexts) {
+    const settled = (userTexts ?? '').match(/Background subagent \S+ finished/g)?.length ?? 0;
+    const woke = /Background subagent \S+ finished/.test(recent ?? '');
+    if (woke && settled >= 2) return say('Both runs of the subagent reported back.');
+    if (woke && step === 1) {
+      const child = /started subagent (\S+)/.exec(String(calls[0]?.result ?? ''))?.[1];
+      if (!child) return say('No subagent id to continue.');
+      return tool('send_message', { agent_id: child, message: 'Please report once more.' });
+    }
+    if (step === 0) {
+      return tool('subagent', {
+        description: 'Continuable probe',
+        prompt: 'P1-SUBCHILD: answer in one line.',
+      });
+    }
+    if (step === 1) return say('Delegated; the subagent reports back when it is done.');
+    return say('Sent the subagent one more message.');
+  },
+  'P1-SUBCHILD'() {
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: 'Child done: the probe ran.',
+      chunks: 10,
+      chunkMs: 100,
+      tag: 'subchild',
     };
   },
   // dsh-rebase P1-4c1 (decision 095, tools/bridge-record.ts `fail-retry`): the

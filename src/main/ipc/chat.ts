@@ -964,6 +964,66 @@ export function registerChatHandlers(): void {
       workerManager.getSessionPanels({ sessionId: payload.sessionId })
   );
 
+  /**
+   * dsh-rebase P1-7b — the jobs window's stop. A mutation of a live session,
+   * claimed for the sender like the goal bar's commands; not refused
+   * mid-turn (a background job is what runs beside a turn).
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_KILL_SESSION_JOB,
+    async (
+      e,
+      payload: { sessionId: string; jobId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.killSessionJob>>> => {
+      await requireLiveSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      return workerManager.killSessionJob({
+        sessionId: payload.sessionId,
+        jobId: payload.jobId,
+        ownerWebContentsId,
+      });
+    }
+  );
+
+  /**
+   * dsh-rebase P1-7b — one job's output for the jobs window. A read, like the
+   * panels' rehydration: no claim, and a chat with no running slot answers
+   * `null` (its jobs went with its host).
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_READ_SESSION_JOB,
+    async (
+      _e,
+      payload: { sessionId: string; jobId: string; from?: number; maxBytes?: number }
+    ): Promise<Awaited<ReturnType<typeof workerManager.readSessionJob>>> =>
+      workerManager.readSessionJob({
+        sessionId: payload.sessionId,
+        jobId: payload.jobId,
+        ...(payload.from !== undefined ? { from: payload.from } : {}),
+        ...(payload.maxBytes !== undefined ? { maxBytes: payload.maxBytes } : {}),
+      })
+  );
+
+  /**
+   * dsh-rebase P1-7b — interrupt one continuable subagent's current run, as
+   * its human parent. A mutation of a live session, claimed for the sender.
+   */
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_INTERRUPT_SUBAGENT,
+    async (
+      e,
+      payload: { sessionId: string; childId: string }
+    ): Promise<Awaited<ReturnType<typeof workerManager.interruptSubagent>>> => {
+      await requireLiveSession(payload.sessionId);
+      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      return workerManager.interruptSubagent({
+        sessionId: payload.sessionId,
+        childId: payload.childId,
+        ownerWebContentsId,
+      });
+    }
+  );
+
   ipcMain.handle(
     IPC_CHANNELS.CHAT_GET_SESSION_TREE,
     async (

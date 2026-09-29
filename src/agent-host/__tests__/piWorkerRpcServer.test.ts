@@ -96,6 +96,9 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     compact: notCalled('compact') as PiWorkerRuntime['compact'],
     command: notCalled('command') as PiWorkerRuntime['command'],
     panels: notCalled('panels') as PiWorkerRuntime['panels'],
+    killJob: notCalled('killJob') as PiWorkerRuntime['killJob'],
+    readJob: notCalled('readJob') as PiWorkerRuntime['readJob'],
+    interruptSubagent: notCalled('interruptSubagent') as PiWorkerRuntime['interruptSubagent'],
     rewind: notCalled('rewind') as PiWorkerRuntime['rewind'],
     reload: notCalled('reload') as PiWorkerRuntime['reload'],
     fork: notCalled('fork') as PiWorkerRuntime['fork'],
@@ -916,6 +919,106 @@ describe('PiWorkerRpcServer — worker.command and worker.panels (P1-7a)', () =>
     expect(messages[2]).toMatchObject({
       requestId: 'panels',
       result: { projections: [{ key: 'todos', view: null }] },
+    });
+  });
+});
+
+/**
+ * dsh-rebase P1-7b (decision 119): the jobs and subagents windows' three
+ * RPCs. Each acts on a live session, so each needs a bootstrapped runtime,
+ * as `worker.command` does, and each checks its payload first.
+ */
+describe('PiWorkerRpcServer — worker.job.kill, worker.job.read, worker.subagent.interrupt (P1-7b)', () => {
+  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new PiWorkerRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      ...engineFactories,
+      createRuntime: () => runtime(overrides),
+    });
+    return { messages, server };
+  }
+  const bootstrap = request('bootstrap', 'worker.bootstrap', {
+    logicalSessionId: 'logical-1',
+    cwd: '/repo',
+  });
+
+  it('[P7B-RPC-ROUTE] routes each to the runtime and returns its answer', async () => {
+    const killJob = vi.fn(async () => ({ outcome: 'requested' as const }));
+    const readJob = vi.fn(async () => ({
+      text: 'hi',
+      from: 0,
+      next: 2,
+      omittedBytes: 0,
+      lossy: false,
+    }));
+    const interruptSubagent = vi.fn(async () => ({ interrupted: true }));
+    const { messages, server } = serverWith({ killJob, readJob, interruptSubagent });
+    server.receive(bootstrap);
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(
+      request('kill', 'worker.job.kill', { logicalSessionId: 'logical-1', jobId: 'bash-2' })
+    );
+    server.receive(
+      request('read', 'worker.job.read', {
+        logicalSessionId: 'logical-1',
+        jobId: 'bash-2',
+        from: 4,
+      })
+    );
+    server.receive(
+      request('int', 'worker.subagent.interrupt', {
+        logicalSessionId: 'logical-1',
+        childId: 'aiclient-kid',
+      })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(4));
+    expect(killJob).toHaveBeenCalledWith({ logicalSessionId: 'logical-1', jobId: 'bash-2' });
+    expect(readJob).toHaveBeenCalledWith({
+      logicalSessionId: 'logical-1',
+      jobId: 'bash-2',
+      from: 4,
+    });
+    expect(interruptSubagent).toHaveBeenCalledWith({
+      logicalSessionId: 'logical-1',
+      childId: 'aiclient-kid',
+    });
+    expect(messages.slice(1)).toEqual([
+      expect.objectContaining({ requestId: 'kill', result: { outcome: 'requested' } }),
+      expect.objectContaining({
+        requestId: 'read',
+        result: expect.objectContaining({ text: 'hi' }),
+      }),
+      expect.objectContaining({ requestId: 'int', result: { interrupted: true } }),
+    ]);
+  });
+
+  it('[P7B-RPC-PAYLOAD] refuses a malformed payload, and a worker not bootstrapped', async () => {
+    const { messages, server } = serverWith();
+    server.receive(request('bad-kill', 'worker.job.kill', { logicalSessionId: 'logical-1' }));
+    server.receive(
+      request('bad-read', 'worker.job.read', {
+        logicalSessionId: 'logical-1',
+        jobId: 'bash-2',
+        from: -3,
+      })
+    );
+    server.receive(
+      request('bad-int', 'worker.subagent.interrupt', { logicalSessionId: 'logical-1' })
+    );
+    server.receive(
+      request('early', 'worker.job.kill', { logicalSessionId: 'logical-1', jobId: 'bash-2' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(4));
+    for (const id of ['bad-kill', 'bad-read', 'bad-int']) {
+      expect(messages.find((message) => message.requestId === id)).toMatchObject({
+        error: { code: 'WORKER_INVALID_PAYLOAD' },
+      });
+    }
+    expect(messages.find((message) => message.requestId === 'early')).toMatchObject({
+      error: { code: 'WORKER_NOT_BOOTSTRAPPED' },
     });
   });
 });

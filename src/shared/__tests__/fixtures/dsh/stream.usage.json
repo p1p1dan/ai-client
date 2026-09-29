@@ -146,6 +146,16 @@
   {
     "sessionId": "rec-usage",
     "requestId": "turn-USAGE",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-usage-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-usage",
+    "requestId": "turn-USAGE",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-usage-t1-s1",

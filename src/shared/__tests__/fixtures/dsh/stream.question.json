@@ -178,6 +178,16 @@
   {
     "sessionId": "rec-question",
     "requestId": "turn-QUESTION-ANSWER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-ANSWER",
     "type": "question.requested",
     "payload": {
       "questionId": "dsh-question-id-17",
@@ -480,6 +490,16 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-question",
+    "requestId": "turn-QUESTION-SKIP",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-question-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "execStartedAt": "<ms>"
     }
   },
   {

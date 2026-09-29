@@ -4,8 +4,10 @@ import { useMessageQueueStore } from './messageQueue';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
 import { useSessionPanelsStore } from './sessionPanels';
 import { useSessionRuntimeFactsStore } from './sessionRuntimeFacts';
+import { useSessionSubwindowsStore } from './sessionSubwindows';
 import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
+import { useToolLiveOutputStore } from './toolLiveOutput';
 import { useTurnSendStatusStore } from './turnSendStatus';
 
 export function pruneRecordBySession<T>(
@@ -96,4 +98,7 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   }));
   useSubagentActivityStore.setState((state) => pruneSubagentActivityState(state, sessionIds));
   useSessionPanelsStore.getState().pruneSessions(sessionIds);
+  // dsh-rebase P1-7b: the live output of running commands and the jobs window's put-away list.
+  useToolLiveOutputStore.getState().pruneSessions(sessionIds);
+  useSessionSubwindowsStore.getState().pruneSessions(sessionIds);
 }

@@ -728,6 +728,10 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // CLIs said `Task`. Both spellings share one treatment everywhere.
   Task: ['description', 'subagent_type', 'agent'],
   Agent: ['description', 'subagent_type'],
+  // dsh-rebase P1-7b: DSH's own delegation tools (decision 090: no custom
+  // ones). The row says the description; the brief (`prompt`) is the body.
+  subagent: ['description'],
+  subagent_fork: ['description'],
   // subagent-data-06 — our own registry. `Glob` (capital) was already here and
   // `glob` was not, so every one of our glob rows also grew a full input body
   // under a summary that already said everything it had.
@@ -1043,6 +1047,10 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
   ExitPlanMode: { done: 'Planned', running: 'Planning', refused: 'Plan' },
   Task: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
   Agent: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  // dsh-rebase P1-7b: DSH's delegation tools carry the same lane (plan P1-7
+  // shard 04 §2); P1-7c gives the fork its own wording.
+  subagent: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  subagent_fork: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
 };
 
 export const UNKNOWN_TOOL_VERB: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
@@ -1160,7 +1168,15 @@ export type ToolClass = 'read' | 'search' | 'action';
  * `classifyTool(name) === 'action'` is NOT a substitute: Bash/Edit/unknown
  * tools are 'action' too.
  */
-export const DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set(['Task', 'Agent']);
+export const DELEGATION_TOOL_NAMES: ReadonlySet<string> = new Set([
+  'Task',
+  'Agent',
+  // dsh-rebase P1-7b: DSH's `subagent` (continuable, in the background by
+  // default) and `subagent_fork` (one-shot) — their children's activity is a
+  // lane under the row, like 1.0.x's (decisions 072 rule 7, 119).
+  'subagent',
+  'subagent_fork',
+]);
 
 export function isDelegationTool(toolName: string): boolean {
   return DELEGATION_TOOL_NAMES.has(toolName);
@@ -1562,6 +1578,8 @@ function formatToolArgDetail(
       break;
     case 'Task':
     case 'Agent':
+    case 'subagent':
+    case 'subagent_fork':
       // subagent-data-06 — `agent` is what OUR `Task` tool takes; the two CLI
       // spellings stay because a replayed Claude-era transcript still has them,
       // and a row falling through to `default:` here would print the whole

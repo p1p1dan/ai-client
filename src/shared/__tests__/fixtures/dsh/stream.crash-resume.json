@@ -142,5 +142,15 @@
         "costUsd": 0
       }
     }
+  },
+  {
+    "sessionId": "rec-crash-resume",
+    "requestId": "turn-CRASH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-crash-resume-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
   }
 ]

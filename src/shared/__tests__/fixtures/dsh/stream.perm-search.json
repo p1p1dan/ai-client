@@ -145,6 +145,16 @@
   {
     "sessionId": "rec-perm-search",
     "requestId": "turn-PERM-SEARCH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-search-t1-s1",
@@ -239,6 +249,16 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-perm-search",
+    "requestId": "turn-PERM-SEARCH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-search-t1-s2",
+      "toolCallId": "toolu_id-8",
+      "execStartedAt": "<ms>"
     }
   },
   {

@@ -10,6 +10,7 @@ import { markSessionsLive } from '@/stores/sessionRetirement';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
@@ -26,6 +27,7 @@ import { PendingPermissionDock } from './PendingPermissionDock';
 import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { SessionPanelStrips } from './SessionPanelStrips';
+import { SubwindowRegion } from './SessionSubwindows';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -217,6 +219,12 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
     return useSessionPanelsStore.getState().init();
   }, []);
 
+  useEffect(() => {
+    // dsh-rebase P1-7b: a running command's live output, same latch
+    // discipline — its first `tool.output` may land before its row is open.
+    return useToolLiveOutputStore.getState().init();
+  }, []);
+
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).
   useEffect(() => {
@@ -289,14 +297,19 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
       ) : (
         <>
           <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
+          {/* dsh-rebase P1-7b (decision 109): the background jobs and
+              subagents windows float over the room above the composer and
+              nowhere else — `SubwindowRegion` lays their layer over it. */}
           {renderedMode === 'session' && (
-            <MessageTimeline
-              sessionId={activeSessionId}
-              status={activeSession?.status ?? 'idle'}
-              thinkingEnabled={thinkingEnabled}
-              repoName={repoName}
-              jumpToBottomRequest={sendJumpRequest}
-            />
+            <SubwindowRegion sessionId={activeSessionId}>
+              <MessageTimeline
+                sessionId={activeSessionId}
+                status={activeSession?.status ?? 'idle'}
+                thinkingEnabled={thinkingEnabled}
+                repoName={repoName}
+                jumpToBottomRequest={sendJumpRequest}
+              />
+            </SubwindowRegion>
           )}
           {/* dsh-rebase P1-7a (decisions 068 / 109): the todo card and the
               goal bar, above the answerable cards, which stay nearest the
@@ -322,11 +335,13 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
               unbound one. Only the sentence differs, and it differs by naming
               the folder — which is why the workspace name is passed in. */}
           {renderedMode === 'empty' && (
-            <div className={START_SCREEN_HOST_CLASS}>
-              <ChatWelcomeCard
-                {...(activeWorkspacePath && repoName ? { workspaceName: repoName } : {})}
-              />
-            </div>
+            <SubwindowRegion sessionId={activeSessionId}>
+              <div className={START_SCREEN_HOST_CLASS}>
+                <ChatWelcomeCard
+                  {...(activeWorkspacePath && repoName ? { workspaceName: repoName } : {})}
+                />
+              </div>
+            </SubwindowRegion>
           )}
           <div className={middleColumnHostClass(renderedMode)}>
             <ChatComposer

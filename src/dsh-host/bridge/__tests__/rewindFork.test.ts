@@ -420,13 +420,17 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     await rewind(runtime, 'u2');
 
     // The child's values went out during the rewind; the root's never did.
+    // P1-7b (decision 119): the child's `jobs` go too, empty or not, so the
+    // retired session's list cannot linger in the jobs window.
     expect(emitted.map((event) => [event.type, event.payload])).toEqual([
       ['session.projection', { key: 'todos', view: null }],
+      ['session.projection', { key: 'jobs', view: [] }],
     ]);
     listener?.({ id: ROOT }, 'todos', []);
     listener?.({ id: child }, 'todos', [{ content: 'child plan', status: 'pending' }]);
     expect(emitted.map((event) => event.payload)).toEqual([
       { key: 'todos', view: null },
+      { key: 'jobs', view: [] },
       { key: 'todos', view: [{ content: 'child plan', status: 'pending' }] },
     ]);
   });

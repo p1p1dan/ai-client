@@ -111,6 +111,18 @@
 - id: permission
   disabled: true
 
+# P1-7b (decision 069 rule 2): a background job's completion notice still
+# wakes an idle session into a turn (DSH's default), but at most three times
+# in a row; past that the notice waits, injected, for the next turn, and a
+# user message restores the budget. Bounds a woken turn that starts the job
+# whose completion wakes it again. dsh-base gives this row no config, so the
+# id patch replaces nothing else. 3 has no measurement behind it yet (E6).
+# A continuable subagent's settlement notice is dsh-subagent's and has no
+# such cap (decision 119).
+- id: tool-jobs
+  config:
+    maxConsecutiveWakes: 3
+
 - insert:
     # P1-5b (decision 034): ctx.credentials, read-only. A key reference of the
     # model plan resolves to the key Main hands over for that one request;

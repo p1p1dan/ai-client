@@ -2,6 +2,8 @@
 
 日期：2026-09-27。**状态：用户 2026-09-28 批准（[决策 090](090-user-rulings-2026-09-28.md)）。** 依据：[P1-7 方案 §5 U3](../topics/p1-7-renderer.md#5-需要拍板的决策点)、runtime-hardening 决策 041 第 4 条。
 
+修订注记（2026-09-28，P1-7b）：已落地。Stop 先打断正在跑的可续子代理、停掉一次性后台子代理的 job，再取消父回合；后台命令不停。`maxConsecutiveWakes: 3` 写在包 overlay 的 `tool-jobs` 行，只管 job 的完成通知；可续子代理的结算通知由 dsh-subagent 发出，DSH 没有上限开关，不设上限；被 Stop 打断的子代理若在父回合结束后才发出结算通知，仍会唤醒一轮（E5 留给 P1-7d）。见[决策 119](119-p1-7b-jobs-subagents-choices.md) 第 15～17 条（待审批）。
+
 ## 规则
 
 1. 用户按 Stop 时：

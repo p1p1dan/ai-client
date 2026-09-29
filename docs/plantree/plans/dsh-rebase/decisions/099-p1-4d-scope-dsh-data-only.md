@@ -8,6 +8,8 @@
 
 修订注记（2026-09-28，P1-7a）：第 11 条里归 P1-7b 的 `goalActivation` 已提前在 P1-7a 做了，原因是原型（验收基准）的目标条有「已挂起」一态；`jobs` 仍归 P1-7b（[决策 118](118-p1-7a-goal-todo-round-choices.md) 第 3、8、9 条，待审批）。
 
+修订注记（2026-09-28，P1-7b）：第 15 条的 `execStartedAt` 已落地，挂在 `tools/execute` 上，与前台命令的 job 对应、子代理配对是同一个挂点，并且覆盖全部工具（不只 bash）；第 11 条的 `jobs` 投影、第 18 条的 `subagent.activity` 同批落地。见[决策 119](119-p1-7b-jobs-subagents-choices.md) 第 2～12 条（待审批）。
+
 修订注记（2026-09-28，P1-4d2）：第 9～12 条的实现取舍见[决策 113](113-p1-4d2-commands-and-projection-choices.md)（待审批）。其中补充：隐藏的三条命令输入后也不执行，照常作为提示词发出；带附件的命令行当提示词；`/compact` 由窗口的内置行提供，菜单里不再重复列；`session.projection` 的首次快照推迟到 bootstrap 之后的第一个事件之前发。
 
 ## 规则

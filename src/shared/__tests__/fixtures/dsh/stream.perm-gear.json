@@ -185,6 +185,16 @@
   {
     "sessionId": "rec-perm-gear",
     "requestId": "turn-PERM-GEAR",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-perm-gear",
+    "requestId": "turn-PERM-GEAR",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-gear-t1-s1",

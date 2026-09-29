@@ -887,6 +887,90 @@ async function main() {
       code: (planOutOfBand.error as Message | undefined)?.code,
     };
     report.panelsCommandEvents = h.client.events(chH).length - eventsBeforePanels;
+    // P1-7b (decisions 069, 099 rule 15, 119): a foreground command's live
+    // tail and its exec stamp; then a background job the window reads and
+    // stops, whose kill notice wakes the agent.
+    const liveFrom = h.client.events(chH).length;
+    await runTurn(
+      h,
+      chH,
+      INS_SKL_SESSION,
+      'LIVE-OUT',
+      'P0-SLEEPTOOL {"token":"live-out","seconds":2} run a slow command.'
+    );
+    const liveEvents = h.client.events(chH).slice(liveFrom);
+    report.liveOutput = {
+      tails: liveEvents
+        .filter((event) => event.type === 'tool.output')
+        .map((event) => String(payloadOf(event).tail)),
+      execStamped: liveEvents.some(
+        (event) =>
+          event.type === 'tool.updated' && typeof payloadOf(event).execStartedAt === 'number'
+      ),
+    };
+    const jobsFrom = h.client.events(chH).length;
+    await runTurn(
+      h,
+      chH,
+      INS_SKL_SESSION,
+      'JOBS-BG',
+      'P1-JOBKILL: start a ticker in the background.'
+    );
+    const listed = h.client
+      .events(chH)
+      .slice(jobsFrom)
+      .filter((event) => event.type === 'session.projection' && payloadOf(event).key === 'jobs')
+      .flatMap((event) => (payloadOf(event).view as Message[] | undefined) ?? []);
+    const jobId = listed[0] ? String(listed[0].id) : '';
+    await sleep(800);
+    const jobRead = jobId
+      ? await h.client.request(chH, 'worker.job.read', {
+          logicalSessionId: INS_SKL_SESSION,
+          jobId,
+        })
+      : undefined;
+    const jobKill = jobId
+      ? await h.client.request(chH, 'worker.job.kill', {
+          logicalSessionId: INS_SKL_SESSION,
+          jobId,
+        })
+      : undefined;
+    const jobsWoke = await h.client.until(
+      chH,
+      (events) =>
+        events
+          .slice(jobsFrom)
+          .some(
+            (event) =>
+              event.type === 'session.status' &&
+              payloadOf(event).status === 'idle' &&
+              String(event.requestId ?? '').startsWith('dsh-turn-')
+          ),
+      60_000
+    );
+    const jobsAfter = await h.client.request(chH, 'worker.panels', {
+      logicalSessionId: INS_SKL_SESSION,
+    });
+    // The human parent's interrupt reaches DSH's subagent service through the
+    // row (`ctx.get('subagents')`); a child DSH does not hold is its no-op.
+    const interruptNobody = await h.client.call(chH, 'worker.subagent.interrupt', {
+      logicalSessionId: INS_SKL_SESSION,
+      childId: 'aiclient-no-such-child',
+    });
+    report.subagentInterrupt = {
+      ok: interruptNobody.ok,
+      result: interruptNobody.result,
+      code: (interruptNobody.error as Message | undefined)?.code,
+    };
+    report.jobs = {
+      listed: listed.map((job) => ({ id: job.id, kind: job.kind, status: job.status })),
+      readStartsWithTick: String(jobRead?.text ?? '').startsWith('tick 1'),
+      kill: jobKill,
+      woke: jobsWoke,
+      after: (((jobsAfter.projections as Message[] | undefined) ?? []).find(
+        (entry) => entry.key === 'jobs'
+      )?.view ?? []) as Message[],
+    };
     await closeSession(h, chH);
     await stopHost(h);
 
@@ -1246,15 +1330,41 @@ async function main() {
     // bridge's `goalActivation` (null: no goal); `worker.command` runs `/goal`
     // out of band with DSH's text either way, refuses `/plan`, and neither RPC
     // puts an event on the channel.
+    // P1-7b adds the bridge's `jobs` (empty: no job yet).
     panelsAnswerCurrentValues:
       JSON.stringify(
         (((report.panels as Message | undefined)?.projections as Message[]) ?? []).map(
           (entry) => entry.key
         )
-      ) === '["todos","goal","subagentCatalog","goalActivation"]' &&
+      ) === '["todos","goal","subagentCatalog","goalActivation","jobs"]' &&
       (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
         (entry) => entry.key === 'goalActivation'
-      )?.view === null,
+      )?.view === null &&
+      JSON.stringify(
+        (((report.panels as Message | undefined)?.projections as Message[]) ?? []).find(
+          (entry) => entry.key === 'jobs'
+        )?.view
+      ) === '[]',
+    // P1-7b (decisions 072 rule 5, 099 rule 15): a running command's row got
+    // its live tail from the job DSH runs it as, and its exec stamp.
+    liveOutputReachesTheRow:
+      ((report.liveOutput as { tails?: string[] } | undefined)?.tails ?? []).some((tail) =>
+        tail.includes('sleep-tool live-out started')
+      ) && (report.liveOutput as { execStamped?: boolean } | undefined)?.execStamped === true,
+    // P1-7b (decision 119): a background job is listed, read from the top,
+    // stopped from outside, and its kill notice wakes the agent (069 rule 2).
+    subagentInterruptReachesDsh:
+      (report.subagentInterrupt as Message | undefined)?.ok === true &&
+      ((report.subagentInterrupt as Message | undefined)?.result as Message | undefined)
+        ?.interrupted === true,
+    backgroundJobListedReadAndStopped:
+      (report.jobs as { listed?: Message[] } | undefined)?.listed?.[0]?.status === 'running' &&
+      (report.jobs as { readStartsWithTick?: boolean } | undefined)?.readStartsWithTick === true &&
+      (report.jobs as { kill?: Message } | undefined)?.kill?.outcome === 'requested' &&
+      (report.jobs as { woke?: boolean } | undefined)?.woke === true &&
+      ((report.jobs as { after?: Message[] } | undefined)?.after ?? []).some(
+        (job) => job.status === 'killed'
+      ),
     commandRunsOutOfBand:
       (report.commandShow as Message | undefined)?.ok === true &&
       String((report.commandShow as Message | undefined)?.output).includes('No goal') &&

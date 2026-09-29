@@ -11,6 +11,9 @@ import {
   isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
   isWorkerInterjectResult,
+  isWorkerJobKillPayload,
+  isWorkerJobKillResult,
+  isWorkerJobReadPayload,
   isWorkerPanelsPayload,
   isWorkerReconcileImportedSessionPayload,
   isWorkerReloadPayload,
@@ -25,6 +28,8 @@ import {
   isWorkerSendResult,
   isWorkerStopPayload,
   isWorkerStopResult,
+  isWorkerSubagentInterruptPayload,
+  isWorkerSubagentInterruptResult,
   isWorkerTreePayload,
   isWorkerTreeResult,
   isWorkerUtilityCancelPayload,
@@ -33,8 +38,10 @@ import {
   isWorkerUtilityStartResult,
   isWorkerUtilityTerminalEvent,
   normalizeWorkerCapabilities,
+  sanitizeWorkerJobRead,
   sanitizeWorkerPanels,
   WORKER_COMMAND_LINE_MAX,
+  WORKER_JOB_READ_MAX_BYTES,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../workerRpc';
 
@@ -599,7 +606,9 @@ describe('worker.command and worker.panels (dsh-rebase P1-7a)', () => {
         projections: [
           { key: 'todos', view: null },
           { key: 'goalActivation', view: { goalId: 'g', revision: 1, activation: 'armed' } },
+          // P1-7b: `jobs` is a known key now; `plan` is one no host forwards.
           { key: 'jobs', view: [] },
+          { key: 'plan', view: { active: false } },
           { key: 'goal' },
           'junk',
         ],
@@ -608,10 +617,80 @@ describe('worker.command and worker.panels (dsh-rebase P1-7a)', () => {
       projections: [
         { key: 'todos', view: null },
         { key: 'goalActivation', view: { goalId: 'g', revision: 1, activation: 'armed' } },
+        { key: 'jobs', view: [] },
       ],
     });
     expect(sanitizeWorkerPanels(undefined)).toEqual({ projections: [] });
     expect(sanitizeWorkerPanels({ projections: 'nope' })).toEqual({ projections: [] });
+  });
+});
+
+describe('worker.job.kill, worker.job.read and worker.subagent.interrupt (dsh-rebase P1-7b)', () => {
+  it('[P7B-GUARD-KILL] a named session and a job id; the answer is one of two outcomes', () => {
+    expect(isWorkerJobKillPayload({ logicalSessionId: 's1', jobId: 'bash-3' })).toBe(true);
+    expect(isWorkerJobKillPayload({ logicalSessionId: 's1', jobId: '' })).toBe(false);
+    expect(isWorkerJobKillPayload({ logicalSessionId: 's1', jobId: 'bash 3' })).toBe(false);
+    expect(isWorkerJobKillPayload({ logicalSessionId: 's1', jobId: 'x'.repeat(129) })).toBe(false);
+    expect(isWorkerJobKillPayload({ jobId: 'bash-3' })).toBe(false);
+    expect(isWorkerJobKillResult({ outcome: 'requested' })).toBe(true);
+    expect(isWorkerJobKillResult({ outcome: 'already-finished' })).toBe(true);
+    expect(isWorkerJobKillResult({ outcome: 'killed' })).toBe(false);
+  });
+
+  it('[P7B-GUARD-READ] an offset and a byte budget, both bounded', () => {
+    const base = { logicalSessionId: 's1', jobId: 'bash-3' };
+    expect(isWorkerJobReadPayload(base)).toBe(true);
+    expect(isWorkerJobReadPayload({ ...base, from: 0, maxBytes: 1 })).toBe(true);
+    expect(isWorkerJobReadPayload({ ...base, maxBytes: WORKER_JOB_READ_MAX_BYTES })).toBe(true);
+    expect(isWorkerJobReadPayload({ ...base, from: -1 })).toBe(false);
+    expect(isWorkerJobReadPayload({ ...base, from: 1.5 })).toBe(false);
+    expect(isWorkerJobReadPayload({ ...base, maxBytes: 0 })).toBe(false);
+    expect(isWorkerJobReadPayload({ ...base, maxBytes: WORKER_JOB_READ_MAX_BYTES + 1 })).toBe(
+      false
+    );
+  });
+
+  it('[P7B-SANITIZE-READ] Main passes a well-formed answer on, clamped; anything else is null', () => {
+    expect(
+      sanitizeWorkerJobRead({
+        text: 'out',
+        from: 10,
+        next: 13,
+        omittedBytes: 10,
+        lossy: false,
+        spillPaths: ['/tmp/a', 3],
+      })
+    ).toEqual({
+      text: 'out',
+      from: 10,
+      next: 13,
+      omittedBytes: 10,
+      lossy: false,
+      spillPaths: ['/tmp/a'],
+    });
+    expect(
+      sanitizeWorkerJobRead({
+        text: 'y'.repeat(3 * WORKER_JOB_READ_MAX_BYTES),
+        from: 0,
+        next: 1,
+        omittedBytes: 0,
+        lossy: true,
+      })?.text.length
+    ).toBe(2 * WORKER_JOB_READ_MAX_BYTES);
+    expect(
+      sanitizeWorkerJobRead({ text: 'x', from: -1, next: 1, omittedBytes: 0, lossy: false })
+    ).toBeNull();
+    expect(sanitizeWorkerJobRead(null)).toBeNull();
+  });
+
+  it('[P7B-GUARD-INTERRUPT] a named session and a child id; the answer says whether it went out', () => {
+    expect(
+      isWorkerSubagentInterruptPayload({ logicalSessionId: 's1', childId: 'aiclient-kid' })
+    ).toBe(true);
+    expect(isWorkerSubagentInterruptPayload({ logicalSessionId: 's1', childId: ' ' })).toBe(false);
+    expect(isWorkerSubagentInterruptPayload({ logicalSessionId: 's1' })).toBe(false);
+    expect(isWorkerSubagentInterruptResult({ interrupted: true })).toBe(true);
+    expect(isWorkerSubagentInterruptResult({ interrupted: 'yes' })).toBe(false);
   });
 });
 

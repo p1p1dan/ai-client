@@ -154,6 +154,10 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerJobKillPayload,
+  type WorkerJobKillResult,
+  type WorkerJobReadPayload,
+  type WorkerJobReadResult,
   type WorkerPanelsPayload,
   type WorkerPanelsResult,
   type WorkerReloadResult,
@@ -163,6 +167,8 @@ import {
   type WorkerSendResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentInterruptPayload,
+  type WorkerSubagentInterruptResult,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
@@ -185,6 +191,7 @@ import {
 import { buildDshForkSeed, type DshCutPlan, planDshCut } from './forkSeed.ts';
 import { copyGrantSidecar, readGrantSidecar, writeGrantSidecar } from './grantStore.ts';
 import { DshHistoryCache, type DshSessionQuery } from './historyCache.ts';
+import { DshJobsTracker, type DshJobsView } from './jobs.ts';
 import {
   DshRetiredHistory,
   readSessionEvents,
@@ -235,6 +242,15 @@ import {
   stubPathFor,
   writeStubAtomically,
 } from './stub.ts';
+import {
+  type DshChildEvent,
+  type DshSubagentRunInfo,
+  DshSubagentsTracker,
+  type DshSubagentsView,
+} from './subagents.ts';
+
+// P1-7b: the job registry's slice moved to `jobs.ts`; plugin.ts still names it from here.
+export type { DshJobsView } from './jobs.ts';
 
 // The stub moved to `stub.ts` (P1-4a, shared with the host's `readPage`); its
 // names stay reachable from here, where the bridge's error codes are listed.
@@ -302,8 +318,10 @@ export interface DshSessionProjectionsView {
 
 /** Services the runtime reads without injecting them; a host without one leaves it undefined. */
 export interface DshBridgeOptionalServices {
-  /** `ctx.jobs`, for `busy`. */
+  /** `ctx.jobs`: `busy`, and (P1-7b, `jobs.ts`) the `jobs` projection, live output, kill and read. */
   jobs: DshJobsView;
+  /** `ctx.subagents` (P1-7b, `subagents.ts`): the human parent's interrupt. */
+  subagents: DshSubagentsView;
   /** `ctx.sessionProjections`, for usage and the three forwarded projections. */
   sessionProjections: DshSessionProjectionsView;
   /** `ctx.commands` (P1-4d2): the menu, command sends and `worker.compact`. */
@@ -336,6 +354,23 @@ export interface DshBridgeContext {
   on(
     name: 'goal/activation-changed',
     listener: (payload: DshGoalActivationChanged) => void
+  ): Dispose;
+  /**
+   * dsh-tools' around-dispatch waterfall (P1-7b): every call of every agent,
+   * after its approval; `next()` runs the tool. The runtime stamps its own
+   * agent's calls (`execStartedAt`) and follows their jobs and children.
+   */
+  on(
+    name: 'tools/execute',
+    listener: (
+      exec: DshToolDispatch,
+      next: () => Promise<DshToolOutcome>
+    ) => Promise<DshToolOutcome>
+  ): Dispose;
+  /** dsh-subagent's lifecycle edges (P1-7b): every session's; each runtime keeps its children's. */
+  on(
+    name: 'subagent/start' | 'subagent/end',
+    listener: (info: DshSubagentRunInfo) => void
   ): Dispose;
   on(
     name: 'user-questions/request',
@@ -401,9 +436,21 @@ export interface DshModelSelectionRef {
   assembled: DshModelSelection | undefined;
 }
 
-/** The slice of `ctx.jobs` (dsh-jobs) `busy` reads. */
-export interface DshJobsView {
-  list(caller?: string): Array<{ readonly owner?: string; readonly status: string }>;
+/** One call inside `tools/execute` (dsh-tools' `ToolDispatchExecution`), narrowed. */
+export interface DshToolDispatch {
+  readonly callId: string;
+  readonly name: string;
+  readonly arguments: unknown;
+  readonly agent?: { readonly id: string };
+  /** Set on a transport sub-dispatch (a `run_code` program's call): not the model's own. */
+  readonly parent?: unknown;
+}
+
+/** What `tools/execute` answers (dsh-tools' `ToolExecutionResult`), narrowed. */
+export interface DshToolOutcome {
+  readonly isError: boolean;
+  /** Execution-local; never in the log (`{kind: 'promoted', jobId}`, `{kind: 'continuable', …}`). */
+  readonly value?: unknown;
 }
 
 /** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
@@ -650,6 +697,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    * it drops whatever a slot sends before that (`WorkerManager.handleWorkerEvent`).
    */
   private projectionBaseline: SessionProjectionPayload[] | null = null;
+  /** P1-7b: the session's background jobs and its running commands' output (`jobs.ts`). */
+  private readonly jobs: DshJobsTracker;
+  /** P1-7b: the session's children on the timeline (`subagents.ts`). */
+  private readonly children: DshSubagentsTracker;
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
@@ -721,6 +772,27 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       },
       now: this.now,
     });
+    this.jobs = new DshJobsTracker({
+      owner: () => this.dshSessionId,
+      registry: () => this.ctx.get?.('jobs'),
+      projectJobs: (jobs) => {
+        if (!this.disposed && this.result) this.forwardProjection({ key: 'jobs', view: jobs });
+      },
+      emitOutput: (output) => {
+        if (!this.disposed) this.live.emitToolOutput(output);
+      },
+      log: options.log,
+      now: this.now,
+    });
+    this.children = new DshSubagentsTracker({
+      owner: () => this.dshSessionId,
+      subagents: () => this.ctx.get?.('subagents'),
+      emitActivity: (payload) => {
+        if (!this.disposed) this.emit({ type: 'subagent.activity', payload });
+      },
+      log: options.log,
+      now: this.now,
+    });
   }
 
   /**
@@ -746,16 +818,18 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   /**
    * The agent is not idle: a turn this bridge started, one it did not (a goal
-   * round, a job notice), other agent work, or a background job of this
-   * session still running after its turn ended. Reported to Main in each pong;
-   * Main never reclaims a busy session (decision 025).
+   * round, a job notice), other agent work, a background job of this session
+   * still running after its turn ended, or (P1-7b) a run of one of its
+   * subagents — a continuable child keeps working after the parent's turn.
+   * Reported to Main in each pong; Main never reclaims a busy session
+   * (decision 025): reclaiming it would end that work.
    */
   get busy(): boolean {
     if (this.disposed) return false;
     if (this.turn !== null || (this.handle !== null && this.handle.agent.status !== 'idle')) {
       return true;
     }
-    return this.commandSends.size > 0 || this.hasLiveJobs();
+    return this.commandSends.size > 0 || this.hasLiveJobs() || this.children.hasRunning();
   }
 
   /** Jobs this session owns that have not settled; the agent reads idle meanwhile. */
@@ -845,6 +919,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       capabilities: skills === undefined ? {} : { skills },
     };
     this.syncSandboxMode();
+    // P1-7b: the session's jobs from now on (a resumed session's live ones included).
+    this.jobs.follow();
     this.projectionBaseline = this.readProjections();
     return this.result;
   }
@@ -1127,6 +1203,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     for (const send of this.commandSends.values()) send.controller.abort();
     this.commandSends.clear();
     this.projectionBaseline = null;
+    this.jobs.dispose();
+    this.children.reset();
     for (const dispose of this.disposers.splice(0)) dispose();
     try {
       await this.handle?.dispose();
@@ -1417,7 +1495,39 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   async panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult> {
     this.assertLogicalSession(input.logicalSessionId);
     if (!this.result || this.disposed) return { projections: [] };
-    return { projections: this.readProjections(true) };
+    return { projections: this.readProjections({ activation: true, jobs: true }) };
+  }
+
+  // ---- the jobs and subagents windows (P1-7b, decisions 069, 119) -----------------------
+
+  /** `worker.job.kill`: DSH's own kill of one of this session's jobs. */
+  async killJob(input: WorkerJobKillPayload): Promise<WorkerJobKillResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    return this.jobs.kill(input.jobId);
+  }
+
+  /** `worker.job.read`: one job's output, read without moving the model's cursor. */
+  async readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    return this.jobs.read(input.jobId, input.from, input.maxBytes);
+  }
+
+  /** `worker.subagent.interrupt`: one child's current run, as its human parent. */
+  async interruptSubagent(
+    input: WorkerSubagentInterruptPayload
+  ): Promise<WorkerSubagentInterruptResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    this.requireOpen();
+    return this.children.interrupt(input.childId);
+  }
+
+  /** A bootstrapped, live session: what the windows' controls act on. */
+  private requireOpen(): void {
+    if (!this.result || this.disposed || !this.handle) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'No open DSH session');
+    }
   }
 
   /**
@@ -1488,6 +1598,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     if (!this.turn || !this.handle) return { stopped: false };
     this.emit({ type: 'session.status', payload: { status: 'stopping' } });
+    // Decision 069 rule 1 (U3): the Stop reaches the session's subagents —
+    // each running continuable child's current run is interrupted (it keeps
+    // its session) and its one-shot background children are killed — but
+    // never its background commands, which their window stops one by one.
+    // Before the turn's own cancel: a child's settlement notice that lands
+    // while the turn still runs waits in the inbox (`keepInbox`) instead of
+    // waking the session after the Stop (it may still wake it; decision 119).
+    this.children.interruptAll();
+    this.jobs.stopSubagentJobs('the user pressed Stop');
     this.handle.agent.cancel({ kind: 'user' }, { keepInbox: true });
     return { stopped: true };
   }
@@ -1777,9 +1896,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     this.syncSandboxMode();
     this.resetLiveState();
+    // P1-7b: the jobs and children of the session the rewind left are not
+    // the child's (a rewind waits for jobs; the retired agent's children go
+    // with its dispose).
+    this.children.reset();
+    this.jobs.follow();
     // The child's projections replace the retired session's at once: the slot
-    // is ready, so they reach the renderer ahead of the rewind's history.
-    this.projectionBaseline = this.readProjections();
+    // is ready, so they reach the renderer ahead of the rewind's history. The
+    // jobs go too, empty or not: the retired session's list must not linger.
+    this.projectionBaseline = this.readProjections({ jobs: true });
     this.flushProjectionBaseline();
     this.historyCache.reset(switched.id);
     await this.historyCache.load();
@@ -2123,16 +2248,27 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   /**
    * The forwarded keys the open session has now, in one consistent cut, and
-   * the bridge's `goalActivation` (P1-7a): with them while a goal is current,
-   * or always — `null` included — for `worker.panels`, whose answer replaces
-   * what the renderer holds. A key whose unit (or service) the host does not
-   * compose is absent; a failed read costs the baseline, never the session.
+   * the bridge's own two: `goalActivation` (P1-7a) while a goal is current,
+   * `jobs` (P1-7b) while the session has a job — or each always (`null`,
+   * empty) when `always` says so: `worker.panels`, whose answer replaces what
+   * the renderer holds, and a rewind's `jobs`. A key whose unit (or service)
+   * the host does not compose is absent; a failed read costs the baseline,
+   * never the session.
    */
-  private readProjections(alwaysActivation = false): SessionProjectionPayload[] {
+  private readProjections(
+    always: { activation?: boolean; jobs?: boolean } = {}
+  ): SessionProjectionPayload[] {
     const projections = this.readDshProjections();
     const activation = this.readGoalActivation();
-    if (activation !== undefined && (activation !== null || alwaysActivation)) {
+    if (activation !== undefined && (activation !== null || always.activation)) {
       projections.push({ key: 'goalActivation', view: activation });
+    }
+    if (this.ctx.get?.('jobs')) {
+      const jobs = this.jobs.current();
+      if (jobs.length > 0 || always.jobs) projections.push({ key: 'jobs', view: jobs });
+      // The session's events are what later changes compare against (a
+      // `worker.panels` answer goes to one window, not to the stream).
+      if (!always.activation) this.jobs.noteProjected(jobs);
     }
     return projections;
   }
@@ -2210,6 +2346,50 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.emitNow({ type: 'session.projection', payload });
   }
 
+  /**
+   * P1-7b: `tools/execute` for a call of this session's own agent (not a
+   * delegate's, not a program's sub-dispatch). On the way in: the row's
+   * `execStartedAt` — the approval is behind it, so the clock no longer
+   * counts the wait (decision 099 rule 15, T146) — and the call's shell job
+   * or delegation opens; on the way out, DSH's execution-local value (never
+   * logged) says what became of them. Nothing here may fail the call.
+   */
+  private async aroundExecute(
+    exec: DshToolDispatch,
+    next: () => Promise<DshToolOutcome>
+  ): Promise<DshToolOutcome> {
+    if (
+      this.disposed ||
+      !exec ||
+      exec.agent?.id !== this.dshSessionId ||
+      exec.parent !== undefined ||
+      typeof exec.callId !== 'string'
+    ) {
+      return next();
+    }
+    const { callId, name } = exec;
+    try {
+      this.live.onExecStarted(callId, this.now());
+      this.jobs.beginCall(callId, name, exec.arguments);
+      this.children.beginCall(callId, name, exec.arguments);
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] call start not followed', name, error);
+    }
+    let outcome: DshToolOutcome | undefined;
+    try {
+      outcome = await next();
+      return outcome;
+    } finally {
+      const value = outcome && !outcome.isError ? outcome.value : undefined;
+      try {
+        this.jobs.endCall(callId, value);
+        this.children.endCall(callId, value);
+      } catch (error) {
+        this.options.log?.('[dsh-bridge] call end not followed', name, error);
+      }
+    }
+  }
+
   private listen(): void {
     // Once per runtime: a bootstrap retried after a failure must not double every event.
     if (this.listening) return;
@@ -2225,7 +2405,16 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     if (unsubscribe) this.disposers.push(unsubscribe);
     this.disposers.push(
       this.ctx.on('session/event', (session, event) => {
-        if (session?.id !== this.dshSessionId || this.disposed) return;
+        if (this.disposed || !session) return;
+        if (session.id !== this.dshSessionId) {
+          // P1-7b: a child of this session's, as lane rows (any other session's is ignored there).
+          try {
+            this.children.onChildEvent(session.id, event as DshChildEvent);
+          } catch (error) {
+            this.options.log?.('[dsh-bridge] subagent event failed', event.type, error);
+          }
+          return;
+        }
         // The history first: the live translation reads the fold (usage steps, goal budget).
         try {
           this.historyCache.push(event);
@@ -2236,6 +2425,30 @@ export class DshSessionRuntime implements PiWorkerRuntime {
           this.live.onSessionEvent(event);
         } catch (error) {
           this.options.log?.('[dsh-bridge] session event failed', event.type, error);
+        }
+        try {
+          this.children.onParentEvent(event as DshChildEvent);
+        } catch (error) {
+          this.options.log?.('[dsh-bridge] subagent catalog failed', error);
+        }
+      }),
+      // P1-7b (decision 099 rule 15): around each call of the session's own
+      // agent, past its approval — the stamp that starts the row's clock, the
+      // job a shell call runs as, the child a delegation starts.
+      this.ctx.on('tools/execute', (exec, next) => this.aroundExecute(exec, next)),
+      // P1-7b: every session's subagent runs; each runtime keeps its children's.
+      this.ctx.on('subagent/start', (info) => {
+        try {
+          if (!this.disposed) this.children.onRunStart(info);
+        } catch (error) {
+          this.options.log?.('[dsh-bridge] subagent start failed', error);
+        }
+      }),
+      this.ctx.on('subagent/end', (info) => {
+        try {
+          if (!this.disposed) this.children.onRunEnd(info);
+        } catch (error) {
+          this.options.log?.('[dsh-bridge] subagent end failed', error);
         }
       }),
       this.ctx.on('agent/assistant-stream', ({ agent, frame }) => {

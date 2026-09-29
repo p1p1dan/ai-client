@@ -153,6 +153,16 @@
   {
     "sessionId": "rec-file-attach",
     "requestId": "turn-FILE-ATTACH",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-file-attach-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-file-attach",
+    "requestId": "turn-FILE-ATTACH",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-file-attach-t1-s1",

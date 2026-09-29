@@ -349,22 +349,15 @@ describe('reduceSubagentActivity — permissions', () => {
   });
 });
 
-describe('reduceSubagentActivity — session terminal sweep', () => {
-  it('sweeps running and never-classified lanes of THAT session to cancelled', () => {
-    const state = fold([
-      started(),
-      activity({ kind: 'text', id: 't', text: 'x', parentToolCallId: 'toolu_null_status' }),
-      activity({ kind: 'started', parentToolCallId: 'toolu_other', agentId: 'a-o' }, 's2'),
-      { type: 'session.stopped', sessionId: SESSION },
-    ]);
-    expect(state.lanes[PARENT].status).toBe('cancelled');
-    expect(state.lanes.toolu_null_status.status).toBe('cancelled');
-    expect(state.lanes.toolu_other.status).toBe('running');
-  });
-
-  it('leaves lanes running when a Ctrl+Enter completion ends the parent run', () => {
-    // The runtime ends an interjected run without stopping its delegates;
-    // each lane is settled by that delegate's own terminal status later.
+/**
+ * dsh-rebase P1-7b (decisions 072 rule 7, 119): a lane ends on its own
+ * delegate's terminal status. The parent's turn end used to sweep every
+ * running lane to `cancelled` — right when a 1.0.x run waited for its
+ * delegates, wrong for a DSH `subagent`, which runs in the background by
+ * default and outlives its parent's turn. Only a lost engine sweeps now.
+ */
+describe('reduceSubagentActivity — how a lane ends', () => {
+  it('[P7B-LANE-TURN-END] no turn end of the parent touches a running lane', () => {
     const state = fold([
       started(),
       {
@@ -372,34 +365,84 @@ describe('reduceSubagentActivity — session terminal sweep', () => {
         sessionId: SESSION,
         payload: { permissionId: 'perm-live', toolName: 'Bash', agentId: 'agent-1' },
       },
-      {
-        type: 'session.completed',
-        sessionId: SESSION,
-        payload: { stopCause: 'interjected' },
-      },
     ]);
-    expect(state.lanes[PARENT].status).toBe('running');
-    expect(state.lanes[PARENT].pendingPermission).not.toBeNull();
-    const settled = fold([activity({ kind: 'status', status: 'completed' })], state);
-    expect(settled.lanes[PARENT].status).toBe('completed');
-  });
-
-  it('still sweeps on a user Stop and on a plain completion', () => {
     for (const terminal of [
       { type: 'session.stopped', sessionId: SESSION },
       { type: 'session.completed', sessionId: SESSION },
       { type: 'session.completed', sessionId: SESSION, payload: { stopCause: 'turn_limit' } },
+      { type: 'session.completed', sessionId: SESSION, payload: { stopCause: 'interjected' } },
+      { type: 'session.failed', sessionId: SESSION, payload: { error: 'boom' } },
     ]) {
-      const state = fold([started(), terminal]);
-      expect(state.lanes[PARENT].status).toBe('cancelled');
+      expect(reduceSubagentActivity(state, terminal)).toBe(state);
     }
+    // The delegate's own terminal settles it.
+    const settled = fold([activity({ kind: 'status', status: 'completed' })], state);
+    expect(settled.lanes[PARENT].status).toBe('completed');
   });
 
-  it('a terminal for a session with nothing to sweep returns the same reference', () => {
+  it('[P7B-LANE-ENGINE-LOST] a lost engine sweeps running and never-classified lanes of THAT session to cancelled', () => {
+    const state = fold([
+      started(),
+      activity({ kind: 'text', id: 't', text: 'x', parentToolCallId: 'toolu_null_status' }),
+      activity({ kind: 'started', parentToolCallId: 'toolu_other', agentId: 'a-o' }, 's2'),
+      { type: 'session.status', sessionId: SESSION, payload: { status: 'disconnected' } },
+    ]);
+    expect(state.lanes[PARENT].status).toBe('cancelled');
+    expect(state.lanes.toolu_null_status.status).toBe('cancelled');
+    expect(state.lanes.toolu_other.status).toBe('running');
+  });
+
+  it('a lost engine with nothing to sweep, and any other status, return the same reference', () => {
     const state = fold([started(), activity({ kind: 'status', status: 'completed' })]);
-    expect(reduceSubagentActivity(state, { type: 'session.failed', sessionId: SESSION })).toBe(
-      state
-    );
+    expect(
+      reduceSubagentActivity(state, {
+        type: 'session.status',
+        sessionId: SESSION,
+        payload: { status: 'disconnected' },
+      })
+    ).toBe(state);
+    const running = fold([started()]);
+    expect(
+      reduceSubagentActivity(running, {
+        type: 'session.status',
+        sessionId: SESSION,
+        payload: { status: 'idle' },
+      })
+    ).toBe(running);
+  });
+
+  it('[P7B-LANE-TIMES] a lane keeps when its run began, its delegation tool, and when it ended', () => {
+    const state = fold([
+      { ...started({ taskType: 'subagent_fork' }), timestamp: 1_000 },
+      { ...activity({ kind: 'status', status: 'completed', endedAt: 4_000 }), timestamp: 4_100 },
+    ]);
+    const lane = state.lanes[PARENT];
+    expect(lane.taskType).toBe('subagent_fork');
+    expect(lane.startedAt).toBe(1_000);
+    expect(lane.endedAt).toBe(4_000);
+  });
+
+  it('[P7B-LANE-RESUMED] a continued run brings an ended lane back: running, a divider row, fresh counters', () => {
+    const ended = fold([
+      started(),
+      activity({ kind: 'status', status: 'failed', usage: { totalTokens: 9, toolUses: 2 } }),
+      activity({ kind: 'report', report: { status: 'failed', stopReason: 'refusal' } }),
+    ]);
+    expect(ended.lanes[PARENT].status).toBe('failed');
+    const resumed = fold([activity({ kind: 'resumed', at: 7_000 })], ended);
+    const lane = resumed.lanes[PARENT];
+    expect(lane.status).toBe('running');
+    expect(lane.report).toBeNull();
+    expect(lane.usage).toBeNull();
+    expect(lane.startedAt).toBe(7_000);
+    expect(lane.endedAt).toBeNull();
+    expect(lane.rows.at(-1)).toMatchObject({ kind: 'resumed', at: 7_000 });
+    // The new run's own end applies — no "no-downgrade" hold from the old one.
+    const done = fold([activity({ kind: 'status', status: 'completed' })], resumed);
+    expect(done.lanes[PARENT].status).toBe('completed');
+    // And the divider is a row of the panel.
+    const rows = deriveSubagentPanelRows(done.lanes[PARENT], { parentRunning: false })[0]?.detail;
+    expect(rows?.map((row) => row.verb)).toContain('Continued');
   });
 });
 

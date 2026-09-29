@@ -148,6 +148,7 @@
 ## 影响与遗留
 
 - **P1-7b**：在 `BRIDGE_PROJECTION_KEYS` 加 `jobs`，`worker.panels` 顺带返回；`live` 标志与补水顺序规则可直接复用；后台任务、子代理两个浮动子窗口与 `worker.job.kill` / `worker.job.read` / `worker.subagent.interrupt` 三个 RPC 照同一套 IPC 写法。
+  - 修订注记（2026-09-28）：已照此落地，`worker.panels` 总带 `jobs`（空列表也带），bootstrap 快照只在有 job 时带；见[决策 119](119-p1-7b-jobs-subagents-choices.md)（待审批）。
 - **P1-7c**：`todo_write` 行展开体接 `TodoList`；`get_goal` / `create_goal` / `update_goal` 的动词与图标。
 - **P1-7d**：
   - 合成态点验：经 Vite import `/stores/sessionPanels.ts`，把合成的 `session.projection` 灌进当前会话，逐态截图（7 种目标状态、待办折叠 / 展开、三种轮次头、通知行、待送达气泡）；

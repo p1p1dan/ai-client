@@ -78,6 +78,20 @@
  *                 model reads the handle's path with `read` and no card comes up;
  *                 the history row carries the file's chip
  *
+ * Background work scenarios (P1-7b, decisions 069 and 119), recorded last:
+ *   jobs-kill     a background ticker; the jobs window reads its output
+ *                 (`worker.job.read`, the tail, then what came after) and stops it
+ *                 (`worker.job.kill`); the kill's completion notice wakes the agent
+ *                 into a turn nobody sent. `rpc.jobs` keeps the reads' shape (the
+ *                 tick count depends on the wall clock), the kill's outcome and the
+ *                 `jobs` list `worker.panels` answers afterwards
+ *   sub-cont      a continuable subagent in the background: its settlement wakes the
+ *                 agent, which sends it one more message (`send_message`); the child
+ *                 runs again on the same lane (`resumed`) and its second settlement
+ *                 wakes the agent once more. The child runs beside its parent, so
+ *                 `stream` keeps the parent's three turns without the lane, and
+ *                 `rpc.lane` keeps the lane's `subagent.activity` in its own order
+ *
  * Question scenario (P1-4d3, decisions 098 and 114), recorded after those:
  *   question      the model calls DSH's `ask_user_question` twice, one turn each:
  *                 the first card is answered (a single-select pick; two
@@ -117,7 +131,10 @@
  * `<ms>`; token counts -> 0; consecutive deltas of one block merged, in the
  * stream and in DSH's stored stream records, and stream timing (`dt`) dropped;
  * a tool row's size updates while its arguments stream (P1-4d1) dropped, since
- * whether one exists depends on the wall clock between two deltas.
+ * whether one exists depends on the wall clock between two deltas; a running
+ * command's live tail (`tool.output`, P1-7b) dropped for the same reason — how
+ * many there are depends on when the job's output was pumped (the bridge's
+ * unit tests and bridge-smoke check them).
  * The system prompt, tool schemas and injected context bodies are replaced by
  * placeholders: they are DSH's text, not the bridge's, and carry dates. The
  * history's `settledAt` is dropped from `rpc`: whether it is present depends
@@ -234,6 +251,7 @@ class Normalizer {
       // a window of wall clock passed between two deltas (plan P1-4 shard 05 §2).
       if (rest.type === 'tool.updated' && isRecord(payload.input) && '__streaming' in payload.input)
         continue;
+      if (rest.type === 'tool.output') continue;
       if (
         (rest.type === 'message.delta' || rest.type === 'thinking.delta') &&
         previous?.type === rest.type &&
@@ -631,6 +649,9 @@ const SCENARIOS: Record<string, Scenario> = {
   // P1-4d3 (decisions 098, 114): DSH's ask_user_question on the card. After
   // the attachments, so every scenario above keeps its recorded host state.
   question: questionScenario,
+  // P1-7b (decisions 069, 119): background work. Last, for the same reason.
+  'jobs-kill': jobsKillScenario,
+  'sub-cont': subContScenario,
 };
 
 /** The id of the first tree node whose preview contains `text`, and the node after it. */
@@ -805,6 +826,129 @@ async function jobNoticeScenario(context: RecordContext, host: Host): Promise<Re
       events.filter((event) => event.requestId === wake),
     ]
   );
+}
+
+// ---- background work (P1-7b) -----------------------------------------------------------
+
+/** Waits until the wake-up turn `requestId` of `session` went idle. */
+async function wakeIdle(session: Session, from: number, requestId: string): Promise<void> {
+  const woke = await session.host.client.until(
+    session.ch,
+    (events) =>
+      events
+        .slice(from)
+        .some(
+          (event) =>
+            event.type === 'session.status' &&
+            payloadOf(event).status === 'idle' &&
+            event.requestId === requestId
+        ),
+    90_000
+  );
+  if (!woke) throw new Error(`${session.logicalSessionId}: ${requestId} never went idle`);
+}
+
+/**
+ * Decision 119: the jobs window's two calls on a live background job. The
+ * ticker writes a line every 100 ms, so how much a read returns is the wall
+ * clock's; what is recorded is its shape — the tail starts at the first byte
+ * and a later read continues where it left — plus the kill's outcome, the
+ * list `worker.panels` answers once the job settled, and the two turns.
+ */
+async function jobsKillScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'jobs-kill');
+  const { client } = session.host;
+  const logicalSessionId = session.logicalSessionId;
+  const from = client.events(session.ch).length;
+  await context.turn(session, 'JOBKILL', 'P1-JOBKILL: start a ticker in the background.');
+  const events = () => client.events(session.ch).slice(from);
+  const jobId = events()
+    .filter((event) => event.type === 'session.projection' && payloadOf(event).key === 'jobs')
+    .flatMap((event) => (payloadOf(event).view as Message[] | undefined) ?? [])
+    .map((job) => String(job.id))
+    .at(0);
+  if (!jobId) throw new Error(`${logicalSessionId}: the jobs projection never listed the ticker`);
+  await sleep(1_000);
+  const first = await client.request(session.ch, 'worker.job.read', { logicalSessionId, jobId });
+  await sleep(500);
+  const later = await client.request(session.ch, 'worker.job.read', {
+    logicalSessionId,
+    jobId,
+    from: first.next,
+  });
+  const kill = await client.request(session.ch, 'worker.job.kill', { logicalSessionId, jobId });
+  const wake = `dsh-turn-${session.dshSessionId}-2`;
+  await wakeIdle(session, from, wake);
+  const panels = await client.request(session.ch, 'worker.panels', { logicalSessionId });
+  const jobs = ((panels.projections as Message[] | undefined) ?? []).find(
+    (entry) => entry.key === 'jobs'
+  );
+  const all = events();
+  const recording = await finish(
+    context,
+    session,
+    [boot],
+    [
+      all.filter((event) => event.requestId === 'turn-JOBKILL'),
+      all.filter((event) => event.requestId === wake),
+    ],
+    {
+      jobs: {
+        first: {
+          startsAtTheTop: first.from === 0 && String(first.text).startsWith('tick 1\n'),
+          lossy: first.lossy,
+        },
+        later: {
+          continues: later.from === first.next && Number(later.next) > Number(first.next),
+          lossy: later.lossy,
+        },
+        kill,
+        afterKill: ((jobs?.view as Message[] | undefined) ?? []).map((job) => ({
+          id: job.id,
+          kind: job.kind,
+          status: job.status,
+        })),
+      },
+    }
+  );
+  await context.stopHost(host);
+  return recording;
+}
+
+/**
+ * Decision 119: a continuable subagent on its lane across two runs. The child
+ * works beside its parent, so where its activity falls among the parent's
+ * events is the wall clock's: `stream` is the parent's three turns without
+ * the lane, and `rpc.lane` the lane's own events, in order, without the
+ * requestId of whichever parent turn happened to be current.
+ */
+async function subContScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const { session, boot } = await context.openSession(host, 'sub-cont');
+  const { client } = session.host;
+  const from = client.events(session.ch).length;
+  await context.turn(session, 'SUBCONT', 'P1-SUBCONT: delegate to a continuable subagent.');
+  const firstWake = `dsh-turn-${session.dshSessionId}-2`;
+  const secondWake = `dsh-turn-${session.dshSessionId}-3`;
+  await wakeIdle(session, from, firstWake);
+  await wakeIdle(session, from, secondWake);
+  const all = client.events(session.ch).slice(from);
+  const parent = all.filter((event) => event.type !== 'subagent.activity');
+  const lane = all
+    .filter((event) => event.type === 'subagent.activity')
+    .map((event) => ({ type: event.type, payload: event.payload }));
+  const recording = await finish(
+    context,
+    session,
+    [boot],
+    [
+      parent.filter((event) => event.requestId === 'turn-SUBCONT'),
+      parent.filter((event) => event.requestId === firstWake),
+      parent.filter((event) => event.requestId === secondWake),
+    ],
+    { lane }
+  );
+  await context.stopHost(host);
+  return recording;
 }
 
 // ---- turn semantics (P1-4c1) ------------------------------------------------------
@@ -1300,8 +1444,13 @@ async function waitForToolCall(session: Session, from: number): Promise<void> {
   if (!found) throw new Error(`${session.logicalSessionId}: the tool call never started`);
 }
 
-/** Scenarios that manage hosts themselves (they kill the one they are given). */
-const OWN_HOST = new Set(['crash-resume', 'perm-restart']);
+/**
+ * Scenarios that manage hosts themselves (they kill the one they are given).
+ * P1-7b's two run on a fresh host of their own and stop it: DSH mints job ids
+ * from one counter per host process (`bash-N`), so on the shared host their
+ * samples would depend on which scenarios ran before them.
+ */
+const OWN_HOST = new Set(['crash-resume', 'perm-restart', 'jobs-kill', 'sub-cont']);
 
 // ---- main ------------------------------------------------------------------------
 

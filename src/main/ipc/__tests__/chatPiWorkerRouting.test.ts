@@ -64,6 +64,10 @@ const releaseSessionForHostPrompt = vi.fn(async () => terminalWasReleased);
 /** cutover-04 — the gate between the handover and the write. */
 const assertHostPromptAllowed = vi.fn();
 const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
+/** dsh-rebase P1-7b — the jobs and subagents windows. */
+const killSessionJob = vi.fn(async () => ({ outcome: 'requested' }));
+const readSessionJob = vi.fn(async () => null);
+const interruptSubagent = vi.fn(async () => ({ interrupted: true }));
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -115,6 +119,9 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     forkSession,
     reloadSession,
     compactSession,
+    killSessionJob,
+    readSessionJob,
+    interruptSubagent,
     send,
     stop,
     closeSession,
@@ -207,6 +214,38 @@ function invoke<T>(channel: string, payload?: unknown): Promise<T> {
   if (!handler) throw new Error(`missing handler ${channel}`);
   return Promise.resolve(handler({ sender: { id: 7 } }, payload) as T);
 }
+
+/**
+ * dsh-rebase P1-7b (decision 119): the jobs and subagents windows. The kill
+ * and the interrupt act on a live session and claim it for the window that
+ * asked; the output read claims nothing.
+ */
+describe('P1-7b background jobs and subagents IPC', () => {
+  it('[P7B-IPC] routes the three windows’ requests to WorkerManager', async () => {
+    await expect(
+      invoke('chat:killSessionJob', { sessionId: 's1', jobId: 'bash-2' })
+    ).resolves.toEqual({ outcome: 'requested' });
+    expect(killSessionJob).toHaveBeenCalledWith({
+      sessionId: 's1',
+      jobId: 'bash-2',
+      ownerWebContentsId: 7,
+    });
+
+    await expect(
+      invoke('chat:readSessionJob', { sessionId: 's1', jobId: 'bash-2', from: 12 })
+    ).resolves.toBeNull();
+    expect(readSessionJob).toHaveBeenCalledWith({ sessionId: 's1', jobId: 'bash-2', from: 12 });
+
+    await expect(
+      invoke('chat:interruptSubagent', { sessionId: 's1', childId: 'aiclient-kid' })
+    ).resolves.toEqual({ interrupted: true });
+    expect(interruptSubagent).toHaveBeenCalledWith({
+      sessionId: 's1',
+      childId: 'aiclient-kid',
+      ownerWebContentsId: 7,
+    });
+  });
+});
 
 describe('Pi WorkerSlot chat routing', () => {
   // Electron's `invoke` rejection carries only `error.message`, and nothing in

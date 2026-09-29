@@ -266,6 +266,16 @@
   {
     "sessionId": "rec-compact",
     "requestId": "turn-TOOL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-compact-t2-s1",
+      "toolCallId": "toolu_id-7",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-compact",
+    "requestId": "turn-TOOL",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-compact-t2-s1",

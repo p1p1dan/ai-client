@@ -146,6 +146,16 @@
   {
     "sessionId": "rec-steer",
     "requestId": "turn-STEER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-steer-t1-s1",
@@ -269,6 +279,16 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-steer",
+    "requestId": "turn-STEER",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-steer-t1-s2",
+      "toolCallId": "toolu_id-9",
+      "execStartedAt": "<ms>"
     }
   },
   {

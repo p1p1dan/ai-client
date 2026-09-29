@@ -36,6 +36,10 @@ import type {
   WorkerHistoryResult,
   WorkerInterjectPayload,
   WorkerInterjectResult,
+  WorkerJobKillPayload,
+  WorkerJobKillResult,
+  WorkerJobReadPayload,
+  WorkerJobReadResult,
   WorkerPanelsPayload,
   WorkerPanelsResult,
   WorkerReloadPayload,
@@ -46,6 +50,8 @@ import type {
   WorkerSendResult,
   WorkerStopPayload,
   WorkerStopResult,
+  WorkerSubagentInterruptPayload,
+  WorkerSubagentInterruptResult,
   WorkerTreePayload,
 } from '../../shared/types/workerRpc.ts';
 import {
@@ -711,6 +717,33 @@ export class NativeWorkerRuntime {
   async panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult> {
     this.assertLogicalSession(input.logicalSessionId);
     return { projections: [] };
+  }
+
+  /**
+   * dsh-rebase P1-7b: the jobs and subagents windows belong to the DSH
+   * bridge. This runtime has no job registry; it retires with P1-12.
+   */
+  async killJob(input: WorkerJobKillPayload): Promise<WorkerJobKillResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    throw new NativeWorkerRuntimeError(
+      'WORKER_JOBS_UNAVAILABLE',
+      'This runtime has no background job registry'
+    );
+  }
+
+  async readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    throw new NativeWorkerRuntimeError(
+      'WORKER_JOBS_UNAVAILABLE',
+      'This runtime has no background job registry'
+    );
+  }
+
+  async interruptSubagent(
+    input: WorkerSubagentInterruptPayload
+  ): Promise<WorkerSubagentInterruptResult> {
+    this.assertLogicalSession(input.logicalSessionId);
+    return { interrupted: false };
   }
 
   async commands(input: WorkerCommandsPayload): Promise<WorkerCommandsResult> {

@@ -320,3 +320,43 @@ describe('sessionPanelsModel — the todo card (plan P1-7 shard 03 §3)', () => 
     ).toMatchObject({ done: 1, total: 1, allDone: true });
   });
 });
+
+describe('sessionPanelsModel — the jobs key (P1-7b, decision 119)', () => {
+  it('[P7B-PANELS-JOBS] keeps well-formed jobs, replaces the list whole, and ignores a list it cannot read', () => {
+    const job = {
+      id: 'bash-1',
+      kind: 'bash',
+      label: 'npm run dev',
+      status: 'running' as const,
+      startedAt: 1,
+    };
+    let state = reduceSessionPanels(
+      initialSessionPanels,
+      projection('s1', {
+        key: 'jobs',
+        view: [
+          job,
+          { id: 'bad', status: 'weird' } as never,
+          { ...job, id: 'bash-2', status: 'completed' },
+        ],
+      })
+    );
+    expect(state.bySession.s1?.jobs?.map((entry) => entry.id)).toEqual(['bash-1', 'bash-2']);
+    expect(state.bySession.s1?.live).toBe(true);
+    state = reduceSessionPanels(state, projection('s1', { key: 'jobs', view: [] }));
+    expect(state.bySession.s1?.jobs).toEqual([]);
+    const same = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'jobs', view: 'nope' as never })
+    );
+    expect(same.bySession.s1?.jobs).toEqual([]);
+    // A rehydration answer fills the key like the others.
+    const hydrated = applyPanelsSnapshot(
+      initialSessionPanels,
+      's2',
+      [{ key: 'jobs', view: [job] }],
+      {}
+    );
+    expect(hydrated.bySession.s2?.jobs).toEqual([job]);
+  });
+});

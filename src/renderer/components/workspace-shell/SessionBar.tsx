@@ -1,7 +1,9 @@
-import { ArrowLeftRight, GitBranch, Monitor, Plus, Terminal } from 'lucide-react';
-import { useState } from 'react';
+import { ArrowLeftRight, GitBranch, Layers, Monitor, Plus, Terminal, Users } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
+import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
 import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,6 +14,9 @@ import {
   createOrReuseUnboundChatSession,
 } from '@/stores/chatSessionActions';
 import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
+import { useSessionPanelsStore } from '@/stores/sessionPanels';
+import { type SubwindowKey, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
+import { useSubagentActivityStore } from '@/stores/subagentActivity';
 
 interface SessionBarProps {
   /**
@@ -203,6 +208,10 @@ export function SessionBar({
           <PresentationButton label="TUI" icon={Terminal} active={isTui} onClick={openTui} />
         </div>
       )}
+      {/* dsh-rebase P1-7b (decisions 090, 109): the background jobs and
+          subagents windows, opened and hidden here, next to where the
+          terminal button goes (P1-11). The count is what runs now. */}
+      {activeSessionId && <BackgroundWorkButtons sessionId={activeSessionId} />}
       {/* Keyed by session: a dialog left open across a session switch must not
           show the previous conversation's tree. Mounted next to its trigger
           rather than in the timeline, so the two cannot drift apart. */}
@@ -216,6 +225,93 @@ export function SessionBar({
         />
       )}
     </div>
+  );
+}
+
+const NO_HIDDEN_JOBS: readonly string[] = [];
+
+/**
+ * dsh-rebase P1-7b: 「后台任务 N」 and 「子代理 N」 (prototype `sessionbar`):
+ * a toggle each, pressed while its window is open; the count, in the brand
+ * colour as the prototype draws it, is what runs now and is absent at zero.
+ * On a narrow window only the icons stay (the prototype's compact bar).
+ */
+function BackgroundWorkButtons({ sessionId }: { sessionId: string }) {
+  const { t } = useI18n();
+  const open = useSessionSubwindowsStore((state) => state.open);
+  const toggle = useSessionSubwindowsStore((state) => state.toggle);
+  const panels = useSessionPanelsStore((state) => state.bySession[sessionId]);
+  const allLanes = useSubagentActivityStore((state) => state.lanes);
+  const { jobs, agents } = useMemo(() => {
+    const lanes = Object.values(allLanes).filter((lane) => lane.sessionId === sessionId);
+    return {
+      jobs: deriveJobsWindowView({ panels, lanes, hidden: NO_HIDDEN_JOBS }).running,
+      agents: deriveSubagentsWindowView({ panels, lanes }).running,
+    };
+  }, [allLanes, panels, sessionId]);
+  return (
+    <div
+      className="flex shrink-0 items-center gap-0.5 border-l pl-2"
+      role="group"
+      aria-label={t('Background work')}
+    >
+      <SubwindowButton
+        windowKey="jobs"
+        label={t('Background tasks')}
+        icon={Layers}
+        count={jobs}
+        active={open.jobs}
+        onClick={() => toggle('jobs')}
+      />
+      <SubwindowButton
+        windowKey="agents"
+        label={t('Subagents')}
+        icon={Users}
+        count={agents}
+        active={open.agents}
+        onClick={() => toggle('agents')}
+      />
+    </div>
+  );
+}
+
+function SubwindowButton({
+  windowKey,
+  label,
+  icon: Icon,
+  count,
+  active,
+  onClick,
+}: {
+  windowKey: SubwindowKey;
+  label: string;
+  icon: typeof Layers;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className={cn(
+        'flex h-6 items-center gap-1 rounded-sm px-2 text-meta transition-colors',
+        active
+          ? 'bg-selection text-foreground'
+          : 'text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:bg-hover'
+      )}
+      onClick={onClick}
+      aria-pressed={active}
+      title={label}
+      data-subwindow={windowKey}
+    >
+      <Icon className="size-3.5" />
+      <span className="max-xl:hidden">{label}</span>
+      {count > 0 && (
+        <Badge size="sm" className="rounded-full tabular-nums">
+          {count}
+        </Badge>
+      )}
+    </button>
   );
 }
 

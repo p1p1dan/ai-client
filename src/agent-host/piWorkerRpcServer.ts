@@ -31,6 +31,8 @@ import {
   isWorkerHistoryPayload,
   isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
+  isWorkerJobKillPayload,
+  isWorkerJobReadPayload,
   isWorkerPanelsPayload,
   isWorkerPermissionRespondPayload,
   isWorkerPreviewRespondPayload,
@@ -44,6 +46,7 @@ import {
   isWorkerSetPermissionsPayload,
   isWorkerSetPermissionTierPayload,
   isWorkerStopPayload,
+  isWorkerSubagentInterruptPayload,
   isWorkerTreePayload,
   isWorkerUtilityCancelPayload,
   isWorkerUtilityStartPayload,
@@ -67,6 +70,10 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerJobKillPayload,
+  type WorkerJobKillResult,
+  type WorkerJobReadPayload,
+  type WorkerJobReadResult,
   type WorkerModelCatalog,
   type WorkerPanelsPayload,
   type WorkerPanelsResult,
@@ -87,6 +94,8 @@ import {
   type WorkerSetPermissionTierResult,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentInterruptPayload,
+  type WorkerSubagentInterruptResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
   type WorkerUtilityCancelPayload,
@@ -127,6 +136,12 @@ export interface PiWorkerRuntime {
   command(input: WorkerCommandPayload): Promise<WorkerCommandResult>;
   /** dsh-rebase P1-7a — the panels' current projections, for a renderer that missed them. */
   panels(input: WorkerPanelsPayload): Promise<WorkerPanelsResult>;
+  /** dsh-rebase P1-7b — stop one background job of the session (the jobs window). */
+  killJob(input: WorkerJobKillPayload): Promise<WorkerJobKillResult>;
+  /** dsh-rebase P1-7b — one job's output, read without moving the model's cursor. */
+  readJob(input: WorkerJobReadPayload): Promise<WorkerJobReadResult>;
+  /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
+  interruptSubagent(input: WorkerSubagentInterruptPayload): Promise<WorkerSubagentInterruptResult>;
   rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
   reload(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
@@ -450,6 +465,15 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.panels':
           await this.handlePanels(request);
+          break;
+        case 'worker.job.kill':
+          await this.handleJobKill(request);
+          break;
+        case 'worker.job.read':
+          await this.handleJobRead(request);
+          break;
+        case 'worker.subagent.interrupt':
+          await this.handleSubagentInterrupt(request);
           break;
         case 'worker.rewind':
           await this.handleRewind(request);
@@ -799,6 +823,55 @@ export class PiWorkerRpcServer {
       return;
     }
     this.respondSuccess(request, await this.runtime.panels(request.payload));
+  }
+
+  /**
+   * dsh-rebase P1-7b — the jobs and subagents windows act on a live session:
+   * each needs a bootstrapped runtime, as `worker.command` does.
+   */
+  private async handleJobKill(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerJobKillPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.job.kill requires logicalSessionId and jobId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.killJob(request.payload));
+  }
+
+  private async handleJobRead(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerJobReadPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.job.read requires logicalSessionId, jobId and a valid from / maxBytes',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.readJob(request.payload));
+  }
+
+  private async handleSubagentInterrupt(request: WorkerRpcRequest): Promise<void> {
+    if (!isWorkerSubagentInterruptPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.subagent.interrupt requires logicalSessionId and childId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+    }
+    this.respondSuccess(request, await this.runtime.interruptSubagent(request.payload));
   }
 
   private async handleRewind(request: WorkerRpcRequest): Promise<void> {

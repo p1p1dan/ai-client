@@ -1,0 +1,399 @@
+[
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "role": "user",
+      "attemptId": "attempt-JOBKILL"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-5",
+      "blockId": "dsh-user-5-text",
+      "text": "P1-JOBKILL: start a ticker in the background."
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-5"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "bash",
+      "input": {
+        "__streaming": {
+          "bytes": 43,
+          "lines": 1
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "command": "for i in $(seq 1 600); do echo tick $i; sleep 0.1; done",
+        "description": "Background ticker",
+        "run_in_background": true
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.projection",
+    "payload": {
+      "key": "jobs",
+      "view": [
+        {
+          "id": "bash-1",
+          "kind": "bash",
+          "label": "for i in $(seq 1 600); do echo tick $i; sleep 0.1; done",
+          "status": "running",
+          "startedAt": "<ms>"
+        }
+      ]
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": true,
+      "output": "started background job bash-1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s2",
+      "blockId": "dsh-aiclient-rec-jobs-kill-t1-s2-b0",
+      "text": "P1-JOBKILL: started the ticker."
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "turn-JOBKILL",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "role": "user",
+      "origin": {
+        "kind": "job"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-22",
+      "blockId": "dsh-user-22-text",
+      "text": "bash for i in $(seq 1 600); do echo tick $i; sleep 0.1; done [status: killed, signal: SIGTERM; stopped by the user from…"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-22"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t2-s1",
+      "blockId": "dsh-aiclient-rec-jobs-kill-t2-s1-b0",
+      "text": "P1-JOBKILL: the ticker was stopped."
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-jobs-kill-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-jobs-kill",
+    "requestId": "dsh-turn-aiclient-rec-jobs-kill-2",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

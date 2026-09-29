@@ -433,9 +433,86 @@ export interface WorkerPanelsPayload {
 }
 
 export interface WorkerPanelsResult {
-  /** One entry per key the host has; `goalActivation` always, `null` with no goal. */
+  /**
+   * One entry per key the host has; `goalActivation` always (`null` with no
+   * goal) and `jobs` always (empty with none).
+   */
   projections: SessionProjectionPayload[];
 }
+
+/**
+ * dsh-rebase P1-7b (decisions 069, 119): stop one background job of the
+ * session from its window — a command, a one-shot subagent, a workflow. DSH's
+ * own `job_kill` path (`ctx.jobs.kill`), fenced by the session's ownership;
+ * the job settles `killed` once its work actually stops. A continuable
+ * subagent is interrupted instead ({@link WorkerSubagentInterruptPayload}).
+ */
+export interface WorkerJobKillPayload {
+  logicalSessionId: string;
+  /** The registry's id (`bash-3`). */
+  jobId: string;
+}
+
+export interface WorkerJobKillResult {
+  /** `requested` for live work; `already-finished` for a job that had settled. */
+  outcome: 'requested' | 'already-finished';
+}
+
+/**
+ * dsh-rebase P1-7b (decision 119): output of one job of the session, read
+ * without moving the model's cursor (`ctx.jobs.readAt`). Without `from`, the
+ * newest `maxBytes`; with it, what came after `from` (a previous `next`),
+ * newest `maxBytes` at most.
+ */
+export interface WorkerJobReadPayload {
+  logicalSessionId: string;
+  jobId: string;
+  /** Absolute byte offset to read from; omitted for the tail. */
+  from?: number;
+  /** At most this many bytes (default {@link WORKER_JOB_READ_DEFAULT_BYTES}). */
+  maxBytes?: number;
+}
+
+export interface WorkerJobReadResult {
+  /** The output from `from` to `next`, as the job wrote it. */
+  text: string;
+  /** Absolute offset of the first byte of `text`. */
+  from: number;
+  /** The offset to ask from next time: the job's total so far. */
+  next: number;
+  /** Bytes before `from` that were asked for (or retained) and are not here. */
+  omittedBytes: number;
+  /** The ring had dropped bytes the read asked for. */
+  lossy: boolean;
+  /** Files that keep the job's complete output, when its sources keep any. */
+  spillPaths?: string[];
+}
+
+/** Default and ceiling of one `worker.job.read` (UTF-8 bytes). */
+export const WORKER_JOB_READ_DEFAULT_BYTES = 16_384;
+export const WORKER_JOB_READ_MAX_BYTES = 65_536;
+
+/**
+ * dsh-rebase P1-7b (decisions 069, 119): interrupt the current run of one
+ * continuable subagent of the session, as its human parent (DSH's
+ * `subagents.interrupt(childId, {kind: 'user'})`). The child keeps its
+ * session and can be continued; an idle or unknown child is a no-op.
+ */
+export interface WorkerSubagentInterruptPayload {
+  logicalSessionId: string;
+  /** The child's DSH session id. */
+  childId: string;
+}
+
+export interface WorkerSubagentInterruptResult {
+  /** The cancel signal went out (the child may take a moment to stop). */
+  interrupted: boolean;
+}
+
+/** `worker.job.kill` / `worker.job.read`: no job of this session has the id. */
+export const WORKER_JOB_UNKNOWN = 'WORKER_JOB_UNKNOWN';
+/** `worker.job.*` / `worker.subagent.interrupt`: the host composes no job registry or subagent service. */
+export const WORKER_JOBS_UNAVAILABLE = 'WORKER_JOBS_UNAVAILABLE';
 
 export interface WorkerCommandsResult {
   commands: WorkerSlashCommandInfo[];
@@ -873,6 +950,12 @@ export type WorkerCommandsRequest = WorkerRpcRequest<'worker.commands', WorkerCo
 export type WorkerCompactRequest = WorkerRpcRequest<'worker.compact', WorkerCompactPayload>;
 export type WorkerCommandRequest = WorkerRpcRequest<'worker.command', WorkerCommandPayload>;
 export type WorkerPanelsRequest = WorkerRpcRequest<'worker.panels', WorkerPanelsPayload>;
+export type WorkerJobKillRequest = WorkerRpcRequest<'worker.job.kill', WorkerJobKillPayload>;
+export type WorkerJobReadRequest = WorkerRpcRequest<'worker.job.read', WorkerJobReadPayload>;
+export type WorkerSubagentInterruptRequest = WorkerRpcRequest<
+  'worker.subagent.interrupt',
+  WorkerSubagentInterruptPayload
+>;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
 export type WorkerReloadRequest = WorkerRpcRequest<'worker.reload', WorkerReloadPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
@@ -1361,6 +1444,7 @@ const PANEL_PROJECTION_KEYS: Readonly<Record<SessionProjectionKey, true>> = {
   goal: true,
   subagentCatalog: true,
   goalActivation: true,
+  jobs: true,
 };
 
 /**
@@ -1378,6 +1462,83 @@ export function sanitizeWorkerPanels(value: unknown): WorkerPanelsResult {
       'view' in entry
   );
   return { projections };
+}
+
+/** A job id as the registry mints them: `<kind>-N`, bounded. */
+function isJobId(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= 128 && !/\s/u.test(value);
+}
+
+export function isWorkerJobKillPayload(value: unknown): value is WorkerJobKillPayload {
+  return isLogicalSessionPayload(value) && isJobId(value.jobId);
+}
+
+export function isWorkerJobKillResult(value: unknown): value is WorkerJobKillResult {
+  return isRecord(value) && (value.outcome === 'requested' || value.outcome === 'already-finished');
+}
+
+export function isWorkerJobReadPayload(value: unknown): value is WorkerJobReadPayload {
+  if (!isLogicalSessionPayload(value) || !isJobId(value.jobId)) return false;
+  if (value.from !== undefined && (!Number.isSafeInteger(value.from) || Number(value.from) < 0)) {
+    return false;
+  }
+  return (
+    value.maxBytes === undefined ||
+    (Number.isSafeInteger(value.maxBytes) &&
+      Number(value.maxBytes) >= 1 &&
+      Number(value.maxBytes) <= WORKER_JOB_READ_MAX_BYTES)
+  );
+}
+
+function isOffset(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+/**
+ * A `worker.job.read` answer Main passes on, or null for a malformed one. The
+ * text is clamped to twice the read ceiling (a worker never sends more; a
+ * character can take up to four bytes, so this is generous) — a wrong answer
+ * costs the output pane, never the window.
+ */
+export function sanitizeWorkerJobRead(value: unknown): WorkerJobReadResult | null {
+  if (
+    !isRecord(value) ||
+    typeof value.text !== 'string' ||
+    !isOffset(value.from) ||
+    !isOffset(value.next) ||
+    !isOffset(value.omittedBytes) ||
+    typeof value.lossy !== 'boolean'
+  ) {
+    return null;
+  }
+  const spillPaths = Array.isArray(value.spillPaths)
+    ? value.spillPaths.filter((path): path is string => typeof path === 'string').slice(0, 8)
+    : [];
+  return {
+    text: value.text.slice(-2 * WORKER_JOB_READ_MAX_BYTES),
+    from: value.from,
+    next: value.next,
+    omittedBytes: value.omittedBytes,
+    lossy: value.lossy,
+    ...(spillPaths.length > 0 ? { spillPaths } : {}),
+  };
+}
+
+export function isWorkerSubagentInterruptPayload(
+  value: unknown
+): value is WorkerSubagentInterruptPayload {
+  return (
+    isLogicalSessionPayload(value) &&
+    typeof value.childId === 'string' &&
+    value.childId.trim().length > 0 &&
+    value.childId.length <= 256
+  );
+}
+
+export function isWorkerSubagentInterruptResult(
+  value: unknown
+): value is WorkerSubagentInterruptResult {
+  return isRecord(value) && typeof value.interrupted === 'boolean';
 }
 
 export function isWorkerCompactPayload(value: unknown): value is WorkerCompactPayload {

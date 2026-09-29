@@ -458,6 +458,12 @@ export const IPC_CHANNELS = {
   CHAT_RUN_SESSION_COMMAND: 'chat:runSessionCommand',
   /** dsh-rebase P1-7a — the goal bar's and todo card's current projections (rehydration). */
   CHAT_GET_SESSION_PANELS: 'chat:getSessionPanels',
+  /** dsh-rebase P1-7b — stop one background job of the session (the jobs window). */
+  CHAT_KILL_SESSION_JOB: 'chat:killSessionJob',
+  /** dsh-rebase P1-7b — one job's output, read without moving the model's cursor. */
+  CHAT_READ_SESSION_JOB: 'chat:readSessionJob',
+  /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
+  CHAT_INTERRUPT_SUBAGENT: 'chat:interruptSubagent',
   CHAT_REWIND_SESSION: 'chat:rewindSession',
   CHAT_FORK_SESSION: 'chat:forkSession',
   /** Pi-only model catalog; no provider credential or base URL crosses IPC. */

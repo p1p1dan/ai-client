@@ -1193,6 +1193,26 @@ const electronAPI = {
     }): Promise<{
       projections: import('@shared/types/runtimeEvents').SessionProjectionPayload[];
     }> => ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SESSION_PANELS, payload),
+    /** dsh-rebase P1-7b — stop one background job of the session (the jobs window). */
+    killSessionJob: (payload: {
+      sessionId: string;
+      jobId: string;
+    }): Promise<import('@shared/types/workerRpc').WorkerJobKillResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_KILL_SESSION_JOB, payload),
+    /** dsh-rebase P1-7b — one job's output; `null` without a running slot. */
+    readSessionJob: (payload: {
+      sessionId: string;
+      jobId: string;
+      from?: number;
+      maxBytes?: number;
+    }): Promise<import('@shared/types/workerRpc').WorkerJobReadResult | null> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_READ_SESSION_JOB, payload),
+    /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
+    interruptSubagent: (payload: {
+      sessionId: string;
+      childId: string;
+    }): Promise<import('@shared/types/workerRpc').WorkerSubagentInterruptResult> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERRUPT_SUBAGENT, payload),
     getSessionTree: (payload: {
       sessionId: string;
       requestSequence: number;

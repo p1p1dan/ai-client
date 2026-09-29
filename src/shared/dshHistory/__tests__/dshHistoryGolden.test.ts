@@ -77,6 +77,31 @@ function normalized(value: unknown): unknown {
   return value;
 }
 
+/**
+ * dsh-rebase P1-7b: the bridge clips a tree node's preview (`…`) BEFORE the
+ * recorder renumbers the UUIDs inside it, and `id-N` is shorter than a UUID —
+ * so a clipped preview that carries one (a subagent's settlement head names
+ * its child, `sub-cont`) reads shorter in the sample than the text the
+ * projection of the normalized log gives. Such a preview is taken as the
+ * prefix it is; every other field, and every other preview, must match.
+ */
+function withRecorderClipping(
+  built: SessionTreeSnapshot,
+  answered: SessionTreeSnapshot
+): SessionTreeSnapshot {
+  return {
+    ...built,
+    nodes: built.nodes.map((node, index) => {
+      const clipped = answered.nodes[index]?.preview;
+      return clipped?.endsWith('…') &&
+        node.preview !== clipped &&
+        node.preview?.startsWith(clipped.slice(0, -1))
+        ? { ...node, preview: clipped }
+        : node;
+    }),
+  };
+}
+
 const scenarios = readdirSync(FIXTURES)
   .filter((file) => /^log\..+\.json$/.test(file))
   .map((file) => file.slice('log.'.length, -'.json'.length))
@@ -114,6 +139,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'fork',
     'image',
     'job-notice',
+    // P1-7b (decisions 069, 119): recorded by the orchestrator at close-out.
+    'jobs-kill',
     'perm-card',
     'perm-deny',
     'perm-gear',
@@ -130,6 +157,8 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'stop-stream',
     'stop-tool',
     'stream',
+    // P1-7b (decisions 069, 119): recorded by the orchestrator at close-out.
+    'sub-cont',
     'think',
     'tool',
     'usage',
@@ -164,7 +193,9 @@ describe.each(scenarios)('the %s recording', (name) => {
       workspacePath,
       leaf: dshLeafCheckpoint(messages, log.header.id, log.cursor),
     });
-    expect(normalized(snapshot)).toEqual(rpc.tree.snapshot);
+    expect(
+      withRecorderClipping(normalized(snapshot) as SessionTreeSnapshot, rpc.tree.snapshot)
+    ).toEqual(rpc.tree.snapshot);
   });
 
   it('gave a reopened session that same first page', () => {

@@ -146,6 +146,16 @@
   {
     "sessionId": "rec-stop-tool",
     "requestId": "turn-STOP-TOOL",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-stop-tool-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-stop-tool",
+    "requestId": "turn-STOP-TOOL",
     "type": "session.status",
     "payload": {
       "status": "stopping"

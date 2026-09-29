@@ -1,0 +1,431 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-sub-cont",
+      "piSessionId": "aiclient-rec-sub-cont",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-sub-cont.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-sub-cont",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-sub-cont.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-SUBCONT: delegate to a continuable subagent."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "subagent",
+              "input": {
+                "description": "Continuable probe",
+                "prompt": "P1-SUBCHILD: answer in one line."
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-8:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "started subagent id-7"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-sub-cont-t1-s1"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "Delegated; the subagent reports back when it is done."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-sub-cont-t1-s2"
+        },
+        {
+          "id": "h:id-11",
+          "entryId": "id-11",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-11:text:0",
+              "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+            }
+          ],
+          "origin": {
+            "kind": "subagent",
+            "childSessionId": "id-7"
+          },
+          "liveMessageId": "dsh-user-23"
+        },
+        {
+          "id": "h:id-14",
+          "entryId": "id-14",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-14:tool-call:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "name": "send_message",
+              "input": {
+                "agent_id": "id-7",
+                "message": "Please report once more."
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-15:tool-result:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "ok": true,
+              "output": "message delivered to agent id-7"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-sub-cont-t2-s1"
+        },
+        {
+          "id": "h:id-17",
+          "entryId": "id-17",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-17:text:0",
+              "text": "Sent the subagent one more message."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-sub-cont-t2-s2"
+        },
+        {
+          "id": "h:id-18",
+          "entryId": "id-18",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-18:text:0",
+              "text": "Background subagent id-7 finished and will do no further work unless you send it more."
+            }
+          ],
+          "origin": {
+            "kind": "subagent",
+            "childSessionId": "id-7"
+          },
+          "liveMessageId": "dsh-user-36"
+        },
+        {
+          "id": "h:id-20",
+          "entryId": "id-20",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-20:text:0",
+              "text": "Both runs of the subagent reported back."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-sub-cont-t3-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 8,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-sub-cont",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-sub-cont.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-20",
+        "fileTailEntryId": "aiclient-rec-sub-cont#39"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-SUBCONT: delegate to a continuable subagent.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Delegated; the subagent reports back when it is done.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-11",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "user",
+          "preview": "Background subagent id-7 finished and will do no further work u…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-14",
+          "parentId": "id-11",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-17",
+          "parentId": "id-14",
+          "depth": 5,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Sent the subagent one more message.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-18",
+          "parentId": "id-17",
+          "depth": 6,
+          "entryType": "message",
+          "role": "user",
+          "preview": "Background subagent id-7 finished and will do no further work u…",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-20",
+          "parentId": "id-18",
+          "depth": 7,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Both runs of the subagent reported back.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 8,
+      "returnedNodes": 8,
+      "truncated": false
+    }
+  },
+  "lane": [
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "started",
+        "description": "Continuable probe",
+        "taskType": "subagent"
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "status",
+        "status": "running"
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "text",
+        "id": "id-7-12-0",
+        "text": "Child done: the probe ran."
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "progress",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "status",
+        "status": "completed",
+        "endedAt": "<ms>",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "report",
+        "report": {
+          "status": "completed",
+          "totalTokens": 144,
+          "totalToolUseCount": 0,
+          "stopReason": "completed"
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "resumed",
+        "at": "<ms>"
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "text",
+        "id": "id-7-22-0",
+        "text": "Child done: the probe ran."
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "progress",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "status",
+        "status": "completed",
+        "endedAt": "<ms>",
+        "usage": {
+          "totalTokens": 0,
+          "toolUses": 0
+        }
+      }
+    },
+    {
+      "type": "subagent.activity",
+      "payload": {
+        "parentToolCallId": "toolu_id-4",
+        "agentId": "id-7",
+        "kind": "report",
+        "report": {
+          "status": "completed",
+          "totalTokens": 144,
+          "totalToolUseCount": 0,
+          "stopReason": "completed"
+        }
+      }
+    }
+  ]
+}

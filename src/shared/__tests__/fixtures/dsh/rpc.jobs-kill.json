@@ -1,0 +1,223 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-jobs-kill",
+      "piSessionId": "aiclient-rec-jobs-kill",
+      "cwd": "<workspace>",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-jobs-kill.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-jobs-kill",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-jobs-kill.dsh.json",
+    "workspacePath": "<workspace>",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-JOBKILL: start a ticker in the background."
+            }
+          ],
+          "liveMessageId": "dsh-user-5"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "bash",
+              "input": {
+                "command": "for i in $(seq 1 600); do echo tick $i; sleep 0.1; done",
+                "description": "Background ticker",
+                "run_in_background": true
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "started background job bash-1"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-jobs-kill-t1-s1"
+        },
+        {
+          "id": "h:id-9",
+          "entryId": "id-9",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-9:text:0",
+              "text": "P1-JOBKILL: started the ticker."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-jobs-kill-t1-s2"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-10:text:0",
+              "text": "bash for i in $(seq 1 600); do echo tick $i; sleep 0.1; done [status: killed, signal: SIGTERM; stopped by the user from…"
+            }
+          ],
+          "origin": {
+            "kind": "job"
+          },
+          "liveMessageId": "dsh-user-22"
+        },
+        {
+          "id": "h:id-12",
+          "entryId": "id-12",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-12:text:0",
+              "text": "P1-JOBKILL: the ticker was stopped."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-jobs-kill-t2-s1"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 5,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-jobs-kill",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-jobs-kill.dsh.json",
+      "workspacePath": "<workspace>",
+      "leaf": {
+        "activeEntryId": "id-12",
+        "fileTailEntryId": "aiclient-rec-jobs-kill#25"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-JOBKILL: start a ticker in the background.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-9",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-JOBKILL: started the ticker.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-9",
+          "depth": 3,
+          "entryType": "message",
+          "role": "user",
+          "preview": "bash for i in $(seq 1 600); do echo tick $i; sleep 0.1; done [status: killed, signal: SIGTERM; …",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-12",
+          "parentId": "id-10",
+          "depth": 4,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-JOBKILL: the ticker was stopped.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 5,
+      "returnedNodes": 5,
+      "truncated": false
+    }
+  },
+  "jobs": {
+    "first": {
+      "startsAtTheTop": true,
+      "lossy": false
+    },
+    "later": {
+      "continues": true,
+      "lossy": false
+    },
+    "kill": {
+      "outcome": "requested"
+    },
+    "afterKill": [
+      {
+        "id": "bash-1",
+        "kind": "bash",
+        "status": "killed"
+      }
+    ]
+  }
+}

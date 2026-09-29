@@ -40,6 +40,7 @@ import {
   isWorkerForkResult,
   isWorkerHistoryResult,
   isWorkerInterjectResult,
+  isWorkerJobKillResult,
   isWorkerPermissionRespondResult,
   isWorkerQuestionRespondResult,
   isWorkerReloadResult,
@@ -47,10 +48,12 @@ import {
   isWorkerSendResult,
   isWorkerSetPermissionTierResult,
   isWorkerStopResult,
+  isWorkerSubagentInterruptResult,
   isWorkerTreeResult,
   normalizeWorkerCapabilities,
   STAGED_FORK_MARKER_SUFFIX,
   sanitizeWorkerCommandRows,
+  sanitizeWorkerJobRead,
   sanitizeWorkerPanels,
   WORKER_COMPACT_REQUEST_TIMEOUT_MS,
   WORKER_RETRY_UNAVAILABLE,
@@ -71,6 +74,10 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerJobKillPayload,
+  type WorkerJobKillResult,
+  type WorkerJobReadPayload,
+  type WorkerJobReadResult,
   type WorkerPanelsPayload,
   type WorkerPanelsResult,
   type WorkerPermissionRespondPayload,
@@ -91,6 +98,8 @@ import {
   type WorkerSlashCommandInfo,
   type WorkerStopPayload,
   type WorkerStopResult,
+  type WorkerSubagentInterruptPayload,
+  type WorkerSubagentInterruptResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '@shared/types/workerRpc';
@@ -1750,6 +1759,84 @@ export class WorkerManager {
       { logicalSessionId: entry.logicalSessionId }
     );
     return sanitizeWorkerPanels(result);
+  }
+
+  /**
+   * dsh-rebase P1-7b (decisions 069, 119) — the jobs window's stop for one
+   * background job. A mutation, so the session must be ready and is claimed
+   * by the window; not refused while a turn runs (a background job is what
+   * runs beside a turn). The engine settles the job `killed` once its work
+   * stops; the `jobs` projection reports it.
+   */
+  async killSessionJob(input: {
+    sessionId: string;
+    jobId: string;
+    ownerWebContentsId?: number;
+  }): Promise<WorkerJobKillResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const result = await entry.slot?.request<WorkerJobKillResult, WorkerJobKillPayload>(
+      'worker.job.kill',
+      { logicalSessionId: entry.logicalSessionId, jobId: input.jobId }
+    );
+    if (!isWorkerJobKillResult(result)) {
+      throw new WorkerManagerError('worker_job_failed', 'The worker could not stop the job');
+    }
+    return result;
+  }
+
+  /**
+   * dsh-rebase P1-7b (decision 119) — one job's output for the jobs window,
+   * read without moving the model's cursor. A read, like `getSessionPanels`:
+   * no claim, and a session without a ready slot answers `null` (its jobs
+   * went with its host) rather than an error.
+   */
+  async readSessionJob(input: {
+    sessionId: string;
+    jobId: string;
+    from?: number;
+    maxBytes?: number;
+  }): Promise<WorkerJobReadResult | null> {
+    const entry = this.entriesBySession.get(input.sessionId);
+    if (!entry || entry.state !== 'ready' || !entry.slot) return null;
+    const result = await entry.slot.request<WorkerJobReadResult, WorkerJobReadPayload>(
+      'worker.job.read',
+      {
+        logicalSessionId: entry.logicalSessionId,
+        jobId: input.jobId,
+        ...(input.from !== undefined ? { from: input.from } : {}),
+        ...(input.maxBytes !== undefined ? { maxBytes: input.maxBytes } : {}),
+      }
+    );
+    return sanitizeWorkerJobRead(result);
+  }
+
+  /**
+   * dsh-rebase P1-7b (decisions 069, 119) — interrupt one continuable
+   * subagent's current run, as its human parent (the subagents window, and
+   * the jobs window's row for it). A mutation: ready and claimed.
+   */
+  async interruptSubagent(input: {
+    sessionId: string;
+    childId: string;
+    ownerWebContentsId?: number;
+  }): Promise<WorkerSubagentInterruptResult> {
+    const entry = this.requireReadySession(input.sessionId);
+    this.claimEntry(entry, input.ownerWebContentsId);
+    const result = await entry.slot?.request<
+      WorkerSubagentInterruptResult,
+      WorkerSubagentInterruptPayload
+    >('worker.subagent.interrupt', {
+      logicalSessionId: entry.logicalSessionId,
+      childId: input.childId,
+    });
+    if (!isWorkerSubagentInterruptResult(result)) {
+      throw new WorkerManagerError(
+        'worker_subagent_failed',
+        'The worker could not interrupt the subagent'
+      );
+    }
+    return result;
   }
 
   async getSessionTree(input: {

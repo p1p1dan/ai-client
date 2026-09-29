@@ -1,5 +1,6 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import type { SubagentReport, SubagentRunStatus, SubagentUsage } from '@shared/types/runtimeEvents';
+import { formatAbsoluteTime } from './messageMetadata';
 import { toolDisplayName } from './piToolNames';
 import { deriveToolRowView, type ToolRowView } from './toolCard';
 import { THOUGHT_VERB } from './turnTiming';
@@ -15,7 +16,8 @@ import { THOUGHT_VERB } from './turnTiming';
  *     unique, so a sessionId level would only add lookups and force
  *     `sessionId` down the hottest render path (`ChatTurn → ToolGroupItem →
  *     ToolRow`) as a prop — the arbitration explicitly rejected that.
- *     `sessionId` lives INSIDE the lane for the session-terminal sweep.
+ *     `sessionId` lives INSIDE the lane for the lost-engine sweep (P1-7b:
+ *     no longer every turn end — a DSH subagent outlives its parent's turn).
  *  2. `deriveSubagentPanelRows` — lane → the panel's rows: ONE header
  *     `ToolRowView` (body `'detail'`) whose children are the subagent's own
  *     tool/text/thinking rows, so folding reuses `ToolRow`'s existing
@@ -43,7 +45,12 @@ export type SubagentLaneRow =
       status: 'running' | 'ok' | 'failed';
       errorText?: string;
     }
-  | { kind: 'text' | 'thinking'; id: string; text: string };
+  | { kind: 'text' | 'thinking'; id: string; text: string }
+  /**
+   * dsh-rebase P1-7b: a continuable DSH subagent began another run in this
+   * lane (its parent sent it a message) — the lane's 「续聊 · 12:31」 divider.
+   */
+  | { kind: 'resumed'; id: string; at: number | null };
 
 export interface SubagentProgress {
   description: string | null;
@@ -58,6 +65,15 @@ export interface SubagentLane {
   description: string | null;
   /** null until a `started`/terminal arrives — the panel then falls back to the parent row's running state. */
   status: SubagentRunStatus | null;
+  /**
+   * dsh-rebase P1-7b: the delegation tool that started it (`subagent`,
+   * `subagent_fork`), off `started.taskType`; null for 1.0.x's lanes.
+   */
+  taskType: string | null;
+  /** When the current run began (its `started` / `resumed`), epoch ms; null when unknown. */
+  startedAt: number | null;
+  /** When the last run ended (a terminal `status`'s `endedAt`), epoch ms; null while running. */
+  endedAt: number | null;
   rows: readonly SubagentLaneRow[];
   /** Ring overflow count — the header arg reports "+N earlier" instead of silently forgetting. */
   droppedRows: number;
@@ -131,6 +147,8 @@ interface RuntimeEventLike {
   type?: string;
   sessionId?: string;
   payload?: unknown;
+  /** Main's stamp on every event: when a lane's run began, absent a time of its own. */
+  timestamp?: unknown;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -145,6 +163,10 @@ function asString(value: unknown): string | null {
 
 function asFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function eventTime(event: RuntimeEventLike): number | null {
+  return asFiniteNumber(event.timestamp) ?? null;
 }
 
 /** Statuses a lane can end on. Widened with P5-2-4's `stopped`/`truncated`. */
@@ -248,10 +270,8 @@ export function reduceSubagentActivity(
       return reducePermissionResolved(prev, event);
     case 'session.history':
       return reduceSessionHistory(prev, event);
-    case 'session.completed':
-    case 'session.failed':
-    case 'session.stopped':
-      return reduceSessionTerminal(prev, event);
+    case 'session.status':
+      return reduceEngineLost(prev, event);
     default:
       return prev;
   }
@@ -293,6 +313,9 @@ function reduceActivity(
       agentType: null,
       description: null,
       status: null,
+      taskType: null,
+      startedAt: null,
+      endedAt: null,
       rows: [],
       droppedRows: 0,
       progress: null,
@@ -325,10 +348,34 @@ function reduceActivity(
         ...lane,
         agentType: asString(payload.agentType) ?? lane.agentType,
         description: asString(payload.description) ?? lane.description,
+        taskType: asString(payload.taskType) ?? lane.taskType,
+        startedAt: lane.startedAt ?? eventTime(event),
         // A `started` racing in after a terminal must not resurrect the lane.
         status: isTerminal(lane.status) ? lane.status : 'running',
       };
       return withLane(state, next);
+    }
+    case 'resumed': {
+      // dsh-rebase P1-7b: the one way back from a terminal status — a
+      // continuable DSH child ran again. Its new run counts from here: the old
+      // report and counters belong to the run that ended.
+      const at = asFiniteNumber(payload.at) ?? eventTime(event);
+      const { rows, dropped } = appendRow(lane.rows, {
+        kind: 'resumed',
+        id: `resumed-${lane.ordinal}-${lane.rows.length + lane.droppedRows}`,
+        at,
+      });
+      return withLane(state, {
+        ...lane,
+        rows,
+        droppedRows: lane.droppedRows + dropped,
+        status: 'running',
+        report: null,
+        usage: null,
+        progress: null,
+        startedAt: at ?? lane.startedAt,
+        endedAt: null,
+      });
     }
     case 'text':
     case 'thinking': {
@@ -419,6 +466,9 @@ function reduceActivity(
         status: finalStatus,
         usage: mergeUsage(lane.usage, readUsage(payload.usage)),
         pendingPermission: isTerminal(finalStatus) ? null : lane.pendingPermission,
+        ...(isTerminal(finalStatus) && !isTerminal(lane.status)
+          ? { endedAt: asFiniteNumber(payload.endedAt) ?? eventTime(event) }
+          : {}),
       });
     }
     case 'report': {
@@ -618,6 +668,9 @@ function reduceSessionHistory(
       agentType,
       description: asString(summary.label),
       status,
+      taskType: null,
+      startedAt: startedAt ?? null,
+      endedAt: completedAt ?? null,
       rows,
       droppedRows: 0,
       progress: null,
@@ -652,20 +705,23 @@ function reduceSessionHistory(
 }
 
 /**
- * A turn-terminal for the session sweeps every lane still `running` (or never
- * classified) to `cancelled` — this closes the "Stop clicked, spinner forever"
- * hole: no further subagent events are coming for those lanes.
+ * The engine is gone (`session.status: disconnected` — the host crashed or
+ * restarted, the slot was reclaimed): every lane still `running` (or never
+ * classified) is swept to `cancelled`, since nothing is left to end it.
+ *
+ * dsh-rebase P1-7b (decisions 072 rule 7, 119): this used to happen on every
+ * turn-terminal of the session, which was right for 1.0.x — a parent run
+ * waited for its delegates before it ended. A DSH `subagent` runs in the
+ * background by default and outlives its parent's turn, so a turn's end
+ * says nothing about it; each lane is settled by its own `subagent/end`
+ * (and a Stop interrupts the children, which then end that way, decision 069).
  */
-function reduceSessionTerminal(
+function reduceEngineLost(
   prev: SubagentActivityState,
   event: RuntimeEventLike
 ): SubagentActivityState {
   const sessionId = asString(event.sessionId);
-  if (!sessionId) return prev;
-  // A Ctrl+Enter completion ends the parent run and deliberately leaves its
-  // delegates running; their own terminal `status` payload settles each lane.
-  if (event.type === 'session.completed' && asRecord(event.payload)?.stopCause === 'interjected')
-    return prev;
+  if (!sessionId || asRecord(event.payload)?.status !== 'disconnected') return prev;
   let lanes: Record<string, SubagentLane> | null = null;
   for (const [key, lane] of Object.entries(prev.lanes)) {
     if (lane.sessionId !== sessionId) continue;
@@ -694,6 +750,8 @@ export interface SubagentPanelOptions {
 
 const HEADER_VERB = 'Subagent';
 const TEXT_ROW_VERB = 'Said';
+/** dsh-rebase P1-7b: the divider a continued run leaves in its lane (「续聊」). */
+const RESUMED_ROW_VERB = 'Continued';
 const FIRST_LINE_MAX = 120;
 
 function firstLineOf(text: string): { line: string; hasMore: boolean } {
@@ -792,6 +850,16 @@ export function deriveSubagentPanelRows(
       );
     } else if (row.kind === 'text') {
       children.push(proseRow(`sub-text-${row.id}`, TEXT_ROW_VERB, row.text));
+    } else if (row.kind === 'resumed') {
+      children.push({
+        key: `sub-resumed-${row.id}`,
+        verb: RESUMED_ROW_VERB,
+        ...(row.at !== null ? { arg: formatAbsoluteTime(row.at) } : {}),
+        argKind: 'prose',
+        running: false,
+        failed: false,
+        expandable: false,
+      });
     } else {
       children.push(proseRow(`sub-think-${row.id}`, THOUGHT_VERB, row.text));
     }
