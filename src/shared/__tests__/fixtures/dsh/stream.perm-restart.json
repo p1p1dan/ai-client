@@ -445,7 +445,7 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-27",
+      "messageId": "dsh-user-28",
       "role": "user",
       "attemptId": "attempt-PERM-COVERED"
     }
@@ -455,8 +455,8 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-27",
-      "blockId": "dsh-user-27-text",
+      "messageId": "dsh-user-28",
+      "blockId": "dsh-user-28-text",
       "text": "P1-PERM-SESSION: echo twice."
     }
   },
@@ -465,7 +465,7 @@
     "requestId": "turn-PERM-COVERED",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-27"
+      "messageId": "dsh-user-28"
     }
   },
   {
@@ -484,7 +484,7 @@
     "type": "tool.started",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
-      "toolCallId": "toolu_id-13",
+      "toolCallId": "toolu_id-15",
       "name": "bash",
       "input": {
         "__streaming": {
@@ -500,7 +500,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
-      "toolCallId": "toolu_id-13",
+      "toolCallId": "toolu_id-15",
       "input": {
         "command": "echo perm-session-first",
         "description": "First echo"
@@ -555,7 +555,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
-      "toolCallId": "toolu_id-13",
+      "toolCallId": "toolu_id-15",
       "execStartedAt": "<ms>"
     }
   },
@@ -565,7 +565,7 @@
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
-      "toolCallId": "toolu_id-13",
+      "toolCallId": "toolu_id-15",
       "ok": true,
       "output": "perm-session-first\n"
     }
@@ -594,7 +594,7 @@
     "type": "tool.started",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
-      "toolCallId": "toolu_id-17",
+      "toolCallId": "toolu_id-19",
       "name": "bash",
       "input": {
         "__streaming": {
@@ -610,7 +610,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
-      "toolCallId": "toolu_id-17",
+      "toolCallId": "toolu_id-19",
       "input": {
         "command": "echo perm-session-second",
         "description": "Second echo"
@@ -665,7 +665,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
-      "toolCallId": "toolu_id-17",
+      "toolCallId": "toolu_id-19",
       "execStartedAt": "<ms>"
     }
   },
@@ -675,7 +675,7 @@
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s2",
-      "toolCallId": "toolu_id-17",
+      "toolCallId": "toolu_id-19",
       "ok": true,
       "output": "perm-session-second\n"
     }
@@ -785,7 +785,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-46",
+      "messageId": "dsh-user-47",
       "role": "user",
       "attemptId": "attempt-PERM-ASKED"
     }
@@ -795,8 +795,8 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-46",
-      "blockId": "dsh-user-46-text",
+      "messageId": "dsh-user-47",
+      "blockId": "dsh-user-47-text",
       "text": "P1-PERM-SESSION: echo twice."
     }
   },
@@ -805,7 +805,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-46"
+      "messageId": "dsh-user-47"
     }
   },
   {
@@ -824,7 +824,7 @@
     "type": "tool.started",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
-      "toolCallId": "toolu_id-24",
+      "toolCallId": "toolu_id-26",
       "name": "bash",
       "input": {
         "__streaming": {
@@ -840,7 +840,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
-      "toolCallId": "toolu_id-24",
+      "toolCallId": "toolu_id-26",
       "input": {
         "command": "echo perm-session-first",
         "description": "First echo"
@@ -894,7 +894,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "permission.requested",
     "payload": {
-      "permissionId": "toolu_id-24",
+      "permissionId": "toolu_id-26",
       "toolName": "bash",
       "action": "run_command",
       "input": {
@@ -923,7 +923,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "permission.resolved",
     "payload": {
-      "permissionId": "toolu_id-24",
+      "permissionId": "toolu_id-26",
       "allow": false,
       "decision": "deny"
     }
@@ -934,7 +934,7 @@
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s1",
-      "toolCallId": "toolu_id-24",
+      "toolCallId": "toolu_id-26",
       "ok": false,
       "output": {
         "content": [
@@ -974,7 +974,7 @@
     "type": "tool.started",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
-      "toolCallId": "toolu_id-28",
+      "toolCallId": "toolu_id-30",
       "name": "bash",
       "input": {
         "__streaming": {
@@ -990,7 +990,7 @@
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
-      "toolCallId": "toolu_id-28",
+      "toolCallId": "toolu_id-30",
       "input": {
         "command": "echo perm-session-second",
         "description": "Second echo"
@@ -1044,7 +1044,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "permission.requested",
     "payload": {
-      "permissionId": "toolu_id-28",
+      "permissionId": "toolu_id-30",
       "toolName": "bash",
       "action": "run_command",
       "input": {
@@ -1073,7 +1073,7 @@
     "requestId": "turn-PERM-ASKED",
     "type": "permission.resolved",
     "payload": {
-      "permissionId": "toolu_id-28",
+      "permissionId": "toolu_id-30",
       "allow": false,
       "decision": "deny"
     }
@@ -1084,7 +1084,7 @@
     "type": "tool.completed",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t3-s2",
-      "toolCallId": "toolu_id-28",
+      "toolCallId": "toolu_id-30",
       "ok": false,
       "output": {
         "content": [

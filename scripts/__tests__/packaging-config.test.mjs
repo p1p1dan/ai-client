@@ -342,6 +342,62 @@ describe('build.yml gate wiring (C5)', () => {
   });
 });
 
+/**
+ * dsh-rebase P1-4e (decisions 100 and 133): the DSH bridge recording gate, in
+ * build.yml's gate and in its own branch workflow. Checked here because a
+ * workflow that drifted to re-recording, or to secrets, would still be green.
+ */
+describe('DSH bridge recording gate wiring (P1-4e)', () => {
+  const RECORD = 'out-node-runtime/node src/dsh-host/tools/bridge-record.ts --check';
+  const branchText = readFileSync(
+    path.join(repoRoot, '.github', 'workflows', 'dsh-bridge-gate.yml'),
+    'utf8'
+  );
+  const branch = yaml.load(branchText);
+  const stepIndex = (steps, predicate) => steps.findIndex(predicate);
+
+  for (const [name, steps] of [
+    ['build.yml gate', workflow.jobs.gate.steps],
+    ['dsh-bridge-gate.yml', branch.jobs.record.steps],
+  ]) {
+    it(`${name}: checks the recording in a step of its own, on the bundled node`, () => {
+      const record = steps.filter((s) => s.run?.includes('bridge-record.ts'));
+      expect(record).toHaveLength(1);
+      expect(record[0].run.startsWith(RECORD)).toBe(true);
+      expect(record[0]['timeout-minutes']).toBeGreaterThan(0);
+      const fetch = stepIndex(steps, (s) => s.run?.includes('fetch-node-runtime.mjs'));
+      const install = stepIndex(steps, (s) => s['working-directory'] === 'src/dsh-host');
+      const check = stepIndex(steps, (s) => s.run?.includes('bridge-record.ts'));
+      expect(install).toBeGreaterThanOrEqual(0);
+      expect(fetch).toBeGreaterThan(install);
+      expect(check).toBeGreaterThan(fetch);
+    });
+
+    it(`${name}: never re-records the golden samples`, () => {
+      const runs = steps.map((s) => s.run ?? '').join('\n');
+      expect(runs).not.toContain('--update');
+      expect(runs).not.toContain('AICLIENT_UPDATE_FIXTURES');
+    });
+
+    it(`${name}: uploads the recording when a step fails`, () => {
+      const upload = steps.find(
+        (s) => s.uses?.startsWith('actions/upload-artifact') && /bridge-record/.test(s.with?.path)
+      );
+      expect(upload?.if).toBe('failure()');
+    });
+  }
+
+  it('runs on the DSH branches and by hand, reading the repository only', () => {
+    expect(branch.on.push.branches).toEqual(['feat/dsh-*', 'ci/dsh-bridge-gate']);
+    expect(branch.on).toHaveProperty('workflow_dispatch');
+    expect(branch.permissions).toEqual({ contents: 'read' });
+    expect(branch.jobs.record['runs-on']).toBe('ubuntu-latest');
+    expect(branch.jobs.record['timeout-minutes']).toBeGreaterThan(0);
+    // The fake gateway is the only model; nothing needs a secret.
+    expect(branchText).not.toMatch(/secrets\./);
+  });
+});
+
 describe('build.yml node runtime steps (C6, D36④)', () => {
   const jobs = workflow.jobs;
 
@@ -357,12 +413,14 @@ describe('build.yml node runtime steps (C6, D36④)', () => {
     expect(fetchRun('build-windows')).toContain('--platform win32-x64');
     expect(fetchRun('build-linux')).toContain('--platform linux-x64');
     expect(fetchRun('build-macos')).toContain(`--platform \${{ steps.target.outputs.platform }}`);
+    // dsh-rebase P1-4e: the gate's DSH bridge recording runs on it too.
+    expect(fetchRun('gate')).toContain('--platform linux-x64');
   });
 
   it('keys the runtime cache on the pin file, not a hardcoded version', () => {
     // actions/cache never overwrites an existing key, so a literal key survives
     // a pin bump and keeps restoring the stale runtime forever.
-    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
+    for (const job of ['gate', 'build-windows', 'build-linux', 'build-macos']) {
       // Match on the cached path: these jobs also cache the pnpm store, and
       // picking the first actions/cache step would assert against that one.
       const cacheStep = jobs[job].steps.find(

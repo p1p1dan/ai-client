@@ -1,0 +1,143 @@
+name: DSH bridge gate
+
+# dsh-rebase P1-4e (decisions 100 and 133): the DSH bridge recording gate for
+# the DSH branches, which build.yml's gate (tags and manual runs) never sees.
+# It drives the product bridge through real DSH hosts from the source checkout,
+# on the node the app bundles, with every model reply from the local fake
+# gateway on 127.0.0.1 (no model credentials, no secrets, no network but the
+# installs), and diffs what the channels carried against the golden samples in
+# src/shared/__tests__/fixtures/dsh/. The samples are never re-recorded here:
+# a difference is uploaded for a person to read.
+#
+# Alongside: the DSH host's typecheck, and the two suites that read the same
+# samples (the renderer replay and the history projection). A manual run can
+# add the broader headless smoke (bridge-smoke.ts), which is not a gate yet.
+# Nothing here pushes, publishes or signs anything.
+on:
+  push:
+    branches:
+      - 'feat/dsh-*'
+      - ci/dsh-bridge-gate
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: Also run the headless bridge smoke (bridge-smoke.ts), informational
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dsh-bridge-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    runs-on: ubuntu-latest
+    # Estimated, not yet measured: about 5 min cold (installs, typecheck, the
+    # recording's 51 s on the 2-core dev box, two test files), times 3 rounded
+    # up to 20; 30 leaves room for a dispatched smoke, which has its own cap.
+    # Re-derive from the first green runs.
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Get pnpm store directory
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-
+
+      # The host reaches src/shared, whose modules resolve `zod` from the root
+      # package; tsc and vitest come from there too. No install scripts: nothing
+      # here needs Electron or its rebuilt natives.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # As build.yml's gate installs it: prebuilt natives, no install scripts.
+      - name: Install dsh-host dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: src/dsh-host
+
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v5
+        with:
+          path: out-node-runtime
+          key: node-runtime-${{ runner.os }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
+
+      - name: Fetch bundled Node runtime
+        id: node
+        run: node scripts/fetch-node-runtime.mjs --platform linux-x64
+
+      - name: Typecheck the DSH host
+        run: pnpm typecheck:dsh-host
+
+      # Heavy steps stay separate, never chained into one command (build.yml's
+      # gate has OOM'd that way before).
+      - name: DSH bridge recording (--check)
+        timeout-minutes: 8
+        run: out-node-runtime/node src/dsh-host/tools/bridge-record.ts --check --artifacts "$RUNNER_TEMP/bridge-record"
+
+      # The suites that read the same samples: the renderer replay (what the
+      # user sees) and the history projection (what a reopened chat shows).
+      - name: Replay and projection suites
+        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        run: pnpm exec vitest run src/renderer/stores/__tests__/dshStreamReplay.test.ts src/shared/dshHistory/__tests__/dshHistoryGolden.test.ts
+
+      - name: Upload the recording on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-bridge-record
+          path: ${{ runner.temp }}/bridge-record
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Informational until it has a few green runs: bridge-smoke.ts prints a
+      # verdict but exits 0 whatever it says, so the next step reads it.
+      - name: Headless bridge smoke (manual runs only)
+        id: smoke
+        if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.smoke && steps.node.outcome == 'success' }}
+        timeout-minutes: 15
+        continue-on-error: true
+        run: |
+          mkdir -p "$RUNNER_TEMP/bridge-smoke"
+          out-node-runtime/node src/dsh-host/tools/bridge-smoke.ts --out "$RUNNER_TEMP/bridge-smoke/report.json" > "$RUNNER_TEMP/bridge-smoke/console.log" 2>&1
+
+      - name: Bridge smoke verdict
+        id: smoke-verdict
+        if: ${{ !cancelled() && steps.smoke.outcome != 'skipped' }}
+        continue-on-error: true
+        run: |
+          node -e '
+            const report = require(process.argv[1]);
+            const failed = Object.entries(report.verdict ?? {}).filter(([, ok]) => ok !== true);
+            for (const [name] of failed) console.log(`::warning::bridge-smoke check failed: ${name}`);
+            console.log(`${Object.keys(report.verdict ?? {}).length - failed.length} passed, ${failed.length} failed`);
+            process.exitCode = failed.length > 0 || !report.verdict ? 1 : 0;
+          ' "$RUNNER_TEMP/bridge-smoke/report.json"
+
+      - name: Upload the smoke report
+        if: ${{ !cancelled() && steps.smoke.outcome != 'skipped' }}
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-bridge-smoke
+          path: ${{ runner.temp }}/bridge-smoke
+          if-no-files-found: warn
+          retention-days: 14

@@ -25,8 +25,8 @@
       "agentDir": "<dsh-home>",
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
       "leaf": {
-        "activeEntryId": "id-1:interrupted",
-        "fileTailEntryId": "aiclient-rec-perm-restart#22"
+        "activeEntryId": "id-13",
+        "fileTailEntryId": "aiclient-rec-perm-restart#23"
       },
       "initialHistory": {
         "logicalSessionId": "rec-perm-restart",
@@ -100,25 +100,22 @@
                   "output": "perm-session-second\n"
                 }
               ],
-              "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2",
-              "incomplete": true,
-              "stopReason": "interrupted"
+              "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2"
             },
             {
-              "id": "h:id-1:interrupted",
-              "entryId": "id-1:interrupted",
-              "role": "system",
+              "id": "h:id-13",
+              "entryId": "id-13",
+              "role": "assistant",
               "timestamp": "<ms>",
+              "model": "aiclient-gateway/fake-1",
               "blocks": [
                 {
                   "type": "text",
-                  "id": "h:id-1:interrupted:interrupted:0",
-                  "text": "This turn was interrupted when the engine stopped unexpectedly.",
-                  "notice": {
-                    "key": "This turn was interrupted when the engine stopped unexpectedly."
-                  }
+                  "id": "h:id-13:text:0",
+                  "text": "P1-PERM-SESSION finished."
                 }
-              ]
+              ],
+              "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s3"
             }
           ],
           "offset": 0,
@@ -206,51 +203,48 @@
               "output": "perm-session-second\n"
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2",
-          "incomplete": true,
-          "stopReason": "interrupted"
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s2"
         },
         {
-          "id": "h:id-1:interrupted",
-          "entryId": "id-1:interrupted",
-          "role": "system",
+          "id": "h:id-13",
+          "entryId": "id-13",
+          "role": "assistant",
           "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-1:interrupted:interrupted:0",
-              "text": "This turn was interrupted when the engine stopped unexpectedly.",
-              "notice": {
-                "key": "This turn was interrupted when the engine stopped unexpectedly."
-              }
+              "id": "h:id-13:text:0",
+              "text": "P1-PERM-SESSION finished."
             }
-          ]
+          ],
+          "liveMessageId": "dsh-aiclient-rec-perm-restart-t1-s3"
         },
         {
-          "id": "h:id-12",
-          "entryId": "id-12",
+          "id": "h:id-14",
+          "entryId": "id-14",
           "role": "user",
           "timestamp": "<ms>",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-12:text:0",
+              "id": "h:id-14:text:0",
               "text": "P1-PERM-SESSION: echo twice."
             }
           ],
-          "liveMessageId": "dsh-user-27"
+          "liveMessageId": "dsh-user-28"
         },
         {
-          "id": "h:id-15",
-          "entryId": "id-15",
+          "id": "h:id-17",
+          "entryId": "id-17",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "tool_call",
-              "id": "h:id-15:tool-call:toolu_id-13",
-              "toolCallId": "toolu_id-13",
+              "id": "h:id-17:tool-call:toolu_id-15",
+              "toolCallId": "toolu_id-15",
               "name": "bash",
               "input": {
                 "command": "echo perm-session-first",
@@ -259,8 +253,8 @@
             },
             {
               "type": "tool_result",
-              "id": "h:id-16:tool-result:toolu_id-13",
-              "toolCallId": "toolu_id-13",
+              "id": "h:id-18:tool-result:toolu_id-15",
+              "toolCallId": "toolu_id-15",
               "ok": true,
               "output": "perm-session-first\n"
             }
@@ -268,16 +262,16 @@
           "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s1"
         },
         {
-          "id": "h:id-19",
-          "entryId": "id-19",
+          "id": "h:id-21",
+          "entryId": "id-21",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "tool_call",
-              "id": "h:id-19:tool-call:toolu_id-17",
-              "toolCallId": "toolu_id-17",
+              "id": "h:id-21:tool-call:toolu_id-19",
+              "toolCallId": "toolu_id-19",
               "name": "bash",
               "input": {
                 "command": "echo perm-session-second",
@@ -286,8 +280,8 @@
             },
             {
               "type": "tool_result",
-              "id": "h:id-20:tool-result:toolu_id-17",
-              "toolCallId": "toolu_id-17",
+              "id": "h:id-22:tool-result:toolu_id-19",
+              "toolCallId": "toolu_id-19",
               "ok": true,
               "output": "perm-session-second\n"
             }
@@ -295,45 +289,45 @@
           "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s2"
         },
         {
-          "id": "h:id-22",
-          "entryId": "id-22",
+          "id": "h:id-24",
+          "entryId": "id-24",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-22:text:0",
+              "id": "h:id-24:text:0",
               "text": "P1-PERM-SESSION finished."
             }
           ],
           "liveMessageId": "dsh-aiclient-rec-perm-restart-t2-s3"
         },
         {
-          "id": "h:id-23",
-          "entryId": "id-23",
+          "id": "h:id-25",
+          "entryId": "id-25",
           "role": "user",
           "timestamp": "<ms>",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-23:text:0",
+              "id": "h:id-25:text:0",
               "text": "P1-PERM-SESSION: echo twice."
             }
           ],
-          "liveMessageId": "dsh-user-46"
+          "liveMessageId": "dsh-user-47"
         },
         {
-          "id": "h:id-26",
-          "entryId": "id-26",
+          "id": "h:id-28",
+          "entryId": "id-28",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "tool_call",
-              "id": "h:id-26:tool-call:toolu_id-24",
-              "toolCallId": "toolu_id-24",
+              "id": "h:id-28:tool-call:toolu_id-26",
+              "toolCallId": "toolu_id-26",
               "name": "bash",
               "input": {
                 "command": "echo perm-session-first",
@@ -342,8 +336,8 @@
             },
             {
               "type": "tool_result",
-              "id": "h:id-27:tool-result:toolu_id-24",
-              "toolCallId": "toolu_id-24",
+              "id": "h:id-29:tool-result:toolu_id-26",
+              "toolCallId": "toolu_id-26",
               "ok": false,
               "output": "Error: permission denied",
               "error": "Error: permission denied",
@@ -353,16 +347,16 @@
           "liveMessageId": "dsh-aiclient-rec-perm-restart-t3-s1"
         },
         {
-          "id": "h:id-30",
-          "entryId": "id-30",
+          "id": "h:id-32",
+          "entryId": "id-32",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "tool_call",
-              "id": "h:id-30:tool-call:toolu_id-28",
-              "toolCallId": "toolu_id-28",
+              "id": "h:id-32:tool-call:toolu_id-30",
+              "toolCallId": "toolu_id-30",
               "name": "bash",
               "input": {
                 "command": "echo perm-session-second",
@@ -371,8 +365,8 @@
             },
             {
               "type": "tool_result",
-              "id": "h:id-31:tool-result:toolu_id-28",
-              "toolCallId": "toolu_id-28",
+              "id": "h:id-33:tool-result:toolu_id-30",
+              "toolCallId": "toolu_id-30",
               "ok": false,
               "output": "Error: permission denied",
               "error": "Error: permission denied",
@@ -382,15 +376,15 @@
           "liveMessageId": "dsh-aiclient-rec-perm-restart-t3-s2"
         },
         {
-          "id": "h:id-33",
-          "entryId": "id-33",
+          "id": "h:id-35",
+          "entryId": "id-35",
           "role": "assistant",
           "timestamp": "<ms>",
           "model": "aiclient-gateway/fake-1",
           "blocks": [
             {
               "type": "text",
-              "id": "h:id-33:text:0",
+              "id": "h:id-35:text:0",
               "text": "P1-PERM-SESSION finished."
             }
           ],
@@ -409,8 +403,8 @@
       "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-perm-restart.dsh.json",
       "workspacePath": "<workspace>/perm-restart",
       "leaf": {
-        "activeEntryId": "id-33",
-        "fileTailEntryId": "aiclient-rec-perm-restart#59"
+        "activeEntryId": "id-35",
+        "fileTailEntryId": "aiclient-rec-perm-restart#60"
       },
       "nodes": [
         {
@@ -451,12 +445,12 @@
           "leaf": false
         },
         {
-          "id": "id-1:interrupted",
+          "id": "id-13",
           "parentId": "id-10",
           "depth": 3,
-          "entryType": "notice",
-          "role": "system",
-          "preview": "This turn was interrupted when the engine stopped unexpectedly.",
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PERM-SESSION finished.",
           "timestamp": "<ms>",
           "childCount": 1,
           "forkable": true,
@@ -464,8 +458,8 @@
           "leaf": false
         },
         {
-          "id": "id-12",
-          "parentId": "id-1:interrupted",
+          "id": "id-14",
+          "parentId": "id-13",
           "depth": 4,
           "entryType": "message",
           "role": "user",
@@ -477,8 +471,8 @@
           "leaf": false
         },
         {
-          "id": "id-15",
-          "parentId": "id-12",
+          "id": "id-17",
+          "parentId": "id-14",
           "depth": 5,
           "entryType": "message",
           "role": "assistant",
@@ -489,8 +483,8 @@
           "leaf": false
         },
         {
-          "id": "id-19",
-          "parentId": "id-15",
+          "id": "id-21",
+          "parentId": "id-17",
           "depth": 6,
           "entryType": "message",
           "role": "assistant",
@@ -501,8 +495,8 @@
           "leaf": false
         },
         {
-          "id": "id-22",
-          "parentId": "id-19",
+          "id": "id-24",
+          "parentId": "id-21",
           "depth": 7,
           "entryType": "message",
           "role": "assistant",
@@ -514,8 +508,8 @@
           "leaf": false
         },
         {
-          "id": "id-23",
-          "parentId": "id-22",
+          "id": "id-25",
+          "parentId": "id-24",
           "depth": 8,
           "entryType": "message",
           "role": "user",
@@ -527,8 +521,8 @@
           "leaf": false
         },
         {
-          "id": "id-26",
-          "parentId": "id-23",
+          "id": "id-28",
+          "parentId": "id-25",
           "depth": 9,
           "entryType": "message",
           "role": "assistant",
@@ -539,8 +533,8 @@
           "leaf": false
         },
         {
-          "id": "id-30",
-          "parentId": "id-26",
+          "id": "id-32",
+          "parentId": "id-28",
           "depth": 10,
           "entryType": "message",
           "role": "assistant",
@@ -551,8 +545,8 @@
           "leaf": false
         },
         {
-          "id": "id-33",
-          "parentId": "id-30",
+          "id": "id-35",
+          "parentId": "id-32",
           "depth": 11,
           "entryType": "message",
           "role": "assistant",

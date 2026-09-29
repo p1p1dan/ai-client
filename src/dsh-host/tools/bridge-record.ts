@@ -2,7 +2,7 @@
  * Bridge recording gate (dsh-rebase P1-4e skeleton, landed with P1-4a).
  *
  *   out-node-runtime/node src/dsh-host/tools/bridge-record.ts [--check | --update]
- *       [--only stream,tool] [--out-dir dir] [--raw dir] [--keep]
+ *       [--only stream,tool] [--out-dir dir] [--raw dir] [--artifacts dir] [--keep]
  *
  * Drives the product bridge through a real DSH host and the local fake gateway
  * (plan dsh-p0-2), exactly as Main's supervisor and WorkerSlot do (Node IPC,
@@ -27,6 +27,12 @@
  * `--only`, and a person reads the diff (a vanished field is a field the GUI
  * stops receiving). `--out-dir` writes the normalized recordings elsewhere
  * (repeat runs, to judge determinism); `--raw` also keeps them unnormalized.
+ * `--artifacts` (P1-4e, CI) keeps what a failed gate needs, in any mode: the
+ * normalized recordings (`recorded/`, the same files as the samples, so the
+ * directory diffs against the fixtures), `summary.json`, and on failure
+ * `differences.txt` and the hosts' stderr tails — the text the console prints
+ * anyway. Never the unnormalized recordings (`--raw`), and no model key: the
+ * hosts only ever get the fake gateway's.
  *
  * Scenarios (P1-4a; P1-4b..d add theirs):
  *   stream        one paced text answer
@@ -113,8 +119,9 @@
  *   perm-gear     S10/14 ask, a card up: a new mode is refused as busy, the
  *                      gear widened to auto answers the card and the call runs
  *   perm-stop     S13  ask, a card up: Stop takes it down as aborted
- *   perm-restart  S15  ask: `echo` answered for the session, the host
- *                      SIGKILLed, a new host reopens the stub and asks nothing;
+ *   perm-restart  S15  ask: `echo` answered for the session, the log flushed
+ *                      (P1-4e), the host SIGKILLed, a new host reopens the stub
+ *                      and asks nothing;
  *                      `worker.setPermissions` then forgets the grant, on disk
  *                      too, and the next `echo` is asked again
  *   perm-subagent S16  ask: a subagent's bash call is asked on the chat's card,
@@ -1319,6 +1326,15 @@ async function permRestartScenario(context: RecordContext, host: Host): Promise<
     answering(first.session, 'PERM-GRANT', () => 'allow_session')
   );
   const grants: Message = { granted: grantsOf(first.session) };
+  // The kill tests the grant sidecar across a crash, not DSH's write batching:
+  // DSH buffers log writes for 200 ms and does not flush at turn boundaries, so
+  // a kill right after `idle` used to lose turn 1's last reply, and whether it
+  // did depended on the clock (decision 133). Flush through DSH's own entry
+  // point first; crash-resume is the scenario that kills mid-turn on purpose.
+  const flushed = await host.client.probe('flush', { sessionId: first.session.dshSessionId });
+  if (flushed.participated !== true) {
+    throw new Error(`perm-restart: the log flush reached no durability listener`);
+  }
   await context.kill(host);
   const restarted = await context.startHost(`${host.label}-restarted`);
   const { session, boot } = await context.openSession(
@@ -1481,6 +1497,7 @@ function parseArgs(argv: string[]) {
     only: only ?? Object.keys(SCENARIOS),
     outDir: value('--out-dir'),
     rawDir: value('--raw'),
+    artifactsDir: value('--artifacts'),
     keep: argv.includes('--keep'),
   };
 }
@@ -1715,6 +1732,7 @@ async function main(): Promise<number> {
 
   const failures: string[] = [];
   const facts: Record<string, Message> = {};
+  const hostStderr: string[] = [];
   let shared: Host | undefined;
   try {
     for (const name of args.only) {
@@ -1753,6 +1771,7 @@ async function main(): Promise<number> {
       }
       for (const [kind, sample] of Object.entries(samples)) {
         const file = `${kind}.${name}.json`;
+        if (args.artifactsDir) writeJson(join(args.artifactsDir, 'recorded', file), sample);
         if (args.outDir) {
           writeJson(join(args.outDir, file), sample);
         } else if (args.update) {
@@ -1773,7 +1792,9 @@ async function main(): Promise<number> {
       `recording failed: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`
     );
     for (const host of live) {
-      process.stderr.write(`--- ${host.label} stderr\n${host.stderr().slice(-2000)}\n`);
+      const tail = `--- ${host.label} stderr\n${host.stderr().slice(-2000)}\n`;
+      hostStderr.push(tail);
+      process.stderr.write(tail);
     }
   } finally {
     for (const host of live) {
@@ -1785,6 +1806,20 @@ async function main(): Promise<number> {
   }
   process.stdout.write(`${JSON.stringify({ scenarios: args.only, facts }, null, 2)}\n`);
   const mode = args.outDir ? `written to ${args.outDir}` : args.update ? 'updated' : 'checked';
+  if (args.artifactsDir) {
+    writeJson(join(args.artifactsDir, 'summary.json'), {
+      mode,
+      scenarios: args.only,
+      differences: failures.length,
+      facts,
+    });
+    if (failures.length > 0) {
+      writeFileSync(join(args.artifactsDir, 'differences.txt'), `${failures.join('\n\n')}\n`);
+    }
+    if (hostStderr.length > 0) {
+      writeFileSync(join(args.artifactsDir, 'hosts-stderr.txt'), hostStderr.join('\n'));
+    }
+  }
   if (failures.length > 0) {
     process.stderr.write(
       `[record] ${failures.length} difference(s):\n  ${failures.join('\n  ')}\n`

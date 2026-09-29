@@ -26,8 +26,13 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     # 10 -> 12 when the runtime package added its own `npm ci` plus two gates;
-    # 12 -> 14 for the DSH host package's `npm ci` and typecheck (dsh-rebase P1-2).
-    timeout-minutes: 14
+    # 12 -> 14 for the DSH host package's `npm ci` and typecheck (dsh-rebase P1-2);
+    # 14 -> 20 for the bundled node and the DSH bridge recording (dsh-rebase
+    # P1-4e, decision 133): about 1.5 min added (the recording's 28 scenarios
+    # took 51 s on the 2-core dev box; the node download, one ~30 MB archive
+    # cached after the first run, is an estimate), times 3 is +4.5, and the
+    # rule above rounds up to the next 10. Re-derive from the first green run.
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -83,6 +88,18 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: src/dsh-host
 
+      # The DSH bridge recording (below) starts real DSH hosts, which run on the
+      # node the app bundles, exactly as packaged; same cache and fetch as
+      # build-linux.
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v5
+        with:
+          path: out-node-runtime
+          key: node-runtime-${{ runner.os }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
+
+      - name: Fetch bundled Node runtime
+        run: node scripts/fetch-node-runtime.mjs --platform linux-x64
+
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
       - name: Gate 1/8 — typecheck
@@ -102,6 +119,25 @@ jobs:
 
       - name: Gate 6/8 — test
         run: pnpm test
+
+      # dsh-rebase P1-4e (decisions 100 and 133): drive the product bridge
+      # through real DSH hosts and the local fake gateway (127.0.0.1 only, no
+      # model credentials) and diff against the golden samples under
+      # src/shared/__tests__/fixtures/dsh/. A difference is DSH's event
+      # vocabulary or the bridge's mapping moving; it is never re-recorded here.
+      # Its own timeout, so a stuck host fails this step rather than the job.
+      - name: DSH bridge recording (--check)
+        timeout-minutes: 8
+        run: out-node-runtime/node src/dsh-host/tools/bridge-record.ts --check --artifacts "$RUNNER_TEMP/bridge-record"
+
+      - name: Upload DSH bridge recording on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-bridge-record-gate
+          path: ${{ runner.temp }}/bridge-record
+          if-no-files-found: ignore
+          retention-days: 14
 
       # ARD risk R1's offline half: proves the Cordis graph comes up and that
       # `Agent` drives a turn to completion against pi-ai's own faux provider.

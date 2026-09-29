@@ -8,7 +8,7 @@
     "delegationDepth": 0
   },
   "inheritedEventCount": 0,
-  "cursor": 59,
+  "cursor": 60,
   "events": [
     {
       "type": "agent/inbox/spliced",
@@ -556,8 +556,121 @@
       }
     },
     {
-      "type": "step/end",
+      "type": "assistant/message",
       "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-PERM-SESSION finished."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-12",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-13"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["P1-PERM-SESSION finished."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "P1-PERM-SESSION finished."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-12",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 21,
       "time": "<ms>",
       "data": {
         "turn": 1,
@@ -566,24 +679,24 @@
     },
     {
       "type": "turn/end",
-      "seq": 21,
+      "seq": 22,
       "time": "<ms>",
       "data": {
         "turn": 1,
         "reason": {
-          "kind": "interrupted"
+          "kind": "completed"
         }
       }
     },
     {
       "type": "session/end-seed",
-      "seq": 22,
+      "seq": 23,
       "time": "<ms>",
       "data": {}
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 23,
+      "seq": 24,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -600,14 +713,14 @@
               "kind": "user"
             },
             "role": "user",
-            "id": "id-12"
+            "id": "id-14"
           }
         ]
       }
     },
     {
       "type": "turn/start",
-      "seq": 24,
+      "seq": 25,
       "time": "<ms>",
       "data": {
         "turn": 2
@@ -615,7 +728,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 25,
+      "seq": 26,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -626,7 +739,7 @@
     },
     {
       "type": "step/start",
-      "seq": 26,
+      "seq": 27,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -635,7 +748,7 @@
     },
     {
       "type": "user/message",
-      "seq": 27,
+      "seq": 28,
       "time": "<ms>",
       "data": {
         "content": [
@@ -648,13 +761,13 @@
           "kind": "user"
         },
         "role": "user",
-        "id": "id-12"
+        "id": "id-14"
       },
       "surfaceOp": "append"
     },
     {
       "type": "request/header",
-      "seq": 28,
+      "seq": 29,
       "time": "<ms>",
       "data": {
         "header": {
@@ -697,7 +810,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 29,
+      "seq": 30,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -707,7 +820,7 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "toolu_id-13",
+              "id": "toolu_id-15",
               "name": "bash",
               "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
             }
@@ -723,7 +836,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-14",
+                "responseId": "msg_id-16",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -733,7 +846,7 @@
               ]
             }
           },
-          "id": "id-15"
+          "id": "id-17"
         },
         "usage": {
           "inputTokens": 0,
@@ -754,7 +867,7 @@
             "type": "tool-call-chunks",
             "time0": "<ms>",
             "index": 0,
-            "id": "toolu_id-13",
+            "id": "toolu_id-15",
             "name": "bash",
             "args": ["{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"]
           },
@@ -766,7 +879,7 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "toolu_id-13",
+                "id": "toolu_id-15",
                 "name": "bash",
                 "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
               }
@@ -799,7 +912,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-14",
+                  "responseId": "msg_id-16",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -816,19 +929,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 30,
+      "seq": 31,
       "time": "<ms>",
       "data": {
         "turn": 2,
         "step": 1,
-        "callId": "toolu_id-13",
+        "callId": "toolu_id-15",
         "name": "bash",
         "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 31,
+      "seq": 32,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -837,9 +950,9 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "toolu_id-13"
+            "callId": "toolu_id-15"
           },
-          "toolCallId": "toolu_id-13",
+          "toolCallId": "toolu_id-15",
           "content": [
             {
               "type": "text",
@@ -847,15 +960,15 @@
             }
           ],
           "isError": false,
-          "id": "id-16"
+          "id": "id-18"
         }
       },
-      "sourceEventSeqs": [30],
+      "sourceEventSeqs": [31],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 32,
+      "seq": 33,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -864,7 +977,7 @@
     },
     {
       "type": "step/start",
-      "seq": 33,
+      "seq": 34,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -873,7 +986,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 34,
+      "seq": 35,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -883,7 +996,7 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "toolu_id-17",
+              "id": "toolu_id-19",
               "name": "bash",
               "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
             }
@@ -899,7 +1012,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-18",
+                "responseId": "msg_id-20",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -909,7 +1022,7 @@
               ]
             }
           },
-          "id": "id-19"
+          "id": "id-21"
         },
         "usage": {
           "inputTokens": 0,
@@ -930,7 +1043,7 @@
             "type": "tool-call-chunks",
             "time0": "<ms>",
             "index": 0,
-            "id": "toolu_id-17",
+            "id": "toolu_id-19",
             "name": "bash",
             "args": ["{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"]
           },
@@ -942,7 +1055,7 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "toolu_id-17",
+                "id": "toolu_id-19",
                 "name": "bash",
                 "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
               }
@@ -975,7 +1088,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-18",
+                  "responseId": "msg_id-20",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -992,19 +1105,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 35,
+      "seq": 36,
       "time": "<ms>",
       "data": {
         "turn": 2,
         "step": 2,
-        "callId": "toolu_id-17",
+        "callId": "toolu_id-19",
         "name": "bash",
         "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 36,
+      "seq": 37,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1013,9 +1126,9 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "toolu_id-17"
+            "callId": "toolu_id-19"
           },
-          "toolCallId": "toolu_id-17",
+          "toolCallId": "toolu_id-19",
           "content": [
             {
               "type": "text",
@@ -1023,15 +1136,15 @@
             }
           ],
           "isError": false,
-          "id": "id-20"
+          "id": "id-22"
         }
       },
-      "sourceEventSeqs": [35],
+      "sourceEventSeqs": [36],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 37,
+      "seq": 38,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1040,7 +1153,7 @@
     },
     {
       "type": "step/start",
-      "seq": 38,
+      "seq": 39,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1049,7 +1162,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 39,
+      "seq": 40,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1073,7 +1186,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-21",
+                "responseId": "msg_id-23",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -1083,7 +1196,7 @@
               ]
             }
           },
-          "id": "id-22"
+          "id": "id-24"
         },
         "usage": {
           "inputTokens": 0,
@@ -1145,7 +1258,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-21",
+                  "responseId": "msg_id-23",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -1162,7 +1275,7 @@
     },
     {
       "type": "step/end",
-      "seq": 40,
+      "seq": 41,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1171,7 +1284,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 41,
+      "seq": 42,
       "time": "<ms>",
       "data": {
         "turn": 2,
@@ -1182,7 +1295,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 42,
+      "seq": 43,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1199,14 +1312,14 @@
               "kind": "user"
             },
             "role": "user",
-            "id": "id-23"
+            "id": "id-25"
           }
         ]
       }
     },
     {
       "type": "turn/start",
-      "seq": 43,
+      "seq": 44,
       "time": "<ms>",
       "data": {
         "turn": 3
@@ -1214,7 +1327,7 @@
     },
     {
       "type": "agent/inbox/spliced",
-      "seq": 44,
+      "seq": 45,
       "time": "<ms>",
       "data": {
         "target": "next-turn",
@@ -1225,7 +1338,7 @@
     },
     {
       "type": "step/start",
-      "seq": 45,
+      "seq": 46,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1234,7 +1347,7 @@
     },
     {
       "type": "user/message",
-      "seq": 46,
+      "seq": 47,
       "time": "<ms>",
       "data": {
         "content": [
@@ -1247,13 +1360,13 @@
           "kind": "user"
         },
         "role": "user",
-        "id": "id-23"
+        "id": "id-25"
       },
       "surfaceOp": "append"
     },
     {
       "type": "assistant/message",
-      "seq": 47,
+      "seq": 48,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1263,7 +1376,7 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "toolu_id-24",
+              "id": "toolu_id-26",
               "name": "bash",
               "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
             }
@@ -1279,7 +1392,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-25",
+                "responseId": "msg_id-27",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -1289,7 +1402,7 @@
               ]
             }
           },
-          "id": "id-26"
+          "id": "id-28"
         },
         "usage": {
           "inputTokens": 0,
@@ -1310,7 +1423,7 @@
             "type": "tool-call-chunks",
             "time0": "<ms>",
             "index": 0,
-            "id": "toolu_id-24",
+            "id": "toolu_id-26",
             "name": "bash",
             "args": ["{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"]
           },
@@ -1322,7 +1435,7 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "toolu_id-24",
+                "id": "toolu_id-26",
                 "name": "bash",
                 "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
               }
@@ -1355,7 +1468,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-25",
+                  "responseId": "msg_id-27",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -1372,19 +1485,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 48,
+      "seq": 49,
       "time": "<ms>",
       "data": {
         "turn": 3,
         "step": 1,
-        "callId": "toolu_id-24",
+        "callId": "toolu_id-26",
         "name": "bash",
         "arguments": "{\"command\":\"echo perm-session-first\",\"description\":\"First echo\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 49,
+      "seq": 50,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1393,9 +1506,9 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "toolu_id-24"
+            "callId": "toolu_id-26"
           },
-          "toolCallId": "toolu_id-24",
+          "toolCallId": "toolu_id-26",
           "content": [
             {
               "type": "text",
@@ -1403,7 +1516,7 @@
             }
           ],
           "isError": true,
-          "id": "id-27"
+          "id": "id-29"
         },
         "error": {
           "name": "PermissionDenial",
@@ -1411,12 +1524,12 @@
           "reason": "user-denied"
         }
       },
-      "sourceEventSeqs": [48],
+      "sourceEventSeqs": [49],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 50,
+      "seq": 51,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1425,7 +1538,7 @@
     },
     {
       "type": "step/start",
-      "seq": 51,
+      "seq": 52,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1434,7 +1547,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 52,
+      "seq": 53,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1444,7 +1557,7 @@
           "content": [
             {
               "type": "tool-call",
-              "id": "toolu_id-28",
+              "id": "toolu_id-30",
               "name": "bash",
               "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
             }
@@ -1460,7 +1573,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-29",
+                "responseId": "msg_id-31",
                 "stopReason": "toolUse"
               },
               "blocks": [
@@ -1470,7 +1583,7 @@
               ]
             }
           },
-          "id": "id-30"
+          "id": "id-32"
         },
         "usage": {
           "inputTokens": 0,
@@ -1491,7 +1604,7 @@
             "type": "tool-call-chunks",
             "time0": "<ms>",
             "index": 0,
-            "id": "toolu_id-28",
+            "id": "toolu_id-30",
             "name": "bash",
             "args": ["{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"]
           },
@@ -1503,7 +1616,7 @@
               "index": 0,
               "block": {
                 "type": "tool-call",
-                "id": "toolu_id-28",
+                "id": "toolu_id-30",
                 "name": "bash",
                 "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
               }
@@ -1536,7 +1649,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-29",
+                  "responseId": "msg_id-31",
                   "stopReason": "toolUse"
                 },
                 "blocks": [
@@ -1553,19 +1666,19 @@
     },
     {
       "type": "tool/call",
-      "seq": 53,
+      "seq": 54,
       "time": "<ms>",
       "data": {
         "turn": 3,
         "step": 2,
-        "callId": "toolu_id-28",
+        "callId": "toolu_id-30",
         "name": "bash",
         "arguments": "{\"command\":\"echo perm-session-second\",\"description\":\"Second echo\"}"
       }
     },
     {
       "type": "tool/result",
-      "seq": 54,
+      "seq": 55,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1574,9 +1687,9 @@
           "role": "tool",
           "source": {
             "kind": "tool",
-            "callId": "toolu_id-28"
+            "callId": "toolu_id-30"
           },
-          "toolCallId": "toolu_id-28",
+          "toolCallId": "toolu_id-30",
           "content": [
             {
               "type": "text",
@@ -1584,7 +1697,7 @@
             }
           ],
           "isError": true,
-          "id": "id-31"
+          "id": "id-33"
         },
         "error": {
           "name": "PermissionDenial",
@@ -1592,12 +1705,12 @@
           "reason": "user-denied"
         }
       },
-      "sourceEventSeqs": [53],
+      "sourceEventSeqs": [54],
       "surfaceOp": "append"
     },
     {
       "type": "step/end",
-      "seq": 55,
+      "seq": 56,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1606,7 +1719,7 @@
     },
     {
       "type": "step/start",
-      "seq": 56,
+      "seq": 57,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1615,7 +1728,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 57,
+      "seq": 58,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1639,7 +1752,7 @@
                 "api": "anthropic-messages",
                 "provider": "aiclient-gateway",
                 "model": "fake-1",
-                "responseId": "msg_id-32",
+                "responseId": "msg_id-34",
                 "stopReason": "stop"
               },
               "blocks": [
@@ -1649,7 +1762,7 @@
               ]
             }
           },
-          "id": "id-33"
+          "id": "id-35"
         },
         "usage": {
           "inputTokens": 0,
@@ -1711,7 +1824,7 @@
                   "api": "anthropic-messages",
                   "provider": "aiclient-gateway",
                   "model": "fake-1",
-                  "responseId": "msg_id-32",
+                  "responseId": "msg_id-34",
                   "stopReason": "stop"
                 },
                 "blocks": [
@@ -1728,7 +1841,7 @@
     },
     {
       "type": "step/end",
-      "seq": 58,
+      "seq": 59,
       "time": "<ms>",
       "data": {
         "turn": 3,
@@ -1737,7 +1850,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 59,
+      "seq": 60,
       "time": "<ms>",
       "data": {
         "turn": 3,

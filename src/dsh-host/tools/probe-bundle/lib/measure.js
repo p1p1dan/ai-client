@@ -29,6 +29,14 @@
  *                               it is on disk and closed
  *   observe-stat { sessionId }  P1-4a: time one `observeSession` (no projection
  *                               state) and answer its size, not its events
+ *   flush { sessionId }         P1-4e: the live session's durability checkpoint
+ *                               through DSH's own entry point (`sessions.flush`,
+ *                               the one the bridge uses), so a driver that is
+ *                               about to SIGKILL the host knows the log holds
+ *                               everything the channel already carried. DSH
+ *                               batches log writes (a 200 ms window) and does not
+ *                               flush at turn boundaries; `participated: false`
+ *                               means no durability listener ran
  *
  * Stream latency: the P0-6 fake gateway stamps every text delta with its send
  * time (`‹t<µs of CLOCK_MONOTONIC>›`); this row reads the stamp at the same
@@ -308,6 +316,15 @@ export function apply(ctx) {
         await handle.dispose();
       }
       return { ms: Math.round(performance.now() - started) };
+    },
+    async flush(message) {
+      const sessions = ctx.get('sessions');
+      if (sessions === undefined) throw new Error('no sessions service');
+      const session = sessions.get(message.sessionId);
+      if (session === undefined) throw new Error(`no live session ${message.sessionId}`);
+      const started = performance.now();
+      const participated = await sessions.flush(session);
+      return { participated, ms: Math.round(performance.now() - started) };
     },
     async 'observe-stat'(message) {
       const query = ctx.get('sessionQuery');
