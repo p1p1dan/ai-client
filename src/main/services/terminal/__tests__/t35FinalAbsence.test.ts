@@ -68,12 +68,19 @@ describe('T35 final Pi-only absence gate', () => {
     }
   });
 
-  it('generic shell sessions reject the retired agent PTY route', () => {
+  it('generic shell sessions have no agent PTY route left', () => {
+    // dsh-rebase P1-11 (decision 128): `SessionKind` is `'terminal'` alone, and
+    // Main stamps it on every create instead of rejecting `'agent'` — the IPC
+    // payload is untyped, and the remote helper still branches on the value.
     const manager = read('src/main/services/session/SessionManager.ts');
-    expect(manager).toContain("if (options.kind === 'agent')");
-    expect(manager).toContain('Agent PTYs are not supported');
+    expect(manager).toContain(
+      "const options: SessionCreateOptions = { ...requested, kind: 'terminal' };"
+    );
+    expect(manager).not.toContain("kind === 'agent'");
+    expect(manager).not.toContain('Agent PTYs are not supported');
     expect(manager).not.toContain('withManagedClaudeEnv');
     expect(manager).not.toContain('withManagedPiEnv');
+    expect(read('src/shared/types/session.ts')).toContain("export type SessionKind = 'terminal';");
   });
 
   it('removes legacy permission runtime contracts and renderer projections', () => {

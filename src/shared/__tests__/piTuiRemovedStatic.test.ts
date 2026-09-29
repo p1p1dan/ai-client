@@ -15,11 +15,12 @@ import { stripComments } from '../../renderer/components/chat/__tests__/stripCom
  * whose extensions only the TUI loaded. Nothing in the product launches the pi
  * CLI any more.
  *
- * What stays, for the right-column shell terminal (decision 126): the generic
- * PTY stack (`PtyManager`, `SessionManager`, `session:*` IPC), `useXterm`,
- * `ShellTerminal`, the terminal theme settings and the worktree init script,
- * which never depended on the TUI. The last block below pins that they are
- * still here.
+ * What stays, and what the right-column shell terminal (decisions 126, 128)
+ * is built from: the generic PTY stack (`PtyManager`, `SessionManager`,
+ * `session:*` IPC), `useXterm`, `ShellTerminal`, the terminal theme settings
+ * and the worktree init script, which never depended on the TUI. The last
+ * block below pins that they are still here, and that the column terminal
+ * runs on them rather than on anything the TUI left behind.
  *
  * Code only: comments are blanked first, so the prose that explains a removal
  * (like this one) cannot fail the scan, and prose alone cannot satisfy it.
@@ -141,7 +142,7 @@ describe('P1-11 · the product has no pi TUI', () => {
     expect(filesContaining('wireVaultAuthJsonResync')).toEqual([]);
   });
 
-  it('keeps the generic terminal stack the right-column shell will reuse', () => {
+  it('keeps the generic terminal stack, which the right-column shell runs on', () => {
     for (const kept of [
       'src/main/services/terminal/PtyManager.ts',
       'src/main/services/session/SessionManager.ts',
@@ -156,8 +157,25 @@ describe('P1-11 · the product has no pi TUI', () => {
     const xterm = CODE.get('src/renderer/hooks/useXterm.ts') ?? '';
     expect(xterm).toContain('window.electronAPI.session.create(');
     expect(xterm).toContain('window.electronAPI.session.write(');
-    // The worktree init script runs in the shell terminal surface, not a TUI.
+    // The worktree init script runs in the shell terminal surface, not a TUI
+    // (decision 128 item 17 keeps it there).
     const worktree = CODE.get('src/renderer/hooks/useWorktree.ts') ?? '';
     expect(worktree).toContain('openInitializationTerminal()');
+  });
+
+  it('opens the session bar terminal as a plain shell in the right column (decision 128)', () => {
+    const column =
+      CODE.get('src/renderer/components/workspace-shell/center/TerminalColumn.tsx') ?? '';
+    expect(column).toContain('<ShellTerminal');
+    expect(column).not.toMatch(/command=|kind=/);
+    const shell = CODE.get('src/renderer/components/workspace-shell/WorkspaceShell.tsx') ?? '';
+    expect(shell).toContain('<TerminalColumn');
+    const bar = CODE.get('src/renderer/components/workspace-shell/SessionBar.tsx') ?? '';
+    expect(bar).toContain('<TerminalButton state={terminalState} onToggle={onToggleTerminal} />');
+    // No PTY kind but a shell is left: the agent value went with the TUI.
+    expect(CODE.get('src/shared/types/session.ts')).toContain(
+      "export type SessionKind = 'terminal';"
+    );
+    expect(CODE.get('src/renderer/hooks/useXterm.ts')).not.toContain('kind?:');
   });
 });

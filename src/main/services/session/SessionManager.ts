@@ -65,13 +65,14 @@ export class SessionManager {
 
   async create(
     target: BrowserWindow | WebContents | number,
-    options: SessionCreateOptions = {}
+    requested: SessionCreateOptions = {}
   ): Promise<SessionOpenResult> {
-    if (options.kind === 'agent') {
-      // The embedded pi TUI was the last agent PTY; it was removed in
-      // dsh-rebase P1-11 (decision 127). Only shell terminals run here.
-      throw new Error('Agent PTYs are not supported');
-    }
+    // Only shells run here. The embedded pi TUI, the last agent PTY, went with
+    // dsh-rebase P1-11 (decision 127), and `SessionKind` has no other value
+    // since (decision 128). The IPC payload is untyped at runtime, so the kind
+    // is stamped rather than trusted: an `'agent'` smuggled through would make
+    // the remote helper run `initialCommand` without its shell wrapper.
+    const options: SessionCreateOptions = { ...requested, kind: 'terminal' };
     const windowId = getWindowId(target);
     if (options.cwd && isRemoteVirtualPath(options.cwd)) {
       return this.createRemote(windowId, options);
@@ -358,7 +359,7 @@ export class SessionManager {
   }
 
   private createLocal(windowId: number, options: SessionCreateOptions): SessionOpenResult {
-    const kind = options.kind ?? 'terminal';
+    const kind = 'terminal';
     const cwd = options.cwd || process.env.HOME || process.env.USERPROFILE || '/';
     const sessionId = this.localPtyManager.allocateId();
     const record: ManagedSessionRecord = {

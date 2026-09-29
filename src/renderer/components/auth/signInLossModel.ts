@@ -83,7 +83,10 @@ export interface SignInLossInput {
   parkedTabsByWorkspace: Readonly<Record<string, { tabs: readonly { isDirty: boolean }[] }>>;
   /** `useEditorStore.currentWorktreePath` — the key to skip in the map above. */
   currentWorkspacePath: string | null;
-  /** `useTerminalStore.sessions` — every shell tab across every workspace. */
+  /**
+   * `useTerminalStore.sessions` — every shell tab across every workspace — plus
+   * the right column's shells (`useColumnTerminalStore`, one per folder).
+   */
   shellTerminals: number;
   /** `useChatSessionsStore.sessions` filtered by `isTurnInFlight(status)`. */
   runningTurns: number;

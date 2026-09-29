@@ -1,4 +1,4 @@
-import type { SessionKind, SessionRuntimeState } from '@shared/types';
+import type { SessionRuntimeState } from '@shared/types';
 import { isRemoteVirtualPath } from '@shared/utils/remotePath';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon } from '@xterm/addon-search';
@@ -35,7 +35,6 @@ export interface UseXtermOptions {
   env?: Record<string, string>;
   isActive?: boolean;
   initialCommand?: string;
-  kind?: SessionKind;
   persistOnDisconnect?: boolean;
   onExit?: () => void;
   onData?: (data: string) => void;
@@ -123,7 +122,6 @@ export function useXterm({
   env,
   isActive = true,
   initialCommand,
-  kind = 'terminal',
   persistOnDisconnect = false,
   onExit,
   onData,
@@ -649,14 +647,14 @@ export function useXterm({
 
       const createOptions = {
         cwd: cwd || window.electronAPI.env.HOME,
-        // If command is provided (e.g., for agent), use shell/args directly
+        // If command is provided, use shell/args directly
         // Otherwise, use shellConfig from settings
         ...(command ? { shell: command.shell, args: command.args } : { shellConfig }),
         cols: terminal.cols,
         rows: terminal.rows,
         env,
         initialCommand: initialCommandRef.current,
-        kind,
+        kind: 'terminal',
         persistOnDisconnect,
       } as const;
 
@@ -745,7 +743,6 @@ export function useXterm({
     shellConfig,
     commandKey,
     terminalRenderer,
-    kind,
     persistOnDisconnect,
     write,
   ]);

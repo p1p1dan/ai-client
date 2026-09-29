@@ -3711,3 +3711,12 @@ Object.assign(zhTranslations, {
   'This chat was continued in version 1.0.x after it moved to the current engine. Continuing it here moves that newer copy over as a chat of its own.':
     '这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。在这里继续它，会把那份较新的内容迁成一个单独的对话。',
 });
+
+// dsh-rebase P1-11 (decisions 109, 126, 128): the session bar's terminal button
+// and the shell terminal it opens in the right column.
+Object.assign(zhTranslations, {
+  'Close terminal': '关闭终端',
+  'Session directory': '会话目录',
+  'Terminal (still running)': '终端（仍在运行）',
+  'This conversation has no folder to open a terminal in': '会话未绑定目录，无法打开终端',
+});

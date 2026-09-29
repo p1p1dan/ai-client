@@ -1,8 +1,8 @@
 /**
- * D47 S5 §3 — the agent-session-only spawn gate, shared by
- * `main/ipc/chat.ts` (`CHAT_CREATE_SESSION`/`CHAT_RESUME_SESSION`) and
- * `SessionManager.create`'s `kind === 'agent'` arm — "换服务两处同变" applies
- * here too, one function both call sites share.
+ * D47 S5 §3 — the agent-session-only spawn gate, used by `main/ipc/chat.ts`
+ * (`CHAT_CREATE_SESSION`/`CHAT_RESUME_SESSION`). Its other caller, the
+ * `kind === 'agent'` arm of `SessionManager.create`, went with the agent PTY
+ * (dsh-rebase P1-11, decisions 127, 128).
  *
  * Throws a plain `Error` whose `.message` is `${code}: ${message}`:
  * Electron's `ipcRenderer.invoke` only reliably preserves a thrown Error's

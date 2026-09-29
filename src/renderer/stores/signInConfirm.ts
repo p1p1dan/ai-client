@@ -30,6 +30,7 @@ import { deriveSignInLosses, type SignInLossSnapshot } from '@/components/auth/s
 // reading it from a store cannot start an import cycle.
 import { isTurnInFlight } from '@/components/chat/turnHead';
 import { useChatSessionsStore } from './chatSessions';
+import { countColumnTerminals } from './columnTerminal';
 import { useEditorStore } from './editor';
 import { useTerminalStore } from './terminal';
 
@@ -100,7 +101,10 @@ export function readSignInLosses(): SignInLossSnapshot {
     tabs: editor.tabs,
     parkedTabsByWorkspace: editor.worktreeStates,
     currentWorkspacePath: editor.currentWorktreePath,
-    shellTerminals: useTerminalStore.getState().sessions.length,
+    // The dock panel's shells plus the right column's (dsh-rebase P1-11,
+    // decision 128). Two stores because `TerminalPanel` replaces its list
+    // wholesale on every sync; both are killed by the same unmount.
+    shellTerminals: useTerminalStore.getState().sessions.length + countColumnTerminals(),
     // Every session, not just the visible one: a background chat's events are
     // dropped by exactly the same unmount, and the user has no other way to
     // find out.

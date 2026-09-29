@@ -1,4 +1,4 @@
-import { ArrowLeftRight, GitBranch, Layers, Plus, Users } from 'lucide-react';
+import { ArrowLeftRight, GitBranch, Layers, Plus, Terminal, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
@@ -16,11 +16,36 @@ import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { type SubwindowKey, useSessionSubwindowsStore } from '@/stores/sessionSubwindows';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
+import type { TerminalButtonState } from './rightColumnModel';
 
 interface SessionBarProps {
   reviewOpen?: boolean;
   reviewCount?: number;
   onToggleReview?: () => void;
+  /** dsh-rebase P1-11: the right-column terminal's toggle; absent = no button. */
+  terminalState?: TerminalButtonState;
+  onToggleTerminal?: () => void;
+}
+
+/**
+ * dsh-rebase P1-11 (decision 128): when a button drops to its icon. On a
+ * narrow window (below `xl`, the rule the sub-window buttons already had), and
+ * also whenever the bar itself is narrow — the bar is as wide as the chat
+ * column, and a file or the terminal in the right column can take half of a
+ * wide window. A viewport breakpoint alone let the labels run past the chat
+ * column's edge and over the right column's tab bar (the prototype's second
+ * round, scene G). The bar is the `@container` these queries read.
+ */
+const BAR_LABEL_CLASS = 'max-xl:hidden @max-2xl:hidden';
+
+/** The toggles' shared look: `h-6`, pressed = `bg-selection`. */
+function barToggleClass(active: boolean): string {
+  return cn(
+    'flex h-6 items-center gap-1 rounded-sm px-2 text-meta transition-colors',
+    active
+      ? 'bg-selection text-foreground'
+      : 'text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:bg-hover'
+  );
 }
 
 /**
@@ -37,13 +62,20 @@ interface SessionBarProps {
  * context — minus the controls D08 deleted for good (the panel toggle and the
  * two/three-column switch went with `shellColumnMode`). The GUI / TUI switch
  * went with the pi TUI in dsh-rebase P1-11 (decision 127); the right-column
- * shell terminal's button takes its place next (decisions 109, 126).
+ * shell terminal's button took its place (decisions 109, 126, 128), first in
+ * the group with the two sub-window toggles.
  *
  * The close ✕ does NOT come back here. "End this conversation" now lives in the
  * sidebar row's context menu, next to Rename and Archive, so the repo's three
  * closes sit together and can be told apart in one place.
  */
-export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: SessionBarProps) {
+export function SessionBar({
+  reviewOpen,
+  reviewCount = 0,
+  onToggleReview,
+  terminalState,
+  onToggleTerminal,
+}: SessionBarProps) {
   const { t } = useI18n();
 
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -119,7 +151,9 @@ export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: Sess
   );
 
   return (
-    <div className="flex h-9 shrink-0 items-center gap-2 border-b bg-card/40 px-2">
+    // `overflow-hidden`: the bar ends at the chat column's edge whatever its
+    // content does; the labels folding away (`BAR_LABEL_CLASS`) is the real fix.
+    <div className="@container flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2">
       {activeWorkspace?.path ? (
         <Tooltip>
           <TooltipTrigger delay={400} render={<div className="min-w-0 flex-1" />}>
@@ -148,7 +182,7 @@ export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: Sess
           title={t('Session branches')}
         >
           <GitBranch className="size-3.5" />
-          {t('Session branches')}
+          <span className={BAR_LABEL_CLASS}>{t('Session branches')}</span>
         </Button>
       )}
       {onToggleReview && activeSessionId && (
@@ -161,7 +195,7 @@ export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: Sess
           title={t('Session review')}
         >
           <ArrowLeftRight className="size-3.5" />
-          {t('Session review')}
+          <span className={BAR_LABEL_CLASS}>{t('Session review')}</span>
           {reviewCount > 0 && <span>{reviewCount}</span>}
         </Button>
       )}
@@ -175,10 +209,17 @@ export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: Sess
         <Plus className="size-3.5" />
       </button>
 
-      {/* dsh-rebase P1-7b (decisions 090, 109): the background jobs and
-          subagents windows, opened and hidden here, next to where the
-          terminal button goes (P1-11). The count is what runs now. */}
-      {activeSessionId && <BackgroundWorkButtons sessionId={activeSessionId} />}
+      {/* dsh-rebase P1-11 (decisions 109, 126, 128): the terminal first, then
+          P1-7b's background jobs and subagents windows (decisions 090, 109),
+          behind one divider as in the prototype's bar. */}
+      {activeSessionId && (
+        <div className="flex shrink-0 items-center gap-0.5 border-l pl-2">
+          {terminalState && onToggleTerminal && (
+            <TerminalButton state={terminalState} onToggle={onToggleTerminal} />
+          )}
+          <BackgroundWorkButtons sessionId={activeSessionId} />
+        </div>
+      )}
       {/* Keyed by session: a dialog left open across a session switch must not
           show the previous conversation's tree. Mounted next to its trigger
           rather than in the timeline, so the two cannot drift apart. */}
@@ -198,10 +239,54 @@ export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: Sess
 const NO_HIDDEN_JOBS: readonly string[] = [];
 
 /**
+ * dsh-rebase P1-11 (decision 128): opens and hides the shell of this
+ * conversation's folder in the right column. Disabled, with the reason, when
+ * the conversation has no folder (decision 126 rule 2). A dot marks a shell
+ * that is running out of sight, so hiding the terminal never hides a process.
+ */
+function TerminalButton({ state, onToggle }: { state: TerminalButtonState; onToggle: () => void }) {
+  const { t } = useI18n();
+  const unavailable = state === 'unavailable';
+  const open = state === 'open';
+  const title = unavailable
+    ? t('This conversation has no folder to open a terminal in')
+    : state === 'hidden'
+      ? t('Terminal (still running)')
+      : t('Terminal');
+  return (
+    // A disabled button gets no pointer events, so the wrapper carries the
+    // reason on hover (the arrangement `FailureContinueButton` uses).
+    <span className="flex shrink-0" title={unavailable ? title : undefined}>
+      <button
+        type="button"
+        className={
+          unavailable
+            ? 'flex h-6 cursor-not-allowed items-center gap-1 rounded-sm px-2 text-meta text-muted-foreground opacity-64'
+            : barToggleClass(open)
+        }
+        onClick={onToggle}
+        disabled={unavailable}
+        aria-pressed={open}
+        aria-label={title}
+        title={title}
+        data-session-terminal={state}
+      >
+        <Terminal className="size-3.5" />
+        <span className={BAR_LABEL_CLASS}>{t('Terminal')}</span>
+        {state === 'hidden' && (
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-running" />
+        )}
+      </button>
+    </span>
+  );
+}
+
+/**
  * dsh-rebase P1-7b: 「后台任务 N」 and 「子代理 N」 (prototype `sessionbar`):
  * a toggle each, pressed while its window is open; the count, in the brand
  * colour as the prototype draws it, is what runs now and is absent at zero.
- * On a narrow window only the icons stay (the prototype's compact bar).
+ * On a narrow window or a narrow bar only the icons stay (the prototype's
+ * compact bar; `BAR_LABEL_CLASS`).
  */
 function BackgroundWorkButtons({ sessionId }: { sessionId: string }) {
   const { t } = useI18n();
@@ -218,7 +303,7 @@ function BackgroundWorkButtons({ sessionId }: { sessionId: string }) {
   }, [allLanes, panels, sessionId]);
   return (
     <div
-      className="flex shrink-0 items-center gap-0.5 border-l pl-2"
+      className="flex shrink-0 items-center gap-0.5"
       role="group"
       aria-label={t('Background work')}
     >
@@ -260,19 +345,14 @@ function SubwindowButton({
   return (
     <button
       type="button"
-      className={cn(
-        'flex h-6 items-center gap-1 rounded-sm px-2 text-meta transition-colors',
-        active
-          ? 'bg-selection text-foreground'
-          : 'text-muted-foreground hover:bg-hover hover:text-foreground focus-visible:bg-hover'
-      )}
+      className={barToggleClass(active)}
       onClick={onClick}
       aria-pressed={active}
       title={label}
       data-subwindow={windowKey}
     >
       <Icon className="size-3.5" />
-      <span className="max-xl:hidden">{label}</span>
+      <span className={BAR_LABEL_CLASS}>{label}</span>
       {count > 0 && (
         <Badge size="sm" className="rounded-full tabular-nums">
           {count}

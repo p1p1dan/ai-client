@@ -18,12 +18,15 @@ import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { columnTerminalKey, useColumnTerminalStore } from '@/stores/columnTerminal';
 import { isDiffTabActive } from '@/stores/diffTabTarget';
 import { useEditorStore } from '@/stores/editor';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { useSettingsStore } from '@/stores/settings';
 import { useShellLayoutStore } from '@/stores/shellLayout';
+import { useWorktreeActivityStore } from '@/stores/worktreeActivity';
 import { EditorColumn } from './center/EditorColumn';
+import { TerminalColumn } from './center/TerminalColumn';
 import {
   chatWidthToEditorRatio,
   deriveEditorOpen,
@@ -33,10 +36,12 @@ import {
   type ShellAllocation,
 } from './centerLayoutModel';
 import { LeftDock } from './LeftDock';
+import { deriveTerminalButtonState, resolveRightColumnOccupant } from './rightColumnModel';
 import { SessionBar } from './SessionBar';
 import { SessionReviewPanel } from './SessionReviewPanel';
 import { ShellResizeHandle } from './ShellResizeHandle';
 import { deriveSessionReview, type SessionReviewEntry } from './sessionReview';
+import { resolveTerminalWorkspace } from './surfaces/terminalWorkspace';
 import { useCapacityReclaimNotice } from './useCapacityReclaimNotice';
 import { useEditorWorktreeSync } from './useEditorWorktreeSync';
 import { useShellShortcuts } from './useShellShortcuts';
@@ -97,7 +102,8 @@ interface WorkspaceShellProps {
  *
  *   left   — `LeftDock`: icon rail + the surface panel (chat/git/files/context/run)
  *   center — session tabs + `ChatWorkspace`
- *   right  — `EditorColumn`, and nothing else
+ *   right  — `EditorColumn`; the session review and (dsh-rebase P1-11) the
+ *            folder's shell terminal take the same place, one at a time
  *
  * The allocator is UNCHANGED. It always budgeted sidebar → chat → editor →
  * panel; D08 simply retires the panel term (the surfaces moved into the
@@ -157,6 +163,40 @@ export function WorkspaceShell({
   const [reviewRequested, setReviewRequested] = useState(false);
   const reviewOpen = showSessionReview && reviewRequested && activeSessionId !== null;
   const closeReview = useCallback(() => setReviewRequested(false), []);
+
+  /**
+   * dsh-rebase P1-11 (decisions 109, 126, 128): the conversation's folder, and
+   * its shell in the right column. The folder is the same chain the dock's
+   * terminal surface uses (`resolveTerminalWorkspace`: session → workspace →
+   * non-empty path); an unbound chat's scratch directory is not one, and
+   * nothing falls back to the home directory (decision 126 rule 2).
+   */
+  const terminalCwd = useChatSessionsStore((state) => {
+    const target = resolveTerminalWorkspace({
+      activeSessionId: state.activeSessionId,
+      sessions: state.sessions,
+      workspaces: state.workspaces,
+    });
+    return target.status === 'ready' ? target.path : null;
+  });
+  const terminalKey = terminalCwd ? columnTerminalKey(terminalCwd) : null;
+  const terminalAlive = useColumnTerminalStore((state) =>
+    terminalKey ? state.terminals[terminalKey] !== undefined : false
+  );
+  const terminalFront = useColumnTerminalStore((state) =>
+    terminalKey ? state.terminals[terminalKey]?.front === true : false
+  );
+  const hasColumnTerminals = useColumnTerminalStore(
+    (state) => Object.keys(state.terminals).length > 0
+  );
+  const hideTerminal = useCallback(() => {
+    if (terminalKey) useColumnTerminalStore.getState().hide(terminalKey);
+  }, [terminalKey]);
+  // The review's Files button means the files, not whatever sits under the review.
+  const showFiles = useCallback(() => {
+    closeReview();
+    hideTerminal();
+  }, [closeReview, hideTerminal]);
   // The expand overlay is shared with the editor; dismissing an expanded
   // review must not hand a full-bleed overlay to the files underneath.
   const dismissReview = useCallback(() => {
@@ -168,14 +208,34 @@ export function WorkspaceShell({
   const editorWorktreePath = useEditorStore((state) => state.currentWorktreePath);
   const previousEditor = useRef({ worktreePath: editorWorktreePath, path: activeEditorPath });
   useEffect(() => {
+    // Opening a file puts the files on top: the review closes, and the
+    // terminal steps behind them with its shell still running.
     if (
       fileIntentPending ||
       (previousEditor.current.worktreePath === editorWorktreePath &&
         previousEditor.current.path !== activeEditorPath)
-    )
+    ) {
       closeReview();
+      hideTerminal();
+    }
     previousEditor.current = { worktreePath: editorWorktreePath, path: activeEditorPath };
-  }, [fileIntentPending, activeEditorPath, editorWorktreePath, closeReview]);
+  }, [fileIntentPending, activeEditorPath, editorWorktreePath, closeReview, hideTerminal]);
+
+  // A workspace being deleted takes its column shells with it, through the
+  // same hook the dock's terminal panel answers (`closeTerminalSessions`).
+  const registerTerminalCloseHandler = useWorktreeActivityStore(
+    (state) => state.registerTerminalCloseHandler
+  );
+  useEffect(
+    () =>
+      registerTerminalCloseHandler((worktreePath) =>
+        useColumnTerminalStore.getState().closeUnder(worktreePath)
+      ),
+    [registerTerminalCloseHandler]
+  );
+  // The shells live in this component's subtree; when it goes, so do they
+  // (the unmount detaches every pty), and the entries must not outlive them.
+  useEffect(() => () => useColumnTerminalStore.getState().reset(), []);
 
   const centerRowRef = useRef<HTMLDivElement>(null);
   const chatColumnRef = useRef<HTMLDivElement>(null);
@@ -230,20 +290,47 @@ export function WorkspaceShell({
   // IS "no surface active". `panelOpen: false` retires the allocator's panel
   // term (see this component's doc note).
   const dockCollapsed = activeSurfaceId === null;
+  /**
+   * dsh-rebase P1-11 (decision 128): one occupant at a time — the review on
+   * top, then the terminal when it is in front, then the files. Whatever is
+   * under the one showing stays as it was, so closing it restores the rest.
+   */
+  const rightOccupant = resolveRightColumnOccupant({ reviewOpen, terminalFront, editorOpen });
+  const terminalVisible = rightOccupant === 'terminal';
+  const editorCovered = rightOccupant === 'review' || rightOccupant === 'terminal';
+  const terminalState = deriveTerminalButtonState({
+    available: terminalCwd !== null,
+    alive: terminalAlive,
+    visible: terminalVisible,
+  });
+  const toggleTerminal = useCallback(() => {
+    if (!terminalCwd) return;
+    if (terminalVisible) {
+      hideTerminal();
+      return;
+    }
+    useColumnTerminalStore.getState().show(terminalCwd);
+    closeReview();
+    // The expand overlay belongs to the files and the review; the terminal
+    // opens at the column's width.
+    if (expanded) toggleExpanded();
+  }, [terminalCwd, terminalVisible, hideTerminal, closeReview, expanded, toggleExpanded]);
+
   const chrome = resolveShellChrome({
     sidebarUserCollapsed: dockCollapsed,
     panelOpen: false,
     manualChat,
-    diffTabActive: !reviewOpen && diffTabActive,
+    diffTabActive: !editorCovered && diffTabActive,
   });
   const chatVisible = chrome.chatVisible;
   /**
-   * D13 (U26): the editor column is allocated whenever a file or the session
-   * review is open. The chat column gets the whole center row otherwise,
-   * because `editorOpen` is keyed off `tabs.length`. (The pi TUI that shared
-   * the chat column went with dsh-rebase P1-11, decision 127.)
+   * D13 (U26): the editor column is allocated whenever a file, the session
+   * review or (dsh-rebase P1-11) the folder's terminal is open. The chat
+   * column gets the whole center row otherwise, because `editorOpen` is keyed
+   * off `tabs.length`. (The pi TUI that shared the chat column went with
+   * dsh-rebase P1-11, decision 127.)
    */
-  const editorAllocated = editorOpen || reviewOpen;
+  const editorAllocated = editorOpen || reviewOpen || terminalVisible;
 
   const allocationInput = {
     shellWidth,
@@ -257,6 +344,22 @@ export function WorkspaceShell({
     panelWidth: 0,
   };
   const allocation = resolveShellAllocation(allocationInput);
+  /**
+   * Where a running column shell waits while it is not the one showing: the
+   * width the column has, or would have if something opened in it. A hidden
+   * terminal keeps a real box (no FitAddon collapse to two columns), and the
+   * same width as when it was last seen, so coming back does not resize it.
+   * The terminal itself uses the editor's floor (`EDITOR_MIN_WIDTH`), so
+   * switching between the files and the terminal never moves the grip.
+   */
+  const parkedTerminalWidth =
+    allocation.editorWidth > 0
+      ? allocation.editorWidth
+      : resolveShellAllocation({
+          ...allocationInput,
+          editorOpen: true,
+          editorMinWidth: undefined,
+        }).editorWidth;
 
   /**
    * Round-12 (drag performance). Every column's width is published as a CSS
@@ -395,6 +498,8 @@ export function WorkspaceShell({
                 reviewOpen={reviewOpen}
                 reviewCount={reviewEntries.length}
                 onToggleReview={showSessionReview ? toggleReview : undefined}
+                terminalState={terminalState}
+                onToggleTerminal={toggleTerminal}
               />
               <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
               {editorAllocated && chatVisible && (
@@ -453,9 +558,9 @@ export function WorkspaceShell({
               <div
                 className={cn(
                   'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
-                  editorOpen && !reviewOpen && expanded && 'absolute inset-0 z-20 bg-background',
-                  editorOpen && !reviewOpen && !expanded && 'min-w-0 shrink-0',
-                  (!editorOpen || reviewOpen) && 'hidden'
+                  editorOpen && !editorCovered && expanded && 'absolute inset-0 z-20 bg-background',
+                  editorOpen && !editorCovered && !expanded && 'min-w-0 shrink-0',
+                  (!editorOpen || editorCovered) && 'hidden'
                 )}
                 style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}
               >
@@ -475,10 +580,40 @@ export function WorkspaceShell({
                   sessionId={activeSessionId}
                   entries={reviewEntries}
                   onClose={dismissReview}
-                  onShowFiles={closeReview}
+                  onShowFiles={showFiles}
                   filesOpen={editorOpen}
                   expanded={expanded}
                   onToggleExpanded={toggleExpanded}
+                />
+              </div>
+            )}
+            {/*
+              dsh-rebase P1-11 (decisions 109, 126, 128): the folder's shell,
+              the column's third occupant, at the editor's width. Mounted while
+              ANY column shell runs, not only while one shows: unmounting a
+              shell ends it. Out of sight it is lifted out of the row
+              (`absolute`) and made invisible, but keeps a real box —
+              `display: none` would collapse xterm to two columns.
+            */}
+            {hasColumnTerminals && (
+              <div
+                className={cn(
+                  'transition-[width] duration-[250ms] group-data-[resizing]/shell:transition-none',
+                  terminalVisible
+                    ? 'min-w-0 shrink-0'
+                    : 'pointer-events-none invisible absolute inset-y-0 right-0'
+                )}
+                style={{
+                  width: terminalVisible ? 'var(--shell-editor-w)' : `${parkedTerminalWidth}px`,
+                }}
+                inert={!terminalVisible}
+                aria-hidden={terminalVisible ? undefined : true}
+              >
+                <TerminalColumn
+                  currentKey={terminalKey}
+                  visible={terminalVisible}
+                  filesOpen={editorOpen}
+                  onShowFiles={hideTerminal}
                 />
               </div>
             )}

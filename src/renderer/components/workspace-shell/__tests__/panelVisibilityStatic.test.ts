@@ -108,9 +108,16 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // TUI did nothing at all, the same
     // zero-consumer deadlock round-10 ⑥ found. The two invariants this test
     // exists for are unchanged and still asserted below.
+    //
+    // dsh-rebase P1-11 (decision 128): the review is no longer the only thing
+    // that can cover the files — the folder's terminal can too. Covered means
+    // `hidden`, never unmounted: the column still consumes file intents.
     expect(shell).toContain('{(editorOpen || fileIntentPending) && (');
-    expect(shell).toContain("editorOpen && !reviewOpen && !expanded && 'min-w-0 shrink-0'");
-    expect(shell).toContain("(!editorOpen || reviewOpen) && 'hidden'");
+    expect(shell).toContain("editorOpen && !editorCovered && !expanded && 'min-w-0 shrink-0'");
+    expect(shell).toContain("(!editorOpen || editorCovered) && 'hidden'");
+    expect(shell).toContain(
+      "const editorCovered = rightOccupant === 'review' || rightOccupant === 'terminal';"
+    );
     expect(shell).toContain(
       "style={editorOpen && !expanded ? { width: 'var(--shell-editor-w)' } : undefined}"
     );
@@ -122,7 +129,7 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // screenshot). It covers the center row, NOT the shell: the dock has to
     // stay reachable, which is the same boundary `ContextPanel`'s overlay used.
     expect(shell).toContain(
-      "editorOpen && !reviewOpen && expanded && 'absolute inset-0 z-20 bg-background'"
+      "editorOpen && !editorCovered && expanded && 'absolute inset-0 z-20 bg-background'"
     );
     // …and it may not outlive the file that justified it.
     expect(shell).toContain('if (expanded && !editorAllocated) {');

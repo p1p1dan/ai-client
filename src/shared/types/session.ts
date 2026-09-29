@@ -1,4 +1,10 @@
-export type SessionKind = 'terminal' | 'agent';
+/**
+ * Every PTY session is a shell. `'agent'` went with the embedded pi TUI
+ * (dsh-rebase P1-11, decisions 127, 128); Main stamps `'terminal'` on every
+ * create whatever an IPC payload says, so the remote helper's leftover
+ * `'agent'` branch is unreachable.
+ */
+export type SessionKind = 'terminal';
 export type SessionBackendKind = 'local' | 'remote';
 
 export interface SessionCreateOptions {
