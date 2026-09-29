@@ -80,7 +80,7 @@
  *
  * Rewind and fork (decision 027): DSH has no rewind and no tree inside a
  * session, so both cut a seeded child session (`forkSeed.ts`). A rewind
- * repoints the stub at the child (`aiclient-<logical id>.r<n>`) and appends
+ * repoints the stub at the child (`aiclient-<logical id>_r<n>`; `.r<n>` before P1-9c) and appends
  * it to the stub's lineage; the session it leaves is retired and stays in the
  * tree (`lineage.ts`). A fork writes a new stub for the child
  * (`aiclient-<id Main minted>`) and releases it for the slot Main opens next.

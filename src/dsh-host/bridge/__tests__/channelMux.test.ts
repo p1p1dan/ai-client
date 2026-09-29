@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
-import { type DshHostToMainMessage, isDshHostPage } from '../../../shared/types/dshHostProtocol.ts';
+import {
+  DSH_SEED_REQUEST_INVALID,
+  DSH_SEED_UNAVAILABLE,
+  type DshHostToMainMessage,
+  type DshSeedSessionResult,
+  isDshHostPage,
+  isDshHostSeeded,
+} from '../../../shared/types/dshHostProtocol.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
 import {
   type ChannelRuntime,
@@ -402,6 +409,144 @@ describe('DshChannelMux — readPage (P1-4a, decision 030)', () => {
     expect(h.sent).toEqual([]);
     expect(h.log).toHaveBeenCalledTimes(1);
     expect(h.log).toHaveBeenCalledWith('dropped a malformed readPage request');
+  });
+});
+
+describe('DshChannelMux — seedSession (P1-9c, decision 054)', () => {
+  const request = {
+    host: 'seedSession',
+    id: 7,
+    kind: 'pi-file',
+    sourceFile: '/profile/pi-agent/sessions/s1.jsonl',
+    logicalSessionId: 's1',
+    cwd: '/work',
+    expect: { bytes: 10, mtimeMs: 1.5 },
+  } as const;
+  const result: DshSeedSessionResult = {
+    stubFile: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+    dshSessionId: 'aiclient-s1',
+    reused: false,
+    source: { sha256: 'a'.repeat(64), bytes: 10, mtimeMs: 1.5 },
+    converted: 'source',
+    legacyPermissions: null,
+    grants: 0,
+    images: { admitted: 0, refused: 0 },
+    report: {
+      converterVersion: 2,
+      source: { kind: 'pi-session', generation: 'native-v4', entries: {} },
+    },
+  };
+
+  function migrator(seedSession: DshChannelMuxOptions['seedSession']) {
+    const sent: DshHostToMainMessage[] = [];
+    const log = vi.fn();
+    const mux = new DshChannelMux({
+      send: (message) => sent.push(message),
+      createRuntime: () => {
+        throw new Error('a migration opens no channel');
+      },
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      ...(seedSession ? { seedSession } : {}),
+      log,
+    });
+    return { mux, sent, log };
+  }
+
+  it('hands the fields over and answers seeded with its id and what was made', async () => {
+    const seedSession = vi.fn(async () => structuredClone(result));
+    const h = migrator(seedSession);
+    expect(h.mux.receive(request)).toBe(true);
+    await settle();
+    const { host: _host, id: _id, ...fields } = request;
+    expect(seedSession).toHaveBeenCalledWith(fields);
+    expect(h.sent).toEqual([{ host: 'seeded', id: 7, ok: true, result, ms: expect.any(Number) }]);
+    expect(isDshHostSeeded(h.sent[0])).toBe(true);
+    expect(h.mux.status()).toEqual([]);
+  });
+
+  it('answers where it stopped: the failure’s stage, code and retryable, or create / seed_failed', async () => {
+    const seedSession = vi
+      .fn<NonNullable<DshChannelMuxOptions['seedSession']>>()
+      .mockRejectedValueOnce(
+        Object.assign(new Error('busy'), { stage: 'read', code: 'source_busy', retryable: true })
+      )
+      .mockRejectedValueOnce(new Error('no idea'));
+    const h = migrator(seedSession);
+    h.mux.receive({ ...request, id: 1 });
+    h.mux.receive({ ...request, id: 2 });
+    await settle();
+    expect(h.sent).toEqual([
+      {
+        host: 'seeded',
+        id: 1,
+        ok: false,
+        error: { stage: 'read', code: 'source_busy', message: 'busy', retryable: true },
+        ms: expect.any(Number),
+      },
+      {
+        host: 'seeded',
+        id: 2,
+        ok: false,
+        error: { stage: 'create', code: 'seed_failed', message: 'no idea', retryable: false },
+        ms: expect.any(Number),
+      },
+    ]);
+    expect(h.sent.every(isDshHostSeeded)).toBe(true);
+  });
+
+  it('runs one migration at a time, in arrival order, and a ping is not held behind them', async () => {
+    let release!: () => void;
+    const slow = new Promise<void>((done) => {
+      release = done;
+    });
+    const started: number[] = [];
+    const seedSession = vi.fn(async (fields: { logicalSessionId: string }) => {
+      started.push(fields.logicalSessionId === 'slow' ? 1 : 2);
+      if (fields.logicalSessionId === 'slow') await slow;
+      return structuredClone(result);
+    });
+    const h = migrator(seedSession);
+    h.mux.receive({ ...request, id: 1, logicalSessionId: 'slow' });
+    h.mux.receive({ ...request, id: 2 });
+    h.mux.receive({ host: 'ping', id: 3 });
+    await settle();
+    expect(started).toEqual([1]);
+    expect(h.sent.map((message) => (message as { host?: string }).host)).toEqual(['pong']);
+    release();
+    await settle();
+    expect(started).toEqual([1, 2]);
+    expect(h.sent.map((message) => (message as { id?: number }).id)).toEqual([3, 1, 2]);
+  });
+
+  it('answers a request it cannot run, and one whose fields are wrong, instead of dropping it', async () => {
+    const none = migrator(undefined);
+    none.mux.receive(request);
+    await settle();
+    expect(none.sent).toEqual([
+      expect.objectContaining({
+        host: 'seeded',
+        id: 7,
+        ok: false,
+        error: expect.objectContaining({ stage: 'request', code: DSH_SEED_UNAVAILABLE }),
+      }),
+    ]);
+    const seedSession = vi.fn();
+    const h = migrator(seedSession);
+    expect(h.mux.receive({ ...request, kind: 'imported-conversation' })).toBe(true);
+    expect(h.mux.receive({ ...request, id: 8, expect: { bytes: -1, mtimeMs: 0 } })).toBe(true);
+    expect(h.mux.receive({ ...request, id: 0, cwd: '' })).toBe(true);
+    expect(seedSession).not.toHaveBeenCalled();
+    expect(h.sent).toEqual([
+      expect.objectContaining({
+        id: 7,
+        ok: false,
+        error: expect.objectContaining({ stage: 'request', code: DSH_SEED_REQUEST_INVALID }),
+      }),
+      expect.objectContaining({ id: 8, ok: false }),
+    ]);
+    expect(h.sent.every(isDshHostSeeded)).toBe(true);
+    // No usable id: nobody to answer, one diagnostic.
+    expect(h.log).toHaveBeenCalledWith('dropped a malformed seedSession request');
   });
 });
 

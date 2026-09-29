@@ -12,6 +12,7 @@ import {
   seedSurface,
 } from '../index.ts';
 import { BRANCH_SUMMARY_PREFIX, BRANCH_SUMMARY_SUFFIX, bashExecutionToText } from '../llmText.ts';
+import { shadowedTokenCount } from '../tokenEstimate.ts';
 
 /**
  * dsh-rebase P1-9b — the mapping rules of plan P1-9 shard 02, one small
@@ -557,10 +558,31 @@ describe('compaction', () => {
     const u1 = seed.findIndex((event) => messageOf(event)?.id === 'u1');
     const a1 = seed.findIndex((event) => messageOf(event)?.id === 'a1');
     expect(checkpoint.surfaceOp).toEqual({ op: 'replace', startSeq: u1, endSeq: a1 });
-    expect(checkpoint.sourceEventSeqs).toEqual([u1, a1]);
     expect(contextIds(seed)).toEqual(['u1:sys0', 'k', 'u2', 'a2', 'u3', 'a3']);
-    // Between runs, outside any turn.
-    expect(seed[checkpoint.seq - 1]?.type).toBe('turn/end');
+    // DSH's transaction around it (P1-9c E1): between runs, so standalone.
+    expect(types(seed).slice(checkpoint.seq - 3, checkpoint.seq + 2)).toEqual([
+      'turn/end',
+      'compaction/start',
+      'compaction/summary',
+      'user/message',
+      'compaction/end',
+    ]);
+    const start = checkpoint.seq - 2;
+    const summary = checkpoint.seq - 1;
+    expect(data(seed[start])).toEqual({ compactionId: 'k', turn: null });
+    expect(data(seed[checkpoint.seq + 1])).toEqual({ compactionId: 'k', turn: null });
+    expect(data(seed[summary])).toEqual({
+      compactionId: 'k',
+      summary: [{ type: 'text', text: 'S' }],
+      shadowedRange: { start: u1, end: a1 },
+      shadowedSeqs: [u1, a1],
+      shadowedTokenCount: shadowedTokenCount(seed, [u1, a1]),
+      provider: 'p',
+      model: 'm',
+    });
+    // DSH's heuristic: ceil(chars / 4) + 4 a block, + 4 a message.
+    expect(shadowedTokenCount(seed, [u1, a1])).toBe(9 + 9);
+    expect(checkpoint.sourceEventSeqs).toEqual([start, summary, u1, a1]);
   });
 
   it('re-adds the prompt 1.0.x kept, hidden, when it summarized the rest of the turn', () => {
@@ -586,8 +608,11 @@ describe('compaction', () => {
       content: [{ type: 'text', text: 'go (truncated)' }],
       source: { kind: 'aiclient-pi-retained', compactionId: 'k' },
     });
-    // Mid-run: the checkpoint sits inside the turn, between its steps.
+    // Mid-run: the checkpoint sits inside the turn, between its steps, and
+    // the turn owns its transaction.
     expect(ofType(seed, 'turn/start')).toHaveLength(1);
+    expect(data(ofType(seed, 'compaction/start')[0])).toEqual({ compactionId: 'k', turn: 1 });
+    expect(data(ofType(seed, 'compaction/end')[0])).toEqual({ compactionId: 'k', turn: 1 });
     expect(converted.report.result?.checkpoints).toEqual({
       keptOriginals: 0,
       retainedCopies: 1,
@@ -629,6 +654,27 @@ describe('compaction', () => {
     ]);
     expect(contextIds(lost.seed)).toEqual(['u1:sys0', 'k']);
     expect(lost.report.lossy?.compactionAnchorsMissing).toBe(1);
+  });
+
+  it('names the legacy route when no reply before the compaction names one', () => {
+    const { seed } = convert([
+      user('u1', 'one'),
+      { id: 'k', type: 'compaction', summary: 'S', tokensBefore: 9, retainedTail: [] },
+    ]);
+    const summary = data(ofType(seed, 'compaction/summary')[0]);
+    expect([summary.provider, summary.model]).toEqual(['legacy', 'legacy']);
+    // The prompt's run is still open: the turn owns the transaction.
+    expect(data(ofType(seed, 'compaction/start')[0])?.turn).toBe(1);
+  });
+
+  it('wraps no transaction around a checkpoint that shadows nothing', () => {
+    const { seed } = convert([
+      { id: 'k', type: 'compaction', summary: 'S', tokensBefore: 9, retainedTail: [] },
+      user('u1', 'one'),
+      reply('a1', [text('1')]),
+    ]);
+    expect(checkpointOf(seed).surfaceOp).toBe('append');
+    expect(types(seed).filter((type) => type.startsWith('compaction/'))).toEqual([]);
   });
 });
 
@@ -747,6 +793,32 @@ describe('images', () => {
     expect(messageOf(ofType(converted.seed, 'tool/result')[0]).content).toEqual([
       { type: 'image', attachment: { pendingImage: second?.key, mediaType: 'image/png' } },
     ]);
+  });
+
+  it('restates a compaction’s shadow price over the bound reference', () => {
+    const converted = convert([
+      user('u1', [text('look'), { type: 'image', data: png, mimeType: 'image/png' }]),
+      reply('a1', [text('ok')]),
+      { id: 'k', type: 'compaction', summary: 'S', tokensBefore: 9, retainedTail: [] },
+    ]);
+    const priceOf = (seed: DshSeedEvent[]) =>
+      data(ofType(seed, 'compaction/summary')[0]).shadowedTokenCount;
+    const shadowed = data(ofType(converted.seed, 'compaction/summary')[0]).shadowedSeqs as number[];
+    const ref = {
+      attachmentId: 'a'.repeat(64),
+      mediaType: 'image/png',
+      bytes: 70,
+      width: 1,
+      height: 1,
+    };
+    const bound = bindSeedImages(
+      converted.seed,
+      new Map([[converted.images[0]?.key as string, ref]])
+    );
+    expect(priceOf(converted.seed)).toBe(shadowedTokenCount(converted.seed, shadowed));
+    expect(priceOf(bound.events)).toBe(shadowedTokenCount(bound.events, shadowed));
+    expect(priceOf(bound.events)).not.toBe(priceOf(converted.seed));
+    expect(checkSeed(bound.events, { images: 'bound' })).toEqual([]);
   });
 });
 

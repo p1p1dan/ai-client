@@ -1,6 +1,6 @@
 {
   "file": "legacy-pi-v1.jsonl.native-v4.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "native-v4",
@@ -31,7 +31,10 @@
       "tool/call": 1,
       "tool/result": 1,
       "step/end": 3,
-      "turn/end": 2
+      "turn/end": 2,
+      "compaction/start": 1,
+      "compaction/summary": 1,
+      "compaction/end": 1
     },
     "turns": 2,
     "steps": 3,

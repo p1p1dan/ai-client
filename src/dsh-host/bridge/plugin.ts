@@ -27,6 +27,7 @@ import {
 } from './dshSessionRuntime.ts';
 import type { DshBridgeModelPlan } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
+import { type SeedSessionDeps, seedPiSession } from './seedSession.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 
 /** Stable Cordis plugin name. */
@@ -55,7 +56,8 @@ export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
  * `aiclientPermissions` is the permission row every session attaches its gate
  * to (P1-6b, decision 042): the bridge serves no session without it.
  * `attachments` (dsh-attachment-local) admits a send's images and stores its
- * text files (P1-4c2, decisions 096 and 097).
+ * text files (P1-4c2, decisions 096 and 097). A migration (`seedSession`,
+ * P1-9c) uses the same four: agents, sessions, sessionQuery, attachments.
  */
 export const inject = [
   'agents',
@@ -152,6 +154,26 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     },
     // Decision 030: Main's preview, read without a channel.
     readPage: (request) => readSessionPage(ctx.sessionQuery, request),
+    // Decision 054 (P1-9c): a legacy pi session made a DSH session, without a channel.
+    seedSession: (request) => {
+      const home = process.env.DSH_HOME;
+      if (!home) return Promise.reject(new Error('no DSH_HOME in this host'));
+      return seedPiSession(
+        {
+          home,
+          agents: ctx.agents as unknown as SeedSessionDeps['agents'],
+          sessions: ctx.sessions as SeedSessionDeps['sessions'],
+          query: ctx.sessionQuery,
+          attachments: ctx.attachments,
+          selection: () => {
+            const { provider, model } = ctx.agentDefaultModel.currentSelection();
+            return { provider, model };
+          },
+          log: (...args) => console.error('[aiclient-bridge]', ...args),
+        },
+        request
+      );
+    },
     log: (...args) => console.error('[aiclient-bridge]', ...args),
   });
   ctx.effect(() => {

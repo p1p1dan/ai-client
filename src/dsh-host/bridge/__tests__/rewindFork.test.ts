@@ -272,7 +272,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
 
     const result = await rewind(runtime, 'u2');
 
-    const child = `${ROOT}.r2`;
+    const child = `${ROOT}_r2`;
     expect(dsh.calls).toEqual([
       `maintenance ${ROOT}`,
       `create ${child}`,
@@ -337,7 +337,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
     const runtime = await open(dsh, stubFile);
     await rewind(runtime, 'u2');
-    const child = `${ROOT}.r2`;
+    const child = `${ROOT}_r2`;
     const observe = vi.mocked(dsh.ctx.sessionQuery.observeSession);
     const readsOfRoot = () => observe.mock.calls.filter(([id]) => id === ROOT).length;
     const rootReads = readsOfRoot();
@@ -377,7 +377,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
   it("[rewind-projections] sends the child's projections at once, and none of the retired session's (P1-4d2)", async () => {
     const stubFile = writeRootStub();
     const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
-    const child = `${ROOT}.r2`;
+    const child = `${ROOT}_r2`;
     const todosOf: Record<string, unknown> = {
       [ROOT]: [{ content: 'root plan', status: 'pending' }],
       [child]: null,
@@ -456,7 +456,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     const runtime = await open(dsh, stubFile);
     const result = await rewind(runtime, 'u1');
     expect(dsh.creates[0]).toEqual({
-      sessionId: `${ROOT}.r2`,
+      sessionId: `${ROOT}_r2`,
       meta: { cwd: CWD, parentSession: ROOT },
       agentOptions: { provider: 'aiclient-gateway', model: 'fake-1' },
       // P1-5a: the child routes by the session's selection too.
@@ -465,7 +465,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     expect(result.editorText).toBe('first');
     expect(result.history.page.messages).toEqual([]);
     expect(readStubFile(stubFile).lineage?.at(-1)).toEqual({
-      dshSessionId: `${ROOT}.r2`,
+      dshSessionId: `${ROOT}_r2`,
       reason: 'rewind',
       parentDshSessionId: ROOT,
       at: T + 1_000,
@@ -482,15 +482,15 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     // a2 exists only in the retired root session now.
     const result = await rewind(runtime, 'a2');
 
-    const second = `${ROOT}.r3`;
+    const second = `${ROOT}_r3`;
     expect(dsh.calls).toEqual([
-      `maintenance ${ROOT}.r2`,
+      `maintenance ${ROOT}_r2`,
       `create ${second}`,
       `flush ${second}`,
       `stub ${second}`,
-      `cancel ${ROOT}.r2 disposed keepInbox`,
-      `maintenance end ${ROOT}.r2`,
-      `dispose ${ROOT}.r2`,
+      `cancel ${ROOT}_r2 disposed keepInbox`,
+      `maintenance end ${ROOT}_r2`,
+      `dispose ${ROOT}_r2`,
     ]);
     expect(dsh.creates[1]).toMatchObject({
       meta: { parentSession: ROOT },
@@ -499,7 +499,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
     expect(dsh.ctx.sessionQuery.observeSession).toHaveBeenCalledWith(ROOT, expect.anything());
     expect(readStubFile(stubFile).lineage?.map((entry) => entry.dshSessionId)).toEqual([
       ROOT,
-      `${ROOT}.r2`,
+      `${ROOT}_r2`,
       second,
     ]);
     expect(result.tree.snapshot.nodes.map((node) => [node.id, node.active, node.leaf])).toEqual([
@@ -513,15 +513,15 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
   it('[rewind-id-taken] moves past a child id an earlier, failed rewind left on disk', async () => {
     const stubFile = writeRootStub();
     const taken = Object.assign(new Error('exists'), { name: 'SessionAlreadyExistsError' });
-    const dsh = fakeDsh({ [ROOT]: TWO_TURNS }, { createErrors: { [`${ROOT}.r2`]: taken } });
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS }, { createErrors: { [`${ROOT}_r2`]: taken } });
     const runtime = await open(dsh, stubFile);
     await rewind(runtime, 'u2');
     expect(dsh.calls.slice(0, 3)).toEqual([
       `maintenance ${ROOT}`,
-      `create ${ROOT}.r2`,
-      `create ${ROOT}.r3`,
+      `create ${ROOT}_r2`,
+      `create ${ROOT}_r3`,
     ]);
-    expect(readStubFile(stubFile).dshSessionId).toBe(`${ROOT}.r3`);
+    expect(readStubFile(stubFile).dshSessionId).toBe(`${ROOT}_r3`);
   });
 
   it('[rewind-v1] reads a version 1 stub as a lineage of one, and writes version 2', async () => {
@@ -535,7 +535,7 @@ describe('rewind — a seeded child and a repointed stub (decision 027)', () => 
       createdAt: 42,
       lineage: [
         { dshSessionId: ROOT, reason: 'create', at: 42 },
-        { dshSessionId: `${ROOT}.r2`, reason: 'rewind' },
+        { dshSessionId: `${ROOT}_r2`, reason: 'rewind' },
       ],
     });
   });
@@ -577,7 +577,7 @@ describe('rewind — refusals and crash windows (plan P1-4 shard 03 §4)', () =>
 
   it.each([
     ['the flush', { flushError: new Error('disk full') }],
-    ['the stub write', { stubErrorFor: `${ROOT}.r2` }],
+    ['the stub write', { stubErrorFor: `${ROOT}_r2` }],
   ] as const)('[rewind-crash-before-switch] a failure at %s leaves the old session current', async (_label, faults) => {
     const stubFile = writeRootStub();
     const before = readFileSync(stubFile, 'utf8');
@@ -587,7 +587,7 @@ describe('rewind — refusals and crash windows (plan P1-4 shard 03 §4)', () =>
     await expect(rewind(runtime, 'u2')).rejects.toThrow('disk full');
 
     // The child is released, the old agent is not cancelled, the stub is as it was.
-    expect(dsh.calls).toContain(`dispose ${ROOT}.r2`);
+    expect(dsh.calls).toContain(`dispose ${ROOT}_r2`);
     expect(dsh.calls).not.toContain(`cancel ${ROOT} disposed keepInbox`);
     expect(dsh.calls.at(-1)).toBe(`maintenance end ${ROOT}`);
     expect(readFileSync(stubFile, 'utf8')).toBe(before);
@@ -615,13 +615,13 @@ describe('rewind — refusals and crash windows (plan P1-4 shard 03 §4)', () =>
 
     const result = await rewind(runtime, 'u2');
 
-    expect(result.leaf.fileTailEntryId).toBe(`${ROOT}.r2#9`);
+    expect(result.leaf.fileTailEntryId).toBe(`${ROOT}_r2#9`);
     expect(log).toHaveBeenCalledWith('[dsh-bridge] retired agent did not dispose in time', ROOT);
     // The host dies here: the stub already names the child, whose log is on disk.
     const restart = fakeDsh(Object.fromEntries(dsh.logs));
     const reopened = await open(restart, stubFile);
     expect(restart.ctx.agents.resume).toHaveBeenCalledWith(
-      expect.objectContaining({ resumeSessionId: `${ROOT}.r2` })
+      expect.objectContaining({ resumeSessionId: `${ROOT}_r2` })
     );
     const tree = (await reopened.tree()).snapshot;
     expect(tree.nodes.map((node) => [node.id, node.active])).toEqual([
@@ -651,7 +651,7 @@ describe('rewind keeps the grants (P1-6c, decision 043)', () => {
     expect(readFileSync(grantsSidecarFor(stubFile), 'utf8')).toBe(before);
     expect(attach.mock.calls.map(([, options]) => options.dshSessionId)).toEqual([
       ROOT,
-      `${ROOT}.r2`,
+      `${ROOT}_r2`,
     ]);
     const [first, second] = attach.mock.calls.map(([, options]) => options.gate);
     expect(second).toBe(first);

@@ -75,18 +75,32 @@
  *      and its read tool (`word_read`, no card) in the workspace. Every other
  *      host runs the allowlist's defaults, where the pilot is off: A reports
  *      it disabled and offers the model none of its tools (decision 115).
+ *   J  (added by dsh-rebase P1-9c) 1.0.x pi sessions from the committed
+ *      synthetic corpus, placed read-only in a scratch profile, migrated by
+ *      the host (`seedSession`, decision 054): a native v4 session with an
+ *      image, one with three compactions, and a legacy v3 file read through
+ *      the 1.0.x copy beside it. Each preview (`readPage`) shows the timeline
+ *      the converter says the seed holds, under the pi entry ids; the first
+ *      two resume as any DSH chat, their first page the preview's, and a
+ *      P0-RECALL turn sees what 1.0.x's model context held and not what it
+ *      did not. The same file again answers the same stub, untouched; an
+ *      empty file is refused at decode; no source file changes.
  *
  * Prints the RuntimeEvent sequence per turn, per-host facts, the experiments
  * and a verdict. Signals only ever go to a ChildProcess this script spawned.
  */
 
 import { type ChildProcess, spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
+  chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
   readlinkSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -99,6 +113,8 @@ import {
   DSH_HOST_PLUGINS_ENV,
   dshHostPluginsEnvValue,
 } from '../../main/services/agent-host/dshHostEnvironment.ts';
+import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
+import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
 import { fakeGatewayPlan, HostClient, type Message, type ServedPlan } from './lib/hostClient.ts';
 import {
   baseEnv,
@@ -1020,6 +1036,159 @@ async function main() {
       : null;
     await closeSession(pluginHost, chI);
     await stopHost(pluginHost);
+
+    // ---- J: P1-9c (decision 054) — 1.0.x pi sessions migrated by the host, read, resumed.
+    const j = startHost('J');
+    await ready(j);
+    const piSessions = join(box.root, 'pi-profile', 'sessions');
+    mkdirSync(piSessions, { recursive: true, mode: 0o700 });
+    const corpus = join(repoRoot, 'src', 'shared', '__tests__', 'fixtures', 'legacy-pi');
+    /** A committed corpus file in the scratch profile, read-only: a write would fail. */
+    const placePi = (file: string): string => {
+      const target = join(piSessions, file);
+      copyFileSync(join(corpus, file), target);
+      chmodSync(target, 0o444);
+      return target;
+    };
+    const v3 = placePi('legacy-pi-v3.jsonl');
+    // 1.0.x's copy beside it, naming this profile's path as 1.0.x would have written it.
+    const v3Copy = `${realpathSync(v3)}.native-v4.jsonl`;
+    const copyText = readFileSync(join(corpus, 'legacy-pi-v3.jsonl.native-v4.jsonl'), 'utf8');
+    const copyCut = copyText.indexOf('\n');
+    const copyHeader = JSON.parse(copyText.slice(0, copyCut)) as { metadata: Message };
+    copyHeader.metadata.importedFrom = realpathSync(v3);
+    writeFileSync(v3Copy, `${JSON.stringify(copyHeader)}${copyText.slice(copyCut)}`);
+    chmodSync(v3Copy, 0o444);
+    const migrations = [
+      {
+        label: 'basic',
+        file: placePi('v4-basic.jsonl'),
+        read: '',
+        logical: 'migrated-basic',
+        // A prompt and the last reply reach the model; the label, an ignorable record, does not.
+        present: ['What do the notes say?', 'Wrote out/summary.md.'],
+        absent: ['notes answer'],
+      },
+      {
+        label: 'compaction',
+        file: placePi('v4-compaction.jsonl'),
+        read: '',
+        logical: 'migrated-compaction',
+        // What the last compaction kept reaches the model; what it summarized does not.
+        present: ['Wrap it up.', 'All steps done.'],
+        absent: ['Start the long task.', 'Step one is done.'],
+      },
+      {
+        label: 'legacy-v3',
+        file: v3,
+        read: v3Copy,
+        logical: 'migrated-v3',
+        present: [],
+        absent: [],
+      },
+    ];
+    const damagedPi = placePi('damaged-empty.jsonl');
+    const fingerprint = (file: string) => {
+      const stats = statSync(file);
+      return `${createHash('sha256').update(readFileSync(file)).digest('hex')}:${stats.size}:${stats.mtimeMs}:${(stats.mode & 0o777).toString(8)}`;
+    };
+    const sourcesBefore = [...migrations.map((m) => m.file), v3Copy].map(fingerprint);
+    const idsOf = (page: unknown) =>
+      (((page as Message | undefined)?.messages as Message[] | undefined) ?? []).map((m) => m.id);
+    const migrate: Record<string, Message> = {};
+    for (const m of migrations) {
+      const { size, mtimeMs } = statSync(m.file);
+      const seeded = await j.client.seedSession({
+        sourceFile: m.file,
+        logicalSessionId: m.logical,
+        cwd: box.workspace,
+        expect: { bytes: size, mtimeMs },
+      });
+      const result = seeded.result as Message | undefined;
+      // The timeline the converter says the seed holds: pi entry ids as message ids (decision 054 rule 6).
+      const expected = convertPiSessionBytes(readFileSync(m.read || m.file), {
+        sourceFile: realpathSync(m.file),
+        cwd: box.workspace,
+      });
+      const expectedIds = expected.ok ? projectDshHistory(expected.seed).map((row) => row.id) : [];
+      const page = result
+        ? await j.client.readPage({
+            stubFile: String(result.stubFile),
+            logicalSessionId: m.logical,
+          })
+        : undefined;
+      const pageIds = idsOf(page?.page);
+      const row: Message = {
+        ok: seeded.ok,
+        error: seeded.error,
+        roundTripMs: seeded.roundTripMs,
+        reused: result?.reused,
+        dshSessionId: result?.dshSessionId,
+        stubFile: result?.stubFile,
+        converted: result?.converted,
+        images: result?.images,
+        pageOk: page?.ok,
+        messages: pageIds.length,
+        pageIdsMatch: pageIds.length > 0 && JSON.stringify(pageIds) === JSON.stringify(expectedIds),
+      };
+      migrate[m.label] = row;
+      if (!result || m.present.length === 0) continue;
+      // Resumed as any DSH chat: its first page is the preview's, and the next turn sees it.
+      const chJ = j.client.openChannel();
+      const boot = await bootstrap(j, chJ, {
+        logicalSessionId: m.logical,
+        cwd: box.workspace,
+        sessionFile: String(result.stubFile),
+      });
+      row.bootOk = boot.ok;
+      row.initialIdsMatch =
+        JSON.stringify(
+          idsOf(((boot.result as Message | undefined)?.initialHistory as Message)?.page)
+        ) === JSON.stringify(pageIds);
+      const turn = await runTurn(
+        j,
+        chJ,
+        m.logical,
+        `MIGRATED-${m.label}`,
+        `P0-RECALL ${JSON.stringify({ markers: [...m.present, ...m.absent] })} which markers do you see?`
+      );
+      const [seen = '', missed = ''] = turn.reply.split(' missing=');
+      row.recall = turn.reply;
+      row.recallOk =
+        turn.completed &&
+        m.present.every((marker) => seen.includes(marker)) &&
+        m.absent.every((marker) => missed.includes(marker));
+      await closeSession(j, chJ);
+    }
+    // The same bytes again: the stub it made, reused, and nothing written.
+    const basicMigration = migrations[0] as (typeof migrations)[number];
+    const basicStub = String(migrate.basic?.stubFile ?? '');
+    const stubBefore = basicStub && existsSync(basicStub) ? fingerprint(basicStub) : '';
+    const again = await j.client.seedSession({
+      sourceFile: basicMigration.file,
+      logicalSessionId: basicMigration.logical,
+      cwd: box.workspace,
+    });
+    migrate.again = {
+      ok: again.ok,
+      reused: (again.result as Message | undefined)?.reused,
+      sameSession:
+        (again.result as Message | undefined)?.dshSessionId === migrate.basic?.dshSessionId,
+      stubUntouched: stubBefore !== '' && fingerprint(basicStub) === stubBefore,
+    };
+    const damaged = await j.client.seedSession({
+      sourceFile: damagedPi,
+      logicalSessionId: 'migrated-damaged',
+      cwd: box.workspace,
+    });
+    migrate.damaged = { ok: damaged.ok, error: damaged.error };
+    migrate.sourcesUntouched = {
+      same:
+        JSON.stringify([...migrations.map((m) => m.file), v3Copy].map(fingerprint)) ===
+        JSON.stringify(sourcesBefore),
+    };
+    report.migrate = migrate;
+    await stopHost(j);
   } catch (error) {
     report.error = error instanceof Error ? error.message : String(error);
   } finally {
@@ -1070,6 +1239,9 @@ async function main() {
   const stub = fresh?.stub;
   const exitOfHost = (label: string) =>
     (hosts[label]?.exit ?? {}) as { code?: number | null; signal?: string | null };
+  /** Host J's record of one migration (P1-9c). */
+  const migrated = (label: string) =>
+    ((report.migrate as Record<string, Message> | undefined)?.[label] ?? {}) as Message;
   const readyPid = protocol.readyPid as { reported?: unknown; spawned?: unknown } | undefined;
   const unknownChannel = protocol.unknownChannel as Message | undefined;
   const pong = protocol.pong as Message | undefined;
@@ -1405,6 +1577,39 @@ async function main() {
       String(pilotTurn?.tools?.[1]?.output).includes(PILOT_PARAGRAPH) &&
       pilotTurn?.completed === true &&
       exitOfHost('PLUGIN').code === 0,
+    // P1-9c (decision 054): each migration made a session whose preview is
+    // the converter's timeline, under the pi entry ids...
+    migratedAndPreviewed: ['basic', 'compaction', 'legacy-v3'].every(
+      (label) =>
+        migrated(label).ok === true &&
+        migrated(label).reused === false &&
+        migrated(label).pageOk === true &&
+        migrated(label).pageIdsMatch === true
+    ),
+    // ...its image admitted, the legacy file read through its 1.0.x copy...
+    migratedImageAndCopy:
+      (migrated('basic').images as Message | undefined)?.admitted === 1 &&
+      migrated('legacy-v3').converted === 'native-v4-copy',
+    // ...resumed as any DSH chat, with what 1.0.x's model saw in context...
+    migratedResumedAndRecalled: ['basic', 'compaction'].every(
+      (label) =>
+        migrated(label).bootOk === true &&
+        migrated(label).initialIdsMatch === true &&
+        migrated(label).recallOk === true
+    ),
+    // ...the same file again answering the same stub, untouched...
+    migrationIdempotent:
+      migrated('again').ok === true &&
+      migrated('again').reused === true &&
+      migrated('again').sameSession === true &&
+      migrated('again').stubUntouched === true,
+    // ...an unreadable one refused where 1.0.x refused it, and no source changed.
+    migrationRefusesAndTouchesNothing:
+      migrated('damaged').ok === false &&
+      (migrated('damaged').error as Message | undefined)?.stage === 'decode' &&
+      (migrated('damaged').error as Message | undefined)?.code === 'session_invalid' &&
+      migrated('sourcesUntouched').same === true &&
+      exitOfHost('J').code === 0,
   };
   report.stderrTail = live
     .map((host) => `--- ${host.label}\n${host.stderr().slice(-1200)}`)

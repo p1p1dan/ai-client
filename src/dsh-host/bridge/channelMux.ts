@@ -26,6 +26,13 @@
  *                       (decision 030, `readPage.ts`): no channel, no lock,
  *                       no write. Reads run side by side, each answered
  *                       `page` with its id, the page or the error's code.
+ *   {host:'seedSession', id, …}
+ *                       a legacy pi session file made a DSH session (decision
+ *                       054, `seedSession.ts`): one migration at a time,
+ *                       queued behind any still running, answered `seeded`
+ *                       with the same id, what was made or where it stopped.
+ *                       A request with a usable id and bad fields is answered
+ *                       `seed_request_invalid`, never dropped: Main waits on it.
  *
  * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
  * then `closed`, and nothing more for that channel after it. Messages that are
@@ -39,19 +46,26 @@ import {
 } from '../../agent-host/piWorkerRpcServer.ts';
 import {
   DSH_CHANNEL_UNKNOWN_CODE,
+  DSH_SEED_REQUEST_INVALID,
+  DSH_SEED_UNAVAILABLE,
   type DshChannelId,
   type DshHostChannelStatus,
   type DshHostGcRequest,
   type DshHostGcResult,
   type DshHostPage,
   type DshHostReadPageRequest,
+  type DshHostSeeded,
+  type DshHostSeedSessionRequest,
   type DshHostToMainMessage,
+  type DshSeedSessionResult,
   dshHostControlKind,
   isDshChannelEnvelope,
   isDshHostCloseChannel,
   isDshHostGcRequest,
   isDshHostPing,
   isDshHostReadPageRequest,
+  isDshHostSeedSessionRequest,
+  isDshSeedStage,
   opensDshChannel,
 } from '../../shared/types/dshHostProtocol.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
@@ -87,6 +101,14 @@ export interface DshChannelMuxOptions {
     offset?: number;
     limit?: number;
   }): Promise<SessionHistoryPage>;
+  /**
+   * Decision 054's migration; without it a `seedSession` is answered
+   * `seed_unavailable`. A rejection carrying `stage`, `code` and `retryable`
+   * (`SeedSessionError`) is answered with them.
+   */
+  seedSession?(
+    request: Omit<DshHostSeedSessionRequest, 'host' | 'id'>
+  ): Promise<DshSeedSessionResult>;
   log(...args: unknown[]): void;
 }
 
@@ -119,6 +141,14 @@ function unsupported(what: string): Error {
   });
 }
 
+function seedFailure(
+  id: number,
+  ms: number,
+  error: NonNullable<DshHostSeeded['error']>
+): DshHostSeeded {
+  return { host: 'seeded', id, ok: false, error, ms };
+}
+
 /** Request id of the dispose a `close` queues; never one Main mints (`rpc-…`). */
 function closeRequestId(ch: DshChannelId): string {
   return `dsh-host-close-${ch}`;
@@ -131,6 +161,8 @@ export class DshChannelMux {
   private readonly options: DshChannelMuxOptions;
   /** One collection pass at a time; a link that never rejects. */
   private gcChain: Promise<void> = Promise.resolve();
+  /** One migration at a time (plan P1-9 §4.3); a link that never rejects. */
+  private seedChain: Promise<void> = Promise.resolve();
 
   constructor(options: DshChannelMuxOptions) {
     this.options = options;
@@ -163,11 +195,29 @@ export class DshChannelMux {
       this.readPage(message);
       return true;
     }
+    if (isDshHostSeedSessionRequest(message)) {
+      this.seedSession(message);
+      return true;
+    }
     const kind = dshHostControlKind(message);
+    if (kind === 'seedSession') {
+      const id = (message as { id?: unknown }).id;
+      if (typeof id === 'number' && Number.isSafeInteger(id) && id > 0) {
+        this.options.send(
+          seedFailure(id, 0, {
+            stage: 'request',
+            code: DSH_SEED_REQUEST_INVALID,
+            message: 'seedSession fields are not what the protocol says',
+            retryable: false,
+          })
+        );
+        return true;
+      }
+    }
     if (kind !== undefined) {
       this.warnOnce(
         `control:${kind}`,
-        kind === 'gc' || kind === 'readPage'
+        kind === 'gc' || kind === 'readPage' || kind === 'seedSession'
           ? `dropped a malformed ${kind} request`
           : `dropped host control message "${kind}"`
       );
@@ -358,6 +408,46 @@ export class DshChannelMux {
         }
       )
       .catch((error: unknown) => this.options.log('readPage answer failed', error));
+  }
+
+  /**
+   * Queued behind any migration still running (they create sessions and
+   * admit images; one at a time keeps the host's load bounded). Never
+   * rejects, for the same reason `gc` never does.
+   */
+  private seedSession(request: DshHostSeedSessionRequest): void {
+    const queued = performance.now();
+    const elapsed = () => Math.round((performance.now() - queued) * 10) / 10;
+    const run = async (): Promise<DshHostSeeded> => {
+      const migrate = this.options.seedSession;
+      if (!migrate) {
+        return seedFailure(request.id, elapsed(), {
+          stage: 'request',
+          code: DSH_SEED_UNAVAILABLE,
+          message: 'migration is not available on this host',
+          retryable: false,
+        });
+      }
+      const { host: _host, id: _id, ...fields } = request;
+      try {
+        const result = await migrate(fields);
+        return { host: 'seeded', id: request.id, ok: true, result, ms: elapsed() };
+      } catch (error) {
+        const failure = error as { stage?: unknown; code?: unknown; retryable?: unknown } | null;
+        const stage = failure?.stage;
+        const code = failure?.code;
+        return seedFailure(request.id, elapsed(), {
+          stage: isDshSeedStage(stage) ? stage : 'create',
+          code: typeof code === 'string' && code.length > 0 ? code : 'seed_failed',
+          message: error instanceof Error ? error.message : String(error),
+          retryable: failure?.retryable === true,
+        });
+      }
+    };
+    this.seedChain = this.seedChain
+      .then(run)
+      .then((answer) => this.options.send(answer))
+      .catch((error: unknown) => this.options.log('seedSession answer failed', error));
   }
 
   /** A request for a channel this host does not serve: answered, never dropped silently. */

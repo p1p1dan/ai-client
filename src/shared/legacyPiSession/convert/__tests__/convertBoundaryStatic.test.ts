@@ -71,6 +71,7 @@ describe('the pi → DSH seed converter', () => {
       'invariants.ts',
       'llmText.ts',
       'seed.ts',
+      'tokenEstimate.ts',
       'types.ts',
     ]);
   });
@@ -134,7 +135,7 @@ describe('the pi → DSH seed converter', () => {
   it('says where each module came from', () => {
     const unlabelled = libraryFiles.filter(
       (file) =>
-        !/^\/\/ (New in dsh-rebase P1-9b|Vendored from @earendil-works\/pi-agent-core \S+ .*\(dsh-rebase P1-9b\))\n/.test(
+        !/^\/\/ (New in dsh-rebase P1-9b|Vendored from (@earendil-works\/pi-agent-core|@deepseek-ai\/dsh-token-meter) \S+ .*\(dsh-rebase P1-9[bc]\))\n/.test(
           readFileSync(file, 'utf8')
         )
     );
@@ -148,6 +149,13 @@ describe('the pi → DSH seed converter', () => {
     expect(vendored).toContain('THE SOFTWARE IS PROVIDED "AS IS"');
     expect(readFileSync(path.join(REPO, 'THIRD_PARTY_NOTICES.md'), 'utf8')).toContain(
       'src/shared/legacyPiSession/convert/llmText.ts'
+    );
+    const estimator = readFileSync(path.join(LIBRARY, 'tokenEstimate.ts'), 'utf8');
+    expect(estimator).toContain('Copyright (c) 2026 DeepSeek');
+    expect(estimator).toContain('Permission is hereby granted, free of charge');
+    expect(estimator).toContain('THE SOFTWARE IS PROVIDED "AS IS"');
+    expect(readFileSync(path.join(REPO, 'THIRD_PARTY_NOTICES.md'), 'utf8')).toContain(
+      'src/shared/legacyPiSession/convert/tokenEstimate.ts'
     );
   });
 });

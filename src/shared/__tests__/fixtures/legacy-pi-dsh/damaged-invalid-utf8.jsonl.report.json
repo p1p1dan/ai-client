@@ -1,6 +1,6 @@
 {
   "file": "damaged-invalid-utf8.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "unknown",

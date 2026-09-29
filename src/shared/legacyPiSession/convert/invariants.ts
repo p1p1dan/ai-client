@@ -12,6 +12,13 @@
  *   `assertMessageEventShape`);
  * - `invariant/…`: `dsh-session/invariant`'s relational checks, transcribed
  *   (turn and step nesting and numbering, calls answered in their step);
+ * - `read/…`: what DSH's reader checks when the log is opened again and the
+ *   constructor lets through (`dsh-session-persistence-jsonl` format
+ *   validation): a checkpoint that replaces surface nodes sits in a
+ *   `compaction/start` → `compaction/summary` → checkpoint → `compaction/end`
+ *   transaction of one id and one owner, the summary names the exact surface
+ *   span the checkpoint shadows and comes right before it, and no turn
+ *   boundary falls inside the transaction (P1-9c experiment E1);
  * - `shape/…`: what this converter promises beyond both — loop-shaped turns
  *   all closed, node 0 the empty system head, every call answered and cited,
  *   calls matching their reply's blocks, message ids unique, ignorable
@@ -44,6 +51,9 @@ const CORE_TYPES: ReadonlySet<string> = new Set([
   'assistant/attempt',
   'tool/call',
   'tool/result',
+  'compaction/start',
+  'compaction/summary',
+  'compaction/end',
 ]);
 const SURFACE_TYPES: ReadonlySet<string> = new Set([
   'system/message',
@@ -277,6 +287,109 @@ function imageFaults(content: unknown, images: 'pending' | 'bound'): string | un
   return undefined;
 }
 
+/** The open compaction transaction, as DSH's reader tracks it. */
+interface OpenCompaction {
+  id: string;
+  turn: number | null;
+  startSeq: number;
+  summary?: { seq: number; start: number; end: number };
+  checkpointed: boolean;
+}
+
+function isReplacingCheckpoint(event: DshSeedEvent): boolean {
+  return (
+    event.type === 'user/message' &&
+    recordOf(event.surfaceOp) !== undefined &&
+    recordOf(recordOf(event.data)?.source)?.kind === 'compact-checkpoint'
+  );
+}
+
+/**
+ * The `read/compaction` rule for one event. `surface` is the surface before
+ * the event applies; `openTurn` the turn open before it. Returns the
+ * transaction as it stands after the event.
+ */
+function checkCompaction(
+  event: DshSeedEvent,
+  next: DshSeedEvent | undefined,
+  open: OpenCompaction | null,
+  surface: readonly number[],
+  openTurn: number | null,
+  fail: (rule: string, message: string) => void
+): OpenCompaction | null {
+  const bad = (message: string) => fail('read/compaction', message);
+  const data = recordOf(event.data) ?? {};
+  if ((event.type === 'turn/start' || event.type === 'turn/end') && open)
+    bad(`${event.type} crosses compaction ${open.id}`);
+  switch (event.type) {
+    case 'compaction/start': {
+      if (open) bad(`compaction/start while ${open.id} is open`);
+      if (!nonEmpty(data.compactionId)) bad('compaction/start needs a compactionId');
+      if (data.turn !== openTurn)
+        bad(`compaction/start owner ${String(data.turn)} is not the open turn ${String(openTurn)}`);
+      return {
+        id: String(data.compactionId),
+        turn: openTurn,
+        startSeq: event.seq,
+        checkpointed: false,
+      };
+    }
+    case 'compaction/summary': {
+      if (!open || open.id !== data.compactionId) {
+        bad('compaction/summary has no matching compaction/start');
+        return open;
+      }
+      if (open.summary) bad('compaction/summary repeats');
+      const range = recordOf(data.shadowedRange);
+      const seqs = Array.isArray(data.shadowedSeqs) ? data.shadowedSeqs : [];
+      const from = surface.indexOf(Number(range?.start));
+      const to = surface.indexOf(Number(range?.end));
+      const span = from < 0 || to < from ? [] : surface.slice(from, to + 1);
+      if (
+        seqs.length === 0 ||
+        span.length !== seqs.length ||
+        span.some((seq, index) => seq !== seqs[index])
+      )
+        bad('compaction/summary shadowedSeqs do not name an exact current surface span');
+      if (surface.length > 0 && seqs.includes(surface[0]))
+        bad('compaction/summary shadows the system head');
+      if (!Array.isArray(data.summary)) bad('compaction/summary needs summary blocks');
+      if (!isSeq(data.shadowedTokenCount))
+        bad('compaction/summary needs a non-negative shadowedTokenCount');
+      if (!nonEmpty(data.provider) || !nonEmpty(data.model))
+        bad('compaction/summary needs provider and model');
+      const checkpoint = next && isReplacingCheckpoint(next) ? recordOf(next.surfaceOp) : undefined;
+      if (checkpoint?.startSeq !== range?.start || checkpoint?.endSeq !== range?.end)
+        bad('compaction/summary must come right before the checkpoint replacing its span');
+      return {
+        ...open,
+        summary: { seq: event.seq, start: Number(range?.start), end: Number(range?.end) },
+      };
+    }
+    case 'compaction/end':
+      if (!open || open.id !== data.compactionId) {
+        bad('compaction/end has no matching compaction/start');
+        return open;
+      }
+      if (data.turn !== open.turn) bad('compaction/end changes its owner turn');
+      if (!open.checkpointed) bad('compaction/end before its checkpoint');
+      return null;
+    default:
+      break;
+  }
+  if (!isReplacingCheckpoint(event)) return open;
+  const source = recordOf(recordOf(event.data)?.source);
+  if (!open || open.id !== source?.compactionId || !open.summary) {
+    bad('compaction checkpoint has no matching compaction/start and summary');
+    return open;
+  }
+  if (open.checkpointed) bad(`compaction ${open.id} replaces twice`);
+  const cited = event.sourceEventSeqs ?? [];
+  if (cited[0] !== open.startSeq || cited[1] !== open.summary.seq)
+    bad('compaction checkpoint must cite its compaction/start and compaction/summary first');
+  return { ...open, checkpointed: true };
+}
+
 /** Every rule the seed breaks; empty when `agents.create` should accept it. */
 export function checkSeed(
   events: readonly DshSeedEvent[],
@@ -295,6 +408,7 @@ export function checkSeed(
   let expectedCalls: { id: string; name: string; arguments: string }[] = [];
   let systemMessages = 0;
   let surfaceEvents = 0;
+  let compaction: OpenCompaction | null = null;
 
   events.forEach((event, index) => {
     const seq = typeof event?.seq === 'number' ? event.seq : index;
@@ -325,6 +439,14 @@ export function checkSeed(
       if (fault) fail('shape/image', fault);
     }
 
+    compaction = checkCompaction(
+      event,
+      events[index + 1],
+      compaction,
+      surface.nodes,
+      openTurn,
+      fail
+    );
     const surfaceFault = surface.apply(event, events);
     if (surfaceFault) fail('seed/surface-replace', surfaceFault);
     if (event.type === 'system/message') {
@@ -448,6 +570,12 @@ export function checkSeed(
     violations.push({ seq: last, rule: 'shape/balanced', message: `step ${openStep} left open` });
   if (openTurn !== null)
     violations.push({ seq: last, rule: 'shape/balanced', message: `turn ${openTurn} left open` });
+  if (compaction !== null)
+    violations.push({
+      seq: last,
+      rule: 'read/compaction',
+      message: `compaction ${(compaction as OpenCompaction).id} left open`,
+    });
   if (surfaceEvents > 0 && systemMessages !== 1)
     violations.push({
       seq: last,

@@ -79,6 +79,28 @@ function valid(): DshSeedEvent[] {
     },
     { type: 'step/end', time: 3, data: { turn: 1, step: 1 } },
     { type: 'turn/end', time: 3, data: { turn: 1, reason: { kind: 'completed' } } },
+    ...compaction(),
+  ];
+  return events.map((event, seq) => ({ ...event, seq }) as DshSeedEvent);
+}
+
+/** Seqs 10–13: a standalone compaction shadowing nodes 3, 4 and 6. */
+function compaction(): Omit<DshSeedEvent, 'seq'>[] {
+  return [
+    { type: 'compaction/start', time: 4, data: { compactionId: 'k', turn: null } },
+    {
+      type: 'compaction/summary',
+      time: 4,
+      data: {
+        compactionId: 'k',
+        summary: [{ type: 'text', text: 's' }],
+        shadowedRange: { start: 3, end: 6 },
+        shadowedSeqs: [3, 4, 6],
+        shadowedTokenCount: 30,
+        provider: 'p',
+        model: 'm',
+      },
+    },
     {
       type: 'user/message',
       time: 4,
@@ -89,10 +111,21 @@ function valid(): DshSeedEvent[] {
         source: { kind: 'compact-checkpoint', compactionId: 'k' },
       },
       surfaceOp: { op: 'replace', startSeq: 3, endSeq: 6 },
-      sourceEventSeqs: [3, 4, 6],
+      sourceEventSeqs: [10, 11, 3, 4, 6],
     },
+    { type: 'compaction/end', time: 4, data: { compactionId: 'k', turn: null } },
   ];
-  return events.map((event, seq) => ({ ...event, seq }) as DshSeedEvent);
+}
+
+/** The seed P1-9b wrote: its checkpoint with no transaction around it. */
+function bare(): DshSeedEvent[] {
+  const events = valid().filter((event) => !event.type.startsWith('compaction/'));
+  events.forEach((event, seq) => {
+    event.seq = seq;
+  });
+  const checkpoint = events[10] as DshSeedEvent;
+  checkpoint.sourceEventSeqs = [3, 4, 6];
+  return events;
 }
 
 const rules = (events: DshSeedEvent[]) => [
@@ -173,17 +206,74 @@ describe('checkSeed', () => {
     [
       'a replacement over the system head',
       (events) => {
-        (events[10] as DshSeedEvent).surfaceOp = { op: 'replace', startSeq: 2, endSeq: 6 };
-        (events[10] as DshSeedEvent).sourceEventSeqs = [2, 3, 4, 6];
+        (events[12] as DshSeedEvent).surfaceOp = { op: 'replace', startSeq: 2, endSeq: 6 };
+        (events[12] as DshSeedEvent).sourceEventSeqs = [10, 11, 2, 3, 4, 6];
       },
       'seed/surface-replace',
     ],
     [
       'a replacement that does not cite what it shadows',
       (events) => {
-        (events[10] as DshSeedEvent).sourceEventSeqs = [3];
+        (events[12] as DshSeedEvent).sourceEventSeqs = [10, 11, 3];
       },
       'seed/surface-replace',
+    ],
+    [
+      'a summary that names another span than the checkpoint shadows',
+      (events) => {
+        data(events[11]).shadowedSeqs = [3, 4];
+        data(events[11]).shadowedRange = { start: 3, end: 4 };
+      },
+      'read/compaction',
+    ],
+    [
+      'a summary without the route that wrote it',
+      (events) => {
+        delete data(events[11]).model;
+      },
+      'read/compaction',
+    ],
+    [
+      'a summary without a shadow price',
+      (events) => {
+        data(events[11]).shadowedTokenCount = -1;
+      },
+      'read/compaction',
+    ],
+    [
+      'a start owned by a turn that is not open',
+      (events) => {
+        data(events[10]).turn = 1;
+      },
+      'read/compaction',
+    ],
+    [
+      'an end that changes the owner',
+      (events) => {
+        data(events[13]).turn = 2;
+      },
+      'read/compaction',
+    ],
+    [
+      'an end for another compaction',
+      (events) => {
+        data(events[13]).compactionId = 'other';
+      },
+      'read/compaction',
+    ],
+    [
+      'a checkpoint of another compaction',
+      (events) => {
+        data(events[12]).source = { kind: 'compact-checkpoint', compactionId: 'other' };
+      },
+      'read/compaction',
+    ],
+    [
+      'a checkpoint that does not cite its start and summary first',
+      (events) => {
+        (events[12] as DshSeedEvent).sourceEventSeqs = [3, 4, 6];
+      },
+      'read/compaction',
     ],
     [
       'a message without id',
@@ -277,6 +367,33 @@ describe('checkSeed', () => {
       event.seq = seq;
     });
     expect(rules(unanswered)).toContain('shape/tool-pairing');
+  });
+
+  it('flags a replacing checkpoint outside a compaction transaction (P1-9c E1)', () => {
+    expect(rules(bare())).toEqual(['read/compaction']);
+    // An appended checkpoint shadows nothing: DSH's reader asks no transaction of it.
+    const appended = bare();
+    const checkpoint = appended[10] as DshSeedEvent;
+    checkpoint.surfaceOp = 'append';
+    delete checkpoint.sourceEventSeqs;
+    expect(rules(appended)).toEqual([]);
+  });
+
+  it('flags a compaction left open, and a turn boundary inside one', () => {
+    const open = valid().slice(0, 13);
+    expect(rules(open)).toEqual(['read/compaction']);
+    const crossing = valid().slice(0, 13);
+    crossing.push({ type: 'turn/start', seq: 13, time: 5, data: { turn: 2 } });
+    expect(rules(crossing)).toContain('read/compaction');
+  });
+
+  it('flags a summary that is not right before its checkpoint', () => {
+    const events = valid();
+    // Swap summary and start: the summary then precedes the start, not the checkpoint.
+    const [start, summary] = [events[10], events[11]] as DshSeedEvent[];
+    events[10] = { ...summary, seq: 10 };
+    events[11] = { ...start, seq: 11 };
+    expect(rules(events)).toContain('read/compaction');
   });
 
   it('refuses session/end-seed: the constructor appends it', () => {

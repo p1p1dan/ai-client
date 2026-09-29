@@ -1,7 +1,7 @@
 {
   "header": {
     "version": 4,
-    "id": "aiclient-rec-rewind.r2",
+    "id": "aiclient-rec-rewind_r2",
     "createdAt": "<ms>",
     "cwd": "<workspace>",
     "parentSession": "aiclient-rec-rewind",

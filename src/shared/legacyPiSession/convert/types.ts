@@ -17,8 +17,9 @@ import type { RuntimePermissionSettings } from '../../types/runtimePermission.ts
 /**
  * Bumped whenever the same source bytes would convert to a different seed.
  * A seed is a pure function of (source bytes, this number) — decision 054.
+ * 2 (P1-9c, decision 121): compactions are written in DSH's transaction.
  */
-export const SEED_CONVERTER_VERSION = 1;
+export const SEED_CONVERTER_VERSION = 2;
 
 /** Ignorable event types a seed may carry (decision 053); never appended at run time. */
 export const SEED_EVENT_TYPE = {

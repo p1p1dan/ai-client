@@ -1,6 +1,6 @@
 {
   "file": "legacy-pi-v3.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "pi-v3",
@@ -38,7 +38,10 @@
       "step/end": 4,
       "aiclient/pi-label": 1,
       "turn/end": 3,
-      "aiclient/pi-entry": 2
+      "aiclient/pi-entry": 2,
+      "compaction/start": 1,
+      "compaction/summary": 1,
+      "compaction/end": 1
     },
     "turns": 3,
     "steps": 4,

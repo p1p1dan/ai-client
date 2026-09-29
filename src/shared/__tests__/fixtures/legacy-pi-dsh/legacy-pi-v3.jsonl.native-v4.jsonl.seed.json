@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "256b026d6953e2a36412ec67ed930d0c3c290a8ccf0f83faa0969380f222395e",
     "sourceBytes": 8713,
     "sourceSessionId": "c409eaae-7d1b-4b15-ab11-66d8d68d83eb",
@@ -459,8 +459,39 @@
       }
     },
     {
-      "type": "user/message",
+      "type": "compaction/start",
       "seq": 24,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "turn": null
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 25,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "summary": [
+          {
+            "type": "text",
+            "text": "v3 summary: read the notes, answered twice."
+          }
+        ],
+        "shadowedRange": {
+          "start": 3,
+          "end": 19
+        },
+        "shadowedSeqs": [3, 4, 6, 9, 15, 16, 19],
+        "shadowedTokenCount": 133,
+        "provider": "anthropic",
+        "model": "claude-legacy"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 26,
       "time": 1790513905660,
       "data": {
         "id": "1dee86f3",
@@ -489,11 +520,20 @@
         "startSeq": 3,
         "endSeq": 19
       },
-      "sourceEventSeqs": [3, 4, 6, 9, 15, 16, 19]
+      "sourceEventSeqs": [24, 25, 3, 4, 6, 9, 15, 16, 19]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 27,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "turn": null
+      }
     },
     {
       "type": "turn/start",
-      "seq": 25,
+      "seq": 28,
       "time": 1790513905660,
       "data": {
         "turn": 3
@@ -501,7 +541,7 @@
     },
     {
       "type": "step/start",
-      "seq": 26,
+      "seq": 29,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -510,7 +550,7 @@
     },
     {
       "type": "user/message",
-      "seq": 27,
+      "seq": 30,
       "time": 1790513905660,
       "data": {
         "id": "282b4634",
@@ -529,7 +569,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 28,
+      "seq": 31,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -561,7 +601,7 @@
     },
     {
       "type": "step/end",
-      "seq": 29,
+      "seq": 32,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -570,7 +610,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 30,
+      "seq": 33,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -584,7 +624,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 31,
+      "seq": 34,
       "time": 1790513905673,
       "data": {
         "turn": 4
@@ -592,7 +632,7 @@
     },
     {
       "type": "step/start",
-      "seq": 32,
+      "seq": 35,
       "time": 1790513905673,
       "data": {
         "turn": 4,
@@ -601,7 +641,7 @@
     },
     {
       "type": "user/message",
-      "seq": 33,
+      "seq": 36,
       "time": 1790513905673,
       "data": {
         "id": "340cd24c-ee67-48a1-9fe4-3aee48d2bfa6",
@@ -620,7 +660,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 34,
+      "seq": 37,
       "time": 1790513905674,
       "data": {
         "turn": 4,
@@ -666,7 +706,7 @@
     },
     {
       "type": "step/end",
-      "seq": 35,
+      "seq": 38,
       "time": 1790513905674,
       "data": {
         "turn": 4,
@@ -675,7 +715,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 36,
+      "seq": 39,
       "time": 1790513905674,
       "data": {
         "turn": 4,

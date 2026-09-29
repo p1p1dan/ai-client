@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "972aaad2f9fb9fc74f0e248c23f5a46ad61d39a35cac72e096d2ecd466332333",
     "sourceBytes": 7908,
     "sourceSessionId": "aa279a65-5bf6-4ca6-a0c5-12a7c80d0349",
@@ -285,8 +285,39 @@
       }
     },
     {
-      "type": "user/message",
+      "type": "compaction/start",
       "seq": 14,
+      "time": 1790513904662,
+      "data": {
+        "compactionId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+        "turn": 2
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 15,
+      "time": 1790513904662,
+      "data": {
+        "compactionId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+        "summary": [
+          {
+            "type": "text",
+            "text": "Summary: step one done, step two under way."
+          }
+        ],
+        "shadowedRange": {
+          "start": 3,
+          "end": 12
+        },
+        "shadowedSeqs": [3, 4, 9, 10, 12],
+        "shadowedTokenCount": 95,
+        "provider": "faux",
+        "model": "faux-corpus"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 16,
       "time": 1790513904662,
       "data": {
         "id": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
@@ -315,11 +346,20 @@
         "startSeq": 3,
         "endSeq": 12
       },
-      "sourceEventSeqs": [3, 4, 9, 10, 12]
+      "sourceEventSeqs": [14, 15, 3, 4, 9, 10, 12]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 17,
+      "time": 1790513904662,
+      "data": {
+        "compactionId": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a",
+        "turn": 2
+      }
     },
     {
       "type": "user/message",
-      "seq": 15,
+      "seq": 18,
       "time": 1790513904662,
       "data": {
         "id": "8ec1b609-0b5a-43fa-82ef-2e2ad65f840a:retained:0",
@@ -339,7 +379,7 @@
     },
     {
       "type": "step/start",
-      "seq": 16,
+      "seq": 19,
       "time": 1790513904663,
       "data": {
         "turn": 2,
@@ -348,7 +388,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 17,
+      "seq": 20,
       "time": 1790513904663,
       "data": {
         "turn": 2,
@@ -394,7 +434,7 @@
     },
     {
       "type": "step/end",
-      "seq": 18,
+      "seq": 21,
       "time": 1790513904663,
       "data": {
         "turn": 2,
@@ -403,7 +443,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 19,
+      "seq": 22,
       "time": 1790513904663,
       "data": {
         "turn": 2,
@@ -414,7 +454,7 @@
     },
     {
       "type": "turn/start",
-      "seq": 20,
+      "seq": 23,
       "time": 1790513904675,
       "data": {
         "turn": 3
@@ -422,7 +462,7 @@
     },
     {
       "type": "step/start",
-      "seq": 21,
+      "seq": 24,
       "time": 1790513904675,
       "data": {
         "turn": 3,
@@ -431,7 +471,7 @@
     },
     {
       "type": "user/message",
-      "seq": 22,
+      "seq": 25,
       "time": 1790513904675,
       "data": {
         "id": "4bd14315-b29f-4427-ac68-e42e4a9ded48",
@@ -450,7 +490,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 23,
+      "seq": 26,
       "time": 1790513904677,
       "data": {
         "turn": 3,
@@ -498,7 +538,7 @@
     },
     {
       "type": "tool/call",
-      "seq": 24,
+      "seq": 27,
       "time": 1790513904677,
       "data": {
         "turn": 3,
@@ -510,7 +550,7 @@
     },
     {
       "type": "tool/result",
-      "seq": 25,
+      "seq": 28,
       "time": 1790513904678,
       "data": {
         "turn": 3,
@@ -540,11 +580,11 @@
         }
       },
       "surfaceOp": "append",
-      "sourceEventSeqs": [24]
+      "sourceEventSeqs": [27]
     },
     {
       "type": "step/end",
-      "seq": 26,
+      "seq": 29,
       "time": 1790513904678,
       "data": {
         "turn": 3,
@@ -552,8 +592,39 @@
       }
     },
     {
+      "type": "compaction/start",
+      "seq": 30,
+      "time": 1790513904679,
+      "data": {
+        "compactionId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+        "turn": 3
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 31,
+      "time": 1790513904679,
+      "data": {
+        "compactionId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+        "summary": [
+          {
+            "type": "text",
+            "text": "[context rollover: a new context window was started without summarizing conversation history]\n\nEarlier messages in this session are not part of this request. The complete transcript is still available to the user, and the environment is unchanged.\n\nAsk before assuming anything about work that is not visible here."
+          }
+        ],
+        "shadowedRange": {
+          "start": 16,
+          "end": 28
+        },
+        "shadowedSeqs": [16, 18, 20, 25, 26, 28],
+        "shadowedTokenCount": 204,
+        "provider": "faux",
+        "model": "faux-corpus"
+      }
+    },
+    {
       "type": "user/message",
-      "seq": 27,
+      "seq": 32,
       "time": 1790513904679,
       "data": {
         "id": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
@@ -579,14 +650,23 @@
       },
       "surfaceOp": {
         "op": "replace",
-        "startSeq": 14,
-        "endSeq": 25
+        "startSeq": 16,
+        "endSeq": 28
       },
-      "sourceEventSeqs": [14, 15, 17, 22, 23, 25]
+      "sourceEventSeqs": [30, 31, 16, 18, 20, 25, 26, 28]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 33,
+      "time": 1790513904679,
+      "data": {
+        "compactionId": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6",
+        "turn": 3
+      }
     },
     {
       "type": "user/message",
-      "seq": 28,
+      "seq": 34,
       "time": 1790513904679,
       "data": {
         "id": "4a3e6278-d61e-4daa-8101-22ddfb8a5aa6:retained:0",
@@ -606,7 +686,7 @@
     },
     {
       "type": "step/start",
-      "seq": 29,
+      "seq": 35,
       "time": 1790513904680,
       "data": {
         "turn": 3,
@@ -615,7 +695,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 30,
+      "seq": 36,
       "time": 1790513904680,
       "data": {
         "turn": 3,
@@ -661,7 +741,7 @@
     },
     {
       "type": "step/end",
-      "seq": 31,
+      "seq": 37,
       "time": 1790513904680,
       "data": {
         "turn": 3,
@@ -670,7 +750,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 32,
+      "seq": 38,
       "time": 1790513904680,
       "data": {
         "turn": 3,
@@ -680,8 +760,39 @@
       }
     },
     {
+      "type": "compaction/start",
+      "seq": 39,
+      "time": 1790513904680,
+      "data": {
+        "compactionId": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+        "turn": null
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 40,
+      "time": 1790513904680,
+      "data": {
+        "compactionId": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+        "summary": [
+          {
+            "type": "text",
+            "text": "Checkpoint that retained nothing."
+          }
+        ],
+        "shadowedRange": {
+          "start": 32,
+          "end": 36
+        },
+        "shadowedSeqs": [32, 34, 36],
+        "shadowedTokenCount": 211,
+        "provider": "faux",
+        "model": "faux-corpus"
+      }
+    },
+    {
       "type": "user/message",
-      "seq": 33,
+      "seq": 41,
       "time": 1790513904680,
       "data": {
         "id": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
@@ -707,14 +818,23 @@
       },
       "surfaceOp": {
         "op": "replace",
-        "startSeq": 27,
-        "endSeq": 30
+        "startSeq": 32,
+        "endSeq": 36
       },
-      "sourceEventSeqs": [27, 28, 30]
+      "sourceEventSeqs": [39, 40, 32, 34, 36]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 42,
+      "time": 1790513904680,
+      "data": {
+        "compactionId": "78cac03a-2bbd-4e92-a0bb-9d8a888fb8fa",
+        "turn": null
+      }
     },
     {
       "type": "turn/start",
-      "seq": 34,
+      "seq": 43,
       "time": 1790513904681,
       "data": {
         "turn": 4
@@ -722,7 +842,7 @@
     },
     {
       "type": "step/start",
-      "seq": 35,
+      "seq": 44,
       "time": 1790513904681,
       "data": {
         "turn": 4,
@@ -731,7 +851,7 @@
     },
     {
       "type": "user/message",
-      "seq": 36,
+      "seq": 45,
       "time": 1790513904681,
       "data": {
         "id": "823c2f12-9124-4a70-bc94-1d5130aa72d4",
@@ -750,7 +870,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 37,
+      "seq": 46,
       "time": 1790513904682,
       "data": {
         "turn": 4,
@@ -796,7 +916,7 @@
     },
     {
       "type": "step/end",
-      "seq": 38,
+      "seq": 47,
       "time": 1790513904682,
       "data": {
         "turn": 4,
@@ -805,7 +925,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 39,
+      "seq": 48,
       "time": 1790513904682,
       "data": {
         "turn": 4,

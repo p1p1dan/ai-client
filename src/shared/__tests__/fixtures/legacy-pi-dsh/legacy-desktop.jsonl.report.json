@@ -1,6 +1,6 @@
 {
   "file": "legacy-desktop.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "pi-desktop-1",
@@ -31,6 +31,9 @@
       "aiclient/pi-entry": 1,
       "step/end": 3,
       "turn/end": 2,
+      "compaction/start": 1,
+      "compaction/summary": 1,
+      "compaction/end": 1,
       "assistant/attempt": 1
     },
     "turns": 2,

@@ -154,6 +154,13 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
+Two small pieces of DSH code are also copied into AiClient's own source,
+under the notice above, because the modules that use them may load no DSH
+package: `buildForkSeed` from `@deepseek-ai/dsh-session` in
+`src/dsh-host/bridge/forkSeed.ts`, and the heuristic token estimator of
+`@deepseek-ai/dsh-token-meter` in
+`src/shared/legacyPiSession/convert/tokenEstimate.ts`.
+
 The Cordis packages published as `@deepseek-ai/cordis*` (from the same
 repository) carry their own notice:
 

@@ -10,6 +10,7 @@
  * was there. Pure: returns new events, the input is left as it was.
  */
 
+import { shadowedTokenCount } from './tokenEstimate.ts';
 import type { DshSeedEvent } from './types.ts';
 
 export interface BoundSeed {
@@ -72,5 +73,16 @@ export function bindSeedImages(
     }
     return event;
   });
-  return { events: out, bound, failed };
+  // A bound reference prices differently from the pending one: restate every
+  // compaction's shadow price over the content DSH will actually store.
+  const repriced = out.map((event) => {
+    const data = recordOf(event.data);
+    if (event.type !== 'compaction/summary' || !data || !Array.isArray(data.shadowedSeqs))
+      return event;
+    return {
+      ...event,
+      data: { ...data, shadowedTokenCount: shadowedTokenCount(out, data.shadowedSeqs) },
+    };
+  });
+  return { events: repriced, bound, failed };
 }

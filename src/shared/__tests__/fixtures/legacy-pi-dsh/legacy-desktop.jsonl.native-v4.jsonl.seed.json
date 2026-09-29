@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "054094f9025772e44940422ea76c69f5d641362d6e04255070d82b37dd4689c5",
     "sourceBytes": 5420,
     "sourceSessionId": "aecc941d-c411-4cc5-9b9f-423a48d8e65b",
@@ -336,8 +336,39 @@
       "surfaceOp": "append"
     },
     {
-      "type": "user/message",
+      "type": "compaction/start",
       "seq": 16,
+      "time": 1772360820000,
+      "data": {
+        "compactionId": "d-c1",
+        "turn": 2
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 17,
+      "time": 1772360820000,
+      "data": {
+        "compactionId": "d-c1",
+        "summary": [
+          {
+            "type": "text",
+            "text": "desktop summary"
+          }
+        ],
+        "shadowedRange": {
+          "start": 3,
+          "end": 15
+        },
+        "shadowedSeqs": [3, 4, 6, 10, 15],
+        "shadowedTokenCount": 120,
+        "provider": "legacy",
+        "model": "legacy"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 18,
       "time": 1772360820000,
       "data": {
         "id": "d-c1",
@@ -366,11 +397,20 @@
         "startSeq": 3,
         "endSeq": 15
       },
-      "sourceEventSeqs": [3, 4, 6, 10, 15]
+      "sourceEventSeqs": [16, 17, 3, 4, 6, 10, 15]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 19,
+      "time": 1772360820000,
+      "data": {
+        "compactionId": "d-c1",
+        "turn": 2
+      }
     },
     {
       "type": "user/message",
-      "seq": 17,
+      "seq": 20,
       "time": 1772360820000,
       "data": {
         "id": "d-c1:retained:0",
@@ -390,7 +430,7 @@
     },
     {
       "type": "user/message",
-      "seq": 18,
+      "seq": 21,
       "time": 1772360820000,
       "data": {
         "id": "d-c1:retained:1",
@@ -414,7 +454,7 @@
     },
     {
       "type": "assistant/attempt",
-      "seq": 19,
+      "seq": 22,
       "time": 1772360880000,
       "data": {
         "turn": 2,
@@ -424,7 +464,7 @@
     },
     {
       "type": "step/end",
-      "seq": 20,
+      "seq": 23,
       "time": 1772360880000,
       "data": {
         "turn": 2,
@@ -433,7 +473,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 21,
+      "seq": 24,
       "time": 1772360880000,
       "data": {
         "turn": 2,

@@ -22,10 +22,18 @@
  *
  * The first step holds an empty `system/message`, so surface node 0 is the
  * system head DSH rewrites in place on the first real request.
+ *
+ * A compaction that shadows anything is written as DSH's live compaction
+ * writes it (`dsh-compaction-basic` `compactSurfaceRegion`): `compaction/start`,
+ * `compaction/summary`, the checkpoint, `compaction/end`, owned by the open
+ * turn or standalone between turns. DSH's reader refuses a replacing
+ * checkpoint outside that transaction, though its seed constructor takes one
+ * (P1-9c experiment E1, evidence p1-9c-seed-experiments-2026-09-28).
  */
 
 import { createHash } from 'node:crypto';
 import { AICLIENT_INTERJECT_REASON, DSH_TOOL_OUTCOME_UNKNOWN } from '../../dshHistory/types.ts';
+import { shadowedTokenCount } from './tokenEstimate.ts';
 import {
   type DshSeedEvent,
   type IrAssistant,
@@ -43,6 +51,13 @@ import {
   type SeedSurfaceOp,
   SYSTEM_PROMPT_SOURCE_KIND,
 } from './types.ts';
+
+/**
+ * The route a compaction summary names when no earlier reply of the branch
+ * names one: the converter's fallback for a reply without provider or model
+ * (`assistant.ts`). pi's compaction entries record neither.
+ */
+const LEGACY_ROUTE = 'legacy';
 
 /** `dsh-compaction-basic`'s framing of a checkpoint node, so DSH reads it as a prior checkpoint. */
 export const CHECKPOINT_PREAMBLE =
@@ -165,6 +180,8 @@ class SeedBuilder {
   private step: StepState | null = null;
   private lastTime = 0;
   private lastTurnEnd: string | undefined;
+  /** The latest reply's route: what a compaction summary says wrote it. */
+  private lastRoute: { provider: string; model: string } | undefined;
 
   constructor(options: SeedBuildOptions) {
     this.options = options;
@@ -363,6 +380,7 @@ class SeedBuilder {
     if (this.step?.reply) this.closeStep();
     const step = this.step ?? this.openStep(item.id, item.time);
     const turn = this.turn as TurnState;
+    this.lastRoute = { provider: item.provider, model: item.model };
     if (item.outcome === 'attempt') {
       this.emit('assistant/attempt', item.time, { turn: turn.no, step: step.no, stream: [] });
     } else {
@@ -516,16 +534,29 @@ class SeedBuilder {
       this.counts.appended += 1;
       this.appendNode('user/message', item.time, item.id, message);
     } else {
+      const start = shadowed[0] as number;
+      const end = shadowed[shadowed.length - 1] as number;
+      // The transaction DSH's reader requires around a replacing checkpoint;
+      // the summary sits right before it (its shadow price, by contract).
+      const lifecycle = { compactionId: item.id, turn: this.turn ? this.turn.no : null };
+      const startSeq = this.emit('compaction/start', item.time, lifecycle);
+      const route = this.lastRoute ?? { provider: LEGACY_ROUTE, model: LEGACY_ROUTE };
+      const summarySeq = this.emit('compaction/summary', item.time, {
+        compactionId: item.id,
+        summary: [{ type: 'text', text: item.summary }],
+        shadowedRange: { start, end },
+        shadowedSeqs: shadowed,
+        shadowedTokenCount: shadowedTokenCount(this.events, shadowed),
+        provider: route.provider,
+        model: route.model,
+      });
       const seq = this.emit('user/message', item.time, message, {
-        surfaceOp: {
-          op: 'replace',
-          startSeq: shadowed[0] as number,
-          endSeq: shadowed[shadowed.length - 1] as number,
-        },
-        sourceEventSeqs: shadowed,
+        surfaceOp: { op: 'replace', startSeq: start, endSeq: end },
+        sourceEventSeqs: [startSeq, summarySeq, ...shadowed],
       });
       this.nodes.splice(1, shadowed.length, seq);
       this.nodeOf.set(item.id, seq);
+      this.emit('compaction/end', item.time, lifecycle);
     }
     copies.forEach((content, index) => {
       const id = `${item.id}:retained:${index}`;

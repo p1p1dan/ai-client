@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "5abb45717f572b3f9e82287a2c13af17db7cab10b228110dddc50673d104ac40",
     "sourceBytes": 4973,
     "sourceSessionId": "34dd6753-2739-4ff5-8787-6a3fcfc20a8d",
@@ -320,8 +320,39 @@
       "ignorable": true
     },
     {
-      "type": "user/message",
+      "type": "compaction/start",
       "seq": 19,
+      "time": 1790513905590,
+      "data": {
+        "compactionId": "2d6c40f5",
+        "turn": 3
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 20,
+      "time": 1790513905590,
+      "data": {
+        "compactionId": "2d6c40f5",
+        "summary": [
+          {
+            "type": "text",
+            "text": "Terminal summary of everything so far."
+          }
+        ],
+        "shadowedRange": {
+          "start": 3,
+          "end": 4
+        },
+        "shadowedSeqs": [3, 4],
+        "shadowedTokenCount": 35,
+        "provider": "anthropic",
+        "model": "claude-cli"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 21,
       "time": 1790513905590,
       "data": {
         "id": "2d6c40f5",
@@ -350,11 +381,20 @@
         "startSeq": 3,
         "endSeq": 4
       },
-      "sourceEventSeqs": [3, 4]
+      "sourceEventSeqs": [19, 20, 3, 4]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 22,
+      "time": 1790513905590,
+      "data": {
+        "compactionId": "2d6c40f5",
+        "turn": 3
+      }
     },
     {
       "type": "user/message",
-      "seq": 20,
+      "seq": 23,
       "time": 1790513905590,
       "data": {
         "id": "50d1f080",
@@ -373,7 +413,7 @@
     },
     {
       "type": "user/message",
-      "seq": 21,
+      "seq": 24,
       "time": 1790513905620,
       "data": {
         "id": "dc9eee64-8038-41cd-b197-5def0c36b96d",
@@ -392,7 +432,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 22,
+      "seq": 25,
       "time": 1790513905624,
       "data": {
         "turn": 3,
@@ -438,7 +478,7 @@
     },
     {
       "type": "step/end",
-      "seq": 23,
+      "seq": 26,
       "time": 1790513905624,
       "data": {
         "turn": 3,
@@ -447,7 +487,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 24,
+      "seq": 27,
       "time": 1790513905624,
       "data": {
         "turn": 3,

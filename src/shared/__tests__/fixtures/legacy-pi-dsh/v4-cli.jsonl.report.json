@@ -1,6 +1,6 @@
 {
   "file": "v4-cli.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "native-v4+cli",
@@ -34,7 +34,10 @@
       "aiclient/pi-label": 1,
       "step/end": 3,
       "turn/end": 3,
-      "aiclient/pi-entry": 1
+      "aiclient/pi-entry": 1,
+      "compaction/start": 1,
+      "compaction/summary": 1,
+      "compaction/end": 1
     },
     "turns": 3,
     "steps": 3,

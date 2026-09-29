@@ -312,6 +312,30 @@ export class HostClient {
     return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
   }
 
+  /**
+   * Decision 054's migration (`{host:'seedSession'}`, P1-9c), answered with
+   * the host's `seeded` message as it came (ok or not), plus the round trip.
+   */
+  async seedSession(
+    payload: {
+      sourceFile: string;
+      logicalSessionId: string;
+      cwd: string;
+      expect?: { bytes: number; mtimeMs: number };
+    },
+    timeoutMs = 120_000
+  ): Promise<Message & { roundTripMs: number }> {
+    const id = 2_000_000 + ++this.requestSeq;
+    const started = performance.now();
+    this.child.send({ host: 'seedSession', id, kind: 'pi-file', ...payload });
+    const reply = await this.control(
+      (message) => message.host === 'seeded' && message.id === id,
+      timeoutMs
+    );
+    if (!reply) throw new Error(`seedSession ${id} timed out`);
+    return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
+  }
+
   /** Resolve once `predicate` holds over the channel's events so far. */
   until(
     ch: string,

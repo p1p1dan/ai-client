@@ -1,6 +1,6 @@
 {
   "file": "v4-compaction.jsonl",
-  "converterVersion": 1,
+  "converterVersion": 2,
   "source": {
     "kind": "pi-session",
     "generation": "native-v4",
@@ -31,7 +31,10 @@
       "step/end": 6,
       "turn/end": 4,
       "tool/call": 2,
-      "tool/result": 2
+      "tool/result": 2,
+      "compaction/start": 3,
+      "compaction/summary": 3,
+      "compaction/end": 3
     },
     "turns": 4,
     "steps": 6,

@@ -15,29 +15,58 @@ import type { HistoryMessage } from '../../shared/types/sessionHistory.ts';
 import type { DshSessionQuery } from './historyCache.ts';
 import type { SessionLineageEntry } from './stub.ts';
 
-/** First suffix a rewind mints: `aiclient-<logical id>.r2` (plan P1-4 shard 03 §3). */
+/** First suffix a rewind mints: `aiclient-<logical id>_r2` (plan P1-4 shard 03 §3). */
 const FIRST_REWIND = 2;
 /** Text a retired node keeps; the tree previews 96 characters. */
 const RETIRED_TEXT_MAX = 400;
 
 /**
+ * The separators of a minted suffix, newest first: `_` since P1-9c (decision
+ * 121), because DSH's projection cache keys a session by its id and refuses
+ * one with a dot (`dsh-storage-json`: `[a-zA-Z0-9_-]`), leaving it stale;
+ * `.` in the lineages written before, which are still read.
+ */
+const SUFFIX_SEPARATORS = ['_', '.'] as const;
+
+/** One past the highest `<base><sep><letter><n>` in `ids`, and never below `first`. */
+export function nextSuffixNumber(
+  base: string,
+  letter: string,
+  ids: Iterable<string>,
+  first: number
+): number {
+  let highest = first - 1;
+  for (const id of ids) {
+    for (const separator of SUFFIX_SEPARATORS) {
+      const prefix = `${base}${separator}${letter}`;
+      if (!id.startsWith(prefix)) continue;
+      const tail = id.slice(prefix.length);
+      const n = /^[1-9][0-9]*$/.test(tail) ? Number(tail) : Number.NaN;
+      if (Number.isSafeInteger(n) && n > highest) highest = n;
+    }
+  }
+  return highest + 1;
+}
+
+/**
  * The id of the `attempt`-th candidate for a rewind of `base`
- * (`aiclient-<logical id>`): one past the highest `.r<n>` of the lineage. A
- * failed rewind can leave its child on disk under the next id, so the caller
- * moves on to the following one when DSH says it already exists.
+ * (`aiclient-<logical id>`): one past the highest `_r<n>` (or legacy `.r<n>`)
+ * of the lineage. A failed rewind can leave its child on disk under the next
+ * id, so the caller moves on to the following one when DSH says it already
+ * exists.
  */
 export function rewindSessionId(
   base: string,
   lineage: readonly SessionLineageEntry[],
   attempt = 0
 ): string {
-  let highest = FIRST_REWIND - 1;
-  for (const entry of lineage) {
-    if (!entry.dshSessionId.startsWith(`${base}.r`)) continue;
-    const n = Number(entry.dshSessionId.slice(base.length + 2));
-    if (Number.isSafeInteger(n) && n > highest) highest = n;
-  }
-  return `${base}.r${highest + 1 + attempt}`;
+  const next = nextSuffixNumber(
+    base,
+    'r',
+    lineage.map((entry) => entry.dshSessionId),
+    FIRST_REWIND
+  );
+  return `${base}_r${next + attempt}`;
 }
 
 /** The retired sessions of a lineage, oldest first, each once, never the current one. */

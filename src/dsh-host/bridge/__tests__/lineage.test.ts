@@ -76,6 +76,21 @@ describe('stub version 2', () => {
     expect(isSessionStub({ ...base, version: 3 })).toBe(false);
   });
 
+  it('reads a migrated chat’s origin opaquely beyond its kind (P1-9c)', () => {
+    const lineage = [entry('aiclient-s.r2', 'create')];
+    const stub = { ...base, version: 2, lineage };
+    expect(isSessionStub({ ...stub, origin: { kind: 'pi-session', converterVersion: 2 } })).toBe(
+      true
+    );
+    // A newer build's origin must not make the chat unopenable.
+    expect(isSessionStub({ ...stub, origin: { kind: 'imported-conversation', extra: [1] } })).toBe(
+      true
+    );
+    for (const origin of [null, 'pi', [], { converterVersion: 2 }]) {
+      expect(isSessionStub({ ...stub, origin }), JSON.stringify(origin)).toBe(false);
+    }
+  });
+
   it('names the grants sidecar after the stub file, whatever the stub names (decision 043)', () => {
     expect(grantsSidecarFor('/h/aiclient-sessions/aiclient-s.dsh.json')).toBe(
       '/h/aiclient-sessions/aiclient-s.dsh.grants.json'
@@ -84,18 +99,44 @@ describe('stub version 2', () => {
 });
 
 describe('rewind ids', () => {
-  it('starts at .r2 and goes one past the highest in the lineage', () => {
-    expect(rewindSessionId('aiclient-s', [entry('aiclient-s', 'create')])).toBe('aiclient-s.r2');
+  it('starts at _r2 and goes one past the highest in the lineage', () => {
+    expect(rewindSessionId('aiclient-s', [entry('aiclient-s', 'create')])).toBe('aiclient-s_r2');
+    expect(
+      rewindSessionId('aiclient-s', [
+        entry('aiclient-s', 'create'),
+        entry('aiclient-s_r2'),
+        entry('aiclient-s_r5'),
+      ])
+    ).toBe('aiclient-s_r6');
+    // A fork's own base is not a rewind of this chat.
+    expect(rewindSessionId('aiclient-s', [entry('aiclient-sx_r9', 'fork')])).toBe('aiclient-s_r2');
+    expect(rewindSessionId('aiclient-s', [entry('aiclient-s', 'create')], 2)).toBe('aiclient-s_r4');
+  });
+
+  it('mints only ids DSH’s projection cache can key: letters, digits, _ and - (decision 121)', () => {
+    const id = rewindSessionId('aiclient-4f1c9e2a-0b7d-4c55-9a3e-2d1f6b8c7e90', []);
+    expect(id).toMatch(/^[a-zA-Z0-9_-]+$/);
+  });
+
+  it('counts the .r<n> rewinds of lineages written before, and continues past them', () => {
     expect(
       rewindSessionId('aiclient-s', [
         entry('aiclient-s', 'create'),
         entry('aiclient-s.r2'),
-        entry('aiclient-s.r5'),
+        entry('aiclient-s.r3'),
       ])
-    ).toBe('aiclient-s.r6');
-    // A fork's own base is not a rewind of this chat.
-    expect(rewindSessionId('aiclient-s', [entry('aiclient-sx.r9', 'fork')])).toBe('aiclient-s.r2');
-    expect(rewindSessionId('aiclient-s', [entry('aiclient-s', 'create')], 2)).toBe('aiclient-s.r4');
+    ).toBe('aiclient-s_r4');
+    expect(
+      rewindSessionId('aiclient-s', [
+        entry('aiclient-s', 'create'),
+        entry('aiclient-s.r4'),
+        entry('aiclient-s_r2'),
+      ])
+    ).toBe('aiclient-s_r5');
+    // Not a number, or not ours: ignored.
+    expect(rewindSessionId('aiclient-s', [entry('aiclient-s.rx'), entry('aiclient-s_r07')])).toBe(
+      'aiclient-s_r2'
+    );
   });
 
   it('lists the retired sessions oldest first, each once, never the current one', () => {

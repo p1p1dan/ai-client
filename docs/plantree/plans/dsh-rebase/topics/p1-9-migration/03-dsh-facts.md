@@ -74,7 +74,11 @@ session/end-seed {}                                         ← 构造器补
 - **压缩**（`dsh-compaction-basic/README.md`「What happens when condensation runs」与「Automatic triggers」）：
   - 最旧的一段平衡区间被一条摘要消息替换，最近的尾巴原样保留；区间总是从第一个非 `system/message` 的节点开始。
   - 检查点是 user 消息，`source` 为 `{kind:'compact-checkpoint', compactionId}`（`dsh-compaction/lib/index.js:109-130`），正文用 `<compacted-summary>` 标签框住（`dsh-compaction-basic/lib/index.js:234-235`）。
-  - 实时压缩还会写 `compaction/start`、`compaction/summary`、`compaction/end` 三个括号事件；种子里不写：没有未闭合的 start 就不存在「压缩锁」（README「The region transaction」）。
+  - 实时压缩还会写 `compaction/start`、`compaction/summary`、`compaction/end` 三个括号事件。~~种子里不写：没有未闭合的 start 就不存在「压缩锁」（README「The region transaction」）。~~
+  - **更正（2026-09-29，P1-9c 实验 E1）：种子里必须写。**
+    - DSH 读盘时的格式校验（`dsh-session-persistence-jsonl` 的 worker，与 `dsh-compaction/lib/invariant.js` 同一规则）要求：每个替换型检查点都落在同一 `compactionId`、同一归属的事务里；summary 要紧挨在检查点之前，并且说清它遮住的 surface 区间。
+    - 种子构造器不查这一条。不写的话，会话写得进去，读不回来。
+    - 转换器从版本 2 起照写（[决策 121](../../decisions/121-p1-9c-seed-session-choices.md)，证据 [p1-9c-seed-experiments-2026-09-28](../../evidence/p1-9c-seed-experiments-2026-09-28.md)）。
 - **附件**（`dsh-attachment-local/README.md:12,39-48,55,86,136`）：
   - 入口 `ctx.attachments.saveImages` / `admitPromptContent`（`dsh-attachment/lib/types/index.d.ts:43-51`）；
   - 单张上限 20 MiB、6400 万像素、每边 8192；归一化到 2048² 像素、4 MiB；干净的单帧 8 位 sRGB PNG / JPEG / WebP 在限内时原样通过；

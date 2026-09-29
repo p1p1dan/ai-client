@@ -12,7 +12,9 @@
  *                                      readPage / page (P1-4a, decision 030),
  *                                      configure (P1-5a, decision 033),
  *                                      credential / credential-result
- *                                      (P1-5b, decision 034)
+ *                                      (P1-5b, decision 034),
+ *                                      seedSession / seeded (P1-9c,
+ *                                      decision 054)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -25,9 +27,9 @@
  * reference names) and the nonce every `credential` request of that host
  * must carry. The host composes nothing, and serves no session, before it.
  *
- * Reserved control kinds, added by the tasks that need them and dropped with a
- * diagnostic by whichever side does not know them yet:
- *   seedSession                                  P1-9
+ * A control kind one side does not know yet is dropped with a diagnostic.
+ * `seedSession` takes one source kind today, `pi-file`; P1-9f adds
+ * `imported-conversation` (decision 056).
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
  * which a source checkout loads under Node's type stripping and the packaged
@@ -35,6 +37,8 @@
  */
 
 import type { DshModelPlan } from '../dshModelPlan/types';
+import type { SeedReport } from '../legacyPiSession/convert/types';
+import type { RuntimePermissionSettings } from './runtimePermission';
 import type { SessionHistoryPage } from './sessionHistory';
 import type { WorkerRpcMessage, WorkerRpcRequest } from './workerRpc';
 
@@ -119,6 +123,90 @@ export interface DshHostReadPageRequest {
 }
 
 /**
+ * Decision 054 (P1-9c): make a legacy pi session file a DSH session, with no
+ * channel (`bridge/seedSession.ts`). The host reads the file read-only (a
+ * 1.0.x `.native-v4.jsonl` copy beside a legacy file stands in for it, as in
+ * 1.0.x), converts its active branch (P1-9b), admits its images, creates and
+ * flushes the DSH session, reads it back, writes the grant sidecar and, last,
+ * the identity stub with its `origin`. The same source migrated again answers
+ * the stub it already has (`reused`). Nothing in the index changes: Main
+ * commits the migration itself (P1-9d). One at a time per host; answered
+ * `seeded` with the same id.
+ */
+export interface DshHostSeedSessionRequest {
+  host: 'seedSession';
+  id: number;
+  /** P1-9c: a pi session file. P1-9f adds `imported-conversation`. */
+  kind: 'pi-file';
+  /** The file the index row names (`runtimeIdentity`). */
+  sourceFile: string;
+  /** The chat whose DSH session this becomes: `aiclient-<id>`, its stub named after it. */
+  logicalSessionId: string;
+  /** The index row's workspace: the DSH session's fixed cwd, as a resume will ask for it. */
+  cwd: string;
+  /**
+   * Main's stat of `sourceFile` just before it asked. A file that no longer
+   * matches is being written (`source_busy`, retryable).
+   */
+  expect?: { bytes: number; mtimeMs: number };
+}
+
+/**
+ * Where a migration stopped (plan P1-9 shard 02 §5): the request itself,
+ * reading the file, the converter's three (decode, build, verify), admitting
+ * images, creating the session, the host's read-back (verify), the grant
+ * sidecar, the stub.
+ */
+export type DshSeedStage =
+  | 'request'
+  | 'read'
+  | 'decode'
+  | 'build'
+  | 'admit'
+  | 'create'
+  | 'verify'
+  | 'sidecar'
+  | 'stub';
+
+export const DSH_SEED_STAGES: readonly DshSeedStage[] = [
+  'request',
+  'read',
+  'decode',
+  'build',
+  'admit',
+  'create',
+  'verify',
+  'sidecar',
+  'stub',
+];
+
+/** A `seedSession` whose own fields are not what the protocol says. */
+export const DSH_SEED_REQUEST_INVALID = 'seed_request_invalid';
+/** A host with no migration (no DSH services for it). */
+export const DSH_SEED_UNAVAILABLE = 'seed_unavailable';
+
+/** What a migration made (or found already made), for Main's index transaction. */
+export interface DshSeedSessionResult {
+  /** The identity stub: the migrated row's `runtimeIdentity`. */
+  stubFile: string;
+  dshSessionId: string;
+  /** An earlier migration of these same bytes was found complete; nothing was written. */
+  reused: boolean;
+  /** The file Main named, as it was read: what `migratedFrom` records. */
+  source: { sha256: string; bytes: number; mtimeMs: number };
+  /** The bytes converted: the file itself, or 1.0.x's `.native-v4.jsonl` copy of it. */
+  converted: 'source' | 'native-v4-copy';
+  /** The last mode / gear the file recorded, for a first resume that names none. */
+  legacyPermissions: RuntimePermissionSettings | null;
+  /** Grants the sidecar holds (0: no sidecar). */
+  grants: number;
+  /** Images admitted, and images the store refused (kept as placeholder text). */
+  images: { admitted: number; refused: number };
+  /** Counts only (plan P1-9 shard 02 §5): no text, title or path. */
+  report: SeedReport;
+}
+
+/**
  * Decision 033: the model plan, Main's first message to a host it spawned.
  * The host waits for it before composing its profile (`DSH_CONFIGURE_TIMEOUT_MS`,
  * then `fatal`), injects `routes` and `defaultModel` as in-memory overlays and
@@ -150,6 +238,7 @@ export type DshMainToHostMessage =
   | DshHostShutdown
   | DshHostGcRequest
   | DshHostReadPageRequest
+  | DshHostSeedSessionRequest
   | DshHostConfigure
   | DshHostCredentialResult;
 
@@ -279,6 +368,22 @@ export interface DshHostPage {
   ms: number;
 }
 
+/** Answer to `seedSession`, echoing its id: what the migration made, or where it stopped. */
+export interface DshHostSeeded {
+  host: 'seeded';
+  id: number;
+  ok: boolean;
+  /** Present exactly when `ok`. */
+  result?: DshSeedSessionResult;
+  /**
+   * Present exactly when not `ok`. `retryable`: the same request may succeed
+   * later unchanged (the file was being written, the session was locked).
+   */
+  error?: { stage: DshSeedStage; code: string; message: string; retryable: boolean };
+  /** Time the host spent on it, queueing included. */
+  ms: number;
+}
+
 /**
  * Decision 034: the host's credential provider asks for the key behind one
  * reference of its plan, once per model request; the host keeps no copy. Main
@@ -303,6 +408,7 @@ export type DshHostToMainMessage =
   | DshHostChannelClosed
   | DshHostGcResult
   | DshHostPage
+  | DshHostSeeded
   | DshHostCredentialRequest;
 
 /** How long a host waits for `configure` before it refuses to boot. */
@@ -502,6 +608,79 @@ export function isDshHostPage(value: unknown): value is DshHostPage {
     typeof error.code === 'string' &&
     error.code.length > 0 &&
     typeof error.message === 'string'
+  );
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+export function isDshSeedStage(value: unknown): value is DshSeedStage {
+  return typeof value === 'string' && (DSH_SEED_STAGES as readonly string[]).includes(value);
+}
+
+/** A stat as it travels: a whole number of bytes and a finite, non-negative mtime. */
+function isFileStat(value: unknown, sizeKey: 'bytes'): boolean {
+  return (
+    isPlainRecord(value) &&
+    isCount(value[sizeKey], 0, Number.MAX_SAFE_INTEGER) &&
+    isNonNegativeFinite(value.mtimeMs)
+  );
+}
+
+export function isDshHostSeedSessionRequest(value: unknown): value is DshHostSeedSessionRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'seedSession' &&
+    isPositiveSafeInteger(value.id) &&
+    value.kind === 'pi-file' &&
+    isNonEmptyString(value.sourceFile) &&
+    isNonEmptyString(value.logicalSessionId) &&
+    isNonEmptyString(value.cwd) &&
+    (value.expect === undefined || isFileStat(value.expect, 'bytes'))
+  );
+}
+
+function isSeedResult(value: unknown): value is DshSeedSessionResult {
+  if (!isPlainRecord(value)) return false;
+  const { source, images, legacyPermissions } = value;
+  return (
+    isNonEmptyString(value.stubFile) &&
+    isNonEmptyString(value.dshSessionId) &&
+    typeof value.reused === 'boolean' &&
+    isFileStat(source, 'bytes') &&
+    isPlainRecord(source) &&
+    typeof source.sha256 === 'string' &&
+    /^[0-9a-f]{64}$/.test(source.sha256) &&
+    (value.converted === 'source' || value.converted === 'native-v4-copy') &&
+    (legacyPermissions === null || isPlainRecord(legacyPermissions)) &&
+    isCount(value.grants, 0, Number.MAX_SAFE_INTEGER) &&
+    isPlainRecord(images) &&
+    isCount(images.admitted, 0, Number.MAX_SAFE_INTEGER) &&
+    isCount(images.refused, 0, Number.MAX_SAFE_INTEGER) &&
+    isPlainRecord(value.report)
+  );
+}
+
+export function isDshHostSeeded(value: unknown): value is DshHostSeeded {
+  if (
+    !isRecord(value) ||
+    value.host !== 'seeded' ||
+    !isPositiveSafeInteger(value.id) ||
+    typeof value.ok !== 'boolean' ||
+    !isNonNegativeFinite(value.ms)
+  ) {
+    return false;
+  }
+  if (value.ok) return isSeedResult(value.result) && value.error === undefined;
+  const error = value.error;
+  return (
+    value.result === undefined &&
+    isPlainRecord(error) &&
+    isDshSeedStage(error.stage) &&
+    isNonEmptyString(error.code) &&
+    typeof error.message === 'string' &&
+    typeof error.retryable === 'boolean'
   );
 }
 

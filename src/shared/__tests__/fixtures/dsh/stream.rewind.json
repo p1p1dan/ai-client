@@ -307,7 +307,7 @@
     "requestId": "turn-RECALL",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1",
+      "messageId": "dsh-aiclient-rec-rewind_r2-t2-s1",
       "role": "assistant",
       "model": "aiclient-gateway/fake-1"
     }
@@ -317,8 +317,8 @@
     "requestId": "turn-RECALL",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1",
-      "blockId": "dsh-aiclient-rec-rewind.r2-t2-s1-b0",
+      "messageId": "dsh-aiclient-rec-rewind_r2-t2-s1",
+      "blockId": "dsh-aiclient-rec-rewind_r2-t2-s1-b0",
       "text": "P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2"
     }
   },
@@ -369,7 +369,7 @@
     "requestId": "turn-RECALL",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-aiclient-rec-rewind.r2-t2-s1"
+      "messageId": "dsh-aiclient-rec-rewind_r2-t2-s1"
     }
   },
   {

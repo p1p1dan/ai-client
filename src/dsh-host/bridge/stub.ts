@@ -27,6 +27,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
+import type { SeedOrigin } from '../../shared/legacyPiSession/convert/types.ts';
 
 /** One DSH session a chat has been (decision 027). */
 export interface SessionLineageEntry {
@@ -53,7 +54,21 @@ export interface SessionStub {
   createdAt: number;
   /** Version 2: oldest first, only ever appended to. */
   lineage?: SessionLineageEntry[];
+  /**
+   * P1-9c (decision 054): the chat was migrated from a 1.0.x pi session, and
+   * this is what was converted. Absent for a chat that began on DSH, and for
+   * a fork (its own chat, even when cut from a migrated one); a rewind keeps it.
+   */
+  origin?: SessionStubOrigin;
 }
+
+/** A migrated chat's source (`seedSession.ts`): what was converted, from which file, when. */
+export type SessionStubOrigin = SeedOrigin & {
+  /** Epoch milliseconds. */
+  migratedAt: number;
+  /** The file Main named and what it held when read; for a legacy file, the file itself, not its copy. */
+  file: { path: string; sha256: string; bytes: number; mtimeMs: number };
+};
 
 /** The version this build writes. */
 export const SESSION_STUB_VERSION = 2 as const;
@@ -102,7 +117,13 @@ export function isSessionStub(value: unknown): value is SessionStub {
     !SAFE_SESSION_ID.test(stub.dshSessionId) ||
     typeof stub.logicalSessionId !== 'string' ||
     typeof stub.cwd !== 'string' ||
-    stub.cwd.length === 0
+    stub.cwd.length === 0 ||
+    // Read opaquely beyond its kind: a newer origin must not make the chat unopenable.
+    (stub.origin !== undefined &&
+      (typeof stub.origin !== 'object' ||
+        stub.origin === null ||
+        Array.isArray(stub.origin) ||
+        typeof (stub.origin as { kind?: unknown }).kind !== 'string'))
   ) {
     return false;
   }

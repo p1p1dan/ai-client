@@ -9,7 +9,12 @@ import { buildSessionContext } from '../../context.ts';
 import { convertLegacySession } from '../../legacy.ts';
 import { projectPiSessionHistory } from '../../timeline.ts';
 import type { Entry } from '../../types.ts';
-import { checkSeed, convertPiSessionBytes, type SeedConversionResult } from '../index.ts';
+import {
+  checkSeed,
+  convertPiSessionBytes,
+  type DshSeedEvent,
+  type SeedConversionResult,
+} from '../index.ts';
 import { compareContexts, compareHistories, piContextLines, seedContextLines } from './e4.ts';
 
 /**
@@ -27,6 +32,8 @@ import { compareContexts, compareHistories, piContextLines, seedContextLines } f
  * Re-record at closeout only:
  *   AICLIENT_UPDATE_FIXTURES=1 pnpm vitest run src/shared/legacyPiSession/convert/__tests__/seedCorpus.test.ts
  *   pnpm exec biome format --write src/shared/__tests__/fixtures/legacy-pi-dsh
+ * To review a re-record first, add AICLIENT_FIXTURES_OUT=<dir>: the goldens
+ * go there and the repository's stay as they are.
  */
 
 interface ManifestEntry {
@@ -137,9 +144,11 @@ function goldens(entry: ManifestEntry) {
 }
 
 function pin(name: string, actual: unknown) {
-  const target = path.join(GOLDEN, name);
+  // With AICLIENT_FIXTURES_OUT an update writes there instead, to be reviewed before it lands.
+  const directory = (UPDATE && process.env.AICLIENT_FIXTURES_OUT) || GOLDEN;
+  const target = path.join(directory, name);
   if (UPDATE) {
-    mkdirSync(GOLDEN, { recursive: true });
+    mkdirSync(directory, { recursive: true });
     writeFileSync(target, `${JSON.stringify(actual, null, 2)}\n`);
   }
   expect(actual).toEqual(JSON.parse(readFileSync(target, 'utf8')));
@@ -195,6 +204,58 @@ describe('the legacy pi corpus as DSH seeds', () => {
     const { history, context } = e4(entry, result);
     expect(history.filter((diff) => !diff.category)).toEqual([]);
     expect(context.filter((diff) => !diff.category)).toEqual([]);
+  });
+
+  it('wraps every replacing checkpoint in DSH’s compaction transaction, which the checker demands (P1-9c E1)', () => {
+    /** The seed as P1-9b wrote it: the same checkpoints with no transaction around them. */
+    const withoutTransactions = (seed: readonly DshSeedEvent[]): DshSeedEvent[] => {
+      const kept = seed.filter((event) => !event.type.startsWith('compaction/'));
+      const moved = new Map(kept.map((event, seq) => [event.seq, seq]));
+      return kept.map((event, seq) => {
+        const op = event.surfaceOp;
+        return {
+          ...event,
+          seq,
+          ...(op && op !== 'append'
+            ? {
+                surfaceOp: {
+                  op: 'replace' as const,
+                  startSeq: moved.get(op.startSeq) as number,
+                  endSeq: moved.get(op.endSeq) as number,
+                },
+              }
+            : {}),
+          ...(event.sourceEventSeqs
+            ? {
+                sourceEventSeqs: event.sourceEventSeqs
+                  .filter((cited) => moved.has(cited))
+                  .map((cited) => moved.get(cited) as number),
+              }
+            : {}),
+        };
+      });
+    };
+    const bracketed: string[] = [];
+    for (const entry of manifest) {
+      const result = convert(entry);
+      if (!result.ok || !result.seed.some((event) => event.type === 'compaction/start')) continue;
+      bracketed.push(entry.file);
+      expect(checkSeed(result.seed), entry.file).toEqual([]);
+      const rules = new Set(
+        checkSeed(withoutTransactions(result.seed)).map((violation) => violation.rule)
+      );
+      expect([...rules], entry.file).toEqual(['read/compaction']);
+    }
+    expect(bracketed).toEqual([
+      'legacy-desktop.jsonl',
+      'legacy-desktop.jsonl.native-v4.jsonl',
+      'legacy-pi-v1.jsonl',
+      'legacy-pi-v1.jsonl.native-v4.jsonl',
+      'legacy-pi-v3.jsonl',
+      'legacy-pi-v3.jsonl.native-v4.jsonl',
+      'v4-cli.jsonl',
+      'v4-compaction.jsonl',
+    ]);
   });
 
   it('keeps the model context 1.0.x built, except where decision 055 or a crash says otherwise', () => {

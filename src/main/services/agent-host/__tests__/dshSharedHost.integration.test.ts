@@ -1323,14 +1323,14 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       });
 
       expect(rewound.editorText).toBe('beta IT-DROP-2, no scenario.');
-      expect(rewound.leaf.fileTailEntryId).toMatch(/^aiclient-w1\.r2#\d+$/);
+      expect(rewound.leaf.fileTailEntryId).toMatch(/^aiclient-w1_r2#\d+$/);
       // Same identity for Main: the stub path did not move, it points at the child.
       expect(stubOf('w1')).toBe(stubFile);
       const stub = JSON.parse(readFileSync(stubFile, 'utf8'));
-      expect(stub).toMatchObject({ version: 2, dshSessionId: 'aiclient-w1.r2' });
+      expect(stub).toMatchObject({ version: 2, dshSessionId: 'aiclient-w1_r2' });
       expect(stub.lineage.map((entry: { dshSessionId: string }) => entry.dshSessionId)).toEqual([
         'aiclient-w1',
-        'aiclient-w1.r2',
+        'aiclient-w1_r2',
       ]);
 
       const recall = await turn(manager, 'w1', RECALL, 50);

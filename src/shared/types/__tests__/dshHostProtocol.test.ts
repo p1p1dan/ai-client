@@ -20,8 +20,11 @@ import {
   isDshHostPong,
   isDshHostReadPageRequest,
   isDshHostReady,
+  isDshHostSeeded,
+  isDshHostSeedSessionRequest,
   isDshHostShutdown,
   isDshHostStopped,
+  isDshSeedStage,
   opensDshChannel,
 } from '../dshHostProtocol';
 
@@ -224,6 +227,148 @@ describe('dshHostProtocol readPage (P1-4a, decision 030)', () => {
     ]) {
       expect(isDshHostPage(bad), JSON.stringify(bad)).toBe(false);
     }
+  });
+});
+
+describe('dshHostProtocol seedSession (P1-9c, decision 054)', () => {
+  const request = {
+    host: 'seedSession',
+    id: 3,
+    kind: 'pi-file',
+    sourceFile: '/p/pi-agent/sessions/s1.jsonl',
+    logicalSessionId: 's1',
+    cwd: '/work',
+  };
+  const result = {
+    stubFile: '/h/aiclient-sessions/aiclient-s1.dsh.json',
+    dshSessionId: 'aiclient-s1',
+    reused: false,
+    source: { sha256: 'f'.repeat(64), bytes: 120, mtimeMs: 1790000000000.25 },
+    converted: 'native-v4-copy',
+    legacyPermissions: { mode: 'agent', gear: 'ask' },
+    grants: 2,
+    images: { admitted: 1, refused: 0 },
+    report: { converterVersion: 2, source: { kind: 'pi-session', generation: 'pi-v3' } },
+  };
+
+  it('accepts a pi-file request, with or without Main’s stat', () => {
+    expect(isDshHostSeedSessionRequest(request)).toBe(true);
+    expect(
+      isDshHostSeedSessionRequest({ ...request, expect: { bytes: 0, mtimeMs: 1790000000000.5 } })
+    ).toBe(true);
+  });
+
+  it.each([
+    ['another host kind', { ...request, host: 'readPage' }],
+    ['no id', { ...request, id: 0 }],
+    ['a source kind not served yet', { ...request, kind: 'imported-conversation' }],
+    ['an empty source file', { ...request, sourceFile: '' }],
+    ['no logical id', { ...request, logicalSessionId: undefined }],
+    ['an empty cwd', { ...request, cwd: '' }],
+    ['a stat with a negative size', { ...request, expect: { bytes: -1, mtimeMs: 0 } }],
+    ['a stat with a fractional size', { ...request, expect: { bytes: 1.5, mtimeMs: 0 } }],
+    ['a stat without mtime', { ...request, expect: { bytes: 1 } }],
+    ['a stat that is a list', { ...request, expect: [1, 2] }],
+  ])('refuses a request with %s', (_label, bad) => {
+    expect(isDshHostSeedSessionRequest(bad)).toBe(false);
+  });
+
+  it('accepts a seeded answer: a result, or where it stopped', () => {
+    expect(isDshHostSeeded({ host: 'seeded', id: 3, ok: true, result, ms: 12.5 })).toBe(true);
+    expect(
+      isDshHostSeeded({
+        host: 'seeded',
+        id: 3,
+        ok: true,
+        result: { ...result, converted: 'source', legacyPermissions: null, grants: 0 },
+        ms: 0,
+      })
+    ).toBe(true);
+    expect(
+      isDshHostSeeded({
+        host: 'seeded',
+        id: 3,
+        ok: false,
+        error: { stage: 'read', code: 'source_busy', message: 'changed', retryable: true },
+        ms: 1,
+      })
+    ).toBe(true);
+  });
+
+  it.each([
+    ['ok without a result', { host: 'seeded', id: 3, ok: true, ms: 1 }],
+    [
+      'ok with an error beside the result',
+      { host: 'seeded', id: 3, ok: true, result, error: {}, ms: 1 },
+    ],
+    [
+      'a short sha256',
+      {
+        host: 'seeded',
+        id: 3,
+        ok: true,
+        result: { ...result, source: { ...result.source, sha256: 'ab' } },
+        ms: 1,
+      },
+    ],
+    [
+      'an unknown conversion',
+      { host: 'seeded', id: 3, ok: true, result: { ...result, converted: 'guess' }, ms: 1 },
+    ],
+    [
+      'a negative image count',
+      {
+        host: 'seeded',
+        id: 3,
+        ok: true,
+        result: { ...result, images: { admitted: -1, refused: 0 } },
+        ms: 1,
+      },
+    ],
+    [
+      'an unknown stage',
+      {
+        host: 'seeded',
+        id: 3,
+        ok: false,
+        error: { stage: 'guess', code: 'x', message: '', retryable: false },
+        ms: 1,
+      },
+    ],
+    [
+      'a failure without retryable',
+      { host: 'seeded', id: 3, ok: false, error: { stage: 'read', code: 'x', message: '' }, ms: 1 },
+    ],
+    [
+      'a failure with a result',
+      {
+        host: 'seeded',
+        id: 3,
+        ok: false,
+        result,
+        error: { stage: 'read', code: 'x', message: '', retryable: false },
+        ms: 1,
+      },
+    ],
+    ['no time', { host: 'seeded', id: 3, ok: true, result }],
+  ])('refuses an answer with %s', (_label, bad) => {
+    expect(isDshHostSeeded(bad)).toBe(false);
+  });
+
+  it('knows the nine stages of plan P1-9 shard 02 §5 and the request', () => {
+    for (const stage of [
+      'request',
+      'read',
+      'decode',
+      'build',
+      'admit',
+      'create',
+      'verify',
+      'sidecar',
+      'stub',
+    ])
+      expect(isDshSeedStage(stage), stage).toBe(true);
+    expect(isDshSeedStage('commit')).toBe(false);
   });
 });
 

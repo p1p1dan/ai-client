@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "a1b8d594ff50f6bbf66be41f469312102151106df82f3a56692b6fdd14b30b41",
     "sourceBytes": 8190,
     "sourceSessionId": "8fa756b6-3f4b-43c5-9ef6-1dd12357ee68",

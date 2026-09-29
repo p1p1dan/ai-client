@@ -51,7 +51,7 @@
               "text": "fake gateway: no P0 scenario marker"
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-rewind.r2-t1-s1"
+          "liveMessageId": "dsh-aiclient-rec-rewind_r2-t1-s1"
         },
         {
           "id": "h:id-6",
@@ -80,7 +80,7 @@
               "text": "P0-RECALL present=REWIND-KEEP-1 missing=REWIND-DROP-2"
             }
           ],
-          "liveMessageId": "dsh-aiclient-rec-rewind.r2-t2-s1"
+          "liveMessageId": "dsh-aiclient-rec-rewind_r2-t2-s1"
         }
       ],
       "offset": 0,
@@ -96,7 +96,7 @@
       "workspacePath": "<workspace>",
       "leaf": {
         "activeEntryId": "id-8",
-        "fileTailEntryId": "aiclient-rec-rewind.r2#22"
+        "fileTailEntryId": "aiclient-rec-rewind_r2#22"
       },
       "nodes": [
         {
@@ -191,7 +191,7 @@
     "editorText": "beta REWIND-DROP-2, no scenario.",
     "leaf": {
       "activeEntryId": "id-5",
-      "fileTailEntryId": "aiclient-rec-rewind.r2#13"
+      "fileTailEntryId": "aiclient-rec-rewind_r2#13"
     },
     "historyIds": ["h:id-1", "h:id-5"],
     "treeNodes": ["id-1", "id-5 *", "id-9 (retired)", "id-11 (retired)"]

@@ -4,7 +4,7 @@
   "cwd": "/tmp/aiclient-legacy-pi-corpus/workspace",
   "origin": {
     "kind": "pi-session",
-    "converterVersion": 1,
+    "converterVersion": 2,
     "sourceSha256": "431d50f13163dba80cc6da7f7ac46340c40a852b95d2ea08661b116046cd6d95",
     "sourceBytes": 5045,
     "sourceSessionId": "01a0e2f1-fffb-7cc7-a79e-b5fb1ff74945",
@@ -457,8 +457,39 @@
       }
     },
     {
-      "type": "user/message",
+      "type": "compaction/start",
       "seq": 24,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "turn": null
+      }
+    },
+    {
+      "type": "compaction/summary",
+      "seq": 25,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "summary": [
+          {
+            "type": "text",
+            "text": "v3 summary: read the notes, answered twice."
+          }
+        ],
+        "shadowedRange": {
+          "start": 3,
+          "end": 19
+        },
+        "shadowedSeqs": [3, 4, 6, 9, 15, 16, 19],
+        "shadowedTokenCount": 133,
+        "provider": "anthropic",
+        "model": "claude-legacy"
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 26,
       "time": 1790513905660,
       "data": {
         "id": "1dee86f3",
@@ -487,11 +518,20 @@
         "startSeq": 3,
         "endSeq": 19
       },
-      "sourceEventSeqs": [3, 4, 6, 9, 15, 16, 19]
+      "sourceEventSeqs": [24, 25, 3, 4, 6, 9, 15, 16, 19]
+    },
+    {
+      "type": "compaction/end",
+      "seq": 27,
+      "time": 1790513905660,
+      "data": {
+        "compactionId": "1dee86f3",
+        "turn": null
+      }
     },
     {
       "type": "turn/start",
-      "seq": 25,
+      "seq": 28,
       "time": 1790513905660,
       "data": {
         "turn": 3
@@ -499,7 +539,7 @@
     },
     {
       "type": "step/start",
-      "seq": 26,
+      "seq": 29,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -508,7 +548,7 @@
     },
     {
       "type": "user/message",
-      "seq": 27,
+      "seq": 30,
       "time": 1790513905660,
       "data": {
         "id": "282b4634",
@@ -527,7 +567,7 @@
     },
     {
       "type": "assistant/message",
-      "seq": 28,
+      "seq": 31,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -559,7 +599,7 @@
     },
     {
       "type": "step/end",
-      "seq": 29,
+      "seq": 32,
       "time": 1790513905660,
       "data": {
         "turn": 3,
@@ -568,7 +608,7 @@
     },
     {
       "type": "turn/end",
-      "seq": 30,
+      "seq": 33,
       "time": 1790513905660,
       "data": {
         "turn": 3,
