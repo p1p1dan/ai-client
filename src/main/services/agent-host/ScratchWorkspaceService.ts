@@ -13,8 +13,8 @@
  * Per the batch-4 acceptance criteria a scratch directory does not survive the
  * app:
  *
- *  - allocated lazily, on the first send (or the first Pi TUI open) of an
- *    unbound session — never when the chat row is merely created, mirroring
+ *  - allocated lazily, on the first send of an unbound session — never when
+ *    the chat row is merely created, mirroring
  *    `chat:registerSession`'s "no worker before the user typed anything";
  *  - released when its session is archived (the product's "destroy a chat");
  *  - the whole root is wiped at app exit AND again at the next startup, so a
@@ -170,7 +170,7 @@ export class ScratchWorkspaceService {
   /**
    * Allocate (or return) this session's isolated cwd.
    *
-   * Idempotent per session: the send path and the TUI path both call it, and a
+   * Idempotent per session: every caller that asks gets the same answer, and a
    * session must never end up with two different working directories.
    */
   ensure(sessionId: string): Promise<string> {

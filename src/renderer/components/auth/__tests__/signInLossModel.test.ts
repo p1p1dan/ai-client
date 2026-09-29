@@ -22,7 +22,6 @@ const EMPTY: SignInLossInput = {
   parkedTabsByWorkspace: {},
   currentWorkspacePath: null,
   shellTerminals: 0,
-  agentTerminals: 0,
   runningTurns: 0,
 };
 
@@ -68,19 +67,17 @@ describe('deriveSignInLosses', () => {
     const losses = deriveSignInLosses({
       ...EMPTY,
       shellTerminals: 2,
-      agentTerminals: 1,
       runningTurns: 4,
     });
     expect(losses).toEqual({
       unsavedFiles: 0,
       shellTerminals: 2,
-      agentTerminals: 1,
       runningTurns: 4,
     });
-    // The copy treats both terminal kinds as one number: both die on the same
-    // unmount, and "2 shells and 1 agent terminal" is a distinction the user
-    // has no decision to make about.
-    expect(totalTerminals(losses)).toBe(3);
+    // dsh-rebase P1-11 (decision 127): the embedded pi TUI is gone, so the
+    // shells are every terminal the unmount kills.
+    expect(totalTerminals(losses)).toBe(2);
+    expect(losses).not.toHaveProperty('agentTerminals');
   });
 });
 
@@ -95,7 +92,6 @@ describe('hasSignInLosses — the gate that decides whether a dialog appears at 
   it.each([
     ['an unsaved file', { unsavedFiles: 1 }],
     ['a shell terminal', { shellTerminals: 1 }],
-    ['an embedded agent terminal', { agentTerminals: 1 }],
     ['a turn in flight', { runningTurns: 1 }],
   ])('is true for %s on its own', (_label, partial) => {
     expect(hasSignInLosses({ ...NOTHING, ...partial })).toBe(true);
@@ -116,8 +112,7 @@ describe('signInLossLines', () => {
   it('leads with the running turn, because that is the line that contradicts what the user assumes', () => {
     const lines = signInLossLines({
       unsavedFiles: 3,
-      shellTerminals: 1,
-      agentTerminals: 1,
+      shellTerminals: 2,
       runningTurns: 1,
     });
     expect(lines.map((line) => line.params?.count)).toEqual([1, 2, 3]);
@@ -145,7 +140,6 @@ describe('signInLossLines', () => {
     const full: SignInLossSnapshot = {
       unsavedFiles: 1,
       shellTerminals: 1,
-      agentTerminals: 0,
       runningTurns: 1,
     };
     for (const line of [

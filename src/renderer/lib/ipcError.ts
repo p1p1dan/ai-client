@@ -10,8 +10,8 @@
  * translates or rewords what is left: the message belongs to whoever raised it
  * (git, WorkerManager). A message that was never wrapped comes back unchanged.
  *
- * `hooks/piTuiOpenError.ts` carries the same pattern for its own dictionary-key
- * lookup and predates this module.
+ * (`hooks/piTuiOpenError.ts` carried the same pattern for the pi TUI's
+ * dictionary-key lookup; it went with the TUI in dsh-rebase P1-11.)
  */
 
 /** `Error invoking remote method 'x': [SomeError: ]<message>` */

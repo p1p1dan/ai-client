@@ -170,75 +170,6 @@ async function assertCreatableIndexRow(sessionId: string): Promise<SessionIndexE
 }
 
 /**
- * Q17 — hand the session's JSONL back from terminal mode to the GUI.
- *
- * Deliberately kills the terminal rather than negotiating with it: the Pi CLI
- * offers no flush-and-hand-over handshake, so "stop the other writer" is the
- * only guarantee available. Best-effort by design — a write must not fail
- * because a terminal that may not even exist could not be reaped.
- *
- * Three steps, in this order. Release the terminal; refuse to continue if one
- * still holds the file (cutover-04 — the gate was written for this and then
- * never called); and re-read the file when a terminal has written it, because
- * killing the other writer says nothing about what it wrote. Skipping that last
- * step is what session-01 turned into a permanently unopenable session: the
- * worker kept the sequence it read before the terminal appended and wrote its
- * next row with a number the file could no longer justify.
- *
- * Every GUI path that appends to the JSONL calls this — send, compact, rewind.
- */
-async function handOverFromTui(
-  sessionId: string,
-  ownerWebContentsId: number | undefined
-): Promise<void> {
-  let sessionFile: string | undefined;
-  try {
-    sessionFile = (await sessionIndexService.get(sessionId))?.runtimeIdentity;
-  } catch (error) {
-    console.warn('[chat] Failed to read the session row before a GUI write:', error);
-    return;
-  }
-  if (!sessionFile) return;
-  const { assertHostPromptAllowed, releaseSessionForHostPrompt } = await import('./piTui');
-  let terminalWrote = false;
-  try {
-    terminalWrote = await releaseSessionForHostPrompt(sessionFile);
-  } catch (error) {
-    console.warn('[chat] Failed to release Pi TUI ownership before a GUI write:', error);
-  }
-  assertHostPromptAllowed(sessionFile);
-  if (terminalWrote) await reloadSessionFromDisk(sessionId, ownerWebContentsId);
-}
-
-/**
- * Bring a live worker's in-memory session back in line with its file on disk.
- *
- * Only reachable when the Pi TUI has been driving the same JSONL: pi's
- * SessionManager caches the file at open, so the worker would otherwise keep
- * the pre-handover leaf and branch the next turn off it, leaving everything the
- * terminal wrote on an abandoned path.
- *
- * With no live worker there is nothing to correct — a later spawn reads the
- * file anyway — so this reports `false` rather than forcing one into existence.
- */
-async function reloadSessionFromDisk(
-  sessionId: string,
-  ownerWebContentsId: number | undefined
-): Promise<boolean> {
-  const row = await sessionIndexService.get(sessionId);
-  if (!row?.runtimeIdentity) return false;
-  // Only a Pi TUI writes behind a worker's back, and it refuses DSH identities
-  // (P1-1), so a DSH session never needs this.
-  if (resolveAgentWireName(row.agent) !== PI_AGENT) return false;
-  const { reloaded } = await workerManager.reloadSession({
-    sessionId,
-    sessionFile: row.runtimeIdentity,
-    ...(ownerWebContentsId !== undefined ? { ownerWebContentsId } : {}),
-  });
-  return reloaded;
-}
-
-/**
  * U12 fix — validate a renderer-supplied spawn tier, or drop it.
  *
  * Dropped rather than rejected: the tier comes from a per-session preference
@@ -479,10 +410,10 @@ export function registerChatHandlers(): void {
   /**
    * U05-a — hand an unbound chat its isolated working directory.
    *
-   * Called on the first send and on the first Pi TUI open, never when the chat
-   * row is created: a chat the user never actually uses must not put a
-   * directory on disk (same rule `chat:registerSession` follows for workers).
-   * Idempotent, so both callers can ask without coordinating.
+   * Called on the first send, never when the chat row is created: a chat the
+   * user never actually uses must not put a directory on disk (same rule
+   * `chat:registerSession` follows for workers). Idempotent, so a repeated ask
+   * gets the same directory.
    */
   ipcMain.handle(
     IPC_CHANNELS.CHAT_ENSURE_SCRATCH_WORKSPACE,
@@ -682,19 +613,6 @@ export function registerChatHandlers(): void {
   );
 
   ipcMain.handle(
-    IPC_CHANNELS.CHAT_RELOAD_SESSION,
-    async (e, payload: { sessionId: string }): Promise<{ reloaded: boolean }> => {
-      // Main resolves the session file from the index rather than taking one
-      // from the renderer: the renderer-side resume path gates on a non-empty
-      // workspace path, which an unbound (scratch) chat does not have, and that
-      // chat needs the reload just as much as a bound one.
-      const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      const reloaded = await reloadSessionFromDisk(payload.sessionId, ownerWebContentsId);
-      return { reloaded };
-    }
-  );
-
-  ipcMain.handle(
     IPC_CHANNELS.CHAT_SEND,
     async (
       e,
@@ -717,10 +635,6 @@ export function registerChatHandlers(): void {
       // Ownership follows the most recent driver: a session picked up in a
       // second window must show ITS approval prompts there, not in the first.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      // Q17 — a warm Pi terminal on this session must stop, and whatever it
-      // wrote must be read back, before the worker writes the same JSONL.
-      // Terminals on other sessions are untouched.
-      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       try {
         const requestId = await workerManager.send({ ...payload, ownerWebContentsId });
         return { requestId };
@@ -741,10 +655,8 @@ export function registerChatHandlers(): void {
         model?: string;
       }
     ): Promise<{ requestId: string }> => {
-      // Same preamble as CHAT_SEND: a retry is a turn, and the turn it re-runs
-      // must be read from the file as a terminal on this session left it.
+      // Same preamble as CHAT_SEND: ownership follows the most recent driver.
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       try {
         const requestId = await workerManager.retryLastTurn({
           sessionId: payload.sessionId,
@@ -976,10 +888,6 @@ export function registerChatHandlers(): void {
     ): Promise<Awaited<ReturnType<typeof workerManager.compactSession>>> => {
       await requireLiveSession(payload.sessionId);
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      // session-01 — compaction appends to the JSONL just as a turn does, so it
-      // needs the same handover. Without it a compaction written on top of what
-      // a terminal appended is the write that makes the file unopenable.
-      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       return workerManager.compactSession({
         sessionId: payload.sessionId,
         ...(payload.instructions ? { instructions: payload.instructions } : {}),
@@ -1118,9 +1026,6 @@ export function registerChatHandlers(): void {
         throw new Error('rewind_confirmation_required: Rewind requires explicit confirmation');
       }
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
-      // session-01 — a rewind moves the branch by appending a lane row, which is
-      // a write to the shared file and needs the same handover as a send.
-      await handOverFromTui(payload.sessionId, ownerWebContentsId);
       return workerManager.rewindSession({
         sessionId: payload.sessionId,
         entryId: payload.entryId,

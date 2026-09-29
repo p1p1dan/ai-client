@@ -109,3 +109,7 @@
 ## 补记（2026-09-29，P1-9f）
 
 「遗留」里的 P1-9f 一节已由[决策 124](124-p1-9f-imports-produce-dsh-choices.md) 落实（待审批）：导入去重认迁移对（第 15 条）；`removeImported` 接受 `dsh` 行，但拒绝带 `migratedFrom` 的行（第 16、17 条）。导入的宿主调用沿用第 1～3 条的超时与生命周期规则，传输失败沿用第 6 条 `host` 阶段的码。
+
+## 补记（2026-09-29，P1-11）
+
+第 16 条「`chat.ts` 里现有的 `handOverFromTui` 不动」已随 pi TUI 删除：`handOverFromTui`、`reloadSessionFromDisk`、`chat:reloadSession` 与 `WorkerManager.reloadSession` 都不在了，迁移与发送都不再有 TUI 交接（[决策 127](127-p1-11-remove-pi-tui-choices.md) 第 2 条，待审批）。`SessionIndexService.list()` 仍回答每一行（第 10 条），服务 GC 与暂存 fork 清扫。

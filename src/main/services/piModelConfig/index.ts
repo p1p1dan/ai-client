@@ -129,7 +129,8 @@ export function getActivePiAgentDir(): string {
 }
 
 /**
- * Rewrite the two files pi reads so they match the stored user services.
+ * Rewrite `models.json` so it matches the stored user services (no key file
+ * since P1-11, decision 127).
  *
  * Called after any change to the user group. The other half of the file comes
  * from `managedHalf()` — the same function the in-memory hand-over uses, so a
@@ -402,8 +403,9 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // project trust any more. The native answer is the `NATIVE_PROJECT_TRUSTED`
     // constant the worker entry reads, so a managed session loads a project's
     // MCP servers, skills, permission policy and instruction files exactly as a
-    // local one does. What still reads this key is `PiTuiPty`, which strips
-    // inherited credential variables out of a managed PTY.
+    // local one does. Its last reader, the embedded pi TUI's credential strip,
+    // went with dsh-rebase P1-11 (decision 127); the value is still sent so an
+    // absent key keeps meaning "old Main build".
     [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
     // F08. Sent in BOTH modes for the same reason as the trust flag, and read
     // from `app` rather than from `package.json` because the packaged app's
@@ -415,25 +417,6 @@ export function resolveManagedPiWorkerEnv(): Record<string, string> {
     // is no longer a case where pi should be left on its own default.
     PI_CODING_AGENT_DIR: getAppPiAgentDir(),
   };
-}
-
-/**
- * What the real pi CLI in a PTY is handed.
- *
- * cutover-10 emptied the difference: the only key this used to drop was the
- * opt-in extension list, which was read by OUR Host code and would have claimed
- * an injection the CLI never performed. That list is gone, so a TUI now gets
- * exactly what a worker gets.
- *
- * Kept as its own name rather than collapsed into the caller, because the three
- * keys left are ALL ones pi itself resolves — `PI_CODING_AGENT_DIR` puts the TUI
- * in the same directory as the GUI (U3), F08's User-Agent makes the header the
- * gateway sees correct, and the managed marker is what `PiTuiPty` reads before
- * it strips inherited credentials. The next worker-only variable needs a place
- * to be dropped, and this is that place.
- */
-export function resolveManagedPiPtyEnv(): Record<string, string> {
-  return { ...resolveManagedPiWorkerEnv() };
 }
 
 export { validatePiManagedModelsConfig } from './configValidation';

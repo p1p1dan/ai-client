@@ -12,7 +12,6 @@ export * from './legacyImport';
 export * from './mcp';
 export * from './onboarding';
 export * from './piRuntime';
-export * from './piTui';
 export * from './remote';
 export * from './repositoryContext';
 export * from './runtimeEvents';

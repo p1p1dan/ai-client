@@ -565,8 +565,8 @@ export class SessionIndexService {
 
   /**
    * Insert one complete row this app did not create a session for, with a
-   * single atomic flush: a Claude Code / Codex import, or a chat pi created
-   * in the terminal (`piTui.ts`).
+   * single atomic flush: a Claude Code / Codex import. (The other caller, the
+   * embedded pi TUI's `/new` sweep, was removed in dsh-rebase P1-11.)
    *
    * P1-9f (decision 056): a conversation import is a DSH session from the
    * start, so a row carrying `legacyImport` must be `dsh`; a `pi` one is

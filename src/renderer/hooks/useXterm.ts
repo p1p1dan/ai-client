@@ -7,13 +7,10 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { addToast } from '@/components/ui/toast';
-import { useI18n } from '@/i18n';
 import { defaultDarkTheme, getXtermTheme } from '@/lib/ghosttyTheme';
 import { matchesKeybinding } from '@/lib/keybinding';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
-import { piTuiOpenRefusalKey } from './piTuiOpenError';
 import '@xterm/xterm/css/xterm.css';
 
 // Regex to match file paths with optional line:column
@@ -28,32 +25,7 @@ const ANSI_ESCAPE_REGEX = /\x1b\[[0-9;?]*[a-zA-Z]/g;
 // Maximum length for session name derived from terminal current line
 const SESSION_NAME_MAX_LENGTH = 36;
 
-/**
- * D17 (T065 回炉) — the second half of the repaint, sent once THIS xterm is
- * attached and listening.
- *
- * Reviving a parked pi leaves Main holding a PTY one row off the size the
- * renderer asked for (`#primeRepaint` in `PiTuiPty.ts`), on purpose: a size the
- * child does not have is the only thing that raises SIGWINCH for it, and the
- * first attempt at this undid its own nudge inside one synchronous turn, so the
- * child saw a net change of zero and the screen stayed blank on the real
- * machine. This call is the change that puts the true size back. It is a
- * separate IPC message, so the child is scheduled in between and observes both
- * transitions, and it is sent from here rather than from Main so the full frame
- * pi paints in response cannot arrive before the xterm that has to show it.
- */
-function confirmPiTuiSize(terminalId: string, terminal: Terminal): void {
-  void window.electronAPI.piTui.resize(terminalId, terminal.cols, terminal.rows).catch(() => {});
-}
-
 export interface UseXtermOptions {
-  piTuiTerminalId?: string;
-  /**
-   * Q17: the chat session's durable JSONL (its index row `runtimeIdentity`).
-   * Passing it makes the terminal continue that conversation and take
-   * interactive ownership of it; omitting it starts a fresh Pi session.
-   */
-  piTuiSessionFile?: string;
   backendSessionId?: string;
   cwd?: string;
   command?: {
@@ -145,8 +117,6 @@ function useTerminalSettings() {
 }
 
 export function useXterm({
-  piTuiTerminalId,
-  piTuiSessionFile,
   backendSessionId,
   cwd,
   command,
@@ -168,11 +138,6 @@ export function useXterm({
   const containerRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const settings = useTerminalSettings();
-  // T065: held in a ref like the callbacks below, so switching language cannot
-  // re-create `initTerminal` and, through it, the whole terminal.
-  const { t } = useI18n();
-  const translateRef = useRef(t);
-  translateRef.current = t;
   const terminalRenderer = useSettingsStore((s) => s.terminalRenderer);
   const copyOnSelection = useSettingsStore((s) => s.copyOnSelection);
   const shellConfig = useSettingsStore((s) => s.shellConfig);
@@ -234,42 +199,9 @@ export function useXterm({
   const writeBufferRef = useRef('');
   const isFlushPendingRef = useRef(false);
 
-  const write = useCallback(
-    (data: string) => {
-      if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
-      if (piTuiTerminalId) {
-        // The id is bound before `open` resolves (see initTerminal), so a write
-        // racing startup can legitimately land before the PTY exists.
-        void window.electronAPI.piTui.write(piTuiTerminalId, data).catch((error: unknown) => {
-          console.warn('[xterm] Pi TUI write failed:', error);
-        });
-      } else {
-        void window.electronAPI.session.write(ptyIdRef.current, data);
-      }
-    },
-    [piTuiTerminalId]
-  );
-
-  /**
-   * T065 回炉 — Main refused to open this chat's terminal; say so where the
-   * user is looking.
-   *
-   * The refusals are real and already worded (another window has the chat, this
-   * terminal is on a different chat, a turn is still running, the session is in
-   * a format the CLI cannot parse), but only the pre-flight in
-   * `usePresentationSwitch` ever displayed one. Everything that reaches
-   * `piTui.open` directly — the 「Start Pi TUI」 button in a window that is
-   * already in terminal mode, and the revive below — swallowed the rejection,
-   * which the D4 re-verify saw as two clicks that did nothing at all. Same
-   * toast, same dictionary lookup, so there is one answer rather than two.
-   */
-  const reportPiTuiOpenFailure = useCallback((error: unknown) => {
-    const translate = translateRef.current;
-    addToast({
-      type: 'warning',
-      title: translate('The Pi TUI cannot open this chat'),
-      description: translate(piTuiOpenRefusalKey(error)),
-    });
+  const write = useCallback((data: string) => {
+    if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
+    void window.electronAPI.session.write(ptyIdRef.current, data);
   }, []);
 
   const fit = useCallback(() => {
@@ -280,20 +212,12 @@ export function useXterm({
       runtimeStateRef.current === 'live'
     ) {
       fitAddonRef.current.fit();
-      if (piTuiTerminalId) {
-        void window.electronAPI.piTui.resize(
-          piTuiTerminalId,
-          terminalRef.current.cols,
-          terminalRef.current.rows
-        );
-      } else {
-        window.electronAPI.session.resize(ptyIdRef.current, {
-          cols: terminalRef.current.cols,
-          rows: terminalRef.current.rows,
-        });
-      }
+      window.electronAPI.session.resize(ptyIdRef.current, {
+        cols: terminalRef.current.cols,
+        rows: terminalRef.current.rows,
+      });
     }
-  }, [piTuiTerminalId]);
+  }, []);
 
   const findNext = useCallback(
     (
@@ -606,8 +530,8 @@ export function useXterm({
       const modKey = isMac ? event.metaKey : event.ctrlKey;
 
       if (event.type === 'keydown' && modKey && !event.altKey) {
-        // Paste: DO NOT intercept - let browser/agent handle it naturally
-        // This allows Pi TUI to receive image paste events
+        // Paste: DO NOT intercept - let the browser handle it natively,
+        // so a full-screen program in the shell can receive image pastes
         if (event.key === 'v' || event.key === 'V') {
           return false; // Let event bubble up
         }
@@ -683,79 +607,44 @@ export function useXterm({
     try {
       const createRequestId = ++createRequestIdRef.current;
       // Handle data from pty with debounced buffering for smooth rendering
-      // 30ms delay merges fragmented TUI packets (clear + write)
-      const cleanup = piTuiTerminalId
-        ? window.electronAPI.piTui.onData((event) => {
-            if (event.terminalId !== ptyIdRef.current) return;
-            writeBufferRef.current += event.data;
-            if (!isFlushPendingRef.current) {
-              isFlushPendingRef.current = true;
-              setTimeout(() => {
-                if (writeBufferRef.current.length > 0) {
-                  const bufferedData = writeBufferRef.current;
-                  terminal.write(bufferedData);
-                  onDataRef.current?.(bufferedData);
-                  writeBufferRef.current = '';
-                }
-                isFlushPendingRef.current = false;
-              }, 30);
+      // 30ms delay merges fragmented full-screen redraw packets (clear + write)
+      const cleanup = window.electronAPI.session.onData((event) => {
+        if (event.sessionId !== ptyIdRef.current) return;
+        writeBufferRef.current += event.data;
+        if (!isFlushPendingRef.current) {
+          isFlushPendingRef.current = true;
+          setTimeout(() => {
+            if (writeBufferRef.current.length > 0) {
+              const bufferedData = writeBufferRef.current;
+              terminal.write(bufferedData);
+              onDataRef.current?.(bufferedData);
+              writeBufferRef.current = '';
             }
-          })
-        : window.electronAPI.session.onData((event) => {
-            if (event.sessionId !== ptyIdRef.current) return;
-            writeBufferRef.current += event.data;
-            if (!isFlushPendingRef.current) {
-              isFlushPendingRef.current = true;
-              setTimeout(() => {
-                if (writeBufferRef.current.length > 0) {
-                  const bufferedData = writeBufferRef.current;
-                  terminal.write(bufferedData);
-                  onDataRef.current?.(bufferedData);
-                  writeBufferRef.current = '';
-                }
-                isFlushPendingRef.current = false;
-              }, 30);
-            }
-          });
+            isFlushPendingRef.current = false;
+          }, 30);
+        }
+      });
       cleanupRef.current = cleanup;
 
       // Handle exit - delay to ensure pending data events are received
       // then flush remaining buffer before calling onExit
-      const exitCleanup = piTuiTerminalId
-        ? window.electronAPI.piTui.onExit((event) => {
-            if (event.terminalId !== ptyIdRef.current) return;
-            setRuntimeState('dead');
-            setTimeout(() => {
-              if (writeBufferRef.current.length > 0) {
-                terminal.write(writeBufferRef.current);
-                onDataRef.current?.(writeBufferRef.current);
-                writeBufferRef.current = '';
-              }
-              onExitRef.current?.();
-            }, 30);
-          })
-        : window.electronAPI.session.onExit((event) => {
-            if (event.sessionId !== ptyIdRef.current) return;
-            setRuntimeState('dead');
-            setTimeout(() => {
-              if (writeBufferRef.current.length > 0) {
-                terminal.write(writeBufferRef.current);
-                onDataRef.current?.(writeBufferRef.current);
-                writeBufferRef.current = '';
-              }
-              onExitRef.current?.();
-            }, 30);
-          });
+      const exitCleanup = window.electronAPI.session.onExit((event) => {
+        if (event.sessionId !== ptyIdRef.current) return;
+        setRuntimeState('dead');
+        setTimeout(() => {
+          if (writeBufferRef.current.length > 0) {
+            terminal.write(writeBufferRef.current);
+            onDataRef.current?.(writeBufferRef.current);
+            writeBufferRef.current = '';
+          }
+          onExitRef.current?.();
+        }, 30);
+      });
       exitCleanupRef.current = exitCleanup;
 
-      const stateCleanup = piTuiTerminalId
-        ? window.electronAPI.piTui.onState((event) => {
-            if (event.terminalId === ptyIdRef.current)
-              setRuntimeState(event.state === 'dead' ? 'dead' : 'live');
-          })
-        : window.electronAPI.session.onState((event) => {
-            if (event.sessionId === ptyIdRef.current) setRuntimeState(event.state);
-          });
+      const stateCleanup = window.electronAPI.session.onState((event) => {
+        if (event.sessionId === ptyIdRef.current) setRuntimeState(event.state);
+      });
       stateCleanupRef.current = stateCleanup;
 
       const createOptions = {
@@ -796,55 +685,29 @@ export function useXterm({
 
       let session: { sessionId: string } | null = null;
       let replay: string | undefined;
-      if (piTuiTerminalId) {
-        // Bind the id before opening: re-opening a suspended PTY replays its
-        // buffered output from inside the open call, so those data events can
-        // reach this listener before the invoke promise resolves. Without the
-        // early bind they fail the `event.terminalId !== ptyIdRef.current`
-        // check and a re-mounted terminal comes back blank.
-        ptyIdRef.current = piTuiTerminalId;
-        const opened = await window.electronAPI.piTui.open({
-          terminalId: piTuiTerminalId,
-          cwd: createOptions.cwd,
-          cols: terminal.cols,
-          rows: terminal.rows,
-          initialPrompt: initialCommand,
-          ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
-        });
-        setCurrentSessionId(opened.terminalId);
-        // D17: this xterm is open on its container and its data listener is
-        // already bound (both happen above), so the repaint this triggers has
-        // somewhere to land. Sent on every open, not only on a resumed one —
-        // Main decides which of the two it was, and a size confirmation is a
-        // no-op for a PTY that was just spawned at that size.
-        confirmPiTuiSize(piTuiTerminalId, terminal);
-      } else {
-        if (backendSessionId) {
-          try {
-            setCurrentSessionId(backendSessionId);
-            const result = await attachToSession(backendSessionId);
-            session = result.session;
-            replay = result.replay;
-          } catch (error) {
-            console.warn('[xterm] Failed to attach existing session, creating a new one:', error);
-            ptyIdRef.current = null;
-          }
+      if (backendSessionId) {
+        try {
+          setCurrentSessionId(backendSessionId);
+          const result = await attachToSession(backendSessionId);
+          session = result.session;
+          replay = result.replay;
+        } catch (error) {
+          console.warn('[xterm] Failed to attach existing session, creating a new one:', error);
+          ptyIdRef.current = null;
         }
-        if (!session) {
-          const attached = await createAndAttachSession();
-          session = attached.session;
-          replay = attached.replay;
-        }
+      }
+      if (!session) {
+        const attached = await createAndAttachSession();
+        session = attached.session;
+        replay = attached.replay;
       }
 
       if (isUnmountedRef.current || createRequestId !== createRequestIdRef.current) {
-        if (piTuiTerminalId)
-          await window.electronAPI.piTui.dispose(piTuiTerminalId).catch(() => {});
-        else if (session) await window.electronAPI.session.kill(session.sessionId).catch(() => {});
+        if (session) await window.electronAPI.session.kill(session.sessionId).catch(() => {});
         return;
       }
 
-      if (!piTuiTerminalId && session) ptyIdRef.current = session.sessionId;
+      if (session) ptyIdRef.current = session.sessionId;
       setIsLoading(false);
 
       if (replay) {
@@ -855,8 +718,7 @@ export function useXterm({
       // Handle input
       terminal.onData((data) => {
         if (!ptyIdRef.current || runtimeStateRef.current !== 'live') return;
-        if (piTuiTerminalId) void window.electronAPI.piTui.write(piTuiTerminalId, data);
-        else void window.electronAPI.session.write(ptyIdRef.current, data);
+        void window.electronAPI.session.write(ptyIdRef.current, data);
       });
 
       // Focus is handled by the isActive effect after loading ends.
@@ -873,15 +735,10 @@ export function useXterm({
       }
       setIsLoading(false);
       setStartupError(error instanceof Error ? error.message : String(error));
-      // T065: a refusal written into a terminal nobody can see is not a
-      // message. The lines below stay for the shell terminals; a Pi TUI that
-      // was refused also gets a toast, the same one the pre-flight shows.
-      if (piTuiTerminalId) reportPiTuiOpenFailure(error);
       terminal.writeln(`\x1b[31mFailed to start terminal.\x1b[0m`);
       terminal.writeln(`\x1b[33mError: ${error}\x1b[0m`);
     }
   }, [
-    piTuiTerminalId,
     backendSessionId,
     cwd,
     command,
@@ -891,7 +748,6 @@ export function useXterm({
     kind,
     persistOnDisconnect,
     write,
-    reportPiTuiOpenFailure,
   ]);
 
   useEffect(() => {
@@ -929,11 +785,7 @@ export function useXterm({
       exitCleanupRef.current?.();
       stateCleanupRef.current?.();
       if (ptyIdRef.current) {
-        if (piTuiTerminalId) {
-          void window.electronAPI.piTui.suspend(piTuiTerminalId).catch(() => {});
-        } else {
-          void window.electronAPI.session.detach(ptyIdRef.current).catch(() => {});
-        }
+        void window.electronAPI.session.detach(ptyIdRef.current).catch(() => {});
         ptyIdRef.current = null;
       }
       // Remove copy-on-selection listener before disposing terminal
@@ -953,7 +805,7 @@ export function useXterm({
       terminalRef.current = null;
       stateCleanupRef.current = null;
     };
-  }, [piTuiTerminalId]);
+  }, []);
   useEffect(() => {
     if (terminalRef.current) {
       terminalRef.current.options.theme = settings.theme;
@@ -972,18 +824,10 @@ export function useXterm({
     const handleResize = () => {
       if (fitAddonRef.current && terminalRef.current && ptyIdRef.current) {
         fitAddonRef.current.fit();
-        if (piTuiTerminalId) {
-          void window.electronAPI.piTui.resize(
-            piTuiTerminalId,
-            terminalRef.current.cols,
-            terminalRef.current.rows
-          );
-        } else {
-          window.electronAPI.session.resize(ptyIdRef.current, {
-            cols: terminalRef.current.cols,
-            rows: terminalRef.current.rows,
-          });
-        }
+        window.electronAPI.session.resize(ptyIdRef.current, {
+          cols: terminalRef.current.cols,
+          rows: terminalRef.current.rows,
+        });
         // Clear WebGL texture atlas on resize to prevent glitches
         const addon = rendererAddonRef.current;
         if (addon && 'clearTextureAtlas' in addon) {
@@ -1025,41 +869,7 @@ export function useXterm({
       observer.disconnect();
       intersectionObserver.disconnect();
     };
-  }, [piTuiTerminalId]);
-
-  // Keep inactive embedded Pi terminals parked. Re-opening the same terminalId
-  // promotes the existing PTY and replays its bounded suspended output.
-  useEffect(() => {
-    if (!piTuiTerminalId || isLoading || !ptyIdRef.current) return;
-    if (!isActive) {
-      void window.electronAPI.piTui.suspend(piTuiTerminalId).catch(() => {});
-      return;
-    }
-    const terminal = terminalRef.current;
-    if (!terminal) return;
-    void window.electronAPI.piTui
-      .open({
-        terminalId: piTuiTerminalId,
-        cwd: cwd || window.electronAPI.env.HOME,
-        cols: terminal.cols,
-        rows: terminal.rows,
-        // terminal-04: the same session the first open named. Without it, an
-        // open that misses the parked PTY (pi failed on startup, capacity
-        // evicted it, something else disposed it) falls into Main's "new
-        // terminal" branch and starts a blank pi bound to no chat — outside the
-        // ownership guard and outside the "the GUI must re-read this" record.
-        ...(piTuiSessionFile ? { sessionFile: piTuiSessionFile } : {}),
-      })
-      // D17: the same size confirmation as the first open. This path is the one
-      // that actually runs when the user switches back to a parked chat, so
-      // leaving it out would leave the screen blank in exactly the case the
-      // defect was reported on.
-      .then(() => confirmPiTuiSize(piTuiTerminalId, terminal))
-      // T065: and the same refusal toast. This used to swallow the rejection
-      // whole, so a revive Main turned down (another window took the chat while
-      // this one was parked) looked like nothing happening.
-      .catch(reportPiTuiOpenFailure);
-  }, [cwd, isActive, isLoading, piTuiSessionFile, piTuiTerminalId, reportPiTuiOpenFailure]);
+  }, []);
 
   // Fit and focus when becoming active (only after loading completes)
   useEffect(() => {

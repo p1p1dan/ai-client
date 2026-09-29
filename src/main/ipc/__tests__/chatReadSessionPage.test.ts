@@ -123,10 +123,6 @@ vi.mock('../../services/chat/SessionReplayReader', () => ({
 }));
 
 vi.mock('../../services/auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn() }));
-vi.mock('../piTui', () => ({
-  releaseSessionForHostPrompt: vi.fn(async () => false),
-  assertHostPromptAllowed: vi.fn(),
-}));
 vi.mock('../../services/agent-host/TempWorkspaceService', () => ({
   isTempWorkspacePath: () => false,
   adoptTempWorkspace: vi.fn(async () => undefined),

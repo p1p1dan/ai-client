@@ -57,12 +57,6 @@ const forkSession = vi.fn(async () => ({
     archived: false,
   },
 }));
-const reloadSession = vi.fn(async () => ({ requestId: 'reload-1', reloaded: true }));
-/** Whether a Pi terminal had written the session file when the GUI write arrived. */
-let terminalWasReleased = false;
-const releaseSessionForHostPrompt = vi.fn(async () => terminalWasReleased);
-/** cutover-04 — the gate between the handover and the write. */
-const assertHostPromptAllowed = vi.fn();
 const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
 /** dsh-rebase P1-7b — the jobs and subagents windows. */
 const killSessionJob = vi.fn(async () => ({ outcome: 'requested' }));
@@ -126,7 +120,6 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     getSessionTree,
     rewindSession,
     forkSession,
-    reloadSession,
     compactSession,
     killSessionJob,
     readSessionJob,
@@ -176,11 +169,6 @@ vi.mock('../../services/chat/LegacyMigrationService', () => ({
 
 vi.mock('../../services/auth/spawnGate', () => ({ assertAgentSpawnAllowed: vi.fn() }));
 
-vi.mock('../piTui', () => ({
-  releaseSessionForHostPrompt,
-  assertHostPromptAllowed,
-}));
-
 /**
  * U05-a — Main owns the scratch directories, so the handlers must ask it what
  * counts as one rather than pattern-matching a path themselves. `SCRATCH_DIR`
@@ -215,12 +203,8 @@ beforeEach(async () => {
   handlers.clear();
   runtimeEventHandlers.length = 0;
   fakeWindows = [];
-  terminalWasReleased = false;
   scratchPathsBySession = {};
   vi.clearAllMocks();
-  // `clearAllMocks` forgets calls, not implementations, and one case here makes
-  // the gate throw.
-  assertHostPromptAllowed.mockReset();
   prepareResume.mockReset();
   prepareResume.mockImplementation(async (row: Record<string, unknown>) => ({ row }));
   const { registerChatHandlers } = await import('../chat');
@@ -835,122 +819,24 @@ describe('Pi WorkerSlot chat routing', () => {
     });
   });
 
-  describe('handing the session file back from the Pi TUI', () => {
-    /**
-     * The Pi TUI refuses DSH identities (P1-1 R6), so the only chat a terminal
-     * can have written behind a worker is a legacy `pi` one. `reads` is how
-     * many times the handler reads the row: a send reads it for the handover
-     * and again for the reload. Exactly that many, so none leaks into the next
-     * test (`clearAllMocks` keeps queued once-values).
-     */
-    async function legacyRow(reads: number): Promise<void> {
-      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
-      const legacy = {
-        sessionId: 's1',
-        agent: 'pi',
-        workspacePath: '/repo',
-        title: 'Source',
-        updatedAt: 1,
-        archived: false,
-        runtimeIdentity: '/session.jsonl',
-        piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
-      };
-      for (let read = 0; read < reads; read += 1) {
-        vi.mocked(sessionIndexService.get).mockResolvedValueOnce(legacy);
-      }
-    }
-
-    it('re-reads the file after killing a terminal, before the turn starts', async () => {
-      terminalWasReleased = true;
-      await legacyRow(2);
-
-      await expect(
-        invoke('chat:send', { sessionId: 's1', attemptId: 'attempt-1', text: 'continue' })
-      ).resolves.toEqual({ requestId: 'send-1' });
-
-      // Killing the other writer is only half a handover: the worker still
-      // holds the tree it read before the terminal appended. Sending first
-      // would branch off the pre-terminal leaf and strand the TUI's messages.
-      expect(reloadSession).toHaveBeenCalledWith({
-        sessionId: 's1',
-        sessionFile: '/session.jsonl',
-        ownerWebContentsId: 7,
-      });
-      expect(reloadSession.mock.invocationCallOrder[0]).toBeLessThan(
-        send.mock.invocationCallOrder[0]
-      );
+  /**
+   * dsh-rebase P1-11 (decision 127): the pi TUI and its handover are gone.
+   * No write path asks a terminal to let go of the session file first, and
+   * the renderer has no reload channel to call after one did.
+   */
+  describe('no pi TUI handover', () => {
+    it('registers no reload channel', () => {
+      expect(handlers.has('chat:reloadSession')).toBe(false);
+      expect([...handlers.keys()].filter((channel) => channel.startsWith('piTui:'))).toEqual([]);
     });
 
-    it('does not reload when no terminal was holding the file', async () => {
-      terminalWasReleased = false;
-
-      await expect(
-        invoke('chat:send', { sessionId: 's1', attemptId: 'attempt-1', text: 'hello' })
-      ).resolves.toEqual({ requestId: 'send-1' });
-
-      // Every ordinary GUI send goes through this path. Re-opening the Pi
-      // session on each one would tear down and rebuild the runtime for
-      // nothing.
-      expect(reloadSession).not.toHaveBeenCalled();
-    });
-
-    it('resolves the file to reload from the index, not from the renderer', async () => {
-      await legacyRow(1);
-      await expect(invoke('chat:reloadSession', { sessionId: 's1' })).resolves.toEqual({
-        reloaded: true,
-      });
-      expect(reloadSession).toHaveBeenCalledWith({
-        sessionId: 's1',
-        sessionFile: '/session.jsonl',
-        ownerWebContentsId: 7,
-      });
-    });
-
-    it('[P1-1] never reloads a DSH session: no terminal can have written it', async () => {
-      await expect(invoke('chat:reloadSession', { sessionId: 's1' })).resolves.toEqual({
-        reloaded: false,
-      });
-      expect(reloadSession).not.toHaveBeenCalled();
-    });
-
-    // session-01 — compaction and rewind append to the same file a send does.
-    // Neither asked for the handover, so either one could be the write that
-    // lands on top of what a terminal appended and makes the file unopenable.
-    // Both run on DSH sessions only now (P1-1), which no terminal can hold, so
-    // the handover still runs first but there is nothing to re-read.
     it.each([
+      ['chat:send', { sessionId: 's1', attemptId: 'a1', text: 'hi' }, send],
       ['chat:compactSession', { sessionId: 's1' }, compactSession],
       ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }, rewindSession],
-    ])('hands the file back before %s writes it', async (channel, payload, worker) => {
-      terminalWasReleased = true;
-
+    ])('%s goes straight to the engine', async (channel, payload, worker) => {
       await invoke(channel, payload);
-
-      expect(releaseSessionForHostPrompt).toHaveBeenCalledWith('/session.jsonl');
-      expect(assertHostPromptAllowed).toHaveBeenCalledWith('/session.jsonl');
-      expect(releaseSessionForHostPrompt.mock.invocationCallOrder[0]).toBeLessThan(
-        worker.mock.invocationCallOrder[0]
-      );
-      expect(reloadSession).not.toHaveBeenCalled();
-    });
-
-    // cutover-04 — the gate was written as "the last check before a GUI write"
-    // and then never called, so a handover that silently failed simply became a
-    // second writer on the file.
-    it.each([
-      ['chat:send', { sessionId: 's1', attemptId: 'a1', text: 'hi' }],
-      ['chat:compactSession', { sessionId: 's1' }],
-      ['chat:rewindSession', { sessionId: 's1', entryId: 'e1', confirmed: true }],
-    ])('refuses %s while a terminal still owns the file', async (channel, payload) => {
-      assertHostPromptAllowed.mockImplementation(() => {
-        throw new Error('Terminal mode owns this session');
-      });
-
-      await expect(invoke(channel, payload)).rejects.toThrow(/Terminal mode owns this session/);
-      expect(assertHostPromptAllowed).toHaveBeenCalledWith('/session.jsonl');
-      expect(send).not.toHaveBeenCalled();
-      expect(compactSession).not.toHaveBeenCalled();
-      expect(rewindSession).not.toHaveBeenCalled();
+      expect(worker).toHaveBeenCalledTimes(1);
     });
   });
 

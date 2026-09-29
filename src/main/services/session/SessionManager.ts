@@ -68,7 +68,9 @@ export class SessionManager {
     options: SessionCreateOptions = {}
   ): Promise<SessionOpenResult> {
     if (options.kind === 'agent') {
-      throw new Error('Agent PTYs must use the dedicated Pi TUI API');
+      // The embedded pi TUI was the last agent PTY; it was removed in
+      // dsh-rebase P1-11 (decision 127). Only shell terminals run here.
+      throw new Error('Agent PTYs are not supported');
     }
     const windowId = getWindowId(target);
     if (options.cwd && isRemoteVirtualPath(options.cwd)) {

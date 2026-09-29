@@ -6,8 +6,9 @@
  * Local mode's whole promise is "Pi reads YOUR configuration". That directory
  * belongs to the user and may hold a `models.json` they maintain by hand;
  * merging our providers into it would overwrite their file. So the derived
- * `models.json` / `auth.json` go into this app's own agent directory, and the
- * user's directory is only ever read.
+ * `models.json` goes into this app's own agent directory, and the user's
+ * directory is only ever read. (The derived `auth.json` is no longer written
+ * since dsh-rebase P1-11, decision 127: keys stay in memory.)
  *
  * H/17 made that a CONDITIONAL move: local mode left `~/.pi/agent` only once a
  * service existed. H/19 removed the condition — both modes always run out of

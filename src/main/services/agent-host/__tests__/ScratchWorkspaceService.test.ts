@@ -50,10 +50,10 @@ describe('ScratchWorkspaceService.ensure', () => {
     expect(await rootEntries()).toEqual(['dir-1', 'dir-2']);
   });
 
-  it('is idempotent: the send path and the TUI path get the same directory', async () => {
-    // A session with two working directories is a session whose TUI cannot see
-    // what its GUI turn just wrote. Both callers ask independently, so this is
-    // the property that makes that safe.
+  it('is idempotent: every caller gets the same directory', async () => {
+    // A session with two working directories is a session whose next turn
+    // cannot see what its previous turn just wrote. Callers ask independently,
+    // so this is the property that makes that safe.
     const first = await service.ensure('session-a');
     const second = await service.ensure('session-a');
     expect(second).toBe(first);

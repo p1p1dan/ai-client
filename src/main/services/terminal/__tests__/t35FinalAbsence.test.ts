@@ -71,7 +71,7 @@ describe('T35 final Pi-only absence gate', () => {
   it('generic shell sessions reject the retired agent PTY route', () => {
     const manager = read('src/main/services/session/SessionManager.ts');
     expect(manager).toContain("if (options.kind === 'agent')");
-    expect(manager).toContain('Agent PTYs must use the dedicated Pi TUI API');
+    expect(manager).toContain('Agent PTYs are not supported');
     expect(manager).not.toContain('withManagedClaudeEnv');
     expect(manager).not.toContain('withManagedPiEnv');
   });
@@ -105,12 +105,11 @@ describe('T35 final Pi-only absence gate', () => {
     expect(productCopy).toContain('Could not detect the Pi runtime');
   });
 
-  it('uses absolute bundled Pi CLI and packaged Node paths without resume flags', () => {
-    const service = read('src/main/services/terminal/PiTuiPty.ts');
-    expect(service).toContain("'pi-coding-agent'");
-    expect(service).toContain("'node-runtime'");
-    expect(service).toContain('args: [cliPath]');
-    expect(service).not.toContain("'--session'");
-    expect(service).not.toContain("'--continue'");
+  // dsh-rebase P1-11 (decision 127): the embedded pi TUI that launched the
+  // bundled pi CLI (`PiTuiPty.ts`) is gone, so the check that its launch used
+  // absolute paths and no resume flags has nothing left to read.
+  // `src/shared/__tests__/piTuiRemovedStatic.test.ts` pins its absence.
+  it('the pi TUI launcher no longer exists', () => {
+    expect(existsSync(resolve(root, 'src/main/services/terminal/PiTuiPty.ts'))).toBe(false);
   });
 });

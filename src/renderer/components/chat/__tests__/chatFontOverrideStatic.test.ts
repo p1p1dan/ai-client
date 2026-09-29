@@ -82,8 +82,10 @@ describe('T104: chat typography override is scoped to the chat column', () => {
   });
 
   /**
-   * The override node also wraps the TUI branch's `AgentTerminal`, so "does the
-   * terminal follow the chat font" has to be answered rather than assumed.
+   * The override node used to wrap the pi TUI's `AgentTerminal` too (removed in
+   * dsh-rebase P1-11), and the right-column shell terminal is built by the same
+   * hook, so "does the terminal follow the chat font" has to be answered rather
+   * than assumed.
    *
    * It does not, and not by luck: xterm is configured entirely through JS
    * options (`new Terminal({ fontSize, fontFamily })`), which no CSS
@@ -93,7 +95,7 @@ describe('T104: chat typography override is scoped to the chat column', () => {
    * that builds the terminal, so a future edit that "simplifies" the terminal
    * onto CSS would fail here instead of silently coupling the two fonts.
    */
-  it('[R3] the TUI terminal takes its font from JS options, so the section override cannot reach it', () => {
+  it('[R3] the xterm terminal takes its font from JS options, so the section override cannot reach it', () => {
     const xtermPath = path.resolve(__dirname, '../../../hooks/useXterm.ts');
     const xterm = stripComments(readFileSync(xtermPath, 'utf8'), 'useXterm.ts');
     expect(xterm).toContain('fontSize: settings.fontSize');

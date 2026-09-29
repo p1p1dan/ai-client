@@ -13,7 +13,6 @@ import {
 import { useShallow } from 'zustand/shallow';
 import type { Repository } from '@/App/constants';
 import { ChatWorkspace } from '@/components/chat/ChatWorkspace';
-import { usePresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { GlobalSearchDialog } from '@/components/search/GlobalSearchDialog';
 import { useI18n } from '@/i18n';
@@ -183,11 +182,6 @@ export function WorkspaceShell({
   const [centerResizing, setCenterResizing] = useState(false);
 
   const temporaryWorkspaceEnabled = useSettingsStore((state) => state.temporaryWorkspaceEnabled);
-  // D07: one instance, two consumers — `SessionBar` renders the switch, the
-  // chat column renders the terminal it switches to. Creating it in both would
-  // give one terminal two ids.
-  const presentation = usePresentationSwitch();
-  const presentationMode = presentation.presentationMode;
   useSyncChatWorkspaceTree({
     repositories,
     selectedRepoPath,
@@ -232,11 +226,6 @@ export function WorkspaceShell({
     return () => observer.disconnect();
   }, []);
 
-  // `presentationMode` stays in settings (untouched, so D19's single-writer TUI
-  // handover is intact); this is only read here for the chrome that depends on
-  // which of the two the chat column is currently showing.
-  const isTui = presentationMode === 'tui';
-
   // D08: `sidebarUserCollapsed` is now derived, not stored — a collapsed dock
   // IS "no surface active". `panelOpen: false` retires the allocator's panel
   // term (see this component's doc note).
@@ -245,23 +234,14 @@ export function WorkspaceShell({
     sidebarUserCollapsed: dockCollapsed,
     panelOpen: false,
     manualChat,
-    diffTabActive: !isTui && !reviewOpen && diffTabActive,
+    diffTabActive: !reviewOpen && diffTabActive,
   });
-  const chatVisible = isTui ? true : chrome.chatVisible;
+  const chatVisible = chrome.chatVisible;
   /**
-   * D13 (U26): the editor column is allocated in TUI too.
-   *
-   * U03-a suppressed it here, under D02's reading that "TUI is the layout at
-   * its limit — dock plus one full-bleed terminal". That reading was made when
-   * the editor was one of several things the right side could hold; D08 then
-   * made the right column the ONLY place files open. The same line therefore
-   * stopped meaning "give the terminal more room" and started meaning "you
-   * cannot look at a file while the terminal is up" — which is what the user
-   * hit: clicking a file in TUI did nothing at all.
-   *
-   * The terminal still gets the whole center row whenever no file is open,
-   * because `editorOpen` is keyed off `tabs.length` — so the full-bleed case
-   * D02 wanted is still the default, it is just no longer forced.
+   * D13 (U26): the editor column is allocated whenever a file or the session
+   * review is open. The chat column gets the whole center row otherwise,
+   * because `editorOpen` is keyed off `tabs.length`. (The pi TUI that shared
+   * the chat column went with dsh-rebase P1-11, decision 127.)
    */
   const editorAllocated = editorOpen || reviewOpen;
 
@@ -412,16 +392,11 @@ export function WorkspaceShell({
                 round removing.
               */}
               <SessionBar
-                presentation={presentation}
                 reviewOpen={reviewOpen}
                 reviewCount={reviewEntries.length}
                 onToggleReview={showSessionReview ? toggleReview : undefined}
               />
-              <ChatWorkspace
-                className="min-w-0 flex-1"
-                onAddRepository={onAddRepository}
-                presentation={presentation}
-              />
+              <ChatWorkspace className="min-w-0 flex-1" onAddRepository={onAddRepository} />
               {editorAllocated && chatVisible && (
                 <ShellResizeHandle
                   side="right"

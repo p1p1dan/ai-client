@@ -339,9 +339,11 @@ export class CredentialVault {
    * T082 — subscribe to successful vault mutations.
    *
    * Fired synchronously from inside the serialized write queue, right after
-   * the new envelope lands on disk (so a listener that re-derives another
-   * file from the vault — pi's `auth.json`, via `writeUserProviderRuntimeConfig`
-   * — sees the same bytes a concurrent `read()` would). This is the ONE hook
+   * the new envelope lands on disk (so a listener that re-derives state from
+   * the vault — the DSH credential broker's key cache — sees the same bytes a
+   * concurrent `read()` would). Its first subscriber, T082's rewrite of pi's
+   * plain-text `auth.json`, went with the embedded pi TUI in dsh-rebase P1-11
+   * (decision 127). This is the ONE hook
    * that covers every mutation path uniformly; `writeUserProviders`'s own
    * caller-side `onChange` (H/17) and each `save()` call site's ad-hoc
    * re-sync (login, startup adoption, account migration) predate this and are

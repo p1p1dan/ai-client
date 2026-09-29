@@ -1,8 +1,7 @@
-import { ArrowLeftRight, GitBranch, Layers, Monitor, Plus, Terminal, Users } from 'lucide-react';
+import { ArrowLeftRight, GitBranch, Layers, Plus, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
 import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
-import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Ident } from '@/components/ui/ident';
@@ -19,13 +18,6 @@ import { type SubwindowKey, useSessionSubwindowsStore } from '@/stores/sessionSu
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 
 interface SessionBarProps {
-  /**
-   * D07's arrangement survives D12: the shell owns the one
-   * `usePresentationSwitch` instance and hands it to both the control (here) and
-   * the terminal (`ChatWorkspace`). Creating it in both would give one terminal
-   * two ids.
-   */
-  presentation: PresentationSwitch;
   reviewOpen?: boolean;
   reviewCount?: number;
   onToggleReview?: () => void;
@@ -41,20 +33,17 @@ interface SessionBarProps {
  * it has a turn running no matter which one is on screen (`isSafeToEvict`), and
  * always did. The strip was drawing a fact the sidebar could state more cheaply.
  *
- * So the bar is back to what `MainHeader` carried before D08 — title, folder
- * context, GUI/TUI — minus the controls D08 deleted for good (the panel toggle
- * and the two/three-column switch went with `shellColumnMode`).
+ * So the bar is back to what `MainHeader` carried before D08 — title and folder
+ * context — minus the controls D08 deleted for good (the panel toggle and the
+ * two/three-column switch went with `shellColumnMode`). The GUI / TUI switch
+ * went with the pi TUI in dsh-rebase P1-11 (decision 127); the right-column
+ * shell terminal's button takes its place next (decisions 109, 126).
  *
  * The close ✕ does NOT come back here. "End this conversation" now lives in the
  * sidebar row's context menu, next to Rename and Archive, so the repo's three
  * closes sit together and can be told apart in one place.
  */
-export function SessionBar({
-  presentation,
-  reviewOpen,
-  reviewCount = 0,
-  onToggleReview,
-}: SessionBarProps) {
+export function SessionBar({ reviewOpen, reviewCount = 0, onToggleReview }: SessionBarProps) {
   const { t } = useI18n();
 
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -68,13 +57,6 @@ export function SessionBar({
   // `projectId` must not label the bar with the wrong folder (the same trap
   // `buildSidebarFolders` documents).
   const activeProject = projects.find((project) => project.id === activeWorkspace?.projectId);
-
-  const { presentationMode, openGui, openTui } = presentation;
-  const isTui = presentationMode === 'tui';
-  // Welcome state: no chat to render either way, so no switch.
-  const presentationSwitchAvailable = Boolean(
-    activeWorkspace?.path?.trim() || activeSession?.unbound
-  );
 
   const contextLine = [activeProject?.name, activeWorkspace?.name].filter(Boolean).join(' · ');
   const busy = activeSession?.status === 'running' || activeSession?.status === 'starting';
@@ -154,7 +136,7 @@ export function SessionBar({
       )}
 
       {/* Left of 「审阅」: both controls inspect the conversation already on
-          screen, while 「+ / GUI / TUI」 to their right create or re-present one.
+          screen, while 「+」 to their right creates one.
           Same size tier as every other control on this bar (h-6, size-3.5). */}
       {hasDurableSession && activeSessionId && (
         <Button
@@ -193,21 +175,6 @@ export function SessionBar({
         <Plus className="size-3.5" />
       </button>
 
-      {presentationSwitchAvailable && (
-        <div
-          className="flex shrink-0 items-center gap-0.5 border-l pl-2"
-          role="group"
-          aria-label={t('Presentation mode')}
-        >
-          <PresentationButton
-            label="GUI"
-            icon={Monitor}
-            active={presentationMode === 'gui'}
-            onClick={openGui}
-          />
-          <PresentationButton label="TUI" icon={Terminal} active={isTui} onClick={openTui} />
-        </div>
-      )}
       {/* dsh-rebase P1-7b (decisions 090, 109): the background jobs and
           subagents windows, opened and hidden here, next to where the
           terminal button goes (P1-11). The count is what runs now. */}
@@ -311,38 +278,6 @@ function SubwindowButton({
           {count}
         </Badge>
       )}
-    </button>
-  );
-}
-
-interface PresentationButtonProps {
-  label: string;
-  icon: typeof Monitor;
-  active: boolean;
-  onClick: () => void;
-}
-
-/**
- * Text + icon rather than icon-only: "GUI" and "TUI" are three letters wide and
- * the two icons (monitor / terminal) are not distinguishable at 14px for anyone
- * who has not already learned which is which. Carried over from `MainHeader`
- * through `SessionTabs` to here unchanged.
- */
-function PresentationButton({ label, icon: Icon, active, onClick }: PresentationButtonProps) {
-  return (
-    <button
-      type="button"
-      className={cn(
-        'flex h-6 items-center gap-1 rounded-sm px-2 text-meta transition-colors',
-        active
-          ? 'bg-selection text-foreground'
-          : 'text-muted-foreground hover:bg-hover hover:text-foreground'
-      )}
-      onClick={onClick}
-      aria-pressed={active}
-    >
-      <Icon className="size-3.5" />
-      {label}
     </button>
   );
 }

@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -64,12 +66,9 @@ const logoutMock = vi.fn(() => {
 const cookiesRemoveMock = vi.fn(async () => {
   events.push('clearServerAuthCookie');
 });
-// ②b / ③ additions. These record order only — the cross-`await` barrier they
-// sit inside is already pinned by their deferred-backed neighbours, so keeping
-// them non-blocking avoids every existing test having to release one more gate.
-const disposeAllPiTuiControllersMock = vi.fn(async () => {
-  events.push('piTui.disposeAllControllers');
-});
+// ③ addition. It records order only — the cross-`await` barrier it sits inside
+// is already pinned by its deferred-backed neighbours, so keeping it
+// non-blocking avoids every existing test having to release one more gate.
 const utilityInvalidateAllMock = vi.fn(async () => {
   events.push('completions.invalidateAll');
 });
@@ -101,10 +100,6 @@ vi.mock('../../services/session/SessionManager', () => ({
 
 vi.mock('../../services/agent-host/WorkerManager', () => ({
   workerManager: { invalidateAll: shutdownMock },
-}));
-
-vi.mock('../piTui', () => ({
-  disposeAllPiTuiControllers: disposeAllPiTuiControllersMock,
 }));
 
 // dsh-rebase P1-15 (decision 125): one-shot completions run on the DSH host
@@ -156,7 +151,6 @@ beforeEach(() => {
     checkRegistrationMock,
     logoutMock,
     cookiesRemoveMock,
-    disposeAllPiTuiControllersMock,
     utilityInvalidateAllMock,
   ]) {
     mock.mockClear();
@@ -252,24 +246,13 @@ describe('performLogoutSequence — I9 checkpoint order (D47 S5 §3)', () => {
     expect(events[events.length - 1]).toBe('refresh');
   });
 
-  it('②b kills the Pi TUI PTYs — after the local PTYs, and before the credential stores are touched', async () => {
-    const { performLogoutSequence } = await import('../onboarding');
-
-    const sequencePromise = performLogoutSequence();
-    await flushUntil(() => events.includes('destroyAllLocalAndWait:start'));
-    // Agent PTYs live outside SessionManager, so ② cannot have reached them.
-    expect(events).not.toContain('piTui.disposeAllControllers');
-
-    destroyAllLocalDeferred.resolve();
-    shutdownDeferred.resolve();
-    vaultClearDeferred.resolve();
-    regenerateDeferred.resolve();
-    await sequencePromise;
-
-    const disposeIdx = events.indexOf('piTui.disposeAllControllers');
-    expect(disposeIdx).toBeGreaterThan(events.indexOf('destroyAllLocalAndWait:end'));
-    expect(disposeIdx).toBeLessThan(events.indexOf('agentHost.shutdown:start'));
-    expect(disposeIdx).toBeLessThan(events.indexOf('vault.clear:start'));
+  it('has no ②b step any more: the pi TUI and its PTYs are gone (P1-11)', async () => {
+    // dsh-rebase P1-11 (decision 127). Every PTY left is a shell in
+    // SessionManager, which ② already awaits; the sequence must not reach for
+    // the deleted TUI module at all.
+    const source = readFileSync(join(process.cwd(), 'src/main/ipc/onboarding.ts'), 'utf8');
+    expect(source).not.toContain("import('./piTui')");
+    expect(source).not.toContain('disposeAllPiTuiControllers');
   });
 
   it('③ cancels the one-shot completions too, before ④ vault.clear', async () => {

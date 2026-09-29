@@ -173,7 +173,7 @@ describe('SessionBar pins (D12, carried from SessionTabs and MainHeader)', () =>
 
   it('the title yields before the bar chrome in the narrow crunch', () => {
     // Same hazard the retired header chip had: something in the row must be
-    // allowed to shrink, or the GUI/TUI switch is pushed past overflow.
+    // allowed to shrink, or the bar's buttons are pushed past overflow.
     expect(CODE).toContain('min-w-0 flex-1');
     expect(CODE).toContain('truncate');
     expect(CODE).toContain('shrink-0');

@@ -1,4 +1,12 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -65,7 +73,21 @@ describe('PiModelConfigService', () => {
     });
   }
 
-  it('writes validated metadata and provider-scoped auth separately', async () => {
+  /**
+   * dsh-rebase P1-11 (decisions 038, 127): the per-provider keys are no longer
+   * written to a plaintext `auth.json`. They exist only in the in-memory build
+   * the DSH credential broker reads, assembled from the cached catalog the
+   * sync left on disk — so that build is what the key assertions look at.
+   */
+  function memoryAuth(inheritedApiKey: string, inheritedBaseUrl: string) {
+    return service(async () => ({
+      ok: false,
+      status: 500,
+      text: async () => '',
+    })).buildNativeModelCatalog({ inheritedApiKey, inheritedBaseUrl }).auth;
+  }
+
+  it('writes validated metadata and keeps the provider-scoped keys off disk', async () => {
     const apiKey = 'company-secret-never-in-models';
     const result = await service(async () => ({
       ok: true,
@@ -80,14 +102,18 @@ describe('PiModelConfigService', () => {
     expect(result.source).toBe('remote');
     expect(result.modelCount).toBe(1);
     const modelsText = readFileSync(join(dir, 'models.json'), 'utf8');
-    const authText = readFileSync(join(dir, 'auth.json'), 'utf8');
     expect(modelsText).not.toContain(apiKey);
     expect(modelsText).not.toContain('apiKey');
-    expect(authText).toContain(apiKey);
-    expect(JSON.parse(authText)).toEqual({ dan: { type: 'api_key', key: apiKey } });
+    // No plaintext key file, and the key is in no file this sync wrote.
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    for (const name of readdirSync(dir)) {
+      expect(readFileSync(join(dir, name), 'utf8'), name).not.toContain(apiKey);
+    }
+    expect(memoryAuth(apiKey, 'https://fallback.example/v1')).toEqual({
+      dan: { type: 'api_key', key: apiKey },
+    });
     if (process.platform !== 'win32') {
       expect(statSync(join(dir, 'models.json')).mode & 0o777).toBe(0o600);
-      expect(statSync(join(dir, 'auth.json')).mode & 0o777).toBe(0o600);
     }
     expect(
       service(async () => ({ ok: false, status: 500, text: async () => '' })).readCatalog()
@@ -104,6 +130,31 @@ describe('PiModelConfigService', () => {
         },
       ],
     });
+  });
+
+  /**
+   * dsh-rebase P1-11 (decisions 038, 127): the file 1.0.x wrote is left as it
+   * is when a build without the TUI starts syncing (it is not this build's to
+   * delete), never rewritten, and taken away only by logout, which already did
+   * that before P1-11.
+   */
+  it('leaves an old auth.json untouched on sync, and only logout removes it', async () => {
+    const stale = JSON.stringify({ dan: { type: 'api_key', key: 'left-by-1.0.x' } });
+    writeFileSync(join(dir, 'auth.json'), stale);
+    const svc = service(async () => ({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify(REMOTE_CONFIG),
+    }));
+    await svc.sync({
+      endpointUrl: 'https://admin.example/config',
+      apiKey: 'fresh-login-key',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    });
+    expect(readFileSync(join(dir, 'auth.json'), 'utf8')).toBe(stale);
+
+    svc.clearCredential();
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
   });
 
   it('reuses a fresh remote snapshot at startup but force refresh bypasses the TTL', async () => {
@@ -123,7 +174,7 @@ describe('PiModelConfigService', () => {
       inheritedBaseUrl: 'https://fallback.example/v1',
     });
     expect(calls).toBe(1);
-    expect(readFileSync(join(dir, 'auth.json'), 'utf8')).toContain('key-2');
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
 
     await service(fetchFn, 3000).sync({
       endpointUrl: 'https://admin.example/config',
@@ -134,7 +185,7 @@ describe('PiModelConfigService', () => {
     expect(calls).toBe(2);
   });
 
-  it('keeps a valid cache when the management endpoint fails and rotates auth', async () => {
+  it('keeps a valid cache when the management endpoint fails, and the keys follow the new login', async () => {
     const good = service(
       async () => ({
         ok: true,
@@ -163,7 +214,10 @@ describe('PiModelConfigService', () => {
     expect(result.source).toBe('stale-cache');
     expect(result.ok).toBe(true);
     expect(result.syncedAt).toBe(1000);
-    expect(readFileSync(join(dir, 'auth.json'), 'utf8')).toContain('new-key');
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(memoryAuth('new-key', 'https://fallback.example/v1')).toEqual({
+      dan: { type: 'api_key', key: 'new-key' },
+    });
     expect(failed.readCatalog()).toMatchObject({
       source: 'stale-cache',
       stale: true,
@@ -301,8 +355,8 @@ describe('PiModelConfigService', () => {
       inheritedBaseUrl: 'https://login.example/v1/',
     });
 
-    const auth = JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'));
-    expect(auth).toEqual({
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(memoryAuth('login-key', 'https://login.example/v1/')).toEqual({
       inherits: { type: 'api_key', key: 'login-key' },
       ownKeyOnly: { type: 'api_key', key: 'admin-key' },
       ownUrlOnly: { type: 'api_key', key: 'login-key' },
@@ -409,7 +463,7 @@ describe('PiModelConfigService', () => {
     ]);
   });
 
-  it('rewrites an administrator key from cache after the login key rotates', async () => {
+  it('keeps an administrator key from cache after the login key rotates', async () => {
     const config = {
       version: 1,
       providers: {
@@ -443,7 +497,8 @@ describe('PiModelConfigService', () => {
 
     expect(result.source).toBe('stale-cache');
     // The administrator's key survives the rotation; only inherited ones move.
-    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(memoryAuth('login-key-new', 'https://login.example/v1')).toEqual({
       vendor: { type: 'api_key', key: 'admin-key' },
     });
   });
@@ -491,7 +546,7 @@ describe('PiModelConfigService', () => {
     expect(headerOf()).toBe(reference);
 
     // 2. the cheap rewrite of a still-fresh cache — no fetch happens at all,
-    // and this path writes models.json anyway to keep auth.json in step.
+    // and this path still rewrites models.json.
     rmSync(join(dir, 'models.json'));
     await service(ok, 2000).sync({
       endpointUrl: 'https://admin.example/config',
@@ -1093,9 +1148,8 @@ describe('PiModelConfigService — bundled catalog snapshot (A3)', () => {
     // the menu and then fail every turn started from it.
     const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
     expect(Object.keys(models.providers)).toEqual(['baseline']);
-    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({
-      baseline: { type: 'api_key', key: 'login-key' },
-    });
+    // The key is not written anywhere (P1-11, decisions 038, 127).
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
 
     // The wire cache means "the last catalog THIS client fetched". Seeding it
     // with the bundled copy would make the next failed sync report
@@ -1256,7 +1310,7 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     });
   }
 
-  it('writes a user service pi can read, with the key only in auth.json', () => {
+  it('writes a user service into models.json without its key, and no auth.json', () => {
     service([userProvider]).writeUserProviderConfig({
       userProviders: [userProvider],
       inheritedApiKey: '',
@@ -1273,12 +1327,12 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
       models: [{ id: 'deepseek-chat' }],
     });
     expect(readFileSync(join(dir, 'models.json'), 'utf8')).not.toContain(userProvider.apiKey);
-    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({
-      'my-deepseek': { type: 'api_key', key: userProvider.apiKey },
-    });
-    if (process.platform !== 'win32') {
-      expect(statSync(join(dir, 'auth.json')).mode & 0o777).toBe(0o600);
-    }
+    // dsh-rebase P1-11 (decisions 038, 127): the key stays in memory.
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(
+      service([userProvider]).buildNativeModelCatalog({ inheritedApiKey: '', inheritedBaseUrl: '' })
+        .auth
+    ).toEqual({ 'my-deepseek': { type: 'api_key', key: userProvider.apiKey } });
   });
 
   it('accepts an API style the managed allowlist does not contain', () => {
@@ -1321,7 +1375,7 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(models.providers['my-deepseek'].models).toEqual([{ id: 'deepseek-chat' }]);
   });
 
-  it('a SUCCESSFUL managed sync keeps the user services in the files pi reads', async () => {
+  it('a SUCCESSFUL managed sync keeps the user services in models.json and the keys', async () => {
     // The whole reason `userProviders` is a constructor supplier rather than a
     // write-time argument: `sync` rebuilds models.json from the server response
     // alone, and nothing in that path knows about the user's own services.
@@ -1339,7 +1393,11 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(result.source).toBe('remote');
 
     const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
-    const auth = JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'));
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    const auth = service([userProvider]).buildNativeModelCatalog({
+      inheritedApiKey: 'company-key',
+      inheritedBaseUrl: 'https://fallback.example/v1',
+    }).auth;
     // Both groups present, each with its own key.
     expect(Object.keys(models.providers).sort()).toEqual(['dan', 'my-deepseek']);
     expect(auth.dan).toEqual({ type: 'api_key', key: 'company-key' });
@@ -1363,9 +1421,12 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(Object.keys(models.providers)).toContain('cx2');
     // The slug of the display name is what the bug produced.
     expect(Object.keys(models.providers)).not.toContain('cx2-gpt-5-6');
-    // auth.json is keyed the same way, or the key reaches a provider that is
-    // no longer there.
-    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toHaveProperty('cx2');
+    // The in-memory keys are keyed the same way, or the key reaches a provider
+    // that is no longer there.
+    expect(
+      service([migrated]).buildNativeModelCatalog({ inheritedApiKey: '', inheritedBaseUrl: '' })
+        .auth
+    ).toHaveProperty('cx2');
   });
 
   it('a blank configKey falls back to the slug rather than an empty provider id', () => {
@@ -1392,7 +1453,7 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(models.providers.dan?.baseUrl).toBe('https://api.deepseek.com/v1');
   });
 
-  it('omits a disabled service from both files', () => {
+  it('omits a disabled service from models.json and from the keys', () => {
     const disabled = { ...userProvider, enabled: false };
     service([disabled]).writeUserProviderConfig({
       userProviders: [disabled],
@@ -1400,7 +1461,11 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
       inheritedBaseUrl: '',
     });
     expect(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')).providers).toEqual({});
-    expect(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8'))).toEqual({});
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(
+      service([disabled]).buildNativeModelCatalog({ inheritedApiKey: '', inheritedBaseUrl: '' })
+        .auth
+    ).toEqual({});
   });
 
   it('keeps only $-prefixed custom headers so a literal secret cannot land in models.json', () => {
@@ -1479,7 +1544,7 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
   const shippedBaseline = () =>
     validatePiManagedModelsConfig(BUNDLED_SNAPSHOT, { credentialsAllowed: false });
 
-  it('assembles byte-identical documents to the ones written for legacy', async () => {
+  it('assembles the same models.json as the file, and keeps the keys in memory only', async () => {
     const built = service({
       userProviders: [userProvider],
       fetchFn: async () => ({
@@ -1499,7 +1564,9 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
       inheritedBaseUrl: 'https://cch.example/v1',
     });
     expect(catalog.models).toEqual(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')));
-    expect(catalog.auth).toEqual(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')));
+    // dsh-rebase P1-11 (decisions 038, 127): no plaintext key file to compare.
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
+    expect(catalog.auth).toMatchObject({ dan: { type: 'api_key', key: 'login-key' } });
   });
 
   it('T3: declared image input reaches the picker from managed and user-owned models', async () => {
@@ -1599,7 +1666,7 @@ describe('PiModelConfigService — native model catalog (P5-5)', () => {
       inheritedBaseUrl: 'https://cch.example/v1',
     });
     expect(catalog.models).toEqual(JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8')));
-    expect(catalog.auth).toEqual(JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')));
+    expect(existsSync(join(dir, 'auth.json'))).toBe(false);
     // Both halves are really there — an equality of two empty catalogs would
     // pass this test while proving nothing.
     expect(Object.keys(catalog.models.providers as object).sort()).toEqual([

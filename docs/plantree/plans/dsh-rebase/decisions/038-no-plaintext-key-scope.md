@@ -19,3 +19,7 @@
 ## 补记（2026-09-29，P1-15，[决策 125](125-p1-15-one-shot-completions-choices.md)）
 
 第 3 条的两个前提之一已满足：P1-15 落地，一次性补全改在 DSH 宿主上跑，不再把含 key 的目录交给任何进程；原生补全在 Main 没交目录时会退回读 `auth.json`，这条路也随之不再走。现在读 `auth.json` 的只剩内嵌 pi TUI，停写只等 P1-11 定下 TUI 的去留。
+
+## 补记（2026-09-29，P1-11，[决策 127](127-p1-11-remove-pi-tui-choices.md)）
+
+第 3 条已落实：内嵌 pi TUI 删除后，`PiModelConfigService` 只写 `models.json`，不再写 `auth.json`；T082 的「保管箱一变就重写 `auth.json`」一并删除（决策 127 第 6、7 条）。升级前留在磁盘上的 `auth.json` 不主动删除，只在登出时照旧删掉（第 8 条，待审批；备选是启动时一次性删除）。

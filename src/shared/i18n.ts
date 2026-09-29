@@ -585,10 +585,6 @@ export const zhTranslations: Record<string, string> = {
   'Prompt history': '提问历史',
   'Jump to this question': '跳转到这条提问',
   'Attachment only': '仅附件',
-  // Pi runs as a local PTY, so a remote workspace has no directory to spawn in.
-  'Pi terminal is unavailable for remote repositories': 'Pi 终端不支持远程仓库',
-  'Open a local repository or worktree to start a Pi terminal.':
-    '请打开本地仓库或 worktree 后再启动 Pi 终端。',
   'New chat': '新建对话',
   // D1 (round-5): header "New" button title, dynamic target discoverability.
   'New session in {{folder}}': '在 {{folder}} 中新建会话',
@@ -850,33 +846,10 @@ export const zhTranslations: Record<string, string> = {
   'File saved': '文件已保存',
   'Generate branch names with AI': '用 AI 生成分支名',
   'Just a really good one to code with ai.': '一个好用的 AI 编程工具。',
-  'Loading Pi...': '正在启动 Pi…',
   Logout: '退出登录',
   'Logout failed': '退出登录失败',
   'No favorite themes yet. Click the heart icon to add favorites.':
     '还没有收藏的主题。点心形图标即可收藏。',
-  'Open TUI': '打开 TUI',
-  'Pi terminal disconnected': 'Pi 终端已断开',
-  // T065 — the Pi TUI's own notices. `Pi TUI closed` and the line under it were
-  // hardcoded English in `usePresentationSwitch.ts`; the two `reason` strings
-  // below are dictionary keys Main sends across IPC (it has no translator).
-  'Pi TUI closed': 'Pi 终端已关闭',
-  'Returned to the GUI session.': '已切回图形界面的对话。',
-  'The Pi TUI cannot open this chat': 'Pi 终端无法打开这个对话',
-  'This chat is already open in a terminal in another window':
-    '该会话已在另一个窗口的终端中打开，请先关闭那个终端，或在那个窗口里继续。',
-  'This chat was saved in an older native format. Open it in the app once to upgrade it, then the Pi terminal can open it.':
-    '这个对话保存的是旧版原生格式。先在应用里打开一次完成升级，Pi 终端才能打开它。',
-  // dsh-rebase P1-1 (R6): a DSH chat's identity is not a pi session file.
-  'This chat runs on the DSH engine, which the Pi terminal cannot open.':
-    '这个对话运行在 DSH 引擎上，Pi 终端打不开它。',
-  // T065 回炉 — the other two refusals Main can send. They used to be thrown
-  // away by the open path (no terminal, no message), so nothing ever displayed
-  // them; now that they reach a toast they need Chinese like the two above.
-  'This terminal is already running another chat; close it before opening this one':
-    '这个终端已经在运行另一个对话，请先关掉那个终端，再打开这一个。',
-  'This chat is still running a turn; wait for it to finish before opening the Pi terminal':
-    '这个对话还有一轮没跑完，等它结束之后再打开 Pi 终端。',
   // D4 回炉 — ProviderSetupDialog 的「各模型元数据」小节。这六个键是
   // i18nCoverage 唯一漏掉的一组：它们全部只在该对话框里使用，所以译名按
   // 「模型能力声明」的语境定，`Input` 取「输入类型」而非孤零零的「输入」，
@@ -934,33 +907,8 @@ export const zhTranslations: Record<string, string> = {
   // than created anew.
   Done: '完成',
 
-  // H/19 U4：用户自装的 pi 扩展。cutover-02 / cutover-03：它们不再进 GUI 会话。
-  'npm:package-name, a git URL, or a folder path': 'npm:包名、git 地址，或者一个目录路径',
-  'Package source': '包来源',
-  'Installing downloads from the network and can take a few seconds.':
-    '安装会联网下载，可能要等几秒。',
-  'Project-level plugins are ignored on the managed route, so this app installs to your account only.':
-    '登录模式下项目级插件不会生效，所以本应用只装到你的账户下。',
-  'Extensions installed for your account. Only the built-in Pi terminal loads them; chats in this app do not.':
-    '装在你账户下的扩展。只有内嵌的 Pi 终端会加载它们，本应用里的对话不会。',
-  'Installed plugins could not be listed:': '读取已装插件失败：',
+  // Shared with the DSH plugin page (P1-10c).
   'Loading plugins...': '正在读取插件…',
-  // 'No plugins installed' and 'Installing...' are already in this file, from
-  // the Claude-era plugin browser. Reusing them rather than adding a second
-  // spelling — a duplicate key silently wins over the first one.
-  'Install one by package name to add tools or commands to your sessions.':
-    '按包名装一个，给会话加上工具或命令。',
-  'Settings file': '设置文件',
-  // cutover-02: the page used to say this app steps aside for a permission
-  // system the user installed. Since P6-5 nothing of the sort is loaded in a
-  // chat — approval is always ours — and an installed one only reaches the
-  // built-in terminal.
-  'This app approves tool calls with its own permission system in every chat.':
-    '本应用的每个对话，都由它自带的权限系统审批工具调用。',
-  'The pi permission system you installed applies to the built-in terminal only, not to chats in this app.':
-    '你自己安装的 pi 权限系统只对内嵌终端生效，管不到本应用里的对话。',
-  'This app could not read its plugin settings, so it cannot say which permission system the built-in terminal runs.':
-    '本应用读不到自己的插件设置，因此无法确定内嵌终端会运行哪一份权限系统。',
   // U13: sidebar group for chats that never got a project folder — they run in
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',
@@ -1919,7 +1867,6 @@ export const zhTranslations: Record<string, string> = {
   'Pull request fetch': 'Pull Request 拉取',
   'AI branch name generation': 'AI 分支名生成',
   Stop: '停止',
-  'Installing...': '安装中...',
   'Uninstalling...': '正在卸载...',
   Install: '安装',
   'CLI install success': 'CLI 安装成功',
@@ -1982,7 +1929,6 @@ export const zhTranslations: Record<string, string> = {
   Arguments: '参数',
   // Plugins
   Plugins: '插件',
-  'No plugins installed': '暂无已安装插件',
   'Plugin installed': '插件已安装',
   'Plugin uninstalled': '插件已卸载',
   'Failed to install plugin': '安装插件失败',
@@ -2258,7 +2204,6 @@ export const zhTranslations: Record<string, string> = {
   // D07: MainHeader absorbed ChatWorkspace's own bar — the two axes it now
   // carries, plus the temporary-chat marker that came with it.
   'Two-column layout': '双栏布局',
-  'Presentation mode': '显示方式',
   Temporary: '临时',
   'Expand sidebar': '展开侧栏',
   'Collapse sidebar': '收起侧栏',
@@ -3456,23 +3401,6 @@ export type Translate = (key: string, params?: Record<string, string | number>) 
 export const englishTranslate: Translate = (key, params) => translate('en', key, params);
 
 /**
- * Terminal-created chats (`/new` inside the Pi TUI).
- *
- * Appended here rather than written into the literal above so that two people
- * adding strings at the same time do not land on the same line. Read from Main
- * through `translate(getCurrentLocale(), …)`, which is why the keys live with
- * the rest of the dictionary rather than in the renderer.
- *
- * The sentence that used to follow — "chats started with /new are not listed in
- * the sidebar" — was deleted with the behaviour it described: those chats ARE
- * listed now. What replaced it is at the end of this file, under the case where
- * indexing one of them fails.
- */
-Object.assign(zhTranslations, {
-  'A new chat was created in the terminal': '终端里新建了一个会话',
-});
-
-/**
  * Changing the permission gear in the middle of a turn.
  *
  * The composer control used to grey out entirely while a turn ran, which put
@@ -3499,20 +3427,6 @@ Object.assign(zhTranslations, {
     '「本会话内允许」会记住以 {{prefix}} 开头的命令',
   'Allow for session remembers {{tool}} on {{path}}':
     '「本会话内允许」会记住 {{tool}} 可访问 {{path}}',
-});
-
-/**
- * A terminal-created chat that could NOT be put in the chat list.
- *
- * The notice used to go out for every `/new` session, because none of them could
- * be listed at all. They are indexed now (`main/ipc/piTui.ts`), so what is left
- * to say is the exception: a file with no readable pi header, or an index that
- * refused the row. Its own block at the end of the file for the usual reason —
- * several people add strings here on the same day.
- */
-Object.assign(zhTranslations, {
-  'This chat could not be added to the chat list. Its file is at {{path}}':
-    '这个会话无法加入会话列表，文件在 {{path}}',
 });
 
 /**

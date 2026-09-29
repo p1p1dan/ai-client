@@ -17,9 +17,13 @@
  *
  * 周期结束、旧引擎退役（P6-5）之后，这条规则收紧成「一处都不许 import」，那时这个
  * 测试只需要把允许名单清空。
+ *
+ * dsh-rebase P1-11 (decision 127): both process users are gone (the embedded
+ * pi TUI and the pi plugin manager), so the third case below now asserts that
+ * nothing in Main launches the CLI either.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -118,17 +122,29 @@ describe('P6-2 · pi-coding-agent is a bundled tool, not our library', () => {
     expect(importers.filter((file) => !LIBRARY_ALLOWED.includes(file))).toEqual([]);
   });
 
-  it('still reaches the terminal and the plugin manager as a process', () => {
-    // The other half of decision A: keeping the package is only justified while
-    // these two features run its CLI. If this stops being true, the package has
-    // no reason to stay and P6-2 can complete literally.
-    const pty = readFileSync(path.join(repoRoot, 'src/main/services/terminal/PiTuiPty.ts'), 'utf8');
-    expect(pty).toContain("'pi-coding-agent'");
-    expect(pty).toContain("'cli.js'");
-    const plugins = readFileSync(
-      path.join(repoRoot, 'src/main/services/piPlugins/index.ts'),
-      'utf8'
-    );
-    expect(plugins).toContain('resolvePiCliLaunchPlan');
+  it('is no longer run as a process either (dsh-rebase P1-11)', () => {
+    // The other half of decision A said keeping the package was only justified
+    // while the embedded terminal and the plugin manager ran its CLI. P1-11
+    // (decision 127) removed both, so the app neither imports the package nor
+    // resolves a path to its CLI: P6-2 can complete literally, and P1-12 takes
+    // the package out of `resources/agent-host` (the manifest is not touched
+    // here).
+    for (const gone of [
+      'src/main/services/terminal/PiTuiPty.ts',
+      'src/main/services/piPlugins',
+      'src/main/services/agent-host/piCliLayout.ts',
+    ]) {
+      expect(existsSync(path.join(repoRoot, gone)), gone).toBe(false);
+    }
+    const launchers = sourceFiles(path.join(srcRoot, 'main'))
+      .filter((file) => !repoRelative(file).includes('/__tests__/'))
+      .filter((file) => {
+        const code = readFileSync(file, 'utf8')
+          .replace(/\/\*[\s\S]*?\*\//g, '')
+          .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+        return code.includes("'pi-coding-agent'") || code.includes('resolvePiCliLaunchPlan');
+      })
+      .map((file) => repoRelative(file));
+    expect(launchers).toEqual([]);
   });
 });

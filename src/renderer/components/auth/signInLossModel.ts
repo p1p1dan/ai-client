@@ -18,9 +18,8 @@
  *    `PtyManager.destroy` → `killProcessTree(pty)` with SIGKILL. Whatever was
  *    running (a build, a test run, an install) dies mid-way with no signal it
  *    can handle.
- *  - A Pi TUI terminal is parked by `useXterm` and then disposed for real by
- *    `usePresentationSwitch`'s own unmount cleanup, which walks every live
- *    terminal id. SIGTERM first, SIGKILL if it does not go.
+ *  - (The embedded pi TUI terminal, counted separately until dsh-rebase P1-11,
+ *    is gone — decision 127. Every terminal left is a shell.)
  *  - The tab list itself is `TerminalPanel`'s React `useState`, so even the
  *    record of which terminals existed is gone.
  *
@@ -65,8 +64,6 @@ export interface SignInLossSnapshot {
   unsavedFiles: number;
   /** Shell terminals: killed with their whole process tree. */
   shellTerminals: number;
-  /** Pi TUI terminals embedded in chat: disposed on the same unmount. */
-  agentTerminals: number;
   /** Sessions with a turn in flight: the turn survives, the renderer's view of it does not. */
   runningTurns: number;
 }
@@ -88,8 +85,6 @@ export interface SignInLossInput {
   currentWorkspacePath: string | null;
   /** `useTerminalStore.sessions` — every shell tab across every workspace. */
   shellTerminals: number;
-  /** `useTerminalWriteStore.writers` — one entry per mounted `AgentTerminal`. */
-  agentTerminals: number;
   /** `useChatSessionsStore.sessions` filtered by `isTurnInFlight(status)`. */
   runningTurns: number;
 }
@@ -111,14 +106,13 @@ export function deriveSignInLosses(input: SignInLossInput): SignInLossSnapshot {
   return {
     unsavedFiles,
     shellTerminals: input.shellTerminals,
-    agentTerminals: input.agentTerminals,
     runningTurns: input.runningTurns,
   };
 }
 
-/** Terminals of both kinds, which the copy treats as one number. */
+/** Every terminal the unmount kills; the copy prints it as one number. */
 export function totalTerminals(snapshot: SignInLossSnapshot): number {
-  return snapshot.shellTerminals + snapshot.agentTerminals;
+  return snapshot.shellTerminals;
 }
 
 /**
@@ -144,9 +138,9 @@ export interface SignInLossLineOptions {
    * Logging out, not just re-logging-in.
    *
    * Only one line changes, and it has to: `performLogoutSequence` runs
-   * `terminateAllSessions()` + `disposeAllPiTuiControllers()` + a worker
-   * `invalidateAll()` BEFORE it clears the vault, so the in-flight turn is
-   * killed outright rather than left running with nobody watching. Printing the
+   * `terminateAllSessions()` + a worker `invalidateAll()` BEFORE it clears
+   * the vault, so the in-flight turn is killed outright rather than left
+   * running with nobody watching. Printing the
    * re-login wording here would promise a turn that survives, on the one path
    * where it provably does not.
    */

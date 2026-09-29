@@ -1025,10 +1025,11 @@ export function MessageTimeline({
           without scrolling with it. Anchors itself to `data-turn-id`. */}
       <PromptNavRail prompts={promptNavItems} containerRef={scrollRootRef} />
       {/* T12-d: the bottom anchor. Shape is the app's OWN — `ShellTerminal`
-          and `AgentTerminal` have carried this exact button for as long as
-          they have had scrollback, and a second vocabulary for "jump to the
-          live end" in the same window would be the worse choice even though
-          the reference implementation centres its own pill instead.
+          (and the pi TUI's terminal, until P1-11) has carried this exact
+          button for as long as it has had scrollback, and a second
+          vocabulary for "jump to the live end" in the same window would be
+          the worse choice even though the reference implementation centres
+          its own pill instead.
 
           Visibility is geometry, never hover: `F-B15`'s reversal bought the
           turn action strip a hover-only life, and the argument that made that

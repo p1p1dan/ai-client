@@ -141,21 +141,6 @@ export const IPC_CHANNELS = {
   SESSION_EXIT: 'session:exit',
   SESSION_STATE: 'session:state',
 
-  // Pi embedded TUI
-  PI_TUI_OPEN: 'piTui:open',
-  PI_TUI_WRITE: 'piTui:write',
-  PI_TUI_RESIZE: 'piTui:resize',
-  PI_TUI_SUSPEND: 'piTui:suspend',
-  PI_TUI_DISPOSE: 'piTui:dispose',
-  PI_TUI_STATUS: 'piTui:status',
-  /** TUI-1: can the bundled pi CLI open this chat's session file at all? */
-  PI_TUI_SESSION_SUPPORT: 'piTui:sessionSupport',
-  PI_TUI_DATA: 'piTui:data',
-  PI_TUI_EXIT: 'piTui:exit',
-  PI_TUI_STATE: 'piTui:state',
-  /** Main indexed the chats `/new` created in a terminal; re-read the list. */
-  PI_TUI_SESSIONS_INDEXED: 'piTui:sessionsIndexed',
-
   // App
   APP_GET_PATH: 'app:getPath',
   APP_TAKE_PENDING_OPEN_PATH: 'app:takePendingOpenPath',
@@ -287,12 +272,6 @@ export const IPC_CHANNELS = {
   AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',
   AGENT_MIGRATION_APPLY: 'agentMigration:apply',
 
-  // H/19 U4 — user-installed pi extensions, run through pi's own package manager.
-  PI_PLUGINS_LIST: 'piPlugins:list',
-  PI_PLUGINS_INSTALL: 'piPlugins:install',
-  PI_PLUGINS_REMOVE: 'piPlugins:remove',
-  PI_PLUGINS_SET_ENABLED: 'piPlugins:setEnabled',
-
   // T08-c — the pi permission policy: read every scope, write the one we own.
   PI_PERMISSIONS_GET: 'piPermissions:get',
   PI_PERMISSIONS_UPDATE: 'piPermissions:update',
@@ -373,13 +352,6 @@ export const IPC_CHANNELS = {
    */
   CHAT_ENSURE_SCRATCH_WORKSPACE: 'chat:ensureScratchWorkspace',
   CHAT_RESUME_SESSION: 'chat:resumeSession',
-  /**
-   * Re-read a session's Pi JSONL after the embedded TUI wrote to it, and
-   * replace the timeline with what is on disk. Distinct from resume: resume
-   * short-circuits when the worker is already live, which is exactly the case
-   * here.
-   */
-  CHAT_RELOAD_SESSION: 'chat:reloadSession',
   CHAT_SEND: 'chat:send',
   /**
    * T135 / decision 045 — the failure card's Continue: re-run the session's

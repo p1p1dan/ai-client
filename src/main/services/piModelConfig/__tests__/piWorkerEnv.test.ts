@@ -22,12 +22,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * CLI — that package has no such variable, and resolves project trust from its
  * own `--approve` flag, `trust.json` and `defaultProjectTrust` setting.
  *
- * What is left is a marker of the credential route, and one consumer:
- * `PiTuiPty` strips inherited credential variables out of a PTY when it reads
- * `'0'`. The value is still pinned here because that consumer is a security
- * behaviour — a company-account terminal must not inherit the gateway key —
- * and because sending the key in BOTH modes is what keeps an absent key
- * meaning "old Main build" rather than "local route".
+ * What is left is a marker of the credential route. Its one consumer, the
+ * embedded pi TUI's credential strip, went with dsh-rebase P1-11 (decision
+ * 127); the value is still pinned here because sending the key in BOTH modes
+ * is what keeps an absent key meaning "old Main build" rather than "local
+ * route".
  */
 
 const APP_VERSION = '9.9.9-test';
@@ -76,12 +75,6 @@ async function workerEnv(
   return resolveManagedPiWorkerEnv();
 }
 
-async function ptyEnv(managed: boolean): Promise<Record<string, string>> {
-  readSharedSettingsMock.mockReturnValue({ credentialMode: managed ? 'managed' : 'local' });
-  const { resolveManagedPiPtyEnv } = await import('../index');
-  return resolveManagedPiPtyEnv();
-}
-
 describe('resolveManagedPiWorkerEnv — project trust', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -92,14 +85,14 @@ describe('resolveManagedPiWorkerEnv — project trust', () => {
     delete process.env.AICLIENT_MANAGED_CREDENTIALS;
   });
 
-  it('marks the managed route, which is what strips PTY credentials', async () => {
+  it('marks the managed route', async () => {
     const env = await workerEnv(true);
     expect(env[PI_PROJECT_TRUST_ENV]).toBe('0');
     // The managed route also isolates the agent directory — both keys travel.
     expect(env.PI_CODING_AGENT_DIR).toMatch(/pi-agent$/);
   });
 
-  it('marks the local route, which keeps a PTY’s inherited environment', async () => {
+  it('marks the local route', async () => {
     const env = await workerEnv(false);
     expect(env[PI_PROJECT_TRUST_ENV]).toBe('1');
     // H/19: the local route ALSO runs out of this app's agent directory. Trust
@@ -154,17 +147,6 @@ describe('resolveManagedPiWorkerEnv — agent directory', () => {
   it('sends no borrow directory at all — the mechanism is gone', async () => {
     for (const managed of [true, false]) {
       expect(await workerEnv(managed)).not.toHaveProperty('AICLIENT_PI_BORROW_RESOURCES_DIR');
-    }
-  });
-
-  it('gives the PTY the same agent directory as the worker', async () => {
-    // The TUI runs the real pi CLI, which DOES read PI_CODING_AGENT_DIR. That
-    // is what makes GUI and TUI find the same sessions (U3).
-    for (const managed of [true, false]) {
-      const pty = await ptyEnv(managed);
-      const worker = await workerEnv(managed);
-      expect(pty.PI_CODING_AGENT_DIR).toBe(worker.PI_CODING_AGENT_DIR);
-      expect(pty[PI_PROJECT_TRUST_ENV]).toBe(managed ? '0' : '1');
     }
   });
 
@@ -270,13 +252,11 @@ describe('native feature switches — one reader, no transport', () => {
     }
   });
 
-  it('hands the PTY the same environment as the worker, now that nothing is worker-only', async () => {
-    readSharedSettingsMock.mockReturnValue({
-      credentialMode: 'managed',
-      [PI_ENABLE_SUBAGENTS_SETTING_KEY]: true,
-    });
-    const { resolveManagedPiWorkerEnv, resolveManagedPiPtyEnv } = await import('../index');
-    expect(resolveManagedPiPtyEnv()).toEqual(resolveManagedPiWorkerEnv());
+  it('has no separate PTY environment any more (P1-11)', async () => {
+    // The pi TUI was the only PTY handed this environment; it is gone, and so
+    // is the helper that built its copy (decision 127).
+    const module = await import('../index');
+    expect(module).not.toHaveProperty('resolveManagedPiPtyEnv');
   });
 
   it('shows the switch ON for an install that never chose, which is what native does', async () => {
@@ -344,15 +324,6 @@ describe('resolveManagedPiWorkerEnv — client User-Agent', () => {
       const env = await workerEnv(managed);
       expect(env[PI_USER_AGENT_ENV]).toBe(`${PI_USER_AGENT_PRODUCT}/${APP_VERSION}`);
     }
-  });
-
-  it('reaches the PTY too, unlike the borrow dir it replaced', async () => {
-    // The borrow dir was dropped because the real pi CLI does not read it (and
-    // the opt-in list, dropped for the same reason, no longer exists at all —
-    // cutover-10). This one the CLI DOES read — out of the `headers` block of
-    // the same models.json a managed TUI session loads — so a PTY turn must
-    // identify itself the same way a worker turn does.
-    expect((await ptyEnv(true))[PI_USER_AGENT_ENV]).toBe(`${PI_USER_AGENT_PRODUCT}/${APP_VERSION}`);
   });
 
   it('never emits a dangling slash when a version is unavailable', async () => {

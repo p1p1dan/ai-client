@@ -20,7 +20,6 @@ import type {
   PermissionPolicySnapshot,
   UpdatePermissionPolicyRequest,
 } from '@shared/piPermissionPolicy';
-import type { PiPluginCommandResult, PiPluginState } from '@shared/piPlugins';
 import type {
   AppCloseRequestPayload,
   AttachmentReadOptions,
@@ -483,57 +482,6 @@ const electronAPI = {
         callback({ id: event.sessionId, exitCode: event.exitCode, signal: event.signal });
       ipcRenderer.on(IPC_CHANNELS.SESSION_EXIT, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.SESSION_EXIT, handler);
-    },
-  },
-
-  // Embedded Pi TUI
-  piTui: {
-    open: (
-      request: import('@shared/types').PiTuiOpenRequest
-    ): Promise<import('@shared/types').PiTuiOpenResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_OPEN, request),
-    write: (terminalId: string, data: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_WRITE, terminalId, data),
-    resize: (terminalId: string, cols: number, rows: number): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_RESIZE, terminalId, cols, rows),
-    suspend: (terminalId: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_SUSPEND, terminalId),
-    dispose: (terminalId?: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_DISPOSE, terminalId),
-    status: (): Promise<import('@shared/types').PiTuiStatus> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_STATUS),
-    sessionSupport: (
-      sessionFile: string | null
-    ): Promise<import('@shared/types').PiTuiSessionSupport> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_TUI_SESSION_SUPPORT, sessionFile),
-    onData: (callback: (event: import('@shared/types').PiTuiDataEvent) => void): (() => void) => {
-      const handler = (_: unknown, event: import('@shared/types').PiTuiDataEvent) =>
-        callback(event);
-      ipcRenderer.on(IPC_CHANNELS.PI_TUI_DATA, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_DATA, handler);
-    },
-    onExit: (callback: (event: import('@shared/types').PiTuiExitEvent) => void): (() => void) => {
-      const handler = (_: unknown, event: import('@shared/types').PiTuiExitEvent) =>
-        callback(event);
-      ipcRenderer.on(IPC_CHANNELS.PI_TUI_EXIT, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_EXIT, handler);
-    },
-    onState: (
-      callback: (event: import('@shared/types').PiTuiStatusEvent) => void
-    ): (() => void) => {
-      const handler = (_: unknown, event: import('@shared/types').PiTuiStatusEvent) =>
-        callback(event);
-      ipcRenderer.on(IPC_CHANNELS.PI_TUI_STATE, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_STATE, handler);
-    },
-    /** Chats `/new` created in a terminal, after Main put them in the index. */
-    onSessionsIndexed: (
-      callback: (event: import('@shared/types').PiTuiSessionsIndexedEvent) => void
-    ): (() => void) => {
-      const handler = (_: unknown, event: import('@shared/types').PiTuiSessionsIndexedEvent) =>
-        callback(event);
-      ipcRenderer.on(IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED, handler);
-      return () => ipcRenderer.off(IPC_CHANNELS.PI_TUI_SESSIONS_INDEXED, handler);
     },
   },
 
@@ -1063,13 +1011,6 @@ const electronAPI = {
        */
     }): Promise<{ requestId: string; migration?: LegacyMigrationSummary }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_RESUME_SESSION, payload),
-    /**
-     * Re-read this session's Pi file after the embedded TUI wrote to it and
-     * replace the timeline with what is on disk. `reloaded: false` means there
-     * was no live worker holding a stale view, so nothing needed correcting.
-     */
-    reloadSession: (payload: { sessionId: string }): Promise<{ reloaded: boolean }> =>
-      ipcRenderer.invoke(IPC_CHANNELS.CHAT_RELOAD_SESSION, payload),
     send: (payload: {
       sessionId: string;
       attemptId: string;
@@ -1366,21 +1307,6 @@ const electronAPI = {
     inspect: (): Promise<MigrationPlan> => ipcRenderer.invoke(IPC_CHANNELS.AGENT_MIGRATION_INSPECT),
     apply: (payload: MigrationRequest): Promise<MigrationResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.AGENT_MIGRATION_APPLY, payload),
-  },
-
-  /**
-   * H/19 U4 — user-installed pi extensions. `install` reaches the npm registry
-   * and can take seconds or fail, so every caller must treat it as slow and
-   * show the returned output when `ok` is false.
-   */
-  piPlugins: {
-    list: (): Promise<PiPluginState> => ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_LIST),
-    install: (source: string): Promise<PiPluginCommandResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_INSTALL, source),
-    remove: (source: string): Promise<PiPluginCommandResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_REMOVE, source),
-    setEnabled: (source: string, enabled: boolean): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_PLUGINS_SET_ENABLED, { source, enabled }),
   },
 
   /**

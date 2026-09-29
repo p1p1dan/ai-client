@@ -73,7 +73,7 @@ import { useSettingsStore } from './stores/settings';
 import { useTempWorkspaceStore } from './stores/tempWorkspace';
 import { useWorkspaceModeStore } from './stores/workspaceMode';
 import { useWorktreeStore } from './stores/worktree';
-import { initAgentActivityListener, useWorktreeActivityStore } from './stores/worktreeActivity';
+import { useWorktreeActivityStore } from './stores/worktreeActivity';
 
 function createPlaceholderWorktree(path: string): GitWorktree {
   return {
@@ -128,11 +128,6 @@ export default function App() {
       }
     });
   }, [requestSignIn]);
-
-  // Initialize agent activity listener for tree sidebar status display
-  useEffect(() => {
-    return initAgentActivityListener();
-  }, []);
 
   // D10: watch which permission system each worker comes up on. Mounted here,
   // not in the tier control that reads it — `session.created` for a restored

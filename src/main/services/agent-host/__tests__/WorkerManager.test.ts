@@ -8,7 +8,6 @@ import {
 } from '@shared/types/workerRpc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../../../../agent-host/stderrRedaction';
-import { BOOTSTRAP_REQUEST_TIMEOUT_MS } from '../createPiWorkerSlot';
 import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
 
 // Normalize a POSIX-style path to the current platform's canonical form so
@@ -144,8 +143,6 @@ function createHarness(
     removeSessionFile?: (file: string) => Promise<void>;
     createFailureAfter?: number;
     maxRestartAttempts?: number;
-    /** When set, `worker.reload` rejects with this message. */
-    reloadFailure?: string;
     /** D10: the gate the bootstrap ack reports. Defaults to the injected copy. */
     permissionGate?: 'bundled' | 'user_configured';
     /**
@@ -373,34 +370,6 @@ function createHarness(
               totalNodes: 0,
               returnedNodes: 0,
               truncated: false,
-            },
-          },
-        };
-      }
-      if (type === 'worker.reload') {
-        if (input.reloadFailure) throw new Error(input.reloadFailure);
-        return {
-          logicalSessionId: sessionId,
-          sessionFile,
-          workspacePath: String(options.cwd),
-          // The file tail is the leaf after a reload: whoever wrote last wins.
-          leaf: { activeEntryId: 'tui-tail', fileTailEntryId: 'tui-tail' },
-          history: {
-            logicalSessionId: sessionId,
-            sessionFile,
-            workspacePath: String(options.cwd),
-            page: {
-              messages: [
-                {
-                  id: 'h:tui-1',
-                  role: 'assistant',
-                  blocks: [{ type: 'text', text: 'written in the terminal' }],
-                },
-              ],
-              offset: 0,
-              limit: 80,
-              totalCount: 1,
-              hasMore: false,
             },
           },
         };
@@ -2598,53 +2567,7 @@ describe('WorkerManager isolation and crash recovery', () => {
   });
 });
 
-// 2026-09-04 bug: creating a session showed "Pi session service stopped · click
-// Retry" while the very next message answered normally. Workers spawn lazily,
-// so an empty pool is the manager's IDLE state — deriving `stopped` from it
-// turned a healthy service into a scary ribbon with a Retry button.
-describe('WorkerManager reload after an external writer', () => {
-  it('re-reads a live session and republishes the file as the branch', async () => {
-    const h = createHarness();
-    await create(h.manager, 's1', 11);
-    h.events.length = 0;
-
-    await expect(
-      h.manager.reloadSession({
-        sessionId: 's1',
-        sessionFile: '/sessions/s1.jsonl',
-        ownerWebContentsId: 11,
-      })
-    ).resolves.toMatchObject({ reloaded: true });
-
-    // The worker was asked to re-open its own file — this is the step that
-    // resumeSession's warm path skips, and the reason the TUI's messages were
-    // invisible before.
-    const reloadCalls = h.records[0]?.request.mock.calls.filter(
-      ([type]) => type === 'worker.reload'
-    );
-    expect(reloadCalls).toHaveLength(1);
-    expect(reloadCalls?.[0]?.[1]).toMatchObject({
-      logicalSessionId: 's1',
-      sessionFile: norm('/sessions/s1.jsonl'),
-    });
-    // Reload rebuilds the whole plugin graph, MCP handshakes included — the
-    // same work bootstrap does. On the warm 10s default a user with one stdio
-    // MCP server lost a healthy session here: the reload timed out, the slot
-    // was retired, and the message that triggered it failed.
-    expect(reloadCalls?.[0]?.[2]).toEqual({ timeoutMs: BOOTSTRAP_REQUEST_TIMEOUT_MS });
-
-    // 'branch', not 'refresh': the file replaces the timeline outright.
-    expect(h.events.map((event) => event.type)).toEqual(['session.history', 'session.status']);
-    expect(h.events[0]).toMatchObject({ payload: { mode: 'branch' } });
-    // The leaf now follows the file tail, so the next turn continues the
-    // terminal's branch rather than opening a sibling one.
-    expect(h.commitPiLeaf).toHaveBeenCalledWith({
-      sessionId: 's1',
-      runtimeIdentity: norm('/sessions/s1.jsonl'),
-      piLeaf: { activeEntryId: 'tui-tail', fileTailEntryId: 'tui-tail' },
-    });
-  });
-
+describe('WorkerManager compaction budget', () => {
   it("gives a compaction a model-sized budget, and waits out the worker's own cutoff", async () => {
     const h = createHarness();
     await create(h.manager, 's1', 11);
@@ -2661,46 +2584,12 @@ describe('WorkerManager reload after an external writer', () => {
     // timeout here only rejects this promise — it does not stop the worker.
     expect(WORKER_COMPACT_BUDGET_MS).toBeLessThan(WORKER_COMPACT_REQUEST_TIMEOUT_MS);
   });
-
-  it('reports nothing to reload when no worker is holding the session', async () => {
-    const h = createHarness();
-    await h.manager.ensureReady();
-    h.events.length = 0;
-
-    await expect(
-      h.manager.reloadSession({ sessionId: 'never-spawned', sessionFile: '/sessions/x.jsonl' })
-    ).resolves.toMatchObject({ reloaded: false });
-    // No worker means no stale in-memory view to correct: a later spawn reads
-    // the file itself. Publishing history here would invent a timeline.
-    expect(h.events).toEqual([]);
-    expect(h.records).toHaveLength(0);
-  });
-
-  it('retires the worker when the reload fails, because the old session is already gone', async () => {
-    const h = createHarness({ reloadFailure: 'switchSession blew up' });
-    await create(h.manager, 's1', 11);
-
-    await expect(
-      h.manager.reloadSession({ sessionId: 's1', sessionFile: '/sessions/s1.jsonl' })
-    ).rejects.toThrow(/switchSession blew up/);
-
-    // switchSession disposes the outgoing Pi session before building the new
-    // one, so a half-failed reload leaves a worker with no usable session.
-    // Keeping it would hand the next send a runtime in that state.
-    expect(h.manager.getSlotSnapshots()).toEqual([]);
-    expect(h.records[0]?.dispose).toHaveBeenCalled();
-  });
-
-  it('refuses to reload a session bound to a different Pi file', async () => {
-    const h = createHarness();
-    await create(h.manager, 's1', 11);
-
-    await expect(
-      h.manager.reloadSession({ sessionId: 's1', sessionFile: '/sessions/someone-else.jsonl' })
-    ).rejects.toThrow(/worker_reload_identity_conflict|bound to another/);
-  });
 });
 
+// 2026-09-04 bug: creating a session showed "Pi session service stopped · click
+// Retry" while the very next message answered normally. Workers spawn lazily,
+// so an empty pool is the manager's IDLE state — deriving `stopped` from it
+// turned a healthy service into a scary ribbon with a Retry button.
 describe('WorkerManager manager-level state', () => {
   it('reports stopped only before it has ever been readied', () => {
     const h = createHarness();

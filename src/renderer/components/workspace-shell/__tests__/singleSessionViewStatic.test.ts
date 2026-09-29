@@ -32,7 +32,7 @@ describe('D12 single-session view', () => {
     // maintaining nothing.
     expect(shell).not.toContain('openSessionIds');
     expect(shell).not.toContain('useSessionTabsStore');
-    expect(shell).toMatch(/<SessionBar\s+presentation=\{presentation\}/);
+    expect(shell).toMatch(/<SessionBar\s+reviewOpen=\{reviewOpen\}/);
   });
 
   it("the sidebar marker reads the runtime's own binding, not a tab list", () => {
@@ -44,10 +44,11 @@ describe('D12 single-session view', () => {
     expect(nav).not.toContain('openSessionIds');
   });
 
-  it('the session bar keeps the GUI/TUI switch — it has no other home', () => {
+  it('the session bar has no GUI/TUI switch and no close control', () => {
     const bar = code(join(SHELL_DIR, 'SessionBar.tsx'));
-    expect(bar).toContain('openGui');
-    expect(bar).toContain('openTui');
+    // dsh-rebase P1-11 (decision 127): the switch went with the pi TUI.
+    expect(bar).not.toContain('openGui');
+    expect(bar).not.toContain('openTui');
     // And it must NOT grow a close control: D12 put ending a conversation in
     // the sidebar row's menu so the repo's three closes sit together.
     expect(bar).not.toContain('endSessionRuntime');

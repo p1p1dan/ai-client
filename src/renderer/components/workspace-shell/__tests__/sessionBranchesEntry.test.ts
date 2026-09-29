@@ -31,7 +31,6 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { stripComments } from '@/components/chat/__tests__/stripComments';
-import type { PresentationSwitch } from '@/components/chat/usePresentationSwitch';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { SessionBar } from '../SessionBar';
 
@@ -51,16 +50,6 @@ vi.mock('@/components/chat/sessionIndex/useResumeSession', () => {
 });
 
 const BRANCHES = zh('Session branches');
-
-const presentation: PresentationSwitch = {
-  presentationMode: 'gui',
-  openGui: () => undefined,
-  openTui: () => undefined,
-  handleTuiExit: () => undefined,
-  tuiTerminalId: null,
-  surfaceSwitching: false,
-  effectiveCwd: '/repo',
-};
 
 function seed(over: { runtimeIdentity?: string; status?: SessionRuntimeStatus } = {}) {
   const { runtimeIdentity, status = 'idle' } = over;
@@ -86,7 +75,7 @@ async function renderBar() {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
-  await act(async () => root.render(createElement(SessionBar, { presentation })));
+  await act(async () => root.render(createElement(SessionBar, {})));
   return { container, root };
 }
 
@@ -175,7 +164,7 @@ it('the timeline keeps no copy of the button, the dialog, or their gates', () =>
   );
   expect(bar).toContain('SessionTreeDialog');
   expect(bar).toContain("t('Session branches')");
-  // Same size tier as the bar's other controls (review / + / GUI / TUI): h-6
+  // Same size tier as the bar's other controls (review / +): h-6
   // shell, size-3.5 icon. A control that sets its own height re-opens the
   // 「臃肿」 D07 spent a round removing.
   expect(bar).toContain('<GitBranch className="size-3.5" />');

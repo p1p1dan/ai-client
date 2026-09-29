@@ -40,8 +40,11 @@ import {
   getDefaultLocale,
   getDefaultShellConfig,
 } from './defaults';
-import { cleanupLegacyFields, migrateSettings } from './migration';
-import { readPresentationMode, writePresentationMode } from './presentationModeMirror';
+import {
+  cleanupLegacyFields,
+  clearLegacyPresentationModeMirror,
+  migrateSettings,
+} from './migration';
 import { electronStorage } from './storage';
 import type {
   BackgroundSizeMode,
@@ -233,10 +236,6 @@ export function getInitialState() {
     backgroundSizeMode: 'cover' as BackgroundSizeMode,
     _backgroundRefreshKey: 0,
 
-    // Settings display mode
-
-    presentationMode: readPresentationMode(),
-
     // Terminal theme favorites
     favoriteTerminalThemes: [] as string[],
 
@@ -275,10 +274,6 @@ export const useSettingsStore = create<SettingsState>()(
 
       setFontSize: (fontSize) => set({ fontSize }),
       setFontFamily: (fontFamily) => set({ fontFamily }),
-      setPresentationMode: (presentationMode) => {
-        writePresentationMode(presentationMode);
-        set({ presentationMode });
-      },
 
       // Terminal Setters - xterm picks these up through its own store subscription
       setTerminalFontSize: (terminalFontSize) => set({ terminalFontSize }),
@@ -585,7 +580,10 @@ export const useSettingsStore = create<SettingsState>()(
         const effectiveState = state ?? useSettingsStore.getState();
         applyInitialSettings(effectiveState);
 
-        writePresentationMode(effectiveState.presentationMode);
+        // dsh-rebase P1-11 (decision 127): the GUI / TUI switch is gone, so the
+        // synchronous mirror of it is dropped too (the persisted key is
+        // stripped by `migrateSettings`).
+        clearLegacyPresentationModeMirror();
 
         // Sync renderer logging configuration after settings are loaded
         updateRendererLogging(effectiveState.loggingEnabled, effectiveState.logLevel);

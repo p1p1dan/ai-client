@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { subscribeWithSelector } from 'zustand/middleware';
-import { useAgentSessionsStore } from './agentSessions';
 
 // Agent activity state for tree sidebar display
 export type AgentActivityState = 'idle' | 'running' | 'waiting_input' | 'completed';
@@ -288,21 +287,3 @@ useWorktreeActivityStore.subscribe(
     },
   }
 );
-
-/** Initialize Pi TUI activity from its dedicated terminal lifecycle. */
-export function initAgentActivityListener(): () => void {
-  const setForSession = (sessionId: string, state: AgentActivityState) => {
-    const cwd = useAgentSessionsStore.getState().sessions.find((s) => s.id === sessionId)?.cwd;
-    if (cwd) useWorktreeActivityStore.getState().setActivityState(cwd, state);
-  };
-  const unsubscribeData = window.electronAPI.piTui.onData((event) => {
-    setForSession(event.terminalId, 'running');
-  });
-  const unsubscribeExit = window.electronAPI.piTui.onExit((event) => {
-    setForSession(event.terminalId, 'completed');
-  });
-  return () => {
-    unsubscribeData();
-    unsubscribeExit();
-  };
-}

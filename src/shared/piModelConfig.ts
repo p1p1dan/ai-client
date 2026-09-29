@@ -28,11 +28,11 @@ export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
  *  - **The name is ours, not pi's.** The `pi` CLI has no such variable
  *    (verified against the bundled `dist/`: it resolves project trust from
  *    `--approve` / `--no-approve`, its own `trust.json`, the global
- *    `defaultProjectTrust` setting, or an interactive prompt). Exporting this
- *    key into a PTY therefore changes nothing about what the TUI loads — the
- *    embedded pi CLI decides that for itself. The one thing the value still
- *    does on that path is tell `PiTuiPty` it is on the managed route, which is
- *    when inherited credential variables are stripped out of the terminal.
+ *    `defaultProjectTrust` setting, or an interactive prompt). The embedded
+ *    pi TUI, which used it to strip inherited credential variables out of a
+ *    managed terminal, was removed in dsh-rebase P1-11 (decision 127); nothing
+ *    in the app reads the value any more, and it is still sent so an absent
+ *    key keeps meaning "old Main build".
  *  - **decision 009 took the native route off it.** It used to be the native
  *    worker's `projectTrusted` as well, and that is what made a managed
  *    session ignore the repository's MCP servers, skills, permission policy and

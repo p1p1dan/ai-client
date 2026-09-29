@@ -1,7 +1,5 @@
-import { Play } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
@@ -11,7 +9,6 @@ import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
-import { AgentTerminal } from './AgentTerminal';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { HostStatusBanner } from './HostStatusBanner';
@@ -31,22 +28,14 @@ import { SubwindowRegion } from './SessionSubwindows';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
-import type { PresentationSwitch } from './usePresentationSwitch';
 
 interface ChatWorkspaceProps {
   className?: string;
   /** Opens the shared AddRepositoryDialog (owned by App) — threaded down to ComposerTargetBar. */
   onAddRepository?: (mode?: 'local' | 'remote' | 'ssh') => void;
-  /**
-   * D07: the shell owns the GUI/TUI switch now (its buttons live in the header
-   * bar `WorkspaceShell` renders), so this column is handed the same instance
-   * rather than creating a second one — two `usePresentationSwitch` calls would
-   * mean two `tuiTerminalId`s for one terminal.
-   */
-  presentation: PresentationSwitch;
 }
 
-export function ChatWorkspace({ className, onAddRepository, presentation }: ChatWorkspaceProps) {
+export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps) {
   const initRuntime = useChatSessionsStore((state) => state.initRuntime);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
   const sessions = useChatSessionsStore((state) => state.sessions);
@@ -115,22 +104,10 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
   const activeWorkspace = workspaces.find((ws) => ws.id === activeSession?.workspaceId);
   const activeWorkspacePath = activeWorkspace?.path?.trim() ?? '';
   const repoName = deriveRepoName(activeWorkspacePath);
-  // D07: `tuiHeaderLabel`, the temporary-chat marker and its `scratchCwd` moved
-  // to `MainHeader` with the rest of this column's old bar. They are derived
-  // there from the same stores, not threaded through — this column no longer has
-  // a header to put them in.
-  //
-  // D07: the GUI/TUI switch moved into the shell's header bar, so its state now
-  // lives in `usePresentationSwitch` and the shell hands the result to both
-  // halves. See that hook for why the owner had to change and what did not.
-  const {
-    presentationMode,
-    openTui,
-    handleTuiExit,
-    tuiTerminalId,
-    surfaceSwitching,
-    effectiveCwd,
-  } = presentation;
+  // D07: the temporary-chat marker and its `scratchCwd` moved to the shell's
+  // session bar with the rest of this column's old bar. They are derived there
+  // from the same stores, not threaded through — this column no longer has a
+  // header to put them in.
 
   // T-28: sticky latch of sessions that have started a send this app run —
   // deriveMiddleColumnMode needs this to dock the composer the instant Enter
@@ -259,106 +236,65 @@ export function ChatWorkspace({ className, onAddRepository, presentation }: Chat
     <section className={cn('relative flex min-h-0 flex-col', className)} style={chatSurfaceStyle}>
       {/*
         D07: this column no longer draws a header bar of its own. It used to be
-        a second h-9 strip under `MainHeader` carrying only the repo name and the
-        GUI/TUI switch — three stacked bars over the 32px title bar is what read
-        as clutter. Everything it held (repo name, the temporary-chat marker, the
-        GUI/TUI switch) moved up into the one bar the shell renders above this
-        column.
+        a second h-9 strip under `MainHeader` — three stacked bars over the 32px
+        title bar is what read as clutter. Everything it held moved up into the
+        one bar the shell renders above this column. (dsh-rebase P1-11,
+        decision 127: the pi TUI this column could switch to is gone.)
       */}
+      <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
+      {/* dsh-rebase P1-7b (decision 109): the background jobs and
+          subagents windows float over the room above the composer and
+          nowhere else — `SubwindowRegion` lays their layer over it. */}
+      {renderedMode === 'session' && (
+        <SubwindowRegion sessionId={activeSessionId}>
+          <MessageTimeline
+            sessionId={activeSessionId}
+            status={activeSession?.status ?? 'idle'}
+            thinkingEnabled={thinkingEnabled}
+            repoName={repoName}
+            jumpToBottomRequest={sendJumpRequest}
+          />
+        </SubwindowRegion>
+      )}
+      {/* dsh-rebase P1-7a (decisions 068 / 109): the todo card and the
+          goal bar, above the answerable cards, which stay nearest the
+          composer. Session mode only: an empty chat has neither. */}
+      {renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
+      {/* F5: the only answerable copy of a live question. Above the
+          composer rather than in the timeline so it cannot scroll away
+          while the session waits on it. */}
+      <PendingQuestionDock sessionId={activeSessionId} />
+      {/* 2026-09-18: the same arrangement for permissions, and the only
+          answerable copy of one. Questions and permissions are two separate
+          gates that can be open at the same time, so neither dock hides the
+          other — stacked, they are still both above the composer. */}
+      <PendingPermissionDock sessionId={activeSessionId} />
+      {/* U05-b ②: the start screen does not REPLACE the composer, it sits
+          above it — a user who wants to bind a folder still has the
+          composer's own target bar, and a user who just wants to talk can
+          type. Still gated on the empty column, so it cannot hang over a
+          chat that already has messages.
 
-      {/* U03-b: "has a usable cwd", not "has a bound folder" — an unbound chat
-          enters the TUI in its own isolated directory. `effectiveCwd` is empty
-          only before `openTui` has allocated one, so this never falls back to
-          the process cwd. */}
-      {presentationMode === 'tui' && effectiveCwd ? (
-        tuiTerminalId ? (
-          <div className="min-h-0 flex-1">
-            <AgentTerminal
-              id={tuiTerminalId}
-              cwd={effectiveCwd}
-              // Q17: continue this chat's own JSONL rather than opening a new
-              // session. Absent until the first send has bound a runtime, and
-              // an unbound chat has no conversation to continue anyway.
-              {...(activeSession?.runtimeIdentity
-                ? { sessionFile: activeSession.runtimeIdentity }
-                : {})}
-              isActive
-              onExit={handleTuiExit}
+          U28 drops the `!hasWorkingDirectory` term (user, 2026-09-06): a
+          bound chat that has not started yet is the same moment as an
+          unbound one. Only the sentence differs, and it differs by naming
+          the folder — which is why the workspace name is passed in. */}
+      {renderedMode === 'empty' && (
+        <SubwindowRegion sessionId={activeSessionId}>
+          <div className={START_SCREEN_HOST_CLASS}>
+            <ChatWelcomeCard
+              {...(activeWorkspacePath && repoName ? { workspaceName: repoName } : {})}
             />
           </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 items-center justify-center">
-            <Button size="sm" onClick={openTui}>
-              <Play className="size-4" />
-              Start Pi TUI
-            </Button>
-          </div>
-        )
-      ) : (
-        <>
-          <HostStatusBanner status={hostStatus} onRetry={() => void retry()} />
-          {/* dsh-rebase P1-7b (decision 109): the background jobs and
-              subagents windows float over the room above the composer and
-              nowhere else — `SubwindowRegion` lays their layer over it. */}
-          {renderedMode === 'session' && (
-            <SubwindowRegion sessionId={activeSessionId}>
-              <MessageTimeline
-                sessionId={activeSessionId}
-                status={activeSession?.status ?? 'idle'}
-                thinkingEnabled={thinkingEnabled}
-                repoName={repoName}
-                jumpToBottomRequest={sendJumpRequest}
-              />
-            </SubwindowRegion>
-          )}
-          {/* dsh-rebase P1-7a (decisions 068 / 109): the todo card and the
-              goal bar, above the answerable cards, which stay nearest the
-              composer. Session mode only: an empty chat has neither. */}
-          {renderedMode === 'session' && <SessionPanelStrips sessionId={activeSessionId} />}
-          {/* F5: the only answerable copy of a live question. Above the
-              composer rather than in the timeline so it cannot scroll away
-              while the session waits on it. */}
-          <PendingQuestionDock sessionId={activeSessionId} />
-          {/* 2026-09-18: the same arrangement for permissions, and the only
-              answerable copy of one. Questions and permissions are two separate
-              gates that can be open at the same time, so neither dock hides the
-              other — stacked, they are still both above the composer. */}
-          <PendingPermissionDock sessionId={activeSessionId} />
-          {/* U05-b ②: the start screen does not REPLACE the composer, it sits
-              above it — a user who wants to bind a folder still has the
-              composer's own target bar, and a user who just wants to talk can
-              type. Still gated on the empty column, so it cannot hang over a
-              chat that already has messages.
-
-              U28 drops the `!hasWorkingDirectory` term (user, 2026-09-06): a
-              bound chat that has not started yet is the same moment as an
-              unbound one. Only the sentence differs, and it differs by naming
-              the folder — which is why the workspace name is passed in. */}
-          {renderedMode === 'empty' && (
-            <SubwindowRegion sessionId={activeSessionId}>
-              <div className={START_SCREEN_HOST_CLASS}>
-                <ChatWelcomeCard
-                  {...(activeWorkspacePath && repoName ? { workspaceName: repoName } : {})}
-                />
-              </div>
-            </SubwindowRegion>
-          )}
-          <div className={middleColumnHostClass(renderedMode)}>
-            <ChatComposer
-              mode={renderedMode}
-              onAddRepository={onAddRepository}
-              onSendStart={markSendAttempt}
-            />
-          </div>
-        </>
+        </SubwindowRegion>
       )}
-      {/* Held over the timeline while the session is re-read from disk, so the
-          pre-handover conversation is never briefly presented as current. */}
-      {surfaceSwitching && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80 text-meta text-muted-foreground">
-          Reloading this chat…
-        </div>
-      )}
+      <div className={middleColumnHostClass(renderedMode)}>
+        <ChatComposer
+          mode={renderedMode}
+          onAddRepository={onAddRepository}
+          onSendStart={markSendAttempt}
+        />
+      </div>
     </section>
   );
 }

@@ -7,8 +7,6 @@ import type { PromptCacheTtl } from '@shared/types/promptCacheTtl';
 // Theme types
 export type Theme = 'light' | 'dark' | 'system' | 'sync-terminal';
 
-export type PresentationMode = 'gui' | 'tui';
-
 // Terminal types
 export type FontWeight =
   | 'normal'
@@ -303,10 +301,6 @@ export interface SettingsState {
   backgroundSizeMode: BackgroundSizeMode;
   _backgroundRefreshKey: number; // Transient: trigger folder re-scan (not persisted)
 
-  // Settings display mode
-
-  presentationMode: PresentationMode;
-
   // Terminal theme favorites
   favoriteTerminalThemes: string[];
 
@@ -324,7 +318,6 @@ export interface SettingsState {
   setLanguage: (language: Locale) => void;
   setFontSize: (size: number) => void;
   setFontFamily: (family: string) => void;
-  setPresentationMode: (mode: PresentationMode) => void;
 
   // Setters - Terminal
   setTerminalFontSize: (size: number) => void;

@@ -43,7 +43,6 @@ import {
   isWorkerJobKillResult,
   isWorkerPermissionRespondResult,
   isWorkerQuestionRespondResult,
-  isWorkerReloadResult,
   isWorkerRewindResult,
   isWorkerSendResult,
   isWorkerSetPermissionTierResult,
@@ -86,8 +85,6 @@ import {
   type WorkerPreviewRespondResult,
   type WorkerQuestionRespondPayload,
   type WorkerQuestionRespondResult,
-  type WorkerReloadPayload,
-  type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerRpcEvent,
@@ -115,11 +112,7 @@ import {
   reconcilePiImport,
 } from '../legacyImport/PiImportProcess';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
-import {
-  BOOTSTRAP_REQUEST_TIMEOUT_MS,
-  type CreatedPiWorkerSlot,
-  createPiWorkerSlot,
-} from './createPiWorkerSlot';
+import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import {
   DSH_HOST_RESTART_BUDGET,
   type DshHostRestartReason,
@@ -259,7 +252,7 @@ interface ManagedSlot {
    */
   leafCheckpoint: PiLeafCheckpoint | null;
   branchRevision: number;
-  mutationInFlight: 'rewind' | 'fork' | 'reload' | null;
+  mutationInFlight: 'rewind' | 'fork' | null;
   /** Bytes after the last newline of this worker's stderr; see hostStderr.ts. */
   stderrPending: string;
   /**
@@ -1954,114 +1947,6 @@ export class WorkerManager {
           ...(result.editorText !== undefined ? { editorText: result.editorText } : {}),
           tree: result.tree.snapshot,
         };
-      } finally {
-        if (this.entriesBySession.get(entry.logicalSessionId) === entry) {
-          entry.mutationInFlight = null;
-        }
-      }
-    });
-  }
-
-  /**
-   * Re-read a live session's JSONL and republish its history.
-   *
-   * The Pi TUI writes the same file this worker owns, and a live worker never
-   * re-reads it: pi's SessionManager caches the file at open. So after the
-   * terminal has appended, the worker is showing pre-handover history and would
-   * branch its next turn off the pre-handover leaf, stranding the terminal's
-   * messages on an abandoned path.
-   *
-   * `resumeSession` cannot do this job. Its warm path deliberately short-
-   * circuits — same file, same cwd, worker already ready, so it re-publishes
-   * the history the worker already had. Only the cold path (no live entry)
-   * touches disk, and the whole point of the TUI handover is that the worker
-   * stays alive across it.
-   *
-   * Returns `reloaded: false` when there is no live worker to reload; the
-   * caller resumes instead, which spawns and therefore reads the file anyway.
-   */
-  async reloadSession(input: {
-    sessionId: string;
-    sessionFile: string;
-    ownerWebContentsId?: number;
-  }): Promise<{ requestId: string; reloaded: boolean }> {
-    const requestId = nextRequestId('reload');
-    return this.serialize(async () => {
-      const entry = this.entriesBySession.get(input.sessionId);
-      if (!entry || entry.state !== 'ready' || !entry.slot) {
-        return { requestId, reloaded: false };
-      }
-      if (!entry.sessionFile || sessionWorkerKey(input.sessionFile) !== entry.key) {
-        throw new WorkerManagerError(
-          'worker_reload_identity_conflict',
-          `Session ${input.sessionId} is bound to another Pi session file`
-        );
-      }
-      this.assertIdleEntry(entry, 'reload');
-      this.claimEntry(entry, input.ownerWebContentsId);
-      entry.mutationInFlight = 'reload';
-      try {
-        const slot = entry.slot;
-        const generation = entry.generation;
-        const result = await slot.request<WorkerReloadResult, WorkerReloadPayload>(
-          'worker.reload',
-          { logicalSessionId: entry.logicalSessionId, sessionFile: entry.sessionFile },
-          // Reload rebuilds the whole plugin graph, MCP handshakes included —
-          // the same work `worker.bootstrap` does, and it gets the same budget.
-          // On the warm 10s default a user with one stdio MCP server could lose
-          // a healthy session to the handover: the reload timed out, Main
-          // retired the slot, and the message that triggered it failed.
-          { timeoutMs: BOOTSTRAP_REQUEST_TIMEOUT_MS }
-        );
-        if (!isWorkerReloadResult(result)) {
-          throw new WorkerManagerError(
-            'worker_invalid_reload_result',
-            'Pi worker returned an invalid reload result'
-          );
-        }
-        this.validateHistoryResult(entry, result.history);
-        if (entry.slot !== slot || !this.isAuthoritative(entry, generation)) {
-          throw new WorkerManagerError(
-            'worker_reload_stale',
-            `Reload for ${input.sessionId} arrived from a retired WorkerSlot`,
-            true
-          );
-        }
-        try {
-          await this.commitPiLeaf({
-            sessionId: entry.logicalSessionId,
-            runtimeIdentity: result.sessionFile,
-            piLeaf: result.leaf,
-          });
-        } catch (error) {
-          await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
-          throw error;
-        }
-        entry.leafCheckpoint = result.leaf;
-        // The active branch can have moved to whatever the other writer
-        // appended, so any tree snapshot or history page still in flight is
-        // describing a branch that is no longer current.
-        entry.branchRevision += 1;
-        entry.lastUsedAt = this.now();
-        entry.lastIdleAt = this.now();
-        // 'branch', not 'refresh': the file is the authority now, so the
-        // timeline is replaced rather than merged with what the renderer was
-        // showing before the handover.
-        this.dispatchHistory(entry, requestId, result.history, 'branch');
-        this.dispatch({
-          type: 'session.status',
-          sessionId: entry.logicalSessionId,
-          requestId,
-          payload: { status: 'idle' },
-        });
-        return { requestId, reloaded: true };
-      } catch (error) {
-        // worker.reload tears the old Pi session down before building the new
-        // one, so a failure leaves the worker without a usable session. Retire
-        // it: the next request spawns a clean one straight from the file.
-        await this.retireAndDispose(entry, 'slot-dispose').catch(() => undefined);
-        this.updateManagerState();
-        throw error;
       } finally {
         if (this.entriesBySession.get(entry.logicalSessionId) === entry) {
           entry.mutationInFlight = null;

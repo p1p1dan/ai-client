@@ -11,3 +11,7 @@
 ## 取舍
 
 - 代价：在内置终端里用 pi 扩展的用户会失去它们。
+
+## 补记（2026-09-29，P1-11，[决策 127](127-p1-11-remove-pi-tui-choices.md)）
+
+第 1 条的「载体」提前消失：P1-11 删掉内嵌 pi TUI 与 pi CLI 插件管理（`piPlugins:*`）之后，产品里已没有任何地方拉起 pi CLI（静态守卫 `piTuiRemovedStatic.test.ts` 钉住）。pi CLI 产物本身仍随 P1-12 从 `resources/agent-host` 去掉。

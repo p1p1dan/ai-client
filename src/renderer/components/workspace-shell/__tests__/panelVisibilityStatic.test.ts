@@ -68,7 +68,9 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // stored beside it. `sidebarCollapsed` used to be its own persisted boolean,
     // which let "collapsed" and "a surface is active" disagree.
     expect(shell).toContain('const dockCollapsed = activeSurfaceId === null;');
-    expect(shell).toContain('const chatVisible = isTui ? true : chrome.chatVisible;');
+    // dsh-rebase P1-11 (decision 127): no TUI override any more; the chrome
+    // model alone decides whether the chat column shows.
+    expect(shell).toContain('const chatVisible = chrome.chatVisible;');
     // D08 retires the allocator's panel term: the surfaces moved into the
     // column the allocator satisfies FIRST, so the last one is simply not
     // requested. Passing 0/false rather than deleting the parameter keeps the
@@ -100,9 +102,10 @@ describe('panel visibility has exactly one derivation point (R1)', () => {
     // column to an overlay — which is why the class list is now composed with
     // `cn()` instead of a ternary.
     //
-    // D13 (U26) drops the `!isTui` term. It was U03-a's, and it made the column
-    // unmountable while the terminal was up — which after D08 (files open ONLY
-    // here) meant clicking a file in TUI did nothing at all, the same
+    // D13 (U26) drops the `!isTui` term (and P1-11 dropped the pi TUI itself).
+    // It was U03-a's, and it made the column unmountable while the terminal was
+    // up — which after D08 (files open ONLY here) meant clicking a file in the
+    // TUI did nothing at all, the same
     // zero-consumer deadlock round-10 ⑥ found. The two invariants this test
     // exists for are unchanged and still asserted below.
     expect(shell).toContain('{(editorOpen || fileIntentPending) && (');

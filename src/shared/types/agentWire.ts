@@ -4,7 +4,8 @@
  * Chat execution is DSH-only (dsh-rebase decision 004): every new, resumed and
  * forked session is `dsh`. `pi` names sessions the retired native engine wrote;
  * they stay readable, and their first continue migrates them to `dsh`
- * (P1-9d, decision 050); imports and the embedded Pi TUI still produce them.
+ * (P1-9d, decision 050). Nothing in this build creates new ones: imports
+ * produce `dsh` (P1-9f) and the embedded pi TUI is gone (P1-11).
  * Terminal CLI ids and one-shot provider ids remain separate axes in their own
  * modules and must not be cast into this type.
  *
@@ -26,7 +27,7 @@ export const AGENT_DISPLAY_NAMES: Record<AgentWireName, string> = {
 
 /**
  * Sessions written by the retired native engine, plus imports and TUI-created
- * chats. Migrated to DSH on their first continue (P1-9d, decision 050); the
+ * chats from 1.0.x. Migrated to DSH on their first continue (P1-9d, decision 050); the
  * row a migrated chat came from stays `pi`, kept for a rollback (decision 051).
  */
 export const PI_AGENT: AgentWireName = 'pi';

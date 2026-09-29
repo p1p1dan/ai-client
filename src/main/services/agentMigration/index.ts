@@ -49,10 +49,9 @@ export function inspectAgentMigration(): MigrationPlan {
 
 export async function applyAgentMigration(request: MigrationRequest): Promise<MigrationResult> {
   const result = await service().apply(request);
-  // Imported services only reach pi through the derived `models.json` /
-  // `auth.json`. Rewriting them here — rather than leaving it to the next
-  // settings edit — is what makes an imported provider appear in the model
-  // picker without a restart.
+  // Keep the derived `models.json` (the menu's fallback) in step with the
+  // imported services right away rather than at the next settings edit. Keys
+  // are not written to disk (no `auth.json` since P1-11, decision 127).
   if (request.kinds.includes('providers')) writeUserProviderRuntimeConfig();
   return result;
 }

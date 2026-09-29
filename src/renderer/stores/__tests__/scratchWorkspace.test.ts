@@ -5,9 +5,9 @@ import { useScratchWorkspaceStore } from '../scratchWorkspace';
  * U05-a (renderer half) — the store that remembers which isolated directory
  * Main handed each unbound chat.
  *
- * The property under test is deduplication. The send path and the Pi TUI both
- * call `ensure` without coordinating, and a session that ends up with two
- * directories is one whose terminal cannot see what its chat just wrote.
+ * The property under test is deduplication. Callers ask `ensure` without
+ * coordinating, and a session that ends up with two directories is one whose
+ * tools cannot see what its previous turn just wrote.
  */
 
 let ensureScratchWorkspace: ReturnType<typeof vi.fn>;

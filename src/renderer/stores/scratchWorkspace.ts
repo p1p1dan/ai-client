@@ -8,7 +8,7 @@ import { create } from 'zustand';
  * `resolveActiveTarget().cwd` is null. It still needs a working directory
  * before anything can run in it; Main allocates one on demand
  * (`chat:ensureScratchWorkspace`) and this store remembers the answer so the
- * send path, the Pi TUI and the session badge all read the same value.
+ * send path and the session badge read the same value.
  *
  * Deliberately NOT part of `chatSessions.workspaces`: a scratch directory is
  * not a project. Putting it there would list a throwaway directory in the

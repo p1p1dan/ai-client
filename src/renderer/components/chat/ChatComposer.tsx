@@ -699,8 +699,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // is no longer blocked: it runs in an isolated directory Main allocates on
   // its first send (D02 decision 2).
   const isUnboundSession = Boolean(activeSessionId) && cwd === null;
-  // Set once that allocation has happened, so the Pi TUI, the @-file search
-  // and the status line all name the directory the agent is actually in.
+  // Set once that allocation has happened, so the @-file search and the
+  // status line name the directory the agent is actually in.
   const scratchCwd = useScratchWorkspaceStore((state) =>
     activeSessionId ? (state.pathsBySession[activeSessionId] ?? null) : null
   );

@@ -140,7 +140,8 @@ function dialogButton(label: string): HTMLButtonElement {
 function setLosses(input: {
   dirtyTabs?: number;
   shellTerminals?: number;
-  agentTerminals?: number;
+  /** Registered terminal writers; since P1-11 they are not a count of their own. */
+  terminalWriters?: number;
   runningTurns?: number;
 }) {
   stores.editor.setState({
@@ -162,7 +163,7 @@ function setLosses(input: {
   });
   stores.terminalWrite.setState({
     writers: new Map(
-      Array.from({ length: input.agentTerminals ?? 0 }, (_, i) => [`a${i}`, () => undefined])
+      Array.from({ length: input.terminalWriters ?? 0 }, (_, i) => [`a${i}`, () => undefined])
     ),
   });
   stores.chat.setState({
@@ -199,7 +200,7 @@ afterEach(() => {
 
 describe('the confirmation in front of a sign-in request', () => {
   it('lists the real counts instead of a vague warning', async () => {
-    setLosses({ dirtyTabs: 3, shellTerminals: 2, agentTerminals: 1, runningTurns: 1 });
+    setLosses({ dirtyTabs: 3, shellTerminals: 3, runningTurns: 1 });
     render();
     await clickAsk();
 
@@ -219,11 +220,14 @@ describe('the confirmation in front of a sign-in request', () => {
     expect(routeEvents).toBe(0);
   });
 
-  it('counts both terminal kinds as one number', async () => {
-    setLosses({ shellTerminals: 4, agentTerminals: 3 });
+  it('counts the shell terminals, and nothing else, as terminals', async () => {
+    // dsh-rebase P1-11 (decision 127): the embedded pi TUI, the one terminal
+    // counted through the writer registry, is gone. A registered writer is not
+    // a terminal of its own and must not inflate the number.
+    setLosses({ shellTerminals: 4, terminalWriters: 3 });
     render();
     await clickAsk();
-    expect(dialogText()).toContain('7 terminal(s) will close');
+    expect(dialogText()).toContain('4 terminal(s) will close');
   });
 
   it('changes absolutely nothing when it is cancelled', async () => {

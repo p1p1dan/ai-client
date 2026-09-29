@@ -22,7 +22,7 @@
  *
  * That fix gave the app its first way to unmount `<App/>` while the user is
  * working, and unmounting kills every terminal in the tree — a shell gets
- * SIGKILL across its whole process group, a Pi TUI gets disposed. Losing a
+ * SIGKILL across its whole process group. Losing a
  * running build to a mis-click is not acceptable, so the request now stops and
  * shows what it is about to cost (`stores/signInConfirm.ts`). Three rules:
  *

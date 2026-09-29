@@ -32,7 +32,6 @@ import { isTurnInFlight } from '@/components/chat/turnHead';
 import { useChatSessionsStore } from './chatSessions';
 import { useEditorStore } from './editor';
 import { useTerminalStore } from './terminal';
-import { useTerminalWriteStore } from './terminalWrite';
 
 /**
  * Which question the dialog asks.
@@ -50,7 +49,6 @@ export type SignInConfirmOutcome = 'granted' | 'declined' | 'unavailable';
 const EMPTY_SNAPSHOT: SignInLossSnapshot = {
   unsavedFiles: 0,
   shellTerminals: 0,
-  agentTerminals: 0,
   runningTurns: 0,
 };
 
@@ -103,9 +101,6 @@ export function readSignInLosses(): SignInLossSnapshot {
     parkedTabsByWorkspace: editor.worktreeStates,
     currentWorkspacePath: editor.currentWorktreePath,
     shellTerminals: useTerminalStore.getState().sessions.length,
-    // One entry per mounted `AgentTerminal` — it registers its writer on mount
-    // and unregisters on unmount, so the map size is the live count.
-    agentTerminals: useTerminalWriteStore.getState().writers.size,
     // Every session, not just the visible one: a background chat's events are
     // dropped by exactly the same unmount, and the user has no other way to
     // find out.

@@ -25,8 +25,6 @@ const TIMELINE = path.join(
   'MessageTimeline.tsx'
 );
 
-const TERMINAL = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'AgentTerminal.tsx');
-
 const COMPOSER = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'ChatComposer.tsx');
 
 const NOTICE = path.join(
@@ -55,7 +53,6 @@ const ADAPTER = path.join(RUNTIME_ROOT, 'model-adapter', 'index.ts');
 const LOOP = path.join(RUNTIME_ROOT, 'agent-loop', 'index.ts');
 
 const SOURCE = stripComments(readFileSync(TIMELINE, 'utf8'), 'MessageTimeline.tsx');
-const TERMINAL_SOURCE = stripComments(readFileSync(TERMINAL, 'utf8'), 'AgentTerminal.tsx');
 const COMPOSER_SOURCE = stripComments(readFileSync(COMPOSER, 'utf8'), 'ChatComposer.tsx');
 const NOTICE_SOURCE = stripComments(readFileSync(NOTICE, 'utf8'), 'ModelMissingNotice.tsx');
 const ADAPTER_SOURCE = stripComments(readFileSync(ADAPTER, 'utf8'), 'model-adapter-index.ts');
@@ -113,34 +110,16 @@ describe('MessageTimeline wires the model-missing recovery (H/21 P0)', () => {
     expect(SOURCE).toContain('font-mono text-code text-muted-foreground');
   });
 
-  it('[MMW-08] ranks auth above model-missing on every surface', () => {
+  it('[MMW-08] ranks auth above model-missing', () => {
     // Both can be true at once for a session that cannot start. Signing in is
-    // the prerequisite, so the model branch must be the one that yields.
+    // the prerequisite, so the model branch must be the one that yields. (The
+    // embedded pi TUI, the other surface, went with dsh-rebase P1-11.)
     expect(SOURCE).toContain('!authRequired');
-    expect(TERMINAL_SOURCE).toContain('!isAuthRequiredError(startupError)');
   });
 });
 
-describe('AgentTerminal wires the model-missing recovery (H/21 P0)', () => {
-  it('[MMW-09] the embedded TUI maps the same failure to the same copy', () => {
-    // H/19 U3 put GUI and TUI on one sessions directory, so the TUI resumes the
-    // same stale sessions and hits the same missing model.
-    expect(TERMINAL_SOURCE).toContain("from './modelMissingError'");
-    expect(TERMINAL_SOURCE).toContain('isModelMissingError(startupError)');
-    expect(TERMINAL_SOURCE).toContain('MODEL_MISSING_ERROR_VIEW.title');
-    expect(TERMINAL_SOURCE).toContain('MODEL_MISSING_ERROR_VIEW.message');
-  });
-
-  it('[MMW-10] offers the same way out rather than leaving a dead overlay', () => {
-    expect(TERMINAL_SOURCE).toContain("from '@/stores/settingsIntent'");
-    expect(TERMINAL_SOURCE).toContain('requestSettings(MODEL_MISSING_ERROR_VIEW.settingsCategory)');
-    expect(TERMINAL_SOURCE).toContain('MODEL_MISSING_ERROR_VIEW.actionLabel');
-  });
-
-  it('[MMW-11] spells the worker text nowhere — the detector owns it', () => {
-    expect(TERMINAL_SOURCE).not.toContain('Pi model not found');
-  });
-});
+// MMW-09..11 pinned the embedded pi TUI's copy of this recovery; the TUI and
+// `AgentTerminal.tsx` were removed in dsh-rebase P1-11 (decision 127).
 
 describe('ChatComposer status strip (H/21 point-check D2)', () => {
   it('[MMW-12] the strip under the composer stops printing the raw diagnostic', () => {
@@ -224,7 +203,7 @@ describe('the session path carries a code the renderer can match (T062 / D19)', 
   it('[MMW-16] the renderer never matches the runtime sentence itself', () => {
     // Matching `no model "…" in the catalog` would tie a Chinese recovery card
     // to an English diagnostic, which is the shape of the original defect.
-    for (const source of [SOURCE, TERMINAL_SOURCE, COMPOSER_SOURCE, NOTICE_SOURCE]) {
+    for (const source of [SOURCE, COMPOSER_SOURCE, NOTICE_SOURCE]) {
       expect(source).not.toContain('in the catalog');
     }
   });

@@ -13,32 +13,34 @@ import { stripComments } from '../../chat/__tests__/stripComments';
  * place files open, at which point it meant "you cannot read a file right now".
  * The rail running full height was fine until every other column grew an `h-9`
  * bar it did not share.
+ *
+ * dsh-rebase P1-11 (decision 127) removed the pi TUI and the GUI / TUI switch,
+ * so the TUI-only half of U26 (chat kept visible under a fullscreen diff while
+ * the terminal lived in the chat column) went with it. What stays is the rule
+ * that the editor column is allocated whenever a file or the review is open.
  */
 const SHELL_DIR = join(process.cwd(), 'src/renderer/components/workspace-shell');
 const code = (file: string) => stripComments(readFileSync(file, 'utf8'), file);
 
-describe('U26 (D13) the editor is reachable in TUI', () => {
-  it('TUI no longer suppresses the editor column', () => {
+describe('U26 (D13) the editor column is allocated whenever a file is open', () => {
+  it('nothing suppresses the editor column', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
     expect(shell).toContain('const editorAllocated = editorOpen || reviewOpen;');
-    expect(shell).not.toContain('!isTui && editorOpen');
+    expect(shell).not.toContain('isTui');
     expect(shell).not.toContain('{!isTui && (editorOpen || fileIntentPending) && (');
   });
 
-  it('the terminal still gets the whole row when no file is open', () => {
-    // The half of D02 that survives: `editorOpen` is keyed off `tabs.length`,
-    // so full-bleed TUI is still the default — it is just no longer forced.
+  it('the chat column gets the whole row when no file is open', () => {
+    // `editorOpen` is keyed off `tabs.length`, so no file means no editor column.
     const model = code(join(SHELL_DIR, 'centerLayoutModel.ts'));
     expect(model).toContain('export function deriveEditorOpen(openTabCount: number)');
     expect(model).toMatch(/deriveEditorOpen[\s\S]{0,120}openTabCount > 0/);
   });
 
-  it('TUI still keeps chat visible and still opts out of the fullscreen-diff hide', () => {
-    // Unchanged by D13 and load-bearing: the terminal LIVES in the chat column,
-    // so hiding chat in TUI would hide the terminal itself.
+  it('chat visibility and the fullscreen-diff hide come from the shell chrome alone', () => {
     const shell = code(join(SHELL_DIR, 'WorkspaceShell.tsx'));
-    expect(shell).toContain('const chatVisible = isTui ? true : chrome.chatVisible;');
-    expect(shell).toContain('diffTabActive: !isTui && !reviewOpen && diffTabActive,');
+    expect(shell).toContain('const chatVisible = chrome.chatVisible;');
+    expect(shell).toContain('diffTabActive: !reviewOpen && diffTabActive,');
   });
 });
 

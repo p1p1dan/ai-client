@@ -32,6 +32,8 @@ const removedKeys = [
   'agentNotificationEnterDelay',
   'fileTreeAutoReveal',
   'terminalInput',
+  // dsh-rebase P1-11 (decision 127): the GUI / TUI switch went with the pi TUI.
+  'presentationMode',
 ];
 
 const legacyProfile = {

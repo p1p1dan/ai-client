@@ -262,6 +262,15 @@ export class PiModelConfigService {
     return join(this.agentDir, PI_MODELS_FILE_NAME);
   }
 
+  /**
+   * The plain-text key file 1.0.x wrote for the embedded pi TUI.
+   *
+   * dsh-rebase P1-11 (decisions 038, 127): nothing writes it any more — the
+   * TUI is gone, the DSH host pulls each key from Main per request, and the
+   * native catalog is assembled in memory. Kept only so logout can remove a
+   * copy an older build left behind ({@link clearCredential}); a file found
+   * here at startup is otherwise left alone.
+   */
   get authPath(): string {
     return join(this.agentDir, PI_AUTH_FILE_NAME);
   }
@@ -299,8 +308,8 @@ export class PiModelConfigService {
       previous.syncedAt !== null &&
       attemptedAt - previous.syncedAt < 10 * 60 * 1000
     ) {
-      // Still fresh, but the login key may have changed since; rewriting is
-      // cheap and keeps auth.json in step with the vault.
+      // Still fresh, but the login credentials may have changed since (the
+      // inherited base URL lands in models.json); rewriting is cheap.
       this.writeAll(cached, input.apiKey, input.inheritedBaseUrl);
       return { ...previous, ok: true };
     }
@@ -364,10 +373,10 @@ export class PiModelConfigService {
     // rung BELOW `stale-cache` (that cache was current for this machine once;
     // a shipped baseline never was) and above `unavailable`.
     //
-    // Written to `models.json` / `auth.json` and deliberately NOT to
-    // `managed-models-source.json`. Two reasons, in order: pi reads its models
-    // off disk, so a snapshot that stayed in memory would populate the menu
-    // and then fail every turn the user started from it; and the wire cache
+    // Written to `models.json` and deliberately NOT to
+    // `managed-models-source.json`. Two reasons, in order: the menu falls back
+    // to `models.json` when no in-memory catalog can be assembled, so a
+    // snapshot kept only in memory would vanish exactly then; and the wire cache
     // means "the last catalog we fetched", so seeding it with the bundled copy
     // would make the NEXT failed sync report `stale-cache` and destroy the one
     // signal that lets the UI say "this is the baseline we shipped with"
@@ -571,6 +580,11 @@ export class PiModelConfigService {
     return entries;
   }
 
+  /**
+   * Logout: remove a plain-text `auth.json` an older build (1.0.x, or this
+   * branch before P1-11) left in the agent directory. Nothing writes it now;
+   * this only takes a stale copy of the signed-out account's keys off disk.
+   */
   clearCredential(): void {
     try {
       if (existsSync(this.authPath)) unlinkSync(this.authPath);
@@ -580,8 +594,9 @@ export class PiModelConfigService {
   }
 
   /**
-   * Writes all three files from one catalog: the wire-form copy, the
-   * `models.json` pi reads, and the per-provider `auth.json`.
+   * Writes both files from one catalog: the wire-form copy and `models.json`.
+   * The keys stay in memory ({@link buildNativeModelCatalog}); since P1-11 no
+   * `auth.json` is written (decisions 038, 127).
    */
   private writeAll(
     config: PiManagedModelsConfig,
@@ -593,8 +608,8 @@ export class PiModelConfigService {
   }
 
   /**
-   * H/17 — rewrite the two files pi reads from the cached managed catalog plus
-   * the user's own services.
+   * H/17 — rewrite `models.json` from the cached managed catalog plus the
+   * user's own services.
    *
    * The local route never syncs, so nothing else would ever write these files
    * there. Managed providers come from the wire-form cache rather than being
@@ -651,11 +666,16 @@ export class PiModelConfigService {
   }
 
   /**
-   * Just the two files pi itself reads.
+   * Just `models.json`, the provider list without keys.
    *
-   * Split out of {@link writeAll} for A3: the bundled snapshot has to reach pi,
-   * but it must not be filed as the wire-form cache of a catalog this client
-   * fetched — see the comment at that call site.
+   * Split out of {@link writeAll} for A3: the bundled snapshot has to reach the
+   * file, but it must not be filed as the wire-form cache of a catalog this
+   * client fetched — see the comment at that call site.
+   *
+   * dsh-rebase P1-11 (decisions 038, 127): the `auth` half of the build is
+   * dropped here on purpose. It used to be written to a plain-text `auth.json`
+   * (0600) for the embedded pi TUI, the last reader of that file; with the TUI
+   * gone, the keys live only in memory and reach the DSH host per request.
    */
   private writeRuntimeConfig(
     config: PiManagedModelsConfig,
@@ -665,14 +685,8 @@ export class PiModelConfigService {
   ): void {
     mkdirSync(this.agentDir, { recursive: true, mode: 0o700 });
     chmodSync(this.agentDir, 0o700);
-    const { models, auth } = buildRuntimeConfig(
-      config,
-      inheritedApiKey,
-      inheritedBaseUrl,
-      userProviders
-    );
+    const { models } = buildRuntimeConfig(config, inheritedApiKey, inheritedBaseUrl, userProviders);
     atomicWriteJson(this.modelsPath, models, 0o600);
-    atomicWriteJson(this.authPath, auth, 0o600);
   }
 
   /**
@@ -684,9 +698,9 @@ export class PiModelConfigService {
    * "what native runs on" and "what legacy reads" can only differ by when they
    * were assembled. Before import-catalog-03 that claim was written here but not
    * implemented: the two sides picked different inputs whenever the wire cache
-   * was missing. The files stay because pi has no other way in; the native
-   * worker is handed this instead, and the plaintext keys never have to exist
-   * outside this process for it.
+   * was missing. Only `models.json` is still written (the menu's fallback);
+   * the `auth` half exists only here, in memory, and since P1-11 no plaintext
+   * key file is written at all (decisions 038, 127).
    *
    * `userProviders` may be supplied by the caller. The Main-side wiring reads
    * the vault itself (it has to distinguish "no services" from "could not be

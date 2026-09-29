@@ -360,7 +360,8 @@ describe('in-app sign-in route (static)', () => {
     // The session-failed card and the notice/alert card — two separate
     // components in one file, both offering 重新登录 on a spawn-gate rejection.
     ['components/chat/MessageTimeline.tsx', 2],
-    ['components/chat/AgentTerminal.tsx', 1],
+    // `components/chat/AgentTerminal.tsx` (the pi TUI's auth-required overlay)
+    // was the fourth; it went with the TUI in dsh-rebase P1-11.
     // Not a button: the automatic `credentials_invalid` push. It can only
     // reach a run that is already `managed` (the probe scheduler runs during
     // `authenticated` only, and `local` never gets there), so it is safe on
@@ -417,7 +418,7 @@ describe('in-app sign-in route (static)', () => {
    *
    * Making the buttons work gave the app its first way to unmount `<App/>`
    * while somebody is using it, and that unmount kills every terminal in the
-   * tree (a shell gets SIGKILL across its process group; a Pi TUI is disposed).
+   * tree (a shell gets SIGKILL across its process group).
    * User ruling, 2026-09-18: 「这个肯定是不行的。需要安全的退出」 → 「先弹确认框，
    * 列明会丢什么」. Behaviour lives in `signInConfirmFlow.test.ts`; what only a
    * source scan can reach is that no surface bypasses it.

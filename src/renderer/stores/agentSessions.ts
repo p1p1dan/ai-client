@@ -102,7 +102,7 @@ function loadFromStorage(): { sessions: Session[]; activeIds: Record<string, str
 }
 
 function saveToStorage(_sessions: Session[], _activeIds: Record<string, string | null>): void {
-  // Pi TUI sessions are process-scoped; never persist fake CLI resumability.
+  // Terminal sessions are process-scoped; never persist fake CLI resumability.
   localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify({ sessions: [], activeIds: {} }));
 }
 

@@ -673,6 +673,10 @@ export interface WorkerRewindResult {
  *
  * `sessionFile` is the caller's assertion about which file it expects to be
  * reloaded; the worker refuses when that is not the file it owns.
+ *
+ * dsh-rebase P1-11 (decision 127): Main no longer sends this — its only caller,
+ * the pi TUI handover, is gone. The method stays in the protocol until the
+ * native runtime that implements it is deleted (P1-12).
  */
 export interface WorkerReloadPayload {
   logicalSessionId: string;

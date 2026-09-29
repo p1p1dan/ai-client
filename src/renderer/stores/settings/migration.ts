@@ -69,7 +69,31 @@ const REMOVED_SETTING_KEYS = [
   'agentNotificationEnterDelay',
   'fileTreeAutoReveal',
   'terminalInput',
+  // dsh-rebase P1-11 (decision 127): the GUI / TUI switch went with the pi
+  // TUI. An old `'tui'` (or `'gui'`) is dropped on load, so every chat opens
+  // in the chat view, which is the only view left.
+  'presentationMode',
 ] as const;
+
+/**
+ * The localStorage key that mirrored `presentationMode` so the first render
+ * could read it before the persisted settings rehydrated (1.0.x and this
+ * branch before P1-11). Nothing reads it any more.
+ */
+export const LEGACY_PRESENTATION_MODE_MIRROR_KEY = 'aiclient-presentation-mode';
+
+/**
+ * Drop the stale mirror (decision 127). Best effort: without localStorage
+ * there is nothing to clean up, and the key is inert either way.
+ */
+export function clearLegacyPresentationModeMirror(storage?: Pick<Storage, 'removeItem'>): void {
+  try {
+    // Read inside the try: touching `localStorage` itself can throw.
+    (storage ?? globalThis.localStorage)?.removeItem(LEGACY_PRESENTATION_MODE_MIRROR_KEY);
+  } catch {
+    // Inert key; nothing depends on removing it.
+  }
+}
 
 export function sanitizeLegacyAiSettings(
   persisted: Partial<SettingsState>
@@ -205,7 +229,6 @@ export function migrateSettings(
     // Override with migrated/sanitized values
     ...(migratedTheme && { theme: migratedTheme }),
     ...(terminalRenderer && { terminalRenderer }),
-    presentationMode: persisted.presentationMode === 'tui' ? 'tui' : 'gui',
     xtermKeybindings: migratedXtermKeybindings,
 
     sourceControlKeybindings: {

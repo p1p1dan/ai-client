@@ -28,15 +28,9 @@ import { registerNotificationHandlers } from './notification';
 import { registerOnboardingHandlers } from './onboarding';
 import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
-import { registerPiPluginHandlers } from './piPlugins';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
 import { registerPiSubagentHandlers } from './piSubagents';
-import {
-  disposeAllPiTuiControllers,
-  disposeAllPiTuiControllersSync,
-  registerPiTuiHandlers,
-} from './piTui';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -91,14 +85,12 @@ export function registerIpcHandlers(): void {
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
   registerPiSubagentHandlers();
-  registerPiPluginHandlers();
   registerLegacyAssetHandlers();
   registerDshPluginHandlers();
   registerAgentMigrationHandlers();
   registerUserProviderHandlers();
   registerUsageHandlers();
   registerAnnouncementHandlers();
-  registerPiTuiHandlers();
   sweepScratchWorkspacesOnStartup();
   installChatEngineModelSource();
 }
@@ -149,8 +141,6 @@ export async function cleanupAllResources(): Promise<void> {
       }, 'terminals'),
       // File system watchers
       safeRun(() => stopAllFileWatchers(), 'fileWatchers'),
-      // Embedded Pi TUI PTYs are independent from generic shell sessions.
-      safeRun(() => disposeAllPiTuiControllers(), 'piTui'),
       // Main-owned Pi WorkerManager. Pool disposal is parallel, so every slot
       // receives the same global deadline and app quit leaves no utility process.
       safeRun(() => cleanupWorkerManager(), 'workerManager'),
@@ -207,9 +197,6 @@ export function cleanupAllResourcesSync(): void {
   clearAllWorktreeServices();
 
   void remoteConnectionManager.cleanup();
-
-  // Embedded Pi TUI PTYs are independent from generic shell sessions.
-  disposeAllPiTuiControllersSync();
 
   // Kill every Pi worker synchronously.
   cleanupWorkerManagerSync();
