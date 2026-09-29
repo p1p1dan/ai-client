@@ -3,6 +3,7 @@
 import { dshNoticeKindOf } from '@shared/dshNotices';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type {
+  PermissionAskReason,
   PermissionAutoReason,
   PermissionDecisionId,
   PermissionDetail,
@@ -285,6 +286,11 @@ export interface ChatBlock {
    * exact call, or when the backend does not report it.
    */
   permissionGrantScope?: PermissionGrantScope;
+  /**
+   * dsh-rebase P1-6d: why the gate asks when the gear alone would not have —
+   * the card words it. Absent when the posture asks anyway.
+   */
+  permissionAskReason?: PermissionAskReason;
   /** S2 (c): which button settled it, when richer than the `allowed` boolean. */
   permissionDecision?: PermissionDecisionId;
   /** S2 (c): set when the client answered without asking anyone. */
@@ -1687,6 +1693,9 @@ function applyRuntimeEventCore(
                 // read the same to the card.
                 ...(event.payload.sessionGrantScope
                   ? { permissionGrantScope: event.payload.sessionGrantScope }
+                  : {}),
+                ...(event.payload.askReason
+                  ? { permissionAskReason: event.payload.askReason }
                   : {}),
                 ...(event.payload.timeoutMs !== undefined
                   ? { permissionExpiresAt: event.timestamp + event.payload.timeoutMs }

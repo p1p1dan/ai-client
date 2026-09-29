@@ -74,7 +74,10 @@ export interface AttachGateOptions {
   gate: AttachableGate;
   /** Fallback workspace when a calling session's header carries no cwd. */
   cwd?: string;
-  /** What bash analysis expands `$HOME` and friends against; defaults to the host's environment. */
+  /**
+   * What the shell analyses expand `$HOME` and friends (bash) or `$env:NAME`
+   * (pwsh) against; defaults to the host's environment.
+   */
   env?: Record<string, string>;
 }
 
@@ -362,6 +365,8 @@ export class PermissionHost {
           fs: this.fs,
           analyzeBash: async (command, workdir) =>
             analyzeBash(await this.options.loadParser(), command, workdir, env),
+          // pwsh (P1-6d): `$env:NAME` and `$HOME` read the same environment.
+          env,
           isTrustedPath: this.isTrustedPath,
           ...(route.delegate
             ? {

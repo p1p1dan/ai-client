@@ -28,6 +28,13 @@
 import { basename, isAbsolute, normalize, relative, sep } from 'node:path';
 import type { PermissionGrantScope } from '../types/runtimeEvents.ts';
 import type { ToolPermissionRequest } from './gate.ts';
+import {
+  isPwshCommandName,
+  isUngrantablePwshCommand,
+  normalizePwshCommandName,
+  PWSH_TOOL,
+  pwshProgramStem,
+} from './pwshNames.ts';
 import { isShellTool } from './shellTools.ts';
 
 /**
@@ -140,6 +147,39 @@ export function commandPrefix(segment: string): string | undefined {
 }
 
 /**
+ * dsh-rebase P1-6d: the Windows launchers and package managers that take a
+ * subcommand, on top of the bash list (`py -m pip` is not `py script.py`).
+ */
+const PWSH_MULTI_COMMAND_TOOLS: ReadonlySet<string> = new Set([
+  ...MULTI_COMMAND_TOOLS,
+  'py',
+  'winget',
+  'choco',
+  'scoop',
+]);
+
+/**
+ * dsh-rebase P1-6d: `commandPrefix` for a `pwsh` segment.
+ *
+ * The name is normalized the way `pwshAnalysis` writes it — an alias as its
+ * cmdlet, case folded — so `ls`, `dir`, `gci` and `Get-ChildItem` are one
+ * grant, and `git status` approved once is `GIT Status` too. A program keeps
+ * its extension (`sc.exe` is not the `sc` alias) and its path. A segment that
+ * runs a string or another shell (`Invoke-Expression`, `cmd /c`) has no
+ * prefix: approving one must not approve the next string.
+ */
+export function pwshCommandPrefix(segment: string): string | undefined {
+  const words = segment.trim().split(/\s+/).filter(Boolean);
+  const head = words[0];
+  if (!head || !isPwshCommandName(head)) return undefined;
+  const name = normalizePwshCommandName(head);
+  if (isUngrantablePwshCommand(name)) return undefined;
+  if (!PWSH_MULTI_COMMAND_TOOLS.has(pwshProgramStem(name))) return name;
+  const second = words[1];
+  return second && !second.startsWith('-') ? `${name} ${second}` : name;
+}
+
+/**
  * Every prefix a bash request would have to have been granted.
  *
  * Reuses the shell analysis rather than re-lexing: `commands` already holds one
@@ -150,18 +190,21 @@ export function commandPrefix(segment: string): string | undefined {
  * checked even when the outer wrapper's prefix was granted.
  *
  * `undefined` means "this command cannot be remembered", and every caller
- * treats that as neither grantable nor granted.
+ * treats that as neither grantable nor granted. So does a request the shell
+ * analysis marked `ungrantable` (P1-6d).
  */
 export function commandPrefixes(request: ToolPermissionRequest): string[] | undefined {
+  if (request.ungrantable) return undefined;
   const segments = request.commands?.length
     ? request.commands
     : request.command
       ? [request.command]
       : [];
   if (segments.length === 0) return undefined;
+  const prefixOf = request.tool === PWSH_TOOL ? pwshCommandPrefix : commandPrefix;
   const prefixes = new Set<string>();
   for (const segment of segments) {
-    const prefix = commandPrefix(segment);
+    const prefix = prefixOf(segment);
     if (prefix === undefined) return undefined;
     prefixes.add(prefix);
   }

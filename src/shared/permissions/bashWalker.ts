@@ -11,6 +11,12 @@ export interface BashAnalysis {
   commands: string[];
   unresolvedPaths: boolean;
   exploration: boolean;
+  /**
+   * dsh-rebase P1-6d: no session grant may cover this command, because part of
+   * it is code the analysis could not read (`pwshAnalysis`). `analyzeBash`
+   * never sets it.
+   */
+  ungrantable?: boolean;
 }
 
 /**

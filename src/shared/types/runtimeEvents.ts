@@ -559,6 +559,14 @@ export type PermissionDecisionId = 'allow' | 'allow_session' | 'deny' | 'cancel'
 export type PermissionAutoReason = 'unsupported' | 'session_closed' | 'aborted' | 'timed_out';
 
 /**
+ * dsh-rebase P1-6d: why a card is up, when the posture alone would not have
+ * raised it. `unresolved`: the gear allows calls like this one, but part of it
+ * could not be read statically (a variable, a script block, a call operator,
+ * a program's own body), so the gate asks. An id, worded by the renderer.
+ */
+export type PermissionAskReason = 'unresolved';
+
+/**
  * What "Allow for session" on THIS card would remember.
  *
  * The button says "Allow for session" and nothing about its reach, and a button
@@ -702,6 +710,13 @@ export interface PermissionRequestedEvent extends RuntimeEventBase {
      * card then shows its generic scope line rather than inventing a reach.
      */
     sessionGrantScope?: PermissionGrantScope;
+    /**
+     * dsh-rebase P1-6d: why the gate asks, when the posture alone would not
+     * have (see `PermissionAskReason`). Absent otherwise — the card then gives
+     * no reason rather than blaming the command for a question the gear asks
+     * every time.
+     */
+    askReason?: PermissionAskReason;
     /** S2: the agent's own justification, when it sent one. */
     reason?: string;
     /**

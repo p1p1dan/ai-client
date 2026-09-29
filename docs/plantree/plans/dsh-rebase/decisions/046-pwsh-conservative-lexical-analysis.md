@@ -17,3 +17,7 @@
 - 不选「PowerShell 自带的 AST」：要常驻一个 helper 进程。
 - 自写分析零新进程、零新依赖，看不懂就问，失败关闭。
 - 代价：auto 档下，Windows 用户会比 Linux 用户多弹卡。runtime-hardening 决策 023 那类「太常问」的反馈有可能重现；bypass 档不受影响。
+
+## 修订注记
+
+- 2026-09-29（P1-6d）：按 [决策 129](129-p1-6d-pwsh-analysis-choices.md) 落地（`pwshAnalysis.ts` 加零依赖的 `pwshNames.ts`）。与本条原文的差异待审批：每个字面词都当候选路径（第 3 条）；含变量、脚本块或执行字符串的命令不可授权（第 4 条）；`sc`、`curl`、`wget` 不归一（第 7 条）。表驱动用例 267 例；Windows CI 两路只写了 workflow，未推送。

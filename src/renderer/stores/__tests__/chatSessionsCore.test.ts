@@ -514,6 +514,36 @@ describe('applyRuntimeEvent — permission.requested', () => {
     expect(Object.keys(entry ?? {})).toEqual(['sessionId', 'permissionId', 'messageId']);
   });
 
+  /**
+   * dsh-rebase P1-6d: why the gate asks rides the BLOCK — it is part of what
+   * the card says, like the grant scope — and stays absent when not sent.
+   */
+  it('keeps the ask reason on the block, and leaves the key out when none is sent', () => {
+    const state = baseState({ sessions: [makeSession({ status: 'running' })], messages: {} });
+    const reasoned = applyRuntimeEvent(state, {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-why', toolName: 'pwsh', askReason: 'unresolved' },
+    } satisfies RuntimeEvent);
+    expect(reasoned.messages?.[SESSION_ID]?.[0]?.blocks?.[0]).toMatchObject({
+      permissionId: 'perm-why',
+      permissionAskReason: 'unresolved',
+    });
+    expect(Object.keys(reasoned.pendingPermissions?.[0] ?? {})).not.toContain('askReason');
+    const plain = applyRuntimeEvent(state, {
+      type: 'permission.requested',
+      seq: 1,
+      sessionId: SESSION_ID,
+      timestamp: 1,
+      payload: { permissionId: 'perm-plain', toolName: 'pwsh' },
+    } satisfies RuntimeEvent);
+    expect(Object.keys(plain.messages?.[SESSION_ID]?.[0]?.blocks?.[0] ?? {})).not.toContain(
+      'permissionAskReason'
+    );
+  });
+
   it('attaches to the target session own latest assistant message, ignoring a newer cross-session decoy', () => {
     const targetAssistant = makeMessage({ id: 'asst-target', role: 'assistant', blocks: [] });
     // Decoy: a different session's assistant message, placed LATER in the array so a

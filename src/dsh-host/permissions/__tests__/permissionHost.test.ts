@@ -394,14 +394,46 @@ describe('request construction (design shard 03 §2)', () => {
     });
   });
 
-  it('gives pwsh the bash policy surface and treats every command as unresolved', async () => {
-    expect((await requestFor('pwsh', { command: 'Get-ChildItem' })).seen[0]).toMatchObject({
+  it('reads pwsh with its own analysis, operands checked as for bash (P1-6d)', async () => {
+    const command = 'ls a; Get-Content notes.txt > copy.txt';
+    const seen = (await requestFor('pwsh', { command })).seen[0];
+    expect(seen).toMatchObject({
       tool: 'pwsh',
-      policySurface: 'bash',
-      command: 'Get-ChildItem',
-      unresolvedPaths: true,
+      path: ws,
+      command,
+      commands: ['Get-ChildItem a', 'Get-Content notes.txt'],
+      unresolvedPaths: false,
       exploration: false,
     });
+    expect(seen?.paths).toEqual(
+      expect.arrayContaining([join(ws, 'a'), join(ws, 'notes.txt'), join(ws, 'copy.txt')])
+    );
+    // The gate judges both shells under the `bash` surface itself (decision 129).
+    expect(seen).not.toHaveProperty('policySurface');
+    expect(seen).not.toHaveProperty('ungrantable');
+    expect((await requestFor('pwsh', { command: 'Get-ChildItem' })).seen[0]).toMatchObject({
+      exploration: true,
+      unresolvedPaths: false,
+      path: ws,
+    });
+    expect(
+      (await requestFor('pwsh', { command: 'Get-ChildItem | % { $_.Name }' })).seen[0]
+    ).toMatchObject({ unresolvedPaths: true, exploration: false, ungrantable: true });
+  });
+
+  it("expands pwsh's $env: from the chat's environment", async () => {
+    const { fake, host } = setup();
+    const { gate, seen } = recordingGate();
+    host.attachGate('c1-1', {
+      dshSessionId: 'aiclient-root',
+      gate,
+      env: { PERM_ROW_OUT: outside },
+    });
+    await fake.prepare(
+      call('pwsh', { command: 'Get-Content $env:PERM_ROW_OUT/far.txt' }, root(), { callId: 'c' })
+    );
+    expect(seen[0]).toMatchObject({ unresolvedPaths: false });
+    expect(seen[0]?.paths).toContain(join(outside, 'far.txt'));
   });
 
   it('treats programs as opaque and plugin tools by their own policy rule', async () => {
@@ -542,6 +574,17 @@ describe('pre-execute decisions (decision 042 rule 2)', () => {
       kind: 'deny',
       reason: `shell operand is denied: ${join(ws, '.env')}`,
     });
+    // P1-6d: pwsh the same way — and a name inside code the analysis cannot
+    // read still meets the deny list.
+    for (const command of [
+      'Get-Content .env',
+      'Get-Content (Join-Path . \x27.env\x27)',
+      'iex "cat .env"',
+    ])
+      expect(await fake.prepare(call('pwsh', { command }, root())), command).toMatchObject({
+        kind: 'deny',
+        reason: `shell operand is denied: ${join(ws, '.env')}`,
+      });
     expect(asked).toEqual([]);
   });
 

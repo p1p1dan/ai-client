@@ -204,6 +204,7 @@ export async function authorizeTarget(
       commands: shell?.commands,
       unresolvedPaths: shell?.unresolvedPaths,
       exploration: shell?.exploration,
+      ...(shell?.ungrantable ? { ungrantable: true } : {}),
       ...(preview ? { preview } : {}),
     },
     signal

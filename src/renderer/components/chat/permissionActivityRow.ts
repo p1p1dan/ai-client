@@ -35,7 +35,7 @@
  * `mcp__server__tool` here and as `server · tool` one row above.
  */
 import { englishTranslate, type Translate } from '@shared/i18n';
-import { toolDisplayName } from './piToolNames';
+import { permissionActivityToolLabel } from './piToolNames';
 
 /** One gate, as the plugin described it. Mirrors `PermissionActivityEvent.payload`. */
 export interface PermissionActivityRecord {
@@ -139,8 +139,9 @@ export function derivePermissionActivityRow(
   // chat-tool-06 — the same label the timeline row and the delegation panel use
   // for the same call. An MCP tool arrives here as `mcp__<server>__<tool>`, and
   // a line a person is meant to read must not be a protocol identifier.
+  // P1-6d: `pwsh` reads PowerShell here as on its card (decision 129).
   const raw = record.surface?.trim();
-  const surface = raw ? toolDisplayName(raw) : t('request');
+  const surface = raw ? permissionActivityToolLabel(raw) : t('request');
   const notes: string[] = [];
 
   // MODEL-20 (2026-09-19): the legacy backend's plugin set `forwarded` +

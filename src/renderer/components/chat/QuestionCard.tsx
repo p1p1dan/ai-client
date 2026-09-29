@@ -855,6 +855,11 @@ function PermissionQaCard({
           </div>
         )}
         {view.detail && <PermissionDetailBody detail={view.detail} />}
+        {/* P1-6d: why this card is up when the gear would have let the call
+            through — the command could not be read statically. */}
+        {view.askReasonNote && (
+          <p className="px-1 text-meta text-muted-foreground">{view.askReasonNote}</p>
+        )}
         {(view.workspace || secondsLeft !== null) && (
           <div className="flex min-w-0 items-center gap-2 px-1 text-meta text-muted-foreground">
             {view.workspace && (

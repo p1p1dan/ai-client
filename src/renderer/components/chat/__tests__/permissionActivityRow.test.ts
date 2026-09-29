@@ -241,3 +241,52 @@ describe('mergePermissionActivity', () => {
     expect(mergePermissionActivity(previous, record({ result: 'deny' })).result).toBe('deny');
   });
 });
+
+/**
+ * dsh-rebase P1-6d (decision 120, deferred): the Windows shell's audit row.
+ * The gate judges `pwsh` under the `bash` policy surface but sends the tool
+ * name as the row's surface; the row reads it PowerShell, as the card does.
+ * `bash` keeps its 1.0.x wording.
+ */
+describe('the PowerShell audit row (P1-6d)', () => {
+  it('reads pwsh as PowerShell in every tone, in both languages', () => {
+    const allowed = record({
+      surface: 'pwsh',
+      value: 'Get-ChildItem',
+      result: 'allow',
+      resolution: 'user_approved',
+    });
+    expect(derivePermissionActivityRow(allowed).label).toBe('Allowed PowerShell');
+    expect(derivePermissionActivityRow(allowed, zh).label).toBe(
+      zh('Allowed {{surface}}', { surface: 'PowerShell' })
+    );
+    expect(derivePermissionActivityRow(allowed, zh).label).toContain('PowerShell');
+    expect(derivePermissionActivityRow(allowed, zh).label).not.toContain('bash');
+    expect(
+      derivePermissionActivityRow(
+        record({ surface: 'pwsh', result: 'deny', resolution: 'user_denied' })
+      ).label
+    ).toBe('Denied PowerShell');
+    expect(derivePermissionActivityRow(record({ phase: 'prompt', surface: 'pwsh' })).label).toBe(
+      'Awaiting approval — PowerShell'
+    );
+    expect(
+      derivePermissionActivityRow(
+        record({ surface: 'pwsh', result: 'deny', resolution: 'gate_error' })
+      ).label
+    ).toBe('Permission check failed — PowerShell');
+  });
+
+  it('keeps the command verbatim and bash by its own name', () => {
+    expect(
+      derivePermissionActivityRow(
+        record({ surface: 'pwsh', value: 'ls src', result: 'allow', resolution: 'user_approved' })
+      ).detail
+    ).toBe('ls src');
+    expect(
+      derivePermissionActivityRow(
+        record({ surface: 'bash', result: 'allow', resolution: 'user_approved' })
+      ).label
+    ).toBe('Allowed bash');
+  });
+});

@@ -20,6 +20,7 @@ import {
   deriveCardTitle,
   deriveFrozenPairs,
   derivePager,
+  derivePermissionAskReasonNote,
   derivePermissionAutoNote,
   derivePermissionCardView,
   derivePermissionDetailView,
@@ -37,9 +38,13 @@ import {
   isQuestionAnswered,
   PERMISSION_ACTION_LABELS,
   PERMISSION_ALLOW_SESSION_NOTE,
+  PERMISSION_ASK_REASON_CALL,
+  PERMISSION_ASK_REASON_PWSH,
+  PERMISSION_ASK_REASON_SHELL,
   PERMISSION_DECISION_LABELS,
   PERMISSION_NO_COMMAND_NOTE,
   PERMISSION_ONE_CALL_NOTE,
+  PERMISSION_PWSH_ALIAS_NOTE,
   permissionDecisionAllows,
   permissionSecondsLeft,
   questionReactKey,
@@ -1534,5 +1539,110 @@ describe('the PowerShell card (P1-7c)', () => {
         true
       ).sessionScopeNote
     ).toBeNull();
+  });
+});
+
+/**
+ * dsh-rebase P1-6d (decision 120 rule 24, deferred to here): the two lines the
+ * PowerShell card was waiting on — aliases share one grant, and why a card is
+ * up when the gear would have let the call through.
+ */
+describe('the PowerShell card: aliases and the reason it asks (P1-6d)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const sessionCard = (toolName: string, prefix: string) =>
+    permissionBlock({
+      toolName,
+      permissionAction: 'run_command',
+      permissionDecisions: ['allow', 'allow_session', 'deny'],
+      permissionGrantScope: { kind: 'command', value: prefix },
+    });
+
+  it('says a cmdlet grant also covers its aliases, in both languages', () => {
+    const card = sessionCard('pwsh', 'Get-ChildItem');
+    expect(derivePermissionCardView(card, true).sessionScopeNote).toBe(
+      `Allow for session remembers commands starting with Get-ChildItem · ${PERMISSION_PWSH_ALIAS_NOTE} · ${PERMISSION_ALLOW_SESSION_NOTE}`
+    );
+    expect(derivePermissionCardView(card, true, zh).sessionScopeNote).toBe(
+      `「本会话内允许」会记住以 Get-ChildItem 开头的命令 · PowerShell 别名（如 ls、dir、gci）按同一条命令记忆 · ${zh(PERMISSION_ALLOW_SESSION_NOTE)}`
+    );
+    expect(
+      derivePermissionGrantScopeNote({ kind: 'command', value: 'npm test, Remove-Item' }, 'pwsh')
+    ).toBe(
+      `Allow for session remembers commands starting with npm test, Remove-Item · ${PERMISSION_PWSH_ALIAS_NOTE}`
+    );
+  });
+
+  it('says nothing about aliases for a program, for bash, or for a file grant', () => {
+    expect(derivePermissionCardView(sessionCard('pwsh', 'npm test'), true).sessionScopeNote).toBe(
+      `Allow for session remembers commands starting with npm test · ${PERMISSION_ALLOW_SESSION_NOTE}`
+    );
+    expect(
+      derivePermissionCardView(sessionCard('bash', 'Get-ChildItem'), true).sessionScopeNote
+    ).not.toContain(PERMISSION_PWSH_ALIAS_NOTE);
+    expect(derivePermissionGrantScopeNote({ kind: 'path', value: 'src/Get-Item.ts' }, 'pwsh')).toBe(
+      'Allow for session remembers pwsh on src/Get-Item.ts'
+    );
+  });
+
+  it('gives the reason per tool when the gate says the command could not be read', () => {
+    const pwsh = permissionBlock({
+      toolName: 'pwsh',
+      permissionKind: 'exec',
+      permissionAskReason: 'unresolved',
+    });
+    expect(derivePermissionCardView(pwsh, true).askReasonNote).toBe(PERMISSION_ASK_REASON_PWSH);
+    expect(derivePermissionCardView(pwsh, true, zh).askReasonNote).toBe(
+      '这条命令含变量、脚本块或调用符，无法静态判断会碰哪些文件，所以需要你确认'
+    );
+    expect(
+      derivePermissionAskReasonNote(
+        permissionBlock({
+          toolName: 'bash',
+          permissionKind: 'exec',
+          permissionAskReason: 'unresolved',
+        })
+      )
+    ).toBe(PERMISSION_ASK_REASON_SHELL);
+    expect(
+      derivePermissionAskReasonNote(
+        permissionBlock({
+          toolName: 'run_code',
+          permissionKind: 'tool',
+          permissionAskReason: 'unresolved',
+        }),
+        zh
+      )
+    ).toBe('无法静态判断这次调用会碰哪些文件，所以需要你确认');
+    expect(PERMISSION_ASK_REASON_CALL).not.toBe(zh(PERMISSION_ASK_REASON_CALL));
+  });
+
+  it('gives no reason when the gate gave none, and none once the card is settled', () => {
+    const plain = permissionBlock({ toolName: 'pwsh', permissionKind: 'exec' });
+    expect(derivePermissionCardView(plain, true).askReasonNote).toBeNull();
+    const reasoned = permissionBlock({
+      toolName: 'pwsh',
+      permissionKind: 'exec',
+      permissionAskReason: 'unresolved',
+    });
+    // Queued behind another card: the reason still explains why it is there.
+    expect(derivePermissionCardView(reasoned, false).askReasonNote).toBe(
+      PERMISSION_ASK_REASON_PWSH
+    );
+    expect(
+      derivePermissionCardView({ ...reasoned, resolved: true, allowed: true }, true).askReasonNote
+    ).toBeNull();
+  });
+
+  it('every new line is a key the Chinese catalog answers', () => {
+    for (const key of [
+      PERMISSION_PWSH_ALIAS_NOTE,
+      PERMISSION_ASK_REASON_PWSH,
+      PERMISSION_ASK_REASON_SHELL,
+      PERMISSION_ASK_REASON_CALL,
+    ]) {
+      expect(zh(key)).not.toBe(key);
+      expect(/[一-鿿]/.test(zh(key))).toBe(true);
+    }
   });
 });

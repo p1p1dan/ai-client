@@ -200,3 +200,16 @@ export function permissionToolLabel(toolName: string): string {
     ? (SHELL_CARD_NAMES[toolName] as string)
     : toolDisplayName(toolName);
 }
+
+/**
+ * dsh-rebase P1-6d (decision 120, "Windows 上的授权活动行"): the tool as the
+ * permission activity row names it. `pwsh` reads PowerShell, as on its card;
+ * every other tool keeps `toolDisplayName`, so bash stays `bash` — the row's
+ * wording since 1.0.x. The row keys on the tool name the gate sends
+ * (`request.tool`), never on the `bash` policy surface both shells share.
+ */
+export function permissionActivityToolLabel(toolName: string): string {
+  return toolName === DSH_TOOL_NAMES.pwsh
+    ? permissionToolLabel(toolName)
+    : toolDisplayName(toolName);
+}

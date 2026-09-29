@@ -130,3 +130,19 @@ describe('QuestionCard.tsx — the permission row sends its own decision (S3 sli
     ).not.toContain('option.label === PERMISSION_ALLOW');
   });
 });
+
+/**
+ * dsh-rebase P1-6d: the card paints the two model lines P1-6d added. The
+ * alias clause travels inside `sessionScopeNote`, already painted; the ask
+ * reason is a line of its own, and a model field nothing renders is exactly
+ * the gap `derivePermissionCardView`'s tests cannot see.
+ */
+describe('QuestionCard.tsx — the reason a permission card is up (P1-6d)', () => {
+  const { syntax } = load('../QuestionCard.tsx', ts.ScriptKind.TSX);
+
+  it('paints askReasonNote, and only when there is one', () => {
+    expect(syntax).toContain('{view.askReasonNote && (');
+    expect(syntax).toContain('{view.askReasonNote}</p>');
+    expect(syntax).toContain('{view.sessionScopeNote}</p>');
+  });
+});

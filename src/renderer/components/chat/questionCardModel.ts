@@ -542,14 +542,62 @@ export function derivePermissionGrantScopeNote(
   t: Translate = englishTranslate
 ): string | null {
   if (!scope) return null;
-  if (scope.kind === 'command')
-    return t('Allow for session remembers commands starting with {{prefix}}', {
+  if (scope.kind === 'command') {
+    const reach = t('Allow for session remembers commands starting with {{prefix}}', {
       prefix: scope.value,
     });
+    return pwshRemembersAliases(scope, toolName)
+      ? `${reach} · ${t(PERMISSION_PWSH_ALIAS_NOTE)}`
+      : reach;
+  }
   return t('Allow for session remembers {{tool}} on {{path}}', {
     tool: toolName ?? '',
     path: scope.value,
   });
+}
+
+/**
+ * dsh-rebase P1-6d (plan P1-7 shard 04 §6; decision 120 rule 24, deferred to
+ * here): a `pwsh` grant is keyed by the cmdlet an alias names, so approving
+ * `ls` for the session also covers `dir`, `gci` and `Get-ChildItem`. The
+ * prefix on the card is the cmdlet, which a user who typed `ls` has never
+ * seen — the clause says why.
+ */
+export const PERMISSION_PWSH_ALIAS_NOTE =
+  'PowerShell aliases (such as ls, dir, gci) are remembered as the same command';
+
+/** A `pwsh` command grant whose prefix list names at least one cmdlet (`Verb-Noun`). */
+function pwshRemembersAliases(scope: PermissionGrantScope, toolName: string | undefined): boolean {
+  if (toolName !== 'pwsh' || scope.kind !== 'command') return false;
+  return scope.value
+    .split(', ')
+    .some((prefix) => /^[A-Za-z]+-[A-Za-z]+$/.test(prefix.split(' ')[0] ?? ''));
+}
+
+/**
+ * dsh-rebase P1-6d (plan P1-7 shard 04 §6; decision 120 rule 24, deferred to
+ * here): why the card is up, when the gear would otherwise have let the call
+ * through (`askReason: 'unresolved'`). Under `auto` this is the whole answer
+ * to "I turned asking off — why am I asked?", which Windows users meet more
+ * often (decision 046). Worded per tool: PowerShell's constructs, bash's, and
+ * a program the gate cannot see into.
+ */
+export const PERMISSION_ASK_REASON_PWSH =
+  'This command contains variables, script blocks or call operators, so the files it touches cannot be determined in advance: please confirm it';
+export const PERMISSION_ASK_REASON_SHELL =
+  'This command contains variables, substitutions or interpreters, so the files it touches cannot be determined in advance: please confirm it';
+export const PERMISSION_ASK_REASON_CALL =
+  'The files this call touches cannot be determined in advance: please confirm it';
+
+export function derivePermissionAskReasonNote(
+  block: ChatBlock,
+  t: Translate = englishTranslate
+): string | null {
+  if (block.permissionAskReason !== 'unresolved') return null;
+  const tool = block.toolName ?? '';
+  if (tool === 'pwsh') return t(PERMISSION_ASK_REASON_PWSH);
+  if (tool === 'bash' || block.permissionKind === 'exec') return t(PERMISSION_ASK_REASON_SHELL);
+  return t(PERMISSION_ASK_REASON_CALL);
 }
 
 /**
@@ -850,6 +898,8 @@ export interface PermissionCardView {
   omittedNote: string | null;
   /** T002 — scope reminder, present only when `options` offers `allow_session`. */
   sessionScopeNote: string | null;
+  /** P1-6d — why the gate asks, when the gear alone would not have; null once resolved. */
+  askReasonNote: string | null;
 }
 
 /**
@@ -1027,6 +1077,7 @@ export function derivePermissionCardView(
   const risk = derivePermissionRisk(block);
   const content = derivePermissionContent(block);
   const workspace = readInputField(block.toolInput, 'workspace');
+  const askReasonNote = derivePermissionAskReasonNote(block, t);
 
   if (block.resolved === true) {
     return {
@@ -1049,6 +1100,7 @@ export function derivePermissionCardView(
       detail,
       omittedNote,
       sessionScopeNote: null,
+      askReasonNote: null,
     };
   }
 
@@ -1075,6 +1127,7 @@ export function derivePermissionCardView(
               block.permissionGrantScope,
               block.toolName
             ),
+      askReasonNote,
     };
   }
 
@@ -1091,6 +1144,7 @@ export function derivePermissionCardView(
     detail,
     omittedNote,
     sessionScopeNote: null,
+    askReasonNote,
   };
 }
 

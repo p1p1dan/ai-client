@@ -1,5 +1,6 @@
 // Moved from src/runtime/plugins/permissions/index.ts (dsh-rebase P1-6a)
 
+import type { PermissionAskReason } from '../types/runtimeEvents.ts';
 import {
   type LegacyPermissionTier,
   type PermissionGear,
@@ -55,6 +56,12 @@ export interface ToolPermissionRequest {
   commands?: readonly string[];
   unresolvedPaths?: boolean;
   exploration?: boolean;
+  /**
+   * dsh-rebase P1-6d: a shell command no session grant may cover — it carries
+   * code the analysis could not read (a script block, `Invoke-Expression`, a
+   * variable). "Allow for session" on its card remembers nothing.
+   */
+  ungrantable?: boolean;
   /**
    * T002. The policy surface to match this call's rules against, when `tool`
    * itself is not that vocabulary's surface name. `mcp__<server>__<tool>` is
@@ -147,6 +154,20 @@ export interface PermissionQueueSlot {
    */
   depth: number;
 }
+/**
+ * dsh-rebase P1-6d: what the gate knows about why a card is up.
+ *
+ * `askReason: 'unresolved'` — the gear would have allowed this call, and asks
+ * only because the analysis could not read part of it (a variable, a script
+ * block, a program's own body). It is the one reason worth putting on the
+ * card: under `auto` it is the whole explanation for a question the user
+ * thought they had turned off (decision 046). Absent when the gear asks
+ * anyway, so the card never blames the command for a question the posture
+ * would have asked regardless.
+ */
+export interface PermissionAskContext {
+  askReason?: PermissionAskReason;
+}
 export interface PermissionConfig {
   cwd: string;
   mode?: RuntimeMode;
@@ -174,7 +195,9 @@ export interface PermissionConfig {
      * a two-parameter function is still a valid `approve`, it simply cannot
      * tell the user there is a line behind this card.
      */
-    queue?: PermissionQueueSlot
+    queue?: PermissionQueueSlot,
+    /** dsh-rebase P1-6d: why the gate asks, when it can say; see `PermissionAskContext`. */
+    context?: PermissionAskContext
   ) => Promise<'allow-once' | 'allow-session' | 'deny'>;
   /**
    * Answer a card that is already on screen with `allow`, because the question
@@ -547,7 +570,12 @@ export class PermissionGate implements PermissionGateService {
           ? [request.command ?? '', ...(request.commands ?? [])]
           : [request.policyValue ?? request.path]
         ).map((value) =>
-          policyAction(policy, request.policySurface ?? request.tool, [value], this.config.cwd)
+          policyAction(
+            policy,
+            request.policySurface ?? defaultPolicySurface(request.tool),
+            [value],
+            this.config.cwd
+          )
         )
       : [];
     const decisions = [...pathDecisions, ...toolDecisions];
@@ -632,6 +660,17 @@ export class PermissionGate implements PermissionGateService {
     )
       return 'allow';
     return request.trustedPath ? 'allow' : 'ask';
+  }
+  /**
+   * dsh-rebase P1-6d: `'unresolved'` when the gear would have allowed this
+   * call had the analysis been able to read all of it — i.e. the unreadable
+   * part is the reason for the card. See `PermissionAskContext`.
+   */
+  private askReasonFor(request: ToolPermissionRequest): PermissionAskReason | undefined {
+    if (!request.unresolvedPaths || request.hostAsk) return undefined;
+    return this.evaluate({ ...request, unresolvedPaths: false }) === 'allow'
+      ? 'unresolved'
+      : undefined;
   }
   canTraverse(request: ToolPermissionRequest): boolean {
     if (
@@ -814,6 +853,7 @@ export class PermissionGate implements PermissionGateService {
       // Announced before the await, so the transcript can show the gate is open
       // for as long as the dialog actually is.
       this.notify({ phase: 'prompt', request, mode: this.mode, gear: this.gearFor(request) });
+      const askReason = this.askReasonFor(request);
       const controller = new AbortController();
       const approvalSignal = AbortSignal.any([combined, controller.signal]);
       const timeout = this.timers.setTimeout(
@@ -827,7 +867,12 @@ export class PermissionGate implements PermissionGateService {
           abort = () => resolve('deny');
           approvalSignal.addEventListener('abort', abort, { once: true });
         });
-        const decision = await Promise.race([approve(request, approvalSignal, queue), cancelled]);
+        const decision = await Promise.race([
+          askReason
+            ? approve(request, approvalSignal, queue, { askReason })
+            : approve(request, approvalSignal, queue),
+          cancelled,
+        ]);
         if (approvalSignal.aborted || epoch !== this.epoch)
           throw approvalSignal.reason === PERMISSION_TIMEOUT_REASON
             ? this.denied('timed-out', 'nobody answered the permission request in time')
@@ -867,6 +912,15 @@ export class PermissionGate implements PermissionGateService {
  */
 function skipsApproval(gear: PermissionGear): boolean {
   return gear === 'auto' || gear === 'bypass';
+}
+/**
+ * The policy surface a tool's own rules are written under, when the request
+ * names none (design shard 03 §2): both shells answer to `bash` — a user's
+ * `"bash": {"git push*": "ask"}` holds on Windows' `pwsh` too, and the bundled
+ * table has no `pwsh` surface to fall back to (dsh-rebase P1-6d).
+ */
+function defaultPolicySurface(tool: string): string {
+  return isShellTool(tool) ? 'bash' : tool;
 }
 /**
  * The default refusal: code `tool_denied`, plus the reason. Hosts with their

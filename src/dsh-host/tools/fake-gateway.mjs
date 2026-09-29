@@ -204,6 +204,10 @@
  *                       paced over 60 deltas, 250 ms apart, for cancel and timeout).
  *                       Every dsh-p0-2 log line also says whether the request carried
  *                       the one-shot system prompt (`completionSystem: true`).
+ *                       dsh-rebase P1-6d adds P1-S18 (tools/perm-pwsh-probe.ts): the
+ *                       gate's S18 cases as `pwsh` calls, or their bash twins for a
+ *                       Linux dry run — `P1-S18 {"case":"card|grants|deny|auto",
+ *                       "shell":"pwsh|bash"}` (see `S18_STEPS`).
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -390,7 +394,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -543,6 +547,64 @@ function firstJsonObject(text) {
   }
   return null;
 }
+/**
+ * dsh-rebase P1-6d: S18's shell steps (plan P1-6 shard 04 §5: pwsh's S1, S3,
+ * S4 and S7), each with its bash twin for the Linux dry run. Relative paths:
+ * the call runs in the session's own workspace.
+ *   card    S1  ask: two writes; the probe allows the first card, denies the second
+ *   grants  S3  ask: `Write-Output` answered for the session; `echo` (its alias)
+ *               asks nothing; `echo …; Remove-Item …` asks (never granted)
+ *   deny    S4  bypass: the env file and a private key, refused without a card
+ *   auto    S7  auto: a variable the analysis cannot read asks (`askReason`),
+ *               the plain word does not
+ */
+const S18_STEPS = {
+  card: {
+    pwsh: [
+      ["Set-Content -LiteralPath 's18-allowed.txt' -Value 'first'", 'Write the first file'],
+      ["Set-Content -LiteralPath 's18-denied.txt' -Value 'second'", 'Write the second file'],
+    ],
+    bash: [
+      ['printf first > s18-allowed.txt', 'Write the first file'],
+      ['printf second > s18-denied.txt', 'Write the second file'],
+    ],
+  },
+  grants: {
+    pwsh: [
+      ['Write-Output s18-a', 'First echo'],
+      ['echo s18-b', 'Second echo, by its alias'],
+      [
+        "echo s18-c; Remove-Item -LiteralPath 's18-missing.txt' -ErrorAction SilentlyContinue",
+        'Echo, then remove a file',
+      ],
+    ],
+    bash: [
+      ['echo s18-a', 'First echo'],
+      ['echo s18-b', 'Second echo'],
+      ['echo s18-c && rm -f s18-missing.txt', 'Echo, then remove a file'],
+    ],
+  },
+  deny: {
+    pwsh: [
+      ['Get-Content -LiteralPath .env', 'Print the env file'],
+      ['Get-Content ~\\.ssh\\id_rsa', 'Print a private key'],
+    ],
+    bash: [
+      ['cat .env', 'Print the env file'],
+      ['cat ~/.ssh/id_rsa', 'Print a private key'],
+    ],
+  },
+  auto: {
+    pwsh: [
+      ['Write-Output $S18X > s18-var.txt', 'Write a variable'],
+      ['Write-Output s18 > s18-plain.txt', 'Write a word'],
+    ],
+    bash: [
+      ['echo $S18X > s18-var.txt', 'Write a variable'],
+      ['echo s18 > s18-plain.txt', 'Write a word'],
+    ],
+  },
+};
 const p04Join = (dir, name) => `${dir}${dir.includes('\\') ? '\\' : '/'}${name}`;
 const pwshQuote = (text) => `'${text.replace(/'/g, "''")}'`;
 const bashQuote = (text) => `'${text.replace(/'/g, "'\\''")}'`;
@@ -1180,6 +1242,18 @@ const DSH_P0_2_SCRIPTS = {
       });
     }
     return say('P1-PERM-GRANTS finished.');
+  },
+  // dsh-rebase P1-6d: S18, the gate's pwsh scenarios (tools/perm-pwsh-probe.ts),
+  // `P1-S18 {"case":"card","shell":"pwsh"}`; `"shell":"bash"` is the Linux dry run.
+  'P1-S18'(_round, step, _calls, triggerText) {
+    const p = p04Params(triggerText);
+    const shell = p.shell === 'pwsh' ? 'pwsh' : 'bash';
+    const steps = S18_STEPS[p.case]?.[shell] ?? [];
+    if (step < steps.length) {
+      const [command, description] = steps[step];
+      return { ...tool(shell, { command, description }), tag: String(p.case) };
+    }
+    return { ...say(`P1-S18 ${p.case} finished.`), tag: String(p.case) };
   },
   // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
   CRASH(_round, step, _calls, triggerText) {

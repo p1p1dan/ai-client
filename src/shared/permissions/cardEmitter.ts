@@ -182,7 +182,7 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
   };
 
   return {
-    approve: (request, signal, queue) =>
+    approve: (request, signal, queue, context) =>
       new Promise((resolve) => {
         // The tool call id is the permission id, which is what the timeline
         // already assumes (`chatSessions.ts` calls it out): one gate per call.
@@ -239,6 +239,8 @@ export function createPermissionPrompt(options: PermissionPromptOptions): Permis
             ...(queue ? { queuePosition: queue.position, queueDepth: queue.depth } : {}),
             ...(detail ? { detail } : {}),
             ...(sessionGrantScope ? { sessionGrantScope } : {}),
+            // P1-6d: why this card is up when the gear would not have asked.
+            ...(context?.askReason ? { askReason: context.askReason } : {}),
           },
         });
 

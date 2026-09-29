@@ -31,6 +31,6 @@
   - 集成测试「授权跨宿主重启仍生效」。
 
   「本会话允许」目前只在宿主进程活着时有效，宿主重启后会丢。
-- **P1-6d**：pwsh 目前一律按「解析不出」处理，每条都会出卡。
+- **P1-6d**：pwsh 目前一律按「解析不出」处理，每条都会出卡。（2026-09-29 修订注记：已由 [决策 129](129-p1-6d-pwsh-analysis-choices.md) 解决，pwsh 有了自己的词法分析，读得懂的命令按档位判定。）
 - **P1-4c / d**：`tool.completed` 对 PermissionDenial 和 ABORTED_BEFORE_DISPATCH 的映射，Stop 收卡后应该显示「未开始」；命令列表隐藏 `/plan`、`/permission`。
 - **只过了 tsc、没有实跑的工具**：goal-probe、p0-6-probe、p0-4-probe 与其上机包、perm-experiments、rewind-experiments、measure。perm-experiments 的 raw 模式是按「权限行默认关」设计的，现在已经失去原来的意义。

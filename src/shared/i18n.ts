@@ -3720,3 +3720,17 @@ Object.assign(zhTranslations, {
   'Terminal (still running)': '终端（仍在运行）',
   'This conversation has no folder to open a terminal in': '会话未绑定目录，无法打开终端',
 });
+
+// dsh-rebase P1-6d (decision 129): the two approval-card lines decision 120
+// deferred — pwsh aliases share a grant, and why a card is up when the gear
+// would have let the call through.
+Object.assign(zhTranslations, {
+  'PowerShell aliases (such as ls, dir, gci) are remembered as the same command':
+    'PowerShell 别名（如 ls、dir、gci）按同一条命令记忆',
+  'This command contains variables, script blocks or call operators, so the files it touches cannot be determined in advance: please confirm it':
+    '这条命令含变量、脚本块或调用符，无法静态判断会碰哪些文件，所以需要你确认',
+  'This command contains variables, substitutions or interpreters, so the files it touches cannot be determined in advance: please confirm it':
+    '这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认',
+  'The files this call touches cannot be determined in advance: please confirm it':
+    '无法静态判断这次调用会碰哪些文件，所以需要你确认',
+});

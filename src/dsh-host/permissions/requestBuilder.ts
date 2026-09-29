@@ -20,6 +20,7 @@ import type {
   PermissionGateService,
   ToolPermissionRequest,
 } from '../../shared/permissions/gate.ts';
+import { analyzePwsh, PWSH_TOOL } from '../../shared/permissions/pwshAnalysis.ts';
 import {
   authorizeTarget,
   checkShellPaths,
@@ -43,6 +44,13 @@ export interface GateCallContext {
   fs: PermissionFileSystem;
   /** Analyse one bash command line (tree-sitter), relative to `cwd`. */
   analyzeBash(command: string, cwd: string): Promise<BashAnalysis>;
+  /**
+   * What `$env:NAME` and `$HOME` expand to in a `pwsh` command (P1-6d); the
+   * host's own environment. Absent: every variable is unresolved.
+   */
+  env?: Record<string, string>;
+  /** Whose path rules a `pwsh` command is read under; defaults to the host's. */
+  platform?: NodeJS.Platform;
   /** Paths the host produced itself (spill files): no workspace-boundary ask. */
   isTrustedPath?(path: string): boolean;
   /** Set when a delegate made the call: the card and audit row name it. */
@@ -83,11 +91,6 @@ function argumentsPreview(args: unknown): string {
     text = String(args);
   }
   return text.length > PREVIEW_MAX_CHARS ? `${text.slice(0, PREVIEW_MAX_CHARS)}…` : text;
-}
-
-/** pwsh has no analyzer yet (P1-6d): every command is unresolved, so auto asks. */
-function opaqueShellAnalysis(command: string): BashAnalysis {
-  return { paths: [], commands: [command], unresolvedPaths: true, exploration: false };
 }
 
 /**
@@ -172,21 +175,21 @@ export async function authorizeCall(
     case 'shell': {
       const command = stringArg(args, 'command') ?? '';
       const workdir = resolve(context.cwd, stringArg(args, 'workdir') ?? '.');
+      // Both shells: operands expanded and checked against the deny list,
+      // before the approval and again after it. The policy surface is `bash`
+      // for either (the gate's default for a shell tool).
       const analyse = async () =>
-        call.name === 'bash'
-          ? checkShellPaths(await context.analyzeBash(command, workdir), {
-              fs: context.fs,
-              cwd: workdir,
-              createError,
-            })
-          : opaqueShellAnalysis(command);
+        checkShellPaths(
+          call.name === PWSH_TOOL
+            ? analyzePwsh(command, workdir, context.env ?? {}, {
+                createError,
+                ...(context.platform ? { platform: context.platform } : {}),
+              })
+            : await context.analyzeBash(command, workdir),
+          { fs: context.fs, cwd: workdir, createError }
+        );
       const analysis = await analyse();
-      await target(
-        call.name,
-        workdir,
-        { command, shell: analysis, ...(call.name === 'bash' ? {} : { policySurface: 'bash' }) },
-        workdir
-      );
+      await target(call.name, workdir, { command, shell: analysis }, workdir);
       const current = await analyse();
       if (JSON.stringify(current.paths) !== JSON.stringify(analysis.paths))
         throw createError('path_changed', 'shell paths changed during approval; retry');

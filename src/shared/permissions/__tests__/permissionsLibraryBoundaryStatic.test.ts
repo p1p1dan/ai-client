@@ -137,9 +137,10 @@ describe('the shared permission library', () => {
   });
 
   it('says where each module came from, for merging runtime fixes from main', () => {
+    // A module added by a later P1-6 step (pwshAnalysis, P1-6d) says which one.
     const unlabelled = libraryFiles.filter(
       (file) =>
-        !/^\/\/ (Moved from src\/runtime\/\S+\.ts.*\(dsh-rebase P1-6a\)|New in dsh-rebase P1-6a)/.test(
+        !/^\/\/ (Moved from src\/runtime\/\S+\.ts.*\(dsh-rebase P1-6a\)|New in dsh-rebase P1-6[a-e])/.test(
           readFileSync(file, 'utf8')
         )
     );

@@ -169,3 +169,7 @@
 - **Windows 上的授权活动行**：`pwsh` 的请求以 `policySurface: 'bash'` 过闸，授权活动行因此写「已允许 bash」。不在本任务范围，记给 P1-6d / P1-7d 核对。
 - **已知限制**：转后台之后，`jobs` 投影只留最新 8 个已结束的任务，前台命令正常结束后 DSH 会移除它，所以较早的 `job_output` / `job_kill` 行多半只显示 id。
 - 相关决策加了修订注记：073、096、098、106、115、118、119。
+
+## 修订注记
+
+- 2026-09-29（P1-6d，[决策 129](129-p1-6d-pwsh-analysis-choices.md)）：第 24 条的两句已补上（129 第 14、15 条：pwsh 的 cmdlet 授权加「PowerShell 别名（如 ls、dir、gci）按同一条命令记忆」；闸门给出 `askReason` 时加原因句）。上面「Windows 上的授权活动行」一条不准确：活动行用的是 `request.tool`，写的是「已允许 pwsh」而不是「已允许 bash」；现改为「已允许 PowerShell」，bash 仍写 `bash`（129 第 16 条）。
