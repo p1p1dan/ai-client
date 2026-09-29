@@ -173,3 +173,4 @@
 ## 修订注记
 
 - 2026-09-29（P1-6d，[决策 129](129-p1-6d-pwsh-analysis-choices.md)）：第 24 条的两句已补上（129 第 14、15 条：pwsh 的 cmdlet 授权加「PowerShell 别名（如 ls、dir、gci）按同一条命令记忆」；闸门给出 `askReason` 时加原因句）。上面「Windows 上的授权活动行」一条不准确：活动行用的是 `request.tool`，写的是「已允许 pwsh」而不是「已允许 bash」；现改为「已允许 PowerShell」，bash 仍写 `bash`（129 第 16 条）。
+- 2026-09-29（[决策 131](131-plugin-row-titles-and-fork-title-choices.md)，按用户裁决 [130](130-user-rulings-2026-09-29-batch3.md)「顺手做了」）：第 27 条已做。bridge 对非 DSH 自带的工具在参数齐了时问 `presentCall`，`tool.started` / `tool.updated` 带 `presentation`，历史投影回放时问同一个 presenter，所以重开会话也有；渲染层有标题时用它替换「动词 + 参数」（131 第 7 条，待审批），office 工具的「读取 / 编辑」词条（第 10 条）退为没有标题时的读法；DSH 自带工具维持本决策的词条。录制 28 个场景无差异。

@@ -23,10 +23,17 @@
  * own diff card describes (`dshFileReview.ts`); and the tool-row flags are
  * read off `tool/result.error` by `dshToolOutcomeFlags`, which the bridge's
  * live `tool.completed` uses as well.
+ *
+ * Decision 131: a plugin tool's call carries the title the tool declares for
+ * it (`presentCall`). The log does not record it; the bridge passes the same
+ * presenter its live rows use (`DshHistoryFoldOptions.presentCall`), so a
+ * reopened row reads as the live one did. Without one (a fold of someone
+ * else's log, the tree, a golden test) no row carries it.
  */
 
 import { dshFileReview } from '../dshFileReview.ts';
 import { dshNoticeText, dshTurnHeadText, dshTurnOrigin } from '../dshNotices.ts';
+import type { DshToolPresenter, ToolCallPresentation } from '../dshToolPresentation.ts';
 import type { SessionFileChange } from '../sessionFileChange.ts';
 import type {
   HistoryAttachment,
@@ -334,6 +341,11 @@ export interface DshHistoryFoldOptions {
    * passes it, a projection of someone else's log has nothing to match.
    */
   liveSessionId?: string;
+  /**
+   * Decision 131: asks a tool for its own title of a call (the bridge's
+   * `presentCall` lookup, pure per DSH's contract). Absent: no row carries one.
+   */
+  presentCall?: DshToolPresenter;
 }
 
 /**
@@ -354,6 +366,7 @@ export class DshHistoryFold {
   private lastSeq = -1;
   private view: HistoryMessage[] | null = null;
   private readonly liveSessionId: string | undefined;
+  private readonly presentCall: DshToolPresenter | undefined;
   /** The current goal's round budget, as the last `goal/change` recorded it. */
   private goalRounds: number | undefined;
   /** Model steps the provider reported usage for. */
@@ -363,6 +376,7 @@ export class DshHistoryFold {
 
   constructor(options: DshHistoryFoldOptions = {}) {
     this.liveSessionId = options.liveSessionId;
+    this.presentCall = options.presentCall;
   }
 
   /** Seq of the last event pushed, -1 before any. */
@@ -442,6 +456,20 @@ export class DshHistoryFold {
 
   private closeFirstBatch(): void {
     if (this.turn) this.turn.firstBatch = false;
+  }
+
+  /**
+   * Decision 131: the tool's own title for a call, when a presenter was given
+   * and the tool declares one. A presenter that throws costs the title only.
+   */
+  private presentationOf(name: string, args: unknown): { presentation?: ToolCallPresentation } {
+    if (!this.presentCall) return {};
+    try {
+      const presentation = this.presentCall(name, args);
+      return presentation ? { presentation } : {};
+    } catch {
+      return {};
+    }
   }
 
   /** The id the live bridge gave a message of step `turn`/`step` (`dshSessionRuntime.ts`). */
@@ -751,6 +779,7 @@ export class DshHistoryFold {
           toolCallId: callId,
           name,
           input: toolRowInput(args),
+          ...this.presentationOf(name, args),
         });
         this.callOwner.set(callId, index);
         this.callNames.set(callId, name);
@@ -840,6 +869,9 @@ export class DshHistoryFold {
           id: partId(id, 'tool-call', callId),
           toolCallId: callId,
           name: this.callNames.get(callId) ?? 'tool',
+          ...(this.callNames.has(callId)
+            ? this.presentationOf(this.callNames.get(callId) as string, this.callArgs.get(callId))
+            : {}),
         },
         result,
       ],

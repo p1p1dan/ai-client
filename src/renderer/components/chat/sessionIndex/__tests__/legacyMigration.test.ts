@@ -1,6 +1,6 @@
 import { zhTranslations } from '@shared/i18n';
 import { PI_AGENT } from '@shared/types/agentWire';
-import type { LegacyMigrationSummary } from '@shared/types/legacyMigration';
+import { LEGACY_FORK_TITLE_KEY, type LegacyMigrationSummary } from '@shared/types/legacyMigration';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
@@ -15,6 +15,7 @@ import {
   LEGACY_MIGRATION_PROGRESS_DETAIL,
   LEGACY_MIGRATION_PROGRESS_TITLE,
   type MigratingResumeDeps,
+  noteForkTitleInStore,
   type ResumeSessionAnswer,
   type ResumeSessionArgs,
   resumeSessionWithMigration,
@@ -178,6 +179,7 @@ describe('applyLegacyMigrationSummary', () => {
     copyPreferences: vi.fn(),
     writePermissions: vi.fn(),
     notePostureSynced: vi.fn(),
+    noteForkTitle: vi.fn(),
   });
 
   it('copies the chat’s preferences to the key its legacy row now lives under', () => {
@@ -194,6 +196,7 @@ describe('applyLegacyMigrationSummary', () => {
       copyPreferences: vi.fn(() => void order.push('copy')),
       writePermissions: vi.fn(() => void order.push('write')),
       notePostureSynced: vi.fn(() => void order.push('note')),
+      noteForkTitle: vi.fn(() => void order.push('fork')),
     };
     applyLegacyMigrationSummary(
       's1',
@@ -222,6 +225,75 @@ describe('applyLegacyMigrationSummary', () => {
       expect(e.writePermissions, JSON.stringify(over)).not.toHaveBeenCalled();
       expect(e.notePostureSynced).not.toHaveBeenCalled();
     }
+  });
+
+  it('[D131-FORK-1] a chat moved over from a 1.0.x continuation takes the interim title Main gave it', () => {
+    const e = effects();
+    applyLegacyMigrationSummary('s1_pi', summary({ fork: { title: 'Notes（1.0.x 分支）' } }), e);
+    expect(e.noteForkTitle).toHaveBeenCalledWith('s1_pi', 'Notes（1.0.x 分支）');
+    // Reverse: an ordinary migration renames nothing.
+    const plain = effects();
+    applyLegacyMigrationSummary('s1', summary(), plain);
+    expect(plain.noteForkTitle).not.toHaveBeenCalled();
+  });
+});
+
+describe('noteForkTitleInStore (decision 131)', () => {
+  afterEach(() => {
+    useChatSessionsStore.setState({ sessions: [] });
+  });
+
+  it('[D131-FORK-2] the live row reads the interim title and waits for its first message', () => {
+    useChatSessionsStore.setState({
+      sessions: [
+        {
+          id: 's1',
+          projectId: 'p',
+          workspaceId: 'w',
+          title: 'Notes',
+          status: 'idle',
+          updatedAt: 1,
+        },
+        {
+          id: 's1_pi',
+          projectId: 'p',
+          workspaceId: 'w',
+          title: 'Notes',
+          status: 'idle',
+          updatedAt: 1,
+        },
+      ],
+    });
+    noteForkTitleInStore('s1_pi', 'Notes (1.0.x branch)');
+    const [original, fork] = useChatSessionsStore.getState().sessions;
+    expect(original).toMatchObject({ title: 'Notes' });
+    expect(original?.forkTitlePending).toBeUndefined();
+    expect(fork).toMatchObject({ title: 'Notes (1.0.x branch)', forkTitlePending: true });
+  });
+
+  it('[D131-FORK-3] reverse: an untitled chat keeps its placeholder, and still waits', () => {
+    useChatSessionsStore.setState({
+      sessions: [
+        {
+          id: 'x_pi',
+          projectId: 'p',
+          workspaceId: 'w',
+          title: 'Session x_pi',
+          status: 'idle',
+          updatedAt: 1,
+        },
+      ],
+    });
+    noteForkTitleInStore('x_pi', '');
+    expect(useChatSessionsStore.getState().sessions[0]).toMatchObject({
+      title: 'Session x_pi',
+      forkTitlePending: true,
+    });
+  });
+
+  it('[D131-FORK-4] the suffix has both languages, keyed by the constant Main words it with', () => {
+    expect(LEGACY_FORK_TITLE_KEY).toBe('{{title}} (1.0.x branch)');
+    expect(zhTranslations[LEGACY_FORK_TITLE_KEY]).toBe('{{title}}（1.0.x 分支）');
   });
 });
 

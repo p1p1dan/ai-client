@@ -27,6 +27,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
   applyAutoSessionTitle,
+  applyForkSessionTitle,
   createChatSessionInCurrentDirectory,
   createUnboundChatSession,
   stopChatSession,
@@ -1001,6 +1002,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // would have been a second, quieter way of pretending the turn never
       // happened.
       if (!isAdmittedOutcome(outcome)) return;
+      // dsh-rebase decision 131: a chat moved over from a 1.0.x continuation
+      // already has messages, but its first one HERE still names it. A no-op
+      // for every chat that is not waiting for that (`forkTitlePending`).
+      void applyForkSessionTitle(sessionId, text);
       if (hadUserMessage) return;
       void applyAutoSessionTitle(sessionId, text);
     },

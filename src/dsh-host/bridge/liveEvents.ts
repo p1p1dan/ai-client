@@ -40,6 +40,10 @@
  *                                       timeout promoted (P1-7c); live only, the
  *                                       value is never logged
  *   a running command's job output      tool.output, the tail (P1-7b, `jobs.ts`)
+ *   a plugin tool's complete call       its `tool.started` / `tool.updated` carry
+ *                                       the title the tool declares for it
+ *                                       (`presentCall`, decision 131); the
+ *                                       history fold asks the same presenter
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
  * `dsh-notice-<seq>`, `dsh-<session>-t<turn>-s<step>` — and the history
@@ -60,6 +64,7 @@ import {
   dshTurnHeadText,
   dshTurnOrigin,
 } from '../../shared/dshNotices.ts';
+import type { ToolCallPresentation } from '../../shared/dshToolPresentation.ts';
 import type { PiSessionUsage } from '../../shared/piTurnRollup.ts';
 import {
   buildPiInterimUsagePayload,
@@ -164,6 +169,12 @@ export interface DshLiveEventsHost {
   /** The command send a `command/done` settles, when it is one of ours. */
   commandSend(commandId: string): CommandSendView | undefined;
   now(): number;
+  /**
+   * Decision 131: the title a plugin tool declares for a call with these
+   * complete arguments (`toolPresentation.ts`); nothing for DSH's own tools.
+   * Absent: no row carries one.
+   */
+  presentCall?(name: string, args: unknown): ToolCallPresentation | undefined;
 }
 
 /** A send that carried a command line (P1-4d2): its request and the renderer's attempt. */
@@ -429,6 +440,19 @@ export class DshLiveEvents {
     this.host.emit(event);
   }
 
+  /**
+   * Decision 131: `{presentation}` for a call whose arguments are complete,
+   * when its tool declares a title; `{}` otherwise, and when asking throws.
+   */
+  private presentationOf(name: string, args: unknown): { presentation?: ToolCallPresentation } {
+    try {
+      const presentation = this.host.presentCall?.(name, args);
+      return presentation ? { presentation } : {};
+    } catch {
+      return {};
+    }
+  }
+
   private stepMessage(turn: number, step: number): StepMessage {
     const key = `${turn}:${step}`;
     let message = this.steps.get(key);
@@ -621,12 +645,19 @@ export class DshLiveEvents {
     };
     stream.settled = true;
     this.argStreams.set(id, stream);
+    const presentation = this.presentationOf(name, args);
     if (!this.startedTools.has(id)) {
       this.startedTools.add(id);
       this.toolStep.set(id, message.messageId);
       this.emit({
         type: 'tool.started',
-        payload: { messageId: message.messageId, toolCallId: id, name, input: toolRowInput(args) },
+        payload: {
+          messageId: message.messageId,
+          toolCallId: id,
+          name,
+          input: toolRowInput(args),
+          ...presentation,
+        },
       });
       this.flushExecStarted(id);
       return;
@@ -637,6 +668,7 @@ export class DshLiveEvents {
         messageId: this.toolStep.get(id) ?? message.messageId,
         toolCallId: id,
         input: toolRowInput(args),
+        ...presentation,
       },
     });
   }
@@ -881,7 +913,13 @@ export class DshLiveEvents {
       this.startedTools.add(callId);
       this.emit({
         type: 'tool.started',
-        payload: { messageId, toolCallId: callId, name, input: toolRowInput(args) },
+        payload: {
+          messageId,
+          toolCallId: callId,
+          name,
+          input: toolRowInput(args),
+          ...this.presentationOf(name, args),
+        },
       });
       this.flushExecStarted(callId);
       return;
@@ -894,6 +932,7 @@ export class DshLiveEvents {
         messageId: this.toolStep.get(callId) ?? messageId,
         toolCallId: callId,
         input: toolRowInput(args),
+        ...this.presentationOf(name, args),
       },
     });
   }

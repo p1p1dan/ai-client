@@ -3710,6 +3710,9 @@ Object.assign(zhTranslations, {
     '这个对话没能迁移到当前引擎，原因见对话里的提示。',
   'This chat was continued in version 1.0.x after it moved to the current engine. Continuing it here moves that newer copy over as a chat of its own.':
     '这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。在这里继续它，会把那份较新的内容迁成一个单独的对话。',
+  // Decision 131: such a copy, once moved, is called this until its first
+  // message here names it (`LEGACY_FORK_TITLE_KEY`).
+  '{{title}} (1.0.x branch)': '{{title}}（1.0.x 分支）',
 });
 
 // dsh-rebase P1-11 (decisions 109, 126, 128): the session bar's terminal button

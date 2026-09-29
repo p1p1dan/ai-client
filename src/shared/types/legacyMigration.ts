@@ -144,4 +144,19 @@ export interface LegacyMigrationSummary {
    * 1.0.x's `{...file, ...payload}` did. False when the renderer named one.
    */
   legacyPermissionsApplied: boolean;
+  /**
+   * Decision 131: the chat was a 1.0.x continuation of an already-migrated one
+   * (the `1.0.x` mark) and is now a chat of its own. Its row carries `title`
+   * (the original's, with the branch suffix) until the first message sent here
+   * names it (`SessionIndexEntry.forkTitlePending`). Absent for every other
+   * migration.
+   */
+  fork?: { title: string };
 }
+
+/**
+ * Decision 131: what a forked chat is called until its first message here
+ * names it — the original's title and this suffix. A dictionary key; Main
+ * words it in the app's language when it commits the migration.
+ */
+export const LEGACY_FORK_TITLE_KEY = '{{title}} (1.0.x branch)';

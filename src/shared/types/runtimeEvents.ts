@@ -4,6 +4,7 @@
  * See docs/plans/2026-07-23-openchamber-chat-refactor-ard.md §5.3 / §6
  */
 
+import type { ToolCallPresentation } from '../dshToolPresentation.ts';
 import type { AgentWireName } from './agentWire';
 import type {
   HistoryMessage,
@@ -369,6 +370,12 @@ export interface ToolStartedEvent extends RuntimeEventBase {
      * `tool.updated` replaces it.
      */
     input?: unknown;
+    /**
+     * dsh-rebase decision 131: the title a plugin tool declared for this call
+     * (its `presentCall`), once the arguments are complete. Never on a call to
+     * one of DSH's own tools; the row reads it (`deriveToolRowView`).
+     */
+    presentation?: ToolCallPresentation;
   };
 }
 
@@ -1091,6 +1098,12 @@ export interface ToolUpdatedEvent extends RuntimeEventBase {
      * revised `input`.
      */
     execStartedAt?: number;
+    /**
+     * dsh-rebase decision 131: the plugin tool's own title for the call, sent
+     * with the complete arguments when the row opened before they were
+     * (`ToolStartedEvent.payload.presentation`).
+     */
+    presentation?: ToolCallPresentation;
   };
 }
 

@@ -30,6 +30,7 @@ import { type DshBridgeModelPlan, DshModelRouter } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
 import { type SeedSessionDeps, seedSession } from './seedSession.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
+import { type DshToolRegistryView, dshToolPresenter } from './toolPresentation.ts';
 
 /** Stable Cordis plugin name. */
 export const name = 'aiclient-bridge';
@@ -95,6 +96,8 @@ interface BridgeRowContext extends DshBridgeContext {
   get(name: 'sessionPersistence'): GcPersistence | undefined;
   /** Decision 033: provided by host.ts from Main's `configure`. */
   get(name: 'aiclientModelPlan'): DshBridgeModelPlan | undefined;
+  /** Decision 131: the tool registry a preview asks a plugin call's title of. */
+  get(name: 'tools'): DshToolRegistryView | undefined;
   /** P1-15: DSH's model-call service (injected), as far as a completion uses it. */
   llm: CompletionLlm;
 }
@@ -170,8 +173,14 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
         request
       );
     },
-    // Decision 030: Main's preview, read without a channel.
-    readPage: (request) => readSessionPage(ctx.sessionQuery, request),
+    // Decision 030: Main's preview, read without a channel; a plugin call
+    // keeps the title its live row carried (decision 131).
+    readPage: (request) =>
+      readSessionPage(
+        ctx.sessionQuery,
+        request,
+        dshToolPresenter(() => ctx.get('tools'))
+      ),
     // Decision 054 (P1-9c): a legacy pi session made a DSH session, without a channel;
     // decision 056 (P1-9f): a Claude Code / Codex conversation, the same way.
     seedSession: (request) => {

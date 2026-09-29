@@ -499,3 +499,51 @@ export async function applyAutoSessionTitle(
     autoTitleInFlight.delete(sessionId);
   }
 }
+
+// Decision 131: its own dedup, for the same reason as `autoTitleInFlight`.
+const forkTitleInFlight = new Set<string>();
+
+/**
+ * dsh-rebase decision 131 (user ruling, decision 130: the two chats must be
+ * told apart, by what the user sends): a chat continued in 1.0.x after its first migration moves
+ * over as a chat of its own, with the original's title and a branch suffix
+ * (`LEGACY_FORK_TITLE_KEY`, Main's `commitMigrated`). The first message sent
+ * here names it — `deriveSessionTitleFromFirstMessage`, the new-chat rule, cut
+ * the same way — and a message with nothing to name it by (only an image,
+ * only symbols) leaves the suffixed title, which then stays.
+ *
+ * Only the first admitted message counts, as for a new chat: the rename
+ * clears `forkTitlePending` in Main whatever it wrote, and so does a rename
+ * the user made before sending — which is never overwritten here. Called for
+ * every admitted send (`maybeApplyFirstMessageTitle`); a no-op for any chat
+ * that is not waiting. A rename that fails leaves it waiting, so the next
+ * message tries again.
+ */
+export async function applyForkSessionTitle(sessionId: string, text: string): Promise<void> {
+  if (forkTitleInFlight.has(sessionId)) return;
+  const session = useChatSessionsStore.getState().sessions.find((item) => item.id === sessionId);
+  if (!session?.forkTitlePending) return;
+  // The interim title is kept when the message names nothing; writing it back
+  // is what ends the wait in Main.
+  const title = deriveSessionTitleFromFirstMessage(text) || session.title;
+  forkTitleInFlight.add(sessionId);
+  try {
+    await renameSessionIndexEntry(sessionId, title, async () => {
+      // Fresh read, as `applyAutoSessionTitle` does: a rename the user made
+      // while this one was in flight already ended the wait, and wins.
+      const current = useChatSessionsStore
+        .getState()
+        .sessions.find((item) => item.id === sessionId);
+      if (!current?.forkTitlePending) return;
+      useChatSessionsStore.setState((state) => ({
+        sessions: state.sessions.map((item) => {
+          if (item.id !== sessionId) return item;
+          const { forkTitlePending: _settled, ...rest } = item;
+          return { ...rest, title };
+        }),
+      }));
+    });
+  } finally {
+    forkTitleInFlight.delete(sessionId);
+  }
+}

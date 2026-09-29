@@ -76,7 +76,10 @@
  *      (AICLIENT_DSH_PLUGINS, decisions 108 and 110): `ready.plugins` reports
  *      it loaded, its eight tools reach the model, and a P0-OFFICE turn in
  *      `ask` runs its write tool (`word_create`, one card, answered allow)
- *      and its read tool (`word_read`, no card) in the workspace. Every other
+ *      and its read tool (`word_read`, no card) in the workspace. Both rows
+ *      carry the title the plugin declares for the call (`presentCall`,
+ *      decision 131), live and in `worker.history`; no row of DSH's own tools
+ *      in any host carries one. Every other
  *      host runs the allowlist's defaults, where the pilot is off: A reports
  *      it disabled and offers the model none of its tools (decision 115).
  *   J  (added by dsh-rebase P1-9c) 1.0.x pi sessions from the committed
@@ -508,6 +511,18 @@ async function main() {
         .filter((e) => e.type === 'permission.resolved')
         .map((e) => String(payloadOf(e).decision)),
       tools: events.filter((e) => e.type === 'tool.completed').map((e) => payloadOf(e)),
+      // Decision 131: the titles plugin calls declared (`presentCall`), in the order they came.
+      presentations: events
+        .filter(
+          (e) =>
+            (e.type === 'tool.started' || e.type === 'tool.updated') &&
+            payloadOf(e).presentation !== undefined
+        )
+        .map((e) => ({
+          type: e.type,
+          toolCallId: payloadOf(e).toolCallId,
+          presentation: payloadOf(e).presentation,
+        })),
       sessionIds: [...new Set(events.map((e) => e.sessionId))],
     };
     turns[label] = turn;
@@ -1102,6 +1117,16 @@ async function main() {
     report.pilotFile = existsSync(docx)
       ? { bytes: statSync(docx).size, head: readFileSync(docx).subarray(0, 2).toString('latin1') }
       : null;
+    // Decision 131: the reopened rows carry the titles the live ones did.
+    const pilotHistory = await pluginHost.client.request(chI, 'worker.history', {
+      logicalSessionId: PLUGIN_SESSION,
+    });
+    report.pilotHistoryTitles = (
+      ((pilotHistory.page as Message | undefined)?.messages as Message[] | undefined) ?? []
+    )
+      .flatMap((message) => (message.blocks as Message[] | undefined) ?? [])
+      .filter((block) => block.type === 'tool_call')
+      .map((block) => ({ name: block.name, presentation: block.presentation }));
     await closeSession(pluginHost, chI);
     await stopHost(pluginHost);
 
@@ -1403,6 +1428,7 @@ async function main() {
     tools?: Message[];
     completed?: boolean;
     permission?: Message;
+    presentations?: Array<{ type: string; toolCallId: unknown; presentation: Message }>;
   };
   const permDeny = turns['PERM-DENY'] as GateTurn | undefined;
   const permSession = turns['PERM-SESSION'] as GateTurn | undefined;
@@ -1785,6 +1811,36 @@ async function main() {
       String(pilotTurn?.tools?.[1]?.output).includes(PILOT_PARAGRAPH) &&
       pilotTurn?.completed === true &&
       exitOfHost('PLUGIN').code === 0,
+    // Decision 131: each office row carries the title the plugin declares
+    // for it — `Create …` for the write, `Read …` for the read, live and
+    // reopened alike — and no row of DSH's own tools carries one.
+    pilotRowsTitled:
+      JSON.stringify(
+        (pilotTurn?.presentations ?? []).map((entry) => [
+          entry.presentation.card,
+          entry.presentation.title,
+          entry.presentation.kind,
+        ])
+      ) ===
+        JSON.stringify([
+          ['generic', 'Create p0-report.docx', 'edit'],
+          ['generic', 'Read p0-report.docx', 'read'],
+        ]) &&
+      JSON.stringify(
+        ((report.pilotHistoryTitles as Message[] | undefined) ?? []).map((row) => [
+          row.name,
+          (row.presentation as Message | undefined)?.title,
+        ])
+      ) ===
+        JSON.stringify([
+          ['word_create', 'Create p0-report.docx'],
+          ['word_read', 'Read p0-report.docx'],
+        ]) &&
+      Object.values(turns).every((turn) =>
+        ((turn as GateTurn).presentations ?? []).every(
+          (entry) => turn === pilotTurn && entry.presentation !== undefined
+        )
+      ),
     // P1-9c (decision 054): each migration made a session whose preview is
     // the converter's timeline, under the pi entry ids...
     migratedAndPreviewed: ['basic', 'compaction', 'legacy-v3'].every(

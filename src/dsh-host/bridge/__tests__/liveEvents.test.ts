@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { projectDshHistory } from '../../../shared/dshHistory/projection.ts';
 import {
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_TURN_CEILING_REASON,
   type DshLogEvent,
 } from '../../../shared/dshHistory/types.ts';
+import type { ToolCallPresentation } from '../../../shared/dshToolPresentation.ts';
 import { readPiUsagePayload } from '../../../shared/piUsage.ts';
 import { TURN_CEILING_CANCEL_REASON } from '../../loopGuard/constants.ts';
 import {
@@ -42,6 +43,8 @@ function harness(
     steered?: Map<string, { attemptId: string }>;
     /** P1-4d2: a command send waiting for its `command/run`. */
     command?: CommandSendView;
+    /** Decision 131: the plugin-title presenter the runtime hands in. */
+    presentCall?: (name: string, args: unknown) => ToolCallPresentation | undefined;
   } = {}
 ) {
   const events: Emitted[] = [];
@@ -84,6 +87,7 @@ function harness(
     },
     commandSend: (commandId) => commands.get(commandId),
     now: () => clock,
+    ...(options.presentCall ? { presentCall: options.presentCall } : {}),
   });
   const durable = (type: string, data: Record<string, unknown>) => {
     seq += 1;
@@ -223,6 +227,122 @@ describe('DshLiveEvents — streaming tool arguments (decision 099 rule 14)', ()
       name: 'bash',
       input: { command: 'ls' },
     });
+  });
+});
+
+describe('DshLiveEvents — a plugin call names itself (decision 131)', () => {
+  const OFFICE_ARGS = '{"path":"out/report.docx","title":"Q3"}';
+  /** As `dshToolPresenter` answers: DSH's own tools never, the office plugin's by its `presentCall`. */
+  const presentCall = vi.fn((name: string, args: unknown): ToolCallPresentation | undefined =>
+    name === 'word_create'
+      ? {
+          card: 'generic',
+          title: `Create ${(args as { path: string }).path}`,
+          kind: 'edit',
+        }
+      : undefined
+  );
+  const TITLE: ToolCallPresentation = {
+    card: 'generic',
+    title: 'Create out/report.docx',
+    kind: 'edit',
+  };
+
+  it('[D131-LIVE-1] streamed: the row opens on the size alone and takes the title with the complete arguments', () => {
+    const h = harness({ presentCall });
+    h.frame({ type: 'start', attemptId: 'att-1', turn: 1, step: 1 });
+    h.chunk({
+      type: 'tool-call-delta',
+      index: 0,
+      id: 'c1',
+      name: 'word_create',
+      argumentsDelta: '{"path":"out/',
+    });
+    h.chunk({
+      type: 'block-end',
+      index: 0,
+      block: { type: 'tool-call', id: 'c1', name: 'word_create', arguments: OFFICE_ARGS },
+    });
+    const [started, updated] = h.events.slice(1);
+    expect(started?.type).toBe('tool.started');
+    expect(started?.payload).not.toHaveProperty('presentation');
+    expect(updated).toMatchObject({
+      type: 'tool.updated',
+      payload: { toolCallId: 'c1', presentation: TITLE },
+    });
+    // The durable call carries the same arguments: nothing more to send.
+    h.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c1',
+      name: 'word_create',
+      arguments: OFFICE_ARGS,
+    });
+    expect(h.of('tool.updated')).toHaveLength(1);
+  });
+
+  it('[D131-LIVE-2] a call the stream never named gets the title on the row the durable call opens, as the history does', () => {
+    const h = harness({ presentCall });
+    h.durable('assistant/message', {
+      turn: 1,
+      step: 1,
+      message: {
+        id: 'a1',
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: 'c9', name: 'word_create', arguments: OFFICE_ARGS }],
+      },
+    });
+    h.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c9',
+      name: 'word_create',
+      arguments: OFFICE_ARGS,
+    });
+    expect(h.of('tool.started')[0]?.payload).toMatchObject({
+      toolCallId: 'c9',
+      name: 'word_create',
+      presentation: TITLE,
+    });
+    const replayed = projectDshHistory(h.log, { presentCall })[0]?.blocks[0] as {
+      presentation?: unknown;
+    };
+    expect(replayed.presentation).toEqual(h.of('tool.started')[0]?.payload.presentation);
+  });
+
+  it("[D131-LIVE-3] reverse: DSH's own tools, and a runtime with no presenter, carry none", () => {
+    const h = harness({ presentCall });
+    h.durable('tool/call', { turn: 1, step: 1, callId: 'c1', name: 'bash', arguments: '{}' });
+    expect(h.of('tool.started')[0]?.payload).not.toHaveProperty('presentation');
+    const bare = harness();
+    bare.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c2',
+      name: 'word_create',
+      arguments: OFFICE_ARGS,
+    });
+    expect(bare.of('tool.started')[0]?.payload).not.toHaveProperty('presentation');
+  });
+
+  it('[D131-LIVE-4] a presenter that throws costs the title, never the row', () => {
+    const h = harness({
+      presentCall: () => {
+        throw new Error('plugin bug');
+      },
+    });
+    h.durable('tool/call', {
+      turn: 1,
+      step: 1,
+      callId: 'c1',
+      name: 'word_create',
+      arguments: OFFICE_ARGS,
+    });
+    expect(h.of('tool.started')[0]?.payload).toMatchObject({
+      toolCallId: 'c1',
+      input: { path: 'out/report.docx', title: 'Q3' },
+    });
+    expect(h.of('tool.started')[0]?.payload).not.toHaveProperty('presentation');
   });
 });
 

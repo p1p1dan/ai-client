@@ -109,6 +109,15 @@ export interface SessionIndexEntry {
    * its chat continues under as a DSH session. Written by the migration only.
    */
   migratedTo?: string;
+  /**
+   * dsh-rebase decision 131 (user ruling, decision 130): this `dsh` row is a
+   * chat continued in 1.0.x after its first migration, migrated again as a
+   * chat of its own (the `1.0.x` mark, decision 123 rule 13). The migration
+   * gave it the original's title with a branch suffix; the first message sent
+   * here names it instead, as a new chat's first message does. Cleared by any
+   * rename. Written only when true.
+   */
+  forkTitlePending?: true;
 }
 
 /** Where a migrated chat came from (decision 051); the source as the host read it. */

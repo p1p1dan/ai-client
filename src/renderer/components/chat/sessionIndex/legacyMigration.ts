@@ -22,6 +22,8 @@ import { willMigrateOnResume } from './resumeIntent';
  *  - on success with a `migration` summary, the chat's stored preferences are
  *    copied to the key its legacy row now lives under (decision 051 rule 3),
  *    and the posture Main fell back to is written where the chip reads it;
+ *    a chat moved over from a 1.0.x continuation (`fork`, decision 131) takes
+ *    the interim title Main gave its row, until its first message names it;
  *  - a failure is left to the caller, which files it on the history card.
  *
  * Every other engine operation on a chat that is still legacy is refused with
@@ -37,12 +39,30 @@ export interface LegacyMigrationSummaryEffects {
   copyPreferences: (fromSessionId: string, toSessionId: string) => unknown;
   writePermissions: typeof writeSessionPermissions;
   notePostureSynced: (sessionId: string) => void;
+  /** Decision 131: the forked chat's row now reads `title` and waits for its first message. */
+  noteForkTitle: (sessionId: string, title: string) => void;
+}
+
+/**
+ * Decision 131: the live row takes what Main just wrote to the index (the
+ * interim title, the pending mark), so the sidebar tells the two chats apart
+ * before the next index refresh would.
+ */
+export function noteForkTitleInStore(sessionId: string, title: string): void {
+  useChatSessionsStore.setState((state) => ({
+    sessions: state.sessions.map((session) =>
+      session.id === sessionId
+        ? { ...session, ...(title ? { title } : {}), forkTitlePending: true as const }
+        : session
+    ),
+  }));
 }
 
 const defaultSummaryEffects = (): LegacyMigrationSummaryEffects => ({
   copyPreferences: copySessionPreferences,
   writePermissions: writeSessionPermissions,
   notePostureSynced: (sessionId) => useLegacyMigrationStore.getState().notePostureSynced(sessionId),
+  noteForkTitle: noteForkTitleInStore,
 });
 
 /**
@@ -62,6 +82,7 @@ export function applyLegacyMigrationSummary(
     effects.writePermissions(sessionId, summary.legacyPermissions);
     effects.notePostureSynced(sessionId);
   }
+  if (summary.fork) effects.noteForkTitle(sessionId, summary.fork.title);
 }
 
 export interface MigratingResumeDeps {

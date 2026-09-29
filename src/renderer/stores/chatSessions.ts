@@ -1,6 +1,8 @@
 // Leaf module (no value imports of its own, decision 106 rule 2): the DSH
 // notice table the bridge and the history projection read too.
 import { dshNoticeKindOf } from '@shared/dshNotices';
+// Leaf module too (no imports at all): a plugin call's own title (decision 131).
+import { sameToolCallPresentation, type ToolCallPresentation } from '@shared/dshToolPresentation';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   PermissionAskReason,
@@ -168,6 +170,14 @@ export interface ChatSession {
    */
   legacyDiverged?: true;
   /**
+   * dsh-rebase decision 131 (optional-field addition): such a copy, moved over
+   * as a chat of its own, still carries its interim title (the original's with
+   * a branch suffix); the first message sent here names it
+   * (`applyForkSessionTitle`). Set from the index row by `mergeSessionIndex`
+   * and from the migration's answer; cleared by any rename.
+   */
+  forkTitlePending?: true;
+  /**
    * a1 (2026-07-30 net-visibility batch, optional-field addition): the CLI's
    * own transport-retry loop, when session.status last carried one. Cleared
    * (set back to undefined) on every session.status WITHOUT a retry payload
@@ -260,6 +270,12 @@ export interface ChatBlock {
    * carries no such stamp.
    */
   toolExecStartedAt?: number;
+  /**
+   * dsh-rebase decision 131: the title a plugin tool declared for this call
+   * (`presentCall`), off `tool.started` / `tool.updated` live and off the
+   * history block on replay. Absent on every call to one of DSH's own tools.
+   */
+  toolPresentation?: ToolCallPresentation;
   toolOk?: boolean;
   toolOutput?: unknown;
   permissionId?: string;
@@ -920,6 +936,8 @@ function mapHistoryBlock(block: HistoryMessage['blocks'][number]): ChatBlock | n
         toolCallId: block.toolCallId,
         toolName: block.name,
         toolInput: block.input,
+        // Decision 131: the title the live row carried, asked again on replay.
+        ...(block.presentation ? { toolPresentation: block.presentation } : {}),
       };
     case 'tool_result':
       return {
@@ -1489,6 +1507,7 @@ function applyRuntimeEventCore(
             toolCallId: event.payload.toolCallId,
             toolName: event.payload.name,
             toolInput: event.payload.input,
+            ...(event.payload.presentation ? { toolPresentation: event.payload.presentation } : {}),
           },
         ],
       };
@@ -1503,7 +1522,9 @@ function applyRuntimeEventCore(
       // nothing to do" gate below.
       const hasInput = event.payload.input !== undefined;
       const hasExecStartedAt = event.payload.execStartedAt !== undefined;
-      if (!hasInput && !hasExecStartedAt) return {};
+      // Decision 131: a plugin call's title rides with its complete arguments.
+      const hasPresentation = event.payload.presentation !== undefined;
+      if (!hasInput && !hasExecStartedAt && !hasPresentation) return {};
       const bucket = state.messages[sessionId] ?? [];
       const existing = bucket.find((item) => item.id === event.payload.messageId);
       if (!existing) return {};
@@ -1516,12 +1537,16 @@ function applyRuntimeEventCore(
       const inputChanged = hasInput && !sameToolInput(current.toolInput, event.payload.input);
       const execStartedAtChanged =
         hasExecStartedAt && current.toolExecStartedAt !== event.payload.execStartedAt;
-      if (!inputChanged && !execStartedAtChanged) return {};
+      const presentationChanged =
+        hasPresentation &&
+        !sameToolCallPresentation(current.toolPresentation, event.payload.presentation);
+      if (!inputChanged && !execStartedAtChanged && !presentationChanged) return {};
       const blocks = [...existing.blocks];
       blocks[blockIndex] = {
         ...current,
         ...(inputChanged ? { toolInput: event.payload.input } : {}),
         ...(execStartedAtChanged ? { toolExecStartedAt: event.payload.execStartedAt } : {}),
+        ...(presentationChanged ? { toolPresentation: event.payload.presentation } : {}),
       };
       return {
         messages: withBucket(state, sessionId, upsertMessage(bucket, { ...existing, blocks })),

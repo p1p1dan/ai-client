@@ -233,6 +233,29 @@ describe('P1-9e — migrated chats and their legacy rows', () => {
     ).sessions;
     expect(plain[0]).toMatchObject({ agent: PI_AGENT, runtimeIdentity: PI_FILE });
   });
+
+  it('[D131-MERGE] a forked chat waits for its first message until a rename clears the mark', () => {
+    const forked = entry('s1_pi', {
+      agent: DSH_AGENT,
+      runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1_pi.dsh.json',
+      title: 'Notes (1.0.x branch)',
+      forkTitlePending: true,
+    });
+    const fresh = mergeSessionIndex([], [forked], { workspaces }).sessions;
+    expect(fresh[0]).toMatchObject({ title: 'Notes (1.0.x branch)', forkTitlePending: true });
+    const live = mergeSessionIndex(fresh, [forked], { workspaces }).sessions;
+    expect(live[0].forkTitlePending).toBe(true);
+    // Renamed (by its first message, or by the user): Main lists it without the mark.
+    const { forkTitlePending: _cleared, ...renamed } = forked;
+    const settled = mergeSessionIndex(live, [{ ...renamed, title: 'Ship the fix' }], {
+      workspaces,
+    }).sessions;
+    expect(settled[0]).toMatchObject({ title: 'Ship the fix' });
+    expect(settled[0].forkTitlePending).toBeUndefined();
+    // Reverse: an ordinary row never carries it.
+    const plain = mergeSessionIndex([], [entry('s2', { agent: DSH_AGENT })], { workspaces });
+    expect('forkTitlePending' in (plain.sessions[0] ?? {})).toBe(false);
+  });
 });
 
 describe('the runtime echo reaches the live row', () => {

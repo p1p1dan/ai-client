@@ -33,10 +33,12 @@
  */
 
 import { stat } from 'node:fs/promises';
+import { translate } from '@shared/i18n';
 import { DSH_AGENT, PI_AGENT } from '@shared/types/agentWire';
 import type { DshHostSeeded, DshSeedSessionResult } from '@shared/types/dshHostProtocol';
 import {
   formatLegacyMigrationFailure,
+  LEGACY_FORK_TITLE_KEY,
   LEGACY_MIGRATION_FAILED,
   LEGACY_MIGRATION_MAIN_CODES,
   type LegacyMigrationFailure,
@@ -45,6 +47,7 @@ import {
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { type DshHostSeedInput, dshHostSupervisor } from '../agent-host/DshHostSupervisor';
+import { getCurrentLocale } from '../i18n';
 import { type SessionMigrationCommit, sessionIndexService } from './SessionIndexService';
 
 /** The host's `read` stage codes Main also answers from its own stat. */
@@ -79,6 +82,16 @@ export interface LegacyMigrationServiceOptions {
   retryDelaysMs?: readonly number[];
   now?: () => number;
   log?: Pick<Console, 'info' | 'warn'>;
+  /**
+   * Decision 131: what a forked chat is called until its first message names
+   * it; the original's title with the branch suffix, in the app's language.
+   */
+  forkTitle?: (title: string) => string;
+}
+
+/** Decision 131: the original's title and the branch suffix, worded in the app's language now. */
+export function legacyForkTitle(title: string): string {
+  return translate(getCurrentLocale(), LEGACY_FORK_TITLE_KEY, { title });
 }
 
 /** An indexed row with a durable identity, as the resume path holds it. */
@@ -166,6 +179,7 @@ export class LegacyMigrationService {
   private readonly retryDelaysMs: readonly number[];
   private readonly now: () => number;
   private readonly log: Pick<Console, 'info' | 'warn'>;
+  private readonly forkTitle: (title: string) => string;
   private readonly flights = new Map<string, Promise<LegacyMigrationOutcome>>();
 
   constructor(options: LegacyMigrationServiceOptions = {}) {
@@ -181,6 +195,7 @@ export class LegacyMigrationService {
     this.retryDelaysMs = options.retryDelaysMs ?? LEGACY_MIGRATION_RETRY_DELAYS_MS;
     this.now = options.now ?? (() => Date.now());
     this.log = options.log ?? console;
+    this.forkTitle = options.forkTitle ?? legacyForkTitle;
   }
 
   /**
@@ -254,6 +269,7 @@ export class LegacyMigrationService {
           mtimeMs: result.source.mtimeMs,
         },
         converterVersion: result.report.converterVersion,
+        forkTitle: this.forkTitle,
       });
     } catch (error) {
       const failure = indexFailure(error);
@@ -285,6 +301,8 @@ export class LegacyMigrationService {
         images: { admitted: result.images.admitted, refused: result.images.refused },
         grants: result.grants,
         legacyPermissions: result.legacyPermissions,
+        // Decision 131: a forked chat's interim title, for the renderer's row.
+        ...(committed.forkTitlePending ? { fork: { title: committed.title } } : {}),
       },
     };
   }

@@ -3,6 +3,7 @@ import { resolveSendCwd } from '@/components/chat/composerTarget';
 import { decideSendPreamble } from '@/components/chat/sendPreamble';
 import {
   applyAutoSessionTitle,
+  applyForkSessionTitle,
   createChatSessionInCurrentDirectory,
   createChatSessionOnWorkspace,
   createOrReuseChatSessionOnWorkspace,
@@ -1238,4 +1239,128 @@ describe('/new inherits only the directory', () => {
   });
   it('refuses a send before the running event', () =>
     expect(createChatSessionInCurrentDirectory(true)).toBeNull());
+});
+
+/**
+ * dsh-rebase decision 131 (user ruling, decision 130): a chat continued in
+ * 1.0.x after its first migration moves over as a chat of its own, with the
+ * original's title and a branch suffix; the first message sent here names it,
+ * by the new-chat rule, or the suffixed title stays.
+ */
+describe('applyForkSessionTitle (decision 131)', () => {
+  function stubRenameSession(renameSession: (args: unknown) => Promise<boolean>) {
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { chat: { renameSession } },
+    } as unknown as typeof globalThis.window;
+  }
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  const fork = (over: Partial<ChatSession> = {}) =>
+    makeSession({
+      id: 's1_pi',
+      title: 'Plan the release（1.0.x 分支）',
+      forkTitlePending: true,
+      ...over,
+    });
+
+  it('[D131-TITLE-1] names the chat from its first message here, cut as a new chat’s is, and ends the wait', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    useChatSessionsStore.setState({
+      sessions: [makeSession({ id: 's1', title: 'Plan the release' }), fork()],
+    });
+
+    await applyForkSessionTitle('s1_pi', '1. Ship the fix for the Windows installer. Then tag it.');
+
+    expect(renameSession).toHaveBeenCalledWith({
+      sessionId: 's1_pi',
+      title: 'Ship the fix for the Windows installer',
+    });
+    const [original, forked] = useChatSessionsStore.getState().sessions;
+    expect(forked?.title).toBe('Ship the fix for the Windows installer');
+    expect(forked?.forkTitlePending).toBeUndefined();
+    // The chat it forked from keeps its name.
+    expect(original?.title).toBe('Plan the release');
+  });
+
+  it('[D131-TITLE-2] a message with nothing to name it by keeps the suffixed title, and still ends the wait', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    useChatSessionsStore.setState({ sessions: [fork()] });
+
+    await applyForkSessionTitle('s1_pi', '👍 !!!');
+
+    // Writing the interim title back is what clears the mark in Main.
+    expect(renameSession).toHaveBeenCalledWith({
+      sessionId: 's1_pi',
+      title: 'Plan the release（1.0.x 分支）',
+    });
+    const [forked] = useChatSessionsStore.getState().sessions;
+    expect(forked?.title).toBe('Plan the release（1.0.x 分支）');
+    expect(forked?.forkTitlePending).toBeUndefined();
+  });
+
+  it('[D131-TITLE-3] reverse: a chat that is not waiting is never renamed, however it is titled', async () => {
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    useChatSessionsStore.setState({
+      sessions: [
+        makeSession({ id: 'plain', title: 'Plan the release' }),
+        fork({ id: 'renamed', title: 'My own name', forkTitlePending: undefined }),
+      ],
+    });
+
+    await applyForkSessionTitle('plain', 'Something else entirely');
+    await applyForkSessionTitle('renamed', 'Something else entirely');
+    await applyForkSessionTitle('missing', 'Something else entirely');
+
+    expect(renameSession).not.toHaveBeenCalled();
+    expect(useChatSessionsStore.getState().sessions.map((item) => item.title)).toEqual([
+      'Plan the release',
+      'My own name',
+    ]);
+  });
+
+  it('[D131-TITLE-4] a rename that fails leaves the chat waiting, so the next message tries again', async () => {
+    stubRenameSession(vi.fn().mockResolvedValue(false));
+    useChatSessionsStore.setState({ sessions: [fork()] });
+
+    await applyForkSessionTitle('s1_pi', 'Ship the fix');
+
+    expect(useChatSessionsStore.getState().sessions[0]).toMatchObject({
+      title: 'Plan the release（1.0.x 分支）',
+      forkTitlePending: true,
+    });
+
+    const renameSession = vi.fn().mockResolvedValue(true);
+    stubRenameSession(renameSession);
+    await applyForkSessionTitle('s1_pi', 'Ship the fix');
+    expect(renameSession).toHaveBeenCalledWith({ sessionId: 's1_pi', title: 'Ship the fix' });
+  });
+
+  it('[D131-TITLE-5] a rename the user made meanwhile wins over the message', async () => {
+    let settle: (ok: boolean) => void = () => undefined;
+    stubRenameSession(
+      vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            settle = resolve;
+          })
+      )
+    );
+    useChatSessionsStore.setState({ sessions: [fork()] });
+
+    const pending = applyForkSessionTitle('s1_pi', 'Ship the fix');
+    // The user's rename landed first: the index refresh cleared the mark.
+    useChatSessionsStore.setState({
+      sessions: [fork({ title: 'Release notes', forkTitlePending: undefined })],
+    });
+    settle(true);
+    await pending;
+
+    expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('Release notes');
+  });
 });

@@ -184,6 +184,13 @@ export interface SessionMigrationCommit {
   workspacePath: string;
   source: { sha256: string; bytes: number; mtimeMs: number };
   converterVersion: number;
+  /**
+   * Decision 131: the title a forked chat carries until its first message
+   * names it, from the original's (`LEGACY_FORK_TITLE_KEY` in the app's
+   * language). Read only when the row being migrated is the kept legacy row
+   * of an already-migrated chat; without it the title stays as it was.
+   */
+  forkTitle?: (title: string) => string;
 }
 
 /**
@@ -344,6 +351,8 @@ export class SessionIndexService {
           // from the legacy row it keeps for a rollback, nor that row off from it.
           ...(existing?.migratedFrom ? { migratedFrom: existing.migratedFrom } : {}),
           ...(existing?.migratedTo ? { migratedTo: existing.migratedTo } : {}),
+          // Decision 131: nor end a forked chat's wait for its first message.
+          ...(existing?.forkTitlePending ? { forkTitlePending: true as const } : {}),
         },
         existing
       );
@@ -456,6 +465,13 @@ export class SessionIndexService {
    * The row must still be the `pi` row naming `legacyRuntimeIdentity`, and the
    * key must be free (`SessionIndexMigrationConflict`); the same commit done
    * again answers the row it made. A failed write restores both rows.
+   *
+   * Decision 131: when the row is itself the kept legacy row of a chat that
+   * migrated before (another `dsh` row's `migratedFrom` names this key — a
+   * chat 1.0.x continued after a rollback, the `1.0.x` mark), the chat it
+   * becomes is a chat of its own and must not read as the original: it takes
+   * `forkTitle(title)` and `forkTitlePending`, which its first message here
+   * replaces (`rename`). The original keeps its title.
    */
   async commitMigrated(input: SessionMigrationCommit): Promise<SessionIndexEntry> {
     await this.ensureLoaded();
@@ -492,8 +508,16 @@ export class SessionIndexService {
       };
       const { piLeaf: _leaf, migratedTo: _to, ...carried } = existing;
       const at = now();
+      const forked = [...this.entries.values()].some(
+        (entry) =>
+          entry.agent === DSH_AGENT && entry.migratedFrom?.legacySessionId === input.sessionId
+      );
+      const forkTitle =
+        forked && existing.title && input.forkTitle ? input.forkTitle(existing.title) : undefined;
       const migrated: SessionIndexEntry = {
         ...carried,
+        ...(forkTitle ? { title: forkTitle } : {}),
+        ...(forked ? { forkTitlePending: true as const } : {}),
         sessionId: input.sessionId,
         agent: DSH_AGENT,
         runtimeIdentity: input.stubFile,
@@ -698,12 +722,18 @@ export class SessionIndexService {
     });
   }
 
+  /**
+   * Any rename settles the title, so it ends a forked chat's wait for its
+   * first message too (decision 131): a name the user gave must not be
+   * replaced by that message afterwards.
+   */
   async rename(sessionId: string, title: string): Promise<boolean> {
     await this.ensureLoaded();
     return this.queueMutation(async () => {
       const existing = this.entries.get(sessionId);
       if (!existing) return false;
-      this.entries.set(sessionId, { ...existing, title, updatedAt: now() });
+      const { forkTitlePending: _pending, ...rest } = existing;
+      this.entries.set(sessionId, { ...rest, title, updatedAt: now() });
       try {
         await this.flush();
       } catch (error) {

@@ -10,12 +10,15 @@
  * this host has the session open, otherwise a cold read that holds only a
  * short read handle and closes an interrupted last turn in memory, never on
  * disk. The projection and the paging are the bridge cache's own
- * (`historyCache.ts`), so a preview shows what a resume would.
+ * (`historyCache.ts`), so a preview shows what a resume would — a plugin
+ * call's title included (decision 131), asked of the registry's global view:
+ * no agent of the session is open here.
  */
 
 import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
+import type { DshToolPresenter } from '../../shared/dshToolPresentation.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import { mapOpenError } from './dshSessionRuntime.ts';
 import type { DshSessionObservation, DshSessionQuery } from './historyCache.ts';
@@ -30,7 +33,8 @@ export interface ReadPageRequest {
 
 export async function readSessionPage(
   query: DshSessionQuery,
-  request: ReadPageRequest
+  request: ReadPageRequest,
+  presentCall?: DshToolPresenter
 ): Promise<SessionHistoryPage> {
   const stub = readStub(request.stubFile);
   if (stub.logicalSessionId !== request.logicalSessionId) {
@@ -47,7 +51,10 @@ export async function readSessionPage(
   }
   try {
     // Named like the cache's rows (P1-4d1), so a preview page equals a resumed one.
-    const fold = new DshHistoryFold({ liveSessionId: stub.dshSessionId });
+    const fold = new DshHistoryFold({
+      liveSessionId: stub.dshSessionId,
+      ...(presentCall ? { presentCall } : {}),
+    });
     for (const event of observation.events) fold.push(event);
     return paginateHistory(fold.messages(), request.offset, request.limit);
   } finally {

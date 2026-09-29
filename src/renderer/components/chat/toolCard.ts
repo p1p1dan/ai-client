@@ -1,3 +1,4 @@
+import { isDshBuiltinTool, type ToolCallPresentation } from '@shared/dshToolPresentation';
 import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { readStreamingToolArgs } from '@shared/streamingToolArgs';
@@ -74,6 +75,12 @@ export interface ToolRun {
    */
   execStartedAtMs?: number;
   /**
+   * dsh-rebase decision 131: the title a plugin tool declared for this call
+   * (`presentCall`), off the block's `toolPresentation`. The row prefers it
+   * over the vocabulary for any tool that is not one of DSH's own.
+   */
+  presentation?: ToolCallPresentation;
+  /**
    * FB7: the RESOLVED `permission_request` block whose decision settled this
    * call, attached by `joinResolvedPermissions` (never by `pairToolBlocks` --
    * the pairing layer only ever sees one message, and the join's search domain
@@ -119,6 +126,7 @@ export function pairToolBlocks(blocks: readonly ChatBlock[]): ToolRun[] {
       ...(typeof block.toolExecStartedAt === 'number'
         ? { execStartedAtMs: block.toolExecStartedAt }
         : {}),
+      ...(block.toolPresentation ? { presentation: block.toolPresentation } : {}),
       ...(result?.toolOutput && typeof result.toolOutput === 'object'
         ? { result: result.toolOutput }
         : {}),
@@ -455,6 +463,16 @@ export interface ToolRowView {
    */
   verb: string;
   /**
+   * dsh-rebase decision 131: a plugin tool's own title for the call
+   * (`Create report.docx`), painted verbatim in place of the verb and the
+   * argument — the title already says both, in the plugin's words, which are
+   * never translated (decision 073 rule 1). `verb` still names the operation
+   * for every reader that words the row itself (the turn's live clause).
+   * Absent on every other row, including a plugin command's (`terminal`
+   * card), which reads as a shell row: 「终端」 + its command.
+   */
+  title?: string;
+  /**
    * Which icon leads the row (decision 034). Optional: a view built outside
    * `deriveToolRowView` — the delegation panel's own rows — falls back to the
    * generic tool mark rather than claiming a type it did not classify.
@@ -642,13 +660,18 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // holds for a call the runtime refused or never started (N5). A stopped one
   // did run (T130), so it keeps the done form: "Ran sleep 30 · Stopped".
   const neverRan = outcome === 'refused' || outcome === 'notStarted';
-  const verb = toolVerb(
-    run.toolName,
-    toolRunWasRefused(run) || neverRan ? 'refused' : running ? 'running' : 'done',
-    run.input
-  );
-  const argDetail = formatToolArgDetail(run, options);
-  const argRef = deriveToolArgRef(run);
+  const verbState: ToolVerbState =
+    toolRunWasRefused(run) || neverRan ? 'refused' : running ? 'running' : 'done';
+  // Decision 131: a plugin call that declared its own title reads by it.
+  const presentation = pluginToolPresentation(run);
+  const verb =
+    presentation?.card === 'terminal'
+      ? PRESENTED_COMMAND_VERBS[verbState]
+      : toolVerb(run.toolName, verbState, run.input);
+  const argDetail = presentation
+    ? presentedArgDetail(presentation)
+    : formatToolArgDetail(run, options);
+  const argRef = presentation ? undefined : deriveToolArgRef(run);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
 
@@ -728,7 +751,10 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   return {
     key: run.blockId,
     verb,
-    iconKind: toolIconKind(run.toolName),
+    ...(presentation && presentation.card !== 'terminal' ? { title: presentation.title } : {}),
+    iconKind: presentation
+      ? presentedIconKind(presentation, run.toolName)
+      : toolIconKind(run.toolName),
     arg: argDetail?.text,
     argKind: argDetail?.kind,
     ...(argRef ? { argRef } : {}),
@@ -1484,6 +1510,66 @@ export const UNKNOWN_TOOL_VERB: ToolVerbs = {
  * another process, and the row already names which one in its argument.
  */
 export const MCP_TOOL_VERB: ToolVerbs = { done: 'Called', running: 'Calling', refused: 'Call' };
+
+/**
+ * dsh-rebase decision 131 (decision 073 rule 1, decision 120 item 27): the
+ * title a plugin tool declared for a call, when the row should read by it —
+ * never for one of DSH's own tools, whose rows are P1-7c's vocabulary even if
+ * something handed them a presentation.
+ *
+ * It outranks the vocabulary for a tool that has an entry too (the office
+ * plugin's 「读取」 / 「编辑」, decision 120 rule 10): the user asked for the
+ * plugin's own title (decision 130), and the entry stays as the reading of a
+ * call that carries none — a session read by a host with the plugin switched
+ * off, or one from before decision 131.
+ */
+export function pluginToolPresentation(
+  run: Pick<ToolRun, 'toolName' | 'presentation'>
+): ToolCallPresentation | undefined {
+  const presentation = run.presentation;
+  if (!presentation || isDshBuiltinTool(run.toolName)) return undefined;
+  return typeof presentation.title === 'string' && presentation.title.trim() !== ''
+    ? presentation
+    : undefined;
+}
+
+/** A plugin's command (a `terminal` card) reads as a shell row: 「终端」 + the command. */
+const PRESENTED_COMMAND_VERBS: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
+
+/**
+ * Decision 131: which icon a presented call wears — its card, then its
+ * category (DSH's `ToolCallKind`, "used by a UI to pick an icon"). A category
+ * that says nothing (`other`, or none) keeps the tool's own icon.
+ */
+export function presentedIconKind(
+  presentation: ToolCallPresentation,
+  toolName: string
+): ToolIconKind {
+  if (presentation.card === 'terminal') return 'terminal';
+  if (presentation.card === 'diff') return 'edit';
+  switch (presentation.kind) {
+    case 'read':
+      return 'read';
+    case 'edit':
+    case 'delete':
+    case 'move':
+      return 'edit';
+    case 'search':
+      return 'search';
+    case 'execute':
+      return 'terminal';
+    case 'fetch':
+      return 'web';
+    default:
+      return toolIconKind(toolName);
+  }
+}
+
+/** A presented command's argument is its summary, as a shell row's is; a titled row has none. */
+function presentedArgDetail(presentation: ToolCallPresentation): ToolArgDetail | undefined {
+  if (presentation.card !== 'terminal') return undefined;
+  return { text: commandSummary(presentation.title), kind: 'ident' };
+}
 
 /**
  * The row's verb key. `input` is optional and read by two DSH tools only:
@@ -2443,6 +2529,15 @@ export function toolRowPermissionClass(): string {
  */
 export function toolRowPermissionNoteClass(): string {
   return 'min-w-0 truncate';
+}
+
+/**
+ * dsh-rebase decision 131: a plugin's title stands where the verb and the
+ * argument would — the verb's tone (it leads the row), the argument's
+ * truncation (a plugin wrote it, and a path inside it can be long).
+ */
+export function toolRowTitleClass(view: Pick<ToolRowView, 'failed'>): string {
+  return cn('min-w-0 truncate', !view.failed && 'group-hover/row:text-foreground');
 }
 
 export function toolRowArgClass(view: Pick<ToolRowView, 'failed' | 'argKind'>): string {

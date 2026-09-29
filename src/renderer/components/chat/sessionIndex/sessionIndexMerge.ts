@@ -53,7 +53,8 @@ import { fallbackSessionTitle } from './sessionTitle';
  *   migrated chats came from, so they never reach this merge — except one
  *   whose file changed since (continued in 1.0.x after a rollback), which
  *   arrives flagged `migrationDiverged` and becomes `legacyDiverged`, re-derived
- *   on every merge like `unbound`. And a live row still bound to `pi` whose
+ *   on every merge like `unbound` (decision 131's `forkTitlePending`, the
+ *   interim title of such a copy once it moved, likewise). And a live row still bound to `pi` whose
  *   index row is now a migrated `dsh` one (the migration committed, the resume
  *   after it did not) takes the index's binding and stub: a migration is a
  *   durable rebind, the one case where the persisted binding outranks the one
@@ -137,6 +138,8 @@ export function mergeSessionIndex(
       entry.unbound && entry.workspacePath ? { workspacePath: entry.workspacePath } : undefined;
     // P1-9e: see the header. Present only when true, like the flag it mirrors.
     const legacyDiverged = entry.migrationDiverged === true ? (true as const) : undefined;
+    // Decision 131: re-derived the same way, so a rename elsewhere clears it here.
+    const forkTitlePending = entry.forkTitlePending === true ? (true as const) : undefined;
 
     if (existing) {
       seenIds.add(existing.id);
@@ -148,6 +151,7 @@ export function mergeSessionIndex(
         ...existing,
         unbound,
         legacyDiverged,
+        forkTitlePending,
         // Persisted title is authoritative only when non-empty; an unnamed
         // persisted entry must not blank out the UI seed title.
         title: entry.title || existing.title || fallbackSessionTitle(entry.sessionId),
@@ -186,6 +190,7 @@ export function mergeSessionIndex(
         agent,
         unbound,
         ...(legacyDiverged ? { legacyDiverged } : {}),
+        ...(forkTitlePending ? { forkTitlePending } : {}),
       });
       continue;
     }
@@ -216,6 +221,7 @@ export function mergeSessionIndex(
       runtimeIdentity: entry.runtimeIdentity,
       agent,
       ...(legacyDiverged ? { legacyDiverged } : {}),
+      ...(forkTitlePending ? { forkTitlePending } : {}),
     });
   }
 

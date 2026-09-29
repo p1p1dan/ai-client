@@ -194,6 +194,8 @@ describe('LegacyMigrationService (P1-9d)', () => {
       workspacePath: '/ws/a',
       source: { sha256: 'c'.repeat(64), bytes: 900, mtimeMs: 1_700_000_000_001.5 },
       converterVersion: 2,
+      // Decision 131: read by the index only when the row is a fork.
+      forkTitle: expect.any(Function),
     });
     expect(outcome.row).toMatchObject({ sessionId: 's1', agent: 'dsh', runtimeIdentity: STUB });
     expect(outcome.summary).toEqual({
@@ -204,6 +206,46 @@ describe('LegacyMigrationService (P1-9d)', () => {
       grants: 2,
       legacyPermissions: { mode: 'plan', gear: 'ask' },
     });
+  });
+
+  it('[D131-SUMMARY] a fork the index marked tells the renderer its interim title; no other migration does', async () => {
+    const forkRow = (input: SessionMigrationCommit): SessionIndexEntry => ({
+      ...legacyRow,
+      sessionId: 's1_pi',
+      agent: 'dsh',
+      runtimeIdentity: input.stubFile,
+      piLeaf: undefined,
+      title: input.forkTitle?.('Before the switch') ?? 'Before the switch',
+      forkTitlePending: true,
+      migratedFrom: {
+        legacySessionId: 's1_pi_pi',
+        runtimeIdentity: input.legacyRuntimeIdentity,
+        sourceSha256: input.source.sha256,
+        sourceBytes: input.source.bytes,
+        sourceMtimeMs: input.source.mtimeMs,
+        migratedAt: 1,
+        converter: `pi-dsh/${input.converterVersion}`,
+      },
+    });
+    const h = harness([ok()], { commit: forkRow });
+    const outcome = await h.service.migrate({ ...legacyRow, sessionId: 's1_pi' }, '/ws/a');
+    expect(outcome.summary.fork).toEqual({ title: 'Before the switch (1.0.x branch)' });
+
+    const plain = harness([ok()]);
+    expect((await plain.service.migrate(legacyRow, '/ws/a')).summary).not.toHaveProperty('fork');
+  });
+
+  it('[D131-WORDING] the interim title is worded in the app’s language when the migration commits', async () => {
+    const { setCurrentLocale } = await import('../../i18n');
+    const { legacyForkTitle } = await import('../LegacyMigrationService');
+    try {
+      setCurrentLocale('zh-CN');
+      expect(legacyForkTitle('发布计划')).toBe('发布计划（1.0.x 分支）');
+      setCurrentLocale('en');
+      expect(legacyForkTitle('Release plan')).toBe('Release plan (1.0.x branch)');
+    } finally {
+      setCurrentLocale('en');
+    }
   });
 
   it('prepareResume migrates a legacy row and answers any other row as it is', async () => {

@@ -248,6 +248,7 @@ import {
   DshSubagentsTracker,
   type DshSubagentsView,
 } from './subagents.ts';
+import { type DshToolRegistryView, dshToolPresenter } from './toolPresentation.ts';
 
 // P1-7b: the job registry's slice moved to `jobs.ts`; plugin.ts still names it from here.
 export type { DshJobsView } from './jobs.ts';
@@ -330,6 +331,8 @@ export interface DshBridgeOptionalServices {
   skills: DshSkillsView;
   /** `ctx.goals` (P1-7a): the live goal's activation, which no projection carries. */
   goals: DshGoalsView;
+  /** `ctx.tools` (decision 131): a plugin tool's own title for a call (`toolPresentation.ts`). */
+  tools: DshToolRegistryView;
 }
 
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
@@ -717,7 +720,13 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.query = {
       observeSession: (sessionId, query) => this.ctx.sessionQuery.observeSession(sessionId, query),
     };
-    this.historyCache = new DshHistoryCache(this.query, options.log);
+    // Decision 131: one presenter for the live rows and the replayed ones,
+    // asked through the session's own agent once it is open.
+    const presentCall = dshToolPresenter(
+      () => this.ctx.get?.('tools'),
+      () => this.handle?.agent
+    );
+    this.historyCache = new DshHistoryCache(this.query, options.log, presentCall);
     this.retired = new DshRetiredHistory(this.query, options.log);
     this.router = new DshModelRouter(() => deps.modelPlan?.(), options.log);
     this.modelId = options.model;
@@ -771,6 +780,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         return send;
       },
       now: this.now,
+      presentCall,
     });
     this.jobs = new DshJobsTracker({
       owner: () => this.dshSessionId,

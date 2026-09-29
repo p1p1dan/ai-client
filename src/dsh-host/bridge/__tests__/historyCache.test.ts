@@ -168,3 +168,41 @@ describe('DshHistoryCache', () => {
     expect(cache.leaf()).toEqual({ activeEntryId: null, fileTailEntryId: null });
   });
 });
+
+describe('DshHistoryCache — a plugin call names itself (decision 131)', () => {
+  const call = (seq: number, name: string): DshLogEvent => ({
+    type: 'assistant/message',
+    seq,
+    time: 1_790_000_000_000 + seq,
+    data: {
+      turn: 1,
+      step: 1,
+      message: {
+        id: `a${seq}`,
+        role: 'assistant',
+        content: [{ type: 'tool-call', id: `c${seq}`, name, arguments: '{"path":"report.docx"}' }],
+      },
+    },
+  });
+
+  it('[D131-CACHE] folds with the presenter the live rows use, on the full read and one event at a time', async () => {
+    const presentCall = vi.fn((name: string) =>
+      name === 'word_read' ? { card: 'generic' as const, title: 'Read report.docx' } : undefined
+    );
+    const { query, release } = fakeQuery([call(0, 'word_read')]);
+    const cache = new DshHistoryCache(query, () => undefined, presentCall);
+    cache.reset(SESSION);
+    await loaded(cache, release);
+    cache.push(call(1, 'word_read'));
+    cache.push(call(2, 'bash'));
+    const presented = cache
+      .messages()
+      .map((message) => (message.blocks[0] as { presentation?: { title: string } }).presentation);
+    expect(presented).toEqual([
+      { card: 'generic', title: 'Read report.docx' },
+      { card: 'generic', title: 'Read report.docx' },
+      undefined,
+    ]);
+    expect(presentCall).toHaveBeenCalledWith('word_read', { path: 'report.docx' });
+  });
+});

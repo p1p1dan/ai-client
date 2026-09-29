@@ -52,6 +52,7 @@ import {
   toolRowArgClass,
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
+  toolRowTitleClass,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
 import { formatWorkedForDuration } from './turnTiming';
@@ -262,11 +263,22 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
       {/* Decision 034: the aggregate row is gone, so every row words itself
           from its own closed-vocabulary verb — there is no count branch left. */}
       <ToolRowIcon kind={view.iconKind} />
-      <span className={verbClass}>{t(view.verb)}</span>
-      {view.argRef ? (
-        <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
+      {/* dsh-rebase decision 131: a plugin's own title for the call says what
+          the verb and the argument would, in the plugin's words (never
+          translated, decision 073 rule 1). */}
+      {view.title !== undefined ? (
+        <span data-slot="tool-row-title" className={toolRowTitleClass(view)}>
+          {view.title}
+        </span>
       ) : (
-        <ToolRowArg view={view} onOpenFile={onOpenFile} />
+        <>
+          <span className={verbClass}>{t(view.verb)}</span>
+          {view.argRef ? (
+            <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
+          ) : (
+            <ToolRowArg view={view} onOpenFile={onOpenFile} />
+          )}
+        </>
       )}
       <ToolRowPermission view={view} />
       {/* N5: a call that never did its work says so in words — 「已拒绝」 for a

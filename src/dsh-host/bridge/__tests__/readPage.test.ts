@@ -138,4 +138,50 @@ describe('readSessionPage', () => {
       readSessionPage(fakeQuery(other).query, { stubFile, logicalSessionId: LOGICAL })
     ).rejects.toBe(other);
   });
+
+  it('[D131-PREVIEW] a plugin call keeps its title in the preview, as in the cache that resumes it', async () => {
+    const stubFile = writeStub();
+    const events: DshLogEvent[] = [
+      { type: 'turn/start', seq: 0, time: 1, data: { turn: 1 } },
+      {
+        type: 'assistant/message',
+        seq: 1,
+        time: 2,
+        data: {
+          turn: 1,
+          step: 1,
+          message: {
+            id: 'a1',
+            role: 'assistant',
+            content: [
+              { type: 'tool-call', id: 'c1', name: 'word_read', arguments: '{"path":"a.docx"}' },
+            ],
+          },
+        },
+      },
+    ];
+    const presentCall = (name: string, args: unknown) =>
+      name === 'word_read'
+        ? { card: 'generic' as const, title: `Read ${(args as { path: string }).path}` }
+        : undefined;
+    const page = await readSessionPage(
+      fakeQuery(events).query,
+      { stubFile, logicalSessionId: LOGICAL },
+      presentCall
+    );
+    expect(page.messages[0]?.blocks[0]).toMatchObject({
+      name: 'word_read',
+      presentation: { title: 'Read a.docx' },
+    });
+    const cache = new DshHistoryCache(fakeQuery(events).query, () => undefined, presentCall);
+    cache.reset(DSH_ID);
+    await cache.load();
+    expect(page).toEqual(cache.page());
+    // Reverse: no presenter (a host without the registry), no title.
+    const bare = await readSessionPage(fakeQuery(events).query, {
+      stubFile,
+      logicalSessionId: LOGICAL,
+    });
+    expect(bare.messages[0]?.blocks[0]).not.toHaveProperty('presentation');
+  });
 });

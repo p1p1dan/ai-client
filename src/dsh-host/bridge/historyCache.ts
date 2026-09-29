@@ -17,6 +17,7 @@ import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import { buildDshSessionTree, dshLeafCheckpoint } from '../../shared/dshHistory/tree.ts';
 import type { DshLogEvent } from '../../shared/dshHistory/types.ts';
+import type { DshToolPresenter } from '../../shared/dshToolPresentation.ts';
 import type {
   HistoryMessage,
   PiLeafCheckpoint,
@@ -45,6 +46,8 @@ type CacheState = 'empty' | 'loading' | 'ready' | 'stale';
 export class DshHistoryCache {
   private readonly query: DshSessionQuery;
   private readonly log: (...args: unknown[]) => void;
+  /** Decision 131: the live rows' own presenter, so a plugin call replays with its title. */
+  private readonly presentCall: DshToolPresenter | undefined;
   private sessionId = '';
   private fold = new DshHistoryFold();
   private state: CacheState = 'empty';
@@ -53,9 +56,14 @@ export class DshHistoryCache {
   private loading: Promise<void> | null = null;
   private generation = 0;
 
-  constructor(query: DshSessionQuery, log: (...args: unknown[]) => void = () => undefined) {
+  constructor(
+    query: DshSessionQuery,
+    log: (...args: unknown[]) => void = () => undefined,
+    presentCall?: DshToolPresenter
+  ) {
     this.query = query;
     this.log = log;
+    this.presentCall = presentCall;
   }
 
   /** Starts over for `sessionId`; call `load` once the session is open. */
@@ -68,9 +76,15 @@ export class DshHistoryCache {
     this.loading = null;
   }
 
-  /** Rows name the ids this session's live events gave them (P1-4d1). */
+  /**
+   * Rows name the ids this session's live events gave them (P1-4d1), and a
+   * plugin call the title its live row carried (decision 131).
+   */
   private newFold(): DshHistoryFold {
-    return new DshHistoryFold({ liveSessionId: this.sessionId });
+    return new DshHistoryFold({
+      liveSessionId: this.sessionId,
+      ...(this.presentCall ? { presentCall: this.presentCall } : {}),
+    });
   }
 
   /** One `session/event` of this session, in the order DSH appended it. */

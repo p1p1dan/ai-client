@@ -1338,6 +1338,86 @@ describe('SessionIndexService', () => {
       expect(persisted().some((row) => 'migrationDiverged' in row)).toBe(false);
     });
 
+    /**
+     * Decision 131 (user ruling, decision 130): a kept pi row that 1.0.x
+     * continued after a rollback migrates again as a chat of its own. It must
+     * not read as the original: it takes the original's title with the branch
+     * suffix and waits for its first message here, which a rename settles.
+     */
+    it('[D131-INDEX] a forked row moves over as a chat of its own: suffixed title, waiting for its first message', async () => {
+      const FORK_FILE = `${PI_FILE}.native-v4.jsonl`;
+      const forkTitle = vi.fn((title: string) => `${title} (1.0.x branch)`);
+      const service = await serviceWith([legacyRow]);
+      // The first migration, then 1.0.x continued the kept row on another file.
+      const original = await service.commitMigrated(commit({ forkTitle }));
+      expect(forkTitle).not.toHaveBeenCalled();
+      expect(original).not.toHaveProperty('forkTitlePending');
+      await service.bindRuntimeIdentity('s1_pi', FORK_FILE);
+
+      const forked = await service.commitMigrated(
+        commit({
+          sessionId: 's1_pi',
+          legacyRuntimeIdentity: FORK_FILE,
+          stubFile: '/dsh-home/aiclient-sessions/aiclient-s1_pi.dsh.json',
+          forkTitle,
+        })
+      );
+
+      expect(forkTitle).toHaveBeenCalledWith('Before the switch');
+      expect(forked).toMatchObject({
+        sessionId: 's1_pi',
+        agent: 'dsh',
+        title: 'Before the switch (1.0.x branch)',
+        forkTitlePending: true,
+        migratedFrom: { legacySessionId: 's1_pi_pi', runtimeIdentity: FORK_FILE },
+      });
+      const rows = persisted();
+      // The chat it forked from keeps its name and gets no mark; the new kept row neither.
+      expect(rows.find((row) => row.sessionId === 's1')).toMatchObject({
+        title: 'Before the switch',
+      });
+      expect(rows.find((row) => row.sessionId === 's1')).not.toHaveProperty('forkTitlePending');
+      expect(rows.find((row) => row.sessionId === 's1_pi_pi')).toMatchObject({
+        agent: 'pi',
+        title: 'Before the switch',
+        migratedTo: 's1_pi',
+      });
+      expect(rows.find((row) => row.sessionId === 's1_pi_pi')).not.toHaveProperty(
+        'forkTitlePending'
+      );
+      expect(
+        (await service.listForDisplay()).find((row) => row.sessionId === 's1_pi')
+      ).toMatchObject({ forkTitlePending: true });
+
+      // A re-record does not end the wait; a rename (its first message, or the user) does.
+      await service.recordCreated({ sessionId: 's1_pi', workspacePath: '/ws/a', agent: DSH_AGENT });
+      expect((await service.get('s1_pi'))?.forkTitlePending).toBe(true);
+      await service.rename('s1_pi', 'Ship the fix');
+      expect(await service.get('s1_pi')).toMatchObject({ title: 'Ship the fix' });
+      expect(await service.get('s1_pi')).not.toHaveProperty('forkTitlePending');
+      expect(persisted().some((row) => 'forkTitlePending' in row)).toBe(false);
+    });
+
+    it('[D131-INDEX-UNTITLED] reverse: an untitled fork keeps its empty title and still waits; no function, no suffix', async () => {
+      const FORK_FILE = `${PI_FILE}.native-v4.jsonl`;
+      const service = await serviceWith([{ ...legacyRow, title: '' }]);
+      await service.commitMigrated(commit());
+      await service.bindRuntimeIdentity('s1_pi', FORK_FILE);
+      const forkTitle = vi.fn((title: string) => `${title} (1.0.x branch)`);
+      const forked = await service.commitMigrated(
+        commit({ sessionId: 's1_pi', legacyRuntimeIdentity: FORK_FILE, forkTitle })
+      );
+      expect(forkTitle).not.toHaveBeenCalled();
+      expect(forked).toMatchObject({ title: '', forkTitlePending: true });
+
+      const titled = await serviceWith([legacyRow]);
+      await titled.commitMigrated(commit());
+      await titled.bindRuntimeIdentity('s1_pi', FORK_FILE);
+      await expect(
+        titled.commitMigrated(commit({ sessionId: 's1_pi', legacyRuntimeIdentity: FORK_FILE }))
+      ).resolves.toMatchObject({ title: 'Before the switch', forkTitlePending: true });
+    });
+
     it('never trims a kept pi row on its own; it goes with the chat that references it', async () => {
       const row = (sessionId: string, updatedAt: number, archived = false): SessionIndexEntry => ({
         sessionId,

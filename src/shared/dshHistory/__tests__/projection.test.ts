@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ToolCallPresentation } from '../../dshToolPresentation.ts';
 import { translate } from '../../i18n.ts';
 import {
   BRANCH_SUMMARY_PREFIX,
@@ -1061,6 +1062,67 @@ describe('projectDshHistory — turns the engine started itself (P1-4d1)', () =>
       ['h:s1', 'user', true],
       ['h:j1', 'system', false],
     ]);
+  });
+});
+
+describe('projectDshHistory — a plugin call names itself (decision 131)', () => {
+  const OFFICE = { path: 'out/report.docx', title: 'Q3' };
+  /** As the bridge's `dshToolPresenter` answers for the office plugin; DSH's own tools never. */
+  const presentCall = (name: string, args: unknown): ToolCallPresentation | undefined =>
+    name === 'word_create'
+      ? { card: 'generic', title: `Create ${(args as { path: string }).path}`, kind: 'edit' }
+      : undefined;
+
+  it('[D131-HIST-1] a plugin call carries the title its live row had; a DSH tool none', () => {
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [toolCall('c1', 'word_create', OFFICE), toolCall('c2', 'bash', {})])
+      .call(1, 1, 'c1', 'word_create', OFFICE)
+      .call(1, 1, 'c2', 'bash', {})
+      .result(1, 1, 'r1', 'c1', 'Created out/report.docx')
+      .result(1, 1, 'r2', 'c2', 'ok');
+    const calls = projectDshHistory(events, { presentCall })[0]?.blocks.filter(
+      (block) => block.type === 'tool_call'
+    );
+    expect(
+      calls?.map((block) => [block.name, 'presentation' in block ? block.presentation : null])
+    ).toEqual([
+      ['word_create', { card: 'generic', title: 'Create out/report.docx', kind: 'edit' }],
+      ['bash', null],
+    ]);
+  });
+
+  it('[D131-HIST-2] reverse: without a presenter (the golden logs, the tree) no row carries one', () => {
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [toolCall('c1', 'word_create', OFFICE)])
+      .result(1, 1, 'r1', 'c1', 'Created');
+    expect(projectDshHistory(events)[0]?.blocks[0]).not.toHaveProperty('presentation');
+  });
+
+  it('[D131-HIST-3] a presenter that throws costs the title only; a result whose call row is missing still gets it', () => {
+    const throwing = () => {
+      throw new Error('plugin bug');
+    };
+    const { events } = log()
+      .turn(1)
+      .assistant(1, 1, 'a1', [toolCall('c1', 'word_create', OFFICE)])
+      .result(1, 1, 'r1', 'c1', 'Created');
+    const [row] = projectDshHistory(events, { presentCall: throwing });
+    expect(row?.blocks.map((block) => block.type)).toEqual(['tool_call', 'tool_result']);
+    expect(row?.blocks[0]).not.toHaveProperty('presentation');
+
+    // A durable call and its result with no step message around them.
+    const orphan = log()
+      .turn(1)
+      .call(1, 1, 'c7', 'word_create', OFFICE)
+      .result(1, 1, 'r7', 'c7', 'Created');
+    const [alone] = projectDshHistory(orphan.events, { presentCall });
+    expect(alone?.blocks[0]).toMatchObject({
+      type: 'tool_call',
+      name: 'word_create',
+      presentation: { title: 'Create out/report.docx' },
+    });
   });
 });
 

@@ -1,3 +1,4 @@
+import type { ToolCallPresentation } from '../dshToolPresentation.ts';
 import type { SessionFileChange } from '../sessionFileChange.ts';
 
 /**
@@ -44,6 +45,11 @@ export type HistoryBlock =
       name: string;
       input?: unknown;
       truncated?: boolean;
+      /**
+       * dsh-rebase decision 131: a plugin tool's own title for the call, as the
+       * live row got it (the bridge asks the same `presentCall` on replay).
+       */
+      presentation?: ToolCallPresentation;
     }
   | {
       type: 'tool_result';
