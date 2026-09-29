@@ -1,12 +1,19 @@
 import {
   Braces,
+  FileOutput,
   FileText,
   Globe,
+  Image,
+  Layers,
+  ListChecks,
   ListTree,
   PencilLine,
+  Plug,
   Search,
   SquareTerminal,
+  Target,
   Users,
+  Workflow,
   Wrench,
 } from 'lucide-react';
 import {
@@ -22,6 +29,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type FileOpenIntent, useFileOpenIntentStore } from '@/stores/fileOpenIntent';
+import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import {
   readToolExpandMemory,
@@ -32,11 +40,14 @@ import { thoughtBodyMaxHeightClass, turnProcessToneClass } from './chatTimelineL
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
+import { TodoList } from './TodoCard';
 import {
+  composeRefArg,
   type FileLinkTarget,
   isDelegationTool,
   runningElapsedMs,
   TOOL_RUN_OUTCOME_LABEL,
+  type ToolArgRef,
   type ToolRowView,
   toolRowArgClass,
   toolRowPermissionClass,
@@ -146,6 +157,16 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
   plan: ListTree,
   thinking: Braces,
   tool: Wrench,
+  // dsh-rebase P1-7c (plan P1-7 shard 04 §1). `todo`, `goal` and `job` are
+  // the marks the todo card, the goal bar and the background-tasks button
+  // already wear, so a row and its panel read as one thing.
+  image: Image,
+  todo: ListChecks,
+  goal: Target,
+  job: Layers,
+  workflow: Workflow,
+  mcp: Plug,
+  deliver: FileOutput,
 };
 
 function ToolRowIcon({ kind }: { kind?: string }) {
@@ -173,6 +194,44 @@ export function ToolRow(props: ToolRowProps) {
     );
   }
   return <ToolRowContent {...props} />;
+}
+
+/**
+ * dsh-rebase P1-7c: an argument naming a background job or a subagent, with
+ * the label the session's panels know for it (`ToolArgRef`). A leaf of its
+ * own so a jobs-projection change re-renders this span, never the derivation
+ * above it. The selectors return strings, so a job's progress line changing
+ * does not re-render a row whose label did not.
+ */
+function RefToolRowArg({
+  view,
+  argRef,
+  sessionId,
+}: {
+  view: ToolRowView;
+  argRef: ToolArgRef;
+  sessionId?: string;
+}) {
+  const panelLabel = useSessionPanelsStore((state) => {
+    if (!sessionId) return undefined;
+    const panels = state.bySession[sessionId];
+    return argRef.kind === 'job'
+      ? panels?.jobs?.find((job) => job.id === argRef.id)?.label
+      : panels?.subagentCatalog?.find((entry) => entry.id === argRef.id)?.label;
+  });
+  // A child the catalog has not listed yet is often already a lane.
+  const laneLabel = useSubagentActivityStore((state) => {
+    if (argRef.kind !== 'subagent') return undefined;
+    const parent = state.agentIndex[argRef.id];
+    return parent ? (state.lanes[parent]?.description ?? undefined) : undefined;
+  });
+  const composed = composeRefArg(view, argRef, panelLabel ?? laneLabel);
+  if (!composed.text) return null;
+  return (
+    <span className={toolRowArgClass({ failed: view.failed, argKind: composed.kind })}>
+      {composed.text}
+    </span>
+  );
 }
 
 function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
@@ -204,7 +263,11 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
           from its own closed-vocabulary verb — there is no count branch left. */}
       <ToolRowIcon kind={view.iconKind} />
       <span className={verbClass}>{t(view.verb)}</span>
-      <ToolRowArg view={view} onOpenFile={onOpenFile} />
+      {view.argRef ? (
+        <RefToolRowArg view={view} argRef={view.argRef} sessionId={sessionId} />
+      ) : (
+        <ToolRowArg view={view} onOpenFile={onOpenFile} />
+      )}
       <ToolRowPermission view={view} />
       {/* N5: a call that never did its work says so in words — 「已拒绝」 for a
           runtime refusal, 「未执行」 for one the run ended before. Same slot and
@@ -216,12 +279,28 @@ function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
           · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
         </span>
       )}
+      {/* dsh-rebase P1-7c (plan P1-7 shard 04 §4): where the call left its
+          work — 「后台 · bash-2」 for `run_in_background`, 「已转后台 · bash-3」
+          for a command its timeout moved there — and a shell's non-zero exit,
+          「退出码 1」. Same slot and tone as the outcome word: neither is a
+          failure, so neither is red. */}
+      {view.backgroundJob && (
+        <span data-slot="tool-row-job" className={toolRowPermissionClass()}>
+          · {t(view.backgroundJob.promoted ? 'Moved to background' : 'In background')}
+          {view.backgroundJob.id ? ` · ${view.backgroundJob.id}` : null}
+        </span>
+      )}
+      {typeof view.exitCode === 'number' && (
+        <span data-slot="tool-row-exit" className={cn(toolRowPermissionClass(), 'tabular-nums')}>
+          · {t('Exit code {{code}}', { code: view.exitCode })}
+        </span>
+      )}
       {/* 2026-09-23 (user report: a 1800s command gave no sign of progress):
           the live clock on a running row — elapsed since `tool.started`, and
-          the deadline the runtime will enforce when the input named one.
-          "12s / 30m" reads without a label because the row's own verb already
-          says Running. A leaf of its own so the per-second tick re-renders
-          this span and nothing above it.
+          the deadline the runtime will apply when the input named one (on DSH,
+          P1-7c: "12s · to background at 2m", since DSH moves a command to the
+          background at its timeout instead of killing it). A leaf of its own
+          so the per-second tick re-renders this span and nothing above it.
           T146 — once `execStartedAtMs` is known (bash, past approval and path
           checks), both numbers switch to that origin instead, and the limit
           is withheld until then — see `deriveToolRowView`. */}
@@ -787,6 +866,14 @@ function ToolRowOutputSegment({
       );
     case 'thinking':
       return <ThinkingBody text={view.output ?? ''} />;
+    case 'todos':
+      // dsh-rebase P1-7c (decision 118's handoff): the list a `todo_write`
+      // set, drawn by the todo card's own component.
+      return (
+        <div className="ml-0.5 border-l border-border pl-3.5">
+          <TodoList items={view.todos ?? []} className="pt-1 pb-2" />
+        </div>
+      );
     case 'stats':
       return (
         <div className="mt-1 flex select-text flex-col gap-1.5 text-chat-process leading-[1.55] text-tool-arg">
@@ -861,13 +948,18 @@ export function ToolRowTimelineContext({
 }
 
 function RunningToolClock({ startedAtMs, timeoutMs }: { startedAtMs: number; timeoutMs?: number }) {
+  const { t } = useI18n();
   const nowMs = useContext(ToolRowClockContext);
   const elapsedMs = runningElapsedMs(startedAtMs, nowMs);
   if (elapsedMs === undefined) return null;
   return (
     <span data-slot="tool-row-clock" className="shrink-0 text-meta tabular-nums">
       · {formatWorkedForDuration(elapsedMs)}
-      {typeof timeoutMs === 'number' && ` / ${formatWorkedForDuration(timeoutMs)}`}
+      {/* dsh-rebase P1-7c (plan P1-7 shard 04 §4): DSH does not kill a
+          command at its timeout, it moves it to the background, so the limit
+          reads as when that happens (「12s · 2m 后转后台」), not as "/ 2m". */}
+      {typeof timeoutMs === 'number' &&
+        ` · ${t('to background at {{limit}}', { limit: formatWorkedForDuration(timeoutMs) })}`}
     </span>
   );
 }

@@ -26,6 +26,7 @@ import {
   derivePermissionGrantScopeNote,
   derivePermissionOmittedNote,
   derivePermissionQueueProgress,
+  derivePermissionRisk,
   derivePermissionRowView,
   derivePermissionSessionScopeNote,
   derivePermissionVerb,
@@ -38,6 +39,7 @@ import {
   PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_DECISION_LABELS,
   PERMISSION_NO_COMMAND_NOTE,
+  PERMISSION_ONE_CALL_NOTE,
   permissionDecisionAllows,
   permissionSecondsLeft,
   questionReactKey,
@@ -1419,10 +1421,12 @@ describe('permission action copy (T023)', () => {
     ['escalate_sandbox', 'Run once with wider sandbox permissions', '以更宽的沙箱权限运行一次'],
   ];
 
+  // dsh-rebase P1-7c (plan P1-7 shard 04 §6): the shells go by their product
+  // names on the card, `bash` as Bash and `pwsh` as PowerShell.
   it.each(CASES)('%s reads English by default and Chinese under zh', (action, english, chinese) => {
     const block = permissionBlock({ toolName: 'bash', permissionAction: action });
-    expect(derivePermissionCardView(block, true).prompt).toBe(`bash — ${english}`);
-    expect(derivePermissionCardView(block, true, zh).prompt).toBe(`bash — ${chinese}`);
+    expect(derivePermissionCardView(block, true).prompt).toBe(`Bash — ${english}`);
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe(`Bash — ${chinese}`);
   });
 
   it('every action label is a key the Chinese catalog actually answers', () => {
@@ -1459,12 +1463,76 @@ describe('permission action copy (T023)', () => {
       permissionAction: 'run_command',
       toolDescription: 'stale prose',
     });
-    expect(derivePermissionCardView(block, true, zh).prompt).toBe('bash — 在工作区运行命令');
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe('Bash — 在工作区运行命令');
   });
 
   it('falls back to the bare tool name when neither is present', () => {
     expect(derivePermissionCardView(permissionBlock({ toolName: 'Bash' }), true, zh).prompt).toBe(
       'Bash'
     );
+  });
+});
+
+/**
+ * dsh-rebase P1-7c (plan P1-7 shard 04 §6): the Windows card. DSH mounts
+ * `pwsh` instead of `bash` there, and the card has to read like the Linux one:
+ * the shell by its name, as loud as bash, the command verbatim.
+ */
+describe('the PowerShell card (P1-7c)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+
+  it('names the shell PowerShell, in both languages', () => {
+    const block = permissionBlock({ toolName: 'pwsh', permissionAction: 'run_command' });
+    expect(derivePermissionCardView(block, true).prompt).toBe(
+      'PowerShell — Run a command in the workspace'
+    );
+    expect(derivePermissionCardView(block, true, zh).prompt).toBe('PowerShell — 在工作区运行命令');
+    // The settled row says the same.
+    expect(
+      derivePermissionRowView({ ...block, resolved: true, allowed: true }, null, zh)?.arg
+    ).toBe('PowerShell — 在工作区运行命令');
+  });
+
+  it('reads pwsh as high risk by name, as bash is, even without an exec detail', () => {
+    expect(derivePermissionRisk(permissionBlock({ toolName: 'pwsh' }))).toBe('high');
+    expect(derivePermissionRisk(permissionBlock({ toolName: 'bash' }))).toBe('high');
+    expect(derivePermissionRisk(permissionBlock({ toolName: 'grep' }))).toBe('medium');
+  });
+
+  it('keeps other tools by the name they were called with, and an MCP tool by its label', () => {
+    expect(
+      derivePermissionCardView(permissionBlock({ toolName: 'word_create' }), true).prompt
+    ).toBe('word_create');
+    expect(
+      derivePermissionCardView(permissionBlock({ toolName: 'mcp__github__create_issue' }), true)
+        .prompt
+    ).toBe('github · create_issue');
+  });
+
+  it('says a sandbox escalation is for this one call, where "Allow for session" would explain its reach', () => {
+    const escalation = permissionBlock({
+      toolName: 'pwsh',
+      permissionAction: 'escalate_sandbox',
+      permissionDecisions: ['allow', 'deny'],
+    });
+    expect(derivePermissionCardView(escalation, true).sessionScopeNote).toBe(
+      PERMISSION_ONE_CALL_NOTE
+    );
+    expect(derivePermissionCardView(escalation, true, zh).sessionScopeNote).toBe(
+      '只对这一次调用有效'
+    );
+    expect(derivePermissionCardView(escalation, true, zh).prompt).toBe(
+      'PowerShell — 以更宽的沙箱权限运行一次'
+    );
+    // Nothing to answer, nothing to explain.
+    expect(derivePermissionCardView(escalation, false).sessionScopeNote).toBeNull();
+    // An ordinary card with no allow_session still says nothing.
+    expect(
+      derivePermissionCardView(
+        permissionBlock({ toolName: 'pwsh', permissionAction: 'run_command' }),
+        true
+      ).sessionScopeNote
+    ).toBeNull();
   });
 });

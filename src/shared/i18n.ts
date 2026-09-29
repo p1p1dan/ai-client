@@ -2721,7 +2721,9 @@ export const zhTranslations: Record<string, string> = {
   Searching: '搜索中',
   Fetched: '获取',
   Fetching: '获取中',
-  Planned: '已规划',
+  // dsh-rebase P1-7c: the P1-7 prototype's 「规划 3/5 已完成」, a type label in
+  // decision 034's style like 「编辑」 / 「读取」 (was 「已规划」).
+  Planned: '规划',
   Planning: '规划中',
   Delegate: '委派',
   Delegated: '已委派',
@@ -3131,8 +3133,9 @@ export const zhTranslations: Record<string, string> = {
     '点「继续」再试一次。如果还是同样的错，把下面那行细节发出来。',
   'The model repeated the same tool calls, so its reply was stopped':
     '模型输出出现重复调用，已中断',
-  'The model kept writing the same subagent tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.':
-    '模型在同一条回复里不停重复同一个子 Agent 工具调用，没有等任何结果。本应用中断了这条回复，其中的工具调用一个都没有执行。',
+  // dsh-rebase P1-7c: DSH's loop guard also watches the background-task tools.
+  'The model kept writing the same subagent or background-task tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.':
+    '模型在同一条回复里不停重复同一个子代理或后台任务工具调用，没有等任何结果。本应用中断了这条回复，其中的工具调用一个都没有执行。',
   'Send a message to carry on — everything before this reply is kept. If it happens again, try another model.':
     '可以继续发消息 —— 这条回复之前的内容都保留着。如果再次出现，换一个模型试试。',
   'The model never answered': '模型没有给出回答',
@@ -3669,4 +3672,101 @@ Object.assign(zhTranslations, {
   'Full output: {{path}}': '完整输出：{{path}}',
   'Live output': '实时输出',
   Continued: '续聊',
+});
+
+// dsh-rebase P1-7c (decision 120; plan P1-7 shard 04): DSH's tool rows — the
+// verbs of every DSH tool the tables did not name, their arguments, where a
+// call left its work (background, promoted), a shell's exit code, the
+// running tail's move to the background — plus the approval card's one-call
+// note and the four provider failure cards. Verbs keep decision 034's
+// type-label style; the English is the catalog key and is enumerated by
+// `dshToolVocabulary.test.ts`.
+Object.assign(zhTranslations, {
+  'Viewed image': '看图',
+  'Viewing image': '看图中',
+  'View image': '看图',
+  'Read job output': '后台输出',
+  'Reading job output': '读取后台输出中',
+  'Waiting for job': '等待中',
+  'Listed jobs': '后台列表',
+  'Listing jobs': '列出后台中',
+  'List jobs': '后台列表',
+  'Stopped job': '停止后台',
+  'Stopping job': '停止后台中',
+  'Stop job': '停止后台',
+  'Messaged subagent': '发消息',
+  'Messaging subagent': '发消息中',
+  'Message subagent': '发消息',
+  'Interrupted subagent': '打断',
+  'Interrupting subagent': '打断中',
+  'Interrupt subagent': '打断',
+  'Checked goal': '查看目标',
+  'Checking goal': '查看目标中',
+  'Check goal': '查看目标',
+  'Set goal': '设定目标',
+  'Setting goal': '设定目标中',
+  'Updated goal': '更新目标',
+  'Updating goal': '更新目标中',
+  'Update goal': '更新目标',
+  'Completed goal': '完成目标',
+  'Completing goal': '完成目标中',
+  'Complete goal': '完成目标',
+  'Marked goal blocked': '目标受阻',
+  'Marking goal blocked': '标记受阻中',
+  'Mark goal blocked': '标记受阻',
+  'Paused goal': '暂停目标',
+  'Pausing goal': '暂停目标中',
+  'Pause goal': '暂停目标',
+  'Resumed goal': '继续目标',
+  'Resuming goal': '继续目标中',
+  'Resume goal': '继续目标',
+  // `Edit goal` is the goal bar's own menu item (P1-7a); the row shares it.
+  'Edited goal': '编辑目标',
+  'Editing goal': '编辑目标中',
+  'Ran workflow': '工作流',
+  'Running workflow': '工作流运行中',
+  'Run workflow': '工作流',
+  'Listed resources': '列资源',
+  'Listing resources': '列资源中',
+  'List resources': '列资源',
+  Presented: '交付',
+  Presenting: '交付中',
+  Present: '交付',
+  'Ran code': '代码',
+  'Running code': '代码运行中',
+  'Run code': '代码',
+  'Listed models': '列模型',
+  'Listing models': '列模型中',
+  'List models': '列模型',
+  'Used tool': '工具',
+  'Using tool': '工具运行中',
+  'Use tool': '工具',
+  'all background jobs': '全部后台任务',
+  'direct subagents': '直接子代理',
+  'all descendants': '全部后代',
+  '{{done}}/{{total}} done': '{{done}}/{{total}} 已完成',
+  'no goal': '没有目标',
+  'In background': '后台',
+  'Moved to background': '已转后台',
+  'to background at {{limit}}': '{{limit}} 后转后台',
+  'Applies to this one call only': '只对这一次调用有效',
+  'The model service refused the key': '模型服务不接受密钥',
+  'The model service did not accept the key this app sent for this model: it is invalid, expired, or not allowed to use this model.':
+    '模型服务不接受本应用为这个模型发送的密钥：密钥无效、已过期，或者没有使用这个模型的权限。',
+  'Sign in again or check the model in settings, then send your message again.':
+    '重新登录或在设置里检查模型后，再发一次消息。',
+  'The model service is limiting requests': '模型服务在限流',
+  'The model service turned the request away because too many were sent, or the quota for this model is used up.':
+    '请求太多，或者这个模型的额度已用完，模型服务拒绝了这次请求。',
+  'Wait a moment and continue. If it keeps happening, check the quota or pick another model.':
+    '稍等片刻再继续。如果一直这样，请检查额度或换一个模型。',
+  'The model service could not be reached': '连不上模型服务',
+  'The connection to the model service failed before a reply came back.':
+    '在收到回复之前，与模型服务的连接就失败了。',
+  'Check the network or proxy, then continue.': '检查网络或代理后再继续。',
+  'The model service returned an error': '模型服务返回了错误',
+  'The model service answered with an error, or with an empty or malformed reply, even after retrying.':
+    '模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。',
+  'Continue to try again. If it fails the same way, send the detail below or pick another model.':
+    '点继续再试一次。如果还是一样失败，请把下面的详情发给我们，或者换一个模型。',
 });

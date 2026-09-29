@@ -33,4 +33,5 @@
 - **测试**：`src/dsh-host/permissions/__tests__/` 的分类测试；bridge 单测覆盖应答、跳过、中止撤卡。
 - **金样本**：新增 `question` 场景（假网关发起一次 `ask_user_question`，回答一次、跳过一次）。
 - **P1-7c**：工具行词表加 `ask_user_question`。
+  - 修订注记（2026-09-28，P1-7c）：已加，复用 `ask` 的「询问」与参数写法（第一个问题）；见[决策 120](120-p1-7c-tool-rows-choices.md) 第 5 条（待审批）。
 - **迁移**：迁移会话里 1.0.x 的 `ask` 行照常显示。

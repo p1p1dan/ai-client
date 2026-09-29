@@ -317,7 +317,7 @@ export function deriveTurnCurrentAction(items: readonly TurnItem[]): TurnCurrent
 }
 
 function actionOf(run: ToolRun, state: Extract<ToolVerbState, 'running' | 'refused'>) {
-  return { run, verb: toolVerb(run.toolName, state), state };
+  return { run, verb: toolVerb(run.toolName, state, run.input), state };
 }
 
 /*

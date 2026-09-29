@@ -6,7 +6,9 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
 /**
- * A running tool row's live "elapsed / limit" tail, through the path the app
+ * A running tool row's live "elapsed · to background at limit" tail (dsh-rebase
+ * P1-7c: DSH moves a command to the background at its timeout, it does not
+ * kill it; the tail used to read "elapsed / limit"), through the path the app
  * actually uses: Runtime Event -> `useTurnTiming` -> `MessageTimeline` ->
  * `ChatTurn` -> `ToolGroupItem` -> `deriveToolGroupRows` -> `ToolRows`.
  *
@@ -123,7 +125,7 @@ function buildMessages(liveExecStartedAt?: number): ChatMessage[] {
       blocks: call(
         'live-1',
         'Bash',
-        { command: 'pnpm build', timeoutSeconds: 1800 },
+        { command: 'pnpm build', timeoutSeconds: 300 },
         false,
         liveExecStartedAt
       ),
@@ -210,11 +212,11 @@ it('[ROW-CLOCK-1] a running row in the timeline shows elapsed / limit, and it ti
   await emit({ type: 'tool.started', timestamp: NOW - 32_000, payload: { toolCallId: 'live-1' } });
   // The derivation ran for the live row — the tail below comes out of it.
   expect(derivedCallIds()).toContain('live-1');
-  expect(container.textContent).toContain('· 32s / 30m');
+  expect(container.textContent).toContain('· 32s · to background at 5m');
   await tick();
-  expect(container.textContent).toContain('· 33s / 30m');
+  expect(container.textContent).toContain('· 33s · to background at 5m');
   // The finished turn's rows never carry a clock.
-  expect(container.textContent?.match(/ \/ 30m/g)).toHaveLength(1);
+  expect(container.textContent?.match(/to background at 5m/g)).toHaveLength(1);
 });
 
 it('[ROW-CLOCK-2] a tick re-derives no tool group, while the running tail still moves', async () => {
@@ -231,7 +233,7 @@ it('[ROW-CLOCK-2] a tick re-derives no tool group, while the running tail still 
   expect(deriveSpy, 'a tick must not re-run deriveToolGroupRows').not.toHaveBeenCalled();
   await tick(10_000);
   expect(deriveSpy).not.toHaveBeenCalled();
-  expect(container.textContent).toContain('· 16s / 30m');
+  expect(container.textContent).toContain('· 16s · to background at 5m');
 });
 
 it('[ROW-CLOCK-4] with no execStartedAt yet (pre-exec), the row shows elapsed and no limit', async () => {
@@ -243,10 +245,10 @@ it('[ROW-CLOCK-4] with no execStartedAt yet (pre-exec), the row shows elapsed an
   await emit({ type: 'tool.started', timestamp: NOW - 16_000, payload: { toolCallId: 'live-1' } });
   expect(derivedCallIds()).toContain('live-1');
   expect(container.textContent).toContain('· 16s');
-  expect(container.textContent?.match(/ \/ \d+m/g)).toBeNull();
+  expect(container.textContent?.match(/to background at/g)).toBeNull();
   await tick();
   expect(container.textContent).toContain('· 17s');
-  expect(container.textContent?.match(/ \/ \d+m/g)).toBeNull();
+  expect(container.textContent?.match(/to background at/g)).toBeNull();
 });
 
 it('[ROW-CLOCK-3] a tool event re-derives the running turn only, never a finished one', async () => {

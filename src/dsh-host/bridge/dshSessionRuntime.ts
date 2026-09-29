@@ -2382,6 +2382,8 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     } finally {
       const value = outcome && !outcome.isError ? outcome.value : undefined;
       try {
+        // P1-7c: the job a background or promoted call left, for its row.
+        this.live.onExecEnded(callId, value);
         this.jobs.endCall(callId, value);
         this.children.endCall(callId, value);
       } catch (error) {

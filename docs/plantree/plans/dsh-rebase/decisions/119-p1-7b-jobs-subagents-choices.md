@@ -117,6 +117,7 @@
 
 - **金样本（编排者收口时重录）**：16 个既有场景的 `stream.*`（第 31 条）；新场景 `jobs-kill`、`sub-cont` 各三份首次录制（`--update --only jobs-kill`、`--update --only sub-cont`，各自独立宿主，单独录与整套录结果相同）。录好之前 `dshHistoryGolden.test.ts` 的清单用例会因两个新场景的文件不存在而失败。
 - **P1-7c**：转后台的结局文案（bridge 已拿到 `promoted`）；分叉的措辞；`job_output` / `job_kill` / `send_message` / `interrupt_agent` 的动词与参数摘要（标签可从 `jobs` 投影查）；pwsh 进终端类集合；行尾「到时转后台」。
+  - 修订注记（2026-09-28）：已照此落地。bridge 在同一挂点把执行期值里的 job id 放进 `tool.completed` 的 `details.backgroundJob`（转后台与 `run_in_background` 都带，只在直播有）；行尾「已转后台 · bash-3」「后台 · bash-2」；分叉写「分叉 · 描述」；标签在绘制时从 `jobs` 投影与子代理目录查；运行中行尾「2m 后转后台」，上限 600 s。见[决策 120](120-p1-7c-tool-rows-choices.md) 第 3、5、8、19 条（待审批）。
 - **P1-7d**：
   - 合成态点验：经 Vite import `/stores/sessionPanels.ts`、`/stores/subagentActivity.ts`、`/stores/toolLiveOutput.ts`、`/stores/sessionSubwindows.ts` 灌合成数据，截图场景 C、D、E（含 1280×720、1024×640）、空窗文案、「全部停止」确认、输出展开、拖动与双击回位、定位高亮、窄窗只剩图标；
   - 真宿主：`P1-JOBKILL`、`P1-SUBCONT`、`P0-SLEEPTOOL` 标记，核对实时尾部、停止、打断、Stop 连带（实验 E5：Stop 之后有没有被结算通知唤醒）、`maxConsecutiveWakes` 生效（实验 E6）、杀宿主后运行项显示「引擎重启，任务已结束」、泳道扫成已取消；

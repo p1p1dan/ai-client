@@ -8,6 +8,8 @@
 
 修订：替换[决策 010](010-p1-1-scope-boundary.md) 第 1 条里「带附件抛 `WORKER_DSH_UNSUPPORTED`」的安全桩。
 
+修订注记（2026-09-28，P1-7c）：第 5 条的 `read_image` 工具行已落地：「看图」+ Image 图标，参数是图片的短路径，点开在编辑器里预览。见[决策 120](120-p1-7c-tool-rows-choices.md) 第 5 条（待审批）。
+
 **实现注记（2026-09-28，P1-4c2）**：按本决策落地，细节与自主取舍见[决策 112](112-p1-4c2-attachment-choices.md)：
 - 第 1 条「bridge 行的 `inject` 要加上 `attachments`」指 Cordis 行的服务注入列表，已加（112 第 15 条）；
 - 第 2 条的拒绝消息格式为 `<DSH 错误码> "<文件名>": <DSH 原句>`；DSH 的错误不指明哪一张，由 bridge 找出（112 第 3 条）；

@@ -179,7 +179,19 @@
       "messageId": "dsh-aiclient-rec-job-notice-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": true,
-      "output": "started background job bash-2"
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "started background job bash-2"
+          }
+        ],
+        "details": {
+          "backgroundJob": {
+            "id": "bash-2"
+          }
+        }
+      }
     }
   },
   {

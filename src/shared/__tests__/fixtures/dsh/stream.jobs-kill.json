@@ -179,7 +179,19 @@
       "messageId": "dsh-aiclient-rec-jobs-kill-t1-s1",
       "toolCallId": "toolu_id-4",
       "ok": true,
-      "output": "started background job bash-1"
+      "output": {
+        "content": [
+          {
+            "type": "text",
+            "text": "started background job bash-1"
+          }
+        ],
+        "details": {
+          "backgroundJob": {
+            "id": "bash-1"
+          }
+        }
+      }
     }
   },
   {

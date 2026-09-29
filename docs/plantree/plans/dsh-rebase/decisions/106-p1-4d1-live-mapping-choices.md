@@ -8,6 +8,8 @@
 
 修订注记（2026-09-28，P1-7b）：第 41 条里的 `execStartedAt`、`jobs` 已落地；子代理的用量（`usage.updated.delegated`）与重试横幅（第 21 条）没有做，记为遗留。见[决策 119](119-p1-7b-jobs-subagents-choices.md) 第 10、13 条（待审批）。
 
+修订注记（2026-09-28，P1-7c）：第 42 条的四个失败码（`PROVIDER_UNAUTHORIZED`、`PROVIDER_RATE_LIMITED`、`NETWORK_ERROR`、`PROVIDER_ERROR`）有了自己的失败卡；第 14、16 条（`ABORTED` → 已停止、卡片被拒不标红）由新的词表测试补例核对，代码不变。见[决策 120](120-p1-7c-tool-rows-choices.md) 第 1 条 l、第 26 条（待审批）。
+
 ## 规则
 
 ### 一、模块

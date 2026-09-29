@@ -414,6 +414,16 @@ export interface ToolOutcomeDetails {
    * unknown; the row says so instead of painting a failure.
    */
   outcomeUnknown?: true;
+  /**
+   * dsh-rebase P1-7c: the call left a DSH background job running — a
+   * `run_in_background` call (`{kind: 'background', jobId}`) or a foreground
+   * command its timeout moved to the background (`{kind: 'promoted', jobId}`).
+   * Read off DSH's execution-local result, which is never logged, so only a
+   * live row carries it; a replayed one shows DSH's own result text (plan
+   * P1-7 shard 04 §4: no text matching). The row ends 「后台 · bash-2」 or
+   * 「已转后台 · bash-3」.
+   */
+  backgroundJob?: { id: string; promoted?: true };
 }
 
 export interface ToolCompletedEvent extends RuntimeEventBase {

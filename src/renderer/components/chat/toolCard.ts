@@ -1,18 +1,34 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
 import { reviewFromToolResult } from '@shared/sessionFileChange';
 import { readStreamingToolArgs } from '@shared/streamingToolArgs';
-import type { ToolOutcomeDetails } from '@shared/types/runtimeEvents';
+import type { DshTodoItem, ToolOutcomeDetails } from '@shared/types/runtimeEvents';
 import { cn } from '@/lib/utils';
 import type { ChatBlock, ChatMessage } from '@/stores/chatSessions';
 import { isQuietPermissionActivity } from './permissionActivityRow';
-import { MCP_TOOL_PREFIX, mcpToolLabel, PI_TOOL_NAMES, RUNTIME_TOOL_NAMES } from './piToolNames';
+import {
+  DSH_TOOL_NAMES,
+  MCP_TOOL_PREFIX,
+  mcpToolLabel,
+  OFFICE_READ_TOOL_NAMES,
+  OFFICE_WRITE_TOOL_NAMES,
+  PI_TOOL_NAMES,
+  RUNTIME_TOOL_NAMES,
+} from './piToolNames';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
 import { formatThoughtRow } from './turnTiming';
 
 // Re-exported so the pi tool vocabulary keeps ONE public entry point even
 // though the constant itself had to move out to break an import cycle.
-export { MCP_TOOL_PREFIX, mcpToolLabel, PI_TOOL_NAMES, RUNTIME_TOOL_NAMES } from './piToolNames';
+export {
+  DSH_TOOL_NAMES,
+  MCP_TOOL_PREFIX,
+  mcpToolLabel,
+  OFFICE_READ_TOOL_NAMES,
+  OFFICE_WRITE_TOOL_NAMES,
+  PI_TOOL_NAMES,
+  RUNTIME_TOOL_NAMES,
+} from './piToolNames';
 
 /**
  * T-05 tool-row pure view model (A07 screen 5, groups A-F). Three layers:
@@ -402,7 +418,25 @@ export function countPermissionRecords(items: readonly PermissionJoinable[]): nu
 // 3. Row/view layer
 // ---------------------------------------------------------------------------
 
-export type ToolRowBody = 'output' | 'detail' | 'thinking' | 'stats';
+export type ToolRowBody = 'output' | 'detail' | 'thinking' | 'stats' | 'todos';
+
+/**
+ * dsh-rebase P1-7c: an argument that names a handle — a background job
+ * (`job_output`, `job_kill`) or a subagent (`send_message`,
+ * `interrupt_agent`) — whose human label lives in a store, not in the call.
+ * The row derivation stays store-free: it carries the handle and a fallback
+ * text (`ToolRowView.arg`), and the leaf that paints the argument looks the
+ * label up (`composeRefArg` decides the wording either way).
+ *
+ * - `id-label`: `bash-3 · npm test` (the id is what the model wrote)
+ * - `to-label`: `→ 调研 goal 投影` (a message is addressed to someone)
+ * - `label`: the subagent's own label, else its id
+ */
+export interface ToolArgRef {
+  kind: 'job' | 'subagent';
+  id: string;
+  format: 'id-label' | 'to-label' | 'label';
+}
 
 export interface ToolRowView {
   /** React key: block id (aggregate rows use `${firstBlockId}~agg`). */
@@ -471,11 +505,33 @@ export interface ToolRowView {
    */
   runningStartedAtMs?: number;
   /**
-   * The timeout the runtime will enforce on a running row, when the input
+   * The timeout the runtime will apply to a running row, when the input
    * names one. Bash-family only; read from `timeoutSeconds`/`timeoutMs` with
-   * the runtime's own 120s default. Rendered as the "elapsed / limit" tail.
+   * the runtime's own 120s default. dsh-rebase P1-7c: DSH does not kill a
+   * command at its timeout, it moves it to the background (capped at 600s),
+   * so the tail reads 「12s · 2m 后转后台」 rather than "elapsed / limit".
    */
   runningTimeoutMs?: number;
+  /**
+   * dsh-rebase P1-7c: the background job the call left behind — `promoted`
+   * when its timeout moved a foreground command there (「已转后台 · bash-3」),
+   * else a `run_in_background` call (「后台 · bash-2」). `id` is live only (the
+   * bridge reads it off DSH's execution-local value); a replayed
+   * `run_in_background` row knows it went to the background from its input
+   * and says so without an id.
+   */
+  backgroundJob?: { id?: string; promoted: boolean };
+  /**
+   * dsh-rebase P1-7c: a shell command's non-zero exit code, read off DSH's
+   * own `[exit code: N]` marker (`dsh-shell` `parseExitStatus`). A neutral
+   * 「退出码 N」 tail, never red: whether a non-zero exit is a failure is the
+   * model's call, as it was in 1.0.x.
+   */
+  exitCode?: number;
+  /** dsh-rebase P1-7c: `todo_write`'s list, for the `todos` body (the todo card's `TodoList`). */
+  todos?: readonly DshTodoItem[];
+  /** dsh-rebase P1-7c: a handle argument whose label the painting leaf looks up. */
+  argRef?: ToolArgRef;
   /** Only a row with a body can expand. */
   expandable: boolean;
   body?: ToolRowBody;
@@ -588,21 +644,40 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const neverRan = outcome === 'refused' || outcome === 'notStarted';
   const verb = toolVerb(
     run.toolName,
-    toolRunWasRefused(run) || neverRan ? 'refused' : running ? 'running' : 'done'
+    toolRunWasRefused(run) || neverRan ? 'refused' : running ? 'running' : 'done',
+    run.input
   );
   const argDetail = formatToolArgDetail(run, options);
+  const argRef = deriveToolArgRef(run);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
+
+  // dsh-rebase P1-7c (decision 118's handoff): a `todo_write` row opens onto
+  // the list it wrote, drawn by the todo card's own component — never the
+  // argument JSON, and not DSH's one-line acknowledgement either. A failed
+  // write keeps its error body instead.
+  const todos = run.toolName === DSH_TOOL_NAMES.todoWrite ? todoItemsOf(run.input) : undefined;
+  const showTodos = Boolean(todos && todos.length > 0) && !failed;
 
   // A never-started call has no output of its own — only the runtime's English
   // note, which `outcome` already says in the reader's language; so has one
   // whose outcome the engine never recorded (decision 032). A refusal keeps
   // its body: the runtime's reason is the only account of why.
   const showOutputBody =
+    !showTodos &&
     !running &&
     outcome !== 'notStarted' &&
     outcome !== 'outcomeUnknown' &&
     (failed || Boolean(run.output));
+  // P1-7c: how a settled call that ran to its end left things — a background
+  // job, a shell's non-zero exit. Neither is a failure, and neither is said
+  // over an outcome word (a stopped command's exit is Stop's, not its own).
+  const settledClean = !running && !failed && !outcome;
+  const backgroundJob = settledClean ? toolRunBackgroundJob(run) : undefined;
+  const exitCode =
+    settledClean && !backgroundJob && SHELL_EXIT_TOOL_NAMES.has(run.toolName)
+      ? shellExitCode(run.output)
+      : undefined;
   // 2026-09-23 (user report: a running command could not be expanded and its
   // full text was nowhere to be seen): a running call's input is now
   // expandable as a live preview. `tool.updated` rewrites
@@ -615,7 +690,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // Running Edit/Write arguments are explicitly labelled as a preview;
   // successful Edit results prefer the SDK patch once the call settles.
   const diff = recordedChange ? null : deriveToolDiff(run);
-  const expandable = showOutputBody || Boolean(inputBody) || Boolean(diff);
+  const expandable = showTodos || showOutputBody || Boolean(inputBody) || Boolean(diff);
 
   // The live clock's origin. `tool.started` is stamped when the call is
   // issued, so the elapsed includes any approval wait that preceded execution
@@ -656,13 +731,17 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     iconKind: toolIconKind(run.toolName),
     arg: argDetail?.text,
     argKind: argDetail?.kind,
+    ...(argRef ? { argRef } : {}),
     running,
     failed,
     ...(outcome ? { outcome } : {}),
+    ...(backgroundJob ? { backgroundJob } : {}),
+    ...(exitCode !== undefined ? { exitCode } : {}),
     runningStartedAtMs,
     runningTimeoutMs,
     expandable,
-    body: showOutputBody ? 'output' : undefined,
+    ...(showTodos ? { todos } : {}),
+    body: showTodos ? 'todos' : showOutputBody ? 'output' : undefined,
     output: showOutputBody ? run.output : undefined,
     outputMaxHeightClass: showOutputBody ? outputMaxHeightClass(run.toolName) : undefined,
     // The diff SUPERSEDES the raw argument body rather than sitting next to
@@ -735,9 +814,12 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   // subagent-data-06 — our own registry. `Glob` (capital) was already here and
   // `glob` was not, so every one of our glob rows also grew a full input body
   // under a summary that already said everything it had.
-  [RUNTIME_TOOL_NAMES.read]: ['path', 'offset', 'limit'],
-  [RUNTIME_TOOL_NAMES.write]: ['path'],
-  [RUNTIME_TOOL_NAMES.edit]: ['path'],
+  // dsh-rebase P1-7c: DSH names the file `file_path`; the bridge adds a `path`
+  // alias (`toolRowInput`) and nothing removes the original, so both are
+  // covered — listing `path` alone grew a JSON body on every DSH read row.
+  [RUNTIME_TOOL_NAMES.read]: ['file_path', 'path', 'offset', 'limit'],
+  [RUNTIME_TOOL_NAMES.write]: ['file_path', 'path'],
+  [RUNTIME_TOOL_NAMES.edit]: ['file_path', 'path'],
   [RUNTIME_TOOL_NAMES.glob]: ['pattern'],
   [RUNTIME_TOOL_NAMES.grep]: ['pattern'],
   // Decision 033 D6, applied to the pi-native spelling on 2026-09-23: the
@@ -758,6 +840,42 @@ export const ARG_COVERED_FIELDS: Readonly<Record<string, readonly string[]>> = {
   [RUNTIME_TOOL_NAMES.taskWait]: ['delegationIds'],
   [RUNTIME_TOOL_NAMES.taskStop]: ['delegationIds'],
   [RUNTIME_TOOL_NAMES.taskList]: [],
+  // dsh-rebase P1-7c: DSH's own tools (plan P1-7 shard 04 §2, §3). `bash` and
+  // `pwsh` build their body their own way (`deriveShellInputBody`), and
+  // `exit_plan_mode`'s body is its plan (`deriveToolInputBody`).
+  [DSH_TOOL_NAMES.readImage]: ['file_path', 'path'],
+  [DSH_TOOL_NAMES.pwsh]: ['description'],
+  [DSH_TOOL_NAMES.jobOutput]: ['job_id', 'wait', 'timeout_ms'],
+  [DSH_TOOL_NAMES.jobList]: [],
+  // The reason, when the model gave one, is the body.
+  [DSH_TOOL_NAMES.jobKill]: ['job_id'],
+  // The message is the body; the row names who it went to.
+  [DSH_TOOL_NAMES.sendMessage]: ['agent_id'],
+  [DSH_TOOL_NAMES.interruptAgent]: ['agent_id'],
+  [DSH_TOOL_NAMES.listAgents]: ['scope'],
+  // The list is drawn as the todo card draws it, never as JSON.
+  [DSH_TOOL_NAMES.todoWrite]: ['todos'],
+  [DSH_TOOL_NAMES.getGoal]: [],
+  [DSH_TOOL_NAMES.createGoal]: ['objective'],
+  // The handles the model had to copy from `get_goal` say nothing to a reader.
+  [DSH_TOOL_NAMES.updateGoal]: ['goal_id', 'revision', 'action', 'objective', 'blocked_reason'],
+  [DSH_TOOL_NAMES.exitPlanMode]: ['plan'],
+  // The script and its declared phases are the body.
+  [DSH_TOOL_NAMES.workflow]: [],
+  [DSH_TOOL_NAMES.listMcpResources]: ['server', 'cursor'],
+  [DSH_TOOL_NAMES.listMcpResourceTemplates]: ['server', 'cursor'],
+  [DSH_TOOL_NAMES.readMcpResource]: ['server', 'uri'],
+  // `ask`'s rule: the arg is the first question, the rest are the body.
+  [DSH_TOOL_NAMES.askUserQuestion]: [],
+  [DSH_TOOL_NAMES.webSearch]: ['queries'],
+  [DSH_TOOL_NAMES.webFetch]: ['url'],
+  [DSH_TOOL_NAMES.present]: [],
+  [DSH_TOOL_NAMES.runCode]: ['description'],
+  [DSH_TOOL_NAMES.listSubagentModels]: [],
+  // The office plugin (decision 115): a read names its file and nothing else;
+  // a write's content is the body, as `write`'s preview is on its card.
+  ...Object.fromEntries(OFFICE_READ_TOOL_NAMES.map((name) => [name, ['path']])),
+  ...Object.fromEntries(OFFICE_WRITE_TOOL_NAMES.map((name) => [name, ['path']])),
 };
 
 /**
@@ -777,10 +895,48 @@ function deriveToolInputBody(run: ToolRun): string | undefined {
   // now also guards the 2026-09-23 running-input preview, not just the settled
   // body it was written for.
   if (readStreamingToolArgs(run.input)) return undefined;
+  if (SHELL_BODY_TOOL_NAMES.has(run.toolName)) return deriveShellInputBody(rec);
+  // dsh-rebase P1-7c (shard 04 §2): the plan itself, as Markdown text rather
+  // than as an escaped JSON string.
+  if (run.toolName === DSH_TOOL_NAMES.exitPlanMode) return stringField(rec, 'plan');
   const covered = new Set(ARG_COVERED_FIELDS[run.toolName] ?? []);
   const hasExtra = keys.some((key) => !covered.has(key));
   if (!hasExtra) return undefined;
   return normalizeRawOutput(run.input);
+}
+
+/** The shells whose expanded input is the command itself (`deriveShellInputBody`). */
+const SHELL_BODY_TOOL_NAMES: ReadonlySet<string> = new Set([
+  RUNTIME_TOOL_NAMES.bash,
+  DSH_TOOL_NAMES.pwsh,
+]);
+
+/**
+ * dsh-rebase P1-7c (shard 04 §4, decision 073 rule 2): a shell call's expanded
+ * input — the model's `description` on the first line, then the command
+ * exactly as it ran, then any other argument (`workdir`, `timeoutMs`, …).
+ *
+ * The row itself keeps the command summary (the 2026-09-22 ruling), so this is
+ * where DSH's "shown in the UI" description goes. Every line that is not the
+ * command is a `#` comment, which both bash and PowerShell read as one: the
+ * body stays safe to copy and run as a whole, the copy-and-rerun path
+ * decision 033 D6 made this body for. Nothing is re-quoted or escaped — the
+ * JSON body it replaces printed a multi-line command as `\n` escapes.
+ */
+function deriveShellInputBody(rec: Record<string, unknown>): string | undefined {
+  const command = stringField(rec, 'command');
+  if (!command) return normalizeRawOutput(rec);
+  const oneLine = (text: string) => text.replace(/[\r\n]+/g, ' ');
+  const description = stringField(rec, 'description');
+  const rest = Object.entries(rec).filter(([key]) => key !== 'command' && key !== 'description');
+  return [
+    ...(description ? [`# ${oneLine(description)}`] : []),
+    command,
+    ...rest.map(
+      ([key, value]) =>
+        `# ${key}: ${typeof value === 'string' ? oneLine(value) : JSON.stringify(value)}`
+    ),
+  ].join('\n');
 }
 
 /**
@@ -801,10 +957,20 @@ function isHitListTool(toolName: string): boolean {
   return classifyTool(toolName) === 'search';
 }
 
-/** Mirrors the runtime's own default (`plugins/tools` DEFAULT_BASH_TIMEOUT_MS). */
+/**
+ * Mirrors the runtime's own default (`plugins/tools` DEFAULT_BASH_TIMEOUT_MS),
+ * which is also DSH's (`dsh-bash-local` / `dsh-pwsh-local` `timeoutMs`).
+ */
 const DEFAULT_BASH_TIMEOUT_MS = 120_000;
 
-const BASH_TIMEOUT_TOOL_NAMES = new Set(['Bash', RUNTIME_TOOL_NAMES.bash]);
+/**
+ * dsh-rebase P1-7c: DSH caps a per-call override at 600s (`maxTimeoutMs` of
+ * `dsh-bash-local` / `dsh-pwsh-local`), so a longer ask moves to the
+ * background at the cap, not at the number the model wrote.
+ */
+const MAX_SHELL_TIMEOUT_MS = 600_000;
+
+const BASH_TIMEOUT_TOOL_NAMES = new Set(['Bash', RUNTIME_TOOL_NAMES.bash, DSH_TOOL_NAMES.pwsh]);
 
 /**
  * The timeout a running bash-family call asked for, as the runtime will apply
@@ -812,16 +978,145 @@ const BASH_TIMEOUT_TOOL_NAMES = new Set(['Bash', RUNTIME_TOOL_NAMES.bash]);
  * for), and neither present means the 120s default. Non-bash tools have no
  * deadline this side can name, so they return undefined and the row shows a
  * bare elapsed.
+ *
+ * dsh-rebase P1-7c: DSH's `timeoutMs` is capped at 600s, and a
+ * `run_in_background` call has no timeout at all (it returns at once).
  */
 function bashTimeoutMsFromInput(run: ToolRun): number | undefined {
   if (!BASH_TIMEOUT_TOOL_NAMES.has(run.toolName)) return undefined;
   const rec = asRecord(run.input);
   if (!rec) return DEFAULT_BASH_TIMEOUT_MS;
+  if (rec.run_in_background === true) return undefined;
   const seconds = rec.timeoutSeconds;
-  if (typeof seconds === 'number' && seconds > 0) return seconds * 1000;
+  if (typeof seconds === 'number' && seconds > 0)
+    return Math.min(seconds * 1000, MAX_SHELL_TIMEOUT_MS);
   const ms = rec.timeoutMs;
-  if (typeof ms === 'number' && ms > 0) return ms;
+  if (typeof ms === 'number' && ms > 0) return Math.min(ms, MAX_SHELL_TIMEOUT_MS);
   return DEFAULT_BASH_TIMEOUT_MS;
+}
+
+/** The shells whose settled output ends in DSH's exit marker (`dsh-shell` `parseExitStatus`). */
+const SHELL_EXIT_TOOL_NAMES: ReadonlySet<string> = new Set([
+  RUNTIME_TOOL_NAMES.bash,
+  DSH_TOOL_NAMES.pwsh,
+]);
+
+/**
+ * dsh-rebase P1-7c (shard 04 §4): a shell command's non-zero exit code, off
+ * the `[exit code: N]` marker DSH's shell tools append as the output's last
+ * line — the same contract `dsh-shell`'s `parseExitStatus` reads, with its
+ * rule that the marker must follow a newline and end the text, so output that
+ * merely mentions one does not count. Undefined for exit 0 (no marker) and for
+ * a signal kill (DSH writes `[killed by signal: X]` instead).
+ */
+export function shellExitCode(output: string | undefined): number | undefined {
+  if (!output) return undefined;
+  const match = /\n\[exit code: (\d+)\]$/.exec(output);
+  if (!match?.[1]) return undefined;
+  const code = Number(match[1]);
+  return Number.isSafeInteger(code) && code !== 0 ? code : undefined;
+}
+
+/**
+ * dsh-rebase P1-7c (shard 04 §4): the background job a settled call left
+ * behind. The job id is the bridge's (`details.backgroundJob`, live only — DSH
+ * never logs the value it comes from); a replayed call that asked for
+ * `run_in_background` still says it went there, without an id. A promoted
+ * command in history reads as an ordinary finished call: its result text is
+ * DSH's own account, and matching that prose is what this module never does.
+ */
+export function toolRunBackgroundJob(
+  run: Pick<ToolRun, 'result' | 'input'>
+): { id?: string; promoted: boolean } | undefined {
+  const details = asRecord(asRecord(run.result)?.details);
+  const job = asRecord(details?.backgroundJob);
+  const id = stringField(job, 'id');
+  if (id) return { id, promoted: job?.promoted === true };
+  return asRecord(run.input)?.run_in_background === true ? { promoted: false } : undefined;
+}
+
+/** `todo_write`'s list, when the input carries a well-formed one. */
+function todoItemsOf(input: unknown): DshTodoItem[] | undefined {
+  const todos = asRecord(input)?.todos;
+  if (!Array.isArray(todos)) return undefined;
+  const items: DshTodoItem[] = [];
+  for (const todo of todos) {
+    const rec = asRecord(todo);
+    const content = stringField(rec, 'content');
+    const status = rec?.status;
+    if (!content) continue;
+    items.push({
+      content,
+      status: status === 'in_progress' || status === 'completed' ? status : 'pending',
+    });
+  }
+  return items;
+}
+
+/**
+ * The goal a goal tool's result names. DSH renders every goal tool's value as
+ * its JSON (`dsh-tool-goal` `GOAL_OUTPUT`): `{goal: {objective, …} | null}`.
+ * `null` is "there is no goal"; undefined is "nothing to read" (no result yet,
+ * or not that shape).
+ */
+function goalObjectiveOf(output: string | undefined): string | null | undefined {
+  if (!output) return undefined;
+  try {
+    const value = asRecord(JSON.parse(output));
+    if (!value || !('goal' in value)) return undefined;
+    if (value.goal === null) return null;
+    return stringField(asRecord(value.goal), 'objective');
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * dsh-rebase P1-7c: the handle a job or subagent tool names, for the leaf
+ * that paints its argument to look the label up (`ToolArgRef`).
+ */
+function deriveToolArgRef(run: ToolRun): ToolArgRef | undefined {
+  const rec = asRecord(run.input);
+  switch (run.toolName) {
+    case DSH_TOOL_NAMES.jobOutput:
+    case DSH_TOOL_NAMES.jobKill: {
+      const id = stringField(rec, 'job_id');
+      return id ? { kind: 'job', id, format: 'id-label' } : undefined;
+    }
+    case DSH_TOOL_NAMES.sendMessage: {
+      const id = stringField(rec, 'agent_id');
+      return id ? { kind: 'subagent', id, format: 'to-label' } : undefined;
+    }
+    case DSH_TOOL_NAMES.interruptAgent: {
+      const id = stringField(rec, 'agent_id');
+      return id ? { kind: 'subagent', id, format: 'label' } : undefined;
+    }
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The argument a handle row shows once its label is (or is not) known:
+ * `bash-3 · npm test`, `→ 调研 goal 投影`, or the subagent's label. Without a
+ * label every format keeps the row's own fallback text — the id for a job or
+ * an interrupt, the message itself for a `send_message`.
+ */
+export function composeRefArg(
+  view: Pick<ToolRowView, 'arg' | 'argKind'>,
+  ref: ToolArgRef,
+  label: string | undefined
+): { text: string | undefined; kind: ToolArgKind | undefined } {
+  const known = label?.replace(/[\r\n]+/g, ' ').trim();
+  if (!known) return { text: view.arg, kind: view.argKind };
+  switch (ref.format) {
+    case 'id-label':
+      return { text: `${ref.id} · ${known}`, kind: 'ident' };
+    case 'to-label':
+      return { text: `→ ${known}`, kind: 'prose' };
+    case 'label':
+      return { text: known, kind: 'prose' };
+  }
 }
 
 /**
@@ -1048,12 +1343,138 @@ export const TOOL_VERBS: Readonly<Record<string, ToolVerbs>> = {
   Task: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
   Agent: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
   // dsh-rebase P1-7b: DSH's delegation tools carry the same lane (plan P1-7
-  // shard 04 §2); P1-7c gives the fork its own wording.
-  subagent: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
-  subagent_fork: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  // shard 04 §2); the fork says so in its argument (「分叉 · …」, P1-7c).
+  [DSH_TOOL_NAMES.subagent]: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  [DSH_TOOL_NAMES.subagentFork]: { done: 'Delegated', running: 'Delegating', refused: 'Delegate' },
+  // ── dsh-rebase P1-7c: the rest of DSH's tools (plan P1-7 shard 04 §2, §3).
+  // `read` / `write` / `edit` / `grep` / `bash` / `skill` share the keys above
+  // (one name, one row), `glob` too. `ralph`, `structured_output` and
+  // `plugin_manager` read as the unknown-tool fallback on purpose
+  // (`dshToolVocabulary.test.ts` lists them).
+  [DSH_TOOL_NAMES.readImage]: {
+    done: 'Viewed image',
+    running: 'Viewing image',
+    refused: 'View image',
+  },
+  // Windows' shell: the same row as bash (decision 073 rule 3).
+  [DSH_TOOL_NAMES.pwsh]: { done: 'Ran', running: 'Running', refused: 'Run' },
+  [DSH_TOOL_NAMES.jobOutput]: {
+    done: 'Read job output',
+    running: 'Reading job output',
+    refused: 'Read job output',
+  },
+  [DSH_TOOL_NAMES.jobList]: { done: 'Listed jobs', running: 'Listing jobs', refused: 'List jobs' },
+  [DSH_TOOL_NAMES.jobKill]: { done: 'Stopped job', running: 'Stopping job', refused: 'Stop job' },
+  [DSH_TOOL_NAMES.sendMessage]: {
+    done: 'Messaged subagent',
+    running: 'Messaging subagent',
+    refused: 'Message subagent',
+  },
+  [DSH_TOOL_NAMES.interruptAgent]: {
+    done: 'Interrupted subagent',
+    running: 'Interrupting subagent',
+    refused: 'Interrupt subagent',
+  },
+  // The words our own `TaskList` already had.
+  [DSH_TOOL_NAMES.listAgents]: {
+    done: 'Listed subagents',
+    running: 'Listing subagents',
+    refused: 'List subagents',
+  },
+  [DSH_TOOL_NAMES.todoWrite]: { done: 'Planned', running: 'Planning', refused: 'Plan' },
+  [DSH_TOOL_NAMES.getGoal]: {
+    done: 'Checked goal',
+    running: 'Checking goal',
+    refused: 'Check goal',
+  },
+  [DSH_TOOL_NAMES.createGoal]: { done: 'Set goal', running: 'Setting goal', refused: 'Set goal' },
+  // The fallback for an action this build does not know; each known action
+  // has its own words (`UPDATE_GOAL_VERBS`).
+  [DSH_TOOL_NAMES.updateGoal]: {
+    done: 'Updated goal',
+    running: 'Updating goal',
+    refused: 'Update goal',
+  },
+  [DSH_TOOL_NAMES.exitPlanMode]: { done: 'Planned', running: 'Planning', refused: 'Plan' },
+  [DSH_TOOL_NAMES.workflow]: {
+    done: 'Ran workflow',
+    running: 'Running workflow',
+    refused: 'Run workflow',
+  },
+  [DSH_TOOL_NAMES.listMcpResources]: {
+    done: 'Listed resources',
+    running: 'Listing resources',
+    refused: 'List resources',
+  },
+  [DSH_TOOL_NAMES.listMcpResourceTemplates]: {
+    done: 'Listed resources',
+    running: 'Listing resources',
+    refused: 'List resources',
+  },
+  [DSH_TOOL_NAMES.readMcpResource]: { done: 'Read', running: 'Reading', refused: 'Read' },
+  // Decisions 098 / 114: DSH's question tool reads as our `ask` did.
+  [DSH_TOOL_NAMES.askUserQuestion]: { done: 'Asked', running: 'Asking', refused: 'Ask' },
+  [DSH_TOOL_NAMES.webSearch]: { done: 'Searched', running: 'Searching', refused: 'Search' },
+  [DSH_TOOL_NAMES.webFetch]: { done: 'Fetched', running: 'Fetching', refused: 'Fetch' },
+  [DSH_TOOL_NAMES.present]: { done: 'Presented', running: 'Presenting', refused: 'Present' },
+  [DSH_TOOL_NAMES.runCode]: { done: 'Ran code', running: 'Running code', refused: 'Run code' },
+  [DSH_TOOL_NAMES.listSubagentModels]: {
+    done: 'Listed models',
+    running: 'Listing models',
+    refused: 'List models',
+  },
+  // Decision 115: the office plugin's reads read a file, its writes write one
+  // — the words `read` and `write` already have, so the row says what the
+  // gate classified (the file name carries the format).
+  ...Object.fromEntries(
+    OFFICE_READ_TOOL_NAMES.map((name) => [
+      name,
+      { done: 'Read', running: 'Reading', refused: 'Read' },
+    ])
+  ),
+  ...Object.fromEntries(
+    OFFICE_WRITE_TOOL_NAMES.map((name) => [
+      name,
+      { done: 'Edited', running: 'Editing', refused: 'Edit' },
+    ])
+  ),
 };
 
-export const UNKNOWN_TOOL_VERB: ToolVerbs = { done: 'Ran', running: 'Running', refused: 'Run' };
+/**
+ * dsh-rebase P1-7c (shard 04 §2): `update_goal` says which update it is — the
+ * verb follows the call's `action`. Keys are `dsh-tool-goal`'s own action
+ * enum; `edit` shares 「编辑目标」 with the goal bar's own menu item.
+ */
+export const UPDATE_GOAL_VERBS: Readonly<Record<string, ToolVerbs>> = {
+  complete: { done: 'Completed goal', running: 'Completing goal', refused: 'Complete goal' },
+  blocked: {
+    done: 'Marked goal blocked',
+    running: 'Marking goal blocked',
+    refused: 'Mark goal blocked',
+  },
+  pause: { done: 'Paused goal', running: 'Pausing goal', refused: 'Pause goal' },
+  resume: { done: 'Resumed goal', running: 'Resuming goal', refused: 'Resume goal' },
+  edit: { done: 'Edited goal', running: 'Editing goal', refused: 'Edit goal' },
+};
+
+/**
+ * dsh-rebase P1-7c (shard 04 §2): a running `job_output` that waits for its
+ * job (`wait: true`) is waiting, not reading — it can sit there for minutes.
+ */
+export const JOB_OUTPUT_WAIT_VERB = 'Waiting for job';
+
+/**
+ * The fallback for a tool no table names — a plugin tool without its own
+ * entry, or a DSH tool added after this build (decision 073 rule 1). It used
+ * to be `Ran`, whose Chinese is 「终端」, so a plugin's row claimed it had run
+ * a shell command; 「工具」 claims nothing. The row's argument starts with
+ * the tool's own name (`formatToolArgDetail`'s `default:`).
+ */
+export const UNKNOWN_TOOL_VERB: ToolVerbs = {
+  done: 'Used tool',
+  running: 'Using tool',
+  refused: 'Use tool',
+};
 
 /**
  * subagent-data-06 — every MCP-bridged tool, which no table can enumerate.
@@ -1064,7 +1485,21 @@ export const UNKNOWN_TOOL_VERB: ToolVerbs = { done: 'Ran', running: 'Running', r
  */
 export const MCP_TOOL_VERB: ToolVerbs = { done: 'Called', running: 'Calling', refused: 'Call' };
 
-export function toolVerb(toolName: string, state: ToolVerbState): string {
+/**
+ * The row's verb key. `input` is optional and read by two DSH tools only:
+ * `update_goal` (its `action`) and a waiting `job_output`.
+ */
+export function toolVerb(toolName: string, state: ToolVerbState, input?: unknown): string {
+  const rec = asRecord(input);
+  if (toolName === DSH_TOOL_NAMES.updateGoal) {
+    const action = stringField(rec, 'action');
+    const byAction =
+      action && Object.hasOwn(UPDATE_GOAL_VERBS, action) ? UPDATE_GOAL_VERBS[action] : undefined;
+    if (byAction) return byAction[state];
+  }
+  if (toolName === DSH_TOOL_NAMES.jobOutput && state === 'running' && rec?.wait === true) {
+    return JOB_OUTPUT_WAIT_VERB;
+  }
   const verbs =
     TOOL_VERBS[toolName] ??
     (toolName.startsWith(MCP_TOOL_PREFIX) ? MCP_TOOL_VERB : UNKNOWN_TOOL_VERB);
@@ -1185,7 +1620,14 @@ export function isDelegationTool(toolName: string): boolean {
 // `ls` counts as a SEARCH, not a read: the aggregate row phrases reads as
 // "N files" and dedupes them by path, and a directory listing is neither a file
 // nor something you read twice by accident. "N searches" is the honest bucket.
-const READ_TOOL_NAMES = new Set(['Read', 'NotebookRead', PI_TOOL_NAMES.read]);
+const READ_TOOL_NAMES = new Set<string>([
+  'Read',
+  'NotebookRead',
+  PI_TOOL_NAMES.read,
+  // dsh-rebase P1-7c: an image and an office document are files read too.
+  DSH_TOOL_NAMES.readImage,
+  ...OFFICE_READ_TOOL_NAMES,
+]);
 const SEARCH_TOOL_NAMES = new Set([
   'Grep',
   'Glob',
@@ -1227,7 +1669,15 @@ export type ToolIconKind =
   | 'delegate'
   | 'plan'
   | 'thinking'
-  | 'tool';
+  | 'tool'
+  // dsh-rebase P1-7c (plan P1-7 shard 04 §1): DSH's own kinds of work.
+  | 'image'
+  | 'todo'
+  | 'goal'
+  | 'job'
+  | 'workflow'
+  | 'mcp'
+  | 'deliver';
 
 const TERMINAL_TOOL_NAMES = new Set<string>([
   'Bash',
@@ -1236,6 +1686,9 @@ const TERMINAL_TOOL_NAMES = new Set<string>([
   PI_TOOL_NAMES.bash,
   PI_TOOL_NAMES.powershell,
   RUNTIME_TOOL_NAMES.bash,
+  // dsh-rebase P1-7c (decision 073 rule 3): Windows' shell, and DSH's PTC program.
+  DSH_TOOL_NAMES.pwsh,
+  DSH_TOOL_NAMES.runCode,
 ]);
 const EDIT_TOOL_NAMES = new Set<string>([
   'Edit',
@@ -1244,15 +1697,45 @@ const EDIT_TOOL_NAMES = new Set<string>([
   'NotebookEdit',
   PI_TOOL_NAMES.edit,
   PI_TOOL_NAMES.write,
+  ...OFFICE_WRITE_TOOL_NAMES,
 ]);
 const WEB_TOOL_NAMES = new Set<string>([
   'WebFetch',
   'WebSearch',
   RUNTIME_TOOL_NAMES.browserPreview,
+  DSH_TOOL_NAMES.webSearch,
+  DSH_TOOL_NAMES.webFetch,
 ]);
-const PLAN_TOOL_NAMES = new Set<string>(['TodoWrite', 'ExitPlanMode']);
+const PLAN_TOOL_NAMES = new Set<string>(['TodoWrite', 'ExitPlanMode', DSH_TOOL_NAMES.exitPlanMode]);
+
+/**
+ * dsh-rebase P1-7c: DSH tools whose icon is a kind of its own (shard 04 §1).
+ * The subagent handles beyond the two lanes (`send_message`,
+ * `interrupt_agent`, `list_agents`, `list_subagent_models`) share the
+ * delegation mark without being delegations: they open no lane.
+ */
+const DSH_ICON_KINDS: Readonly<Record<string, ToolIconKind>> = {
+  [DSH_TOOL_NAMES.readImage]: 'image',
+  [DSH_TOOL_NAMES.todoWrite]: 'todo',
+  [DSH_TOOL_NAMES.getGoal]: 'goal',
+  [DSH_TOOL_NAMES.createGoal]: 'goal',
+  [DSH_TOOL_NAMES.updateGoal]: 'goal',
+  [DSH_TOOL_NAMES.jobOutput]: 'job',
+  [DSH_TOOL_NAMES.jobList]: 'job',
+  [DSH_TOOL_NAMES.jobKill]: 'job',
+  [DSH_TOOL_NAMES.workflow]: 'workflow',
+  [DSH_TOOL_NAMES.listMcpResources]: 'mcp',
+  [DSH_TOOL_NAMES.listMcpResourceTemplates]: 'mcp',
+  [DSH_TOOL_NAMES.readMcpResource]: 'mcp',
+  [DSH_TOOL_NAMES.present]: 'deliver',
+  [DSH_TOOL_NAMES.sendMessage]: 'delegate',
+  [DSH_TOOL_NAMES.interruptAgent]: 'delegate',
+  [DSH_TOOL_NAMES.listAgents]: 'delegate',
+  [DSH_TOOL_NAMES.listSubagentModels]: 'delegate',
+};
 
 export function toolIconKind(toolName: string): ToolIconKind {
+  if (Object.hasOwn(DSH_ICON_KINDS, toolName)) return DSH_ICON_KINDS[toolName] as ToolIconKind;
   // Order matters where the sets overlap: `WebSearch` is a SEARCH to
   // `classifyTool` (it counts as one) but a globe to the reader, and a reader
   // who sees a magnifier expects local hits.
@@ -1261,6 +1744,8 @@ export function toolIconKind(toolName: string): ToolIconKind {
   if (EDIT_TOOL_NAMES.has(toolName)) return 'edit';
   if (PLAN_TOOL_NAMES.has(toolName)) return 'plan';
   if (isDelegationTool(toolName)) return 'delegate';
+  // Shard 04 §3: an MCP-bridged tool wears the plug its resource tools wear.
+  if (toolName.startsWith(MCP_TOOL_PREFIX)) return 'mcp';
   // `ls` splits off from the search bucket here: its verb is 「列目录」 and a
   // magnifier would be the wrong promise for a listing.
   if (toolName === PI_TOOL_NAMES.ls) return 'list';
@@ -1337,12 +1822,31 @@ const CD_PREFIX_PATTERN = /^\s*cd\s+(?:'[^']*'|"[^"]*"|[^\s;|&()]+)\s*&&\s*/;
  */
 const COMMAND_SUMMARY_MAX_CHARS = 40;
 
-function commandSummary(command: string): string {
+/**
+ * dsh-rebase P1-7c (plan P1-7 shard 04 §4): PowerShell's directory changes, in
+ * every spelling a model writes them — `cd`, `Set-Location` (with or without
+ * `-Path` / `-LiteralPath`), `Push-Location`, `pushd` — ended by `;` or by
+ * pwsh 7's `&&`. Case-insensitive, as PowerShell is. The path may be quoted
+ * or a bare Windows path (`C:\repo`); `;`, `&`, `|` and whitespace end it.
+ *
+ * The quotes are spelled `\x27` / `\x22`: the static scans in `__tests__`
+ * (`fontDomainScan`) pair quote characters across a whole file, and a regex
+ * literal carrying an odd number of them sends that scan into exponential
+ * backtracking over every backslash after it.
+ */
+const PWSH_LOCATION_PREFIX_PATTERN =
+  /^\s*(?:cd|set-location|push-location|pushd)\s+(?:-(?:literal)?path\s+)?(?:\x27[^\x27]*\x27|\x22[^\x22]*\x22|[^\s;|&()]+)\s*(?:;|&&)\s*/i;
+
+/** Which shell's directory prefixes a summary strips. */
+export type CommandDialect = 'bash' | 'pwsh';
+
+function commandSummary(command: string, dialect: CommandDialect = 'bash'): string {
+  const prefix = dialect === 'pwsh' ? PWSH_LOCATION_PREFIX_PATTERN : CD_PREFIX_PATTERN;
   let rest = command;
   // A loop, not a single replace: `cd a && cd b && cmd` is rare but real, and
   // stripping one level would leave the row looking like it starts at `cd`.
-  while (CD_PREFIX_PATTERN.test(rest)) {
-    const next = rest.replace(CD_PREFIX_PATTERN, '');
+  while (prefix.test(rest)) {
+    const next = rest.replace(prefix, '');
     if (!next.trim()) break;
     rest = next;
   }
@@ -1379,6 +1883,29 @@ function fileArgWithProgress(
 
 /** D25 §2.4 arg font-domain classifier -- see `ToolRowView.argKind` doc comment. */
 export type ToolArgKind = 'ident' | 'prose';
+
+/** The first non-blank line of a text, trimmed. */
+function firstLineOf(text: string): string | undefined {
+  return (
+    text
+      .split(/\r\n|\n|\r/)
+      .map((line) => line.trim())
+      .find((line) => line.length > 0) ?? undefined
+  );
+}
+
+/**
+ * A Markdown text's first heading, else its first line — the title
+ * `dsh-plan-mode` gives an `exit_plan_mode` card (`firstHeading(plan) ?? 'Plan'`),
+ * with the first line instead of DSH's English word.
+ */
+function firstHeadingOf(markdown: string): string | undefined {
+  for (const line of markdown.split(/\r\n|\n|\r/)) {
+    const heading = /^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/.exec(line);
+    if (heading?.[1]) return heading[1];
+  }
+  return firstLineOf(markdown);
+}
 
 interface ToolArgDetail {
   text: string;
@@ -1419,7 +1946,9 @@ function formatToolArgDetail(
     // `grep` showed its PATH ("src") instead of what was searched for
     // ("TODO"), and every path rendered proportional instead of mono.
     case PI_TOOL_NAMES.read: {
-      const path = stringField(rec, 'path');
+      // dsh-rebase P1-7c: DSH's own name first; `path` is the bridge's alias
+      // and what pi and our retired runtime sent.
+      const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
       if (path) {
         const offset = numberField(rec, 'offset');
         if (offset != null) {
@@ -1435,8 +1964,139 @@ function formatToolArgDetail(
     }
     case PI_TOOL_NAMES.edit:
     case PI_TOOL_NAMES.write: {
-      raw = fileArgWithProgress(stringField(rec, 'path'), run.input, t);
+      raw = fileArgWithProgress(
+        stringField(rec, 'file_path') ?? stringField(rec, 'path'),
+        run.input,
+        t
+      );
       if (raw) kind = 'ident';
+      break;
+    }
+    // ─── dsh-rebase P1-7c: DSH's own tools (plan P1-7 shard 04 §2, §3) ───
+    case DSH_TOOL_NAMES.readImage: {
+      const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
+      raw = path ? shortPath(path) : undefined;
+      if (raw) kind = 'ident';
+      break;
+    }
+    case DSH_TOOL_NAMES.pwsh: {
+      const command = stringField(rec, 'command');
+      raw = command ? commandSummary(command, 'pwsh') : command;
+      if (raw) kind = 'ident';
+      break;
+    }
+    // The job id is the fallback; the painting leaf adds the job's label
+    // when the jobs window knows it (`argRef`).
+    case DSH_TOOL_NAMES.jobOutput:
+    case DSH_TOOL_NAMES.jobKill:
+      raw = stringField(rec, 'job_id');
+      if (raw) kind = 'ident';
+      break;
+    case DSH_TOOL_NAMES.jobList:
+      raw = t('all background jobs');
+      break;
+    // Addressed to a subagent the leaf names when it can; until then the
+    // message itself says more than the child's session id would.
+    case DSH_TOOL_NAMES.sendMessage:
+      raw = stringField(rec, 'message');
+      break;
+    case DSH_TOOL_NAMES.interruptAgent:
+      raw = stringField(rec, 'agent_id');
+      if (raw) kind = 'ident';
+      break;
+    case DSH_TOOL_NAMES.listAgents:
+      raw =
+        stringField(rec, 'scope') === 'descendants' ? t('all descendants') : t('direct subagents');
+      break;
+    case DSH_TOOL_NAMES.todoWrite: {
+      const todos = todoItemsOf(run.input);
+      if (todos && todos.length > 0) {
+        const done = todos.filter((todo) => todo.status === 'completed').length;
+        raw = t('{{done}}/{{total}} done', { done, total: todos.length });
+      }
+      break;
+    }
+    // `get_goal` takes nothing: the goal it read is in its result.
+    case DSH_TOOL_NAMES.getGoal: {
+      const objective = goalObjectiveOf(run.output);
+      raw = objective === null ? t('no goal') : objective;
+      break;
+    }
+    case DSH_TOOL_NAMES.createGoal:
+      raw = stringField(rec, 'objective');
+      break;
+    case DSH_TOOL_NAMES.updateGoal: {
+      const action = stringField(rec, 'action');
+      // What the update says, else the goal its result names.
+      const said =
+        action === 'blocked'
+          ? stringField(rec, 'blocked_reason')
+          : action === 'edit'
+            ? stringField(rec, 'objective')
+            : undefined;
+      raw = said ?? goalObjectiveOf(run.output) ?? undefined;
+      break;
+    }
+    // DSH's own card title for it: the plan's first heading (dsh-plan-mode).
+    case DSH_TOOL_NAMES.exitPlanMode: {
+      const plan = stringField(rec, 'plan');
+      raw = plan ? firstHeadingOf(plan) : undefined;
+      break;
+    }
+    case DSH_TOOL_NAMES.workflow:
+      raw = stringField(asRecord(rec?.meta), 'name');
+      if (raw) kind = 'ident';
+      break;
+    case DSH_TOOL_NAMES.listMcpResources:
+    case DSH_TOOL_NAMES.listMcpResourceTemplates:
+      raw = stringField(rec, 'server');
+      if (raw) kind = 'ident';
+      break;
+    case DSH_TOOL_NAMES.readMcpResource: {
+      const server = stringField(rec, 'server');
+      const uri = stringField(rec, 'uri');
+      raw = server && uri ? `${server} · ${uri}` : (uri ?? server);
+      if (raw) kind = 'ident';
+      break;
+    }
+    case DSH_TOOL_NAMES.webSearch: {
+      const queries = Array.isArray(rec?.queries)
+        ? rec.queries.filter((query): query is string => typeof query === 'string' && query !== '')
+        : [];
+      raw = queries.length > 0 ? queries.join(' · ') : undefined;
+      break;
+    }
+    case DSH_TOOL_NAMES.webFetch:
+      raw = stringField(rec, 'url');
+      if (raw) kind = 'ident';
+      break;
+    case DSH_TOOL_NAMES.present: {
+      const files = Array.isArray(rec?.files)
+        ? rec.files
+            .map((file) => stringField(asRecord(file), 'path'))
+            .filter((path): path is string => Boolean(path))
+            .map((path) => shortPath(path, 1))
+        : [];
+      raw = files.length > 0 ? files.join(', ') : undefined;
+      if (raw) kind = 'ident';
+      break;
+    }
+    case DSH_TOOL_NAMES.runCode: {
+      const description = stringField(rec, 'description');
+      const code = stringField(rec, 'code');
+      raw = description ?? (code ? firstLineOf(code) : undefined);
+      if (!description && raw) kind = 'ident';
+      break;
+    }
+    case DSH_TOOL_NAMES.listSubagentModels:
+      // No argument: the verb 「列模型」 is the whole row.
+      raw = undefined;
+      break;
+    case DSH_TOOL_NAMES.askUserQuestion: {
+      // `ask`'s rule: the first question stands for the call.
+      const questions = rec?.questions;
+      const first = Array.isArray(questions) ? asRecord(questions[0]) : undefined;
+      raw = stringField(first, 'question') ?? stringField(first, 'header');
       break;
     }
     case PI_TOOL_NAMES.grep:
@@ -1578,8 +2238,7 @@ function formatToolArgDetail(
       break;
     case 'Task':
     case 'Agent':
-    case 'subagent':
-    case 'subagent_fork':
+    case DSH_TOOL_NAMES.subagent:
       // subagent-data-06 — `agent` is what OUR `Task` tool takes; the two CLI
       // spellings stay because a replayed Claude-era transcript still has them,
       // and a row falling through to `default:` here would print the whole
@@ -1589,7 +2248,25 @@ function formatToolArgDetail(
         stringField(rec, 'agent') ??
         stringField(rec, 'subagent_type');
       break;
+    case DSH_TOOL_NAMES.subagentFork: {
+      // dsh-rebase P1-7c (the prototype's 「已委派 分叉 · 复核方案」): a fork
+      // carries the parent's whole context, so it says it is one. No agent
+      // name: DSH's subagents have none (decision 090).
+      const description = stringField(rec, 'description');
+      raw = description ? `${t('Fork')} · ${description}` : t('Fork');
+      break;
+    }
     default: {
+      // dsh-rebase P1-7c: the office plugin names its file in `path`.
+      if (
+        OFFICE_READ_TOOL_NAMES.includes(run.toolName) ||
+        OFFICE_WRITE_TOOL_NAMES.includes(run.toolName)
+      ) {
+        const path = stringField(rec, 'path');
+        raw = path ? shortPath(path) : undefined;
+        if (raw) kind = 'ident';
+        break;
+      }
       const probed =
         stringField(rec, 'command') ??
         stringField(rec, 'description') ??
@@ -1603,8 +2280,16 @@ function formatToolArgDetail(
       // call says more than its address does, and the label only replaces the
       // wire identifier this branch would otherwise print verbatim.
       const mcp = mcpToolLabel(run.toolName);
-      raw = probed ?? mcp ?? run.toolName;
-      if (!probed && mcp) kind = 'ident';
+      if (mcp) {
+        raw = probed ?? mcp;
+        if (!probed) kind = 'ident';
+        break;
+      }
+      // dsh-rebase P1-7c (decision 073 rule 1): a tool no table names — a
+      // plugin's, or one DSH added after this build — says WHICH tool it is
+      // first, since its verb (「工具」) no longer can; what it was about follows.
+      raw = probed ? `${run.toolName} · ${probed}` : run.toolName;
+      if (!probed) kind = 'ident';
       break;
     }
   }
@@ -1638,6 +2323,8 @@ export function deriveFileLink(run: ToolRun): FileLinkTarget | null {
       PI_TOOL_NAMES.read,
       PI_TOOL_NAMES.edit,
       PI_TOOL_NAMES.write,
+      // dsh-rebase P1-7c (shard 04 §2): the editor previews an image it opens.
+      DSH_TOOL_NAMES.readImage,
     ].includes(run.toolName)
   )
     return null;
@@ -1675,12 +2362,15 @@ export function deriveRepoName(workspacePath: string | null | undefined): string
 // needed our own lowercase `bash` (and pi's `powershell` sibling) as well as
 // Claude's capitalised spellings; without them a native shell call got the
 // 60vh window meant for file output.
-const BASH_TOOL_NAMES = new Set([
+const BASH_TOOL_NAMES = new Set<string>([
   'Bash',
   'BashOutput',
   'KillShell',
   PI_TOOL_NAMES.bash,
   PI_TOOL_NAMES.powershell,
+  // dsh-rebase P1-7c: Windows' shell, and a background job's output.
+  DSH_TOOL_NAMES.pwsh,
+  DSH_TOOL_NAMES.jobOutput,
 ]);
 
 /** Output body scroll window (legacy sign-off ② values): Bash-family 46vh, everything else 60vh. */

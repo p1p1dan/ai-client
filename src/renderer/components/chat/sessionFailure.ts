@@ -131,10 +131,13 @@ const FAILURE_VIEWS = {
   // the same Task* call was cut while it streamed, and nothing in it ran.
   // `continue` because the conversation before that reply is intact and a
   // fresh message is exactly how the user carries on.
+  // dsh-rebase P1-7c (plan P1-7 shard 04 §7): on DSH the guarded family also
+  // takes in the background-job tools (`job_*`) and `send_message`
+  // (`loopGuard/constants.ts` DELEGATION_TOOL_NAMES), so the sentence names both.
   tool_call_repetition: {
     title: 'The model repeated the same tool calls, so its reply was stopped',
     reason:
-      'The model kept writing the same subagent tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.',
+      'The model kept writing the same subagent or background-task tool call in one reply without waiting for any result. This app interrupted that reply and ran none of the tool calls in it.',
     hint: 'Send a message to carry on — everything before this reply is kept. If it happens again, try another model.',
     action: 'continue',
   },
@@ -199,6 +202,37 @@ const FAILURE_VIEWS = {
     hint: 'Sign in again, or unlock the system keyring, then send your message again.',
     action: 'configure',
   },
+  // dsh-rebase P1-7c (decision 106 rule 42): the four provider classes DSH
+  // reports that no card above already says (`src/shared/dshFailureCodes.ts`).
+  // DSH's own sentence stays under each as the detail. DSH has already retried
+  // the transient ones by itself (`dsh-llm-retry`) before any of them lands.
+  PROVIDER_UNAUTHORIZED: {
+    title: 'The model service refused the key',
+    reason:
+      'The model service did not accept the key this app sent for this model: it is invalid, expired, or not allowed to use this model.',
+    hint: 'Sign in again or check the model in settings, then send your message again.',
+    action: 'configure',
+  },
+  PROVIDER_RATE_LIMITED: {
+    title: 'The model service is limiting requests',
+    reason:
+      'The model service turned the request away because too many were sent, or the quota for this model is used up.',
+    hint: 'Wait a moment and continue. If it keeps happening, check the quota or pick another model.',
+    action: 'continue',
+  },
+  NETWORK_ERROR: {
+    title: 'The model service could not be reached',
+    reason: 'The connection to the model service failed before a reply came back.',
+    hint: 'Check the network or proxy, then continue.',
+    action: 'continue',
+  },
+  PROVIDER_ERROR: {
+    title: 'The model service returned an error',
+    reason:
+      'The model service answered with an error, or with an empty or malformed reply, even after retrying.',
+    hint: 'Continue to try again. If it fails the same way, send the detail below or pick another model.',
+    action: 'continue',
+  },
   unknown: {
     title: 'The turn stopped',
     reason: 'This app does not recognise the reason the turn ended with.',
@@ -215,8 +249,8 @@ export type KnownSessionFailureCode = keyof typeof FAILURE_VIEWS;
  * runtime's provider vocabulary (`src/shared/dshFailureCodes.ts`). Three of
  * those codes mean exactly what a card above already says, so they read it.
  * The rest (`PROVIDER_UNAUTHORIZED`, `PROVIDER_RATE_LIMITED`, `NETWORK_ERROR`,
- * `PROVIDER_ERROR`) keep the generic card with DSH's own sentence as the
- * detail until their wording is written (plan P1-7 shard 04 §7).
+ * `PROVIDER_ERROR`) have cards of their own since P1-7c (plan P1-7 shard 04
+ * §7), with DSH's own sentence as the detail.
  */
 const FAILURE_CODE_ALIASES: Readonly<Record<string, KnownSessionFailureCode>> = {
   TIMEOUT: 'timeout',

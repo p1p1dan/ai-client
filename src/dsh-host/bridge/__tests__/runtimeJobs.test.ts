@@ -216,6 +216,85 @@ describe('DshSessionRuntime — P1-7b wiring (decisions 069, 099 rule 15, 119)',
     expect(next).toHaveBeenCalledTimes(3);
   });
 
+  it('[P7C-JOB] a promoted or background call’s result names its job (`details.backgroundJob`); others do not', async () => {
+    const host = fakeHost();
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+    await bridge.startSend(send('turn-1', 'run it'));
+    const call = (callId: string, args: Record<string, unknown>) =>
+      host.append('tool/call', {
+        turn: 1,
+        step: 1,
+        callId,
+        name: 'bash',
+        arguments: JSON.stringify(args),
+      });
+    const execute = (callId: string, value: unknown, agentId = DSH_ID) =>
+      host.fire(
+        'tools/execute',
+        { callId, name: 'bash', arguments: {}, agent: { id: agentId } },
+        async () => ({ isError: false, value, content: [] })
+      );
+    const result = (callId: string, text: string, extra: Record<string, unknown> = {}) =>
+      host.append('tool/result', {
+        turn: 1,
+        step: 1,
+        message: { toolCallId: callId, content: [{ type: 'text', text }], isError: false },
+        ...extra,
+      });
+    const completed = (callId: string) =>
+      emitted.find(
+        (event) => event.type === 'tool.completed' && event.payload?.toolCallId === callId
+      )?.payload;
+
+    // Its timeout moved a foreground command to the background.
+    call('call-p', { command: 'npm test', description: 'Run the tests' });
+    await execute('call-p', { kind: 'promoted', jobId: 'bash-3', timeoutMs: 120_000, output: '' });
+    result('call-p', '[still running after 120000ms; moved to background job bash-3]');
+    expect(completed('call-p')).toMatchObject({
+      ok: true,
+      output: {
+        content: [{ type: 'text', text: expect.stringContaining('moved to background job') }],
+        details: { backgroundJob: { id: 'bash-3', promoted: true } },
+      },
+    });
+
+    // `run_in_background`: the job from the start.
+    call('call-b', { command: 'npm run dev', description: 'Start', run_in_background: true });
+    await execute('call-b', { kind: 'background', jobId: 'bash-4' });
+    result('call-b', 'started background job bash-4');
+    expect(completed('call-b')).toMatchObject({
+      output: { details: { backgroundJob: { id: 'bash-4' } } },
+    });
+    expect(
+      (completed('call-b')?.output as { details: { backgroundJob: object } }).details.backgroundJob
+    ).toEqual({ id: 'bash-4' });
+
+    // An ordinary foreground call: the plain string it always was.
+    call('call-f', { command: 'ls', description: 'List' });
+    await execute('call-f', { kind: 'foreground', exitCode: 0 });
+    result('call-f', 'a\nb');
+    expect(completed('call-f')).toMatchObject({ ok: true, output: 'a\nb' });
+
+    // A child's call is not this session's row, whatever it returned.
+    call('call-c', { command: 'npm test', description: 'Run the tests' });
+    await execute('call-c', { kind: 'promoted', jobId: 'bash-9' }, 'aiclient-child');
+    result('call-c', 'x');
+    expect(completed('call-c')).toMatchObject({ output: 'x' });
+
+    // A result that failed names no job, even if the value said one.
+    call('call-e', { command: 'npm test', description: 'Run the tests' });
+    await execute('call-e', { kind: 'promoted', jobId: 'bash-5' });
+    host.append('tool/result', {
+      turn: 1,
+      step: 1,
+      message: { toolCallId: 'call-e', content: [{ type: 'text', text: 'boom' }], isError: true },
+    });
+    expect(completed('call-e')).toMatchObject({ ok: false });
+    expect(completed('call-e')?.output).toBeUndefined();
+  });
+
   it('[P7B-BASELINE] `jobs` joins the bootstrap snapshot only while the session has one; `worker.panels` always', async () => {
     const empty = fakeHost();
     empty.services.jobs = fakeJobs().registry;

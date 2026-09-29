@@ -499,9 +499,12 @@ describe('toolVerb / classifyTool', () => {
     expect(toolVerb('Edit', 'running')).toBe('Editing');
   });
 
-  it('falls back to Ran/Running for an unknown tool name', () => {
-    expect(toolVerb('SomeUnknownTool', 'done')).toBe('Ran');
-    expect(toolVerb('SomeUnknownTool', 'running')).toBe('Running');
+  // dsh-rebase P1-7c (decision 073 rule 1): the fallback used to be Ran /
+  // Running, whose Chinese is 「终端」 — a plugin's row claimed to run a shell.
+  it('falls back to Used tool / Using tool for an unknown tool name', () => {
+    expect(toolVerb('SomeUnknownTool', 'done')).toBe('Used tool');
+    expect(toolVerb('SomeUnknownTool', 'running')).toBe('Using tool');
+    expect(toolVerb('SomeUnknownTool', 'done')).not.toBe('Ran');
   });
 
   it('classifies an mcp__server__tool call as action, so it never aggregates', () => {
@@ -786,7 +789,8 @@ describe('deriveToolRowView', () => {
  * 2026-09-23 (user report: a running command could not be expanded, its full
  * text was nowhere to be seen, and nothing showed how long it had been going):
  * a RUNNING call now expands into its live input, and carries the start stamp
- * and timeout the renderer turns into the "12s / 30m" tail.
+ * and timeout the renderer turns into the "12s · to background at 2m" tail
+ * (dsh-rebase P1-7c; it read "12s / 2m" while the runtime killed at the limit).
  */
 describe('deriveToolRowView — running input preview and live clock', () => {
   it('expands a running bash row into its full input', () => {
@@ -846,12 +850,14 @@ describe('deriveToolRowView — running input preview and live clock', () => {
     // the origin-switch tests below), so every bash case here sets it; that
     // is not what this test is about, which is `bashTimeoutMsFromInput`'s own
     // reading of `timeoutSeconds` / `timeoutMs`.
+    // dsh-rebase P1-7c: DSH caps an override at 600s (`maxTimeoutMs`), so a
+    // 30-minute ask moves to the background at 10 minutes.
     const seconds = deriveToolRowView(
       makeRun('b5', 'bash', { command: 'sleep 1', timeoutSeconds: 1800 }, 'running', {
         execStartedAtMs: 1_000,
       })
     );
-    expect(seconds.runningTimeoutMs).toBe(1_800_000);
+    expect(seconds.runningTimeoutMs).toBe(600_000);
 
     const ms = deriveToolRowView(
       makeRun('b6', 'bash', { command: 'sleep 1', timeoutMs: 300_000 }, 'running', {
@@ -964,7 +970,7 @@ describe('deriveToolGroupRows — running rows keep their clock', () => {
         // set to the same instant `toolStartedAtMs` names below so the
         // `runningStartedAtMs` assertion is unaffected by which origin wins.
         runEntry(
-          makeRun('c2', 'bash', { command: 'pnpm build', timeoutSeconds: 1800 }, 'running', {
+          makeRun('c2', 'bash', { command: 'pnpm build', timeoutMs: 300_000 }, 'running', {
             execStartedAtMs: 5_000,
           })
         ),
@@ -981,7 +987,7 @@ describe('deriveToolGroupRows — running rows keep their clock', () => {
     const running = rows.find((row) => row.key === 'c2');
     expect(running?.running).toBe(true);
     expect(running?.runningStartedAtMs).toBe(5_000);
-    expect(running?.runningTimeoutMs).toBe(1_800_000);
+    expect(running?.runningTimeoutMs).toBe(300_000);
     // A settled row reads no stamp even when one is on record.
     expect(rows.find((row) => row.key === 'c1')?.runningStartedAtMs).toBeUndefined();
     // The thinking half of the options still reaches the thought row.
@@ -1517,15 +1523,17 @@ describe('refused calls are not described in the past tense', () => {
   });
 
   it('every tool has a refused form, and none of them is the completed one', () => {
+    // `Read` is the one word that is legitimately both — English, not an
+    // oversight. dsh-rebase P1-7c adds the two DSH verbs built on the same
+    // kind of word: `read` and `set` have no separate past tense either.
+    const SAME_IN_BOTH_FORMS = new Set(['Read', 'Read job output', 'Set goal']);
     for (const [name, verbs] of Object.entries(TOOL_VERBS)) {
       expect(verbs.refused, `${name} has no refused form`).toBeTruthy();
-      // `Read` is the one word that is legitimately both — English, not an
-      // oversight — so it is the only permitted collision.
-      if (verbs.done !== 'Read') {
+      if (!SAME_IN_BOTH_FORMS.has(verbs.done)) {
         expect(verbs.refused, `${name} still reads as completed`).not.toBe(verbs.done);
       }
     }
-    expect(UNKNOWN_TOOL_VERB.refused).toBe('Run');
+    expect(UNKNOWN_TOOL_VERB.refused).toBe('Use tool');
   });
 });
 

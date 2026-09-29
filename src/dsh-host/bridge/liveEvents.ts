@@ -34,6 +34,11 @@
  *   carried                             (P1-4d2, rule 9); no turn is opened
  *   a call entering `tools/execute`     tool.updated with `execStartedAt`: its
  *                                       approval is behind it (P1-7b, rule 15)
+ *   a call leaving `tools/execute`      its `tool.completed` names the background
+ *   with a background job               job it left (`details.backgroundJob`):
+ *                                       `run_in_background`, or a command its
+ *                                       timeout promoted (P1-7c); live only, the
+ *                                       value is never logged
  *   a running command's job output      tool.output, the tail (P1-7b, `jobs.ts`)
  *
  * Message ids are fixed by DSH's own coordinates — `dsh-user-<seq>`,
@@ -337,6 +342,8 @@ export class DshLiveEvents {
   private currentStream: { attemptId: string; message: StepMessage } | null = null;
   /** P1-7b: calls that entered `tools/execute` before their row was opened, and when. */
   private readonly execStarted = new Map<string, number>();
+  /** P1-7c: calls that left `tools/execute` with a background job, until their result. */
+  private readonly backgroundJobs = new Map<string, { id: string; promoted?: true }>();
   /**
    * The turn is still taking in its first batch of input (until its first
    * model event), and whether a head came out of it (P1-4d1, decision 072).
@@ -357,6 +364,7 @@ export class DshLiveEvents {
     this.argStreams.clear();
     this.currentStream = null;
     this.execStarted.clear();
+    this.backgroundJobs.clear();
     this.batch = { first: false, headed: false };
   }
 
@@ -376,6 +384,23 @@ export class DshLiveEvents {
     this.emit({
       type: 'tool.updated',
       payload: { messageId, toolCallId: callId, execStartedAt: at },
+    });
+  }
+
+  /**
+   * P1-7c (plan P1-7 shard 04 §4): the call left `tools/execute` with DSH's
+   * execution-local `value`. A `run_in_background` call answers
+   * `{kind: 'background', jobId}` and a foreground command its timeout moved
+   * to the background `{kind: 'promoted', jobId}`; the row's result, which
+   * DSH records right after, names that job. Any other value names none.
+   */
+  onExecEnded(callId: string, value: unknown): void {
+    const result = recordOf(value);
+    const jobId = stringOf(result?.jobId);
+    if (!jobId || (result?.kind !== 'background' && result?.kind !== 'promoted')) return;
+    this.backgroundJobs.set(callId, {
+      id: jobId,
+      ...(result.kind === 'promoted' ? { promoted: true as const } : {}),
     });
   }
 
@@ -889,9 +914,12 @@ export class DshLiveEvents {
     const review = failed
       ? undefined
       : dshFileReview(this.toolNames.get(callId), this.callArgs.get(callId), data.meta);
+    const backgroundJob = failed ? undefined : this.backgroundJobs.get(callId);
+    this.backgroundJobs.delete(callId);
     const details = {
       ...(review ? { review } : {}),
       ...dshToolOutcomeFlags(data.error, data.meta),
+      ...(backgroundJob ? { backgroundJob } : {}),
     };
     const structured = Object.keys(details).length > 0;
     this.emit({

@@ -148,21 +148,35 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
     expect(deriveSessionFailure({ errorCode: 'something_new' }).showsDetail).toBe(true);
   });
 
-  it('[P1-4d1] a DSH code that means an existing card reads that card; the rest stay generic', () => {
+  it('[P1-4d1] a DSH code that means an existing card reads that card', () => {
     // src/shared/dshFailureCodes.ts names DSH failures in the native provider vocabulary.
     expect(toSessionFailureCode('TIMEOUT')).toBe('timeout');
     expect(toSessionFailureCode('CONTEXT_TOO_LARGE')).toBe('context_too_large');
     expect(toSessionFailureCode('MODEL_NOT_CONFIGURED')).toBe('model_missing');
     expect(deriveSessionFailure({ errorCode: 'CONTEXT_TOO_LARGE' }).action).toBe('configure');
     expect(toSessionFailureCode('tool_call_repetition')).toBe('tool_call_repetition');
-    for (const code of [
-      'PROVIDER_UNAUTHORIZED',
-      'PROVIDER_RATE_LIMITED',
-      'NETWORK_ERROR',
-      'PROVIDER_ERROR',
-    ]) {
-      expect(toSessionFailureCode(code), code).toBe('unknown');
-    }
+  });
+
+  // dsh-rebase P1-7c (decision 106 rule 42): the four provider classes that
+  // had only the generic card get their own; DSH's sentence stays the detail.
+  it.each([
+    ['PROVIDER_UNAUTHORIZED', 'The model service refused the key', 'configure'],
+    ['PROVIDER_RATE_LIMITED', 'The model service is limiting requests', 'continue'],
+    ['NETWORK_ERROR', 'The model service could not be reached', 'continue'],
+    ['PROVIDER_ERROR', 'The model service returned an error', 'continue'],
+  ] as const)('[P1-7c] %s has a card of its own', (code, title, action) => {
+    expect(toSessionFailureCode(code)).toBe(code);
+    const view = deriveSessionFailure({ errorCode: code, error: 'DSH sentence' });
+    expect(view.title).toBe(title);
+    expect(view.action).toBe(action);
+    expect(view.showsDetail).toBe(true);
+    expect(view.title).not.toBe(deriveSessionFailure({ errorCode: 'unknown' }).title);
+  });
+
+  it('[P1-7c] the repetition card names the background-task tools DSH also guards', () => {
+    const view = deriveSessionFailure({ errorCode: 'tool_call_repetition' });
+    expect(view.reason).toContain('subagent or background-task tool call');
+    expect(zhTranslations[view.reason]).toContain('子代理或后台任务工具调用');
   });
 
   it('does not read a code out of the prototype chain', () => {
@@ -192,6 +206,10 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'dsh_host_crashed',
       'dsh_engine_restarted',
       'CREDENTIALS_UNAVAILABLE',
+      'PROVIDER_UNAUTHORIZED',
+      'PROVIDER_RATE_LIMITED',
+      'NETWORK_ERROR',
+      'PROVIDER_ERROR',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });
@@ -320,6 +338,10 @@ describe('every failure sentence has a Chinese entry', () => {
       'dsh_host_crashed',
       'dsh_engine_restarted',
       'CREDENTIALS_UNAVAILABLE',
+      'PROVIDER_UNAUTHORIZED',
+      'PROVIDER_RATE_LIMITED',
+      'NETWORK_ERROR',
+      'PROVIDER_ERROR',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });

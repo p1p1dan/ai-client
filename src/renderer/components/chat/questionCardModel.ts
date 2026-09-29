@@ -8,6 +8,7 @@ import type {
   QuestionItem,
 } from '@shared/types/runtimeEvents';
 import type { ChatBlock } from '@/stores/chatSessions';
+import { permissionToolLabel } from './piToolNames';
 import type { ToolRowView } from './toolCard';
 
 /**
@@ -880,7 +881,9 @@ export const PERMISSION_ACTION_LABELS: Readonly<Record<PermissionRequestAction, 
  * tool name — a card that says less, never one that says something wrong.
  */
 function derivePermissionPrompt(block: ChatBlock, t: Translate = englishTranslate): string {
-  const toolName = block.toolName ?? '';
+  // dsh-rebase P1-7c (plan P1-7 shard 04 §6): the shells by their product
+  // names, so a Windows card reads 「PowerShell — 在工作区运行命令」.
+  const toolName = block.toolName ? permissionToolLabel(block.toolName) : '';
   const label = block.permissionAction
     ? PERMISSION_ACTION_LABELS[block.permissionAction]
     : undefined;
@@ -896,9 +899,18 @@ function derivePermissionPrompt(block: ChatBlock, t: Translate = englishTranslat
 export function derivePermissionRisk(block: ChatBlock): PermissionRisk {
   if (block.permissionKind === 'exec' || block.permissionKind === 'file_change') return 'high';
   const tool = (block.toolName ?? '').toLowerCase();
-  if (tool === 'bash' || tool === 'write' || tool === 'edit') return 'high';
+  // dsh-rebase P1-7c: Windows' shell is as loud as bash (shard 04 §6).
+  if (tool === 'bash' || tool === 'pwsh' || tool === 'write' || tool === 'edit') return 'high';
   return 'medium';
 }
+
+/**
+ * dsh-rebase P1-7c (plan P1-7 shard 04 §6): a sandbox escalation is granted
+ * for the one call that asked — DSH has no "for this session" for it — and the
+ * card offers only allow / deny, so the reach the session-scope note would
+ * otherwise explain is stated here instead.
+ */
+export const PERMISSION_ONE_CALL_NOTE = 'Applies to this one call only';
 
 function readInputField(input: unknown, key: string): string | null {
   if (typeof input !== 'object' || input === null) return null;
@@ -1054,12 +1066,15 @@ export function derivePermissionCardView(
       waiting: false,
       detail,
       omittedNote,
-      sessionScopeNote: derivePermissionSessionScopeNote(
-        options,
-        t,
-        block.permissionGrantScope,
-        block.toolName
-      ),
+      sessionScopeNote:
+        block.permissionAction === 'escalate_sandbox'
+          ? t(PERMISSION_ONE_CALL_NOTE)
+          : derivePermissionSessionScopeNote(
+              options,
+              t,
+              block.permissionGrantScope,
+              block.toolName
+            ),
     };
   }
 

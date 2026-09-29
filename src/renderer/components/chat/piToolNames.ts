@@ -69,6 +69,62 @@ export const RUNTIME_TOOL_NAMES = {
 } as const;
 
 /**
+ * dsh-rebase P1-7c: the DSH tools (pinned 0.1.7-rc.2) whose names neither
+ * table above carries, by the `name:` literal of each tool's own definition.
+ * The shared names (`read`, `write`, `edit`, `glob`, `grep`, `bash`, `skill`)
+ * stay in {@link RUNTIME_TOOL_NAMES}: one name, one row treatment. Argument
+ * names differ from Claude's and pi's again — `file_path` for files,
+ * `job_id` / `agent_id` for handles — so every table keyed on a field reads
+ * DSH's own spelling (plan P1-7 shard 04 §2).
+ *
+ * The permission gate's classification table
+ * (`src/dsh-host/permissions/classification.ts`) is the list this one is
+ * reconciled against, by `dshToolVocabulary.test.ts`.
+ */
+export const DSH_TOOL_NAMES = {
+  readImage: 'read_image',
+  pwsh: 'pwsh',
+  jobOutput: 'job_output',
+  jobList: 'job_list',
+  jobKill: 'job_kill',
+  subagent: 'subagent',
+  subagentFork: 'subagent_fork',
+  sendMessage: 'send_message',
+  interruptAgent: 'interrupt_agent',
+  listAgents: 'list_agents',
+  todoWrite: 'todo_write',
+  getGoal: 'get_goal',
+  createGoal: 'create_goal',
+  updateGoal: 'update_goal',
+  exitPlanMode: 'exit_plan_mode',
+  workflow: 'workflow',
+  listMcpResources: 'list_mcp_resources',
+  listMcpResourceTemplates: 'list_mcp_resource_templates',
+  readMcpResource: 'read_mcp_resource',
+  askUserQuestion: 'ask_user_question',
+  // Not mounted by our composition today (shard 04 §3), mapped all the same.
+  webSearch: 'web_search',
+  webFetch: 'web_fetch',
+  present: 'present',
+  runCode: 'run_code',
+  listSubagentModels: 'list_subagent_models',
+} as const;
+
+/**
+ * dsh-rebase P1-7c (decision 115): the tools of the allowlisted
+ * `dsh-office-tools` plugin, by the review's classification — three reads,
+ * five writes, every one naming its file in `path`.
+ */
+export const OFFICE_READ_TOOL_NAMES: readonly string[] = ['word_read', 'excel_read', 'ppt_read'];
+export const OFFICE_WRITE_TOOL_NAMES: readonly string[] = [
+  'word_create',
+  'word_update',
+  'excel_create',
+  'excel_update',
+  'ppt_create',
+];
+
+/**
  * Prefix every MCP-bridged tool carries: `mcp__<server>__<tool>`.
  *
  * The name is composed at runtime from the server and tool ids, so no table can
@@ -125,4 +181,22 @@ export function mcpToolLabel(toolName: string): string | undefined {
  */
 export function toolDisplayName(toolName: string): string {
   return mcpToolLabel(toolName) ?? toolName;
+}
+
+/**
+ * dsh-rebase P1-7c (plan P1-7 shard 04 §6): the two shells by the names a
+ * person knows them by, for the approval card's title line — a Windows card
+ * reads 「PowerShell — 在工作区运行命令」, not the wire name `pwsh`. Product
+ * names, so they are not translated.
+ */
+const SHELL_CARD_NAMES: Readonly<Record<string, string>> = {
+  bash: 'Bash',
+  pwsh: 'PowerShell',
+};
+
+/** The tool as the approval card names it: a shell by its product name, else `toolDisplayName`. */
+export function permissionToolLabel(toolName: string): string {
+  return Object.hasOwn(SHELL_CARD_NAMES, toolName)
+    ? (SHELL_CARD_NAMES[toolName] as string)
+    : toolDisplayName(toolName);
 }
