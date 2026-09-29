@@ -34,6 +34,10 @@
  *                       refused without a card, its read runs
  *      two P1-3a experiments, ENV (no .env file reaches a tool, decision 023)
  *      and FDS (the descriptors a tool inherits, decision 034's precondition),
+ *      P1-15's one-shot completions beside S1 (decision 125: `complete`, no
+ *      channel): a review streamed in deltas, a fenced commit message, a slow
+ *      review cancelled mid-stream and answered at once, a malformed request
+ *      refused, and no session written for any of them,
  *      then worker.dispose right after the last turn (ACK, then closed; the
  *      host lives on), and shutdown (stopped, exit 0).
  *   B  new session S2, SIGKILLed right after bootstrap: a header-only log whose
@@ -121,7 +125,14 @@ import {
   convertImportedConversation,
   convertPiSessionBytes,
 } from '../../shared/legacyPiSession/convert/index.ts';
-import { fakeGatewayPlan, HostClient, type Message, type ServedPlan } from './lib/hostClient.ts';
+import {
+  FAKE_MODEL,
+  FAKE_ROUTE,
+  fakeGatewayPlan,
+  HostClient,
+  type Message,
+  type ServedPlan,
+} from './lib/hostClient.ts';
 import {
   baseEnv,
   captureStderr,
@@ -240,6 +251,28 @@ interface Host {
   startedAt: number;
   /** Main's model source, played for this host. */
   served: ServedPlan;
+}
+
+/**
+ * P1-15: every session directory and identity stub under the DSH home
+ * (`sessions/<project>/<id>`, `aiclient-sessions/*`), sorted, to tell that
+ * a completion wrote none.
+ */
+function sessionIdsUnder(dshHome: string): string[] {
+  const found: string[] = [];
+  const sessionsRoot = join(dshHome, 'sessions');
+  if (existsSync(sessionsRoot)) {
+    for (const project of readdirSync(sessionsRoot)) {
+      const dir = join(sessionsRoot, project);
+      if (!statSync(dir).isDirectory()) continue;
+      for (const id of readdirSync(dir)) found.push(`sessions/${project}/${id}`);
+    }
+  }
+  const stubs = join(dshHome, 'aiclient-sessions');
+  if (existsSync(stubs)) {
+    for (const name of readdirSync(stubs)) found.push(`aiclient-sessions/${name}`);
+  }
+  return found.sort();
 }
 
 /**
@@ -624,6 +657,35 @@ async function main() {
       hostFd3: hostChannelFd,
       sandboxed: fdsView(fdsRuns[0]),
       escalated: fdsView(fdsRuns[1]),
+    };
+
+    // P1-15 (decision 125): one-shot completions on the same host, beside S1:
+    // no channel, no session written.
+    const sessionsBeforeCompletions = sessionIdsUnder(box.dshHome);
+    report.completions = {
+      review: await a.client.complete({
+        purpose: 'code-review',
+        prompt: 'P1-COMPLETE-REVIEW: review the smoke diff.',
+        timeoutMs: 60_000,
+        stream: true,
+      }),
+      commit: await a.client.complete({
+        purpose: 'commit-message',
+        prompt: 'P1-COMPLETE-COMMIT: one line for the smoke diff.',
+        timeoutMs: 60_000,
+      }),
+      cancelled: await a.client.complete(
+        {
+          purpose: 'code-review',
+          prompt: 'P1-COMPLETE-SLOW: a review to stop.',
+          timeoutMs: 60_000,
+          stream: true,
+        },
+        { cancelAfterDeltas: 2 }
+      ),
+      invalid: await a.client.complete({ purpose: 'title', prompt: 'x', timeoutMs: 1_000 }),
+      sessionsUnchanged:
+        JSON.stringify(sessionIdsUnder(box.dshHome)) === JSON.stringify(sessionsBeforeCompletions),
     };
 
     // P1-4a: what F's first page must repeat after the host restarts.
@@ -1375,6 +1437,17 @@ async function main() {
   const credentials = report.credentials as
     | { requests: number; outcomes: string[]; refs: string[] }
     | undefined;
+  // P1-15: host A's one-shot completions, as `HostClient.complete` answered them.
+  type CompletionAnswer = Message & { deltas: string[]; cancelToAnswerMs?: number };
+  const completions = report.completions as
+    | {
+        review?: CompletionAnswer;
+        commit?: CompletionAnswer;
+        cancelled?: CompletionAnswer;
+        invalid?: CompletionAnswer;
+        sessionsUnchanged?: boolean;
+      }
+    | undefined;
   type FdsView = { lines: string[]; inherited: boolean; channelVariable: boolean };
   const ipcHandle = experiments.ipcHandle as
     | { hostFd3: string | null; sandboxed: FdsView; escalated: FdsView }
@@ -1545,6 +1618,22 @@ async function main() {
       credentials.requests >= 4 &&
       JSON.stringify(credentials.outcomes) === '["served"]' &&
       JSON.stringify(credentials.refs) === JSON.stringify(Object.keys(plan.refs)),
+    // P1-15 (decision 125): one-shot completions through ctx.llm, no channel, no session
+    completionStreamsAndAnswers:
+      completions?.review?.ok === true &&
+      completions.review.deltas.length >= 2 &&
+      completions.review.deltas.join('') === completions.review.text &&
+      completions.review.model === `${FAKE_ROUTE}/${FAKE_MODEL}` &&
+      completions.commit?.ok === true &&
+      completions.commit.deltas.length === 0 &&
+      String(completions.commit.text).startsWith('```'),
+    completionCancelAnsweredAtOnce:
+      completions?.cancelled?.ok === false &&
+      (completions.cancelled.error as Message | undefined)?.code === 'completion_cancelled' &&
+      (completions.cancelled.cancelToAnswerMs ?? Number.POSITIVE_INFINITY) < 1_000,
+    completionRefusesMalformedRequest:
+      (completions?.invalid?.error as Message | undefined)?.code === 'completion_request_invalid',
+    completionWritesNoSession: completions?.sessionsUnchanged === true,
     // Decision 034's precondition (IT-07): no tool inherits the host's IPC channel
     // P1-6b part 2 (decisions 042, 044): the app's own gate judges every call
     gateAsksInAsk:

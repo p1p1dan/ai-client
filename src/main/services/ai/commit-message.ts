@@ -1,6 +1,9 @@
 import { execSync } from 'node:child_process';
 import type { CommonAICompletionOptions } from '@shared/types/ai';
-import { piUtilityService } from '../agent-host/PiUtilityService';
+import {
+  type DshCompletionService,
+  dshCompletionService,
+} from '../agent-host/DshCompletionService';
 import { isWslGitRepository, spawnGit } from '../git/runtime';
 import { stripCodeFence } from './providers';
 
@@ -66,8 +69,14 @@ function runGit(args: string[], cwd: string): Promise<string> {
   });
 }
 
+/**
+ * dsh-rebase P1-15 (decision 125): the completion runs on the shared DSH host
+ * (`service`, the app's own by default); the prompt and the fence stripping
+ * are unchanged.
+ */
 export async function generateCommitMessage(
-  options: CommitMessageOptions
+  options: CommitMessageOptions,
+  service: Pick<DshCompletionService, 'complete'> = dshCompletionService
 ): Promise<CommitMessageResult> {
   const { workdir, maxDiffLines, timeout, model, effort, prompt: customPrompt } = options;
 
@@ -105,8 +114,8 @@ ${stagedStat || '(no stats)'}
 ${truncatedDiff}`;
 
   try {
-    const completion = await piUtilityService.complete({
-      cwd: workdir,
+    const completion = await service.complete({
+      purpose: 'commit-message',
       prompt,
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),

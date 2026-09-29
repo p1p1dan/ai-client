@@ -34,6 +34,13 @@
  *                       with the same id, what was made or where it stopped.
  *                       A request with a usable id and bad fields is answered
  *                       `seed_request_invalid`, never dropped: Main waits on it.
+ *   {host:'complete', id, …} / {host:'complete-cancel', id}
+ *                       a one-shot completion on the host's LLM service (P1-15,
+ *                       decision 125, `completions.ts`): no channel, no session.
+ *                       Completions run side by side, each answered `completed`
+ *                       with its id; a request with a usable id and bad fields
+ *                       is answered `completion_request_invalid`, and a host
+ *                       without completions `completion_unavailable`.
  *
  * A channel's own `worker.dispose` closes that channel only: its ACK goes out,
  * then `closed`, and nothing more for that channel after it. Messages that are
@@ -47,10 +54,13 @@ import {
 } from '../../agent-host/piWorkerRpcServer.ts';
 import {
   DSH_CHANNEL_UNKNOWN_CODE,
+  DSH_COMPLETION_REQUEST_INVALID,
+  DSH_COMPLETION_UNAVAILABLE,
   DSH_SEED_REQUEST_INVALID,
   DSH_SEED_UNAVAILABLE,
   type DshChannelId,
   type DshHostChannelStatus,
+  type DshHostCompleteRequest,
   type DshHostGcRequest,
   type DshHostGcResult,
   type DshHostPage,
@@ -64,6 +74,8 @@ import {
   dshHostControlKind,
   isDshChannelEnvelope,
   isDshHostCloseChannel,
+  isDshHostCompleteCancel,
+  isDshHostCompleteRequest,
   isDshHostGcRequest,
   isDshHostPing,
   isDshHostReadPageRequest,
@@ -110,6 +122,15 @@ export interface DshChannelMuxOptions {
    * `stage`, `code` and `retryable` (`SeedSessionError`) is answered with them.
    */
   seedSession?(request: DshSeedSessionSource): Promise<DshSeedSessionResult | DshSeedImportResult>;
+  /**
+   * P1-15 (decision 125): one-shot completions (`DshCompletions`), which
+   * answer every request themselves; without them a `complete` is answered
+   * `completion_unavailable`.
+   */
+  completions?: {
+    start(request: DshHostCompleteRequest): void;
+    cancel(id: number): void;
+  };
   log(...args: unknown[]): void;
 }
 
@@ -202,6 +223,14 @@ export class DshChannelMux {
       this.seedSession(message);
       return true;
     }
+    if (isDshHostCompleteRequest(message)) {
+      this.complete(message);
+      return true;
+    }
+    if (isDshHostCompleteCancel(message)) {
+      this.options.completions?.cancel(message.id);
+      return true;
+    }
     const kind = dshHostControlKind(message);
     if (kind === 'seedSession') {
       const id = (message as { id?: unknown }).id;
@@ -217,10 +246,30 @@ export class DshChannelMux {
         return true;
       }
     }
+    if (kind === 'complete') {
+      const id = (message as { id?: unknown }).id;
+      if (typeof id === 'number' && Number.isSafeInteger(id) && id > 0) {
+        this.options.send({
+          host: 'completed',
+          id,
+          ok: false,
+          error: {
+            code: DSH_COMPLETION_REQUEST_INVALID,
+            message: 'complete fields are not what the protocol says',
+          },
+          ms: 0,
+        });
+        return true;
+      }
+    }
     if (kind !== undefined) {
       this.warnOnce(
         `control:${kind}`,
-        kind === 'gc' || kind === 'readPage' || kind === 'seedSession'
+        kind === 'gc' ||
+          kind === 'readPage' ||
+          kind === 'seedSession' ||
+          kind === 'complete' ||
+          kind === 'complete-cancel'
           ? `dropped a malformed ${kind} request`
           : `dropped host control message "${kind}"`
       );
@@ -451,6 +500,43 @@ export class DshChannelMux {
       .then(run)
       .then((answer) => this.options.send(answer))
       .catch((error: unknown) => this.options.log('seedSession answer failed', error));
+  }
+
+  /**
+   * Not queued behind anything: a completion holds no lock and writes
+   * nothing. `DshCompletions` answers it, a failure included; a throw out of
+   * it (a bug) is answered here, so Main never waits on a lost request.
+   */
+  private complete(request: DshHostCompleteRequest): void {
+    const completions = this.options.completions;
+    if (!completions) {
+      this.options.send({
+        host: 'completed',
+        id: request.id,
+        ok: false,
+        error: {
+          code: DSH_COMPLETION_UNAVAILABLE,
+          message: 'completions are not available on this host',
+        },
+        ms: 0,
+      });
+      return;
+    }
+    try {
+      completions.start(request);
+    } catch (error) {
+      this.options.log('complete failed to start', error);
+      this.options.send({
+        host: 'completed',
+        id: request.id,
+        ok: false,
+        error: {
+          code: DSH_COMPLETION_UNAVAILABLE,
+          message: error instanceof Error ? error.message : String(error),
+        },
+        ms: 0,
+      });
+    }
   }
 
   /** A request for a channel this host does not serve: answered, never dropped silently. */

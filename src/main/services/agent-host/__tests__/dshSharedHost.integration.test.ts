@@ -49,6 +49,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * out, and runs the KEY-CANARY scan; the last loads the shipped catalog's plan
  * into a host and requires no route diagnostic (the drift gate).
  *
+ * P1-15 (decisions 039, 125): a completion supervisor runs the commit
+ * message, the branch name and the code review through their real entries on
+ * a host of its own: no channel, no session written, no process started but
+ * the host (and git), a review stopped mid-stream and one past its deadline.
+ *
  * P1-10b (decisions 108, 110): a ninth supervisor runs packaged-form hosts
  * from scratch installs with a test-only fixture plugin preinstalled, enables
  * and disables it through WorkerManager's restart, and checks the rejected,
@@ -119,6 +124,17 @@ vi.mock('electron', () => ({
   powerMonitor: { on: () => undefined, removeListener: () => undefined },
 }));
 vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => shared.stateRoot }));
+// P1-15: the repository reads of the three completion entries, without the
+// terminal and proxy modules the real runtime reaches (node-pty, Electron's
+// session). The spawn is the wrapped one, so these processes are counted too.
+vi.mock('../../git/runtime', async () => {
+  const childProcess = await import('node:child_process');
+  return {
+    isWslGitRepository: () => false,
+    spawnGit: (cwd: string, args: string[], options: Record<string, unknown> = {}) =>
+      childProcess.spawn('git', args, { ...options, cwd }),
+  };
+});
 
 const { DshHostSupervisor, DSH_HOST_TIMINGS, dshHostSupervisor } = await import(
   '../DshHostSupervisor'
@@ -129,7 +145,12 @@ const { SessionIndexService } = await import('../../chat/SessionIndexService');
 const { WorkerManager } = await import('../WorkerManager');
 const { createPiWorkerSlot } = await import('../createPiWorkerSlot');
 const { DshCredentialBroker } = await import('../DshCredentialBroker');
-const { spawn } = await import('node:child_process');
+// P1-15: Main's one-shot completions and the three features on top of them.
+const { DshCompletionService } = await import('../DshCompletionService');
+const { generateCommitMessage } = await import('../../ai/commit-message');
+const { generateBranchName } = await import('../../ai/branch-name');
+const { startCodeReview, stopCodeReview } = await import('../../ai/code-review');
+const { spawn, execFileSync } = await import('node:child_process');
 // P1-10b: Main's environment rule, for the plugin phase's own launches.
 const { buildDshHostEnvironment, dshPluginSelectionKey } = await import('../dshHostEnvironment');
 
@@ -1634,6 +1655,226 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       // No key reference name reaches a tool either.
       expect(scanned.toolEnv).not.toMatch(/^AICLIENT_KEY_/m);
     }, 240_000);
+  });
+
+  /**
+   * P1-15 (decisions 039, 125): the three one-shot completions through their
+   * real entries, on a host of their own. Each is one model request with the
+   * one-shot system prompt and no tool; nothing opens a channel or writes a
+   * session, and nothing but the host (and git) is started for them.
+   */
+  describe('a completion supervisor: commit message, branch name and review (P1-15)', () => {
+    let supervisor: Supervisor;
+    let service: InstanceType<typeof DshCompletionService>;
+    let source: ReturnType<typeof modelSource>;
+    let auth: Record<string, unknown> | undefined;
+    let repo = '';
+    const REVIEW_TEXT =
+      'Review of the P1-COMPLETE diff: no issues found. The change is small and tested.';
+
+    const gatewayLines = () => {
+      const file = join(shared.stateRoot, 'gateway.jsonl');
+      if (!existsSync(file)) return [];
+      return readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    };
+    /** Session logs and identity stubs under the DSH home, by path. */
+    const sessionFiles = () => {
+      const home = join(shared.stateRoot, 'dsh-home');
+      return [
+        ...[...sessionDirs(home).values()],
+        ...(existsSync(join(home, 'aiclient-sessions'))
+          ? readdirSync(join(home, 'aiclient-sessions'))
+          : []),
+      ].sort();
+    };
+    const isGit = (child: ChildProcess) => child.spawnfile === 'git';
+
+    beforeAll(() => {
+      auth = { 'aiclient-gateway': { type: 'api_key', key: FAKE_KEY } };
+      source = modelSource(() => auth);
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: source });
+      service = new DshCompletionService({ host: supervisor });
+      repo = join(shared.stateRoot, 'completion-repo');
+      mkdirSync(repo, { recursive: true, mode: 0o700 });
+      // A scratch repository of this test's own: one commit, one staged change.
+      const git = (...args: string[]) =>
+        execFileSync(
+          'git',
+          ['-c', 'user.name=p1-15', '-c', 'user.email=p1-15@example.invalid', ...args],
+          { cwd: repo, stdio: 'pipe' }
+        );
+      git('init', '-q');
+      writeFileSync(join(repo, 'notes.txt'), 'one\n');
+      git('add', 'notes.txt');
+      git('commit', '-q', '-m', 'feat: first note');
+      writeFileSync(join(repo, 'notes.txt'), 'one\ntwo P1-15\n');
+      git('add', 'notes.txt');
+    });
+
+    afterAll(async () => {
+      await supervisor?.shutdown('app-quit');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    it('[IT-15a] a commit message, a branch name and a streamed review, on one host and nothing else', async () => {
+      const childrenFrom = shared.children.length;
+      const seen = gatewayLines().length;
+      const sessionsBefore = sessionFiles();
+
+      const commit = await generateCommitMessage(
+        {
+          workdir: repo,
+          maxDiffLines: 200,
+          timeout: 120,
+          prompt: 'P1-COMPLETE-COMMIT: one line for\n{staged_diff}',
+        },
+        service
+      );
+      expect(commit).toEqual({
+        success: true,
+        message: 'feat(p1-15): generate commit messages on the DSH host',
+      });
+      // The host was started for the completion, and opened no channel for it.
+      expect(supervisor.status()).toMatchObject({ state: 'ready', channels: 0, completions: 0 });
+
+      const branch = await generateBranchName(
+        {
+          workdir: repo,
+          prompt: 'P1-COMPLETE-BRANCH: name a branch for the notes',
+          effort: 'high',
+        },
+        service
+      );
+      expect(branch).toEqual({ success: true, branchName: 'feat/p1-15-one-shot' });
+
+      const chunks: string[] = [];
+      const errors: string[] = [];
+      let completed = false;
+      await startCodeReview(
+        {
+          workdir: repo,
+          language: 'English',
+          reviewId: 'it-review-1',
+          prompt: 'P1-COMPLETE-REVIEW: review this\n{git_diff}',
+          onChunk: (chunk) => chunks.push(chunk),
+          onComplete: () => {
+            completed = true;
+          },
+          onError: (error) => errors.push(error),
+        },
+        service
+      );
+      expect(errors).toEqual([]);
+      expect(completed).toBe(true);
+      expect(chunks.length).toBeGreaterThan(1);
+      expect(chunks.join('')).toBe(REVIEW_TEXT);
+
+      // Three model requests, each the one-shot shape: its system prompt, no
+      // tool, the plan's default model, the key pulled per request, and no
+      // effort on a model that offers none (the branch name asked for high).
+      const lines = gatewayLines().slice(seen);
+      expect(
+        lines.map((line) => [
+          String(line.decision).split(' ')[0],
+          line.completionSystem,
+          line.tools ?? 0,
+          line.model,
+          line.auth,
+          line.reasoning,
+        ])
+      ).toEqual([
+        ['P1-COMPLETE-COMMIT', true, 0, 'fake-1', digestOf(FAKE_KEY), undefined],
+        ['P1-COMPLETE-BRANCH', true, 0, 'fake-1', digestOf(FAKE_KEY), undefined],
+        ['P1-COMPLETE-REVIEW', true, 0, 'fake-1', digestOf(FAKE_KEY), undefined],
+      ]);
+      // The staged diff reached the model inside the commit prompt.
+      expect(String(lines[0]?.contentSummary)).toContain('P1-COMPLETE-COMMIT');
+
+      // No session was opened or written for any of them.
+      expect(sessionFiles()).toEqual(sessionsBefore);
+      // One host, git, and no native utility worker or any other process.
+      const spawned = shared.children.slice(childrenFrom);
+      expect(spawned.filter(isHost)).toHaveLength(1);
+      // (Electron's utilityProcess, the worker's other way out, is not even in this mock.)
+      expect(spawned.filter((child) => !isHost(child) && !isGit(child))).toEqual([]);
+      process.stderr.write(
+        `[p1-15] 3 completions on host pid ${String(supervisor.status().pid)}: ` +
+          `${spawned.filter(isGit).length} git process(es), nothing else spawned\n`
+      );
+    }, 180_000);
+
+    it('[IT-15b] Stop cuts a streaming review at once; Main’s deadline ends another; the host lives on', async () => {
+      const pid = supervisor.status().pid;
+      const chunks: string[] = [];
+      const errors: string[] = [];
+      const review = startCodeReview(
+        {
+          workdir: repo,
+          language: 'English',
+          reviewId: 'it-review-slow',
+          prompt: 'P1-COMPLETE-SLOW: review this\n{git_diff}',
+          onChunk: (chunk) => chunks.push(chunk),
+          onComplete: () => errors.push('completed'),
+          onError: (error) => errors.push(error),
+        },
+        service
+      );
+      expect(await until(() => chunks.length >= 2, 30_000)).toBe(true);
+      const stoppedAt = Date.now();
+      stopCodeReview('it-review-slow', service);
+      await review;
+      expect(Date.now() - stoppedAt).toBeLessThan(2_000);
+      expect(errors).toEqual(['cancelled']);
+      const kept = chunks.length;
+      await sleep(1_500);
+      expect(chunks.length).toBe(kept);
+
+      const timedOut = await generateCommitMessage(
+        { workdir: repo, maxDiffLines: 50, timeout: 2, prompt: 'P1-COMPLETE-SLOW: {staged_diff}' },
+        service
+      );
+      expect(timedOut).toEqual({ success: false, error: 'timeout' });
+
+      const again = await generateBranchName(
+        { workdir: repo, prompt: 'P1-COMPLETE-BRANCH: once more' },
+        service
+      );
+      expect(again).toEqual({ success: true, branchName: 'feat/p1-15-one-shot' });
+      expect(supervisor.status()).toMatchObject({ pid, channels: 0, completions: 0 });
+      expect(service.activeCount).toBe(0);
+    }, 120_000);
+
+    it('[IT-15c] a model the plan does not serve, and a signed-out key, come back as coded errors', async () => {
+      const seen = gatewayLines().length;
+      const missing = await generateBranchName(
+        { workdir: repo, prompt: 'P1-COMPLETE-BRANCH: x', model: 'gone/model-9' },
+        service
+      );
+      expect(missing.success).toBe(false);
+      expect(missing.error).toMatch(/^MODEL_NOT_CONFIGURED: /);
+
+      auth = undefined;
+      source.credentials.invalidate();
+      const signedOut = await generateCommitMessage(
+        {
+          workdir: repo,
+          maxDiffLines: 50,
+          timeout: 60,
+          prompt: 'P1-COMPLETE-COMMIT: {staged_diff}',
+        },
+        service
+      );
+      expect(signedOut.success).toBe(false);
+      expect(signedOut.error).toMatch(/^CREDENTIALS_UNAVAILABLE: /);
+      // Neither reached the gateway.
+      expect(gatewayLines().length).toBe(seen);
+      auth = { 'aiclient-gateway': { type: 'api_key', key: FAKE_KEY } };
+      source.credentials.invalidate();
+    }, 120_000);
   });
 
   /**

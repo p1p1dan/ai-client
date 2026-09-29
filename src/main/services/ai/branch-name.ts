@@ -1,5 +1,8 @@
 import type { CommonAICompletionOptions } from '@shared/types/ai';
-import { piUtilityService } from '../agent-host/PiUtilityService';
+import {
+  type DshCompletionService,
+  dshCompletionService,
+} from '../agent-host/DshCompletionService';
 import { stripCodeFence } from './providers';
 
 export interface BranchNameOptions extends CommonAICompletionOptions {
@@ -14,12 +17,20 @@ export interface BranchNameResult {
   error?: string;
 }
 
-export async function generateBranchName(options: BranchNameOptions): Promise<BranchNameResult> {
-  const { workdir, prompt, model, effort, timeout = 120 } = options;
+/**
+ * dsh-rebase P1-15 (decision 125): the completion runs on the shared DSH host
+ * (`service`, the app's own by default); `workdir` only scopes the IPC call
+ * now, since the prompt is all the model gets.
+ */
+export async function generateBranchName(
+  options: BranchNameOptions,
+  service: Pick<DshCompletionService, 'complete'> = dshCompletionService
+): Promise<BranchNameResult> {
+  const { prompt, model, effort, timeout = 120 } = options;
 
   try {
-    const completion = await piUtilityService.complete({
-      cwd: workdir,
+    const completion = await service.complete({
+      purpose: 'branch-name',
       prompt,
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),

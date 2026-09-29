@@ -2909,8 +2909,13 @@ export class WorkerManager {
     );
   }
 
-  /** A turn, a mutation, or work the host reports on some session's channel. */
+  /**
+   * A turn, a mutation, work the host reports on some session's channel, or
+   * a one-shot completion on the host (P1-15, decision 125: a code review may
+   * stream for minutes, and a restart would cut it).
+   */
   private hasWorkInFlight(): boolean {
+    if ((this.host?.status().completions ?? 0) > 0) return true;
     const busy = this.busyChannels();
     return [...this.entriesBySession.values()].some((entry) => {
       const channel = entry.slot?.channelId;

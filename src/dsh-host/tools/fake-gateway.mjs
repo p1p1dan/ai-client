@@ -195,6 +195,15 @@
  *                       which sends it one more message; the second settlement wakes
  *                       it again) and P1-SUBCHILD (the child: one paced answer, 1 s,
  *                       so the parent's own step is over before the child speaks).
+ *                       dsh-rebase P1-15 adds four for one-shot completions (decision
+ *                       125; the shared-host integration test's completion phase and
+ *                       tools/bridge-smoke.ts): P1-COMPLETE-COMMIT (a commit message
+ *                       in a ``` fence), P1-COMPLETE-BRANCH (a branch name in a
+ *                       ```text fence), P1-COMPLETE-REVIEW (a review paced over six
+ *                       text deltas, 100 ms apart) and P1-COMPLETE-SLOW (a review
+ *                       paced over 60 deltas, 250 ms apart, for cancel and timeout).
+ *                       Every dsh-p0-2 log line also says whether the request carried
+ *                       the one-shot system prompt (`completionSystem: true`).
  *                       dsh-rebase P1-8 adds the P8-* scripts for the loop guard
  *                       (tools/loop-guard-smoke.ts, decisions 065 / 066), decided by
  *                       `decideP8` ahead of the scripts above: P8-REPEAT streams one reply
@@ -381,7 +390,22 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS))/;
+
+/** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
+const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
+
+/** P1-15: whether the request's system prompt (Anthropic `system`, or a system message) is the one-shot one. */
+function carriesCompletionSystem(parsed) {
+  const system = parsed?.system;
+  const texts = [];
+  if (typeof system === 'string') texts.push(system);
+  else if (Array.isArray(system)) for (const block of system) texts.push(String(block?.text ?? ''));
+  for (const message of Array.isArray(parsed?.messages) ? parsed.messages : []) {
+    if (message?.role === 'system' || message?.role === 'developer') texts.push(ownText(message));
+  }
+  return texts.some((text) => COMPLETION_SYSTEM.test(text));
+}
 /** dsh-rebase P1-8 loop guard scenarios, decided by `decideP8`. */
 const P8_MARKER = /P8-(REPEAT|VARIED|FANOUT|CHILD|LOOP|WAKE|SUBREPEAT|VICTIM)/;
 
@@ -816,6 +840,35 @@ const DSH_P0_2_SCRIPTS = {
     return {
       ...say(`P0-RECALL ${present ? 'present' : 'missing'}`),
       tag: present ? 'present' : 'missing',
+    };
+  },
+  // dsh-rebase P1-15 (decision 125): one-shot completions. The commit message
+  // and the branch name come fenced, as models often answer, so the app's own
+  // fence stripping is on the path; the reviews are paced text.
+  'P1-COMPLETE-COMMIT'() {
+    return say('```\nfeat(p1-15): generate commit messages on the DSH host\n```');
+  },
+  'P1-COMPLETE-BRANCH'() {
+    return say('```text\nfeat/p1-15-one-shot\n```');
+  },
+  'P1-COMPLETE-REVIEW'() {
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: 'Review of the P1-COMPLETE diff: no issues found. The change is small and tested.',
+      chunks: 6,
+      chunkMs: 100,
+    };
+  },
+  'P1-COMPLETE-SLOW'() {
+    return {
+      kind: 'paced-text',
+      status: 200,
+      text: 'A slow review that keeps going, one small piece at a time, until someone stops it. '.repeat(
+        3
+      ),
+      chunks: 60,
+      chunkMs: 250,
     };
   },
   // dsh-rebase P1-5b (KEY-CANARY): the upstream rejects the key and repeats it.
@@ -2332,6 +2385,8 @@ function main() {
               // P0-6: request size and what a resumed session sent.
               bodyChars: body.length,
               probe: decision.probe,
+              // P1-15: a one-shot completion's system prompt (absent otherwise).
+              completionSystem: carriesCompletionSystem(parsed) || undefined,
             }
           : {}),
       });

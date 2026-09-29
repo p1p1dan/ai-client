@@ -5,8 +5,9 @@ const forceKillAllNow = vi.fn();
 const disposeUtilities = vi.fn(async () => undefined);
 const forceKillUtilities = vi.fn();
 
-vi.mock('../../services/agent-host/PiUtilityService', () => ({
-  piUtilityService: { disposeAll: disposeUtilities, forceKillAllNow: forceKillUtilities },
+// dsh-rebase P1-15 (decision 125): one-shot completions are the DSH host's now.
+vi.mock('../../services/agent-host/DshCompletionService', () => ({
+  dshCompletionService: { disposeAll: disposeUtilities, forceKillAllNow: forceKillUtilities },
 }));
 
 vi.mock('../../services/agent-host/WorkerManager', () => ({

@@ -156,22 +156,23 @@ describe('the model picker and the worker are handed the same catalog', () => {
     expect(WIRING).toContain('return dshModelPlanFor(resolveNativeModelCatalog());');
   });
 
-  it('[T062-D3] the worker side still reads the same assembler', () => {
-    // If this name ever stops being the one the worker side injects, the line
-    // above is wiring the picker to a different catalog than the worker's.
+  it('[T062-D3] the engine side still reads the same assembler', () => {
+    // If this name ever stops being the one the engine side reads, the line
+    // above is wiring the picker to a different catalog than the engine's.
     // dsh-rebase P1-1: chat sessions run on the DSH host and get no catalog
-    // (`ChatSlotBootstrapPayload`), so the one-shot utility worker is the
-    // native process left that is handed one.
-    const utility = readFileSync(
+    // (`ChatSlotBootstrapPayload`); P1-15 (decision 125) moved the one-shot
+    // completions there too. What the host's requests get from this assembly
+    // is the key per request, through the credential broker (decision 034).
+    const source = readFileSync(
       path.join(
         path.dirname(fileURLToPath(import.meta.url)),
         '..',
         '..',
         'agent-host',
-        'PiUtilityService.ts'
+        'dshHostModelSource.ts'
       ),
       'utf8'
     );
-    expect(utility).toContain('readModelCatalog: () => resolveNativeModelCatalog()');
+    expect(source).toContain('readAuth: () => resolveNativeModelCatalog()?.auth,');
   });
 });

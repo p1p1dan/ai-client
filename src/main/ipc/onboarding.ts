@@ -58,7 +58,7 @@ async function clearServerAuthCookie(serverUrl: string): Promise<void> {
  *     Followed by ②b `disposeAllPiTuiControllers()`: agent PTYs moved out of
  *     `SessionManager` into their own controller map in T36, so ② no longer
  *     reaches them and they need their own (equally ungated) teardown.
- *  ③ `await workerManager.invalidateAll()` + `piUtilityService.invalidateAll()`
+ *  ③ `await workerManager.invalidateAll()` + `dshCompletionService.invalidateAll()`
  *     — both flag-gated (matches the pre-S5
  *     "logout with managed credentials off never touches the runtime" contract,
  *     `OnboardingServiceManagedHome.test.ts`'s own assertion). MOVED OUT of
@@ -123,14 +123,16 @@ export async function performLogoutSequence(): Promise<boolean> {
     } catch (error) {
       console.warn('[onboarding:logout] Failed to invalidate Pi workers:', error);
     }
-    // One-shot utility workers are a separate supervisor from WorkerManager and
-    // were previously only torn down at app shutdown, so an in-flight code
-    // review / commit message kept its loaded credentials past logout.
+    // One-shot completions (a code review, a commit message) are their own
+    // service beside WorkerManager; an in-flight one must not outlive the
+    // credentials this logout revokes. Since P1-15 (decision 125) they run on
+    // the shared DSH host, which the call above already took down; this
+    // settles and forgets them, and the service stays usable after sign-in.
     try {
-      const { piUtilityService } = await import('../services/agent-host/PiUtilityService');
-      await piUtilityService.invalidateAll();
+      const { dshCompletionService } = await import('../services/agent-host/DshCompletionService');
+      await dshCompletionService.invalidateAll();
     } catch (error) {
-      console.warn('[onboarding:logout] Failed to invalidate Pi utility workers:', error);
+      console.warn('[onboarding:logout] Failed to cancel one-shot completions:', error);
     }
   }
 

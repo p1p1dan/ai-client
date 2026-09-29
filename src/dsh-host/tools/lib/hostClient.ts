@@ -356,6 +356,55 @@ export class HostClient {
     return { ...reply, roundTripMs: Math.round((performance.now() - started) * 10) / 10 };
   }
 
+  /**
+   * P1-15's one-shot completion (`{host:'complete'}`, decision 125), answered
+   * with the host's `completed` message as it came (ok or not), the texts of
+   * the `completion-delta`s before it, the round trip, and, when
+   * `cancelAfterDeltas` sent a `complete-cancel` once that many deltas had
+   * arrived, how long the answer took after it.
+   */
+  async complete(
+    payload: Message,
+    options: { cancelAfterDeltas?: number; timeoutMs?: number } = {}
+  ): Promise<Message & { deltas: string[]; roundTripMs: number; cancelToAnswerMs?: number }> {
+    const id = 3_000_000 + ++this.requestSeq;
+    const started = performance.now();
+    const deltas: string[] = [];
+    let cancelledAt: number | undefined;
+    const onMessage = (message: unknown) => {
+      if (!isRecord(message) || message.host !== 'completion-delta' || message.id !== id) return;
+      deltas.push(String(message.text));
+      if (
+        options.cancelAfterDeltas !== undefined &&
+        cancelledAt === undefined &&
+        deltas.length >= options.cancelAfterDeltas
+      ) {
+        cancelledAt = performance.now();
+        this.child.send({ host: 'complete-cancel', id });
+      }
+    };
+    this.child.on('message', onMessage);
+    try {
+      this.child.send({ host: 'complete', id, ...payload });
+      const reply = await this.control(
+        (message) => message.host === 'completed' && message.id === id,
+        options.timeoutMs ?? 120_000
+      );
+      if (!reply) throw new Error(`complete ${id} timed out`);
+      const answeredAt = performance.now();
+      return {
+        ...reply,
+        deltas,
+        roundTripMs: Math.round((answeredAt - started) * 10) / 10,
+        ...(cancelledAt !== undefined
+          ? { cancelToAnswerMs: Math.round((answeredAt - cancelledAt) * 10) / 10 }
+          : {}),
+      };
+    } finally {
+      this.child.off('message', onMessage);
+    }
+  }
+
   /** Resolve once `predicate` holds over the channel's events so far. */
   until(
     ch: string,

@@ -42,6 +42,11 @@
  *     retries it here (the migration service decides). An import
  *     (`seedImportedConversation`, decision 056, P1-9f) is the same message
  *     with the other source kind, and the same rules.
+ *   - A one-shot completion (`startCompletion`, P1-15, decision 125) starts a
+ *     host on demand like a migration, out of `failed` too (the user clicked
+ *     for it), and holds off the idle stop until it is answered, cancelled
+ *     or cut by the host's exit (`DSH_HOST_COMPLETION_INTERRUPTED`). It opens
+ *     no channel; `status().completions` counts the ones in flight.
  *
  * The host's stderr belongs to the host: redacted, logged line by line, kept
  * in a ring and replayed once at error level when the host dies. It never
@@ -68,7 +73,9 @@ import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
 import { type DshPluginReport, isDshPluginReport } from '@shared/dshPlugins';
 import {
   type DshChannelId,
+  type DshCompletionPurpose,
   type DshHostChannelStatus,
+  type DshHostCompleted,
   type DshHostConfigure,
   type DshHostCredentialRequest,
   type DshHostCredentialResult,
@@ -88,6 +95,8 @@ import {
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshHostChannelClosed,
+  isDshHostCompleted,
+  isDshHostCompletionDelta,
   isDshHostCredentialRequest,
   isDshHostFatal,
   isDshHostGcResult,
@@ -196,7 +205,13 @@ export type DshHostSupervisorErrorCode =
   /** The host exited while a migration was in flight (crash, hang, restart, stop). */
   | 'DSH_HOST_SEED_INTERRUPTED'
   /** The host answered a migration with a `seeded` message the protocol does not allow. */
-  | 'DSH_HOST_SEED_MALFORMED';
+  | 'DSH_HOST_SEED_MALFORMED'
+  /** The host exited while a one-shot completion was in flight (P1-15). */
+  | 'DSH_HOST_COMPLETION_INTERRUPTED'
+  /** The host answered a completion with a `completed` message the protocol does not allow. */
+  | 'DSH_HOST_COMPLETION_MALFORMED'
+  /** Main cancelled the completion before its answer came. */
+  | 'DSH_HOST_COMPLETION_CANCELLED';
 
 export class DshHostSupervisorError extends Error {
   constructor(
@@ -332,6 +347,8 @@ export interface DshHostSupervisorStatus {
    * launched with, `dshHostPluginSelection` of its environment.
    */
   pluginSelection?: string;
+  /** P1-15: one-shot completions in flight, a host start for one included. */
+  completions: number;
 }
 
 export interface DshPowerMonitor {
@@ -400,6 +417,41 @@ export type DshHostSeedInput = Omit<DshSeedPiFileSource, 'kind'>;
 export type DshHostSeedImportInput = Omit<DshSeedImportSource, 'kind'>;
 
 type AnySeeded = DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>;
+
+/** What `startCompletion` asks the host to complete; see `DshHostCompleteRequest`. */
+export interface DshHostCompletionInput {
+  purpose: DshCompletionPurpose;
+  prompt: string;
+  /** Our `provider/modelId`; absent: the plan's default model. */
+  model?: string;
+  /** Our effort word; absent or `off`: none sent. */
+  effort?: string;
+  timeoutMs: number;
+}
+
+/** One completion in flight (P1-15). */
+export interface DshHostCompletionCall {
+  /**
+   * The host's `completed` answer as it came, a failed completion included.
+   * Rejects when no host can be had (`DSH_HOST_UNAVAILABLE` and the start
+   * codes), when the host exits first (`DSH_HOST_COMPLETION_INTERRUPTED`),
+   * on a malformed answer (`DSH_HOST_COMPLETION_MALFORMED`), and once
+   * `cancel` was called (`DSH_HOST_COMPLETION_CANCELLED`).
+   */
+  readonly result: Promise<DshHostCompleted>;
+  /** Settles `result` now and tells the host to abort; a no-op once settled. */
+  cancel(): void;
+}
+
+interface PendingCompletion {
+  readonly id: number;
+  /** Set once the request went out; a cancel before that sends nothing. */
+  host: HostRecord | null;
+  readonly onDelta?: (text: string) => void;
+  readonly resolve: (answer: DshHostCompleted) => void;
+  readonly reject: (error: Error) => void;
+  settled: boolean;
+}
 
 interface PendingSeed {
   readonly host: HostRecord;
@@ -520,6 +572,9 @@ export class DshHostSupervisor {
   private readonly pendingSeedSessions = new Map<number, PendingSeed>();
   /** `seedSession` calls in flight, host start included: a host migrating a chat is not idle. */
   private pendingSeeds = 0;
+  private completionSequence = 0;
+  /** P1-15: completions in flight by id, from the call until they settle, host start included. */
+  private readonly pendingCompletions = new Map<number, PendingCompletion>();
   /** P1-10b: the plugin report of the latest `ready`, kept past that host's exit. */
   private lastPluginReport: DshPluginReport | null = null;
 
@@ -587,6 +642,7 @@ export class DshHostSupervisor {
       ...(live ? { planRevision: live.plan.revision } : {}),
       ...(live?.routeDiagnostics ? { routeDiagnostics: [...live.routeDiagnostics] } : {}),
       ...(live ? { pluginSelection: live.pluginSelection } : {}),
+      completions: this.pendingCompletions.size,
     };
   }
 
@@ -875,6 +931,90 @@ export class DshHostSupervisor {
         );
       }
     });
+  }
+
+  /**
+   * P1-15 (decisions 039, 125): one tool-free completion on the host's LLM
+   * service, with no channel and no session. A host is started when none is
+   * up, out of `failed` too: the user asked for this one. `onDelta` gets the
+   * text as it arrives (the request asks the host to stream only when there
+   * is one). Main's deadline is the caller's: `cancel` on timeout. Holds off
+   * the idle stop until it settles.
+   */
+  startCompletion(
+    input: DshHostCompletionInput,
+    onDelta?: (text: string) => void
+  ): DshHostCompletionCall {
+    const id = ++this.completionSequence;
+    const answer = deferred<DshHostCompleted>();
+    // The caller awaits it; a call cancelled before anyone did must not surface as unhandled.
+    answer.promise.catch(() => {});
+    const pending: PendingCompletion = {
+      id,
+      host: null,
+      ...(onDelta ? { onDelta } : {}),
+      resolve: answer.resolve,
+      reject: answer.reject,
+      settled: false,
+    };
+    this.pendingCompletions.set(id, pending);
+    this.disarmIdleStop();
+    void this.sendCompletion(pending, input).catch((error: unknown) => {
+      this.settleCompletion(id)?.reject(error instanceof Error ? error : new Error(String(error)));
+    });
+    return {
+      result: answer.promise,
+      cancel: () => {
+        const settled = this.settleCompletion(id);
+        if (!settled) return;
+        if (settled.host) this.sendControl(settled.host, { host: 'complete-cancel', id });
+        settled.reject(
+          new DshHostSupervisorError(
+            'DSH_HOST_COMPLETION_CANCELLED',
+            `completion ${id} was cancelled`
+          )
+        );
+      },
+    };
+  }
+
+  private async sendCompletion(
+    pending: PendingCompletion,
+    input: DshHostCompletionInput
+  ): Promise<void> {
+    const info = await this.ensureHost({ userInitiated: true });
+    // Cancelled while the host was starting: nothing goes out.
+    if (pending.settled) return;
+    const host = this.host;
+    if (
+      this.state !== 'ready' ||
+      !host ||
+      host.generation !== info.generation ||
+      host.exitInfo ||
+      !host.connected
+    ) {
+      throw new DshHostSupervisorError(
+        'DSH_HOST_UNAVAILABLE',
+        'the DSH host went away before the completion'
+      );
+    }
+    pending.host = host;
+    const sent = this.sendControl(host, {
+      host: 'complete',
+      id: pending.id,
+      purpose: input.purpose,
+      prompt: input.prompt,
+      ...(input.model ? { model: input.model } : {}),
+      ...(input.effort ? { effort: input.effort } : {}),
+      timeoutMs: input.timeoutMs,
+      ...(pending.onDelta ? { stream: true } : {}),
+    });
+    if (!sent) {
+      throw new DshHostSupervisorError(
+        'DSH_HOST_UNAVAILABLE',
+        'the complete request could not be sent'
+      );
+    }
   }
 
   /**
@@ -1284,6 +1424,19 @@ export class DshHostSupervisor {
       this.onCredentialRequest(host, message);
       return;
     }
+    if (isDshHostCompletionDelta(message)) {
+      const pending = this.pendingCompletions.get(message.id);
+      if (pending?.host === host && !pending.settled) pending.onDelta?.(message.text);
+      return;
+    }
+    if (isDshHostCompleted(message)) {
+      this.onCompleted(host, message);
+      return;
+    }
+    if (dshHostControlKind(message) === 'completed') {
+      this.onMalformedCompleted(host, message as Record<string, unknown>);
+      return;
+    }
     const record =
       typeof message === 'object' && message !== null ? (message as Record<string, unknown>) : null;
     if (record?.type === 'ready') {
@@ -1399,6 +1552,7 @@ export class DshHostSupervisor {
     this.rejectGc(host);
     this.rejectReads(host);
     this.rejectSeeds(host);
+    this.rejectCompletions(host);
     host.resolveExited();
     const channels = this.host === host ? this.takeChannels() : [];
     if (!host.readySettled) {
@@ -1687,7 +1841,8 @@ export class DshHostSupervisor {
       this.channels.size === 0 &&
       this.pendingOpens === 0 &&
       this.pendingReads === 0 &&
-      this.pendingSeeds === 0
+      this.pendingSeeds === 0 &&
+      this.pendingCompletions.size === 0
     );
   }
 
@@ -1832,6 +1987,59 @@ export class DshHostSupervisor {
         new DshHostSupervisorError(
           'DSH_HOST_SEED_INTERRUPTED',
           `the DSH host exited during seedSession ${id}`
+        )
+      );
+    }
+  }
+
+  // ---- one-shot completions (P1-15, decision 125) ------------------------------------
+
+  private onCompleted(host: HostRecord, message: DshHostCompleted): void {
+    const pending = this.pendingCompletions.get(message.id);
+    if (pending?.host !== host) {
+      // Cancelled (or timed out) before the host's answer: nobody waits on it.
+      this.warnRateLimited('stale-completed', `[dsh-host] dropped completed ${message.id}`);
+      return;
+    }
+    this.settleCompletion(message.id)?.resolve(message);
+  }
+
+  /** A `completed` the protocol does not allow: the completion waiting on its id fails now. */
+  private onMalformedCompleted(host: HostRecord, message: Record<string, unknown>): void {
+    const id = message.id;
+    const pending = typeof id === 'number' ? this.pendingCompletions.get(id) : undefined;
+    if (typeof id !== 'number' || pending?.host !== host) {
+      this.warnRateLimited(
+        'malformed-completed',
+        '[dsh-host] dropped a malformed completed message'
+      );
+      return;
+    }
+    this.settleCompletion(id)?.reject(
+      new DshHostSupervisorError(
+        'DSH_HOST_COMPLETION_MALFORMED',
+        `completion ${id} was answered with a malformed completed message`
+      )
+    );
+  }
+
+  /** Takes a completion out of the table and re-arms the idle stop; undefined once settled. */
+  private settleCompletion(id: number): PendingCompletion | undefined {
+    const pending = this.pendingCompletions.get(id);
+    if (!pending || pending.settled) return undefined;
+    pending.settled = true;
+    this.pendingCompletions.delete(id);
+    this.armIdleStop();
+    return pending;
+  }
+
+  private rejectCompletions(host: HostRecord): void {
+    for (const [id, pending] of [...this.pendingCompletions]) {
+      if (pending.host !== host) continue;
+      this.settleCompletion(id)?.reject(
+        new DshHostSupervisorError(
+          'DSH_HOST_COMPLETION_INTERRUPTED',
+          `the DSH host exited during completion ${id}`
         )
       );
     }

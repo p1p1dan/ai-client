@@ -1453,6 +1453,195 @@ describe('DshHostSupervisor seedSession (P1-9d, decision 054)', () => {
   });
 });
 
+/**
+ * P1-15 (decisions 039, 125): Main's half of `complete`. The host's answer is
+ * resolved as it came, failed completions included; only the transport and a
+ * cancel reject the call, each with its own code.
+ */
+describe('DshHostSupervisor one-shot completions (P1-15, decision 125)', () => {
+  const input = {
+    purpose: 'commit-message' as const,
+    prompt: 'Summarize the staged diff.',
+    timeoutMs: 30_000,
+  };
+  const completed = (id: number, extra: Record<string, unknown> = {}) => ({
+    host: 'completed',
+    id,
+    ok: true,
+    text: 'feat: x',
+    model: 'gw/m1',
+    ms: 5,
+    ...extra,
+  });
+  const requests = (child: FakeChild) =>
+    child
+      .controls()
+      .filter((message) => (message as { host?: unknown }).host === 'complete') as Array<{
+      id: number;
+    }>;
+  const cancels = (child: FakeChild) =>
+    child
+      .controls()
+      .filter((message) => (message as { host?: unknown }).host === 'complete-cancel');
+
+  it('starts a host when none is up, sends one complete and resolves with its answer', async () => {
+    const h = createFakeHostHarness();
+    const call = h.supervisor.startCompletion(input);
+    expect(h.spawn).toHaveBeenCalledTimes(1);
+    // In flight while the host starts: WorkerManager defers a plan restart for it.
+    expect(h.supervisor.status().completions).toBe(1);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    // No `stream` without a delta listener, no model or effort when none was chosen.
+    expect(requests(child)).toEqual([{ host: 'complete', id: 1, ...input }]);
+    child.post(completed(9));
+    child.post(completed(1));
+    await expect(call.result).resolves.toEqual(completed(1));
+    expect(h.supervisor.status()).toMatchObject({ state: 'ready', channels: 0, completions: 0 });
+  });
+
+  it('asks for deltas when it has a listener, and hands them over in order until the answer', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const deltas: string[] = [];
+    const call = h.supervisor.startCompletion(
+      { ...input, purpose: 'code-review', model: 'gw/m1', effort: 'high' },
+      (text) => deltas.push(text)
+    );
+    await flushMicrotasks();
+    const id = requests(child).at(-1)?.id ?? 0;
+    expect(requests(child).at(-1)).toEqual({
+      host: 'complete',
+      id,
+      purpose: 'code-review',
+      prompt: input.prompt,
+      model: 'gw/m1',
+      effort: 'high',
+      timeoutMs: input.timeoutMs,
+      stream: true,
+    });
+    child.post({ host: 'completion-delta', id, text: 'Looks ' });
+    child.post({ host: 'completion-delta', id: id + 5, text: 'other' });
+    child.post({ host: 'completion-delta', id, text: 'fine.' });
+    const failed = completed(id, {
+      ok: false,
+      text: undefined,
+      model: undefined,
+      error: { code: 'CREDENTIALS_UNAVAILABLE', message: 'no key' },
+    });
+    child.post(failed);
+    await expect(call.result).resolves.toEqual(failed);
+    child.post({ host: 'completion-delta', id, text: 'late' });
+    expect(deltas).toEqual(['Looks ', 'fine.']);
+  });
+
+  it('cancel settles at once; the host is told only once the request went out', async () => {
+    const h = createFakeHostHarness();
+    // Cancelled while the host starts: nothing is ever sent for it.
+    const early = h.supervisor.startCompletion(input);
+    early.cancel();
+    await expect(early.result).rejects.toMatchObject({ code: 'DSH_HOST_COMPLETION_CANCELLED' });
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    expect(requests(child)).toEqual([]);
+    expect(cancels(child)).toEqual([]);
+
+    const sent = h.supervisor.startCompletion(input);
+    await flushMicrotasks();
+    const id = requests(child).at(-1)?.id ?? 0;
+    sent.cancel();
+    sent.cancel();
+    await expect(sent.result).rejects.toMatchObject({ code: 'DSH_HOST_COMPLETION_CANCELLED' });
+    expect(cancels(child)).toEqual([{ host: 'complete-cancel', id }]);
+    expect(h.supervisor.status().completions).toBe(0);
+    // The host's answer to the cancel is nobody's.
+    child.post(
+      completed(id, {
+        ok: false,
+        text: undefined,
+        error: { code: 'completion_cancelled', message: 'cancelled by Main' },
+      })
+    );
+    await flushMicrotasks();
+    expect(consoleWarn.mock.calls.map((call) => String(call[0]))).toContain(
+      `[dsh-host] dropped completed ${id}`
+    );
+  });
+
+  it('fails a completion in flight when the host exits, and at once on a malformed answer', async () => {
+    const h = createFakeHostHarness();
+    const child = await startReadyHost(h);
+    const dying = h.supervisor.startCompletion(input);
+    await flushMicrotasks();
+    child.die(null, 'SIGKILL');
+    await expect(dying.result).rejects.toMatchObject({ code: 'DSH_HOST_COMPLETION_INTERRUPTED' });
+
+    const replacement = await startReadyHost(h);
+    const call = h.supervisor.startCompletion(input);
+    await flushMicrotasks();
+    const id = requests(replacement).at(-1)?.id ?? 0;
+    replacement.post({ host: 'completed', id, ok: true, ms: 1 });
+    await expect(call.result).rejects.toMatchObject({ code: 'DSH_HOST_COMPLETION_MALFORMED' });
+  });
+
+  it('rejects with the start failure when no host can be had', async () => {
+    const h = createFakeHostHarness();
+    const call = h.supervisor.startCompletion(input);
+    h.child().post({ type: 'fatal', message: 'no configure' });
+    h.child().die(1);
+    await expect(call.result).rejects.toMatchObject({ code: 'DSH_HOST_START_FAILED' });
+    expect(h.supervisor.status().completions).toBe(0);
+  });
+
+  it('comes out of failed: a completion is the user’s click', async () => {
+    const h = createFakeHostHarness();
+    await startReadyHost(h);
+    for (let fault = 1; fault <= DSH_HOST_RESTART_BUDGET.restarts; fault += 1) {
+      h.child().die(null, 'SIGKILL');
+      const next = h.supervisor.ensureHost();
+      h.child().ready();
+      await next;
+    }
+    h.child().die(null, 'SIGKILL');
+    await expect(h.supervisor.ensureHost()).rejects.toMatchObject({
+      code: 'DSH_HOST_UNAVAILABLE',
+    });
+    const spawned = h.spawn.mock.calls.length;
+    const call = h.supervisor.startCompletion(input);
+    expect(h.spawn).toHaveBeenCalledTimes(spawned + 1);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    child.post(completed(requests(child).at(-1)?.id ?? 0));
+    await expect(call.result).resolves.toMatchObject({ ok: true });
+  });
+
+  it('holds off the idle stop while a completion runs, and arms it once it is answered', async () => {
+    const IDLE = 60_000;
+    const h = createFakeHostHarness({ idleStopMs: IDLE });
+    const call = h.supervisor.startCompletion(input);
+    const child = h.child();
+    child.ready();
+    await flushMicrotasks();
+    const advance = async (ms: number) => {
+      for (let at = 0; at < ms; at += T.heartbeatIntervalMs) {
+        child.post(pong(child.pings().length || 1));
+        await vi.advanceTimersByTimeAsync(T.heartbeatIntervalMs);
+      }
+    };
+    await advance(IDLE + T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    child.post(completed(requests(child).at(-1)?.id ?? 0));
+    await expect(call.result).resolves.toMatchObject({ ok: true });
+    await advance(IDLE - T.heartbeatIntervalMs);
+    expect(child.controls()).not.toContainEqual({ type: 'shutdown' });
+    await advance(T.heartbeatIntervalMs);
+    expect(child.controls()).toContainEqual({ type: 'shutdown' });
+  });
+});
+
 describe('DshHostSupervisor model plan and keys (P1-5, decisions 033 and 034)', () => {
   const plan = buildDshModelPlan({
     models: {

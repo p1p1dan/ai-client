@@ -19,13 +19,14 @@ import { installModelSelection } from '@deepseek-ai/dsh-agent';
 import { createUserMessage } from '@deepseek-ai/dsh-llm';
 import type { DshHostToMainMessage } from '../../shared/types/dshHostProtocol.ts';
 import { DshChannelMux } from './channelMux.ts';
+import { type CompletionLlm, DshCompletions } from './completions.ts';
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
   type DshJobsView,
   DshSessionRuntime,
 } from './dshSessionRuntime.ts';
-import type { DshBridgeModelPlan } from './modelRoute.ts';
+import { type DshBridgeModelPlan, DshModelRouter } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
 import { type SeedSessionDeps, seedSession } from './seedSession.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
@@ -58,7 +59,8 @@ export const PERMISSION_AGENT_DIR_ENV = 'AICLIENT_PERMISSION_AGENT_DIR';
  * `attachments` (dsh-attachment-local) admits a send's images and stores its
  * text files (P1-4c2, decisions 096 and 097). A migration (`seedSession`,
  * P1-9c) and an import (P1-9f) use the same four: agents, sessions,
- * sessionQuery, attachments.
+ * sessionQuery, attachments. `llm` is DSH's model-call service, which Main's
+ * one-shot completions stream through directly (P1-15, decisions 039, 125).
  */
 export const inject = [
   'agents',
@@ -66,6 +68,7 @@ export const inject = [
   'sessions',
   'agentLoop',
   'sessionQuery',
+  'llm',
   'aiclientPermissions',
   'attachments',
 ];
@@ -92,6 +95,8 @@ interface BridgeRowContext extends DshBridgeContext {
   get(name: 'sessionPersistence'): GcPersistence | undefined;
   /** Decision 033: provided by host.ts from Main's `configure`. */
   get(name: 'aiclientModelPlan'): DshBridgeModelPlan | undefined;
+  /** P1-15: DSH's model-call service (injected), as far as a completion uses it. */
+  llm: CompletionLlm;
 }
 
 function tenths(value: number): number {
@@ -129,6 +134,18 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     // P1-6c: the user layer of the permission policy, from Main (dshHostEnvironment.ts).
     permissionAgentDir: process.env[PERMISSION_AGENT_DIR_ENV]?.trim() || null,
   };
+  // P1-15 (decisions 039, 125): one-shot completions, routed by the same plan
+  // as every chat turn, as completions (no effort unless one was chosen).
+  const completionRouter = new DshModelRouter(
+    () => ctx.get('aiclientModelPlan'),
+    (...args) => console.error('[aiclient-bridge]', ...args)
+  );
+  const completions = new DshCompletions({
+    llm: () => ctx.llm,
+    route: (model, effort) => completionRouter.completion(model, effort),
+    send,
+    log: (...args) => console.error('[aiclient-bridge]', ...args),
+  });
   const mux = new DshChannelMux({
     send,
     createRuntime: (options) => new DshSessionRuntime(ctx, options, deps),
@@ -176,6 +193,7 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
         request
       );
     },
+    completions,
     log: (...args) => console.error('[aiclient-bridge]', ...args),
   });
   ctx.effect(() => {
@@ -186,6 +204,7 @@ export async function apply(ctx: BridgeRowContext): Promise<void> {
     for (const message of inbox.queue.splice(0)) mux.receive(message);
     return () => {
       inbox.deliver = undefined;
+      completions.dispose();
       eld.disable();
     };
   }, 'aiclient-bridge.ipc');

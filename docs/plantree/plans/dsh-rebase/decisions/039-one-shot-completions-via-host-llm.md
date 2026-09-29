@@ -13,3 +13,9 @@
 - 只有一条模型路径，不新增协议，P1-12 能把原生 runtime 删干净。
 - 备选：宿主开临时会话（重）；Main 直接调网关（多一套协议实现和凭据路径）；保留一个极小的补全载体（P1-12 删不干净）。
 - 代价：补全也依赖宿主（冷启动约 0.8 s，常驻约 180 MB），共享宿主崩溃时补全一起失败。
+
+## 修订注记（2026-09-29，P1-15，[决策 125](125-p1-15-one-shot-completions-choices.md)，待审批）
+
+- 第 1 条的实现形式：不在通道上跑 `utility.*` RPC，改为宿主控制消息 `complete` / `complete-cancel` / `completion-delta` / `completed`（决策 125 第 1 条）；「经 `ctx.llm.stream` 直调、不开会话、没有工具、不落盘」「`inject` 加 `llm`」不变。只有 `worker.bootstrap` 能建通道的规则因此不用改。
+- 第 2 条：不给 `PiUtilityService` 换 transport，改为新服务 `DshCompletionService`；容量、超时、取消、登出失效的语义照旧，取消与超时改为立即结掉（决策 125 第 12 条）。`PiUtilityService` 已无调用方，留到 P1-12 删（决策 125 第 18 条）。
+- 第 3 条不变。

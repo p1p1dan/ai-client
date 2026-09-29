@@ -14,7 +14,10 @@
  *                                      credential / credential-result
  *                                      (P1-5b, decision 034),
  *                                      seedSession / seeded (P1-9c,
- *                                      decision 054)
+ *                                      decision 054),
+ *                                      complete / complete-cancel /
+ *                                      completion-delta / completed
+ *                                      (P1-15, decisions 039 and 125)
  *   lifecycle      {type: <kind>, ...} host.ts's own boot and stop messages
  *
  * Channel ids are minted by Main, one per virtual slot, and never reused. Only
@@ -31,6 +34,13 @@
  * `seedSession` takes two source kinds: `pi-file` (P1-9c, a 1.0.x chat) and
  * `imported-conversation` (P1-9f, decision 056: a Claude Code / Codex
  * conversation Main read); `seeded` answers each with its own result.
+ *
+ * `complete` (P1-15, decision 125) is a one-shot completion — a commit
+ * message, a branch name, a code review — served by the host's LLM service
+ * with no channel, no session and no tool: text deltas come back as
+ * `completion-delta` when Main asked for them, and one `completed` ends it
+ * (the text, or an error code). `complete-cancel` aborts one; the host
+ * answers it `completed` with `completion_cancelled` right away.
  *
  * Shared with the host bridge (P1-3a, `src/dsh-host/bridge/channelMux.ts`),
  * which a source checkout loads under Node's type stripping and the packaged
@@ -50,8 +60,9 @@ export type DshChannelId = string;
 const CHANNEL_ID_PATTERN = /^c[1-9][0-9]*-[1-9][0-9]*$/;
 
 /**
- * Worker RPC methods allowed to open a channel on the host. P1-15 adds
- * `utility.start` for one-shot completions (decision 039).
+ * Worker RPC methods allowed to open a channel on the host. One-shot
+ * completions (P1-15) open none: they are the `complete` host control
+ * (decision 125 revises decision 039's `utility.start` channel).
  */
 export const DSH_CHANNEL_OPENING_METHODS: readonly string[] = ['worker.bootstrap'];
 
@@ -280,6 +291,50 @@ export type DshHostCredentialResult =
   | { host: 'credential-result'; id: number; ok: true; value: string }
   | { host: 'credential-result'; id: number; ok: false; error: DshCredentialFailure };
 
+/** What a one-shot completion is for (P1-15): the three AI features of the source-control views. */
+export type DshCompletionPurpose = 'commit-message' | 'branch-name' | 'code-review';
+
+export const DSH_COMPLETION_PURPOSES: readonly DshCompletionPurpose[] = [
+  'commit-message',
+  'branch-name',
+  'code-review',
+];
+
+/**
+ * The longest `timeoutMs` a completion may carry: a longer delay makes
+ * `setTimeout` fire at once, so Main and the host would both give up early.
+ */
+export const DSH_COMPLETION_MAX_TIMEOUT_MS = 2_147_483_647;
+
+/**
+ * Decision 125 (P1-15): one tool-free completion on the host's LLM service
+ * (`ctx.llm.stream`, decision 039) — no channel, no session, nothing written.
+ * The model is our own `provider/modelId` (absent: the plan's default model)
+ * and the effort our own word (absent or `off`: none sent), both resolved by
+ * the plan as a completion (`resolveRoute`, mode `completion`). The host gives
+ * up after `timeoutMs` (`completion_timeout`); Main's own deadline is the same.
+ * Answered by `completed` with the same id, after `completion-delta`s when
+ * `stream` is set. Ids are Main's and never reused while one is running.
+ */
+export interface DshHostCompleteRequest {
+  host: 'complete';
+  id: number;
+  purpose: DshCompletionPurpose;
+  /** The whole user message: Main builds it (the git diff included) as it always did. */
+  prompt: string;
+  model?: string;
+  effort?: string;
+  timeoutMs: number;
+  /** Send the text as it arrives (`completion-delta`); a code review shows it live. */
+  stream?: boolean;
+}
+
+/** Abort one completion; the host answers `completed` with `completion_cancelled`. */
+export interface DshHostCompleteCancel {
+  host: 'complete-cancel';
+  id: number;
+}
+
 export type DshMainToHostMessage =
   | DshChannelEnvelope<WorkerRpcRequest>
   | DshHostPing
@@ -289,7 +344,9 @@ export type DshMainToHostMessage =
   | DshHostReadPageRequest
   | DshHostSeedSessionRequest
   | DshHostConfigure
-  | DshHostCredentialResult;
+  | DshHostCredentialResult
+  | DshHostCompleteRequest
+  | DshHostCompleteCancel;
 
 // ---- host -> Main -----------------------------------------------------------
 
@@ -452,6 +509,44 @@ export interface DshHostCredentialRequest {
   nonce: string;
 }
 
+/** Text of one completion as it arrives, in order; only when its request set `stream`. */
+export interface DshHostCompletionDelta {
+  host: 'completion-delta';
+  id: number;
+  text: string;
+}
+
+/** A `complete` whose own fields are not what the protocol says. */
+export const DSH_COMPLETION_REQUEST_INVALID = 'completion_request_invalid';
+/** A host with no completions (no LLM service for them). */
+export const DSH_COMPLETION_UNAVAILABLE = 'completion_unavailable';
+/** Main cancelled it (`complete-cancel`). */
+export const DSH_COMPLETION_CANCELLED = 'completion_cancelled';
+/** The request's `timeoutMs` ran out on the host. */
+export const DSH_COMPLETION_TIMEOUT = 'completion_timeout';
+/** The model call failed with a code the failure table does not know, or ended without a finish. */
+export const DSH_COMPLETION_FAILED = 'completion_failed';
+
+/**
+ * Answer to `complete`, echoing its id: the text and the model it came from
+ * (our id), or an error. `code` is one of the `DSH_COMPLETION_*` codes above
+ * or a code of `src/shared/dshFailureCodes.ts` (`CREDENTIALS_UNAVAILABLE`,
+ * `MODEL_NOT_CONFIGURED`, `PROVIDER_*`, …); `dshCode` is DSH's own failure
+ * code when the model call failed.
+ */
+export interface DshHostCompleted {
+  host: 'completed';
+  id: number;
+  ok: boolean;
+  /** Present exactly when `ok`; may be empty. */
+  text?: string;
+  model?: string;
+  /** Present exactly when not `ok`. */
+  error?: { code: string; message: string; dshCode?: string };
+  /** From the request's arrival to the answer. */
+  ms: number;
+}
+
 export type DshHostToMainMessage =
   | DshHostReady
   | DshHostFatal
@@ -462,7 +557,9 @@ export type DshHostToMainMessage =
   | DshHostGcResult
   | DshHostPage
   | DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>
-  | DshHostCredentialRequest;
+  | DshHostCredentialRequest
+  | DshHostCompletionDelta
+  | DshHostCompleted;
 
 /** How long a host waits for `configure` before it refuses to boot. */
 export const DSH_CONFIGURE_TIMEOUT_MS = 10_000;
@@ -829,4 +926,65 @@ export function isDshHostCredentialResult(value: unknown): value is DshHostCrede
   }
   if (value.ok === true) return typeof value.value === 'string' && value.value.length > 0;
   return value.ok === false && (value.error === 'unavailable' || value.error === 'refused');
+}
+
+export function isDshCompletionPurpose(value: unknown): value is DshCompletionPurpose {
+  return (
+    typeof value === 'string' && (DSH_COMPLETION_PURPOSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Shape only for `effort`: any word, the host's router reads it as the effort
+ * vocabulary does (a word outside it sends none), so this module keeps no copy
+ * of that list.
+ */
+export function isDshHostCompleteRequest(value: unknown): value is DshHostCompleteRequest {
+  return (
+    isRecord(value) &&
+    value.host === 'complete' &&
+    isPositiveSafeInteger(value.id) &&
+    isDshCompletionPurpose(value.purpose) &&
+    isNonEmptyString(value.prompt) &&
+    (value.model === undefined || isNonEmptyString(value.model)) &&
+    (value.effort === undefined || isNonEmptyString(value.effort)) &&
+    isPositiveSafeInteger(value.timeoutMs) &&
+    value.timeoutMs <= DSH_COMPLETION_MAX_TIMEOUT_MS &&
+    (value.stream === undefined || typeof value.stream === 'boolean')
+  );
+}
+
+export function isDshHostCompleteCancel(value: unknown): value is DshHostCompleteCancel {
+  return isRecord(value) && value.host === 'complete-cancel' && isPositiveSafeInteger(value.id);
+}
+
+export function isDshHostCompletionDelta(value: unknown): value is DshHostCompletionDelta {
+  return (
+    isRecord(value) &&
+    value.host === 'completion-delta' &&
+    isPositiveSafeInteger(value.id) &&
+    typeof value.text === 'string'
+  );
+}
+
+export function isDshHostCompleted(value: unknown): value is DshHostCompleted {
+  if (
+    !isRecord(value) ||
+    value.host !== 'completed' ||
+    !isPositiveSafeInteger(value.id) ||
+    typeof value.ok !== 'boolean' ||
+    !isNonNegativeFinite(value.ms) ||
+    (value.model !== undefined && !isNonEmptyString(value.model))
+  ) {
+    return false;
+  }
+  if (value.ok) return typeof value.text === 'string' && value.error === undefined;
+  const error = value.error;
+  return (
+    value.text === undefined &&
+    isPlainRecord(error) &&
+    isNonEmptyString(error.code) &&
+    typeof error.message === 'string' &&
+    (error.dshCode === undefined || isNonEmptyString(error.dshCode))
+  );
 }

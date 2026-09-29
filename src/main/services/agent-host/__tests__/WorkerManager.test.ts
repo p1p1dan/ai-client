@@ -102,6 +102,8 @@ interface FakeHost {
   planRevision?: string;
   /** The plugin selection the running host was launched with (P1-10b). */
   pluginSelection?: string;
+  /** One-shot completions in flight on the host (P1-15). */
+  completions?: number;
 }
 
 const BUDGETED_HOST_EXITS = new Set([
@@ -205,6 +207,7 @@ function createHarness(
         ...(fake.state === 'ready' && fake.pluginSelection
           ? { pluginSelection: fake.pluginSelection }
           : {}),
+        completions: fake.completions ?? 0,
       })),
       ensureHost: vi.fn(async (options: { userInitiated?: boolean } = {}) => {
         if (fake.state === 'disposed') {
@@ -5031,6 +5034,22 @@ describe('WorkerManager — a host on an older model plan (dsh-rebase P1-5a, dec
       requestId: turnId,
       payload: { status: 'idle' },
     });
+    await vi.advanceTimersByTimeAsync(2_500);
+    expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
+  });
+
+  it('[WM-plan-04] waits for the one-shot completions on the host, then restarts (P1-15)', async () => {
+    vi.useFakeTimers();
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.planRevision = 'rev-a';
+    await create(h.manager, 's1', 7);
+    // A code review streaming on the host: no session is busy, but the host is.
+    h.host.completions = 1;
+    h.manager.reconcileModelPlan('rev-b');
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(h.host.shutdown).not.toHaveBeenCalled();
+    h.host.completions = 0;
     await vi.advanceTimersByTimeAsync(2_500);
     expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
   });

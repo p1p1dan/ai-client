@@ -71,7 +71,7 @@ const disposeAllPiTuiControllersMock = vi.fn(async () => {
   events.push('piTui.disposeAllControllers');
 });
 const utilityInvalidateAllMock = vi.fn(async () => {
-  events.push('piUtility.invalidateAll');
+  events.push('completions.invalidateAll');
 });
 const clearReadStateMock = vi.fn(() => {
   events.push('announcements.clearReadState');
@@ -107,8 +107,10 @@ vi.mock('../piTui', () => ({
   disposeAllPiTuiControllers: disposeAllPiTuiControllersMock,
 }));
 
-vi.mock('../../services/agent-host/PiUtilityService', () => ({
-  piUtilityService: { invalidateAll: utilityInvalidateAllMock },
+// dsh-rebase P1-15 (decision 125): one-shot completions run on the DSH host
+// through their own service; logout cancels what is in flight.
+vi.mock('../../services/agent-host/DshCompletionService', () => ({
+  dshCompletionService: { invalidateAll: utilityInvalidateAllMock },
 }));
 
 vi.mock('../../services/auth', () => ({
@@ -270,21 +272,21 @@ describe('performLogoutSequence — I9 checkpoint order (D47 S5 §3)', () => {
     expect(disposeIdx).toBeLessThan(events.indexOf('vault.clear:start'));
   });
 
-  it('③ invalidates the one-shot utility workers too, before ④ vault.clear', async () => {
+  it('③ cancels the one-shot completions too, before ④ vault.clear', async () => {
     const { performLogoutSequence } = await import('../onboarding');
 
     const sequencePromise = performLogoutSequence();
     destroyAllLocalDeferred.resolve();
     await flushUntil(() => events.includes('agentHost.shutdown:start'));
     // Still gated behind the same await barrier as the session workers.
-    expect(events).not.toContain('piUtility.invalidateAll');
+    expect(events).not.toContain('completions.invalidateAll');
 
     shutdownDeferred.resolve();
     vaultClearDeferred.resolve();
     regenerateDeferred.resolve();
     await sequencePromise;
 
-    const utilityIdx = events.indexOf('piUtility.invalidateAll');
+    const utilityIdx = events.indexOf('completions.invalidateAll');
     expect(utilityIdx).toBeGreaterThan(events.indexOf('agentHost.shutdown:end'));
     expect(utilityIdx).toBeLessThan(events.indexOf('vault.clear:start'));
   });

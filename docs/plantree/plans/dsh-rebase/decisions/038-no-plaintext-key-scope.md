@@ -15,3 +15,7 @@
 
 - 不选「P1-5 立刻停写 `auth.json`」：内嵌 TUI 马上就会失去模型访问，而 P1-11 之前 TUI 是旧会话唯一能续聊的地方（[决策 005](005-legacy-pi-sessions-read-only-until-p1-9.md)）。
 - 代价：这段时间里 `auth.json` 仍是明文 0600，同一用户的进程都读得到，与 1.0.x 相同。
+
+## 补记（2026-09-29，P1-15，[决策 125](125-p1-15-one-shot-completions-choices.md)）
+
+第 3 条的两个前提之一已满足：P1-15 落地，一次性补全改在 DSH 宿主上跑，不再把含 key 的目录交给任何进程；原生补全在 Main 没交目录时会退回读 `auth.json`，这条路也随之不再走。现在读 `auth.json` 的只剩内嵌 pi TUI，停写只等 P1-11 定下 TUI 的去留。

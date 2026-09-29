@@ -311,3 +311,41 @@ describe('host.ts plugin loading and audit (P1-10b, decisions 058, 059, 108, 110
     expect(host).toMatch(/plugins: pluginReport\(\s*enabledInput,/);
   });
 });
+
+/**
+ * P1-15 (decisions 039, 125): one-shot completions go straight through DSH's
+ * LLM service, which the bridge injects: no agent, no session, no tool, and
+ * nothing of the native utility worker's RPC.
+ */
+describe('one-shot completions stream through ctx.llm alone (P1-15)', () => {
+  const completions = read('bridge', 'completions.ts');
+
+  it('the bridge row injects llm and hands the completions to the multiplexer', () => {
+    const plugin = read('bridge', 'plugin.ts');
+    expect(plugin).toMatch(/export const inject = \[[^\]]*'llm',[^\]]*\];/);
+    expect(plugin).toContain('llm: () => ctx.llm,');
+    expect(plugin).toContain(
+      'route: (model, effort) => completionRouter.completion(model, effort),'
+    );
+    expect(plugin).toMatch(/const mux = new DshChannelMux\(\{[\s\S]*?\n {4}completions,\n/);
+    expect(plugin).toContain('completions.dispose();');
+  });
+
+  it('a completion opens no agent or session, offers no tool and writes nothing', () => {
+    expect(completions).toContain('llm.stream({');
+    for (const banned of [
+      'agents.create',
+      'sessions.',
+      'sessionQuery',
+      'tools:',
+      'toolHistory',
+      'sessionId',
+      'writeFile',
+      'utility.start',
+      'utility.delta',
+      'PiWorkerRpcServer',
+    ]) {
+      expect(completions, banned).not.toContain(banned);
+    }
+  });
+});

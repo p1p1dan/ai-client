@@ -1,5 +1,8 @@
 import type { CommonAICompletionOptions } from '@shared/types/ai';
-import { piUtilityService } from '../agent-host/PiUtilityService';
+import {
+  type DshCompletionService,
+  dshCompletionService,
+} from '../agent-host/DshCompletionService';
 import { spawnGit } from '../git/runtime';
 
 export interface CodeReviewOptions extends CommonAICompletionOptions {
@@ -70,7 +73,15 @@ ${gitDiff || '(No diff available)'}
 ${gitLog || '(No commit history available)'}`;
 }
 
-export async function startCodeReview(options: CodeReviewOptions): Promise<void> {
+/**
+ * dsh-rebase P1-15 (decision 125): the review streams from the shared DSH host
+ * (`service`, the app's own by default); the prompt, the repository reads and
+ * the 10 min deadline are unchanged.
+ */
+export async function startCodeReview(
+  options: CodeReviewOptions,
+  service: Pick<DshCompletionService, 'complete'> = dshCompletionService
+): Promise<void> {
   const {
     workdir,
     language,
@@ -96,9 +107,9 @@ export async function startCodeReview(options: CodeReviewOptions): Promise<void>
 
   try {
     activeReviewIds.add(reviewId);
-    await piUtilityService.complete({
+    await service.complete({
       operationId: reviewId,
-      cwd: workdir,
+      purpose: 'code-review',
       prompt: buildPrompt(gitDiff, gitLog, language, customPrompt),
       ...(model ? { model } : {}),
       ...(effort ? { effort } : {}),
@@ -113,10 +124,15 @@ export async function startCodeReview(options: CodeReviewOptions): Promise<void>
   }
 }
 
-export function stopCodeReview(reviewId: string): void {
-  void piUtilityService.cancel(reviewId);
+export function stopCodeReview(
+  reviewId: string,
+  service: Pick<DshCompletionService, 'cancel'> = dshCompletionService
+): void {
+  service.cancel(reviewId);
 }
 
-export function stopAllCodeReviews(): void {
-  for (const reviewId of activeReviewIds) void piUtilityService.cancel(reviewId);
+export function stopAllCodeReviews(
+  service: Pick<DshCompletionService, 'cancel'> = dshCompletionService
+): void {
+  for (const reviewId of activeReviewIds) service.cancel(reviewId);
 }

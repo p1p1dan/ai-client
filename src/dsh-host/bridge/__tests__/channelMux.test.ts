@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
 import {
+  DSH_COMPLETION_REQUEST_INVALID,
+  DSH_COMPLETION_UNAVAILABLE,
   DSH_SEED_REQUEST_INVALID,
   DSH_SEED_UNAVAILABLE,
   type DshHostToMainMessage,
   type DshSeedSessionResult,
+  isDshHostCompleted,
   isDshHostPage,
   isDshHostSeeded,
 } from '../../../shared/types/dshHostProtocol.ts';
@@ -579,6 +582,121 @@ describe('DshChannelMux — seedSession (P1-9c, decision 054)', () => {
     expect(h.sent.every(isDshHostSeeded)).toBe(true);
     // No usable id: nobody to answer, one diagnostic.
     expect(h.log).toHaveBeenCalledWith('dropped a malformed seedSession request');
+  });
+});
+
+/**
+ * P1-15 (decision 125): a one-shot completion is no channel's. The mux hands
+ * it to the completions, which answer it themselves; the mux answers only what
+ * they cannot: a host without them, and a request whose fields are wrong.
+ */
+describe('DshChannelMux — one-shot completions (P1-15, decision 125)', () => {
+  const request = {
+    host: 'complete',
+    id: 5,
+    purpose: 'branch-name',
+    prompt: 'Name a branch for: add login',
+    timeoutMs: 120_000,
+  } as const;
+
+  function completer(completions: DshChannelMuxOptions['completions']) {
+    const sent: DshHostToMainMessage[] = [];
+    const log = vi.fn();
+    const mux = new DshChannelMux({
+      send: (message) => sent.push(message),
+      createRuntime: () => {
+        throw new Error('a completion opens no channel');
+      },
+      sample: () => ({ eldMaxMs: 0, rssMb: 0 }),
+      ...(completions ? { completions } : {}),
+      log,
+    });
+    return { mux, sent, log };
+  }
+
+  it('hands a request and a cancel to the completions, opening no channel', () => {
+    const start = vi.fn();
+    const cancel = vi.fn();
+    const h = completer({ start, cancel });
+    expect(h.mux.receive(request)).toBe(true);
+    expect(h.mux.receive({ host: 'complete-cancel', id: 5 })).toBe(true);
+    expect(start).toHaveBeenCalledWith(request);
+    expect(cancel).toHaveBeenCalledWith(5);
+    expect(h.sent).toEqual([]);
+    expect(h.mux.status()).toEqual([]);
+  });
+
+  it('answers completion_unavailable without completions, or when starting one throws', () => {
+    const none = completer(undefined);
+    none.mux.receive(request);
+    // A cancel for nothing is simply consumed.
+    expect(none.mux.receive({ host: 'complete-cancel', id: 5 })).toBe(true);
+    expect(none.sent).toEqual([
+      {
+        host: 'completed',
+        id: 5,
+        ok: false,
+        error: { code: DSH_COMPLETION_UNAVAILABLE, message: expect.any(String) },
+        ms: 0,
+      },
+    ]);
+    const broken = completer({
+      start: () => {
+        throw new Error('bug');
+      },
+      cancel: vi.fn(),
+    });
+    broken.mux.receive(request);
+    expect(broken.sent).toEqual([
+      expect.objectContaining({
+        id: 5,
+        ok: false,
+        error: { code: DSH_COMPLETION_UNAVAILABLE, message: 'bug' },
+      }),
+    ]);
+    expect(none.sent.concat(broken.sent).every(isDshHostCompleted)).toBe(true);
+  });
+
+  it('answers a request with a usable id and wrong fields, and drops one without an id', () => {
+    const start = vi.fn();
+    const h = completer({ start, cancel: vi.fn() });
+    expect(h.mux.receive({ ...request, purpose: 'title' })).toBe(true);
+    expect(h.mux.receive({ ...request, id: 6, prompt: '' })).toBe(true);
+    expect(h.mux.receive({ ...request, id: 0 })).toBe(true);
+    expect(h.mux.receive({ host: 'complete-cancel', id: 'x' })).toBe(true);
+    expect(start).not.toHaveBeenCalled();
+    expect(h.sent).toEqual([
+      expect.objectContaining({
+        id: 5,
+        ok: false,
+        error: expect.objectContaining({ code: DSH_COMPLETION_REQUEST_INVALID }),
+      }),
+      expect.objectContaining({ id: 6, ok: false }),
+    ]);
+    expect(h.sent.every(isDshHostCompleted)).toBe(true);
+    expect(h.log).toHaveBeenCalledWith('dropped a malformed complete request');
+    expect(h.log).toHaveBeenCalledWith('dropped a malformed complete-cancel request');
+  });
+
+  it('never lets utility.start open a channel', async () => {
+    const h = harness();
+    h.mux.receive({
+      ch: 'c1-9',
+      rpc: rpc(
+        'utility.start',
+        { operationId: 'op', cwd: '/repo', prompt: 'x', timeoutMs: 1000 },
+        'u1'
+      ),
+    });
+    await settle();
+    expect(h.runtimes).toEqual([]);
+    expect(responses(h.sent, 'c1-9')).toEqual([
+      expect.objectContaining({
+        requestId: 'u1',
+        ok: false,
+        error: expect.objectContaining({ code: 'WORKER_CHANNEL_UNKNOWN' }),
+      }),
+    ]);
   });
 });
 

@@ -5,9 +5,11 @@
  * (decisions 004 and 009): there is no engine switch and no native fallback.
  * The host (`src/dsh-host/host.ts`, built to `host.js` for packaging by P1-2)
  * runs on the bundled Node with an IPC channel, one per app, spawned and
- * owned by `DshHostSupervisor` (decision 019). One-shot completions keep the
- * native worker (`PiWorkerProcess.ts`) until P1-12; conversation imports are
- * seeded by the host since P1-9f (decision 056).
+ * owned by `DshHostSupervisor` (decision 019). One-shot completions run on
+ * the same host since P1-15 (decision 125, `DshCompletionService.ts`);
+ * conversation imports are seeded by the host since P1-9f (decision 056).
+ * Nothing in the product starts the native worker (`PiWorkerProcess.ts`)
+ * any more; P1-12 deletes it.
  *
  * The pieces are separate functions so each can be pinned on its own: the
  * layout (which binary runs which entry), the home (decision 008), the

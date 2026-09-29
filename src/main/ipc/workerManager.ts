@@ -1,6 +1,6 @@
+import { dshCompletionService } from '../services/agent-host/DshCompletionService';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
 import { installDshHostModelSource } from '../services/agent-host/dshHostModelSource';
-import { piUtilityService } from '../services/agent-host/PiUtilityService';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { workerManager } from '../services/agent-host/WorkerManager';
 
@@ -13,9 +13,13 @@ async function disposeChatEngine(): Promise<void> {
   }
 }
 
-/** Awaited app-close cleanup for all Main-owned Pi worker processes. */
+/**
+ * Awaited app-close cleanup for all Main-owned Pi worker processes. One-shot
+ * completions (P1-15) run on the same DSH host and start no process: they
+ * are settled here, and the host's shutdown ends whatever they left.
+ */
 export async function cleanupWorkerManager(): Promise<void> {
-  await Promise.all([disposeChatEngine(), piUtilityService.disposeAll()]);
+  await Promise.all([disposeChatEngine(), dshCompletionService.disposeAll()]);
   // U05-a: after the workers are gone, not before — a live worker still has
   // its scratch cwd open, and removing it underneath one invites EBUSY on
   // Windows and a confusing tool failure everywhere else.
@@ -42,7 +46,7 @@ export function installChatEngineModelSource(): void {
 
 /** Signal/deadline fallback: detach routing and synchronously kill every worker. */
 export function cleanupWorkerManagerSync(): void {
-  piUtilityService.forceKillAllNow();
+  dshCompletionService.forceKillAllNow();
   workerManager.forceKillAllNow();
   // After the slots detached: SIGKILL the shared DSH host itself (idempotent).
   dshHostSupervisor.forceKillNow();

@@ -31,7 +31,8 @@
  *                   for the credential relay. Everything else is the
  *                   aiclient-bridge row's (bridge/plugin.ts): every chat
  *                   session's channel envelopes and the host controls (ping,
- *                   close). Probe drivers layer the test-only bundle
+ *                   close, and P1-15's one-shot `complete`, streamed through
+ *                   ctx.llm with no session). Probe drivers layer the test-only bundle
  *                   @aiclient/dsh-probe (tools/probe-bundle) on top of it
  *                   (decision 015).
  * Every IPC message is buffered from the first line of this file until the

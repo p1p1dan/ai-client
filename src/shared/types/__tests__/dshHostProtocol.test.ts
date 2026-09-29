@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   DSH_CHANNEL_OPENING_METHODS,
+  DSH_COMPLETION_MAX_TIMEOUT_MS,
+  DSH_COMPLETION_PURPOSES,
   DSH_CONFIGURE_TIMEOUT_MS,
   DSH_CREDENTIAL_TIMEOUT_MS,
   dshHostControlKind,
@@ -8,8 +10,13 @@ import {
   formatDshChannelId,
   isDshChannelEnvelope,
   isDshChannelId,
+  isDshCompletionPurpose,
   isDshHostChannelClosed,
   isDshHostCloseChannel,
+  isDshHostCompleteCancel,
+  isDshHostCompleted,
+  isDshHostCompleteRequest,
+  isDshHostCompletionDelta,
   isDshHostConfigure,
   isDshHostCredentialRequest,
   isDshHostCredentialResult,
@@ -488,5 +495,105 @@ describe('dshHostProtocol model plan and keys (P1-5, decisions 033 and 034)', ()
   it('gives the host 10 s for configure and a key request 5 s', () => {
     expect(DSH_CONFIGURE_TIMEOUT_MS).toBe(10_000);
     expect(DSH_CREDENTIAL_TIMEOUT_MS).toBe(5_000);
+  });
+});
+
+/**
+ * P1-15 (decisions 039, 125): a one-shot completion is a host control of its
+ * own — no channel, no session — answered by one `completed`.
+ */
+describe('dshHostProtocol one-shot completions (P1-15, decision 125)', () => {
+  const request = {
+    host: 'complete',
+    id: 3,
+    purpose: 'commit-message',
+    prompt: 'Write a commit message for this diff.',
+    timeoutMs: 30_000,
+  };
+
+  it('knows the three purposes and nothing else', () => {
+    expect(DSH_COMPLETION_PURPOSES).toEqual(['commit-message', 'branch-name', 'code-review']);
+    for (const purpose of DSH_COMPLETION_PURPOSES)
+      expect(isDshCompletionPurpose(purpose)).toBe(true);
+    for (const bad of ['title', '', 'Commit-Message', 3, null]) {
+      expect(isDshCompletionPurpose(bad), String(bad)).toBe(false);
+    }
+  });
+
+  it('accepts a request with a purpose, a prompt and a deadline; model, effort and stream optional', () => {
+    expect(isDshHostCompleteRequest(request)).toBe(true);
+    expect(
+      isDshHostCompleteRequest({
+        ...request,
+        purpose: 'code-review',
+        model: 'gw/m1',
+        effort: 'high',
+        stream: true,
+      })
+    ).toBe(true);
+    // Any effort word passes the shape check; the host's router reads the vocabulary.
+    expect(isDshHostCompleteRequest({ ...request, effort: 'default' })).toBe(true);
+    expect(isDshHostCompleteRequest({ ...request, timeoutMs: DSH_COMPLETION_MAX_TIMEOUT_MS })).toBe(
+      true
+    );
+  });
+
+  it.each([
+    ['no id', { id: undefined }],
+    ['a zero id', { id: 0 }],
+    ['an unknown purpose', { purpose: 'title' }],
+    ['an empty prompt', { prompt: '' }],
+    ['a prompt that is not text', { prompt: ['x'] }],
+    ['an empty model', { model: '' }],
+    ['an empty effort', { effort: '' }],
+    ['no deadline', { timeoutMs: undefined }],
+    ['a fractional deadline', { timeoutMs: 1.5 }],
+    ['a deadline setTimeout cannot hold', { timeoutMs: DSH_COMPLETION_MAX_TIMEOUT_MS + 1 }],
+    ['a stream flag that is not boolean', { stream: 'yes' }],
+  ])('refuses a request with %s', (_label, patch) => {
+    expect(isDshHostCompleteRequest({ ...request, ...patch })).toBe(false);
+  });
+
+  it('accepts a cancel and a delta by id', () => {
+    expect(isDshHostCompleteCancel({ host: 'complete-cancel', id: 3 })).toBe(true);
+    expect(isDshHostCompleteCancel({ host: 'complete-cancel' })).toBe(false);
+    expect(isDshHostCompletionDelta({ host: 'completion-delta', id: 3, text: 'fe' })).toBe(true);
+    expect(isDshHostCompletionDelta({ host: 'completion-delta', id: 3, text: '' })).toBe(true);
+    expect(isDshHostCompletionDelta({ host: 'completion-delta', id: 3 })).toBe(false);
+    expect(isDshHostCompletionDelta({ host: 'completion-delta', id: -1, text: 'x' })).toBe(false);
+  });
+
+  it('accepts an answer: the text and model, or a coded error, never both', () => {
+    const ok = { host: 'completed', id: 3, ok: true, text: 'feat: x', model: 'gw/m1', ms: 12 };
+    expect(isDshHostCompleted(ok)).toBe(true);
+    expect(isDshHostCompleted({ ...ok, text: '' })).toBe(true);
+    const failed = {
+      host: 'completed',
+      id: 3,
+      ok: false,
+      error: { code: 'CREDENTIALS_UNAVAILABLE', message: 'no key', dshCode: 'MISSING_CREDENTIAL' },
+      ms: 1,
+    };
+    expect(isDshHostCompleted(failed)).toBe(true);
+    const { dshCode: _dsh, ...plain } = failed.error;
+    expect(isDshHostCompleted({ ...failed, error: plain })).toBe(true);
+    for (const [label, bad] of [
+      ['ok without text', { ...ok, text: undefined }],
+      ['ok with an error', { ...ok, error: failed.error }],
+      ['an empty model', { ...ok, model: '' }],
+      ['no ms', { ...ok, ms: undefined }],
+      ['a failure with text', { ...failed, text: 'x' }],
+      ['a failure without a code', { ...failed, error: { message: 'x' } }],
+      ['a failure with an empty dshCode', { ...failed, error: { ...failed.error, dshCode: '' } }],
+    ] as const) {
+      expect(isDshHostCompleted(bad), label).toBe(false);
+    }
+  });
+
+  it('reports the new kinds by name, and none of them opens a channel', () => {
+    expect(dshHostControlKind(request)).toBe('complete');
+    expect(dshHostControlKind({ host: 'completed', id: 1 })).toBe('completed');
+    expect(opensDshChannel(rpc('utility.start'))).toBe(false);
+    expect(DSH_CHANNEL_OPENING_METHODS).not.toContain('utility.start');
   });
 });
