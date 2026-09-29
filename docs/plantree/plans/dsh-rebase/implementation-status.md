@@ -35,12 +35,19 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
    1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
    2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → ~~P1-4d3（联网装 `dsh-tool-ask-user`）~~ 已落地 `4e003c1b` → P1-4e（进 CI 的 `build.yml`、`dsh-bridge-gate.yml` 改动先问用户，决策 100）；
    3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；~~P1-16e 旧资产提示~~ 已落地 `6d2fc8a0`；~~P1-10c 插件页~~ 已落地 `0bd912f3`；
-   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（原型场景 G 已由用户确认，[决策 126](decisions/126-user-rulings-p1-11-terminal-prototype-2026-09-29.md)；P1-15 之后开工）；之后 ~~P1-9c~~ 已落地 `01c57b52` → ~~P1-9d~~ 已落地 `7f6bef13` → ~~P1-9e~~ 已落地 `7c505ed9` → ~~P1-9f~~ 已落地 `f8532981` → ~~P1-15~~ 已落地 `75a54553` → P1-11 → P1-6d。
+   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（原型场景 G 已由用户确认，[决策 126](decisions/126-user-rulings-p1-11-terminal-prototype-2026-09-29.md)；P1-15 之后开工）；之后 ~~P1-9c~~ 已落地 `01c57b52` → ~~P1-9d~~ 已落地 `7f6bef13` → ~~P1-9e~~ 已落地 `7c505ed9` → ~~P1-9f~~ 已落地 `f8532981` → ~~P1-15~~ 已落地 `75a54553` → P1-11（第一部分去掉 pi TUI 已落地 `4d530938`；第二部分右列终端进行中）→ P1-6d。
 
 **本机限制（2026-09-28 用户明令）**：不跑 `pnpm build`（整包 electron-vite 构建两次把系统弄崩）等庞大操作；验证只做四套 tsc、挑选的 vitest、宿主冒烟与 `bridge-record`，一次一个。**未验证项**：P1-10b 给 `DshHostProcess.ts` 加了静态导入，vite 拆块没有在本机检查，交 CI 或用户构建时看。
 
 ## Last Landed
 
+- 2026-09-29 P1-11 第一部分：去掉内嵌 pi TUI `4d530938`（决策 109、126；取舍见[决策 127](decisions/127-p1-11-remove-pi-tui-choices.md)，20 条，待审批，**请重点看第 4、8、11 条**：pi CLI 插件管理提前删除（原定 P1-12）；旧 `auth.json` 要不要启动时一次性删除，默认不删；`presentationMode` 字段删除、旧值读入时丢弃）：
+  - 删 pi TUI 服务、IPC、TUI 交接、`chat:reloadSession`、`/new` 会话登记，以及会话栏 GUI / TUI 开关与 TUI 视图；共 99 个文件、约 −8k 行。
+  - `auth.json` 停写明文 key（决策 038 第 3 条的两个前提都已满足），key 只在内存；已有文件不删，登出照旧删。
+  - 通用 shell 终端栈保留给右列终端：`PtyManager`、`SessionManager`、`session:*` IPC、`useXterm`、`ShellTerminal` 等；worktree 初始化脚本本就在左栏通用终端里跑，不依赖 TUI。
+  - 新静态守卫 `piTuiRemovedStatic`：产品里不再拉起 pi CLI、没有开关、不写 `auth.json`、通用终端栈还在。
+  - 编排器复跑：四套 tsc 通过；`src/main`、`src/shared/__tests__` 与全仓 Static / Scan / Wiring 共 220 个文件、2762 例，渲染层全部 292 个文件、4793 例，全部通过；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异。
+  - **过渡状态**：右列终端上线之前，会话栏没有任何终端入口。留给 P1-12：`worker.reload` 协议四处、`src/agent-host` 里的 `@earendil-works/pi-coding-agent` 依赖、4 个手动探针脚本。发版说明要补「内嵌 pi 终端移除」。
 - 2026-09-29 P1-15 一次性补全换引擎 `75a54553`（取舍见[决策 125](decisions/125-p1-15-one-shot-completions-choices.md)，待审批，**请重点看第 1、10、11、13、16 条**：没走决策 039 的通道 `utility.*` RPC，改为宿主控制消息；「自动」取计划里的第一个模型；档位按 completion 规则，不再退回读 `<agentDir>/settings.json` 的思考档位；宿主从 `failed` 也会被补全拉起；错误显示为「码: 句子」）：
   - 提交信息、分支名、代码评审经共享宿主 `ctx.llm.stream` 直调，不开会话、不写盘、没有工具；Main 新服务 `DshCompletionService` 保留容量 2、超时、取消、登出失效与退出清理。
   - 编排器复跑：四套 tsc 通过；`src/main`、`src/dsh-host`、`src/shared/types` 共 174 个文件、2544 例，`src/shared/__tests__`、全仓 Static / Scan / Wiring、`src/agent-host` 共 114 个文件、1348 例，全部通过；真宿主集成 35/35（新增补全阶段：三个真入口各生成一次、中途停止 2 s 内结束、超时后宿主照常、计划外模型与登出状态都没有请求到达网关）；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
