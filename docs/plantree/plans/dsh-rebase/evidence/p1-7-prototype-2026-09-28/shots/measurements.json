@@ -1273,5 +1273,256 @@
     "anyHeaderOverflow": false,
     "anyMessageCovered": false,
     "anyMessageCoveredUnexpected": false
+  },
+  {
+    "file": "G-terminal-light.png",
+    "size": "1440",
+    "scene": "G",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "rightcol",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 304,
+        "width": 340,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 2/256 轮12:02\"",
+          "clock:\"已工作 1 分 12 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"空值分支修好了，补了 3 个用例，本地单测通过。\"",
+          "zone:\"✻完成于 12:04 · 5 次工具调用\"",
+          "autohead:\"目标 · 第 3/256 轮12:05\"",
+          "clock:\"✻工作中 38 秒 · 运行中\""
+        ],
+        "overlapsRightColumn": false
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 361,
+        "left": 304,
+        "width": 340,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"✻工作中 38 秒 · 运行中\"",
+          "row:\"规划3/5 已完成\"",
+          "row:\"终端npm run dev · 后台 · bas\"",
+          "row:\"终端npm run build · 后台 · b\"",
+          "row:\"读取parseConfig.ts src/con\""
+        ],
+        "overlapsRightColumn": false
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false,
+    "rightColumn": {
+      "width": 460,
+      "height": 868,
+      "cwd": "~/projects/demo",
+      "headerOverflow": false
+    },
+    "anyOverlapsRightColumn": false,
+    "sessionbarOverlapsRightColumn": false
+  },
+  {
+    "file": "G-terminal-dark.png",
+    "size": "1440",
+    "scene": "G",
+    "theme": "dark",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "rightcol",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 711,
+    "timelinePxWith": 643,
+    "dockTopPx": 678.5,
+    "centerHeightPx": 868,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 304,
+        "width": 340,
+        "height": 309,
+        "bottom": 353,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 2/256 轮12:02\"",
+          "clock:\"已工作 1 分 12 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"空值分支修好了，补了 3 个用例，本地单测通过。\"",
+          "zone:\"✻完成于 12:04 · 5 次工具调用\"",
+          "autohead:\"目标 · 第 3/256 轮12:05\"",
+          "clock:\"✻工作中 38 秒 · 运行中\""
+        ],
+        "overlapsRightColumn": false
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 361,
+        "left": 304,
+        "width": 340,
+        "height": 230,
+        "bottom": 591,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "clock:\"✻工作中 38 秒 · 运行中\"",
+          "row:\"规划3/5 已完成\"",
+          "row:\"终端npm run dev · 后台 · bas\"",
+          "row:\"终端npm run build · 后台 · b\"",
+          "row:\"读取parseConfig.ts src/con\""
+        ],
+        "overlapsRightColumn": false
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false,
+    "rightColumn": {
+      "width": 460,
+      "height": 868,
+      "cwd": "~/projects/demo",
+      "headerOverflow": false
+    },
+    "anyOverlapsRightColumn": false,
+    "sessionbarOverlapsRightColumn": false
+  },
+  {
+    "file": "G-terminal-1280x720-light.png",
+    "size": "1280",
+    "scene": "G",
+    "theme": "light",
+    "form": "floating",
+    "effectiveForm": "floating",
+    "termPos": "rightcol",
+    "columnTerminal": false,
+    "strips": 2,
+    "expanded": [],
+    "perStripPx": [
+      {
+        "strip": "todo",
+        "px": 28
+      },
+      {
+        "strip": "goal",
+        "px": 28
+      }
+    ],
+    "stripsPx": 60,
+    "gapBelowPx": 8,
+    "addedPx": 68,
+    "timelinePxWithout": 531,
+    "timelinePxWith": 463,
+    "dockTopPx": 498.5,
+    "centerHeightPx": 688,
+    "subwindows": [
+      {
+        "id": "jobs",
+        "form": "floating",
+        "top": 44,
+        "left": 144,
+        "width": 340,
+        "height": 219,
+        "bottom": 263,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 2/256 轮12:02\"",
+          "clock:\"已工作 1 分 12 秒\"",
+          "divider:\"最终输出\"",
+          "answer:\"空值分支修好了，补了 3 个用例，本地单测通过。\"",
+          "zone:\"✻完成于 12:04 · 5 次工具调用\""
+        ],
+        "overlapsRightColumn": false
+      },
+      {
+        "id": "agents",
+        "form": "floating",
+        "top": 271,
+        "left": 144,
+        "width": 340,
+        "height": 219,
+        "bottom": 490,
+        "overlapsDock": false,
+        "headerOverflow": false,
+        "coversMessages": [
+          "autohead:\"目标 · 第 3/256 轮12:05\"",
+          "clock:\"✻工作中 38 秒 · 运行中\"",
+          "row:\"规划3/5 已完成\"",
+          "row:\"终端npm run dev · 后台 · bas\"",
+          "row:\"终端npm run build · 后台 · b\"",
+          "row:\"读取parseConfig.ts src/con\""
+        ],
+        "overlapsRightColumn": false
+      }
+    ],
+    "embeddedDrawerPx": null,
+    "anyOverlap": false,
+    "anyHeaderOverflow": false,
+    "anyMessageCovered": true,
+    "anyMessageCoveredUnexpected": false,
+    "rightColumn": {
+      "width": 460,
+      "height": 688,
+      "cwd": "~/projects/demo",
+      "headerOverflow": false
+    },
+    "anyOverlapsRightColumn": false,
+    "sessionbarOverlapsRightColumn": false
   }
 ]

@@ -215,9 +215,64 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
 .colterm-head .lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .colterm-head .hint { font-weight: 400; font-size: var(--text-meta); color: var(--muted-foreground); }
 
-.center { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.sessionbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+/* ---------------- terminal, variant 3 (decision 109, scene G): right column,
+   peer of the file editor column (`workspace-shell/center/EditorColumn.tsx`).
+   Structurally this is a SIBLING of `.center`, matching the real shell where
+   `EditorColumn` sits beside the chat column, outside it — NOT inside
+   `.center`, so `.subwin-layer`'s `position:absolute; inset:0` (scoped to
+   `.center`) never reaches over this column: floating sub-windows and this
+   column cannot geometrically overlap (see `measure()`'s
+   `overlapsRightColumn`, verified per shot, not just eyeballed). Width is a
+   static stand-in for the real `--shell-editor-w` (`shellLayoutModel.ts`,
+   `centerLayoutModel.ts`'s DEFAULT_EDITOR_RATIO 0.5) — the real column is
+   user-resizable, this prototype is not. */
+.rightcol { width: 460px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+  border-left: 1px solid var(--border); background: var(--background); }
+/* Tab strip matches `files/EditorTabs.tsx`: h-10 (40px) bar, h-9 (36px) tab,
+   2px `bg-primary` top indicator on the active tab — same visual language as
+   a file tab, which IS the point of "同级" (decision 109). Terminal and the
+   file editor are mutually exclusive occupants of this one column (same
+   mechanism the column already uses for editor vs. review, see
+   `WorkspaceShell.tsx`'s `editorOpen`/`reviewOpen`) rather than a shared tab
+   strip with file tabs — see README "布局选择与理由". */
+.rc-tabbar { height: 40px; flex-shrink: 0; display: flex; align-items: center; padding: 0 4px;
   border-bottom: 1px solid var(--border); }
+.rc-tab { position: relative; height: 36px; display: inline-flex; align-items: center; gap: 6px;
+  padding: 0 10px; min-width: 0; max-width: 220px; border-right: 1px solid var(--border); }
+.rc-tab::before { content: ""; position: absolute; inset-inline: 0; top: 0; height: 2px; background: var(--primary); }
+.rc-tab .lbl { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-tab .x { flex-shrink: 0; display: inline-flex; padding: 2px; border-radius: var(--radius-xs); color: var(--muted-foreground); }
+.rc-tab .x:hover { background: var(--hover); color: var(--foreground); }
+/* Breadcrumb row mirrors `EditorArea.tsx`'s file-path breadcrumb below the tab
+   strip — here it shows the session's cwd instead of a file path, which is
+   the "终端标题显示会话目录" requirement. */
+.rc-breadcrumb { flex-shrink: 0; height: 28px; display: flex; align-items: center; gap: 6px;
+  padding: 0 12px; border-bottom: 1px solid var(--border); font-size: var(--text-meta); color: var(--muted-foreground); min-width: 0; }
+.rc-breadcrumb .path { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-mono); font-size: var(--text-code); color: var(--foreground); }
+/* Session with no bound directory (open question 10): the terminal button
+   itself is disabled (no honest cwd to open a shell in) rather than falling
+   back to some default directory — see README "未绑定目录时的建议". Reuses
+   the same disabled look the blocked-goal "继续" button already established. */
+.chip.dashed { border: 1px dashed var(--border); background: transparent; color: var(--muted-foreground); }
+
+.center { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* Coordinator round 3, defect 1/3: `.sessionbar` is scoped to `.center` (a
+   sibling of `#rightcol`, never a child of it — see the `.rightcol` CSS
+   comment), so it should never need to paint past its own right edge.
+   `overflow: hidden` is a defence-in-depth clip, same rationale as
+   `.subwin`'s (below): the REAL fix is `.sb-title` being allowed to shrink
+   (see next rule), mirroring `SessionBar.tsx`'s title wrapper
+   (`min-w-0 flex-1`) — the one item in the row allowed to give up space —
+   while every button stays `flex-shrink: 0` like the real bar's `Button`s. */
+.sessionbar { height: 36px; flex-shrink: 0; display: flex; align-items: center; gap: 6px; padding: 0 8px;
+  border-bottom: 1px solid var(--border); overflow: hidden; }
+/* The row's one shrinkable/growable item (mirrors `SessionBar.tsx`'s
+   `<div className="min-w-0 flex-1">{title}</div>`); everything else in
+   `sessionbar()`'s markup is a plain button/span with no flex overrides, i.e.
+   the default `flex: 0 1 auto` reads as `shrink-0` in practice once this one
+   sibling has already given up all its width. */
+.sb-title { min-width: 0; flex: 1 1 auto; display: flex; align-items: center; gap: 6px; overflow: hidden; }
 .sessionbar .title { font-weight: 600; white-space: nowrap; }
 .vsep { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
 .timeline { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 24px 16px; }
@@ -482,7 +537,8 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     <button data-scene="C">C 后台任务</button>
     <button data-scene="D">D 子代理</button>
     <button data-scene="E">E 两窗同开</button>
-    <button data-scene="F">F 终端</button>
+    <button data-scene="F">F 终端（已作废）</button>
+    <button data-scene="G">G 右列终端</button>
   </div>
   <span class="pg-label">主题</span>
   <div class="seg" id="themeSeg" role="group" aria-label="主题">
@@ -497,8 +553,9 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
   </div>
   <span class="pg-label">终端位置</span>
   <div class="seg" id="termPosSeg" role="group" aria-label="终端位置">
-    <button data-termpos="panel">左栏面板</button>
-    <button data-termpos="column">整列切换</button>
+    <button data-termpos="rightcol">右列（决策 109，场景 G）</button>
+    <button data-termpos="panel">左栏面板（已作废）</button>
+    <button data-termpos="column">整列切换（已作废）</button>
   </div>
   <span class="pg-label">目标状态</span>
   <div class="seg" id="goalSeg" role="group" aria-label="目标状态">
@@ -514,6 +571,7 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     <button data-size="1024">1024×640</button>
   </div>
   <label class="chk"><input type="checkbox" id="annoChk" /> 高度标注</label>
+  <label class="chk"><input type="checkbox" id="unboundChk" /> 会话未绑定目录（第 10 题，任意场景可勾）</label>
 </header>
 
 <section class="notes" id="notes"></section>
@@ -541,6 +599,10 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
         <div class="subwin-layer" id="floatLayer"></div>
         <div class="anno-layer" id="anno"></div>
       </main>
+      <!-- Decision 109 / scene G: sibling of `.center`, matching the real
+           shell's EditorColumn sitting beside (not inside) the chat column —
+           see the `.rightcol` CSS comment for why that placement matters. -->
+      <aside class="rightcol" id="rightcol" style="display:none"></aside>
     </div>
   </div>
 </div>
@@ -590,7 +652,12 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     { id: 'bash-2', kind: 'cmd', origin: 'bg', label: 'npm run dev', status: 'running', time: '4:12' },
     { id: 'bash-6', kind: 'cmd', origin: 'timeout', label: 'npm run build', status: 'running', time: '1:47' },
     { id: 'bash-4', kind: 'cmd', origin: 'bg', label: 'npm run lint', status: 'failed', exit: 1, time: '0:18' },
-    { id: 'agent-explore', kind: 'agent', origin: 'agent', continuable: true, label: 'explore · 调研 goal 投影',
+    // Coordinator round 3, defect 5: decision 119 #25 (per decision 090) —
+    // subagents are named "子代理 · 描述" / "分叉 · 描述", never a raw agent
+    // name (DSH's `subagent` tool has no name to begin with). `id` stays
+    // `agent-explore` (internal key only, never rendered) so the existing
+    // fork/timeline references keep working.
+    { id: 'agent-explore', kind: 'agent', origin: 'agent', continuable: true, label: '子代理 · 调研 goal 投影',
       status: 'running', time: '2:31',
       activity: ['读取 goal/types.d.ts', '搜索 activation（src/dsh-host/）', '状态 运行中 · 12 次调用 · 45k tokens'] },
     { id: 'wf-release', kind: 'workflow', origin: 'workflow', label: '发布前检查', status: 'running', time: '3:05',
@@ -598,10 +665,14 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
   ];
   // Subagent sub-window (decision 090). `id` doubles as the timeline
   // data-agent key so "定位" can scroll/flash the matching lane.
+  // Coordinator round 3, defect 5: `name` is what renders (decision 119 #25,
+  // per decision 090) — "子代理" for a plain subagent, "分叉" for
+  // `subagent_fork`, never the raw agent name. `id` is unchanged (internal
+  // key for `data-agent` timeline matching, never rendered).
   const SUBAGENTS_MAIN = [
-    { id: 'explore', st: 'running', name: 'explore', desc: '调研 goal 投影', time: '2:31', meta: '45k tokens · 12 次调用' },
+    { id: 'explore', st: 'running', name: '子代理', desc: '调研 goal 投影', time: '2:31', meta: '45k tokens · 12 次调用' },
     { id: 'fork', st: 'done', name: '分叉', desc: '复核方案', time: '0:48', meta: '12k tokens · 5 次调用' },
-    { id: 'review', st: 'failed', name: 'review', desc: '检查审批文案', time: '1:02', meta: '拒绝了任务' },
+    { id: 'review', st: 'failed', name: '子代理', desc: '检查审批文案', time: '1:02', meta: '拒绝了任务' },
   ];
   const SESSIONS = [
     { id: 'empty', title: '新会话', time: '刚刚' },
@@ -619,6 +690,12 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     D: { session: 'sa', running: true, todo: false, goalMode: null, tl: 'agents', open: { agents: true } },
     E: { session: 'sa', running: true, todo: true, goalMode: 'running', tl: 'agents', open: { jobs: true, agents: true } },
     F: { session: 'ci', running: true, todo: true, goalMode: 'running', tl: 'goal', open: { terminal: true } },
+    // G (decision 109): terminal in the right column, peer of the file
+    // editor — supersedes F's two variants. Opens both floating sub-windows
+    // too, on purpose: this is the worst-case combination for checking
+    // whether the new column and the floating windows fight over space.
+    G: { session: 'ci', running: true, todo: true, goalMode: 'running', tl: 'goal',
+      open: { terminal: true, jobs: true, agents: true }, defaultTermPos: 'rightcol' },
   };
 
   const NOTES = {
@@ -644,11 +721,19 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       ask: ['两个子窗口同时打开时，浮动/停靠形态默认纵向堆叠、各占可用高度的一半——小屏幕下会变得很矮（1024×640 时可能不到 150px），能接受这种"够用但局促"的效果吗？',
         '嵌入（底部抽屉）形态下两个子窗口共用一个抽屉、上下各占一半，这个高度分配和浮动形态一致，方便对比；但它会压缩时间线可视高度，浮动/停靠不会，见下方实测。',
         '浮动形态会盖住时间线内容（见下方"盖住时间线内容"提示，C、E 场景都能看到），这个代价能接受吗？还是应该默认用"右侧停靠"（宽屏不盖、窄屏退回浮动）？'] },
-    F: { title: 'F · 打开终端', decisions: '决策 090 / Q003；现状见方案 p1-8-p1-11 分片 01、02',
-      desc: '点会话栏"终端"按钮后开一个普通 shell，有两种位置可切换对比：「左栏面板」复用左栏已有的、目前仅供"建 worktree 后跑初始化脚本"打开的 terminal surface（`surfaceRegistry.ts` 里 `registeredOnly: true` 的那个）；「整列切换」是 1.0.x GUI / TUI 开关的形态，中栏整个换成终端，点"聊天"或再点一次终端按钮切回来。终端不出现在会话栏原来 GUI / TUI 开关的位置本身，那个位置现在是"终端"按钮。',
-      ask: ['两种终端位置该保留哪个做默认：左栏面板只有 280px 宽，普通 shell 输出经常放不下；整列切换更宽敞但会暂时看不见聊天。',
-        '终端复用左栏已有的 terminal surface（左栏面板变体）、不再新增面板/浮层，这个选择见 README"原型与决策方案的冲突/待厘清点"——是否认可？',
-        '打开终端后，rail 上没有任何图标被点亮（因为 terminal 不是 rail 可选中的 surface），这个"来源不在导轨里"的状态是否需要额外提示？'] },
+    F: { title: 'F · 打开终端（已作废，决策 109 → 见场景 G）', decisions: '决策 090 / Q003 的原方案；已被决策 109 取代',
+      desc: '⚠️ 已作废（决策 109，2026-09-28）：用户裁决终端放在右侧、与文件编辑器同级，这里的「左栏面板」「整列切换」两个位置都不采用。本场景与截图仅保留作历史记录，不删除，最终方案见场景 G。以下是原方案描述：点会话栏"终端"按钮后开一个普通 shell，有两种位置可切换对比：「左栏面板」复用左栏已有的、目前仅供"建 worktree 后跑初始化脚本"打开的 terminal surface（`surfaceRegistry.ts` 里 `registeredOnly: true` 的那个）；「整列切换」是 1.0.x GUI / TUI 开关的形态，中栏整个换成终端，点"聊天"或再点一次终端按钮切回来。',
+      ask: ['（历史问题，已被决策 109 取代，不需要再答）两种终端位置该保留哪个做默认：左栏面板只有 280px 宽，普通 shell 输出经常放不下；整列切换更宽敞但会暂时看不见聊天。',
+        '（历史问题）终端复用左栏已有的 terminal surface，这个选择是否认可？',
+        '（历史问题）打开终端后 rail 上没有任何图标被点亮，是否需要额外提示？'] },
+    // G (decision 109): terminal moves to the right column, peer of the file
+    // editor. Supersedes F entirely — see the `.rightcol` CSS comment and
+    // README "场景 G" for the full reasoning.
+    G: { title: 'G · 右列终端（决策 109）', decisions: '决策 109；方案见 p1-8-p1-11 分片 01、02',
+      desc: '点会话栏"终端"按钮后，右侧出现一个新列，与文件编辑器列同级、同一个位置（`workspace-shell/center/EditorColumn.tsx` 挂载的地方）——两者是这一列里互斥的同级占用者，与该列现有的 editor/review 互斥机制相同：文件标签不会丢失，只是暂时不可见，关闭终端后原样恢复。标题区仿文件编辑器的标签栏（h-9/h-10、顶部 2px 主色指示条），下方一行面包屑显示会话目录（本原型用占位路径 `~/projects/demo`，不接入真实 shell）。本场景同时打开了后台任务、子代理两个浮动子窗口，用来检验它们是否会盖住新的右列——`measurements.json` 的 `overlapsRightColumn` 字段是实测结果，不是目测。用页面顶部"会话未绑定目录"复选框可以看第 10 题的建议状态：终端按钮直接置灰，不提供默认目录兜底。',
+      ask: ['右列终端与文件编辑器"互斥同级共享同一列位"（关闭终端才能看到之前的文件，反之亦然）这个信息架构是否认可？（推荐：认可，理由见 README）',
+        '未绑定目录时终端按钮直接置灰 + 提示文案，而不是退化打开某个默认目录（如用户主目录），是否认可？（推荐：认可，更安全）',
+        '本原型把右列终端宽度定为约 460px（约等于中栏对半分，与真实 `--shell-editor-w` 默认比例一致），是否需要不同的默认宽度？'] },
   };
 
   // ---------------- state ----------------
@@ -664,13 +749,24 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
   const DOCK_GAP = 16;
   const DOCK_TIMELINE_RESERVE = 720;
   const params = new URLSearchParams(location.search);
+  const initialScene = SCENES[params.get('scene')] ? params.get('scene') : 'A';
+  // Terminal position (decision 109): 'rightcol' is the final answer (scene
+  // G); 'panel'/'column' are F's two retired variants, kept selectable for
+  // historical comparison only. Landing directly on scene G (no explicit
+  // ?termpos=) should show the final answer, not the retired default.
+  const TERM_POS_VALUES = ['rightcol', 'panel', 'column'];
   const state = {
-    scene: SCENES[params.get('scene')] ? params.get('scene') : 'A',
+    scene: initialScene,
     theme: params.get('theme') === 'dark' ? 'dark' : 'light',
     form: FORMS.includes(params.get('form')) ? params.get('form') : 'floating',
-    termPos: params.get('termpos') === 'column' ? 'column' : 'panel',
+    termPos: TERM_POS_VALUES.includes(params.get('termpos'))
+      ? params.get('termpos')
+      : (SCENES[initialScene].defaultTermPos || 'panel'),
     size: SIZES[params.get('size')] ? params.get('size') : '1440',
     anno: params.get('anno') !== '0',
+    // Open question 10: a session with no bound directory. Global toggle so
+    // it can be checked on top of any scene, not just G.
+    unbound: params.get('unbound') === '1',
     shot: params.get('shot') === '1',
     ui: null,
   };
@@ -808,7 +904,8 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       : { running: '运行中', completed: '已完成', failed: '失败' }[j.status];
     const res = j.exit != null ? `<span class="badge tnum">退出码 ${j.exit}</span>` : '';
     // Only the timeout-conversion provenance needs a tag; kind already reads
-    // "workflow" / "子代理" via idLabel, a second "workflow" badge is noise.
+    // "workflow" via idLabel or "子代理" via `label` itself (decision 119
+    // #25), a second badge saying the same thing would be noise.
     const tag = j.origin === 'timeout' ? '<span class="badge">超时转入</span>' : '';
     const tailOpen = !!state.ui.tails[j.id];
     const running = j.status === 'running' && !killed;
@@ -821,9 +918,13 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       acts = gbtn('scroll-text', expandLabel, 'tail', j.id, tailOpen, 'tight') + gbtn('eye-off', '移除', 'job-remove', j.id, null, 'tight');
     }
     const icon = { cmd: 'square-terminal', agent: 'users', workflow: 'workflow' }[j.kind];
-    const idLabel = isCmd ? j.id : j.kind === 'workflow' ? 'workflow' : '子代理';
+    // Coordinator round 3, defect 5: an agent-kind row's `label` now already
+    // reads "子代理 · 描述" (decision 119 #25) — a separate "子代理" `idLabel`
+    // next to it would double the word. Only cmd (id) and workflow (literal
+    // tag) still need one.
+    const idLabel = isCmd ? j.id : j.kind === 'workflow' ? 'workflow' : '';
     return `<div class="jrow">
-      <div class="jrow-l1">${ic(icon)}<span class="jid ${isCmd ? 'mono' : ''}">${idLabel}</span>
+      <div class="jrow-l1">${ic(icon)}${idLabel ? `<span class="jid ${isCmd ? 'mono' : ''}">${idLabel}</span>` : ''}
         <span class="jlabel ${isCmd ? 'mono' : ''}" title="${esc(j.label)}">${j.label}</span>
         <span class="jtime tnum">${j.time}</span></div>
       <div class="jrow-l2"><span>${status}</span>${tag}${res}<span class="jacts">${acts}</span></div>
@@ -952,30 +1053,77 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       </div>`;
   }
 
+  // Terminal, variant 3 (decision 109, scene G): right column, peer of the
+  // file editor column. A placeholder cwd is used deliberately — see the task
+  // brief: no real username/hostname/home directory in a public repo's
+  // screenshots.
+  const RIGHTCOL_TERMINAL_CWD = '~/projects/demo';
+  function rightcolTerminalView(sc) {
+    const s = SESSIONS.find((x) => x.id === sc.session);
+    const cwd = RIGHTCOL_TERMINAL_CWD;
+    return `<div class="rc-tabbar">
+        <div class="rc-tab" title="${esc(s.title)}">${ic('terminal', 's14')}<span class="lbl">终端</span>
+          <button class="x" data-act="toggle-terminal" title="关闭终端" aria-label="关闭终端">${ic('x', 's12')}</button></div>
+      </div>
+      <div class="rc-breadcrumb"><span>会话目录</span><span class="path" title="${esc(cwd)}">${esc(cwd)}</span></div>
+      <div class="term-body" style="flex:1">
+        <div class="term-line"><span class="term-cwd">${esc(cwd)}</span> $ pwd</div>
+        <div class="term-line m">${esc(cwd)}</div>
+        <div class="term-line"><span class="term-cwd">${esc(cwd)}</span> $ git status</div>
+        <div class="term-line m">On branch main\nnothing to commit, working tree clean</div>
+        <div class="term-line"><span class="term-cwd">${esc(cwd)}</span> $ ls</div>
+        <div class="term-line m">README.md  package.json  src</div>
+        <div class="term-line"><span class="term-cwd">${esc(cwd)}</span> $ <span class="term-cursor">&nbsp;</span></div>
+      </div>`;
+  }
+
   function sessionbar(sc, jobsList, agentsList) {
     const s = SESSIONS.find((x) => x.id === sc.session);
     const jobsRunning = jobsList.filter((j) => j.status === 'running' && !state.ui.killed[j.id]).length;
     const agentsRunning = agentsList.filter((a) => a.st === 'running' && !state.ui.killed[`agent-${a.id}`]).length;
     const cbadge = (n) => (n > 0 ? `<span class="cbadge tnum">${n}</span>` : '');
-    return `<span class="dot ${sc.running ? 'run' : 'idle'}"></span><span class="title">${esc(s.title)}</span>
-      <span class="m">workspace · Main</span><span class="grow"></span>
+    // Open question 10: no bound directory means no honest cwd to open a
+    // shell in — disable the button rather than fall back to some default
+    // directory (README "未绑定目录时的建议"). Rendered as a non-interactive
+    // `<span>` (no `data-act`), same pattern the blocked-goal "继续" button
+    // already uses below.
+    const termBtn = state.unbound
+      ? `<span class="gbtn ui disabled" title="会话未绑定目录，无法打开终端（建议，第 10 题）" aria-disabled="true">${ic('terminal', 's14')}<span class="lbltext">终端</span></span>`
+      : `<button class="gbtn ui" data-act="toggle-terminal" aria-pressed="${state.ui.open.terminal}" title="终端：在该会话目录打开一个 shell，右列与文件编辑器同级（决策 109）">${ic('terminal', 's14')}<span class="lbltext">终端</span></button>`;
+    // Coordinator round 3, defect 1/3: title + context are the ONLY things in
+    // this row allowed to shrink/truncate (`.sb-title`, `.trunc` on each
+    // span) — every button below keeps its natural size, same division of
+    // labour as `SessionBar.tsx`'s `min-w-0 flex-1` title vs. its `shrink-0`
+    // buttons. No more bare `.grow` spacer: `.sb-title` itself absorbs the
+    // leftover space now.
+    return `<span class="sb-title"><span class="dot ${sc.running ? 'run' : 'idle'}"></span><span class="title trunc">${esc(s.title)}</span><span class="m trunc">workspace · Main</span></span>
       <button class="gbtn ui m">${ic('git-branch', 's14')}<span class="lbltext">会话分支</span></button>
       <button class="gbtn ui m">${ic('arrow-left-right', 's14')}<span class="lbltext">审阅</span></button>
       <button class="ibtn">${ic('plus', 's14')}</button><span class="vsep"></span>
-      <button class="gbtn ui" data-act="toggle-terminal" aria-pressed="${state.ui.open.terminal}" title="终端：在该会话目录打开一个 shell（Q003）">${ic('terminal', 's14')}<span class="lbltext">终端</span></button>
+      ${termBtn}
       <button class="gbtn ui" data-act="toggle-jobs" aria-pressed="${state.ui.open.jobs}" title="后台任务">${ic('layers', 's14')}<span class="lbltext">后台任务</span>${cbadge(jobsRunning)}</button>
       <button class="gbtn ui" data-act="toggle-agents" aria-pressed="${state.ui.open.agents}" title="子代理">${ic('users', 's14')}<span class="lbltext">子代理</span>${cbadge(agentsRunning)}</button>`;
   }
 
   function composer(running) {
-    const ph = running ? 'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 在下一轮后插话…' : '继续输入…';
+    // Coordinator round 3, defect 4: decision 093/118 renamed Ctrl+Enter from
+    // "queues for the next turn" to "joins the running turn" — exact copy
+    // from `shared/i18n.ts`'s zh-CN entry for
+    // 'Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…'.
+    const ph = running ? 'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…' : '继续输入…';
     const btns = running
       ? `<span class="rbtn stop">${ic('square', 's12')}</span><span class="rbtn send off">${ic('list-plus', 's14')}</span>`
       : `<span class="rbtn send off">${ic('send-horizontal', 's14')}</span>`;
+    // Open question 10 (unbound checkbox): swap the folder chip for a dashed
+    // placeholder when the session has no bound directory — this is the same
+    // condition that disables the sessionbar's terminal button.
+    const targetChip = state.unbound
+      ? `<span class="chip dashed" title="未选择工作目录（第 10 题）">${ic('folder', 's14')}未选择目录</span>`
+      : `<span class="chip">${ic('folder', 's14')}workspace${ic('lock', 's12 m')}</span>`;
     return `<div class="composer"><div class="ph">${ph}</div>
         <div class="cbar"><span class="ibtn">${ic('plus', 's14')}</span><span class="chip">${ic('shield', 's14')}执行 · 每次询问</span>
           <span class="grow"></span><span class="chip m">Automatic${ic('chevron-down', 's14')}</span>${btns}</div></div>
-      <div class="target"><span class="chip">${ic('folder', 's14')}workspace${ic('lock', 's12 m')}</span>
+      <div class="target">${targetChip}
         <span class="chip">${ic('monitor', 's14')}本机</span></div>`;
   }
 
@@ -1104,7 +1252,8 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
         columnTerminal: true, strips: 0, expanded: [], perStripPx: [], stripsPx: 0, gapBelowPx: 0, addedPx: 0,
         timelinePxWithout: 0, timelinePxWith: 0, dockTopPx: 0, centerHeightPx: 0, subwindows: [],
         embeddedDrawerPx: null, anyOverlap: false, anyHeaderOverflow: false, anyMessageCovered: false,
-        anyMessageCoveredUnexpected: false,
+        anyMessageCoveredUnexpected: false, rightColumn: null, anyOverlapsRightColumn: false,
+        sessionbarOverlapsRightColumn: false,
       };
     }
     const strips = $('#strips');
@@ -1127,6 +1276,33 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     const centerRect = $('#center').getBoundingClientRect();
     const dockRect = $('#dock').getBoundingClientRect();
     const eff = effectiveForm();
+    // Decision 109 / scene G: is the right-column terminal open, and does it
+    // geometrically intersect any floating/docked sub-window? Both rects come
+    // from `getBoundingClientRect()` (viewport-relative), so comparing them
+    // directly is valid even though `#rightcol` is a sibling of `.center`,
+    // not a descendant — see the `.rightcol` CSS comment for why that sibling
+    // placement is what makes "cannot overlap" a structural fact rather than
+    // a coincidence of today's widths.
+    const rcEl = document.getElementById('rightcol');
+    const rcVisible = !!rcEl && getComputedStyle(rcEl).display !== 'none';
+    const rcRect = rcVisible ? rcEl.getBoundingClientRect() : null;
+    const rectsOverlap = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    const rcHeaderOverflow = rcVisible
+      ? [...rcEl.querySelectorAll('.rc-tabbar, .rc-breadcrumb')].some((row) => row.scrollWidth > row.clientWidth + 0.5)
+      : false;
+    // Coordinator round 3, defect 1/2: does any sessionbar control's OWN box
+    // (not just its painted/overflowing text — see the `.sb-title` CSS
+    // comment for why an unshrinkable flex child's box can genuinely be laid
+    // out past its container's edge) intersect the right column's title row?
+    // This is the judge for defect 1 (visual clash) that `anyHeaderOverflow`
+    // did not catch, because `.rc-tabbar` itself never overflowed ITS OWN
+    // box — a neighbouring element's box bled into it instead, which is a
+    // different failure mode `headRowOverflows` was never built to see.
+    const rcTabbarRect = rcVisible ? (rcEl.querySelector('.rc-tabbar')?.getBoundingClientRect() ?? null) : null;
+    const sbEl = document.getElementById('sessionbar');
+    const sessionbarOverlapsRightColumn = Boolean(
+      rcTabbarRect && sbEl && [...sbEl.children].some((el) => rectsOverlap(el.getBoundingClientRect(), rcTabbarRect))
+    );
     const subwindows = [...document.querySelectorAll('.subwin')].map((w) => {
       const r = w.getBoundingClientRect();
       return {
@@ -1136,6 +1312,7 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
         overlapsDock: r.bottom > dockRect.top + 0.5,
         headerOverflow: headRowOverflows(w),
         coversMessages: coveredMessages(r),
+        overlapsRightColumn: !!rcRect && rectsOverlap(r, rcRect),
       };
     });
     const embedDrawer = document.getElementById('embedDrawer');
@@ -1155,12 +1332,24 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       subwindows,
       embeddedDrawerPx: embedDrawer ? px(embedDrawer.getBoundingClientRect().height) : null,
       anyOverlap: subwindows.some((w) => w.overlapsDock),
-      anyHeaderOverflow: subwindows.some((w) => w.headerOverflow),
+      anyHeaderOverflow: subwindows.some((w) => w.headerOverflow) || rcHeaderOverflow,
       // Floating windows are EXPECTED to be able to cover timeline content —
       // that is the documented trade-off (README). embedded/docked promise
       // NOT to, so coverage from those two is a real bug, not a trade-off.
       anyMessageCovered: subwindows.some((w) => w.coversMessages.length > 0),
       anyMessageCoveredUnexpected: subwindows.some((w) => w.coversMessages.length > 0 && w.form !== 'floating'),
+      // Decision 109 / scene G geometry (README "场景 G"). `rightColumn` is
+      // null when the terminal is not showing in the right column (any other
+      // scene, or scene G with a floating window closed).
+      rightColumn: rcVisible
+        ? { width: px(rcRect.width), height: px(rcRect.height), cwd: RIGHTCOL_TERMINAL_CWD, headerOverflow: rcHeaderOverflow }
+        : null,
+      anyOverlapsRightColumn: subwindows.some((w) => w.overlapsRightColumn),
+      // Coordinator round 3, defect 1/2 (new judge): a sessionbar control's
+      // box laid out past the chat column's edge, overlapping the right
+      // column's own title row. See the computation above for why this is a
+      // different failure mode than `anyHeaderOverflow`.
+      sessionbarOverlapsRightColumn,
     };
   }
   window.__measure = measure;
@@ -1169,6 +1358,15 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     const layer = $('#anno');
     layer.innerHTML = '';
     if (!state.anno || !m.strips) return;
+    // Coordinator round 3, defect 6: the label's fixed `sr.right + 12px`
+    // offset assumes room to the right of `.strips` that no longer exists
+    // once the right-column terminal takes part of `.center`'s width — at
+    // 1440/1280 it painted straight over the terminal column instead of
+    // annotating the strip. `renderNotes()` already states the same "多占
+    // NN px" number in prose for every scene (including G), so skipping the
+    // visual annotation here loses no information rather than needing a
+    // relocated-but-still-fragile position.
+    if (m.rightColumn) return;
     const center = $('#center').getBoundingClientRect();
     const sr = $('#strips').getBoundingClientRect();
     const top = sr.top - center.top;
@@ -1204,11 +1402,26 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       ? m.subwindows.map((w) => `${w.id === 'jobs' ? '后台任务' : '子代理'}窗（${w.form}）：${w.width}×${w.height}px，底边距输入框上边界 ${px(m.dockTopPx - w.bottom)}px`
           + `${w.overlapsDock ? '<b style="color:var(--destructive)"> · 遮挡输入框！</b>' : ''}`
           + `${w.headerOverflow ? '<b style="color:var(--destructive)"> · 标题行溢出！</b>' : ''}`
+          + `${w.overlapsRightColumn ? '<b style="color:var(--destructive)"> · 与右列终端重叠！</b>' : ''}`
           + fmtCover(w.coversMessages)).join('<br>')
+      : '';
+    // Decision 109 / scene G: report the right column's own geometry and
+    // whether any floating sub-window's rect intersected it — this is the
+    // "确认不互相遮挡" evidence the task asked for, read from `measure()`
+    // rather than eyeballed off a screenshot.
+    const rcLine = m.rightColumn
+      ? `右列终端：${m.rightColumn.width}×${m.rightColumn.height}px，目录 ${esc(m.rightColumn.cwd)}`
+        + `${m.rightColumn.headerOverflow ? '<b style="color:var(--destructive)"> · 标题行溢出！</b>' : ''}`
+        + (m.anyOverlapsRightColumn
+          ? '<b style="color:var(--destructive)"> · 与浮动子窗口重叠！</b>'
+          : ' · 与浮动子窗口不重叠（实测，见 measurements.json 的 overlapsRightColumn）')
+        + (m.sessionbarOverlapsRightColumn
+          ? '<b style="color:var(--destructive)"> · 会话栏按钮与右列标题行重叠！</b>'
+          : ' · 会话栏按钮与右列标题行不重叠（实测，见 measurements.json 的 sessionbarOverlapsRightColumn）')
       : '';
     $('#notes').innerHTML = `<h2>${n.title}</h2><p class="m">依据：${n.decisions}</p><p>${n.desc}</p>
       <ol>${n.ask.map((q) => `<li>${q}</li>`).join('')}</ol>
-      <div class="measure">${measureLine}${winLines ? `<br>${winLines}` : ''}<br><span class="m">橙色虚线、括号与"新增"小标是原型标注，不属于界面。聊天区与左栏的其余内容只作背景，不在本次确认范围内。</span></div>`;
+      <div class="measure">${measureLine}${winLines ? `<br>${winLines}` : ''}${rcLine ? `<br>${rcLine}` : ''}<br><span class="m">橙色虚线、括号与"新增"小标是原型标注，不属于界面。聊天区与左栏的其余内容只作背景，不在本次确认范围内。</span></div>`;
   }
 
   // ---------------- render ----------------
@@ -1223,6 +1436,7 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     document.querySelectorAll('#goalSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.goal === state.ui.goalMode)));
     document.querySelectorAll('#sizeSeg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === state.size)));
     $('#annoChk').checked = state.anno;
+    $('#unboundChk').checked = state.unbound;
 
     const dims = SIZES[state.size];
     document.documentElement.style.setProperty('--app-w', dims.w + 'px');
@@ -1231,14 +1445,22 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
 
     const jobsList = sc.session === 'empty' ? [] : JOBS_MAIN;
     const agentsList = sc.session === 'empty' ? [] : SUBAGENTS_MAIN;
-    const columnTerminal = state.ui.open.terminal && state.termPos === 'column';
+    // `termMode` is null (terminal closed) or one of 'panel' | 'column' |
+    // 'rightcol' — the three are mutually exclusive by construction (a single
+    // `state.termPos`), so exactly one of the branches below ever renders.
+    const termMode = state.ui.open.terminal ? state.termPos : null;
+    const columnTerminal = termMode === 'column';
+    const rightcolOpen = termMode === 'rightcol';
 
     $('#rail').innerHTML = rail();
-    // The whole-column terminal (variant 2) only ever replaces the CENTRE;
-    // the left dock stays the normal chat/session list either way. The
-    // left-dock terminal panel (variant 1) only applies in `termPos: panel`.
-    $('#side').innerHTML = (state.ui.open.terminal && state.termPos === 'panel') ? terminalPanel(sc) : chatPanel(sc);
+    // The whole-column terminal (variant 2, retired) only ever replaces the
+    // CENTRE; the left dock stays the normal chat/session list either way.
+    // The left-dock terminal panel (variant 1, retired) only applies in
+    // `termPos: 'panel'`. Neither applies to the current answer ('rightcol').
+    $('#side').innerHTML = (termMode === 'panel') ? terminalPanel(sc) : chatPanel(sc);
     $('#sessionbar').innerHTML = sessionbar(sc, jobsList, agentsList);
+    $('#rightcol').style.display = rightcolOpen ? 'flex' : 'none';
+    $('#rightcol').innerHTML = rightcolOpen ? rightcolTerminalView(sc) : '';
 
     $('#timeline').style.display = columnTerminal ? 'none' : '';
     $('#dock').style.display = columnTerminal ? 'none' : '';
@@ -1253,6 +1475,11 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
       $('#timeline').style.paddingRight = '';
       $('#strips').innerHTML = [sc.todo ? todoStrip() : '', state.ui.goalMode ? goalStrip() : ''].join('');
       $('#composer').innerHTML = composer(sc.running);
+      // Sub-windows are laid out inside `.center`, which is now narrower by
+      // the rightcol's width when it is open (rightcol is a flex sibling of
+      // `.center`, not a child) — `layoutOverlayWindows()` reads `.center`'s
+      // live rect, so this needs no special-casing here for the two to avoid
+      // each other; `measure()` below verifies it actually held.
       renderSubwindows(jobsList, agentsList);
     }
 
@@ -1261,8 +1488,9 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     renderNotes(m);
     const q = new URLSearchParams({ scene: state.scene, theme: state.theme, form: state.form, size: state.size });
     if (state.ui.goalMode) q.set('goal', state.ui.goalMode);
-    if (state.termPos !== 'panel') q.set('termpos', state.termPos);
+    if (state.termPos !== (SCENES[state.scene].defaultTermPos || 'panel')) q.set('termpos', state.termPos);
     if (!state.anno) q.set('anno', '0');
+    if (state.unbound) q.set('unbound', '1');
     if (state.shot) q.set('shot', '1');
     history.replaceState(null, '', `?${q}`);
   }
@@ -1350,6 +1578,13 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     const b = e.target.closest('button[data-scene]');
     if (!b) return;
     state.scene = b.dataset.scene;
+    // Landing on G should show the final answer (rightcol); leaving G for a
+    // scene that cannot render it (only F used the retired panel/column
+    // variants) should fall back to a sane default instead of silently
+    // keeping 'rightcol' selected somewhere it does nothing.
+    const dflt = SCENES[state.scene].defaultTermPos;
+    if (dflt) state.termPos = dflt;
+    else if (state.termPos === 'rightcol') state.termPos = 'panel';
     resetUi();
     render();
   });
@@ -1386,6 +1621,14 @@ body.shot *, body.shot *::before { animation: none !important; transition: none 
     render();
   });
   $('#annoChk').addEventListener('change', (e) => { state.anno = e.target.checked; render(); });
+  $('#unboundChk').addEventListener('change', (e) => {
+    state.unbound = e.target.checked;
+    // Closing the terminal when the toggle switches on keeps the two states
+    // from contradicting each other on screen (an open terminal with a
+    // disabled button that supposedly cannot open one).
+    if (state.unbound) state.ui.open.terminal = false;
+    render();
+  });
 
   resetUi();
   render();
