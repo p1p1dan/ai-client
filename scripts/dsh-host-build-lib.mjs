@@ -87,10 +87,10 @@ export const BRIDGE_EXTERNALS = ['@deepseek-ai/dsh-llm', '@deepseek-ai/dsh-agent
 /**
  * The product bundle's own rows, each an esbuild bundle of our TypeScript:
  * the shared host's only bridge (P1-3a, decision 019), the permission gate
- * (P1-6b, decision 042), the loop guard (P1-8, decisions 065 and 066) and the
- * read-only credentials provider (P1-5b, decision 034). `inputs` are the
- * source prefixes a row may take in, `externals` the npm packages it may
- * import at run time.
+ * (P1-6b, decision 042), the loop guard (P1-8, decisions 065 and 066), the
+ * read-only credentials provider (P1-5b, decision 034) and the encrypted-read
+ * fallback (P1-13c, decision 091). `inputs` are the source prefixes a row may
+ * take in, `externals` the npm packages it may import at run time.
  */
 export const BRIDGE_ENTRIES = [
   {
@@ -131,6 +131,15 @@ export const BRIDGE_ENTRIES = [
     inputs: ['src/dsh-host/credentials/', 'src/agent-host/stderrRedaction.ts'],
     // Its service class extends the abstract `ctx.credentials` seam.
     externals: ['@deepseek-ai/dsh-credentials'],
+  },
+  {
+    entry: 'encryptedRead/plugin.ts',
+    out: 'bundle/lib/encrypted-read.js',
+    row: 'aiclient-encrypted-read',
+    inputs: ['src/dsh-host/encryptedRead/'],
+    // FsError must stay the host's own class: dsh-tool-fs routes failures by
+    // `instanceof FsError`, and a bundled twin would break that (P1-13c).
+    externals: ['@deepseek-ai/dsh-fs'],
   },
 ];
 
@@ -1170,6 +1179,8 @@ export function requiredFiles(target) {
     'node_modules/tree-sitter-bash/tree-sitter-bash.wasm',
     // P1-8: the loop guard row, which host.ts requires to be composed on.
     'node_modules/@aiclient/dsh-app/lib/loop-guard.js',
+    // P1-13c: the encrypted-read fallback row, required on the same way.
+    'node_modules/@aiclient/dsh-app/lib/encrypted-read.js',
   ];
   // libvips: the library list and versions travel with the binaries (licenses shard §2.3).
   if (target.platform === 'win32')

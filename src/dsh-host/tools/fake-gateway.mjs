@@ -687,12 +687,14 @@ const DSH_P0_2_SCRIPTS = {
     return say('Inherited file descriptors listed.');
   },
   // dsh-rebase P0-4: file tools and the shell against an encrypted workspace.
+  // P1-13c: `markerName` (default `marker.txt`) lets the encrypted-read smoke
+  // point the first read at a policy-encrypted extension.
   FS(_round, step, _calls, triggerText) {
     const p = p04Params(triggerText);
     const f = (name) => p04Join(p.dir, name);
     const written = f(`dsh-written-${p.token}.txt`);
     const steps = [
-      tool('read', { file_path: f('marker.txt') }),
+      tool('read', { file_path: f(p.markerName ?? 'marker.txt') }),
       tool('read', { file_path: f('edit-target.txt') }),
       tool('edit', {
         file_path: f('edit-target.txt'),

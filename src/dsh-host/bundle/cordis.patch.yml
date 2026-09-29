@@ -141,3 +141,13 @@
       name: '@aiclient/dsh-app/loop-guard'
       config:
         stepCeiling: 500
+
+    # P1-13c (decision 091): on Windows, files the company disk-encryption
+    # policy hands node as ciphertext are re-read through Windows PowerShell
+    # 5.1, which the policy decrypts for. Wraps the fs service's read
+    # entrances only after its own 16-byte prefix check trips, so a normal
+    # read pays nothing but that check; everything the fallback cannot turn
+    # into trusted plaintext is refused as FS_ENCRYPTED, never handed over as
+    # ciphertext. Inert on Linux and macOS; always on, like the rows above.
+    - id: aiclient-encrypted-read
+      name: '@aiclient/dsh-app/encrypted-read'
