@@ -20,7 +20,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 - **已裁决**：第三批决策 111～129 由用户裁决（[决策 130](decisions/130-user-rulings-2026-09-29-batch3.md)）：没点名的按建议批准；120 第 27 条与 123 分叉标题已由[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md) 做完（`740a45b1`，第 7、15、17 条待审批）。
 - **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
-  2. CI 在跑时派代理做 P1-4e（录制门禁进 CI）；
+  2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
   3. P1-7d GUI 点验与真实网关 R1～R10 一起做，期间不跑代理；R1～R10 要用户在开发版里登录公司账号，编排者不经手凭据；
   4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
@@ -29,8 +29,9 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
     - `l1PilotWriteAskedReadRan`：工作区内的 read / grep / glob / pwsh 全都弹了审批。推断：闸门的 `cwd` 没有规范化，runner 的临时目录是 8.3 短名（`RUNNER~1`），目标路径经 `fs/promises` 的 `realpath` 展开成长名，于是判成「工作区外」；
     - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
     - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
-  - 下一步：P1-4e 代理交回后，派代理修这三项，另建只打包宿主的 Windows 冒烟工作流加快迭代。
-- **在等**：Windows 端的 P1-13c（决策 091）。用户已让它从 `eda6c248` 开分支开工，合并冲突由编排者解决。
+  - P1-13c 的 Windows 端在真 Windows 桌面机上跑 L1 基线，也是 `l1RipgrepFromArtifact`、`nativesPtyRan` 两项失败（那时还没有 `l1PilotWriteAskedReadRan`），说明这两项不是 CI 环境特有。
+  - 下一步：派代理修这三项，另建只打包宿主的 Windows 冒烟工作流加快迭代。
+- ✅ P1-13c 已合入 `f84f7bbd`（Windows 端 `801cac53`，决策 091 待审批）。
 - 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
 
 以下为 2026-09-28 晚的原始 Next Target，保留作历史：
@@ -61,6 +62,18 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-29 P1-13c Windows 加密文件读回退合入 `f84f7bbd`（Windows 端在加密机上开发，分支 `feat/dsh-p1-13c` 的 `801cac53`；取舍见[决策 091](decisions/091-p1-13c-windows-read-fallback.md)，待审批，**请重点看 §2 的 edit 不做明文编辑**）：
+  - 新增宿主行 `aiclient-encrypted-read`，只在 Windows 上包装 fs 服务的四个读入口与 `editText`；读普通文件的额外开销只是读开头 16 字节。
+  - 开头是 TSD 头时经 PowerShell 5.1 回读（绝对路径、`-EncodedCommand`、路径走环境变量、10 秒超时、并发 2、明文上限 32 MiB）；读出仍是密文或失败就报 `FS_ENCRYPTED`，密文不交给模型。
+  - 加密机实测：真实加密的 `.yml` 经 `read` 174 ms 读回明文；六类可解密类型每次 137～141 ms。证据：[p1-13c-windows-read-fallback-2026-09-29.md](evidence/p1-13c-windows-read-fallback-2026-09-29.md)。
+  - 合并冲突三处（行登记与静态测试），都保留两边；合并后 Linux 全套复跑通过（四套 tsc、相关单测与全仓扫描、集成 35/35、bridge-smoke 66 项、`--check` 无差异、L1 44 项）。
+  - Windows 端的环境观察（范围外）：C 盘 corepack 缓存目录下 node 打不开 `.js`，pnpm 崩溃，用 `COREPACK_HOME` 绕开；策略会延迟加密 node 写入的 `.ts` / `.js`，对其他开发工具链可能有影响。
+- 2026-09-29 P1-4e 录制门禁进 CI `16e94be8`（取舍见[决策 133](decisions/133-p1-4e-gate-ci-choices.md)，待审批，**请重点看第 13、16、17 条**：根依赖用 `--ignore-scripts` 安装、bridge-smoke 只在手动触发时跑且不阻断、超时取值是估算）：
+  - `build.yml` 的 gate 加取随包 node 与 `bridge-record --check`；新增 `dsh-bridge-gate.yml`，push 到 `feat/dsh-*` 时跑宿主 tsc、录制检查、回放与投影测试。
+  - 新增 `dshStreamReplay.test.ts`，28 个场景灌进真实 reducer 断言用户看到的内容；新增场景没写断言会失败。
+  - `perm-restart` 原本依赖 DSH 200 ms 批量落盘的时序，改为强杀前调用 DSH 的 `sessions.flush`；编排者全量重录，只有这一场景三份金样本变化。
+  - 新增 [p1-7d-gui-pointcheck.md](topics/p1-7d-gui-pointcheck.md) 点验清单。
+  - 编排器复跑：四套 tsc；渲染层 stores 与投影 43 个文件、916 例；Static / Scan / Wiring、`src/shared/__tests__`、scripts、dsh-host 全过；集成 35/35；bridge-smoke 66 项；`--check` 无差异。
 - 2026-09-29 插件工具行用插件自带标题、分叉旧会话以新发的第一条消息命名 `740a45b1`（用户裁决 130 的 120 第 27 条与 123；取舍见[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md)，待审批，**请重点看第 7、15、17 条**：标题整体替换「动词 + 参数」；过渡标题「原标题（1.0.x 分支）」按迁移当时的语言存成字符串；只看迁移后第一条消息，取不出标题就保留后缀）：
   - bridge 对非 DSH 自带工具问 `presentCall`，`tool.started` / `tool.updated` 带收窄后的 `presentation`；历史投影回放问同一个 presenter，直播与重开一致；插件关掉后重开的行退回词条。
   - `commitMigrated` 认出分叉时改名并记 `forkTitlePending`，任何改名都结束等待，手动改名优先。
