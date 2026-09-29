@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-09-28。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-09-29。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -15,11 +15,15 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 - **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
 - **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
 
-## Next Target（2026-09-29 更新：本机计划项已全部落地，等用户审批与授权）
+## Next Target（2026-09-29 晚更新：第三批已裁决，五项授权动作全部批准）
 
-- **待用户审批**：第三批决策 111～129 的汇总见 [decision-review-3.md](decision-review-3.md)（没点名的按同意处理）；已裁决的有决策 126（右列终端原型）、124 末尾（导入去重「不怕重复，就怕漏」）、127 第 4、8、11 条。
-- **待用户授权**（汇总第四节）：推送分支跑 Windows CI（`dsh-p1-6d-windows.yml`，P1-10d 的打包冒烟 L1 已带试点插件）；P1-7d 在开发机上起 Electron 做 GUI 点验；P1-4e 门禁进 CI；真实网关验证；P1-12 删除自有 runtime（前置条件已全部满足）。
-- **在等**：Windows 端的 P1-13c（决策 091）。
+- **已裁决**：第三批决策 111～129 由用户裁决（[决策 130](decisions/130-user-rulings-2026-09-29-batch3.md)）：没点名的按建议批准；120 第 27 条与 123 分叉标题已由[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md) 做完（`740a45b1`，第 7、15、17 条待审批）。
+- **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
+  1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
+  2. CI 在跑时派代理做 P1-4e（录制门禁进 CI）；
+  3. P1-7d GUI 点验与真实网关 R1～R10 一起做，期间不跑代理；R1～R10 要用户在开发版里登录公司账号，编排者不经手凭据；
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。
+- **在等**：Windows 端的 P1-13c（决策 091）。用户已让它从 `eda6c248` 开分支开工，合并冲突由编排者解决。
 - 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
 
 以下为 2026-09-28 晚的原始 Next Target，保留作历史：
@@ -50,6 +54,11 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-29 插件工具行用插件自带标题、分叉旧会话以新发的第一条消息命名 `740a45b1`（用户裁决 130 的 120 第 27 条与 123；取舍见[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md)，待审批，**请重点看第 7、15、17 条**：标题整体替换「动词 + 参数」；过渡标题「原标题（1.0.x 分支）」按迁移当时的语言存成字符串；只看迁移后第一条消息，取不出标题就保留后缀）：
+  - bridge 对非 DSH 自带工具问 `presentCall`，`tool.started` / `tool.updated` 带收窄后的 `presentation`；历史投影回放问同一个 presenter，直播与重开一致；插件关掉后重开的行退回词条。
+  - `commitMigrated` 认出分叉时改名并记 `forkTitlePending`，任何改名都结束等待，手动改名优先。
+  - 编排器复跑：四套 tsc 通过；bridge、`src/shared/dshHistory`、`src/shared/types`、`src/main/services/chat` 43 个文件、984 例；渲染层 chat 与 stores 175 个文件、3511 例；Static / Scan / Wiring 73 个文件、739 例；`src/shared/__tests__` 26 个文件、372 例；scripts 12 个文件、214 例；真宿主集成 35/35；bridge-smoke 66 项（新增 `pilotRowsTitled`）；`--check` 28 个场景无差异，不用重录；宿主产物 82.6 MiB，L1 44 项。
+  - 遗留：子代理泳道里的插件行不带标题；GUI 样式与分叉过渡标题归 P1-7d 点验。
 - 2026-09-29 P1-6d PowerShell 权限分析 `7a11cbc4`、Windows CI 工作流 `376611a7`（取舍见[决策 129](decisions/129-p1-6d-pwsh-analysis-choices.md)，待审批，**需用户重点拍板第 4、7、13、16 条**：含变量或执行字符串的 pwsh 命令不可授权，比 bash 严；`sc`、`curl`、`wget` 不归一；1.0.x 自有引擎的 bash 卡也会带原因句；活动行两个 shell 写法不对称）：
   - `pwshAnalysis` 保守词法分析，拿不准就问；别名与全名授权互通（P1-6d 之前按原始首词记的授权不再命中，多问一次）；闸门产出 `askReason`，审批卡显示原因句与 PowerShell 别名说明；活动行显示「已允许 PowerShell」。顺带更正决策 120：活动行此前写的是「已允许 pwsh」，不是「bash」。
   - S18 不进录制金样本（录制器只在 Linux），改用断言式探针 `perm-pwsh-probe`；Linux 下 bash 干跑 14/14。
@@ -220,10 +229,10 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-没有在跑的代理。
+没有在跑的代理。下一步：推送与 Windows CI（见 Next Target）。
 
 待用户处理：
-1. 授权真实网关验证 R1～R10；授权真实数据离线迁移测试。
+1. 真实网关 R1～R10 已授权（决策 130），到时要用户在开发版里登录公司账号；真实数据离线迁移测试仍待授权。
 2. P1-13c 做完后，上加密机验证读回退。
 
 ## Blocked By
