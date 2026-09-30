@@ -5,16 +5,19 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { opendir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   PiWorkerRpcServer,
   type PiWorkerRuntimeOptions,
 } from '../../../agent-host/piWorkerRpcServer.ts';
 import { encodeGrants, type PermissionGrant } from '../../../shared/permissions/grants.ts';
+import type { PermissionFileSystem } from '../../../shared/permissions/shellPaths.ts';
 import type { RuntimeEventDraft } from '../../../shared/types/runtimeEvents.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
 import type { DshPreToolDecision, DshToolCall } from '../../permissions/dshTypes.ts';
@@ -58,9 +61,9 @@ afterEach(() => {
 
 type Event = RuntimeEventDraft & { requestId?: string; payload: Record<string, unknown> };
 
-function fakeDsh(options: { permissions?: boolean } = {}) {
+function fakeDsh(options: { permissions?: boolean; fs?: PermissionFileSystem } = {}) {
   const calls: string[] = [];
-  const permissions = testPermissionHost();
+  const permissions = testPermissionHost(options.fs ? { fs: options.fs } : {});
   const attach = vi.spyOn(permissions.api, 'attachGate');
   const listeners = new Map<string, (...args: unknown[]) => unknown>();
   /** What `agent.status` reads: DSH marks a goal round or a job notice running before its turn/start. */
@@ -986,5 +989,144 @@ describe('the sandbox mapping hook (decision 044; P1-6e fills it in)', () => {
       `${DSH_ID} read-only`,
       `${DSH_ID} danger-full-access`,
     ]);
+  });
+});
+
+/**
+ * Decision 134: the gate judges the workspace by the spelling targets are
+ * canonicalized in (the native realpath) and by the one the session was opened
+ * with. Windows CI asked for every read in a workspace under the 8.3 `%TEMP%`
+ * (`C:\Users\RUNNER~1`): the gate had canonicalized its cwd with the
+ * JavaScript realpath, which keeps short names, and the row its targets with
+ * the native one, which expands them. The symlink case is the same defect on
+ * POSIX for shell operands written against the opened spelling.
+ */
+describe('the workspace by every spelling (decision 134)', () => {
+  let base = '';
+
+  beforeEach(() => {
+    base = realpathSync(mkdtempSync(join(tmpdir(), 'dsh-bridge-perm-spell-')));
+  });
+
+  afterEach(() => {
+    rmSync(base, { recursive: true, force: true });
+  });
+
+  /** One DSH tool call from a session whose header names `cwd`. */
+  const callIn = (
+    cwd: string,
+    name: string,
+    args: Record<string, unknown>,
+    callId: string
+  ): DshToolCall => ({
+    ...call(name, args, { callId }),
+    agent: { id: DSH_ID, session: { header: { id: DSH_ID, cwd } } },
+  });
+
+  /** The decision, or `'card'` as soon as the call raised one (so a regression fails fast). */
+  const decided = async (
+    events: Event[],
+    pending: Promise<DshPreToolDecision>
+  ): Promise<DshPreToolDecision | 'card'> => {
+    const before = cards(events).length;
+    let settled = false;
+    const decision = pending.finally(() => {
+      settled = true;
+    });
+    const card = until(() => settled || cards(events).length > before).then(
+      (): Promise<DshPreToolDecision | 'card'> | 'card' => (settled ? decision : 'card')
+    );
+    return Promise.race<DshPreToolDecision | 'card'>([decision, card]);
+  };
+
+  it.skipIf(process.platform === 'win32')(
+    '[perm-ws-symlink] a workspace opened through a symlink: reads, and accept-edits shell calls written against the link, ask nothing',
+    async () => {
+      const link = join(base, 'ws-link');
+      symlinkSync(ws, link);
+      const dsh = fakeDsh();
+      const { bridge, events } = runtime(dsh.ctx, {
+        cwd: link,
+        permissions: { mode: 'agent', gear: 'accept-edits' },
+      });
+      await bridge.bootstrap();
+      const run = (name: string, args: Record<string, unknown>, callId: string) =>
+        dsh.host.preExecute(callIn(link, name, args, callId), allowNext);
+
+      expect(await decided(events, run('read', { file_path: 'notes.txt' }, 'c-read'))).toEqual({
+        kind: 'allow',
+      });
+      expect(
+        await decided(events, run('read', { file_path: join(link, 'notes.txt') }, 'c-read-abs'))
+      ).toEqual({ kind: 'allow' });
+      expect(
+        await decided(
+          events,
+          run(
+            'pwsh',
+            { command: `Get-Content ${join(link, 'notes.txt')}; Set-Content out.txt x` },
+            'c-pwsh'
+          )
+        )
+      ).toEqual({ kind: 'allow' });
+      expect(cards(events)).toHaveLength(0);
+
+      // Out of the workspace by either spelling: still a card.
+      const outside = run('pwsh', { command: `Get-Content ${join(base, 'far.txt')}` }, 'c-out');
+      await until(() => cards(events).length === 1);
+      bridge.respondPermission({ permissionId: 'c-out', decision: 'deny' });
+      expect(await outside).toMatchObject({ kind: 'deny' });
+    }
+  );
+
+  it('[perm-ws-8dot3] a workspace under an 8.3 path: the gate canonicalizes it as the row does its targets', async () => {
+    // Stands in for Windows: `RUNNER~1` exists on disk, and the native resolver
+    // spells it `runneradmin` (the JavaScript one would keep `RUNNER~1`).
+    const shortRoot = join(base, 'RUNNER~1');
+    const longRoot = join(base, 'runneradmin');
+    const short = join(shortRoot, 'ws');
+    mkdirSync(short, { recursive: true });
+    writeFileSync(join(short, 'notes.txt'), 'notes\n');
+    const expand = (path: string) =>
+      path === shortRoot || path.startsWith(`${shortRoot}${sep}`)
+        ? `${longRoot}${path.slice(shortRoot.length)}`
+        : path;
+    const fs: PermissionFileSystem = {
+      realpath: async (path) => expand(await realpath(path)),
+      readDirectory: (path) =>
+        (async function* () {
+          yield* await opendir(path);
+        })(),
+    };
+    const dsh = fakeDsh({ fs });
+    const { bridge, events } = runtime(
+      dsh.ctx,
+      { cwd: short },
+      { realpathSync: (path) => expand(realpathSync(path)) }
+    );
+    await bridge.bootstrap();
+    const run = (name: string, args: Record<string, unknown>, callId: string) =>
+      dsh.host.preExecute(callIn(short, name, args, callId), allowNext);
+
+    expect(await decided(events, run('read', { file_path: 'notes.txt' }, 'c-read'))).toEqual({
+      kind: 'allow',
+    });
+    expect(await decided(events, run('glob', { pattern: '*.txt' }, 'c-glob'))).toEqual({
+      kind: 'allow',
+    });
+    expect(await decided(events, run('grep', { pattern: 'notes', path: short }, 'c-grep'))).toEqual(
+      { kind: 'allow' }
+    );
+    expect(cards(events)).toHaveLength(0);
+
+    // A write in ask still raises its card, naming the canonical file.
+    const write = run('write', { file_path: 'out.txt', content: 'x' }, 'c-write');
+    await until(() => cards(events).length === 1);
+    expect(cards(events)[0]?.payload).toMatchObject({
+      toolName: 'write',
+      input: { path: join(longRoot, 'ws', 'out.txt') },
+    });
+    bridge.respondPermission({ permissionId: 'c-write', decision: 'allow' });
+    expect(await write).toEqual({ kind: 'allow' });
   });
 });

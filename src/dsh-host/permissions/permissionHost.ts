@@ -28,7 +28,7 @@
 import { realpathSync } from 'node:fs';
 import { opendir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { analyzeBash, type BashParser } from '../../shared/permissions/bashWalker.ts';
 import { errorCode } from '../../shared/permissions/errors.ts';
 import {
@@ -37,6 +37,7 @@ import {
   type ToolPermissionRequest,
 } from '../../shared/permissions/gate.ts';
 import type { PermissionFileSystem } from '../../shared/permissions/shellPaths.ts';
+import { canonicalSpelling, type SyncRealpath } from '../../shared/permissions/workspace.ts';
 import { TURN_CEILING_REFUSAL_CODE } from '../loopGuard/constants.ts';
 import { classifyTool } from './classification.ts';
 import type {
@@ -155,6 +156,12 @@ function processEnv(): Record<string, string> {
   return env;
 }
 
+/**
+ * Targets are canonicalized by `fs/promises` realpath (libuv's), and every
+ * root they are compared with by its synchronous twin, `realpathSync.native`
+ * (decision 134; `SyncRealpath` says why the JavaScript `realpathSync` is not
+ * one: it keeps Windows 8.3 short names).
+ */
 const nodeFs: PermissionFileSystem = {
   realpath: (path) => realpath(path),
   readDirectory: (path) =>
@@ -162,6 +169,7 @@ const nodeFs: PermissionFileSystem = {
       yield* await opendir(path);
     })(),
 };
+const nativeRealpathSync: SyncRealpath = (path) => realpathSync.native(path);
 
 /** `$TMPDIR/dsh-spill-*`, dsh-spill-local's private per-process roots. */
 export function isSpillPath(path: string, root: string = spillParent()): boolean {
@@ -186,28 +194,30 @@ export function isAttachmentPath(path: string, root: string | null | undefined):
  * follows `$DSH_HOME`), on the canonical spelling of the home.
  */
 export function defaultAttachmentRoot(
-  home: string | undefined = process.env.DSH_HOME
+  home: string | undefined = process.env.DSH_HOME,
+  canonicalize: SyncRealpath = nativeRealpathSync
 ): string | null {
   const trimmed = home?.trim();
   if (!trimmed) return null;
-  let canonical: string;
-  try {
-    canonical = realpathSync(trimmed);
-  } catch {
-    canonical = resolve(trimmed);
-  }
-  return join(canonical, 'attachments', 'v1');
+  return join(canonicalSpelling(trimmed, canonicalize), 'attachments', 'v1');
+}
+
+/**
+ * The parent of dsh-spill-local's roots: the host's temp directory, on the
+ * canonical spelling the targets are compared in (decision 134: on Windows
+ * `%TEMP%` is spelled with an 8.3 short name when the account name does not
+ * fit one, `C:\Users\RUNNER~1\AppData\Local\Temp` on a CI runner).
+ */
+export function spillRootOf(
+  tmp: string = tmpdir(),
+  canonicalize: SyncRealpath = nativeRealpathSync
+): string {
+  return canonicalSpelling(tmp, canonicalize);
 }
 
 let tmpRoot: string | undefined;
 function spillParent(): string {
-  if (tmpRoot === undefined) {
-    try {
-      tmpRoot = realpathSync(tmpdir());
-    } catch {
-      tmpRoot = tmpdir();
-    }
-  }
+  tmpRoot ??= spillRootOf();
   return tmpRoot;
 }
 

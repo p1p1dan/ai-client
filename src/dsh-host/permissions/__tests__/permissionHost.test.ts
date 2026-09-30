@@ -7,8 +7,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   type PermissionActivityRecord,
@@ -27,6 +28,7 @@ import {
   isAttachmentPath,
   isSpillPath,
   PERMISSION_HOST_SERVICE,
+  spillRootOf,
 } from '../permissionHost.ts';
 import { apply, inject, name } from '../plugin.ts';
 import { PERMISSION_PROMPT_CONTEXT } from '../promptContext.ts';
@@ -1042,4 +1044,49 @@ describe('the attachment store is trusted for reads (P1-4c2)', () => {
     await run('bash', { command: `cat ${notes}` });
     expect(asked).toEqual(['read', 'write', 'bash']);
   });
+});
+
+/**
+ * Decision 134: the trusted roots (spill parent, attachment store) are
+ * canonicalized by the twin of the resolver the targets go through, the
+ * native one. On Windows the JavaScript `realpathSync` keeps an 8.3 `%TEMP%`
+ * (`C:\Users\RUNNER~1\...`) while the targets come back long, so a spill
+ * the model was told to read raised a card.
+ */
+describe('the trusted roots are canonical as the targets are (decision 134)', () => {
+  /** A Windows 8.3 expansion, stood in for on any box. */
+  const expand = (path: string) => path.replace(`${sep}RUNNER~1${sep}`, `${sep}runneradmin${sep}`);
+  const shortTmp = join(sep, 'users', 'RUNNER~1', 'tmp');
+  const longTmp = join(sep, 'users', 'runneradmin', 'tmp');
+
+  it('[8dot3-spill] the spill parent is the expanded temp directory', () => {
+    const root = spillRootOf(shortTmp, expand);
+    expect(root).toBe(longTmp);
+    expect(isSpillPath(join(longTmp, 'dsh-spill-1', 'grep.txt'), root)).toBe(true);
+    // What the JavaScript resolver's root made of the same target.
+    expect(isSpillPath(join(longTmp, 'dsh-spill-1', 'grep.txt'), shortTmp)).toBe(false);
+  });
+
+  it('[8dot3-attachments] the attachment store is under the expanded home', () => {
+    const home = join(sep, 'users', 'RUNNER~1', 'dsh-home');
+    expect(defaultAttachmentRoot(home, expand)).toBe(
+      join(sep, 'users', 'runneradmin', 'dsh-home', 'attachments', 'v1')
+    );
+  });
+
+  it('[native-twin] by default, a root resolves exactly as fs/promises realpath resolves it', async () => {
+    const tmp = tmpdir();
+    expect(spillRootOf(tmp)).toBe(await realpath(tmp));
+    expect(defaultAttachmentRoot(ws)).toBe(join(await realpath(ws), 'attachments', 'v1'));
+  });
+
+  it.skipIf(process.platform !== 'win32' || !/~\d/.test(tmpdir()))(
+    '[win32-8dot3] an 8.3 %TEMP% keeps its short name under the JavaScript resolver only',
+    async () => {
+      const tmp = tmpdir();
+      expect(realpathSync(tmp)).toBe(tmp);
+      expect(spillRootOf(tmp)).not.toBe(tmp);
+      expect(spillRootOf(tmp)).toBe(await realpath(tmp));
+    }
+  );
 });

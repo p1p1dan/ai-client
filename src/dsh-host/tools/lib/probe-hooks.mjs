@@ -7,7 +7,10 @@
  *   internet (telemetry, account, catalog fetches) even if a row misbehaves.
  * - Spawn log: every child_process spawn (async and sync) and worker_threads
  *   Worker is logged with its command line. Native spawns (node-pty) bypass
- *   this; the supervisor's process-tree sampling and strace cover them.
+ *   this; the supervisor's process-tree sampling and strace cover them. On
+ *   Windows every DSH tool starts through dsh-subprocess-local's Job runner, a
+ *   node.exe that creates the tool through the Win32 API: the log shows the
+ *   runner, with the tool's argv after its `--` (decision 134).
  * - Module log (AICLIENT_PROBE_MODULE_LOG=1, dsh-rebase P1-2): every module URL
  *   the loaders load, every native addon `process.dlopen` opens, and at exit
  *   the shared objects the process mapped. The packaged-host smoke uses it to

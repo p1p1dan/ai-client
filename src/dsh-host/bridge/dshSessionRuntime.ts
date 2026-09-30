@@ -113,6 +113,7 @@ import {
   loadPermissionPolicy,
   type PermissionPolicyFiles,
 } from '../../shared/permissions/policy.ts';
+import { type SyncRealpath, workspaceSpellings } from '../../shared/permissions/workspace.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
 import {
   type DshGoalActivation,
@@ -499,6 +500,12 @@ export interface DshBridgeDeps {
   compactTimeoutMs?: number;
   /** The same for `worker.command` (`WORKER_COMMAND_BUDGET_MS`); tests shorten it. */
   commandTimeoutMs?: number;
+  /**
+   * How the gate canonicalizes the workspace (decision 134): `realpathSync.native`,
+   * the twin of the permission row's target resolver. Tests stand in a
+   * Windows 8.3 expansion here.
+   */
+  realpathSync?: SyncRealpath;
 }
 
 /**
@@ -978,15 +985,15 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    *     valid policy fails the bootstrap, as it failed 1.0.x's;
    *   - the grants the sidecar kept, and every change to them written back.
    * It judges against the canonical workspace, the spelling every path it
-   * sees has been resolved to.
+   * sees has been resolved to, canonicalized by the same (native) resolver
+   * the permission row resolves targets with; the spelling the session was
+   * opened with stays an alias of it (decision 134).
    */
   private async buildGate(): Promise<PermissionGate> {
-    let cwd: string;
-    try {
-      cwd = realpathSync(this.cwd);
-    } catch {
-      cwd = resolve(this.cwd);
-    }
+    const { cwd, cwdAliases } = workspaceSpellings(
+      this.cwd,
+      this.deps.realpathSync ?? ((path) => realpathSync.native(path))
+    );
     const policy = await loadPermissionPolicy(POLICY_FILES, {
       cwd,
       agentDir: this.deps.permissionAgentDir ?? null,
@@ -995,6 +1002,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     return new PermissionGate(
       {
         cwd,
+        ...(cwdAliases.length > 0 ? { cwdAliases } : {}),
         ...(this.options.permissions?.mode ? { mode: this.options.permissions.mode } : {}),
         ...(this.options.permissions?.gear ? { gear: this.options.permissions.gear } : {}),
         ...(this.options.tier ? { tier: this.options.tier } : {}),

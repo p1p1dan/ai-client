@@ -169,7 +169,18 @@ export interface PermissionAskContext {
   askReason?: PermissionAskReason;
 }
 export interface PermissionConfig {
+  /** The workspace, canonicalized the way the host canonicalizes targets. */
   cwd: string;
+  /**
+   * dsh-rebase decision 134: other spellings of the same workspace (the one
+   * the session was opened with: through a symlink, or an 8.3 short name on
+   * Windows). A path under any of them is inside the workspace. A shell
+   * operand reaches the gate by both its written and its canonical spelling,
+   * and the written one is under the session's spelling, not the canonical
+   * one; a link out of the workspace still asks, through the canonical
+   * spelling. Policy rules are matched relative to `cwd` only.
+   */
+  cwdAliases?: readonly string[];
   mode?: RuntimeMode;
   gear?: PermissionGear;
   tier?: LegacyPermissionTier;
@@ -502,6 +513,13 @@ export class PermissionGate implements PermissionGateService {
   isToolAllowed(name: string): boolean {
     return !this.config.allowedTools || this.config.allowedTools.includes(name);
   }
+  /** Inside the workspace, by any of its spellings (`cwd`, `cwdAliases`). */
+  private inWorkspace(path: string): boolean {
+    return (
+      containsPath(this.config.cwd, path) ||
+      (this.config.cwdAliases ?? []).some((root) => containsPath(root, path))
+    );
+  }
   /**
    * Has the user already approved a call of this shape in this session?
    *
@@ -532,7 +550,7 @@ export class PermissionGate implements PermissionGateService {
       inspected.some((path) => policyAction(policy, 'path', [path], this.config.cwd) === 'ask')
     )
       return false;
-    if (isShellTool(request.tool) && inspected.some((path) => !containsPath(this.config.cwd, path)))
+    if (isShellTool(request.tool) && inspected.some((path) => !this.inWorkspace(path)))
       return false;
     return true;
   }
@@ -561,7 +579,7 @@ export class PermissionGate implements PermissionGateService {
       ? [
           ...inspectedPaths.map((path) => policyAction(policy, 'path', [path], this.config.cwd)),
           ...inspectedPaths
-            .filter((path) => !containsPath(this.config.cwd, path))
+            .filter((path) => !this.inWorkspace(path))
             .map((path) => policyAction(policy, 'external_directory', [path], this.config.cwd)),
         ]
       : [];
@@ -633,10 +651,8 @@ export class PermissionGate implements PermissionGateService {
     if (
       !request.trustedPath &&
       (pathAction === 'ask' ||
-        !containsPath(this.config.cwd, request.path) ||
-        (request.paths ?? []).some(
-          (path) => !containsPath(this.config.cwd, path) || pathPolicy(path) === 'ask'
-        ))
+        !this.inWorkspace(request.path) ||
+        (request.paths ?? []).some((path) => !this.inWorkspace(path) || pathPolicy(path) === 'ask'))
     )
       return 'ask';
     if (

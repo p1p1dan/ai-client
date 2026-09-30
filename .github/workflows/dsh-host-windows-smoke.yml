@@ -1,0 +1,105 @@
+name: DSH host Windows smoke
+
+# dsh-rebase decision 134: the packaged DSH host's L1 smoke on Windows without
+# building the Electron package — build.yml's build-windows takes 15-30 min a
+# round, this takes a few. Push the branch below (or dispatch) to run it; the
+# report, the hook logs and the diagnostics are uploaded whatever the outcome.
+on:
+  push:
+    branches:
+      - ci/dsh-host-windows-smoke
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    # Same image as build.yml's build-windows (see the pin rationale there).
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.26.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: ${{ runner.os }}-pnpm-
+
+      # Only esbuild is needed from the root (build-dsh-host bundles our rows
+      # with every npm package external). No lifecycle scripts: nothing here
+      # runs Electron, so neither its download nor the native rebuilds apply.
+      - name: Install root dependencies (no scripts)
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # As build-windows: a clean `npm ci` of src/dsh-host's lockfile for this
+      # platform (optional dependencies included, decision 013), pruned and
+      # verified into out-dsh-host/.
+      - name: Build DSH host artifact
+        run: node scripts/build-dsh-host.mjs
+
+      - name: Cache bundled Node runtime
+        uses: actions/cache@v5
+        with:
+          path: out-node-runtime
+          key: node-runtime-${{ runner.os }}-${{ hashFiles('scripts/node-runtime-pin.mjs') }}
+
+      - name: Fetch bundled Node runtime
+        run: node scripts/fetch-node-runtime.mjs --platform win32-x64
+
+      # The workspace goes under %TEMP%, which is an 8.3 path on the runner
+      # (C:\Users\RUNNER~1\...), as build-windows' smoke had it: the case
+      # decision 134 fixes. The scratch tree is kept for the upload below.
+      - name: DSH host smoke (L1)
+        shell: pwsh
+        run: |
+          $scratch = Join-Path $env:TEMP 'aiclient-dsh-smoke-134'
+          node scripts/packaged-dsh-host-smoke.mjs --level 1 --host-dir out-dsh-host --node out-node-runtime\node.exe --scratch $scratch --keep --report dist/dsh-host-smoke-report.json
+          $code = $LASTEXITCODE
+          New-Item -ItemType Directory -Force dist/smoke-logs | Out-Null
+          Copy-Item -Force (Join-Path $scratch 'logs\*.jsonl') dist/smoke-logs -ErrorAction SilentlyContinue
+          if ($code -ne 0) { throw "DSH smoke exited $code" }
+
+      # Diagnostics for the three items of decision 134 (paths and realpath,
+      # DSH's spawn chain and ripgrep, node-pty under each way of starting node).
+      - name: Windows diagnostics
+        if: always()
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $hooks = @()
+          foreach ($log in @('dist/smoke-logs/hooks.jsonl', 'dist/smoke-logs/natives-hooks.jsonl')) {
+            if (Test-Path $log) { $hooks += @('--hooks', $log) }
+          }
+          node scripts/dsh-host-windows-diag.mjs --host-dir out-dsh-host --node out-node-runtime\node.exe @hooks --out dist/diag/windows-diag.json | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "diagnostics exited $LASTEXITCODE" }
+
+      - name: Upload smoke report, hook logs and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-host-windows-smoke
+          path: |
+            dist/dsh-host-smoke-report.json
+            dist/smoke-logs/
+            dist/diag/
+            out-dsh-host/dsh-host-manifest.json
+          retention-days: 14
+          if-no-files-found: warn

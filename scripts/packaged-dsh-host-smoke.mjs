@@ -58,6 +58,7 @@ import {
   DSH_HOST_PLUGINS_ENV,
   dshHostPluginsEnvValue,
 } from '../src/main/services/agent-host/dshHostEnvironment.ts';
+import { isRipgrep, spawnTarget } from './dsh-host-smoke-lib.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const HOOKS = path.join(repoRoot, 'src', 'dsh-host', 'tools', 'lib', 'probe-hooks.mjs');
@@ -705,32 +706,58 @@ async function level1(ctx, gateway) {
  * sharp + libvips (read_image needs an image-capable route the P1 gateway model
  * does not declare) and node-pty (the shell tool does not use a PTY on Linux),
  * loaded by the bundled node from the artifact with the same hooks.
+ *
+ * node-pty is driven as DSH's only caller of it drives it
+ * (dsh-subprocess-local's `spawnTerminal`: default ConPTY, the terminal type
+ * as `name` and `TERM`), from a node started as the host is: `--expose-internals`
+ * and the hooks, and never `--input-type` (decision 134). On Windows node-pty
+ * reads the ConPTY output on a worker thread; a worker inherits its parent's
+ * execArgv, and one that inherits `--import` together with `--input-type`
+ * refuses to start ("--input-type can only be used with string input") and
+ * exits 1, which node-pty reports as `exitCode -1` with no output. So the
+ * probe is CommonJS `-e`.
  */
 async function nativeProbe(ctx) {
   const script = `
-    import { createRequire } from 'node:module';
-    const req = createRequire(${JSON.stringify(path.join(ctx.hostDir, 'package.json'))});
-    const out = {};
-    const sharp = req('sharp');
-    const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#336699' } }).png().toBuffer();
-    out.sharp = { pngBytes: png.length, libvips: sharp.versions?.vips ?? null };
-    const pty = req('node-pty');
-    const [file, args] = process.platform === 'win32'
-      ? [process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'echo pty-ok']]
-      : ['/bin/sh', ['-c', 'echo pty-ok']];
-    out.pty = await new Promise((done) => {
-      let text = '';
-      const term = pty.spawn(file, args, { cols: 80, rows: 10, cwd: ${JSON.stringify(ctx.workspace)}, env: process.env });
-      const timer = setTimeout(() => { try { term.kill(); } catch {} done({ text, timedOut: true }); }, 20000);
-      term.onData((chunk) => { text += chunk; });
-      term.onExit(({ exitCode }) => { clearTimeout(timer); done({ text: text.slice(-200), exitCode }); });
-    });
-    process.stdout.write(JSON.stringify(out));
+    const req = require('node:module').createRequire(${JSON.stringify(path.join(ctx.hostDir, 'package.json'))});
+    (async () => {
+      const out = {};
+      const sharp = req('sharp');
+      const png = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#336699' } }).png().toBuffer();
+      out.sharp = { pngBytes: png.length, libvips: sharp.versions?.vips ?? null };
+      const pty = req('node-pty');
+      const [file, args] = process.platform === 'win32'
+        ? [process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'echo pty-ok']]
+        : ['/bin/sh', ['-c', 'echo pty-ok']];
+      out.pty = await new Promise((done) => {
+        let text = '';
+        let term;
+        try {
+          term = pty.spawn(file, args, {
+            name: 'xterm-256color',
+            cols: 80,
+            rows: 10,
+            cwd: ${JSON.stringify(ctx.workspace)},
+            env: { ...process.env, TERM: 'xterm-256color' },
+          });
+        } catch (error) {
+          done({ text, error: String(error) });
+          return;
+        }
+        // node-pty's own reason for a failed Windows start (-1 alone says nothing).
+        let reason;
+        term._agent?.onError?.((error) => { reason = String(error?.message ?? error); });
+        const timer = setTimeout(() => { try { term.kill(); } catch {} done({ text, timedOut: true, reason }); }, 20000);
+        term.onData((chunk) => { text += chunk; });
+        term.onExit(({ exitCode }) => { clearTimeout(timer); done({ text: text.slice(-200), exitCode, ...(reason ? { reason } : {}) }); });
+      });
+      process.stdout.write(JSON.stringify(out));
+    })().catch((error) => { process.stdout.write(JSON.stringify({ error: String(error?.stack ?? error) })); });
   `;
   const hookLog = path.join(path.dirname(ctx.hookLog), 'natives-hooks.jsonl');
   const child = spawn(
     ctx.node,
-    ['--import', pathToFileURL(HOOKS).href, '--input-type=module', '-e', script],
+    ['--expose-internals', '--import', pathToFileURL(HOOKS).href, '-e', script],
     {
       cwd: ctx.workspace,
       env: { ...ctx.env, AICLIENT_PROBE_HOOK_LOG: hookLog },
@@ -771,21 +798,6 @@ function narbRoot(ctx) {
     return path.join(ctx.env.LOCALAPPDATA ?? '', 'node-addon-native-custom-loader', 'native-cache');
   const uid = typeof process.getuid === 'function' ? String(process.getuid()) : 'nouid';
   return path.join(ctx.env.TMPDIR, `node-addon-native-custom-loader-${uid}`, 'native-cache');
-}
-
-/**
- * The program a spawn record runs. With a user systemd session (Main's
- * environment carries XDG_RUNTIME_DIR and DBus, decision 022) DSH launches a
- * tool as `systemd-run … -- <runner> -- <tool argv>`: the tool is the first
- * word after the second `--` (the tool's own argv may hold more).
- */
-function toolOf(record) {
-  const args = Array.isArray(record.args) ? record.args : [];
-  const first = args.indexOf('--');
-  const second = first < 0 ? -1 : args.indexOf('--', first + 1);
-  return /(^|[\\/])systemd-run$/.test(String(record.file ?? '')) && second >= 0
-    ? args[second + 1]
-    : record.file;
 }
 
 function analyzeHooks(ctx, hostNatives, extraLogs = []) {
@@ -832,14 +844,12 @@ function analyzeHooks(ctx, hostNatives, extraLogs = []) {
       )
     ),
   ];
+  // Through DSH's launchers (systemd-run on Linux, its node runners on Windows,
+  // decision 134): the tool is the argv the launcher was handed, not the launcher.
   const spawns = records
     .filter((r) => r.kind === 'spawn' || r.kind === 'spawn-sync')
-    .map((r) => ({
-      file: r.file,
-      target: toolOf(r),
-      args: Array.isArray(r.args) ? r.args.slice(0, 4) : undefined,
-    }));
-  const rg = spawns.filter((item) => /(^|[\\/])rg(\.exe)?$/i.test(String(item.target ?? '')));
+    .map((r) => ({ file: r.file, target: spawnTarget(r) }));
+  const rg = spawns.filter((item) => isRipgrep(item.target));
   return {
     moduleCount: modules.length,
     outsideModules,
@@ -858,6 +868,7 @@ function analyzeHooks(ctx, hostNatives, extraLogs = []) {
     ],
     ripgrep: rg.map((item) => item.target),
     spawnedExecutables: [...new Set(spawns.map((item) => item.file))].slice(0, 30),
+    spawnTargets: [...new Set(spawns.map((item) => item.target))].slice(0, 30),
   };
 }
 
