@@ -64,6 +64,11 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-30 P1-5 真实网关验证 R1～R10（Linux 开发机，用户亲自登录公司账号；证据 [p1-5-real-gateway-2026-09-30.md](evidence/p1-5-real-gateway-2026-09-30.md)，50 次请求，约 $1.44）：
+  - R1 目录 13 个模型、4 个 provider、三种协议，菜单与计划一致；R3 工具回合、R4 档位（日志里 `reasoningEffort` 全部与所选一致）、R5 跨协议换模型、R6 读图、R7 三种一次性补全与评审中途停止都通过。
+  - R2：China 组 GLM 5.3、DeepSeek V4 Flash / Pro 网关 503 `no_available_providers`（GW-1，待网关确认）。R8 只验了登出（宿主 318 ms 关停、凭据库清空），「在飞的回合被登出打断」待用户重新登录后补验。R9 说明已交用户转达。R10 按形状扫描，凭据库以外零命中。
+  - 待定问题：503 被自动重试 3 次（GW-2）；GPT 间歇断连（GW-3）；Grok 4.7 的 `maxTokens` 等于上下文窗口，自动压缩算不出预算（GW-4）；UA 待网关答复（GW-5）；代码评审标题「代码审查()」空括号（GW-6）；「新建 worktree」对话框没挂在任何界面上，main 同样如此（GW-7）；`git init` 后 Git 面板不刷新（GW-8）。
+  - 逐项 JSON 与请求台账含网关原始错误体，只留本地（主检出 `contextFX/`）。
 - 2026-09-30 P1-7e 点验问题修复五组全部落地（分组见 [topics/p1-7e-pointcheck-fixes.md](topics/p1-7e-pointcheck-fixes.md)；决策 138～144 待审批，其中 138 第 21 条用户选丙，140 的问题 31 与 143 的问题 30 用户按建议裁决）：
   - e1 侧栏 `47eb2d36`（决策 137、138）；e2a 时间线与会话 `e482d3ce`（139）；e2b 失败注记、Stop 保留输出、`/compact` 摘要、网关流闸门与参数不兼容错误卡 `e35bbee2`（140）；e3 浮窗、终端、toast、对比度与 e5 插件自动重启、旧资产提示、会话授权活动行、图片上限 `0f04c61c`（142、143）；e4 文案与问答卡 `6fc05ddb`（144）。
   - 另：P1-13d 复核修复 `70956bf7`；`encryptedRead/` 纳入宿主 tsc `51ed11de`；模型计划对只支持 adaptive 的模型不下发 off `1c3f9fc9`（141）；旧会话投影金样本补 `failure` `7ec5ba47`。
