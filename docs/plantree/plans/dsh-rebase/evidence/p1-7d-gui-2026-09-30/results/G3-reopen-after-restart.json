@@ -1,0 +1,133 @@
+{
+  "opened": {
+    "id": "session-1790743338490-j89wiuj",
+    "active": "session-1790743338490-j89wiuj",
+    "tried": 1
+  },
+  "rowsCreate": [
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用 执行 · 每次询问 Automatic workspace 本机",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx Read p0-report.docx",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "Create p0-report.docx Read p0-report.docx",
+      "svg": "lucide lucide-pencil-line",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    }
+  ],
+  "rowsRead": [
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用 执行 · 每次询问 Automatic workspace 本机",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx Read p0-report.docx",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "Create p0-report.docx Read p0-report.docx",
+      "svg": "lucide lucide-pencil-line",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    }
+  ],
+  "transcript": "P0-OFFICE: create a report, then read it back.\n已工作 2 秒\nCreate p0-report.docx\nRead p0-report.docx\n最终输出\nOffice document created and read back.\n✻ 完成于 00:42 · 2 次工具调用",
+  "shot": "shots/G3-reopen-after-restart-rows.png"
+}

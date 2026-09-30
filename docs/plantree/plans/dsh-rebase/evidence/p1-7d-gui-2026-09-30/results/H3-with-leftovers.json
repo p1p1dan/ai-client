@@ -1,0 +1,47 @@
+{
+  "nav": [
+    "通用",
+    "外观",
+    "终端",
+    "编辑器",
+    "Git",
+    "Pi",
+    "扩展 *",
+    "数据迁移",
+    "快捷键",
+    "网络",
+    "高级"
+  ],
+  "headings": [
+    "开始对话",
+    "设置",
+    "扩展",
+    "技能",
+    "本应用的技能",
+    "共享技能",
+    "技能怎样才会被加载",
+    "插件",
+    "旧版遗留内容",
+    "自定义子代理",
+    "提示词模板",
+    "用户层指令文件",
+    "MCP 服务",
+    "不会加载的技能",
+    "子代理委派"
+  ],
+  "pageText": "设置\n通用\n外观\n终端\n编辑器\nGit\nPi\n扩展\n数据迁移\n快捷键\n网络\n高级\n扩展\n技能\n对话从下面两个目录加载技能，另外还会加载项目仓库根目录下的 .dsh/skills 和 .agents/skills。\n本应用的技能\n\n你为本应用的对话准备的技能。\n\n/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills\n打开文件夹\n共享技能\n\n其他遵循 Agent Skills 约定的 Agent 也会读取这里。\n\n/tmp/aiclient-p17d3h1/home/.agents/skills\n打开文件夹\n技能怎样才会被加载\n每个技能是技能目录第一层里的一项：<name>/SKILL.md，或单个 <name>.md。更深层的文件不会被扫描。\nfrontmatter 必须写 name 和 description；name 只能用小写字母、数字和短横线，例如 code-review。\n在消息任意位置输入 /<name> 即可使用技能；加上 disable-model-invocation: true，模型就不会自行调用它。\n插件\n经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。\ndsh-office-tools\n1.0.4\n\n在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。\n\n第三方插件，已经过本应用审查\n2026-09-28 审查：有条件通过\n写入文件\nexcel_create, excel_update, ppt_create, word_create, word_update\n读取文件\nexcel_read, ppt_read, word_read\n\n应用打开后对话引擎还没有启动过，所以暂时看不到它加载了什么。\n\n旧版遗留内容\n旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。\n自定义子代理\n\n子代理定义文件不再加载。对话改用内置的子代理，始终可用。\n\nx-reviewer\n/tmp/aiclient-p17d3h1/home/.agents/subagents/x.md\n提示词模板\n\n模板不再展开。想继续使用的，请改写成技能：存为 /tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。\n\n/review\n/tmp/aiclient-p17d3h1/workspace/.pi/prompts/review.md\n/ship\n/tmp/aiclient-p17d3h1/workspace/.pi/prompts/ship.md\n用户层指令文件\n\n旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 /tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md。\n\n/tmp/aiclient-p17d3h1/home/.pilab/AGENTS.md\nMCP 服务\n\n新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。\n\ndemo-files, demo-web\n/tmp/aiclient-p17d3h1/workspace/.pi/mcp.json\n不会加载的技能\n\n技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。\n\nBad_Skill\nname 不是小写字母、数字和短横线\n/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md\nlegacy-skill\n所在目录新版不扫描\n/tmp/aiclient-p17d3h1/workspace/.pi/skills/legacy-skill/SKILL.md\n子代理委派\n\n你曾关闭子代理委派。新版的子代理始终可用。\n\n已检查 /tmp/aiclient-p17d3h1/workspace 下的项目文件。\n\n打开 agent 目录",
+  "forbidden": ["子代理", "委派"],
+  "shotTop": "shots/H3-with-leftovers-extensions-top.png",
+  "legacy": {
+    "text": "旧版遗留内容\n旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。\n自定义子代理\n\n子代理定义文件不再加载。对话改用内置的子代理，始终可用。\n\nx-reviewer\n/tmp/aiclient-p17d3h1/home/.agents/subagents/x.md\n提示词模板\n\n模板不再展开。想继续使用的，请改写成技能：存为 /tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。\n\n/review\n/tmp/aiclient-p17d3h1/workspace/.pi/prompts/review.md\n/ship\n/tmp/aiclient-p17d3h1/workspace/.pi/prompts/ship.md\n用户层指令文件\n\n旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 /tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md。\n\n/tmp/aiclient-p17d3h1/home/.pilab/AGENTS.md\nMCP 服务\n\n新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。\n\ndemo-files, demo-web\n/tmp/aiclient-p17d3h1/workspace/.pi/mcp.json\n不会加载的技能\n\n技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。\n\nBad_Skill\nname 不是小写字母、数字和短横线\n/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md\nlegacy-skill\n所在目录新版不扫描\n/tmp/aiclient-p17d3h1/workspace/.pi/skills/legacy-skill/SKILL.md\n子代理委派\n\n你曾关闭子代理委派。新版的子代理始终可用。\n\n已检查 /tmp/aiclient-p17d3h1/workspace 下的项目文件。\n\n打开 agent 目录",
+    "rect": {
+      "x": 373,
+      "y": 90,
+      "w": 806,
+      "h": 1149
+    },
+    "badges": [],
+    "switches": []
+  },
+  "shotLegacy": "shots/H3-with-leftovers-extensions-legacy.png"
+}

@@ -1,0 +1,264 @@
+{
+  "made": {
+    "key": "L1",
+    "title": "旧会话甲：整理笔记",
+    "use": "F1 (send), then F4 / F5 text",
+    "sessionId": "session-1790657198005-lgl1",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_0e8c694b-4125-4cba-8a6d-6b4ccacc10b3.jsonl",
+    "bytes": 6779
+  },
+  "click": {
+    "ok": true,
+    "matches": 2
+  },
+  "active": "session-1790657198005-lgl1",
+  "row": {
+    "id": "session-1790657198005-lgl1",
+    "title": "旧会话甲：整理笔记",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "preview": {
+    "view": {
+      "notice": [
+        {
+          "role": "status",
+          "text": "本机",
+          "spinner": false,
+          "buttons": []
+        }
+      ],
+      "composer": {
+        "value": "",
+        "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+        "disabled": false
+      }
+    },
+    "transcript": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用"
+  },
+  "shotPreview": "shots/F1-legacy-placeholder.png",
+  "send": {
+    "t0": 1790743707758,
+    "shot": "shots/F1-migrating.png",
+    "trace": [
+      {
+        "dt": 101,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "本机",
+            "spinner": false,
+            "buttons": []
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 2200,
+        "notice": [
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "",
+            "spinner": false,
+            "buttons": []
+          },
+          {
+            "role": "status",
+            "text": "本机",
+            "spinner": false,
+            "buttons": []
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在发送到 Agent Host…",
+          "disabled": false
+        }
+      }
+    ]
+  },
+  "turn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790657198005-lgl1",
+    "status": "idle",
+    "messages": 10,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790743710613,
+        "status": "idle"
+      }
+    ]
+  },
+  "activeAfter": "session-1790657198005-lgl1",
+  "rowAfter": {
+    "id": "session-1790657198005-lgl1",
+    "title": "旧会话甲：整理笔记",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "rows": [
+    {
+      "id": "session-1790743338490-j89wiuj",
+      "title": "P0-OFFICE: create a report, then read it back",
+      "status": "idle",
+      "agent": "dsh",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790743121931-nig3pux",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "status": "idle",
+      "agent": "dsh",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790743046054-5tjoio2",
+      "title": "P1-PERM-GRANTS: echo three times",
+      "status": "idle",
+      "agent": "dsh",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-live-1790742746160-pxakfl9",
+      "title": "P1-S18 {\"case\":\"auto\",\"shell\":\"bash\"}",
+      "status": "idle",
+      "agent": "dsh",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790657198005-lgl1",
+      "title": "旧会话甲：整理笔记",
+      "status": "idle",
+      "agent": "dsh",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 10
+    },
+    {
+      "id": "session-1790657138005-lgl2",
+      "title": "旧会话乙：看图",
+      "status": "idle",
+      "agent": "pi",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790657078005-lgl3",
+      "title": "旧会话丙：写摘要",
+      "status": "idle",
+      "agent": "pi",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790657018005-lgl4",
+      "title": "旧会话丁：文件被占用",
+      "status": "idle",
+      "agent": "pi",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-1790656958005-lgl5",
+      "title": "旧会话戊：文件已删除",
+      "status": "idle",
+      "agent": "pi",
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    },
+    {
+      "id": "session-live-1790743660226-atblgcy",
+      "title": "Live Agent Host",
+      "status": "idle",
+      "agent": null,
+      "forkTitlePending": null,
+      "legacyDiverged": null,
+      "messages": 0
+    }
+  ],
+  "transcript": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用\nP0-RECALL {\"markers\":[\"alpha and beta\",\"A single red pixel\",\"Wrote out/summary.md\"]} 旧对话里说过什么？\n已工作 1 秒\n最终输出\nP0-RECALL present=alpha and beta,A single red pixel,Wrote out/summary.md missing=-\n✻ 完成于 00:48",
+  "shotAfter": "shots/F1-after-migration.png",
+  "index": [
+    {
+      "sessionId": "session-1790657198005-lgl1",
+      "agent": "dsh",
+      "title": "旧会话甲：整理笔记",
+      "migratedTo": null,
+      "migratedFrom": {
+        "legacySessionId": "session-1790657198005-lgl1_pi",
+        "converter": "pi-dsh/2"
+      }
+    },
+    {
+      "sessionId": "session-1790657198005-lgl1_pi",
+      "agent": "pi",
+      "title": "旧会话甲：整理笔记",
+      "migratedTo": "session-1790657198005-lgl1",
+      "migratedFrom": null
+    }
+  ]
+}

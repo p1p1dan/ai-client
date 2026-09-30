@@ -1,0 +1,100 @@
+{
+  "sid": "session-1790743046054-5tjoio2",
+  "gear": "执行 · 每次询问",
+  "shotFirst": "shots/I2-first-card-grant-hint.png",
+  "shotSecond": "shots/I2-card-2.png",
+  "turn": {
+    "settled": true,
+    "log": [
+      {
+        "dt": 2104,
+        "n": 1,
+        "cards": [
+          {
+            "text": "权限 | 高风险 | Bash — 在工作区运行命令 | echo perm-grant-a | 工作目录：/tmp/aiclient-p17d3/workspace | 项目：/tmp/aiclient-p17d3/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+            "lines": [
+              "权限",
+              "高风险",
+              "Bash — 在工作区运行命令",
+              "echo perm-grant-a",
+              "工作目录：/tmp/aiclient-p17d3/workspace",
+              "项目：/tmp/aiclient-p17d3/workspace",
+              "若 120 秒内未响应将自动拒绝",
+              "直接允许",
+              "本会话内允许",
+              "直接拒绝",
+              "「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理"
+            ],
+            "buttons": ["直接允许", "本会话内允许", "直接拒绝"],
+            "rect": {
+              "x": 502,
+              "y": 509,
+              "w": 720,
+              "h": 255
+            }
+          }
+        ],
+        "action": "session"
+      },
+      {
+        "dt": 4434,
+        "n": 2,
+        "cards": [
+          {
+            "text": "权限 | 高风险 | Bash — 在工作区运行命令 | echo perm-grant-c && rm -f perm-grant-missing.txt | 工作目录：/tmp/aiclient-p17d3/workspace | 项目：/tmp/aiclient-p17d3/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo, rm 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+            "lines": [
+              "权限",
+              "高风险",
+              "Bash — 在工作区运行命令",
+              "echo perm-grant-c && rm -f perm-grant-missing.txt",
+              "工作目录：/tmp/aiclient-p17d3/workspace",
+              "项目：/tmp/aiclient-p17d3/workspace",
+              "若 120 秒内未响应将自动拒绝",
+              "直接允许",
+              "本会话内允许",
+              "直接拒绝",
+              "「本会话内允许」会记住以 echo, rm 开头的命令 · 对本次会话内的所有代理生效，含子代理"
+            ],
+            "buttons": ["直接允许", "本会话内允许", "直接拒绝"],
+            "rect": {
+              "x": 502,
+              "y": 509,
+              "w": 720,
+              "h": 255
+            }
+          }
+        ],
+        "action": "allow"
+      }
+    ]
+  },
+  "final": {
+    "sid": "session-1790743046054-5tjoio2",
+    "status": "idle",
+    "messages": 5,
+    "lastError": null
+  },
+  "calls": [
+    {
+      "id": "toolu_b7b04816-4499-455c-9d31-0ebfd580d0da",
+      "name": "bash",
+      "cmd": "echo perm-grant-a",
+      "settled": true
+    },
+    {
+      "id": "toolu_7218f998-81e0-4571-8eaa-6babe7be0c49",
+      "name": "bash",
+      "cmd": "echo perm-grant-b",
+      "settled": true
+    },
+    {
+      "id": "toolu_7d5ff988-e7db-441c-bf81-fa1596f2027f",
+      "name": "bash",
+      "cmd": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+      "settled": true
+    }
+  ],
+  "transcript": "P1-PERM-GRANTS: echo three times.\n已工作 4 秒\n终端\necho perm-grant-a\n· 本会话内已允许\n终端\necho perm-grant-b\n终端\necho perm-grant-c && rm -f perm-grant-mi…\n· 已允许\n最终输出\nP1-PERM-GRANTS finished.\n✻ 完成于 00:37 · 3 次工具调用",
+  "activity": ["· 本会话内已允许", "· 已允许"],
+  "shotAfter": "shots/I2-after-settle.png"
+}

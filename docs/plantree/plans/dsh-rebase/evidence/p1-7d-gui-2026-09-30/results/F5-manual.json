@@ -1,0 +1,150 @@
+{
+  "made": {
+    "key": "L3",
+    "title": "旧会话丙：写摘要",
+    "use": "F2 (/compact), then F5 manual rename",
+    "sessionId": "session-1790657078005-lgl3",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_1dd6fae3-826a-4c5d-97f2-92a465f666f6.jsonl",
+    "bytes": 6779
+  },
+  "keptId": "session-1790657078005-lgl3_pi",
+  "sidebarBefore": [
+    {
+      "title": "旧会话丙：写摘要",
+      "text": "旧会话丙：写摘要 10m",
+      "selected": null,
+      "rect": {
+        "x": 52,
+        "y": 201,
+        "w": 263,
+        "h": 28
+      },
+      "badges": []
+    },
+    {
+      "title": "旧会话丙：写摘要",
+      "text": "旧会话丙：写摘要 10m",
+      "selected": null,
+      "rect": {
+        "x": 64,
+        "y": 523,
+        "w": 251,
+        "h": 28
+      },
+      "badges": []
+    },
+    {
+      "title": "旧会话丙：写摘要",
+      "text": "旧会话丙：写摘要 1.0.x 1h",
+      "selected": null,
+      "rect": {
+        "x": 64,
+        "y": 793,
+        "w": 251,
+        "h": 28
+      },
+      "badges": [
+        {
+          "text": "1.0.x",
+          "title": "这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。在这里继续它，会把那份较新的内容迁成一个单独的对话。",
+          "aria": "这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。在这里继续它，会把那份较新的内容迁成一个单独的对话。",
+          "cls": "text-xs sm:text-[.625rem] bg-warning/8 text-warning dark:bg-warning/16",
+          "color": "oklch(0.5665 0.1523 45.02)",
+          "bg": "oklab(0.5665 0.107655 0.10773 / 0.08)"
+        }
+      ]
+    }
+  ],
+  "badgeRowIndex": 2,
+  "click": {
+    "ok": true,
+    "matches": 1
+  },
+  "active": "session-1790657078005-lgl3_pi",
+  "row": {
+    "id": "session-1790657078005-lgl3_pi",
+    "title": "旧会话丙：写摘要",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": true
+  },
+  "tree": "clicked",
+  "titlesAfterMove": {
+    "trace": [
+      {
+        "dt": 409,
+        "fork": {
+          "title": "旧会话丙：写摘要（1.0.x 分支）",
+          "agent": "pi",
+          "pending": true,
+          "status": "idle"
+        },
+        "original": "旧会话丙：写摘要"
+      },
+      {
+        "dt": 487,
+        "fork": {
+          "title": "旧会话丙：写摘要（1.0.x 分支）",
+          "agent": "dsh",
+          "pending": true,
+          "status": "idle"
+        },
+        "original": "旧会话丙：写摘要"
+      }
+    ],
+    "interimSeen": true
+  },
+  "shotInterim": "shots/F5-manual-interim-before-rename.png",
+  "rename": {
+    "title": "旧会话丙：写摘要（1.0.x 分支）",
+    "menu": [],
+    "clicked": false,
+    "input": null
+  },
+  "rowAfterRename": {
+    "id": "session-1790657078005-lgl3_pi",
+    "title": "旧会话丙：写摘要（1.0.x 分支）",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": true,
+    "legacyDiverged": true
+  },
+  "turn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790657078005-lgl3_pi",
+    "status": "idle",
+    "messages": 12,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790744520825,
+        "status": "idle"
+      }
+    ]
+  },
+  "rowAfter": {
+    "id": "session-1790657078005-lgl3_pi",
+    "title": "这条消息不应该改掉手动起的名字",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": true
+  },
+  "original": {
+    "id": "session-1790657078005-lgl3",
+    "title": "旧会话丙：写摘要",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "index": [
+    {
+      "title": "这条消息不应该改掉手动起的名字",
+      "forkTitlePending": null
+    }
+  ],
+  "shotAfter": "shots/F5-manual-rename-wins.png"
+}

@@ -1,0 +1,78 @@
+{
+  "made": {
+    "key": "L5",
+    "title": "旧会话戊：文件已删除",
+    "use": "F3 source_missing (not retryable)",
+    "sessionId": "session-1790656958005-lgl5",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_ce8b4b86-baf2-4ed0-b4c8-90259d52e487.jsonl",
+    "bytes": 6779
+  },
+  "click": {
+    "ok": true,
+    "matches": 1
+  },
+  "active": "session-1790656958005-lgl5",
+  "row": {
+    "id": "session-1790656958005-lgl5",
+    "title": "旧会话戊：文件已删除",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "previewTranscript": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用",
+  "deleted": true,
+  "send": {
+    "t0": 1790744003312,
+    "shot": null,
+    "trace": [
+      {
+        "dt": 67,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": -238,
+            "bottom": -169,
+            "inView": false
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 293,
+        "notice": [],
+        "composer": {
+          "value": "",
+          "placeholder": "正在发送到 Agent Host…",
+          "disabled": false
+        }
+      }
+    ]
+  },
+  "card": null,
+  "composer": {
+    "value": "",
+    "placeholder": "正在发送到 Agent Host…",
+    "disabled": false
+  },
+  "shotCard": "shots/F3-missing-failure-card.png",
+  "detailClick": "no card",
+  "cardDetail": null,
+  "shotDetail": "shots/F3-missing-failure-detail.png",
+  "rowAfter": {
+    "id": "session-1790656958005-lgl5",
+    "title": "旧会话戊：文件已删除",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "toasts": []
+}

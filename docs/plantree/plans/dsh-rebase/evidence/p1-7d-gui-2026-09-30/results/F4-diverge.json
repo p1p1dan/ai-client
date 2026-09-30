@@ -1,0 +1,59 @@
+{
+  "how": "appended one 1.0.x exchange per kept legacy file, app stopped",
+  "out": [
+    {
+      "key": "L1",
+      "keptRow": "session-1790657198005-lgl1_pi",
+      "migratedRow": "session-1790657198005-lgl1",
+      "tag": "F5-CONTINUED-IN-1X-L1",
+      "migratedFrom": {
+        "bytes": 6779,
+        "mtimeMs": 1790743598005.951
+      },
+      "before": {
+        "size": 6779,
+        "mtimeMs": 1790743598006
+      },
+      "after": {
+        "size": 7683,
+        "mtimeMs": 1790744234075
+      }
+    },
+    {
+      "key": "L2",
+      "keptRow": "session-1790657138005-lgl2_pi",
+      "migratedRow": "session-1790657138005-lgl2",
+      "tag": "F5-CONTINUED-IN-1X-L2",
+      "migratedFrom": {
+        "bytes": 6779,
+        "mtimeMs": 1790743598005.951
+      },
+      "before": {
+        "size": 6779,
+        "mtimeMs": 1790743598006
+      },
+      "after": {
+        "size": 7683,
+        "mtimeMs": 1790744234075
+      }
+    },
+    {
+      "key": "L3",
+      "keptRow": "session-1790657078005-lgl3_pi",
+      "migratedRow": "session-1790657078005-lgl3",
+      "tag": "F5-CONTINUED-IN-1X-L3",
+      "migratedFrom": {
+        "bytes": 6779,
+        "mtimeMs": 1790743598005.951
+      },
+      "before": {
+        "size": 6779,
+        "mtimeMs": 1790743598006
+      },
+      "after": {
+        "size": 7683,
+        "mtimeMs": 1790744234075
+      }
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "how": "appended one 1.0.x exchange per kept legacy file, app stopped",
+  "out": [
+    {
+      "key": "L6",
+      "keptRow": "session-1790657534150-lgl6_pi",
+      "migratedRow": "session-1790657534150-lgl6",
+      "tag": "F5-CONTINUED-IN-1X-L6",
+      "migratedFrom": {
+        "bytes": 6779,
+        "mtimeMs": 1790753957963.999
+      },
+      "before": {
+        "size": 6779,
+        "mtimeMs": 1790753957964
+      },
+      "after": {
+        "size": 7683,
+        "mtimeMs": 1790745173658
+      }
+    }
+  ]
+}

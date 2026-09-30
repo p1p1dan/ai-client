@@ -1,0 +1,10 @@
+{
+  "click": "能力",
+  "popup": [
+    {
+      "slot": "dialog-popup",
+      "text": "能力\n\n这个对话可以使用的技能。\n\n发送一条消息启动这个对话后，才能看到它启用了什么。"
+    }
+  ],
+  "shot": "shots/H3-caps-popover.png"
+}

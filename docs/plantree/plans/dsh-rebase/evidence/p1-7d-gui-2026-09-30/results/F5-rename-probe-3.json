@@ -1,0 +1,115 @@
+{
+  "sid": "session-live-1790745238665-htgn3yb",
+  "rename": {
+    "title": "Live Agent Host",
+    "box": {
+      "x": 124,
+      "y": 502,
+      "rows": 2
+    },
+    "via": "right click",
+    "menu": ["重命名", "归档"],
+    "clicked": true,
+    "focusTrace": [
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      },
+      {
+        "active": "INPUT:Live Agent Host",
+        "fields": [
+          {
+            "value": "Live Agent Host",
+            "focused": true
+          }
+        ]
+      }
+    ],
+    "input": "rename field focused"
+  },
+  "rowAfter": {
+    "id": "session-live-1790745238665-htgn3yb",
+    "title": "Live Agent Host",
+    "status": "idle",
+    "agent": null,
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  }
+}

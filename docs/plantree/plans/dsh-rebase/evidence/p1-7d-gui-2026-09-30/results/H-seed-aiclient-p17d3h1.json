@@ -1,0 +1,13 @@
+{
+  "kind": "with-assets",
+  "written": [
+    "/tmp/aiclient-p17d3h1/home/.pilab/AGENTS.md",
+    "/tmp/aiclient-p17d3h1/home/.agents/subagents/x.md",
+    "/tmp/aiclient-p17d3h1/workspace/.pi/prompts/review.md",
+    "/tmp/aiclient-p17d3h1/workspace/.pi/prompts/ship.md",
+    "/tmp/aiclient-p17d3h1/workspace/.pi/mcp.json",
+    "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md",
+    "/tmp/aiclient-p17d3h1/workspace/.pi/skills/legacy-skill/SKILL.md",
+    "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/settings.json"
+  ]
+}

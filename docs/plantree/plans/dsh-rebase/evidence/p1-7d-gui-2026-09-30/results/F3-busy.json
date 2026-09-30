@@ -1,0 +1,132 @@
+{
+  "made": {
+    "key": "L4",
+    "title": "旧会话丁：文件被占用",
+    "use": "F3 source_busy (retryable)",
+    "sessionId": "session-1790657018005-lgl4",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_6f74289b-a52b-4305-9e2f-b3adb541408e.jsonl",
+    "bytes": 6779
+  },
+  "click": {
+    "ok": true,
+    "matches": 1
+  },
+  "active": "session-1790657018005-lgl4",
+  "row": {
+    "id": "session-1790657018005-lgl4",
+    "title": "旧会话丁：文件被占用",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "send": {
+    "t0": 1790743918967,
+    "shot": "shots/F3-busy-migrating.png",
+    "trace": [
+      {
+        "dt": 71,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": -238,
+            "bottom": -169,
+            "inView": false
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 591,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": 88,
+            "bottom": 157,
+            "inView": true
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 825,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": 88,
+            "bottom": 157,
+            "inView": true
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 1298,
+        "notice": [],
+        "composer": {
+          "value": "",
+          "placeholder": "正在发送到 Agent Host…",
+          "disabled": false
+        }
+      }
+    ]
+  },
+  "card": null,
+  "composer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false
+  },
+  "shotCard": "shots/F3-busy-failure-card.png",
+  "detailClick": "no card",
+  "cardDetail": null,
+  "shotDetail": "shots/F3-busy-failure-detail.png",
+  "touches": 1879202,
+  "retry": "no retry",
+  "retryTrace": [
+    {
+      "dt": 1,
+      "notice": [],
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false
+      }
+    }
+  ],
+  "rowAfterRetry": {
+    "id": "session-1790657018005-lgl4",
+    "title": "旧会话丁：文件被占用",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "composerAfterRetry": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false
+  },
+  "shotAfterRetry": "shots/F3-busy-after-retry.png"
+}

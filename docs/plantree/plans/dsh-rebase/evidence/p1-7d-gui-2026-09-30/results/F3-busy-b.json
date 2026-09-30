@@ -1,0 +1,183 @@
+{
+  "made": {
+    "key": "L6",
+    "title": "旧会话己：一直在被写",
+    "use": "F3 source_busy, with piLeaf",
+    "sessionId": "session-1790657534150-lgl6",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T13-10-00-000Z_7b911e9e-5f66-426f-9fae-b3edb9af13ee.jsonl",
+    "bytes": 6779,
+    "piLeaf": {
+      "activeEntryId": "7bbf73d8-07cc-4429-99c9-081bcb36cd12",
+      "fileTailEntryId": "33e77d0b-edd6-4064-aa51-e2028cb19afc"
+    }
+  },
+  "click": {
+    "ok": true,
+    "matches": 1
+  },
+  "active": "session-1790657534150-lgl6",
+  "row": {
+    "id": "session-1790657534150-lgl6",
+    "title": "旧会话己：一直在被写",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "send": {
+    "t0": 1790744906064,
+    "shot": "shots/F3-busy-b-migrating.png",
+    "trace": [
+      {
+        "dt": 193,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": -149,
+            "bottom": -80,
+            "inView": false
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 961,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": 88,
+            "bottom": 157,
+            "inView": true
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 1363,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "spinner": true,
+            "buttons": [],
+            "top": 88,
+            "bottom": 157,
+            "inView": true
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…",
+          "disabled": false
+        }
+      },
+      {
+        "dt": 4392,
+        "notice": [
+          {
+            "role": "alert",
+            "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | retry",
+            "spinner": false,
+            "buttons": ["详情", "retry"],
+            "top": 88,
+            "bottom": 281,
+            "inView": true
+          }
+        ],
+        "composer": {
+          "value": "F3 可重试：文件一直在被写。",
+          "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+          "disabled": false
+        }
+      }
+    ]
+  },
+  "card": {
+    "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | retry",
+    "lines": [
+      "这个对话没能迁移到当前引擎",
+      "旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。",
+      "当时有其他程序正在写入它的文件。",
+      "错误码：read/source_busy",
+      "点「重试」或再发一次消息，都会重新尝试迁移。",
+      "详情",
+      "retry"
+    ],
+    "buttons": ["详情", "retry"],
+    "details": null
+  },
+  "composer": {
+    "value": "F3 可重试：文件一直在被写。",
+    "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+    "disabled": false
+  },
+  "shotCard": "shots/F3-busy-b-failure-card.png",
+  "detailClick": "button",
+  "cardDetail": {
+    "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | Error invoking remote method 'chat:resumeSession': LegacyMigrationError: legacy_migration_failed:read/source_busy: Session session-1790657534150-lgl6 could not be moved to the current chat engine (retryable) | retry",
+    "lines": [
+      "这个对话没能迁移到当前引擎",
+      "旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。",
+      "当时有其他程序正在写入它的文件。",
+      "错误码：read/source_busy",
+      "点「重试」或再发一次消息，都会重新尝试迁移。",
+      "详情",
+      "Error invoking remote method 'chat:resumeSession': LegacyMigrationError: legacy_migration_failed:read/source_busy: Session session-1790657534150-lgl6 could not be moved to the current chat engine (retryable)",
+      "retry"
+    ],
+    "buttons": ["详情", "retry"],
+    "details": null
+  },
+  "shotDetail": "shots/F3-busy-b-failure-detail.png",
+  "touches": 4322759,
+  "retry": "no retry",
+  "retryTrace": [
+    {
+      "dt": 1,
+      "notice": [
+        {
+          "role": "alert",
+          "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | Error invoking remote method 'chat:resumeSession': LegacyMigrationError: legacy_migration_failed:read/source_busy: Session session-1790657534150-lgl6 could not be moved to the current chat engine (retryable) | retry",
+          "spinner": false,
+          "buttons": ["详情", "retry"],
+          "top": 88,
+          "bottom": 340,
+          "inView": true
+        }
+      ],
+      "composer": {
+        "value": "F3 可重试：文件一直在被写。",
+        "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+        "disabled": false
+      }
+    }
+  ],
+  "rowAfterRetry": {
+    "id": "session-1790657534150-lgl6",
+    "title": "旧会话己：一直在被写",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "composerAfterRetry": {
+    "value": "F3 可重试：文件一直在被写。",
+    "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+    "disabled": false
+  },
+  "shotAfterRetry": "shots/F3-busy-b-after-retry.png"
+}

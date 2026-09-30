@@ -1,0 +1,63 @@
+{
+  "note": "focusin/focusout log (capture phase) around a sidebar right-click > 重命名 on the Live Agent Host row; second attempt after document.activeElement.blur()",
+  "log": [
+    {
+      "t": 91693,
+      "type": "focusin",
+      "target": "DIV(button)",
+      "related": null
+    },
+    {
+      "t": 91716,
+      "type": "focusout",
+      "target": "DIV(button)",
+      "related": "DIV(menu)"
+    },
+    {
+      "t": 91717,
+      "type": "focusin",
+      "target": "DIV(menu)",
+      "related": "DIV(button)"
+    },
+    {
+      "t": 92429,
+      "type": "focusout",
+      "target": "DIV(menu)",
+      "related": "DIV(menuitem)"
+    },
+    {
+      "t": 92429,
+      "type": "focusin",
+      "target": "DIV(menuitem)",
+      "related": "DIV(menu)"
+    },
+    {
+      "t": 92438,
+      "type": "focusout",
+      "target": "DIV(menuitem)",
+      "related": null
+    },
+    {
+      "t": 92440,
+      "type": "focusin",
+      "target": "INPUT[Live Agent Host]",
+      "related": null
+    },
+    {
+      "t": 92441,
+      "type": "input added"
+    },
+    {
+      "t": 92441,
+      "type": "focusout",
+      "target": "INPUT[Live Agent Host]",
+      "related": "TEXTAREA"
+    },
+    {
+      "t": 92442,
+      "type": "focusin",
+      "target": "TEXTAREA",
+      "related": "INPUT[Live Agent Host]"
+    }
+  ]
+}

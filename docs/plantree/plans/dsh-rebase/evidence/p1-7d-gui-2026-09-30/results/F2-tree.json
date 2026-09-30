@@ -1,0 +1,94 @@
+{
+  "made": {
+    "key": "L2",
+    "title": "旧会话乙：看图",
+    "use": "F2 (会话分支), then F5 image only",
+    "sessionId": "session-1790657138005-lgl2",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_2b565c78-c1dc-46d7-9e6a-e86587cabe6a.jsonl",
+    "bytes": 6779
+  },
+  "click": "clicked",
+  "active": "session-1790657138005-lgl2",
+  "row": {
+    "id": "session-1790657138005-lgl2",
+    "title": "旧会话乙：看图",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "preview": {
+    "notice": [],
+    "composer": {
+      "value": "",
+      "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+      "disabled": false
+    }
+  },
+  "trace": [
+    {
+      "dt": 76,
+      "notice": [
+        {
+          "role": "status",
+          "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+          "spinner": true,
+          "buttons": [],
+          "top": -71,
+          "bottom": -2,
+          "inView": false
+        }
+      ],
+      "composer": {
+        "value": "",
+        "placeholder": "正在把这个对话迁移到当前引擎…",
+        "disabled": false
+      },
+      "dialogs": [
+        "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n加载会话树\n刷新\n关闭"
+      ]
+    }
+  ],
+  "shotMigrating": "shots/F2-tree-migrating.png",
+  "dialog": [
+    {
+      "role": "dialog",
+      "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 8 个节点，显示 8 个\n刷新\nWhat do the notes say?\nuser\nReading the notes.\nassistant\nThe notes say alpha and beta.\nassistant\nWhat is in this picture?\nuser\nA single red pixel.\nassistant\nWrite a short summary file.\nuser\nassistant message\nassistant\nWrote out/summary.md.\nassistant\n当前\n关闭",
+      "buttons": [
+        "刷新",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "回退到这里",
+        "从这里分叉",
+        "关闭",
+        "Close"
+      ]
+    }
+  ],
+  "shotDialog": "shots/F2-tree-dialog-after-migration.png",
+  "toasts": [],
+  "rowAfter": {
+    "id": "session-1790657138005-lgl2",
+    "title": "旧会话乙：看图",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "errors": {
+    "lastError": null,
+    "historyError": null
+  }
+}

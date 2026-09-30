@@ -1,0 +1,65 @@
+{
+  "sid": "session-live-1790744296791-i6wodu8",
+  "rename": {
+    "title": "Live Agent Host",
+    "box": {
+      "x": 124,
+      "y": 507,
+      "rows": 2
+    },
+    "via": "right click",
+    "menu": ["重命名", "归档"],
+    "clicked": true,
+    "focusTrace": [
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      },
+      {
+        "active": "TEXTAREA:composer",
+        "fields": []
+      }
+    ],
+    "input": "no focused rename field; nothing typed"
+  },
+  "rowAfter": {
+    "id": "session-live-1790744296791-i6wodu8",
+    "title": "Live Agent Host",
+    "status": "idle",
+    "agent": null,
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  }
+}

@@ -1,0 +1,101 @@
+{
+  "sid": "session-live-1790742746160-pxakfl9",
+  "gear": "执行 · 全自动",
+  "shotCard": "shots/I1-reason-line-card.png",
+  "cardDom": [
+    {
+      "text": "Bash — 在工作区运行命令",
+      "color": "oklch(0.1696 0.0017 17.32)",
+      "y": 519
+    },
+    {
+      "text": "echo $S18X > s18-var.txt",
+      "color": "oklch(0.1696 0.0017 17.32)",
+      "y": 568
+    },
+    {
+      "text": "工作目录：/tmp/aiclient-p17d3/workspace",
+      "color": "oklch(0.4531 0.005 91.5)",
+      "y": 591
+    },
+    {
+      "text": "这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认",
+      "color": "oklch(0.4531 0.005 91.5)",
+      "y": 624
+    },
+    {
+      "text": "项目：/tmp/aiclient-p17d3/workspace",
+      "color": "oklch(0.4531 0.005 91.5)",
+      "y": 657
+    },
+    {
+      "text": "若 119 秒内未响应将自动拒绝",
+      "color": "oklch(0.4531 0.005 91.5)",
+      "y": 657
+    },
+    {
+      "text": "「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+      "color": "oklch(0.4531 0.005 91.5)",
+      "y": 730
+    }
+  ],
+  "turn": {
+    "settled": true,
+    "log": [
+      {
+        "dt": 9195,
+        "n": 1,
+        "cards": [
+          {
+            "text": "权限 | 高风险 | Bash — 在工作区运行命令 | echo $S18X > s18-var.txt | 工作目录：/tmp/aiclient-p17d3/workspace | 这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认 | 项目：/tmp/aiclient-p17d3/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+            "lines": [
+              "权限",
+              "高风险",
+              "Bash — 在工作区运行命令",
+              "echo $S18X > s18-var.txt",
+              "工作目录：/tmp/aiclient-p17d3/workspace",
+              "这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认",
+              "项目：/tmp/aiclient-p17d3/workspace",
+              "若 120 秒内未响应将自动拒绝",
+              "直接允许",
+              "本会话内允许",
+              "直接拒绝",
+              "「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理"
+            ],
+            "buttons": ["直接允许", "本会话内允许", "直接拒绝"],
+            "rect": {
+              "x": 502,
+              "y": 476,
+              "w": 720,
+              "h": 288
+            }
+          }
+        ],
+        "action": "allow"
+      }
+    ]
+  },
+  "final": {
+    "sid": "session-live-1790742746160-pxakfl9",
+    "status": "idle",
+    "messages": 4,
+    "lastError": null
+  },
+  "reasonLineStill": false,
+  "transcript": "P1-S18 {\"case\":\"auto\",\"shell\":\"bash\"}\n已工作 5 秒\n终端\necho $S18X > s18-var.txt\n· 已允许\n终端\necho s18 > s18-plain.txt\n最终输出\nP1-S18 auto finished.\n✻ 完成于 00:37 · 2 次工具调用",
+  "calls": [
+    {
+      "id": "toolu_3bd84407-97ff-41c7-b6ed-c0577ca19e95",
+      "name": "bash",
+      "cmd": "echo $S18X > s18-var.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_b2af6abf-3fba-46fc-8cb3-e34cd1c357e0",
+      "name": "bash",
+      "cmd": "echo s18 > s18-plain.txt",
+      "settled": true
+    }
+  ],
+  "shotAfter": "shots/I1-after-settle.png"
+}

@@ -1,0 +1,164 @@
+{
+  "sid": "session-1790743121931-nig3pux",
+  "gear": "执行 · 每次询问",
+  "waiting": {
+    "sid": "session-1790743121931-nig3pux",
+    "status": "waiting_permission",
+    "messages": 2,
+    "lastError": null
+  },
+  "cardsBefore": [
+    {
+      "text": "权限 | 高风险 | Bash — 在工作区运行命令 | echo P1-PERM-HOLD | 工作目录：/tmp/aiclient-p17d3/workspace | 项目：/tmp/aiclient-p17d3/workspace | 若 119 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+      "lines": [
+        "权限",
+        "高风险",
+        "Bash — 在工作区运行命令",
+        "echo P1-PERM-HOLD",
+        "工作目录：/tmp/aiclient-p17d3/workspace",
+        "项目：/tmp/aiclient-p17d3/workspace",
+        "若 119 秒内未响应将自动拒绝",
+        "直接允许",
+        "本会话内允许",
+        "直接拒绝",
+        "「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理"
+      ],
+      "buttons": ["直接允许", "本会话内允许", "直接拒绝"],
+      "rect": {
+        "x": 502,
+        "y": 509,
+        "w": 720,
+        "h": 255
+      }
+    }
+  ],
+  "shotHeld": "shots/I3-card-held.png",
+  "stop": true,
+  "samples": [
+    {
+      "dt": 282,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 536,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 791,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 1045,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 1301,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 1556,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 1812,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 2066,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 2320,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 2574,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 2829,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 3083,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 3338,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 3592,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 3851,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 4105,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 4359,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 4615,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 4870,
+      "status": "idle",
+      "cards": 0
+    },
+    {
+      "dt": 5124,
+      "status": "idle",
+      "cards": 0
+    }
+  ],
+  "settled": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790743121931-nig3pux",
+    "status": "idle",
+    "messages": 2,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790743131518,
+        "status": "idle"
+      }
+    ]
+  },
+  "transcript": "P1-PERM-HOLD: hold at the gate.\n已工作 3 秒\n运行\necho P1-PERM-HOLD\n· 已拒绝\n· 自动：已中止\n· 未执行\n✻ 完成于 00:38 · 1 次工具调用",
+  "calls": [
+    {
+      "id": "toolu_c6c25d60-2d7a-4ba7-9aed-9fcffa89fcb3",
+      "name": "bash",
+      "cmd": "echo P1-PERM-HOLD",
+      "settled": true
+    }
+  ],
+  "shotAfter": "shots/I3-after-stop.png",
+  "sentAt": 1790743123561
+}

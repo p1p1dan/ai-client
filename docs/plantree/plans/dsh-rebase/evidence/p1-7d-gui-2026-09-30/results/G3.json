@@ -1,0 +1,236 @@
+{
+  "sid": "session-1790743338490-j89wiuj",
+  "gear": "执行 · 每次询问",
+  "cards": [
+    {
+      "dt": 1883,
+      "cards": [
+        {
+          "text": "权限 | 需确认 | word_create | 参数 | { |   \"path\": \"p0-report.docx\", |   \"title\": \"P0-2 report\", |   \"paragraphs\": [ |     \"Written by dsh-office-tools through the fake gateway.\" |   ], |   \"bullets\": [ |     \"goal\", |     \"todo\", |     \"jobs\" |   ] | } | 项目：/tmp/aiclient-p17d3/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住 word_create 可访问 p0-report.docx · 对本次会话内的所有代理生效，含子代理",
+          "lines": [
+            "权限",
+            "需确认",
+            "word_create",
+            "参数",
+            "{",
+            "\"path\": \"p0-report.docx\",",
+            "\"title\": \"P0-2 report\",",
+            "\"paragraphs\": [",
+            "\"Written by dsh-office-tools through the fake gateway.\"",
+            "],",
+            "\"bullets\": [",
+            "\"goal\",",
+            "\"todo\",",
+            "\"jobs\"",
+            "]",
+            "}",
+            "项目：/tmp/aiclient-p17d3/workspace",
+            "若 120 秒内未响应将自动拒绝",
+            "直接允许",
+            "本会话内允许",
+            "直接拒绝",
+            "「本会话内允许」会记住 word_create 可访问 p0-report.docx · 对本次会话内的所有代理生效，含子代理"
+          ],
+          "buttons": ["直接允许", "本会话内允许", "直接拒绝"],
+          "rect": {
+            "x": 502,
+            "y": 337,
+            "w": 720,
+            "h": 427
+          }
+        }
+      ]
+    }
+  ],
+  "headsAtCard": ["✻ 工作中 · 编辑中"],
+  "rowsAtCard": [
+    {
+      "text": "P0-OFFICE: create a report, then read it back. ✻ 工作中 · 编辑中 Create p0-report.docx",
+      "svg": "lucide lucide-loader-circle",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "✻ 工作中 · 编辑中 Create p0-report.docx",
+      "svg": "lucide lucide-loader-circle",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    }
+  ],
+  "shotCard": "shots/G3-word-create-card.png",
+  "heads": [["✻ 工作中 · 编辑中"]],
+  "final": {
+    "sid": "session-1790743338490-j89wiuj",
+    "status": "idle",
+    "messages": 4,
+    "lastError": null
+  },
+  "rowsCreate": [
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用 执行 · 每次询问 0% Automatic workspace 本机",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "Create p0-report.docx · 已允许 Read p0-report.docx",
+      "svg": "lucide lucide-pencil-line",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "Create p0-report.docx · 已允许",
+      "svg": "lucide lucide-pencil-line",
+      "title": {
+        "text": "Create p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    }
+  ],
+  "rowsRead": [
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用 执行 · 每次询问 0% Automatic workspace 本机",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "P0-OFFICE: create a report, then read it back. 已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx 最终输出 Office document created and read back. ✻ 完成于 00:42 · 2 次工具调用",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "已工作 2 秒 Create p0-report.docx · 已允许 Read p0-report.docx",
+      "svg": "lucide lucide-chevron-right",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    },
+    {
+      "text": "Create p0-report.docx · 已允许 Read p0-report.docx",
+      "svg": "lucide lucide-pencil-line",
+      "title": {
+        "text": "Read p0-report.docx",
+        "cls": "min-w-0 truncate group-hover/row:text-foreground",
+        "whiteSpace": "nowrap",
+        "overflow": "hidden",
+        "textOverflow": "ellipsis",
+        "fontFamily": "-apple-system, BlinkMacSystemFont, \"Sego"
+      }
+    }
+  ],
+  "transcript": "P0-OFFICE: create a report, then read it back.\n已工作 2 秒\nCreate p0-report.docx\n· 已允许\nRead p0-report.docx\n最终输出\nOffice document created and read back.\n✻ 完成于 00:42 · 2 次工具调用",
+  "permissionRequests": [
+    {
+      "name": "word_create",
+      "presentation": {
+        "card": "generic",
+        "title": "Create p0-report.docx",
+        "kind": "edit"
+      }
+    },
+    {
+      "name": "word_read",
+      "presentation": {
+        "card": "generic",
+        "title": "Read p0-report.docx",
+        "kind": "read"
+      }
+    }
+  ],
+  "shotRows": "shots/G3-office-rows.png"
+}

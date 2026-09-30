@@ -1,0 +1,9 @@
+{
+  "dialogs": [],
+  "composer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false
+  },
+  "shot": "shots/F3-missing-state-after-send.png"
+}

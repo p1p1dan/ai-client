@@ -33,6 +33,13 @@
  *     frame, so a loop of 4×4-pixel captures keeps ~25 frames/s going. `shot`
  *     now pumps 0.8 s of frames before it captures.
  *
+ * Batch 3 (sections F, G, H, I; driven by p1-7d-items-fghi.mjs) changed two
+ * things, batch 1 and 2 usage unchanged:
+ *   - the privacy check lets the scratch HOME through (`<SCRATCH>/home/…` is a
+ *     /tmp path the settings pages print, not a user's home); `/home/`
+ *     anywhere else, the real home, host name and user@ still refuse the shot;
+ *   - `launch` honours P17D_NO_OPEN_PATH=1 (start with no workspace, H2).
+ *
  *   node p1-7d-gui.mjs setup            scratch dirs, fake env, model catalog, gateway (--reset)
  *   node p1-7d-gui.mjs gateway-start    start the gateway alone (no --reset)
  *   node p1-7d-gui.mjs gateway-stop     stop the gateway by exact pid
@@ -137,8 +144,11 @@ const INSTALL_TERM_RECORDER = `(() => {
   return 'installed';
 })()`;
 
-function privacyHits(text) {
+function privacyHits(raw) {
   const hits = [];
+  // Batch 3: the settings pages print the scratch HOME (`<SCRATCH>/home/.pilab/…`),
+  // which is a /tmp path, not a user's home; only that exact prefix is let through.
+  const text = String(raw).split(`${SCRATCH}/home`).join('<scratch-home>');
   if (text.includes('/home/')) hits.push('/home/');
   if (text.includes(hostName)) hits.push('hostname');
   if (text.includes(`${userName}@`)) hits.push('user@');
@@ -465,13 +475,11 @@ function launch() {
     no_proxy: 'localhost,127.0.0.1,::1',
     NO_PROXY: 'localhost,127.0.0.1,::1',
   });
+  // Batch 3: P17D_NO_OPEN_PATH=1 starts with no workspace (H2's clean first start).
+  const openPath = process.env.P17D_NO_OPEN_PATH === '1' ? [] : [`--open-path=${dirs.workspace}`];
   const child = spawn(
     'node',
-    [
-      path.join(repoRoot, 'scripts/dev.js'),
-      `--open-path=${dirs.workspace}`,
-      `--remote-debugging-port=${PORT}`,
-    ],
+    [path.join(repoRoot, 'scripts/dev.js'), ...openPath, `--remote-debugging-port=${PORT}`],
     { cwd: repoRoot, env, detached: true, stdio: ['ignore', logFd, logFd] }
   );
   child.unref();
@@ -591,8 +599,10 @@ async function shot(cdp, name, { force = false } = {}) {
             : h === 'home dir'
               ? userHome
               : h;
-      const at = text.indexOf(needle);
-      return scrubText(text.slice(Math.max(0, at - 60), at + 80));
+      // Batch 3: point at the hit the check saw, not at the scratch HOME.
+      const shown = text.split(`${SCRATCH}/home`).join('<scratch-home>');
+      const at = shown.indexOf(needle);
+      return scrubText(shown.slice(Math.max(0, at - 60), at + 80));
     });
     throw new Error(
       `privacy check failed (${hits.join(', ')}); not saved: ${JSON.stringify(where)}`

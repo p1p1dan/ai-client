@@ -1,0 +1,28 @@
+{
+  "made": [
+    {
+      "key": "L6",
+      "title": "旧会话己：一直在被写",
+      "use": "F3 source_busy, with piLeaf",
+      "sessionId": "session-1790657534150-lgl6",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T13-10-00-000Z_7b911e9e-5f66-426f-9fae-b3edb9af13ee.jsonl",
+      "bytes": 6779,
+      "piLeaf": {
+        "activeEntryId": "7bbf73d8-07cc-4429-99c9-081bcb36cd12",
+        "fileTailEntryId": "33e77d0b-edd6-4064-aa51-e2028cb19afc"
+      }
+    },
+    {
+      "key": "L7",
+      "title": "旧会话庚：文件被删",
+      "use": "F3 source_missing, with piLeaf",
+      "sessionId": "session-1790657474150-lgl7",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T13-10-00-000Z_099c2bf5-f072-44d6-a526-12215f0d6114.jsonl",
+      "bytes": 6779,
+      "piLeaf": {
+        "activeEntryId": "7bbf73d8-07cc-4429-99c9-081bcb36cd12",
+        "fileTailEntryId": "33e77d0b-edd6-4064-aa51-e2028cb19afc"
+      }
+    }
+  ]
+}

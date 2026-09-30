@@ -1,0 +1,96 @@
+{
+  "made": {
+    "key": "L3",
+    "title": "旧会话丙：写摘要",
+    "use": "F2 (/compact), then F5 manual rename",
+    "sessionId": "session-1790657078005-lgl3",
+    "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_1dd6fae3-826a-4c5d-97f2-92a465f666f6.jsonl",
+    "bytes": 6779
+  },
+  "click": {
+    "ok": true,
+    "matches": 1
+  },
+  "active": "session-1790657078005-lgl3",
+  "row": {
+    "id": "session-1790657078005-lgl3",
+    "title": "旧会话丙：写摘要",
+    "status": "idle",
+    "agent": "pi",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "preview": {
+    "notice": [],
+    "composer": {
+      "value": "",
+      "placeholder": "发送即可继续，这个对话会先迁移到当前引擎",
+      "disabled": false
+    }
+  },
+  "trace": [
+    {
+      "dt": 546,
+      "status": "idle",
+      "notice": [
+        {
+          "role": "status",
+          "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+          "spinner": true,
+          "buttons": [],
+          "top": -71,
+          "bottom": -2,
+          "inView": false
+        }
+      ],
+      "composer": {
+        "value": "/compact ",
+        "placeholder": "正在把这个对话迁移到当前引擎…",
+        "disabled": false
+      }
+    },
+    {
+      "dt": 918,
+      "status": "idle",
+      "notice": [],
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false
+      }
+    }
+  ],
+  "shotMigrating": "shots/F2-compact-migrating.png",
+  "toasts": [],
+  "rowAfter": {
+    "id": "session-1790657078005-lgl3",
+    "title": "旧会话丙：写摘要",
+    "status": "idle",
+    "agent": "dsh",
+    "forkTitlePending": null,
+    "legacyDiverged": null
+  },
+  "transcript": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用",
+  "errors": {
+    "lastError": null,
+    "historyError": null
+  },
+  "gateway": [
+    {
+      "status": 200,
+      "label": null,
+      "scenario": null
+    },
+    {
+      "status": 200,
+      "label": null,
+      "scenario": null
+    },
+    {
+      "status": 200,
+      "label": null,
+      "scenario": null
+    }
+  ],
+  "shotAfter": "shots/F2-compact-after.png"
+}

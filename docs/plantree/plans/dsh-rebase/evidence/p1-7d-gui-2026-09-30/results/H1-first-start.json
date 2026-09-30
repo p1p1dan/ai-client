@@ -1,0 +1,33 @@
+{
+  "scratch": "/tmp/aiclient-p17d3h1 (clean HOME plus the 1.0.x leftovers h-seed wrote, see H-seed-aiclient-p17d3h1.json)",
+  "sequence": [
+    "first start with --open-path=<scratch workspace>; 「使用本机已有配置」 opened Settings > Pi (no AI service yet)",
+    "the legacy notice was detected first, then yielded to the announcement dialog (modal queue: announcements outrank it)",
+    "after 「知道了」 on the announcement the legacy notice came back on top of Settings",
+    "closed with 「知道了」: the dialog is gone and settings.json has dshLegacyAssetNoticeSeen = true"
+  ],
+  "noticeHeadings": [
+    "以下内容在新版中不再生效",
+    "自定义子代理",
+    "用户层指令文件",
+    "不会加载的技能",
+    "子代理委派"
+  ],
+  "noticeButtons": ["打开 agent 目录", "知道了"],
+  "noticeRect": { "x": 412, "y": 45, "w": 576, "h": 753 },
+  "missingFromNotice": [
+    "提示词模板 (.pi/prompts/review.md, ship.md)",
+    "MCP 服务器 (.pi/mcp.json: demo-files, demo-web)",
+    "legacy-skill (.pi/skills/legacy-skill, unscanned-root)"
+  ],
+  "detectorWithWorkspace": {
+    "workspace": "/tmp/aiclient-p17d3h1/workspace",
+    "templates": ["review", "ship"],
+    "mcp": [["demo-files", "demo-web"]],
+    "skills": ["Bad_Skill:invalid-name", "legacy-skill:unscanned-root"]
+  },
+  "detectorWithoutWorkspace": { "workspace": null, "templates": 0, "skills": 1 },
+  "why": "LegacyAssetNoticePrompt asks once with repoPath undefined (the workspace is not restored yet); the user-level items alone are enough to show it, so settled=true and it never asks again with the workspace (src/renderer/components/settings/LegacyAssetNotice.tsx:217-240)",
+  "seenAfterGotIt": true,
+  "shot": "shots/H1-notice-first-start.png"
+}

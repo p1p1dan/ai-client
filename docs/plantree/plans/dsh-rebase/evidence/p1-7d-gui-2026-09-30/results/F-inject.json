@@ -1,0 +1,46 @@
+{
+  "corpus": "src/shared/__tests__/fixtures/legacy-pi/v4-basic.jsonl",
+  "made": [
+    {
+      "key": "L1",
+      "title": "旧会话甲：整理笔记",
+      "use": "F1 (send), then F4 / F5 text",
+      "sessionId": "session-1790657198005-lgl1",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_0e8c694b-4125-4cba-8a6d-6b4ccacc10b3.jsonl",
+      "bytes": 6779
+    },
+    {
+      "key": "L2",
+      "title": "旧会话乙：看图",
+      "use": "F2 (会话分支), then F5 image only",
+      "sessionId": "session-1790657138005-lgl2",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_2b565c78-c1dc-46d7-9e6a-e86587cabe6a.jsonl",
+      "bytes": 6779
+    },
+    {
+      "key": "L3",
+      "title": "旧会话丙：写摘要",
+      "use": "F2 (/compact), then F5 manual rename",
+      "sessionId": "session-1790657078005-lgl3",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_1dd6fae3-826a-4c5d-97f2-92a465f666f6.jsonl",
+      "bytes": 6779
+    },
+    {
+      "key": "L4",
+      "title": "旧会话丁：文件被占用",
+      "use": "F3 source_busy (retryable)",
+      "sessionId": "session-1790657018005-lgl4",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_6f74289b-a52b-4305-9e2f-b3adb541408e.jsonl",
+      "bytes": 6779
+    },
+    {
+      "key": "L5",
+      "title": "旧会话戊：文件已删除",
+      "use": "F3 source_missing (not retryable)",
+      "sessionId": "session-1790656958005-lgl5",
+      "file": "/tmp/aiclient-p17d3/home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17d3-workspace--/2026-09-27T12-58-24-571Z_ce8b4b86-baf2-4ed0-b4c8-90259d52e487.jsonl",
+      "bytes": 6779
+    }
+  ],
+  "indexRowsBefore": 4
+}

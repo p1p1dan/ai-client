@@ -1,0 +1,32 @@
+{
+  "tag": "H2-clean-first-start",
+  "close": "none",
+  "seenBefore": {
+    "error": "ENOENT: no such file or directory, open '/tmp/aiclient-p17d3h2/home/.pilab/jyw-ai-client-dev/settings.json'"
+  },
+  "language": "zh",
+  "entered": "使用本机已有配置",
+  "otherDialogs": [],
+  "noticeAfterMs": null,
+  "notice": null,
+  "seenAfter": {
+    "dshLegacyAssetNoticeSeen": null,
+    "enablePiSubagents": null
+  },
+  "inspect": {
+    "report": {
+      "agentDir": "/tmp/aiclient-p17d3h2/home/.pilab/jyw-ai-client-dev/pi-agent",
+      "instructionTarget": "/tmp/aiclient-p17d3h2/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md",
+      "skillsTarget": "/tmp/aiclient-p17d3h2/home/.pilab/jyw-ai-client-dev/pi-agent/skills",
+      "workspace": "/tmp/aiclient-p17d3h2/workspace",
+      "subagents": [],
+      "promptTemplates": [],
+      "instructionFile": null,
+      "mcpConfigs": [],
+      "skills": [],
+      "delegationSwitchOff": false
+    },
+    "seen": false
+  },
+  "shotNoNotice": "shots/H2-clean-first-start-no-notice.png"
+}

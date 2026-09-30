@@ -1,0 +1,68 @@
+{
+  "tag": "H1-second-start",
+  "close": "none",
+  "seenBefore": {
+    "dshLegacyAssetNoticeSeen": true,
+    "enablePiSubagents": false
+  },
+  "language": "zh",
+  "entered": "使用本机已有配置",
+  "otherDialogs": [
+    {
+      "dt": 6650,
+      "title": "公告",
+      "closedWith": "知道了"
+    }
+  ],
+  "noticeAfterMs": null,
+  "notice": null,
+  "seenAfter": {
+    "dshLegacyAssetNoticeSeen": true,
+    "enablePiSubagents": false
+  },
+  "inspect": {
+    "report": {
+      "agentDir": "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent",
+      "instructionTarget": "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md",
+      "skillsTarget": "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills",
+      "workspace": "/tmp/aiclient-p17d3h1/workspace",
+      "subagents": [],
+      "promptTemplates": [
+        {
+          "name": "review",
+          "path": "/tmp/aiclient-p17d3h1/workspace/.pi/prompts/review.md",
+          "scope": "project"
+        },
+        {
+          "name": "ship",
+          "path": "/tmp/aiclient-p17d3h1/workspace/.pi/prompts/ship.md",
+          "scope": "project"
+        }
+      ],
+      "instructionFile": "/tmp/aiclient-p17d3h1/home/.pilab/AGENTS.md",
+      "mcpConfigs": [
+        {
+          "path": "/tmp/aiclient-p17d3h1/workspace/.pi/mcp.json",
+          "scope": "project",
+          "servers": ["demo-files", "demo-web"],
+          "unreadable": false
+        }
+      ],
+      "skills": [
+        {
+          "name": "Bad_Skill",
+          "path": "/tmp/aiclient-p17d3h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md",
+          "issues": ["invalid-name"]
+        },
+        {
+          "name": "legacy-skill",
+          "path": "/tmp/aiclient-p17d3h1/workspace/.pi/skills/legacy-skill/SKILL.md",
+          "issues": ["unscanned-root"]
+        }
+      ],
+      "delegationSwitchOff": true
+    },
+    "seen": true
+  },
+  "shotNoNotice": "shots/H1-second-start-no-notice.png"
+}

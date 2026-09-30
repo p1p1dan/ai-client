@@ -1,0 +1,41 @@
+{
+  "nav": [
+    "通用",
+    "外观",
+    "终端",
+    "编辑器",
+    "Git",
+    "Pi",
+    "扩展 *",
+    "数据迁移",
+    "快捷键",
+    "网络",
+    "高级"
+  ],
+  "headings": [
+    "开始对话",
+    "设置",
+    "扩展",
+    "技能",
+    "本应用的技能",
+    "共享技能",
+    "技能怎样才会被加载",
+    "插件",
+    "旧版遗留内容"
+  ],
+  "pageText": "设置\n通用\n外观\n终端\n编辑器\nGit\nPi\n扩展\n数据迁移\n快捷键\n网络\n高级\n扩展\n技能\n对话从下面两个目录加载技能，另外还会加载项目仓库根目录下的 .dsh/skills 和 .agents/skills。\n本应用的技能\n\n你为本应用的对话准备的技能。\n\n/tmp/aiclient-p17d3h2/home/.pilab/jyw-ai-client-dev/pi-agent/skills\n打开文件夹\n共享技能\n\n其他遵循 Agent Skills 约定的 Agent 也会读取这里。\n\n/tmp/aiclient-p17d3h2/home/.agents/skills\n打开文件夹\n技能怎样才会被加载\n每个技能是技能目录第一层里的一项：<name>/SKILL.md，或单个 <name>.md。更深层的文件不会被扫描。\nfrontmatter 必须写 name 和 description；name 只能用小写字母、数字和短横线，例如 code-review。\n在消息任意位置输入 /<name> 即可使用技能；加上 disable-model-invocation: true，模型就不会自行调用它。\n插件\n经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。\ndsh-office-tools\n1.0.4\n\n在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。\n\n第三方插件，已经过本应用审查\n2026-09-28 审查：有条件通过\n写入文件\nexcel_create, excel_update, ppt_create, word_create, word_update\n读取文件\nexcel_read, ppt_read, word_read\n\n应用打开后对话引擎还没有启动过，所以暂时看不到它加载了什么。\n\n旧版遗留内容\n旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。\n\n没有发现旧版遗留的内容。\n\n打开一个工作区后，还会检查它的项目文件。",
+  "forbidden": [],
+  "shotTop": "shots/H3-no-workspace-extensions-top.png",
+  "legacy": {
+    "text": "旧版遗留内容\n旧版用过、新版不再加载的内容。这里只做列出，不修改或删除任何文件。\n\n没有发现旧版遗留的内容。\n\n打开一个工作区后，还会检查它的项目文件。",
+    "rect": {
+      "x": 373,
+      "y": 612,
+      "w": 806,
+      "h": 137
+    },
+    "badges": [],
+    "switches": []
+  },
+  "shotLegacy": "shots/H3-no-workspace-extensions-legacy.png"
+}
