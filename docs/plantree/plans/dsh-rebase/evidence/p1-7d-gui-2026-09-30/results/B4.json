@@ -1,0 +1,116 @@
+{
+  "sid": "session-1790732744052-w0rrop0",
+  "gear": "执行 · 全自动",
+  "untilRunning": [
+    {
+      "dt": 459,
+      "status": "idle",
+      "goal": null,
+      "todo": null
+    },
+    {
+      "dt": 714,
+      "status": "running",
+      "goal": "running | 目标 · 第 1/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "todo": null
+    },
+    {
+      "dt": 31250,
+      "status": "running",
+      "goal": "running | 目标 · 第 2/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "todo": null
+    }
+  ],
+  "beforeReload": {
+    "goal": {
+      "state": "running",
+      "text": "目标 · 第 3/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "buttons": [
+        "目标 · 第 3/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round.",
+        "暂停",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": [
+        "P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round."
+      ],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "shotBefore": "shots/B4-goal-before-reload.png",
+  "reload": {
+    "via": "Page.reload (Ctrl+R did not reload)",
+    "dismissed": "知道了"
+  },
+  "activeAfterReload": "session-live-1790732838858-ih6jkjd",
+  "rehydrate": [
+    {
+      "dt": 228,
+      "goal": null,
+      "todo": null
+    }
+  ],
+  "afterReload": {
+    "goal": null,
+    "todo": null,
+    "composerTop": {
+      "top": 775,
+      "h": 56
+    }
+  },
+  "callsAfterReload": [
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": false
+    }
+  ],
+  "shotAfterReload": "shots/B4-goal-after-reload.png",
+  "hostsBefore": [482587],
+  "killed": 482587,
+  "afterKill": [
+    {
+      "dt": 22,
+      "status": "running",
+      "hosts": [],
+      "goal": null,
+      "buttons": null
+    },
+    {
+      "dt": 384,
+      "status": "disconnected",
+      "hosts": [483091],
+      "goal": null,
+      "buttons": null
+    },
+    {
+      "dt": 5495,
+      "status": "idle",
+      "hosts": [483091],
+      "goal": null,
+      "buttons": null
+    }
+  ],
+  "afterKillShots": {},
+  "finalPanels": {
+    "goal": null,
+    "todo": null,
+    "composerTop": {
+      "top": 775,
+      "h": 56
+    }
+  },
+  "transcriptTail": "最近\n\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\nnow\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\nnow\nLive Agent Host\n1m\n显示更多 (\n9\n)\n\n仓库列表\n\nworkspace\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\nnow\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\nnow\nLive Agent Host\n1m\nP1-QUESTION: ask me before you start\n13m\nP1-IMAGE: what do you see\n13m\nP1-IMAGE: what do you see\n13m\nP1-FILEREAD: read the attached notes\n13m\nP1-STEER: two tool steps\n36m\nP1-FAIL: this request fails upstream\n38m\nP1-FAILONCE: this request fails once\n39m\nP0-STREAM: 连通性检查\n42m\nSession srd2ne\n57m",
+  "shotFinal": "shots/B4-after-kill-final.png"
+}

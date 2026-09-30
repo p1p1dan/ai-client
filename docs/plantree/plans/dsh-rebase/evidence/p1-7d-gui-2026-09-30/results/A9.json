@@ -1,0 +1,379 @@
+{
+  "sid": "session-1790729892843-pu0o5mc",
+  "chipBefore": {
+    "text": "0%",
+    "visible": true,
+    "open": false
+  },
+  "usageTurn": {
+    "settled": true,
+    "sid": "session-1790729892843-pu0o5mc",
+    "status": "idle",
+    "messages": 5,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790729921578,
+        "status": "idle"
+      },
+      {
+        "t": 1790729922083,
+        "status": "waiting_permission"
+      },
+      {
+        "t": 1790730041974,
+        "status": "idle"
+      }
+    ]
+  },
+  "chipAfterUsage": {
+    "text": "0%",
+    "visible": true,
+    "open": false
+  },
+  "shotChip": "shots/A9-usage-chip.png",
+  "detailsAfterUsage": "上下文窗口\n剩余 199.5k tokens\n100%\n剩余\n上下文占用\n496 / 200.0k · 0%\n\n最近一次模型请求（已结算）\n\n输入\n30\n输出\n9\n缓存读取\n400\n缓存写入\n50\n缓存命中率\n93%\n合计 tokens\n489\n会话累计（本次加载以来）\n675 tokens · 3 次模型请求\n\n本轮工具调用\n\nbash × 1\n\n暂无分工具 token、推理 token 和生成速度的同口径计量。",
+  "shotPopover": "shots/A9-usage-popover.png",
+  "shotRunning": "shots/A9-usage-chip-running.png",
+  "runningSamples": [
+    {
+      "t": 1790730045617,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "正在发送到 Agent Host…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730045920,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730046254,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730046507,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730046760,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730047154,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730047408,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730047662,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730047921,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730048174,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      }
+    },
+    {
+      "t": 1790730048426,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    },
+    {
+      "t": 1790730048679,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    },
+    {
+      "t": 1790730048931,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    },
+    {
+      "t": 1790730049184,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    },
+    {
+      "t": 1790730049436,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    },
+    {
+      "t": 1790730049689,
+      "chip": {
+        "text": "0%",
+        "visible": true,
+        "open": false
+      },
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      }
+    }
+  ],
+  "secondTurn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790729892843-pu0o5mc",
+    "status": "idle",
+    "messages": 7,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790730049944,
+        "status": "idle"
+      }
+    ]
+  },
+  "chipAfterSecond": {
+    "text": "0%",
+    "visible": true,
+    "open": false
+  },
+  "stopClicked": true,
+  "stopTurn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790729892843-pu0o5mc",
+    "status": "idle",
+    "messages": 9,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790730075967,
+        "status": "idle"
+      }
+    ]
+  },
+  "chipAfterStop": {
+    "text": "0%",
+    "visible": true,
+    "open": false
+  },
+  "detailsAfterStop": "上下文窗口\n剩余 199.9k tokens\n100%\n剩余\n上下文占用\n83 / 200.0k · 0%\n\n最近一次模型请求（已结算）\n\n本次消耗未知\n\n会话累计（本次加载以来）\n819 tokens · 4 次模型请求\n\n本轮工具调用\n\n本轮没有调用工具\n\n暂无分工具 token、推理 token 和生成速度的同口径计量。",
+  "shotStopped": "shots/A9-usage-stopped-unknown.png",
+  "problems": [
+    {
+      "kind": "console.error",
+      "text": "20:58:41.571 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "20:58:41.571 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "20:58:41.716 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "20:58:41.716 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:41.687 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:41.688 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:41.803 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:41.803 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:45.764 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:45.764 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:45.911 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:45.911 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:48.354 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:00:48.354 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:01:15.272 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:01:15.272 › [workspace-tree] worktrees-absent Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:01:15.710 › [workspace-tree] worktree query failed Object"
+    },
+    {
+      "kind": "console.error",
+      "text": "21:01:15.710 › [workspace-tree] worktrees-absent Object"
+    }
+  ]
+}

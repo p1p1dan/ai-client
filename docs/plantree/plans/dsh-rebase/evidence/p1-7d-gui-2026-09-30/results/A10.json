@@ -1,0 +1,92 @@
+{
+  "sid": "session-1790733619146-2uv9916",
+  "turn0": {
+    "settled": true,
+    "sid": "session-1790733619146-2uv9916",
+    "status": "idle",
+    "messages": 2,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790733621751,
+        "status": "idle"
+      },
+      {
+        "t": 1790733622260,
+        "status": "running"
+      },
+      {
+        "t": 1790733624365,
+        "status": "idle"
+      }
+    ]
+  },
+  "menu": {
+    "via": "container",
+    "items": []
+  },
+  "shotMenu": "shots/A10-slash-menu.png",
+  "menuScrolled": null,
+  "menuWithArgs": {
+    "via": "container",
+    "items": []
+  },
+  "compactArgs": {
+    "composer": {
+      "value": "/compact keep the API decisions",
+      "placeholder": "继续输入…",
+      "disabled": false,
+      "round": ["发送消息"]
+    },
+    "toasts": [
+      {
+        "t": 1790733629790,
+        "title": "/compact 不接受附加说明",
+        "description": "删掉 /compact 后面的文字，再按一次 Enter。"
+      }
+    ],
+    "alerts": []
+  },
+  "shotCompactArgs": "shots/A10-compact-with-args.png",
+  "menuCompact": {
+    "via": "container",
+    "items": []
+  },
+  "secondEnter": true,
+  "compactAlone": {
+    "composer": {
+      "value": "",
+      "placeholder": "继续输入…",
+      "disabled": false,
+      "round": ["发送消息"]
+    },
+    "toasts": [],
+    "roles": [
+      "user:text(P0-STREAM: 先有一轮对话，再试斜杠命令。)",
+      "assistant:text(DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫)"
+    ],
+    "transcript": "en finish\nnow\nP1-JOBNOTICE: start a background job, then wait for its not…\n2m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n2m\nP1-JOBNOTICE: start a background job, then wait for its not…\n6m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n9m\n显示更多 (\n12\n)\n\n仓库列表\n\nworkspace\nP0-STREAM: 先有一轮对话，再试斜杠命令\nnow\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP1-JOBNOTICE: start a background job, then wait for its not…\n2m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n2m\nP1-JOBNOTICE: start a background job, then wait for its not…\n6m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n9m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n9m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n9m\nLive Agent Host\n9m\nP1-QUESTION: ask me before you start\n25m\nP1-IMAGE: what do you see\n25m\nP1-IMAGE: what do you see\n25m\nP1-FILEREAD: read the attached notes\n25m\nP1-STEER: two tool steps\n48m\nP1-FAIL: this request fails upstream\n50m\nP1-FAILONCE: this request fails once\n51m\nP0-STREAM: 连通性检查\n54m\nSession srd2ne\n1h"
+  },
+  "shotCompact": "shots/A10-compact-done.png",
+  "secondEnterGoal": true,
+  "goalAlone": {
+    "composer": {
+      "value": "",
+      "placeholder": "继续输入…",
+      "disabled": false,
+      "round": ["发送消息"]
+    },
+    "roles": [
+      "user:text(P0-STREAM: 先有一轮对话，再试斜杠命令。)",
+      "assistant:text(DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫)",
+      "user:text(/goal)",
+      "system:text(No goal is currently set.\nUsage: /goal [<objective)"
+    ],
+    "gatewayRequests": 0,
+    "transcript": "GOAL-PAUSE: run a slow check, then finish\nnow\nP1-JOBNOTICE: start a background job, then wait for its not…\n3m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n3m\nP1-JOBNOTICE: start a background job, then wait for its not…\n7m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n7m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n9m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n9m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n9m\nLive Agent Host\n9m\nP1-QUESTION: ask me before you start\n26m\nP1-IMAGE: what do you see\n26m\nP1-IMAGE: what do you see\n26m\nP1-FILEREAD: read the attached notes\n26m\nP1-STEER: two tool steps\n49m\nP1-FAIL: this request fails upstream\n50m\nP1-FAILONCE: this request fails once\n52m\nP0-STREAM: 连通性检查\n55m\nSession srd2ne\n1h",
+    "commandRows": [
+      "No goal is currently set.\nUsage: /goal [<objective>|clear|edit <objective>|pause|resume]"
+    ]
+  },
+  "shotGoal": "shots/A10-goal-command.png"
+}

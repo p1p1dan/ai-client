@@ -1,0 +1,34 @@
+{
+  "sid": "session-1790733441637-vsfew1x",
+  "gear": "执行 · 全自动",
+  "secondSentAfterMs": 808,
+  "roles": [
+    "user:text(P1-JOBNOTICE: start a background job, then wait fo)",
+    "assistant:tool_call,tool_result",
+    "assistant:text(Started a background job; its notice will wake me.)",
+    "user:text(P0-SLEEPTOOL {\"token\":\"b7\",\"seconds\":8} keep busy )",
+    "assistant:tool_call,tool_result",
+    "system:text(bash sleep 3; echo job-notice-done [status: comple)",
+    "assistant:text(P0-SLEEPTOOL b7 finished.)"
+  ],
+  "notices": [
+    {
+      "role": "system",
+      "noticeKind": "tool-jobs",
+      "origin": null,
+      "text": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]"
+    }
+  ],
+  "noticeDom": [
+    {
+      "text": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]",
+      "title": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]",
+      "icon": true,
+      "cls": "min-w-0 flex-1 select-text truncate",
+      "row": "bash sleep 3; echo job-notice-done [status: completed, exit code: 0]"
+    }
+  ],
+  "transcript": "最近\n\nP1-JOBNOTICE: start a background job, then wait for its not…\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP1-JOBNOTICE: start a background job, then wait for its not…\n3m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n3m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n6m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n6m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n6m\n显示更多 (\n11\n)\n\n仓库列表\n\nworkspace\nP1-JOBNOTICE: start a background job, then wait for its not…\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP1-JOBNOTICE: start a background job, then wait for its not…\n3m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n3m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n6m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n6m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n6m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n6m\nLive Agent Host\n6m\nP1-QUESTION: ask me before you start\n23m\nP1-IMAGE: what do you see\n23m\nP1-IMAGE: what do you see\n23m\nP1-FILEREAD: read the attached notes\n23m\nP1-STEER: two tool steps\n46m\nP1-FAIL: this request fails upstream\n47m\nP1-FAILONCE: this request fails once\n49m\nP0-STREAM: 连通性检查\n52m\nSession srd2ne\n1h",
+  "shot": "shots/B7-notice-row.png",
+  "shotHover": "shots/B7-notice-row-hover.png"
+}

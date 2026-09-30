@@ -1,0 +1,216 @@
+{
+  "sid": "session-1790730768104-ch6x950",
+  "resumed": true,
+  "card1": {
+    "text": "提问\n2 / 2\nQ1\nQ2\n已答 2 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n全部答完，可以提交\n跳过\n继续\nctrl + enter",
+    "tabs": [
+      {
+        "text": "Q1",
+        "selected": "true"
+      },
+      {
+        "text": "Q2",
+        "selected": "false"
+      }
+    ],
+    "options": [
+      {
+        "role": "radio",
+        "checked": "true",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ],
+    "buttons": ["", "跳过", "继续 ctrl + enter"]
+  },
+  "status1": {
+    "sid": "session-1790730768104-ch6x950",
+    "status": "waiting_question",
+    "messages": 2,
+    "lastError": null
+  },
+  "pick": [
+    "checked",
+    true,
+    "checked",
+    "clicked",
+    "clicked",
+    {
+      "aria": "Your answer",
+      "placeholder": "Type your answer…"
+    }
+  ],
+  "cardFilled": {
+    "text": "提问\n2 / 2\nQ1\nQ2\n已答 2 / 2\nChecks\nWhich checks should run afterwards?\nA\ntsc\nB\nsmoke, then record\nC\nvitest\nD\n全部答完，可以提交\n跳过\n继续\nctrl + enter",
+    "tabs": [
+      {
+        "text": "Q1",
+        "selected": "false"
+      },
+      {
+        "text": "Q2",
+        "selected": "true"
+      }
+    ],
+    "options": [
+      {
+        "role": "checkbox",
+        "checked": "true",
+        "text": "A tsc"
+      },
+      {
+        "role": "checkbox",
+        "checked": "true",
+        "text": "B smoke, then record"
+      },
+      {
+        "role": "checkbox",
+        "checked": "false",
+        "text": "C vitest"
+      },
+      {
+        "role": "checkbox",
+        "checked": "true",
+        "text": "D"
+      }
+    ],
+    "buttons": ["", "跳过", "继续 ctrl + enter"]
+  },
+  "shotFilled": "shots/A11-card-filled.png",
+  "submit": true,
+  "turn1": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790730768104-ch6x950",
+    "status": "idle",
+    "messages": 3,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790731401544,
+        "status": "idle"
+      }
+    ]
+  },
+  "answer1": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"A11-OTHER, typed note\"}]}",
+  "transcript1": "P1-QUESTION: ask me before you start.\n\n已工作 10 分 31 秒\n询问\nWhich part should change first?\n回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc, smoke, then record, A11-OTHER, typed note\n最终输出\n\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"A11-OTHER, typed note\"}]}\n\n✻ 完成于 21:23 · 1 次工具调用",
+  "shotAnswered": "shots/A11-answered-frozen.png",
+  "card2": {
+    "text": "提问\n0 / 2\nQ1\nQ2\n已答 0 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n还有 2 个未回答\n下一个未回答\n跳过\n继续\nctrl + enter",
+    "tabs": [
+      {
+        "text": "Q1",
+        "selected": "true"
+      },
+      {
+        "text": "Q2",
+        "selected": "false"
+      }
+    ],
+    "options": [
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ],
+    "buttons": ["", "下一个未回答", "跳过", "继续 ctrl + enter [disabled]"]
+  },
+  "skip": true,
+  "turn2": {
+    "settled": true,
+    "sid": "session-1790730768104-ch6x950",
+    "status": "idle",
+    "messages": 6,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790731406557,
+        "status": "waiting_question"
+      },
+      {
+        "t": 1790731407060,
+        "status": "idle"
+      }
+    ]
+  },
+  "answer2": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}",
+  "transcript2": "P1-QUESTION: ask me before you start.\n\n已工作 10 分 31 秒\n询问\nWhich part should change first?\n回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc, smoke, then record, A11-OTHER, typed note\n最终输出\n\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"A11-OTHER, typed note\"}]}\n\n✻ 完成于 21:23 · 1 次工具调用\n\nP1-QUESTION: ask me again, I will skip.\n\n已工作 1 秒\n询问\nWhich part should change first?\n已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过\n最终输出\n\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}\n\n✻ 完成于 21:23 · 1 次工具调用",
+  "shotSkipped": "shots/A11-skipped.png",
+  "card3": {
+    "text": "提问\n0 / 2\nQ1\nQ2\n已答 0 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n还有 2 个未回答\n下一个未回答\n跳过\n继续\nctrl + enter",
+    "tabs": [
+      {
+        "text": "Q1",
+        "selected": "true"
+      },
+      {
+        "text": "Q2",
+        "selected": "false"
+      }
+    ],
+    "options": [
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ],
+    "buttons": ["", "下一个未回答", "跳过", "继续 ctrl + enter [disabled]"]
+  },
+  "pendingBeforeStop": [
+    {
+      "sessionId": "session-1790730768104-ch6x950",
+      "questionId": "dsh-question-830dc7e9-8bd6-42af-8a9c-7d7297a8b1ae",
+      "messageId": "dsh-aiclient-session-1790730768104-ch6x950-t3-s1"
+    }
+  ],
+  "stop": true,
+  "turn3": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790730768104-ch6x950",
+    "status": "idle",
+    "messages": 8,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790731410031,
+        "status": "idle"
+      }
+    ]
+  },
+  "cardAfterStop": null,
+  "pendingAfterStop": [],
+  "transcript3": "P1-QUESTION: ask me before you start.\n\n已工作 10 分 31 秒\n询问\nWhich part should change first?\n回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc, smoke, then record, A11-OTHER, typed note\n最终输出\n\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"A11-OTHER, typed note\"}]}\n\n✻ 完成于 21:23 · 1 次工具调用\n\nP1-QUESTION: ask me again, I will skip.\n\n已工作 1 秒\n询问\nWhich part should change first?\n已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过\n最终输出\n\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}\n\n✻ 完成于 21:23 · 1 次工具调用\n\nP1-QUESTION: ask once more, then I press Stop.\n\n已工作 1 秒\n询问\nWhich part should change first?\n已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过\n✻ 完成于 21:23 · 1 次工具调用",
+  "shotStopped": "shots/A11-stop-card-gone.png"
+}

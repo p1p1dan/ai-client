@@ -1,0 +1,527 @@
+{
+  "sid": "session-1790731534617-nkr2dgu",
+  "model": {
+    "opened": "workspace",
+    "items": [
+      {
+        "role": "option",
+        "checked": null,
+        "text": "workspace"
+      },
+      {
+        "role": "option",
+        "checked": null,
+        "text": "workspace"
+      }
+    ],
+    "picked": false,
+    "trigger": {
+      "text": "workspace",
+      "aria": null,
+      "title": "/tmp/aiclient-p17d/workspace"
+    }
+  },
+  "paste1": {
+    "bytes": 581,
+    "dispatched": false,
+    "defaultPrevented": true
+  },
+  "drafts1": ["Remove a7-small.png"],
+  "shotDraft": "shots/A7-image-draft.png",
+  "turn1": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790731534617-nkr2dgu",
+    "status": "idle",
+    "messages": 2,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790731543119,
+        "status": "idle"
+      }
+    ]
+  },
+  "answer1": "P1-IMAGE saw 0 image block(s).",
+  "userMessages1": [
+    {
+      "text": "P1-IMAGE: what do you see?",
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png",
+          "name": "a7-small.png"
+        }
+      ]
+    }
+  ],
+  "shotSent": "shots/A7-image-sent.png",
+  "paste2": {
+    "bytes": 279,
+    "dispatched": false,
+    "defaultPrevented": true
+  },
+  "drafts2": [],
+  "sent2": 1790731571403,
+  "trace2": [
+    {
+      "dt": 0,
+      "composer": {
+        "value": "",
+        "placeholder": "正在发送到 Agent Host…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 1000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 1250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 1500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 1750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 2000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 2250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 2500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 2750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 3000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 3250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 3500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 3750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 4000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 4250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 4500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 4750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 5000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 5250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 5500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 5750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 6000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 6250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 6500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 6750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 7000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 7250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 7500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 7750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 8000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 8250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 8500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 8750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 9000,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 9250,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 9500,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    },
+    {
+      "dt": 9750,
+      "composer": {
+        "value": "",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": [],
+      "status": "idle"
+    }
+  ],
+  "toasts2": [],
+  "bodyNotice": null,
+  "userMessages2": [
+    {
+      "text": "P1-IMAGE: what do you see?",
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png",
+          "name": "a7-small.png"
+        }
+      ]
+    },
+    {
+      "text": "P1-IMAGE: this one is 8193 px wide.",
+      "attachments": []
+    }
+  ],
+  "shotRefused": "shots/A7-wide-image-refused.png"
+}

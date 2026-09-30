@@ -1,0 +1,149 @@
+{
+  "blocked": {
+    "sid": "session-1790732606585-w9x7a0f",
+    "gear": "执行 · 全自动",
+    "trace": [
+      {
+        "dt": 571,
+        "status": "idle",
+        "goal": null,
+        "todo": null
+      },
+      {
+        "dt": 1394,
+        "status": "idle",
+        "goal": "waiting | 目标 · 第 2/6 轮 · 等待下一轮 · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 暂停",
+        "todo": null
+      },
+      {
+        "dt": 2254,
+        "status": "idle",
+        "goal": "blocked | 目标受阻 · Config /nonexistent/p0-config.json is still missing (round 3). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 继续",
+        "todo": null
+      }
+    ],
+    "panels": {
+      "goal": {
+        "state": "blocked",
+        "text": "目标受阻 · Config /nonexistent/p0-config.json is still missing (round 3). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 继续",
+        "buttons": [
+          "目标受阻 · Config /nonexistent/p0-config.json is still missing (round 3). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it",
+          "继续",
+          "目标菜单",
+          "展开"
+        ],
+        "hint": ["P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it"],
+        "rect": {
+          "top": 736,
+          "h": 28
+        }
+      },
+      "todo": null,
+      "composerTop": {
+        "top": 781,
+        "h": 26
+      }
+    },
+    "roundHeads": ["目标 · 第 1/6 轮", "目标 · 第 2/6 轮", "目标 · 第 3/6 轮"],
+    "shot": "shots/B3-goal-blocked.png",
+    "resume": "clicked",
+    "afterResume": [
+      {
+        "dt": 410,
+        "status": "running",
+        "goal": "suspended | 目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 继续",
+        "todo": null
+      },
+      {
+        "dt": 667,
+        "status": "idle",
+        "goal": "blocked | 目标受阻 · Config /nonexistent/p0-config.json is still missing (round 4). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 继续",
+        "todo": null
+      }
+    ],
+    "toastsAfterResume": [],
+    "panelsAfterResume": {
+      "goal": {
+        "state": "blocked",
+        "text": "目标受阻 · Config /nonexistent/p0-config.json is still missing (round 4). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it 继续",
+        "buttons": [
+          "目标受阻 · Config /nonexistent/p0-config.json is still missing (round 4). · P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it",
+          "继续",
+          "目标菜单",
+          "展开"
+        ],
+        "hint": ["P0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply it"],
+        "rect": {
+          "top": 736,
+          "h": 28
+        }
+      },
+      "todo": null,
+      "composerTop": {
+        "top": 781,
+        "h": 26
+      }
+    },
+    "roundHeadsAfterResume": [
+      "目标 · 第 1/6 轮",
+      "目标 · 第 2/6 轮",
+      "目标 · 第 3/6 轮",
+      "目标 · 第 4/6 轮"
+    ],
+    "shotAfterResume": "shots/B3-goal-blocked-after-resume.png"
+  },
+  "roundLimit": {
+    "sid": "session-1790732625291-momkmp4",
+    "gear": "执行 · 全自动",
+    "trace": [
+      {
+        "dt": 397,
+        "status": "idle",
+        "goal": null,
+        "todo": null
+      },
+      {
+        "dt": 655,
+        "status": "idle",
+        "goal": "roundLimit | 目标已用完 2 轮 · P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing 继续",
+        "todo": null
+      }
+    ],
+    "panels": {
+      "goal": {
+        "state": "roundLimit",
+        "text": "目标已用完 2 轮 · P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing 继续",
+        "buttons": [
+          "目标已用完 2 轮 · P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing",
+          "继续 [disabled]",
+          "目标菜单",
+          "展开"
+        ],
+        "hint": [
+          "P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing",
+          "让助手调高轮数上限，或清除目标后重新开始"
+        ],
+        "rect": {
+          "top": 736,
+          "h": 28
+        }
+      },
+      "todo": null,
+      "composerTop": {
+        "top": 781,
+        "h": 26
+      }
+    },
+    "roundHeads": [
+      "目标 · 第 1/2 轮",
+      "目标 · 第 2/2 轮",
+      "目标已用完 2 轮 · P0-GOAL-ROUNDLIMIT: keep polishing without ever finishing"
+    ],
+    "shot": "shots/B3-goal-round-limit.png",
+    "hint": {
+      "disabled": true,
+      "wrapperTitle": "让助手调高轮数上限，或清除目标后重新开始"
+    },
+    "shotHover": "shots/B3-goal-round-limit-hover.png"
+  }
+}

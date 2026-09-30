@@ -1,0 +1,34 @@
+{
+  "sid": "session-1790730578749-ah7422k",
+  "turn": {
+    "settled": true,
+    "sid": "session-1790730578749-ah7422k",
+    "status": "failed",
+    "messages": 2,
+    "lastError": "500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}",
+    "statuses": [
+      {
+        "t": 1790730581164,
+        "status": "idle"
+      },
+      {
+        "t": 1790730581668,
+        "status": "running"
+      },
+      {
+        "t": 1790730603386,
+        "status": "failed"
+      }
+    ]
+  },
+  "failure": {
+    "count": 1,
+    "disabled": false,
+    "title": "从失败的地方重试上一轮",
+    "wrapTitle": null,
+    "card": "模型服务返回了错误\n\n模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。\n\n500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}\n\n继续"
+  },
+  "transcript": "最近\n\nP1-FAIL: this request fails upstream\nfailed\nnow\nP1-FAILONCE: this request fails once\n1m\nP0-STREAM: 连通性检查\n4m\nLive Agent Host\n19m\n\n仓库列表\n\nworkspace\nP1-FAIL: this request fails upstream\nfailed\nnow\nP1-FAILONCE: this request fails once\n1m\nP0-STREAM: 连通性检查\n4m\nLive Agent Host\n19m",
+  "title": "P1-FAIL: this request fails upstream",
+  "shot": "shots/A5-fail-live.png"
+}

@@ -1,0 +1,192 @@
+{
+  "opened": {
+    "id": "session-1790732744052-w0rrop0",
+    "active": "session-1790732744052-w0rrop0"
+  },
+  "before": {
+    "goal": {
+      "state": "suspended",
+      "text": "目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 继续",
+      "buttons": [
+        "目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round.",
+        "继续",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": [
+        "P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round."
+      ],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "resume": "clicked",
+  "untilRunning": [
+    {
+      "dt": 389,
+      "status": "running",
+      "goal": "suspended | 目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 继续",
+      "todo": null
+    },
+    {
+      "dt": 720,
+      "status": "running",
+      "goal": "running | 目标 · 第 6/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "todo": null
+    }
+  ],
+  "beforeReload": {
+    "goal": {
+      "state": "running",
+      "text": "目标 · 第 6/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "buttons": [
+        "目标 · 第 6/256 轮 · 进行中 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round.",
+        "暂停",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": [
+        "P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round."
+      ],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "shotBefore": "shots/B4-goal-before-reload.png",
+  "reload": {
+    "via": "Page.reload (Ctrl+R did not reload)",
+    "dismissed": "知道了"
+  },
+  "activeAfterReload": "session-live-1790733070487-2wgpc55",
+  "reopened": {
+    "id": "session-1790732744052-w0rrop0",
+    "active": "session-1790732744052-w0rrop0"
+  },
+  "rehydrate": [
+    {
+      "dt": 24,
+      "row": {
+        "goal": "waiting | 目标 · 第 6/256 轮 · 等待下一轮 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停"
+      }
+    }
+  ],
+  "afterReload": {
+    "goal": {
+      "state": "waiting",
+      "text": "目标 · 第 6/256 轮 · 等待下一轮 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 暂停",
+      "buttons": [
+        "目标 · 第 6/256 轮 · 等待下一轮 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round.",
+        "暂停",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": [
+        "P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round."
+      ],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "callsAfterReload": [
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": true
+    },
+    {
+      "cmd": "echo \"sleep-tool missing started\"; sleep 30; echo \"sleep-too",
+      "settled": false
+    }
+  ],
+  "shotAfterReload": "shots/B4-goal-after-reload.png",
+  "hostsBefore": [483091],
+  "killed": 483091,
+  "afterKill": [
+    {
+      "dt": 60,
+      "status": "idle",
+      "hosts": 0,
+      "goal": "waiting | 目标 · 第 6/256 轮 · 等待下一轮 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds",
+      "buttons": ["暂停", "目标菜单", "展开"]
+    },
+    {
+      "dt": 755,
+      "status": "disconnected",
+      "hosts": 1,
+      "goal": "suspended | 目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seco",
+      "buttons": ["目标菜单", "展开"]
+    },
+    {
+      "dt": 5895,
+      "status": "idle",
+      "hosts": 1,
+      "goal": "suspended | 目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seco",
+      "buttons": ["继续", "目标菜单", "展开"]
+    }
+  ],
+  "afterKillShots": {
+    "waiting-nobutton": "shots/B4-after-kill-waiting-nobutton.png",
+    "suspended-nobutton": "shots/B4-after-kill-suspended-nobutton.png",
+    "suspended-resume": "shots/B4-after-kill-suspended-resume.png"
+  },
+  "finalPanels": {
+    "goal": {
+      "state": "suspended",
+      "text": "目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round. 继续",
+      "buttons": [
+        "目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round.",
+        "继续",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": [
+        "P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one long command running each round."
+      ],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  }
+}

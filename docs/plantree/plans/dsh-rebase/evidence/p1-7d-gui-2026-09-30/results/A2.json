@@ -1,0 +1,118 @@
+{
+  "sid": "session-1790732058249-ugvvdye",
+  "gear": "执行 · 全自动",
+  "running": [
+    {
+      "cmd": "echo \"sleep-tool a2 started\"; sleep 30; echo \"sleep-tool don",
+      "settled": false
+    }
+  ],
+  "shotRunning": "shots/A2-command-running.png",
+  "hostsBefore": [480470],
+  "killed": 480470,
+  "timeline": [
+    {
+      "dt": 839,
+      "status": "running",
+      "hosts": [482587],
+      "card": "对话引擎意外退出",
+      "calls": [
+        {
+          "cmd": "echo \"sleep-tool a2 started\"; sleep 30; echo \"sleep-tool don",
+          "settled": false
+        }
+      ]
+    },
+    {
+      "dt": 1159,
+      "status": "failed",
+      "hosts": [482587],
+      "card": "对话引擎意外退出",
+      "calls": [
+        {
+          "cmd": "echo \"sleep-tool a2 started\"; sleep 30; echo \"sleep-tool don",
+          "settled": false
+        }
+      ]
+    },
+    {
+      "dt": 6821,
+      "status": "failed",
+      "hosts": [482587],
+      "card": "对话引擎意外退出",
+      "calls": [
+        {
+          "cmd": "echo \"sleep-tool a2 started\"; sleep 30; echo \"sleep-tool don",
+          "settled": true
+        }
+      ]
+    }
+  ],
+  "failure": {
+    "count": 1,
+    "disabled": false,
+    "title": "从失败的地方重试上一轮",
+    "wrapTitle": null,
+    "card": "对话引擎意外退出\n\n运行对话的引擎在这条回复生成途中退出了，回复因此中断。各个对话会自动重新连上。\n\n继续"
+  },
+  "transcript": "最近\n\nP1-IMAGE: what do you see\nnow\nP1-IMAGE: what do you see\nnow\nP1-QUESTION: ask me before you start\nnow\nP1-FILEREAD: read the attached notes\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\nfailed\nnow\nP1-STEER: two tool steps\n23m\nP1-FAIL: this request fails upstream\nfailed\n24m\n显示更多 (\n3\n)\n\n仓库列表\n\nworkspace\nP1-IMAGE: what do you see\nnow\nP1-IMAGE: what do you see\nnow\nP1-QUESTION: ask me before you start\nnow\nP1-FILEREAD: read the attached notes\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\nfailed\nnow\nP1-STEER: two tool steps\n23m\nP1-FAIL: this request fails upstream\nfailed\n24m\nP1-FAILONCE: this request fails once\n26m\nP0-STREAM: 连通性检查\n29m\nLive Agent Host\n43m",
+  "promptOccurrences": 1,
+  "rowText": {
+    "text": "echo \"sleep-tool a2 started\"; sleep 30; …",
+    "cls": "min-w-0 truncate text-tool-arg font-mono text-code tracking-normal",
+    "redDescendant": false
+  },
+  "notice": ":\"a2\",\"seconds\":30} run a long command\nworkspace · Main\n会话分支\n审阅\n终端\n后台任务\n子代理\n\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command.\n\n已工作 1 秒\n终端\necho \"sleep-tool a2 started\"; sleep 30; …\n· 结果未知\n\n引擎意外停止，这一轮没有完成。\n\n✻ 完成于 21:34 · 1 次工具调用\n\n对话引擎意外退出\n\n运行对话的引擎在这条回复生成途中退出了，回复因此中断。各个对",
+  "composer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "round": ["发送消息"]
+  },
+  "roles": [
+    "user:text(P0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a lon)",
+    "assistant:tool_call,tool_result",
+    "system:text(This turn was interrupted when the engine stopped )"
+  ],
+  "tools": [
+    {
+      "type": "tool_call",
+      "toolName": "bash",
+      "ok": null,
+      "input": "{\"command\":\"echo \\\"sleep-tool a2 started\\\"; sleep 30; echo \\\"sleep-tool done\\\"\",\"description\":\"Run a long command\"}"
+    },
+    {
+      "type": "tool_result",
+      "toolName": null,
+      "ok": false,
+      "output": "{\"content\":[{\"type\":\"text\",\"text\":\"The tool call was interrupted after it was recorded, but no result was durably recorded. Its outcome is unknown. Decide whether to retry from the tool semantics: ret"
+    }
+  ],
+  "shotAfter": "shots/A2-after-host-kill.png",
+  "nextTurn": {
+    "settled": true,
+    "sid": "session-1790732058249-ugvvdye",
+    "status": "idle",
+    "messages": 5,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790732093790,
+        "status": "idle"
+      },
+      {
+        "t": 1790732094293,
+        "status": "running"
+      },
+      {
+        "t": 1790732096825,
+        "status": "idle"
+      }
+    ]
+  },
+  "nextAnswer": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。",
+  "hostsAfter": [482587],
+  "promptOccurrencesAfter": 1,
+  "shotNext": "shots/A2-next-turn.png",
+  "orphanSleep": []
+}

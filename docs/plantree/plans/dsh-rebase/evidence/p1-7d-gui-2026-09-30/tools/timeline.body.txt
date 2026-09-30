@@ -1,0 +1,31 @@
+const chat = await import('/stores/chatSessions.ts');
+const want = window.__p17dOpen;
+const s0 = chat.useChatSessionsStore.getState();
+const target = s0.sessions.find((x) => x.id.endsWith(want));
+if (!target) return { error: 'no session' };
+if (s0.activeSessionId !== target.id) {
+  const rows = [...document.querySelectorAll('[role="button"][title]')].filter((n) => n.offsetParent !== null && n.getAttribute('title') === target.title);
+  if (!rows.length) return { error: 'no row', title: target.title };
+  rows[0].click();
+  for (let i = 0; i < 30; i += 1) {
+    await new Promise((r) => setTimeout(r, 300));
+    if (chat.useChatSessionsStore.getState().activeSessionId === target.id) break;
+  }
+}
+await new Promise((r) => setTimeout(r, 3000));
+for (const sm of [...document.querySelectorAll('details > summary')].filter((x) => x.offsetParent !== null)) {
+  if (!sm.parentElement.open) sm.click();
+}
+await new Promise((r) => setTimeout(r, 1000));
+const viewports = [...document.querySelectorAll('[data-slot="scroll-area-viewport"]')].filter((v) => v.offsetParent !== null && !/仓库列表/.test(v.innerText || ''));
+let best = null;
+for (const v of viewports) if (!best || (v.innerText || '').length > (best.innerText || '').length) best = v;
+if (best) best.scrollTop = best.scrollHeight;
+const st = chat.useChatSessionsStore.getState();
+return {
+  id: target.id,
+  title: target.title,
+  status: st.sessions.find((x) => x.id === target.id)?.status,
+  messages: (st.messages[target.id] ?? []).length,
+  timeline: (best?.innerText ?? '').replace(/\n{2,}/g, '\n').slice(0, 4000),
+};

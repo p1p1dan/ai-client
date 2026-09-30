@@ -1,0 +1,153 @@
+{
+  "sid": "session-1790730671496-cr0roes",
+  "gear": "执行 · 全自动",
+  "runningCalls": [
+    {
+      "cmd": "sleep 2; echo steer-step-1",
+      "settled": false
+    }
+  ],
+  "placeholderWhileRunning": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+  "pendingBubble": {
+    "title": "会在当前回合的下一步并入",
+    "clock": true,
+    "articleClass": "flex justify-end",
+    "dashed": true,
+    "text": "STEER-NOTE-A also report the step count.\n\n待送达"
+  },
+  "composerAfterSteer": {
+    "value": "",
+    "placeholder": "Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…",
+    "disabled": false,
+    "round": ["停止当前回合", "加入队列"]
+  },
+  "trace": [
+    {
+      "dt": 406,
+      "bubble": {
+        "title": "会在当前回合的下一步并入",
+        "dashed": true,
+        "clock": true
+      },
+      "status": "running",
+      "calls": [
+        {
+          "cmd": "sleep 2; echo steer-step-1",
+          "settled": false
+        }
+      ]
+    },
+    {
+      "dt": 2248,
+      "bubble": null,
+      "status": "idle",
+      "calls": [
+        {
+          "cmd": "sleep 2; echo steer-step-1",
+          "settled": true
+        },
+        {
+          "cmd": "echo steer-step-2",
+          "settled": true
+        }
+      ]
+    }
+  ],
+  "shotPending": "shots/A6-awaiting-delivery.png",
+  "turn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790730671496-cr0roes",
+    "status": "idle",
+    "messages": 5,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790730679831,
+        "status": "idle"
+      }
+    ]
+  },
+  "roles": [
+    "user:text(P1-STEER: two tool steps.)",
+    "assistant:tool_call,tool_result",
+    "user:text(STEER-NOTE-A also report the step count.)",
+    "assistant:tool_call,tool_result",
+    "assistant:text(P1-STEER finished; heard: STEER-NOTE-A.)"
+  ],
+  "answer": "P1-STEER finished; heard: STEER-NOTE-A.",
+  "shotFinal": "shots/A6-steer-final.png",
+  "idleCtrlEnterTurn": {
+    "settled": true,
+    "sid": "session-1790730671496-cr0roes",
+    "status": "idle",
+    "messages": 7,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790730684529,
+        "status": "idle"
+      },
+      {
+        "t": 1790730685033,
+        "status": "running"
+      },
+      {
+        "t": 1790730687319,
+        "status": "idle"
+      }
+    ]
+  },
+  "rolesAfterIdleCtrlEnter": [
+    "user:text(P1-STEER: two tool steps.)",
+    "assistant:tool_call,tool_result",
+    "user:text(STEER-NOTE-A also report the step count.)",
+    "assistant:tool_call,tool_result",
+    "assistant:text(P1-STEER finished; heard: STEER-NOTE-A.)",
+    "user:text(P0-STREAM: 回合结束后按 Ctrl+Enter，应当等于普通发送。)",
+    "assistant:text(DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫)"
+  ],
+  "shotIdle": "shots/A6-ctrl-enter-idle.png",
+  "gatewaySteer": [
+    {
+      "seq": 16,
+      "status": 500,
+      "summary": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current DSH file policy: danger-full-access. The DSH file sandbox does not "
+    },
+    {
+      "seq": 17,
+      "status": 500,
+      "summary": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current DSH file policy: danger-full-access. The DSH file sandbox does not "
+    },
+    {
+      "seq": 18,
+      "status": 500,
+      "summary": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current DSH file policy: danger-full-access. The DSH file sandbox does not "
+    },
+    {
+      "seq": 19,
+      "status": 500,
+      "summary": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current DSH file policy: danger-full-access. The DSH file sandbox does not "
+    },
+    {
+      "seq": 20,
+      "status": 200,
+      "summary": "Current runtime context. This snapshot supersedes earlier runtime-context snapshots. Current DSH file policy: danger-full-access. The DSH file sandbox does not "
+    },
+    {
+      "seq": 21,
+      "status": 200,
+      "summary": "STEER-NOTE-A also report the step count."
+    },
+    {
+      "seq": 22,
+      "status": 200,
+      "summary": "[tool_result:steer-step-2 ]"
+    },
+    {
+      "seq": 23,
+      "status": 200,
+      "summary": "P0-STREAM: 回合结束后按 Ctrl+Enter，应当等于普通发送。"
+    }
+  ]
+}

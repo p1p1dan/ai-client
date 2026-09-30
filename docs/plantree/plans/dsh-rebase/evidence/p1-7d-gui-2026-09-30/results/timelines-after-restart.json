@@ -1,0 +1,37 @@
+{
+  "790731947380-abkee19": {
+    "id": "session-1790731947380-abkee19",
+    "title": "P1-FILEREAD: read the attached notes",
+    "status": "idle",
+    "messages": 3,
+    "timeline": "notes.txt\nP1-FILEREAD: read the attached notes.\n已工作 1 秒\n读取\nnotes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d79698f0c1d4d96f104fd/\n最终输出\nP1-FILEREAD read: FILE-MARKER-NOTES.\n✻ 完成于 21:32 · 1 次工具调用"
+  },
+  "790733619146-2uv9916": {
+    "id": "session-1790733619146-2uv9916",
+    "title": "P0-STREAM: 先有一轮对话，再试斜杠命令",
+    "status": "idle",
+    "messages": 3,
+    "timeline": "P0-STREAM: 先有一轮对话，再试斜杠命令。\n已工作 13 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\nContext summary\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n## Current Work\n- (none)\n✻ 完成于 22:00"
+  },
+  "a5a93373-6771-4968-9b6f-beb8a0da58db": {
+    "id": "session-fork-a5a93373-6771-4968-9b6f-beb8a0da58db",
+    "title": "P0-STREAM: A3-FIRST 第一轮 (fork)",
+    "status": "idle",
+    "messages": 4,
+    "timeline": "P0-STREAM: A3-FIRST 第一轮。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n✻ 完成于 22:02\nP0-RECALL {\"markers\":[\"A3-FIRST\",\"A3-SECOND\"]} 分叉里模型看得到哪些？\n已工作 1 秒\n最终输出\nP0-RECALL present=A3-FIRST missing=A3-SECOND\n✻ 完成于 22:05"
+  },
+  "790730578749-ah7422k": {
+    "id": "session-1790730578749-ah7422k",
+    "title": "P1-FAIL: this request fails upstream",
+    "status": "idle",
+    "messages": 2,
+    "timeline": "P1-FAIL: this request fails upstream.\n已工作 22 秒\n最终输出\nResponse interrupted before any assistant content was saved.\n✻ 完成于 21:10"
+  },
+  "790730768104-ch6x950": {
+    "id": "session-1790730768104-ch6x950",
+    "title": "P1-QUESTION: ask me before you start",
+    "status": "idle",
+    "messages": 8,
+    "timeline": "P1-QUESTION: ask me before you start.\n已工作 10 分 31 秒\n询问\nWhich part should change first?\n最终输出\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"A11-OTHER, typed note\"}]}\n✻ 完成于 21:23 · 1 次工具调用\nP1-QUESTION: ask me again, I will skip.\n已工作 1 秒\n询问\nWhich part should change first?\n最终输出\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}\n✻ 完成于 21:23 · 1 次工具调用\nP1-QUESTION: ask once more, then I press Stop.\n已工作 1 秒\n询问\nWhich part should change first?\n✻ 完成于 21:23 · 1 次工具调用"
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "sid": "session-1790732236185-d81s7tu",
+  "before": {
+    "goal": {
+      "state": "complete",
+      "text": "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 收起 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 创建于 21:37 · 最后更新 21:37 · 已用 2/4 轮",
+      "buttons": [
+        "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+        "收起",
+        "目标菜单",
+        "折叠"
+      ],
+      "hint": ["P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it"],
+      "rect": {
+        "top": 686,
+        "h": 78
+      }
+    },
+    "todo": {
+      "text": "待办 2/2 已完成 Write progress.txt Verify progress.txt",
+      "rect": {
+        "top": 600,
+        "h": 82
+      }
+    },
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "expand": "no button 展开",
+  "expanded": "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\n收起\n\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\n\n创建于 21:37 · 最后更新 21:37 · 已用 2/4 轮",
+  "shotExpanded": "shots/B5-goal-expanded.png",
+  "menuOpen": "clicked",
+  "menuItems": [
+    {
+      "role": "menuitem",
+      "checked": null,
+      "text": "编辑目标…"
+    },
+    {
+      "role": "menuitem",
+      "checked": null,
+      "text": "复制目标文本"
+    },
+    {
+      "role": "menuitem",
+      "checked": null,
+      "text": "清除目标…"
+    }
+  ],
+  "shotMenu": "shots/B5-goal-menu.png",
+  "copy": true,
+  "toastsAfterCopy": [],
+  "edit": true,
+  "editDialog": {
+    "role": "dialog",
+    "text": "编辑目标\n\n助手会从下一轮起按新的目标继续。\n\n取消\n保存",
+    "buttons": ["取消", "保存 [disabled]", "Close"]
+  },
+  "editTyped": "P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it (edited in the B5 point-check)",
+  "shotEdit": "shots/B5-goal-edit-dialog.png",
+  "save": "clicked",
+  "toastsAfterEdit": [],
+  "dialogAfterSave": null,
+  "afterEdit": {
+    "goal": {
+      "state": "complete",
+      "text": "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it (edited in the B5 point-check) 收起 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it (edited in the B5 point-check) 创建于 21:40 · 最后更新 21:40 · 已用 2/256 轮",
+      "buttons": [
+        "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it (edited in the B5 point-check)",
+        "收起",
+        "目标菜单",
+        "折叠"
+      ],
+      "hint": [
+        "P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it (edited in the B5 point-check)"
+      ],
+      "rect": {
+        "top": 686,
+        "h": 78
+      }
+    },
+    "todo": {
+      "text": "待办 2/2 已完成 Write progress.txt Verify progress.txt",
+      "rect": {
+        "top": 600,
+        "h": 82
+      }
+    },
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "shotEditResult": "shots/B5-goal-edit-result.png",
+  "clear": true,
+  "clearDialog": {
+    "role": "alertdialog",
+    "text": "清除目标？\n\n目标会停下，目标条随之消失。对话和已经完成的工作不受影响。\n\n取消\n清除",
+    "buttons": ["取消", "清除"]
+  },
+  "shotClear": "shots/B5-goal-clear-confirm.png",
+  "clearConfirm": "clicked",
+  "toastsAfterClear": [],
+  "afterClear": {
+    "goal": null,
+    "todo": {
+      "text": "待办 2/2 已完成 Write progress.txt Verify progress.txt",
+      "rect": {
+        "top": 682,
+        "h": 82
+      }
+    },
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "transcriptTail": "e progress.txt in the workspace, then verify it\n最终输出\n\nGoal created; automatic rounds will do the work.\n\n✻ 完成于 21:37 · 1 次工具调用\n目标 · 第 1/4 轮\n21:37\n已工作 1 秒\n规划\n0/2 已完成\n终端\necho round-1 > progress.txt && cat progr…\n最终输出\n\nRound 1: wrote progress.txt; verification remains for the next round.\n\n✻ 完成于 21:37 · 2 次工具调用\n目标 · 第 2/4 轮\n21:37\n已工作 1 秒\n终端\ncat progress.txt\n规划\n2/2 已完成\n查看目标\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\n完成目标\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\n最终输出\n\nWrapping up the goal for the user.\n\n✻ 完成于 21:37 · 4 次工具调用\n目标 · 第 1/256 轮\n21:40\n已工作 1 秒\n最终输出\n\nRound 1: wrote progress.txt; verification remains for the next round.\n\n✻ 完成于 21:40 · 2 次工具调用\n目标 · 第 2/256 轮\n21:40\n已工作 1 秒\n最终输出\n\nWrapping up the goal for the user.\n\n✻ 完成于 21:40 · 4 次工具调用",
+  "shotCleared": "shots/B5-goal-cleared.png"
+}

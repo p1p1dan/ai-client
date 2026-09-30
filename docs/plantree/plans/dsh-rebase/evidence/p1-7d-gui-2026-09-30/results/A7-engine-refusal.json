@@ -1,0 +1,58 @@
+{
+  "sid": "session-1790731751520-n264yff",
+  "trigger": {
+    "text": "fake-vision",
+    "aria": "模型与思考强度：fake-vision —— 对下一轮生效",
+    "title": "fake-vision —— 点击可更换模型或思考强度（对下一轮生效）"
+  },
+  "paste": {
+    "full": 339,
+    "cut": 203
+  },
+  "drafts": ["Remove a7-truncated.png"],
+  "shotDraft": "shots/A7-truncated-draft.png",
+  "trace": [
+    {
+      "dt": 0,
+      "composer": {
+        "value": "",
+        "placeholder": "正在发送到 Agent Host…",
+        "disabled": false,
+        "round": ["停止当前回合", "加入队列"]
+      },
+      "drafts": ["Remove a7-truncated.png"],
+      "alerts": ["引擎拒收了附件「a7-truncated.png」（INVALID_IMAGE）。移除或替换它后即可发送。"]
+    },
+    {
+      "dt": 250,
+      "composer": {
+        "value": "P1-IMAGE: a truncated PNG (the engine should refuse it).",
+        "placeholder": "继续输入…",
+        "disabled": false,
+        "round": ["发送消息"]
+      },
+      "drafts": ["Remove a7-truncated.png"],
+      "alerts": ["引擎拒收了附件「a7-truncated.png」（INVALID_IMAGE）。移除或替换它后即可发送。"]
+    }
+  ],
+  "toasts": [],
+  "userMessages": [
+    {
+      "text": "P1-IMAGE: what do you see?",
+      "attachments": [
+        {
+          "kind": "image",
+          "mediaType": "image/png",
+          "name": "a7-small.png"
+        }
+      ]
+    },
+    {
+      "text": "P1-IMAGE: this one is 8193 px wide.",
+      "attachments": []
+    }
+  ],
+  "gatewayRequests": 0,
+  "lastError": null,
+  "shotRefused": "shots/A7-engine-refused.png"
+}

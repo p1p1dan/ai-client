@@ -1,0 +1,100 @@
+{
+  "sid": "session-1790733764832-nr3q4fl",
+  "title": "P0-STREAM: A3-FIRST 第一轮",
+  "textsBefore": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染",
+    "user: P0-STREAM: A3-SECOND 第二轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "tree": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: A3-FIRST 第一轮。 user",
+        "depthPad": "8px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true,
+        "forkTitle": "要等助手给出第一条回复后才能分叉"
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "20px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: A3-SECOND 第二轮。 user",
+        "depthPad": "32px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant 当前",
+        "depthPad": "44px",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 4,
+        "text": "P0-RECALL {\"markers\":[\"A3-FIRST\",\"A3-SECOND\"]} 回退之后模型还看得到哪些？ user",
+        "depthPad": "32px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 5,
+        "text": "P0-RECALL present=A3-FIRST missing=A3-SECOND assistant",
+        "depthPad": "44px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      }
+    ]
+  },
+  "forkIndex": 1,
+  "forkClick": "clicked",
+  "dialogAfterFork": null,
+  "newSessions": [
+    {
+      "id": "session-fork-a5a93373-6771-4968-9b6f-beb8a0da58db",
+      "title": "P0-STREAM: A3-FIRST 第一轮 (fork)",
+      "status": "idle"
+    }
+  ],
+  "activeAfterFork": "session-fork-a5a93373-6771-4968-9b6f-beb8a0da58db",
+  "sidebarRows": ["P0-STREAM: A3-FIRST 第一轮 (fork)", "P0-STREAM: A3-FIRST 第一轮 (fork)"],
+  "shotSidebar": "shots/A4-fork-created.png",
+  "forkTexts": [],
+  "forkTranscript": "ing without ever finishing\nnow\nP0-STREAM: A3-FIRST 第一轮\n1m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n2m\nP0-STREAM: 先有一轮对话，再试斜杠命令\n4m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n5m\nP1-JOBNOTICE: start a background job, then wait for its not…\n7m\n显示更多 (\n14\n)\n\n仓库列表\n\nworkspace\nP0-STREAM: A3-FIRST 第一轮 (fork)\nnow\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\nnow\nP0-STREAM: A3-FIRST 第一轮\n1m\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\n2m\nP0-STREAM: 先有一轮对话，再试斜杠命令\n4m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n5m\nP1-JOBNOTICE: start a background job, then wait for its not…\n7m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n8m\nP1-JOBNOTICE: start a background job, then wait for its not…\n11m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n11m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n14m\nLive Agent Host\n14m\nP1-QUESTION: ask me before you start\n30m\nP1-IMAGE: what do you see\n30m\nP1-IMAGE: what do you see\n30m\nP1-FILEREAD: read the attached notes\n30m\nP1-STEER: two tool steps\n53m\nP1-FAIL: this request fails upstream\n55m\nP1-FAILONCE: this request fails once\n56m\nP0-STREAM: 连通性检查\n59m\nSession srd2ne\n1h",
+  "shotFork": "shots/A4-fork-opened.png",
+  "forkTurn": "idle",
+  "forkRecall": "P0-RECALL present=A3-FIRST missing=A3-SECOND",
+  "shotForkRecall": "shots/A4-fork-recall.png",
+  "openedOriginal": {
+    "id": "session-1790733764832-nr3q4fl",
+    "active": "session-1790733764832-nr3q4fl"
+  },
+  "originalTexts": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染",
+    "user: P0-STREAM: A3-SECOND 第二轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "shotOriginal": "shots/A4-original-unchanged.png"
+}

@@ -1,0 +1,40 @@
+{
+  "sid": "session-1790731947380-abkee19",
+  "gear": "执行 · 每次询问",
+  "paste": {
+    "defaultPrevented": true
+  },
+  "drafts": ["Remove notes.txt"],
+  "shotDraft": "shots/A8-file-draft.png",
+  "statuses": ["idle"],
+  "permissionShot": null,
+  "answer": "P1-FILEREAD read: FILE-MARKER-NOTES.",
+  "userMessages": [
+    {
+      "text": "P1-FILEREAD: read the attached notes.",
+      "attachments": [
+        {
+          "kind": "text",
+          "mediaType": "text/plain",
+          "name": "notes.txt"
+        }
+      ]
+    }
+  ],
+  "tools": [
+    {
+      "type": "tool_call",
+      "toolName": "read",
+      "ok": null,
+      "input": "{\"file_path\":\"/tmp/aiclient-p17d/home/.pilab/jyw-ai-client-dev/dsh-home/attachments/v1/files/d0/d0dcf05b445978e538b07399f3c729daf67fe393be5d79698f0c1d4d96f104fd/notes.txt\",\"path\":\"/tmp/aiclient-p17d/h"
+    },
+    {
+      "type": "tool_result",
+      "toolName": null,
+      "ok": true,
+      "output": "\"<path>/tmp/aiclient-p17d/home/.pilab/jyw-ai-client-dev/dsh-home/attachments/v1/files/d0/d0dcf05b445978e538b07399f3c729daf67fe393be5d79698f0c1d4d96f104fd/notes.txt</path>\\n<type>file</type>\\n<content>"
+    }
+  ],
+  "transcript": "最近\n\nP1-FILEREAD: read the attached notes\nnow\nP1-IMAGE: what do you see\n3m\nP1-IMAGE: what do you see\n6m\nP1-QUESTION: ask me before you start\n9m\nP1-STEER: two tool steps\n21m\nP1-FAIL: this request fails upstream\nfailed\n23m\nP1-FAILONCE: this request fails once\n24m\n显示更多 (\n2\n)\n\n仓库列表\n\nworkspace\nP1-FILEREAD: read the attached notes\nnow\nP1-IMAGE: what do you see\n3m\nP1-IMAGE: what do you see\n6m\nP1-QUESTION: ask me before you start\n9m\nP1-STEER: two tool steps\n21m\nP1-FAIL: this request fails upstream\nfailed\n23m\nP1-FAILONCE: this request fails once\n24m\nP0-STREAM: 连通性检查\n27m\nLive Agent Host\n42m",
+  "shotDone": "shots/A8-file-read.png"
+}

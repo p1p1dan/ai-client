@@ -1,0 +1,131 @@
+{
+  "sid": "session-1790732495336-1d3vpgj",
+  "gear": "执行 · 全自动",
+  "untilRunning": [
+    {
+      "dt": 182,
+      "status": "idle",
+      "goal": null,
+      "todo": null
+    },
+    {
+      "dt": 812,
+      "status": "running",
+      "goal": "running | 目标 · 第 1/256 轮 · 进行中 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停",
+      "todo": null
+    }
+  ],
+  "runningPanels": {
+    "goal": {
+      "state": "running",
+      "text": "目标 · 第 1/256 轮 · 进行中 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停",
+      "buttons": [
+        "目标 · 第 1/256 轮 · 进行中 · P0-GOAL-PAUSE: run a slow check, then finish.",
+        "暂停",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": ["P0-GOAL-PAUSE: run a slow check, then finish."],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "shotRunning": "shots/B2-goal-running-slow-check.png",
+  "pause": "clicked",
+  "untilPaused": [
+    {
+      "dt": 7,
+      "status": "running",
+      "goal": "paused | 目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 继续",
+      "todo": null
+    },
+    {
+      "dt": 770,
+      "status": "idle",
+      "goal": "paused | 目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 继续",
+      "todo": null
+    }
+  ],
+  "pausedPanels": {
+    "goal": {
+      "state": "paused",
+      "text": "目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 继续",
+      "buttons": [
+        "目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish.",
+        "继续",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": ["P0-GOAL-PAUSE: run a slow check, then finish."],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "pausedCalls": [
+    {
+      "cmd": "sleep 8; echo slow-check-done",
+      "settled": true
+    }
+  ],
+  "pausedTranscript": "最近\n\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP1-QUESTION: ask me before you start\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n1m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP1-IMAGE: what do you see\n7m\nP1-IMAGE: what do you see\n7m\nP1-FILEREAD: read the attached notes\n7m\n显示更多 (\n5\n)\n\n仓库列表\n\nworkspace\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP1-QUESTION: ask me before you start\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n1m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP1-IMAGE: what do you see\n7m\nP1-IMAGE: what do you see\n7m\nP1-FILEREAD: read the attached notes\n7m\nP1-STEER: two tool steps\n30m\nP1-FAIL: this request fails upstream\nfailed\n31m\nP1-FAILONCE: this request fails once\n33m\nP0-STREAM: 连通性检查\n36m\nLive Agent Host\n50m",
+  "shotPaused": "shots/B2-goal-paused.png",
+  "resume": "clicked",
+  "untilComplete": [
+    {
+      "dt": 412,
+      "status": "idle",
+      "goal": "suspended | 目标已挂起 · 重开会话、回退或打断后需要手动继续 · P0-GOAL-PAUSE: run a slow check, then finish. 继续",
+      "todo": null
+    },
+    {
+      "dt": 1194,
+      "status": "idle",
+      "goal": "complete | 目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 收起",
+      "todo": null
+    }
+  ],
+  "roundHeads": [
+    "目标 · 第 1/256 轮",
+    "目标 · 第 2/256 轮",
+    "目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish."
+  ],
+  "finalPanels": {
+    "goal": {
+      "state": "complete",
+      "text": "目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 收起",
+      "buttons": [
+        "目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish.",
+        "收起",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": ["P0-GOAL-PAUSE: run a slow check, then finish."],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": null,
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "toasts": [],
+  "transcript": "最近\n\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP1-QUESTION: ask me before you start\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n1m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP1-IMAGE: what do you see\n7m\nP1-IMAGE: what do you see\n7m\nP1-FILEREAD: read the attached notes\n7m\n显示更多 (\n5\n)\n\n仓库列表\n\nworkspace\n/goal P0-GOAL-PAUSE: run a slow check, then finish\nnow\nP1-QUESTION: ask me before you start\nnow\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n1m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n6m\nP1-IMAGE: what do you see\n7m\nP1-IMAGE: what do you see\n7m\nP1-FILEREAD: read the attached notes\n7m\nP1-STEER: two tool steps\n30m\nP1-FAIL: this request fails upstream\nfailed\n31m\nP1-FAILONCE: this request fails once\n33m\nP0-STREAM: 连通性检查\n36m\nLive Agent Host\n50m",
+  "shotResumed": "shots/B2-goal-resumed-complete.png"
+}

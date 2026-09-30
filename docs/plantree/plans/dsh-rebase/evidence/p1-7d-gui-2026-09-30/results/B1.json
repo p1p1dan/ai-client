@@ -1,0 +1,73 @@
+{
+  "sid": "session-1790732236185-d81s7tu",
+  "gear": "执行 · 全自动",
+  "trace": [
+    {
+      "dt": 114,
+      "status": "idle",
+      "goal": null,
+      "todo": null
+    },
+    {
+      "dt": 917,
+      "status": "running",
+      "goal": null,
+      "todo": null
+    },
+    {
+      "dt": 1937,
+      "status": "running",
+      "goal": "running | 目标 · 第 1/4 轮 · 进行中 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 暂停",
+      "todo": "待办 0/2 · 正在：Write progress.txt"
+    },
+    {
+      "dt": 3743,
+      "status": "idle",
+      "goal": "complete | 目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 收起",
+      "todo": "待办 2/2 已完成"
+    }
+  ],
+  "shots": {
+    "running": "shots/B1-goal-running.png",
+    "complete": "shots/B1-goal-complete.png"
+  },
+  "todoShot": "shots/B6-todo-card.png",
+  "panels": {
+    "goal": {
+      "state": "complete",
+      "text": "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 收起",
+      "buttons": [
+        "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+        "收起",
+        "目标菜单",
+        "展开"
+      ],
+      "hint": ["P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it"],
+      "rect": {
+        "top": 736,
+        "h": 28
+      }
+    },
+    "todo": {
+      "text": "待办 2/2 已完成",
+      "rect": {
+        "top": 704,
+        "h": 28
+      }
+    },
+    "composerTop": {
+      "top": 781,
+      "h": 26
+    }
+  },
+  "roundHeads": [
+    "目标 · 第 1/4 轮",
+    "目标 · 第 2/4 轮",
+    "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it"
+  ],
+  "transcript": "最近\n\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n2m\nP1-IMAGE: what do you see\n2m\nP1-IMAGE: what do you see\n2m\nP1-QUESTION: ask me before you start\n2m\nP1-FILEREAD: read the attached notes\n2m\nP1-STEER: two tool steps\n25m\n显示更多 (\n4\n)\n\n仓库列表\n\nworkspace\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\nnow\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n2m\nP1-IMAGE: what do you see\n2m\nP1-IMAGE: what do you see\n2m\nP1-QUESTION: ask me before you start\n2m\nP1-FILEREAD: read the attached notes\n2m\nP1-STEER: two tool steps\n25m\nP1-FAIL: this request fails upstream\nfailed\n27m\nP1-FAILONCE: this request fails once\n28m\nP0-STREAM: 连通性检查\n31m\nLive Agent Host\n46m",
+  "shotComplete": "shots/B1-goal-complete-final.png",
+  "todoExpand": true,
+  "todoExpanded": "待办 2/2 已完成\nWrite progress.txt\nVerify progress.txt",
+  "shotTodoExpanded": "shots/B6-todo-expanded.png"
+}

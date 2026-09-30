@@ -1,0 +1,268 @@
+{
+  "sid": "session-1790733764832-nr3q4fl",
+  "t1": "idle",
+  "t2": "idle",
+  "textsBefore": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染",
+    "user: P0-STREAM: A3-SECOND 第二轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "tree1": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: A3-FIRST 第一轮。 user",
+        "depthPad": "8px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true,
+        "forkTitle": "要等助手给出第一条回复后才能分叉"
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "20px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: A3-SECOND 第二轮。 user",
+        "depthPad": "32px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant 当前",
+        "depthPad": "44px",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      }
+    ]
+  },
+  "shotTree": "shots/A3-tree-dialog.png",
+  "rewindIndex": 2,
+  "rewindClick": "clicked",
+  "confirm": {
+    "role": "alertdialog",
+    "text": "确认回退这个会话？\n\n当前对话会切到「P0-STREAM: A3-SECOND 第二轮。」。之后的消息会保留为另一条分支，不会被删除。\n\n取消\n回退",
+    "buttons": ["取消", "回退"]
+  },
+  "shotConfirm": "shots/A3-rewind-confirm.png",
+  "confirmClick": "clicked",
+  "treeAfterRewind": {
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: A3-FIRST 第一轮。 user",
+        "depthPad": "8px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true,
+        "forkTitle": "要等助手给出第一条回复后才能分叉"
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant 当前",
+        "depthPad": "20px",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: A3-SECOND 第二轮。 user",
+        "depthPad": "32px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "44px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      }
+    ]
+  },
+  "textsAfterRewind": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "composerAfterRewind": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "round": ["发送消息"]
+  },
+  "transcriptAfterRewind": "最近\n\nP0-STREAM: A3-FIRST 第一轮\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\nP0-STREAM: 先有一轮对话，再试斜杠命令\n2m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n2m\nP1-JOBNOTICE: start a background job, then wait for its not…\n5m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n5m\nP1-JOBNOTICE: start a background job, then wait for its not…\n9m\n显示更多 (\n13\n)\n\n仓库列表\n\nworkspace\nP0-STREAM: A3-FIRST 第一轮\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\nP0-STREAM: 先有一轮对话，再试斜杠命令\n2m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n2m\nP1-JOBNOTICE: start a background job, then wait for its not…\n5m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n5m\nP1-JOBNOTICE: start a background job, then wait for its not…\n9m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n9m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n11m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n11m\nLive Agent Host\n11m\nP1-QUESTION: ask me before you start\n28m\nP1-IMAGE: what do you see\n28m\nP1-IMAGE: what do you see\n28m\nP1-FILEREAD: read the attached notes\n28m\nP1-STEER: two tool steps\n51m\nP1-FAIL: this request fails upstream\n52m\nP1-FAILONCE: this request fails once\n54m\nP0-STREAM: 连通性检查\n57m\nSession srd2ne\n1h",
+  "shotAfterRewind": "shots/A3-after-rewind.png",
+  "t3": "idle",
+  "recall": "P0-RECALL present=A3-FIRST missing=A3-SECOND",
+  "textsAfterRecall": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染",
+    "user: P0-RECALL {\"markers\":[\"A3-FIRST\",\"A3-SECOND\"]} 回退之后模型还看得到哪些？",
+    "assistant: P0-RECALL present=A3-FIRST missing=A3-SECOND"
+  ],
+  "shotRecall": "shots/A3-recall-after-rewind.png",
+  "tree2": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: A3-FIRST 第一轮。 user",
+        "depthPad": "8px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true,
+        "forkTitle": "要等助手给出第一条回复后才能分叉"
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "20px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: A3-SECOND 第二轮。 user",
+        "depthPad": "32px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "44px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 4,
+        "text": "P0-RECALL {\"markers\":[\"A3-FIRST\",\"A3-SECOND\"]} 回退之后模型还看得到哪些？ user",
+        "depthPad": "32px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 5,
+        "text": "P0-RECALL present=A3-FIRST missing=A3-SECOND assistant 当前",
+        "depthPad": "44px",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      }
+    ]
+  },
+  "oldCandidates": [3],
+  "oldIndex": 3,
+  "shotTree2": "shots/A3-tree-dialog-after-recall.png",
+  "switchClick": "clicked",
+  "confirm2": {
+    "role": "alertdialog",
+    "text": "确认回退这个会话？\n\n当前对话会切到「DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。」。之后的消息会保留为另一条分支，不会被删除。\n\n取消\n回退",
+    "buttons": ["取消", "回退"]
+  },
+  "confirmClick2": "clicked",
+  "treeAfterSwitch": {
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: A3-FIRST 第一轮。 user",
+        "depthPad": "8px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true,
+        "forkTitle": "要等助手给出第一条回复后才能分叉"
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant",
+        "depthPad": "20px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: A3-SECOND 第二轮。 user",
+        "depthPad": "32px",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 assistant 当前",
+        "depthPad": "44px",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 4,
+        "text": "P0-RECALL {\"markers\":[\"A3-FIRST\",\"A3-SECOND\"]} 回退之后模型还看得到哪些？ user",
+        "depthPad": "32px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      },
+      {
+        "i": 5,
+        "text": "P0-RECALL present=A3-FIRST missing=A3-SECOND assistant",
+        "depthPad": "44px",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false,
+        "forkTitle": "从这里分叉"
+      }
+    ]
+  },
+  "textsAfterSwitch": [
+    "user: P0-STREAM: A3-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染",
+    "user: P0-STREAM: A3-SECOND 第二轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "composerAfterSwitch": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "round": ["发送消息"]
+  },
+  "transcriptAfterSwitch": "最近\n\nP0-STREAM: A3-FIRST 第一轮\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\nP0-STREAM: 先有一轮对话，再试斜杠命令\n2m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n3m\nP1-JOBNOTICE: start a background job, then wait for its not…\n5m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n6m\nP1-JOBNOTICE: start a background job, then wait for its not…\n9m\n显示更多 (\n13\n)\n\n仓库列表\n\nworkspace\nP0-STREAM: A3-FIRST 第一轮\nnow\nP0-GOAL-BLOCKED: load /nonexistent/p0-config.json and apply…\nnow\nP0-STREAM: 先有一轮对话，再试斜杠命令\n2m\n/goal P0-GOAL-PAUSE: run a slow check, then finish\n3m\nP1-JOBNOTICE: start a background job, then wait for its not…\n5m\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then…\n6m\nP1-JOBNOTICE: start a background job, then wait for its not…\n9m\nP0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command\n9m\nP0-GOAL-ROUNDLIMIT: keep polishing without ever finishing\n12m\n/goal P0-SLEEPTOOL {\"token\":\"b4\",\"seconds\":45} keep one lon…\n12m\nLive Agent Host\n12m\nP1-QUESTION: ask me before you start\n28m\nP1-IMAGE: what do you see\n28m\nP1-IMAGE: what do you see\n28m\nP1-FILEREAD: read the attached notes\n28m\nP1-STEER: two tool steps\n52m\nP1-FAIL: this request fails upstream\n53m\nP1-FAILONCE: this request fails once\n55m\nP0-STREAM: 连通性检查\n58m\nSession srd2ne\n1h",
+  "shotAfterSwitch": "shots/A3-after-switch-old-branch.png"
+}

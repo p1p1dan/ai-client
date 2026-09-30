@@ -1,0 +1,239 @@
+{
+  "sid": "session-1790730488869-i73729u",
+  "rolesBefore": [],
+  "retryingText": "AI Client\n聊天\n新建\n添加仓库\n\n最近\n\nP1-FAILONCE: this request fails once\nnow\nP0-STREAM: 连通性检查\n2m\nLive Agent Host\n17m\n\n仓库列表\n\nworkspace\nP1-FAILONCE: this request fails once\nnow\nP0-STREAM: 连通性检查\n2m\nLive Agent Host\n17m\n未登录\nP1-FAILONCE: this request fails once\nworkspace · Main\n会话分支\n审阅\n终端\n后台任务\n子代理\n\nP1-FAILONCE: this request fails once.\n\n✻ 工作中 4 秒\n\n网络重试中 · 2/3 · 本回合仍在进行\n\n4s 后重试 · SERVER\n\n立即放弃\n执行 · 每次询问\nAutomatic\nworkspace\n本机",
+  "trace": [
+    {
+      "t": 1790730491185,
+      "status": "idle",
+      "card": null
+    },
+    {
+      "t": 1790730491308,
+      "status": "running",
+      "card": null
+    },
+    {
+      "t": 1790730511033,
+      "status": "failed",
+      "card": {
+        "disabled": false,
+        "wrapTitle": null
+      }
+    }
+  ],
+  "shotRetrying": "shots/A5-retrying.png",
+  "failure": {
+    "count": 1,
+    "disabled": false,
+    "title": "从失败的地方重试上一轮",
+    "wrapTitle": null,
+    "card": "模型服务返回了错误\n\n模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。\n\n500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAILONCE: the fake upstream failed this request once\"}}\n\n继续"
+  },
+  "shotFailedBusy": null,
+  "shotFailed": "shots/A5-failed-card.png",
+  "rolesAtFailure": ["user:text(P1-FAILONCE: this request fails once.)", "assistant:"],
+  "continue1": {
+    "ok": true
+  },
+  "turn1": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790730488869-i73729u",
+    "status": "idle",
+    "messages": 3,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790730511830,
+        "status": "failed"
+      },
+      {
+        "t": 1790730512335,
+        "status": "idle"
+      }
+    ]
+  },
+  "rolesAfterContinue": [
+    "user:text(P1-FAILONCE: this request fails once.)",
+    "assistant:",
+    "assistant:text(P1-FAILONCE recovered after the retry.)"
+  ],
+  "failureAfterContinue": null,
+  "answer": "P1-FAILONCE recovered after the retry.",
+  "shotContinued": "shots/A5-continued.png",
+  "continue2": {
+    "ok": false,
+    "reason": "none"
+  },
+  "toastsAfterSecond": [],
+  "rolesAfterSecond": [
+    "user:text(P1-FAILONCE: this request fails once.)",
+    "assistant:",
+    "assistant:text(P1-FAILONCE recovered after the retry.)"
+  ],
+  "shotSecond": "shots/A5-second-continue.png",
+  "toasts": [],
+  "events": [
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\",\"retry\":{\"attempt\":2,\"maxRetries\":3,\"delayMs\":5851.022671141171,\"errorStatus\":null,\"error\":\"SERVER\",\"retryAt\":1790730313529.0227}}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\",\"retry\":{\"attempt\":3,\"maxRetries\":3,\"delayMs\":12788.347679613076,\"errorStatus\":null,\"error\":\"SERVER\",\"retryAt\":1790730326329.3477}}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "message.completed",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790729892843-pu0o5mc-t5-s1\"}"
+    },
+    {
+      "type": "session.failed",
+      "payload": "{\"error\":\"500 {\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"overloaded_error\\\",\\\"message\\\":\\\"P1-FAILONCE: the fake upstream failed this request once\\\"}}\",\"errorCode\":\"PROVIDER_ERROR\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"idle\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "message.started",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790729892843-pu0o5mc-t6-s1\",\"role\":\"assistant\",\"model\":\"p1-7d-fake-gateway/fake-1\"}"
+    },
+    {
+      "type": "usage.updated",
+      "payload": "{\"input\":12,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":12,\"costUsd\":0,\"pending\":true}"
+    },
+    {
+      "type": "usage.updated",
+      "payload": "{\"input\":12,\"output\":9,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":21,\"costUsd\":0,\"context\":{\"tokens\":30,\"contextWindow\":200000,\"percent\":0.015},\"session\":{\"turns\":5,\"toolResults\":0,\"input\":108,\"output"
+    },
+    {
+      "type": "message.completed",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790729892843-pu0o5mc-t6-s1\"}"
+    },
+    {
+      "type": "session.completed",
+      "payload": "{}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"idle\"}"
+    },
+    {
+      "type": "session.created",
+      "payload": "{\"agent\":\"dsh\",\"runtimeIdentity\":\"/tmp/aiclient-p17d/home/.pilab/jyw-ai-client-dev/dsh-home/aiclient-sessions/aiclient-session-1790730488869-i73729u.dsh.json\",\"permissionGate\":\"bundled\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"idle\"}"
+    },
+    {
+      "type": "session.projection",
+      "payload": "{\"key\":\"todos\",\"view\":null}"
+    },
+    {
+      "type": "session.projection",
+      "payload": "{\"key\":\"goal\",\"view\":null}"
+    },
+    {
+      "type": "session.projection",
+      "payload": "{\"key\":\"subagentCatalog\",\"view\":[]}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "message.started",
+      "payload": "{\"messageId\":\"dsh-user-5\",\"role\":\"user\",\"attemptId\":\"session-1790730488869-i73729u:10\"}"
+    },
+    {
+      "type": "message.completed",
+      "payload": "{\"messageId\":\"dsh-user-5\"}"
+    },
+    {
+      "type": "message.started",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790730488869-i73729u-t1-s1\",\"role\":\"assistant\",\"model\":\"p1-7d-fake-gateway/fake-1\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\",\"retry\":{\"attempt\":1,\"maxRetries\":3,\"delayMs\":2940.061509289593,\"errorStatus\":null,\"error\":\"SERVER\",\"retryAt\":1790730493873.0615}}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\",\"retry\":{\"attempt\":2,\"maxRetries\":3,\"delayMs\":5956.928980280744,\"errorStatus\":null,\"error\":\"SERVER\",\"retryAt\":1790730499838.929}}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\",\"retry\":{\"attempt\":3,\"maxRetries\":3,\"delayMs\":11089.30145080119,\"errorStatus\":null,\"error\":\"SERVER\",\"retryAt\":1790730510935.3015}}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "message.completed",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790730488869-i73729u-t1-s1\"}"
+    },
+    {
+      "type": "session.failed",
+      "payload": "{\"error\":\"500 {\\\"type\\\":\\\"error\\\",\\\"error\\\":{\\\"type\\\":\\\"overloaded_error\\\",\\\"message\\\":\\\"P1-FAILONCE: the fake upstream failed this request once\\\"}}\",\"errorCode\":\"PROVIDER_ERROR\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"idle\"}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"running\"}"
+    },
+    {
+      "type": "message.started",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790730488869-i73729u-t2-s1\",\"role\":\"assistant\",\"model\":\"p1-7d-fake-gateway/fake-1\"}"
+    },
+    {
+      "type": "usage.updated",
+      "payload": "{\"input\":12,\"output\":0,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":12,\"costUsd\":0,\"pending\":true}"
+    },
+    {
+      "type": "usage.updated",
+      "payload": "{\"input\":12,\"output\":9,\"cacheRead\":0,\"cacheWrite\":0,\"totalTokens\":21,\"costUsd\":0,\"context\":{\"tokens\":30,\"contextWindow\":200000,\"percent\":0.015},\"session\":{\"turns\":1,\"toolResults\":0,\"input\":12,\"output\""
+    },
+    {
+      "type": "message.completed",
+      "payload": "{\"messageId\":\"dsh-aiclient-session-1790730488869-i73729u-t2-s1\"}"
+    },
+    {
+      "type": "session.completed",
+      "payload": "{}"
+    },
+    {
+      "type": "session.status",
+      "payload": "{\"status\":\"idle\"}"
+    }
+  ]
+}

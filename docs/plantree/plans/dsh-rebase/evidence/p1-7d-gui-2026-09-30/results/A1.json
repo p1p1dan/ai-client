@@ -1,0 +1,129 @@
+{
+  "target": {
+    "id": "session-1790732058249-ugvvdye",
+    "title": "P0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command",
+    "status": "idle"
+  },
+  "activeAtStart": "session-1790732625291-momkmp4",
+  "hostBefore": {
+    "state": "ready",
+    "capabilities": {
+      "history": true,
+      "thinking": true
+    },
+    "capacity": 6,
+    "slots": 0,
+    "active": 0,
+    "restarting": 0,
+    "errors": 0
+  },
+  "hostsBefore": [
+    {
+      "pid": 484292,
+      "fdHits": 0
+    }
+  ],
+  "filesBefore": {
+    "stub": {
+      "file": "aiclient-sessions/aiclient-session-1790732058249-ugvvdye.dsh.json",
+      "size": 372,
+      "mtimeMs": 1790732062835
+    },
+    "logs": [
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.lock",
+        "size": 0,
+        "mtimeMs": 1790733083250
+      },
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.v4.jsonl.zstd",
+        "size": 17201,
+        "mtimeMs": 1790732879831
+      }
+    ]
+  },
+  "messagesBefore": 0,
+  "shotHover": "shots/A1-hover.png",
+  "hostAfterHover": {
+    "state": "ready",
+    "capabilities": {
+      "history": true,
+      "thinking": true
+    },
+    "capacity": 6,
+    "slots": 0,
+    "active": 0,
+    "restarting": 0,
+    "errors": 0
+  },
+  "filesAfterHover": {
+    "stub": {
+      "file": "aiclient-sessions/aiclient-session-1790732058249-ugvvdye.dsh.json",
+      "size": 372,
+      "mtimeMs": 1790732062835
+    },
+    "logs": [
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.lock",
+        "size": 0,
+        "mtimeMs": 1790733083250
+      },
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.v4.jsonl.zstd",
+        "size": 17201,
+        "mtimeMs": 1790732879831
+      }
+    ]
+  },
+  "hostAfterClick": {
+    "state": "ready",
+    "capabilities": {
+      "history": true,
+      "thinking": true
+    },
+    "capacity": 6,
+    "slots": 0,
+    "active": 0,
+    "restarting": 0,
+    "errors": 0
+  },
+  "hostsAfterClick": [
+    {
+      "pid": 484292,
+      "fdHits": 0
+    }
+  ],
+  "filesAfterClick": {
+    "stub": {
+      "file": "aiclient-sessions/aiclient-session-1790732058249-ugvvdye.dsh.json",
+      "size": 372,
+      "mtimeMs": 1790732062835
+    },
+    "logs": [
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.lock",
+        "size": 0,
+        "mtimeMs": 1790733083250
+      },
+      {
+        "file": "sessions/--tmp-aiclient-p17d-workspace--/aiclient-session-1790732058249-ugvvdye/session.v4.jsonl.zstd",
+        "size": 17201,
+        "mtimeMs": 1790732879831
+      }
+    ]
+  },
+  "messagesAfterClick": 5,
+  "statusAfterClick": "idle",
+  "gatewayRequests": 0,
+  "composer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "round": ["发送消息"]
+  },
+  "events": ["session.history"],
+  "timeline": "P0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command.\n已工作 1 秒\n终端\necho \"sleep-tool a2 started\"; sleep 30; …\n· 结果未知\n引擎意外停止，这一轮没有完成。\n✻ 完成于 21:34 · 1 次工具调用\nP0-STREAM: 宿主被杀并自动重启之后再发一轮。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n✻ 完成于 21:34",
+  "sameAsBeforeQuit": true,
+  "beforeQuitTimeline": "P0-SLEEPTOOL {\"token\":\"a2\",\"seconds\":30} run a long command.\n已工作 1 秒\n终端\necho \"sleep-tool a2 started\"; sleep 30; …\n· 结果未知\n引擎意外停止，这一轮没有完成。\n✻ 完成于 21:34 · 1 次工具调用\nP0-STREAM: 宿主被杀并自动重启之后再发一轮。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n✻ 完成于 21:34",
+  "shotPreview": "shots/A1-preview.png"
+}
