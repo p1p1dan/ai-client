@@ -13,7 +13,11 @@ import { fileURLToPath } from 'node:url';
 import { zhTranslations } from '@shared/i18n';
 import { WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
-import { COMPACT_INSTRUCTIONS_UNSUPPORTED, runCompactCommand } from '../compactCommand';
+import {
+  COMPACT_INSTRUCTIONS_UNSUPPORTED,
+  compactionSummaryOf,
+  runCompactCommand,
+} from '../compactCommand';
 
 const COMPOSER_SOURCE = readFileSync(
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../ChatComposer.tsx'),
@@ -67,6 +71,41 @@ describe('runCompactCommand', () => {
   });
 });
 
+/**
+ * dsh-rebase P1-7e (problem 10, decision 140): the worker hands back the
+ * context-summary row the compaction wrote, and the outcome carries it.
+ */
+describe('runCompactCommand — the summary row', () => {
+  const row = {
+    id: 'h:c1',
+    role: 'system',
+    blocks: [{ type: 'text', id: 'h:c1:summary:0', text: 'Context summary\n\n- x' }],
+  };
+
+  it('[CC-09] success carries the row the worker read back', async () => {
+    const compact = vi.fn(async () => ({ compacted: true, summary: row }));
+    await expect(runCompactCommand({ turnRunning: false, compact })).resolves.toEqual({
+      kind: 'compacted',
+      summary: row,
+    });
+  });
+
+  it('[CC-10] anything that is not a history row is no row: an older worker, a malformed one', () => {
+    for (const result of [
+      undefined,
+      null,
+      { compacted: true },
+      { compacted: true, summary: null },
+      { compacted: true, summary: 'h:c1' },
+      { compacted: true, summary: { ...row, id: 'c1' } },
+      { compacted: true, summary: { ...row, blocks: undefined } },
+    ]) {
+      expect(compactionSummaryOf(result), JSON.stringify(result)).toBeUndefined();
+    }
+    expect(compactionSummaryOf({ compacted: true, summary: row })).toBe(row);
+  });
+});
+
 describe('the composer reports every outcome and keeps the command (source scan)', () => {
   const compactCase = COMPOSER_SOURCE.slice(
     COMPOSER_SOURCE.indexOf("case 'compact': {"),
@@ -99,6 +138,11 @@ describe('the composer reports every outcome and keeps the command (source scan)
     expect(archiveCase).toContain("t('Could not archive this conversation')");
   });
 
+  it('[CC-11] success shows the summary row, or says so in a toast when there is none', () => {
+    expect(compactCase).toContain('showCompactionSummary(activeSessionId, outcome.summary)');
+    expect(compactCase).toContain("t('Conversation compacted')");
+  });
+
   it('[CC-07] the new copy is translated', () => {
     for (const key of [
       'Wait for this turn to finish before compacting',
@@ -107,6 +151,8 @@ describe('the composer reports every outcome and keeps the command (source scan)
       'Could not archive this conversation',
       '/compact takes no instructions',
       'Remove the text after /compact, then press Enter again.',
+      'Conversation compacted',
+      'The summary shows as "Context summary" when this chat is reopened.',
     ]) {
       expect(zhTranslations[key]).toBeTruthy();
     }

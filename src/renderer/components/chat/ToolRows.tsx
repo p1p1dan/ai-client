@@ -36,6 +36,7 @@ import {
   resolveToolRowOpen,
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
+import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { thoughtBodyMaxHeightClass, turnProcessToneClass } from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
@@ -53,8 +54,11 @@ import {
   toolRowPermissionClass,
   toolRowPermissionNoteClass,
   toolRowTitleClass,
+  withStoppedOutput,
 } from './toolCard';
 import type { ToolDiff } from './toolDiff';
+import { stoppedToolOutput } from './toolLiveOutputModel';
+import { kilobytesLabel } from './toolOutputHead';
 import { formatWorkedForDuration } from './turnTiming';
 
 /**
@@ -235,9 +239,17 @@ function RefToolRowArg({
   );
 }
 
-function ToolRowContent({ view, onOpenFile, sessionId }: ToolRowProps) {
+function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) {
   const showDiff = useContext(ToolDiffVisibility);
   const { t } = useI18n();
+  // P1-7e (problem 20): a call Stop cut short shows what it printed before the
+  // stop, while this window still holds its last live tail.
+  const kept = useToolLiveOutputStore((state) =>
+    derived.outcome === 'stopped'
+      ? stoppedToolOutput(state, sessionId, derived.toolCallId)
+      : undefined
+  );
+  const view = useMemo(() => withStoppedOutput(derived, kept), [derived, kept]);
   // The dim rung of the 2026-09-18 reading ladder (see
   // `chatTimelineLayout.ts`). It used to be `text-muted-foreground`, which is
   // the same tier the work-group head above these rows now uses — so the head
@@ -718,7 +730,18 @@ function ToolRowBody({
           <pre className="m-0 select-text whitespace-pre-wrap pt-1 font-mono text-code leading-[1.55] text-muted-foreground">
             {view.input}
           </pre>
-          <pre className="m-0 mt-1 select-text whitespace-pre-wrap border-t border-border pt-2 pb-2 font-mono text-code leading-[1.55] text-muted-foreground">
+          {/* P1-7e (problem 21): when the output lost its start, the rule
+              between input and output sits above the note that says so. */}
+          <OutputHeadNote
+            omitted={view.outputHeadOmitted}
+            className="mt-1 border-t border-border pt-2"
+          />
+          <pre
+            className={cn(
+              'm-0 select-text whitespace-pre-wrap pb-2 font-mono text-code leading-[1.55] text-muted-foreground',
+              view.outputHeadOmitted ? 'pt-1' : 'mt-1 border-t border-border pt-2'
+            )}
+          >
             {view.output}
           </pre>
         </div>
@@ -738,6 +761,33 @@ function ToolRowBody({
       {view.running && view.toolCallId && <LiveToolOutput toolCallId={view.toolCallId} />}
       <ToolRowOutputSegment view={view} onOpenFile={onOpenFile} sessionId={sessionId} />
     </>
+  );
+}
+
+/**
+ * dsh-rebase P1-7e (problem 21, decision 140): the line above an output that
+ * lost its start — 「已省略前 x KB」 when the bytes are known (the jobs window's
+ * and the live pane's wording), 「已省略前面的输出」 when DSH's record does not
+ * say how much it dropped.
+ */
+function OutputHeadNote({
+  omitted,
+  className,
+}: {
+  omitted: ToolRowView['outputHeadOmitted'];
+  className?: string;
+}) {
+  const { t } = useI18n();
+  if (!omitted) return null;
+  return (
+    <p
+      className={cn('text-meta text-muted-foreground tabular-nums', className)}
+      data-testid="tool-output-head-omitted"
+    >
+      {omitted.bytes
+        ? t('Earlier {{size}} not shown', { size: kilobytesLabel(omitted.bytes) })
+        : t('Earlier output not shown')}
+    </p>
   );
 }
 
@@ -852,6 +902,7 @@ function ToolRowOutputSegment({
     case 'output':
       return (
         <div className="ml-0.5 border-l border-border pl-3.5">
+          <OutputHeadNote omitted={view.outputHeadOmitted} className="pt-1" />
           <pre
             className={cn(
               'm-0 select-text overflow-auto whitespace-pre-wrap pt-1 pb-2 font-mono text-code leading-[1.55] text-muted-foreground',

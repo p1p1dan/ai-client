@@ -26,7 +26,8 @@ import type { ChatMessage } from '@/stores/chatSessions';
 export type { TurnStopCause };
 
 /** The fields read off each message; any `ChatMessage` satisfies it. */
-export type TurnEndCauseMessage = Pick<ChatMessage, 'role' | 'stopCause' | 'stopReason'>;
+export type TurnEndCauseMessage = Pick<ChatMessage, 'role' | 'stopCause' | 'stopReason'> &
+  Partial<Pick<ChatMessage, 'turnEnd'>>;
 
 /**
  * Why this turn ended, when the user ended it; `null` when it ended on its own
@@ -45,6 +46,11 @@ export type TurnEndCauseMessage = Pick<ChatMessage, 'role' | 'stopCause' | 'stop
 export function turnEndCause(body: readonly TurnEndCauseMessage[]): TurnStopCause | null {
   for (let index = body.length - 1; index >= 0; index -= 1) {
     const message = body[index];
+    // P1-7e (decision 140): a replayed turn that saved no reply ends on a note
+    // (`turnEnd`), no longer on an empty assistant row; it answers as that row did.
+    if (message?.turnEnd) {
+      return message.turnEnd.kind === 'stopped' ? (message.stopCause ?? 'user_stop') : null;
+    }
     if (!message || message.role !== 'assistant') continue;
     if (message.stopCause) return message.stopCause;
     return message.stopReason === 'aborted' ? 'user_stop' : null;

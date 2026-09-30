@@ -52,7 +52,7 @@
  * `dsh-command-<seq>`; the history does not project commands yet (decision 113).
  */
 
-import { mapDshFailureCode } from '../../shared/dshFailureCodes.ts';
+import { dshFailureErrorCode } from '../../shared/dshFailureCodes.ts';
 import { dshFileReview } from '../../shared/dshFileReview.ts';
 import { dshMessageAttachments, dshToolOutcomeFlags } from '../../shared/dshHistory/projection.ts';
 import { parseToolArguments, toolRowInput } from '../../shared/dshHistory/toolInput.ts';
@@ -1019,8 +1019,9 @@ export class DshLiveEvents {
         }
         break;
       default: {
-        // Design shard 03 §5: DSH's failure code in our vocabulary, beside its sentence.
-        const errorCode = mapDshFailureCode(recordOf(reason.error)?.code);
+        // Design shard 03 §5: DSH's failure code in our vocabulary, beside its
+        // sentence; decision 140: two provider failures by their text first.
+        const errorCode = dshFailureErrorCode(recordOf(reason.error));
         this.emit({
           type: 'session.failed',
           payload: { error: failureText(reason), ...(errorCode ? { errorCode } : {}) },

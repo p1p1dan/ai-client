@@ -404,6 +404,33 @@ describe('deriveTurnWorkZone — the turn describes itself, in two states', () =
     });
   });
 
+  it('[E2B-WZ-NO-REPLY] a turn that ended with no reply saved reports no completion time (decision 140)', () => {
+    const zone = deriveTurnWorkZone({
+      running: false,
+      elapsedSeconds: null,
+      workedMs: 2_000,
+      completedAtMs: 1_700_000_000_000,
+      endedWithoutReply: true,
+      toolCalls: 1,
+      thinkingMs: null,
+    });
+    expect(zone).toEqual({
+      kind: 'worked',
+      worked: { minutes: 0, seconds: 2 },
+      completedAtMs: null,
+      toolCalls: 1,
+      thinkingMs: null,
+    });
+    expect(
+      deriveTurnWorkZone({
+        ...base,
+        running: false,
+        completedAtMs: 1_700_000_000_000,
+        endedWithoutReply: false,
+      })
+    ).toMatchObject({ completedAtMs: 1_700_000_000_000 });
+  });
+
   /**
    * A07 `:2399`'s red line at turn scale: unknown means OMIT, not `0`.
    *

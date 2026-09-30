@@ -31,6 +31,7 @@ import {
   applyForkSessionTitle,
   createChatSessionInCurrentDirectory,
   createUnboundChatSession,
+  showCompactionSummary,
   stopChatSession,
 } from '@/stores/chatSessionActions';
 import {
@@ -1199,6 +1200,17 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             description: outcome.reason,
           });
           return true;
+        }
+        // dsh-rebase P1-7e (problem 10, decision 140): the success is shown
+        // where a reopen shows it — the context-summary row at the end of the
+        // timeline — the moment it is written. A worker that could not read
+        // the row back still gets its success said, as a toast.
+        if (!outcome.summary || !showCompactionSummary(activeSessionId, outcome.summary)) {
+          toastManager.add({
+            type: 'success',
+            title: t('Conversation compacted'),
+            description: t('The summary shows as "Context summary" when this chat is reopened.'),
+          });
         }
         break;
       }

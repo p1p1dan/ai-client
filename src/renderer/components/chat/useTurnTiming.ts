@@ -1,20 +1,17 @@
-import type { RuntimeEvent } from '@shared/types/runtimeEvents';
-import { useCallback, useEffect, useState } from 'react';
-import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
-import {
-  initialTurnTimingRegistry,
-  reduceTurnTiming,
-  type ThinkingTiming,
-  type TurnTimingRegistry,
-} from './turnTiming';
+import { useCallback, useEffect } from 'react';
+import { useTurnTimingStore } from '@/stores/turnTimingRegistry';
+import type { ThinkingTiming } from './turnTiming';
 
 /**
  * Team-side thinking-timing registry surface (T-05, mirrors `useMessageMetadata.ts`):
- * subscribes to Runtime Events for the active session and folds
- * `thinking.started`/`thinking.completed` — and, since 2026-09-23,
- * `tool.started`/`tool.completed` for the running rows' live elapsed tail —
- * into per-block duration lookups, without touching the red-line
- * `chatSessions` store.
+ * per-block duration lookups folded from `thinking.started`/`thinking.completed`
+ * — and, since 2026-09-23, `tool.started`/`tool.completed` for the running
+ * rows' live elapsed tail — without touching the red-line `chatSessions` store.
+ *
+ * dsh-rebase P1-7e (decision 140): the registry lives in
+ * `stores/turnTimingRegistry.ts` for the whole run, fed for every chat by one
+ * listener. This hook only holds that listener while it is mounted and reads
+ * its chat's registry, so a timeline that remounts still says 「思考 N 秒」.
  */
 
 export interface UseTurnTimingResult {
@@ -24,33 +21,20 @@ export interface UseTurnTimingResult {
 }
 
 export function useTurnTiming(sessionId: string | null): UseTurnTimingResult {
-  const [registry, setRegistry] = useState<TurnTimingRegistry>(initialTurnTimingRegistry);
-
-  useEffect(() => {
-    if (!sessionId) {
-      setRegistry(initialTurnTimingRegistry);
-      return () => undefined;
-    }
-    let cancelled = false;
-    const unsubscribe = subscribeRuntimeEvent((event: RuntimeEvent) => {
-      if (cancelled) return;
-      if (event.sessionId && event.sessionId !== sessionId) return;
-      setRegistry((prev) => reduceTurnTiming(prev, event));
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [sessionId]);
+  useEffect(() => useTurnTimingStore.getState().retain(), []);
+  const registry = useTurnTimingStore((state) =>
+    sessionId ? state.bySession[sessionId] : undefined
+  );
 
   // Stable across renders that did not change THEIR map — same reason as
   // `useMessageMetadata`'s `get` (review batch F7): both feed props of the
   // memoized `ChatTurn`. Keyed on the map, not the registry, so a tool event
   // leaves `getThinking` (read by every turn) untouched.
-  const { byBlock, byToolCall } = registry;
-  const getThinking = useCallback((blockId: string) => byBlock[blockId], [byBlock]);
+  const byBlock = registry?.byBlock;
+  const byToolCall = registry?.byToolCall;
+  const getThinking = useCallback((blockId: string) => byBlock?.[blockId], [byBlock]);
   const getToolStartedAtMs = useCallback(
-    (toolCallId: string) => byToolCall[toolCallId]?.startedAt,
+    (toolCallId: string) => byToolCall?.[toolCallId]?.startedAt,
     [byToolCall]
   );
 

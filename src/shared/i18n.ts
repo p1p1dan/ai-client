@@ -3743,3 +3743,34 @@ Object.assign(zhTranslations, {
   'The files this call touches cannot be determined in advance: please confirm it':
     '无法静态判断这次调用会碰哪些文件，所以需要你确认',
 });
+
+// dsh-rebase P1-7e e2b (decision 140): how a reopened turn that saved no reply
+// ends, a command output that lost its start, `/compact`'s success, and the
+// two provider failures the bridge reads off their text.
+Object.assign(zhTranslations, {
+  'This turn did not finish: {{reason}}. No reply was saved.':
+    '这一轮没有完成：{{reason}}，没有保存任何回复。',
+  'This turn did not finish. No reply was saved.': '这一轮没有完成，没有保存任何回复。',
+  'This turn was stopped. No reply was saved.': '这一轮已停止，没有保存任何回复。',
+  'This turn was interrupted. No reply was saved.': '这一轮中断了，没有保存任何回复。',
+  // The same notes after steps that did save something.
+  'This turn did not finish: {{reason}}.': '这一轮没有完成：{{reason}}。',
+  'This turn did not finish.': '这一轮没有完成。',
+  'This turn was stopped.': '这一轮已停止。',
+  'This turn was interrupted.': '这一轮中断了。',
+  'Earlier output not shown': '已省略前面的输出',
+  'Conversation compacted': '对话已压缩',
+  'The summary shows as "Context summary" when this chat is reopened.':
+    '摘要会在重新打开这个对话时显示为「Context summary」。',
+  'The company gateway cut off this reply': '公司网关中断了这次回复',
+  'The company gateway stopped this reply before the model started to answer.':
+    '公司网关在模型开始回答之前中断了这次回复。',
+  'Retrying the same request usually fails again. Switch to another model or lower the thinking level, and forward the error detail to the gateway administrator.':
+    '重试同一请求通常还会失败。请换一个模型或调低思考档位，并把错误详情转给网关管理员。',
+  'Continue anyway': '仍然继续',
+  'The model settings do not fit this model': '模型设置与该模型不兼容',
+  'The model service refused a setting this app sent with the request, because this model does not support it.':
+    '模型服务拒绝了本应用随请求发送的一项设置：这个模型不支持它。',
+  'Check the thinking settings of this model in the model settings, then send your message again.':
+    '请在模型设置里检查这个模型的思考相关配置，改好后再发一次消息。',
+});

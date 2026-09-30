@@ -104,5 +104,28 @@ export type DshToolResultBlock = Extract<HistoryBlock, { type: 'tool_result' }>;
  */
 export const REVIEW_PATCH_MAX_LENGTH = 64 * 1024;
 
+/**
+ * Part-id kind of the first block of a context-summary row (`<row id>:summary:0`):
+ * a compaction's checkpoint, or a migrated pi branch summary. The projection
+ * mints it; `isDshSummaryRow` reads it back.
+ */
+export const DSH_SUMMARY_PART = 'summary';
+
+/**
+ * Whether a timeline row is a context summary, by the id of its first block —
+ * a history row as the projection wrote it, or the same row in the renderer's
+ * store, which keeps block ids as they came. dsh-rebase P1-7e (decision 140):
+ * a turn's clock must not run on to a compaction that happened after it.
+ */
+export function isDshSummaryRow(message: {
+  readonly id: string;
+  readonly role: string;
+  readonly blocks: readonly { readonly id: string }[];
+}): boolean {
+  return (
+    message.role === 'system' && message.blocks[0]?.id === `${message.id}:${DSH_SUMMARY_PART}:0`
+  );
+}
+
 /** What a tree node is, beyond its role (`SessionTreeNode.entryType`). */
 export type DshHistoryEntryType = 'message' | 'compaction' | 'notice';

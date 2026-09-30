@@ -17,6 +17,7 @@ import {
 } from './piToolNames';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
+import { dshShellOutputHead, isDshAbortedText, startAtLine } from './toolOutputHead';
 import { formatThoughtRow } from './turnTiming';
 
 // Re-exported so the pi tool vocabulary keeps ONE public entry point even
@@ -555,6 +556,14 @@ export interface ToolRowView {
   body?: ToolRowBody;
   /** Body text when `body === 'output'`. */
   output?: string;
+  /**
+   * dsh-rebase P1-7e (problem 21, decision 140): the output shown lost its
+   * start — DSH kept only the tail of the command's stdout, or the row shows
+   * the last live tail of a stopped call. The body opens on its first whole
+   * line and says so above it: 「已省略前 x KB」 with `bytes`, and without them
+   * (DSH's record does not say how much it dropped) 「已省略前面的输出」.
+   */
+  outputHeadOmitted?: { bytes?: number };
   /** Scroll-window class when `body === 'output'` (legacy sign-off values). */
   outputMaxHeightClass?: string;
   /**
@@ -674,6 +683,13 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   const argRef = presentation ? undefined : deriveToolArgRef(run);
   const link = deriveFileLink(run) ?? undefined;
   const hitSource = isHitListTool(run.toolName) && !outcome ? run.output : undefined;
+  // P1-7e (problem 20): a call Stop cut short has no output of its own on
+  // record, only DSH's `Error: tool call aborted`, which the outcome word
+  // (「已停止」) already says in the reader's language. What the command printed
+  // before the stop, when this window still holds it, is laid in by the row
+  // (`withStoppedOutput`).
+  const recordedOutput =
+    outcome === 'stopped' && isDshAbortedText(run.output) ? undefined : run.output;
 
   // dsh-rebase P1-7c (decision 118's handoff): a `todo_write` row opens onto
   // the list it wrote, drawn by the todo card's own component — never the
@@ -691,7 +707,13 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     !running &&
     outcome !== 'notStarted' &&
     outcome !== 'outcomeUnknown' &&
-    (failed || Boolean(run.output));
+    (failed || Boolean(recordedOutput));
+  // P1-7e (problem 21): a long command's record keeps the tail of its stdout;
+  // the body starts on a whole line and says the start is missing.
+  const outputHead =
+    showOutputBody && recordedOutput && SHELL_EXIT_TOOL_NAMES.has(run.toolName)
+      ? dshShellOutputHead(recordedOutput)
+      : null;
   // P1-7c: how a settled call that ran to its end left things — a background
   // job, a shell's non-zero exit. Neither is a failure, and neither is said
   // over an outcome word (a stopped command's exit is Stop's, not its own).
@@ -768,7 +790,8 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     expandable,
     ...(showTodos ? { todos } : {}),
     body: showTodos ? 'todos' : showOutputBody ? 'output' : undefined,
-    output: showOutputBody ? run.output : undefined,
+    output: showOutputBody ? (outputHead ? outputHead.text : recordedOutput) : undefined,
+    ...(outputHead?.headCut ? { outputHeadOmitted: {} } : {}),
     outputMaxHeightClass: showOutputBody ? outputMaxHeightClass(run.toolName) : undefined,
     // The diff SUPERSEDES the raw argument body rather than sitting next to
     // it: they carry the same information, and showing both would put an
@@ -2458,6 +2481,30 @@ const BASH_TOOL_NAMES = new Set<string>([
   DSH_TOOL_NAMES.pwsh,
   DSH_TOOL_NAMES.jobOutput,
 ]);
+
+/**
+ * dsh-rebase P1-7e (problem 20, decision 140): a stopped call's row with what
+ * the command printed before Stop, when this window still holds its last live
+ * tail (`toolLiveOutputModel`'s `stopped`). The record of such a call is only
+ * DSH's sentence about the stop, which `deriveToolRowView` leaves out; a row
+ * whose record does carry output keeps it. A tail read from a byte offset
+ * starts on its first whole line, and the row says how much came before.
+ */
+export function withStoppedOutput(
+  view: ToolRowView,
+  kept: { text: string; omittedBytes: number } | undefined
+): ToolRowView {
+  if (!kept?.text || view.outcome !== 'stopped' || view.output) return view;
+  const head = startAtLine(kept.text, kept.omittedBytes);
+  return {
+    ...view,
+    expandable: true,
+    body: 'output',
+    output: head.text,
+    outputMaxHeightClass: view.outputMaxHeightClass ?? outputMaxHeightClass(view.toolName ?? ''),
+    ...(head.omittedBytes > 0 ? { outputHeadOmitted: { bytes: head.omittedBytes } } : {}),
+  };
+}
 
 /** Output body scroll window (legacy sign-off ② values): Bash-family 46vh, everything else 60vh. */
 export function outputMaxHeightClass(toolName: string): string {

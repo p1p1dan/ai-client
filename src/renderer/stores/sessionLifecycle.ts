@@ -11,6 +11,7 @@ import { useSubagentActivityStore } from './subagentActivity';
 import { useToolExpansionStore } from './toolExpansion';
 import { useToolLiveOutputStore } from './toolLiveOutput';
 import { useTurnSendStatusStore } from './turnSendStatus';
+import { useTurnTimingStore } from './turnTimingRegistry';
 
 export function pruneRecordBySession<T>(
   record: Readonly<Record<string, T>>,
@@ -70,6 +71,8 @@ export function resetSessionScopedRendererState(sessionId: string): void {
   // replaced. The composer's draft is NOT cleared here: it is what the user
   // typed, and a rewind hands its prompt back into it (problem 1).
   useMessageMetadataStore.getState().resetSession(sessionId);
+  // P1-7e (decision 140): the thought and tool stamps of that branch too.
+  useTurnTimingStore.getState().resetSession(sessionId);
   useSubagentActivityStore.setState((state) => {
     const liveSessionIds = [
       ...new Set(
@@ -111,4 +114,6 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   // composer drafts (problem 33) of chats that are gone.
   useMessageMetadataStore.getState().pruneSessions(sessionIds);
   useComposerDraftsStore.getState().pruneSessions(sessionIds);
+  // P1-7e (decision 140): the thought and tool stamps of chats that are gone.
+  useTurnTimingStore.getState().pruneSessions(sessionIds);
 }

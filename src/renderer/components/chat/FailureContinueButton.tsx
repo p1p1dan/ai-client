@@ -19,13 +19,23 @@ export interface FailureContinueButtonProps {
   /** Catalog key of the reason Continue is disabled; `null` when it is enabled. */
   blockedReason: string | null;
   onContinue: () => void;
+  /**
+   * dsh-rebase P1-7e (decision 140): catalog key of the button's label when
+   * plain 「继续」 would promise too much (「仍然继续」 for a failure that
+   * retrying usually repeats). Defaults to `Continue`.
+   */
+  label?: string;
 }
 
 function swallow(event: MouseEvent | KeyboardEvent): void {
   event.stopPropagation();
 }
 
-export function FailureContinueButton({ blockedReason, onContinue }: FailureContinueButtonProps) {
+export function FailureContinueButton({
+  blockedReason,
+  onContinue,
+  label = 'Continue',
+}: FailureContinueButtonProps) {
   const { t } = useI18n();
   const disabled = blockedReason !== null;
   const title = disabled ? t(blockedReason) : t('Retry the last turn from where it failed');
@@ -48,7 +58,7 @@ export function FailureContinueButton({ blockedReason, onContinue }: FailureCont
         }}
       >
         <Send className="mr-1 h-3.5 w-3.5" />
-        {t('Continue')}
+        {t(label)}
       </Button>
     </span>
   );

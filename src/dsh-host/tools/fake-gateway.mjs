@@ -140,6 +140,10 @@
  *                       Scripts are listed in `DSH_P0_2_SCRIPTS` below.
  *                       dsh-rebase P1-5b adds P1-ECHOKEY (HTTP 401 repeating the key it got)
  *                       and P1-ENVDUMP (one bash `env`) for the KEY-CANARY scan.
+ *                       dsh-rebase P1-7e (decision 140) adds P1-GATE: HTTP 502 whose body
+ *                       is a company gateway's stream-gate refusal
+ *                       (`stream_gate_precommit` / `prebuffer_overflow`), which the
+ *                       host must not retry (tools/loop-guard-smoke.ts, host A).
  *                       dsh-rebase P1-4e adds P1-FAIL (HTTP 500 for the whole turn) and
  *                       answers DSH's compaction instruction (`/compact`) with a short
  *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
@@ -401,7 +405,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
+  /P1-(FAILONCE|FAIL|GATE|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -1010,6 +1014,22 @@ const DSH_P0_2_SCRIPTS = {
       kind: 'error',
       status: 500,
       message: 'P1-FAIL: the fake upstream failed this request',
+    };
+  },
+  // dsh-rebase P1-7e (decision 140): a company gateway's stream gate refuses
+  // the reply before the model's first byte, as a 5xx with its own body.
+  'P1-GATE'() {
+    return {
+      kind: 'raw-error',
+      status: 502,
+      body: JSON.stringify({
+        error: {
+          type: 'stream_gate_precommit',
+          reason: 'prebuffer_overflow',
+          family: 'anthropic',
+          message: 'P1-GATE: the fake gateway gated this reply',
+        },
+      }),
     };
   },
   // dsh-rebase P1-7b (tools/bridge-record.ts `jobs-kill`): a background ticker
@@ -2494,6 +2514,9 @@ function main() {
 
       if (decision.kind === 'error') {
         sendError(res, decision.status, decision.message);
+      } else if (decision.kind === 'raw-error') {
+        res.writeHead(decision.status, { 'content-type': 'application/json' });
+        res.end(decision.body);
       } else if (decision.kind === 'echo-key') {
         sendError(
           res,

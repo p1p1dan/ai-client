@@ -1125,11 +1125,14 @@ const electronAPI = {
       sessionId?: string;
     }): Promise<{ commands: WorkerSlashCommandInfo[]; truncated: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_GET_SLASH_COMMANDS, payload ?? {}),
-    /** R02-c — manual context compaction. */
+    /**
+     * R02-c — manual context compaction. dsh-rebase P1-7e (decision 140): with
+     * the context-summary row it wrote, when the worker could read it back.
+     */
     compactSession: (payload: {
       sessionId: string;
       instructions?: string;
-    }): Promise<{ compacted: true }> =>
+    }): Promise<import('@shared/types/workerRpc').WorkerCompactResult> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_COMPACT_SESSION, payload),
     /** dsh-rebase P1-7a — one engine command out of band (the goal bar's `/goal …`). */
     runSessionCommand: (payload: {

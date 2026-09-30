@@ -71,6 +71,14 @@ export interface SessionFailureView {
    * says in words and the operator log keeps.
    */
   showsDetail: boolean;
+  /**
+   * dsh-rebase P1-7e (decision 140): the hint stays on the card beside the
+   * Continue button. For a failure that retrying usually repeats, the button
+   * alone would promise what the hint has to take back.
+   */
+  hintWithContinue?: boolean;
+  /** Decision 140: the Continue button's own label, when `Continue` would promise too much. */
+  continueLabel?: string;
 }
 
 /**
@@ -233,6 +241,28 @@ const FAILURE_VIEWS = {
     hint: 'Continue to try again. If it fails the same way, send the detail below or pick another model.',
     action: 'continue',
   },
+  // dsh-rebase P1-7e (decision 140): the bridge reads these two off the
+  // provider's own text (`classifyDshFailureText`), and the host never
+  // retries them. A company gateway's stream gate refuses the reply before
+  // the model's first byte; the same request is refused again, so the card
+  // keeps its hint beside a Continue that says it is a long shot.
+  GATEWAY_STREAM_GATE: {
+    title: 'The company gateway cut off this reply',
+    reason: 'The company gateway stopped this reply before the model started to answer.',
+    hint: 'Retrying the same request usually fails again. Switch to another model or lower the thinking level, and forward the error detail to the gateway administrator.',
+    action: 'continue',
+    hintWithContinue: true,
+    continueLabel: 'Continue anyway',
+  },
+  // The provider refused a parameter this model does not take (`"thinking.type.disabled"
+  // is not supported for this model`): nothing changes until the settings do.
+  MODEL_SETTING_UNSUPPORTED: {
+    title: 'The model settings do not fit this model',
+    reason:
+      'The model service refused a setting this app sent with the request, because this model does not support it.',
+    hint: 'Check the thinking settings of this model in the model settings, then send your message again.',
+    action: 'configure',
+  },
   unknown: {
     title: 'The turn stopped',
     reason: 'This app does not recognise the reason the turn ended with.',
@@ -296,6 +326,8 @@ export function deriveSessionFailure(input: {
     hint: view.hint,
     action: view.action,
     showsDetail: !('detail' in view && view.detail === false),
+    ...('hintWithContinue' in view && view.hintWithContinue ? { hintWithContinue: true } : {}),
+    ...('continueLabel' in view ? { continueLabel: view.continueLabel } : {}),
   };
 }
 

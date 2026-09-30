@@ -52,6 +52,7 @@ import {
   type JobRowView,
 } from './subwindowsModel';
 import { normalizeTerminalText } from './toolLiveOutputModel';
+import { kilobytesLabel, startAtLine } from './toolOutputHead';
 import { useSubwindowClock } from './useSubwindowClock';
 
 const EMPTY: readonly string[] = [];
@@ -369,11 +370,6 @@ function LaneActivity({ lane }: { lane: SubagentLane | undefined }) {
   );
 }
 
-/** Size in KB for the 「已省略前 x KB」 note. */
-function kilobytes(bytes: number): string {
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
 /** What one pane keeps, in characters: a few reads' worth. */
 const PANE_MAX_CHARS = 65_536;
 
@@ -454,7 +450,13 @@ export function JobOutputPane({
     };
   }, [sessionId, jobId, running]);
 
-  const shown = useMemo(() => normalizeTerminalText(pane.text), [pane.text]);
+  // P1-7e (problem 21): output read from a byte offset opens on a whole line;
+  // the cut part counts toward what the title says was left out.
+  const head = useMemo(
+    () => startAtLine(normalizeTerminalText(pane.text), pane.omitted),
+    [pane.text, pane.omitted]
+  );
+  const shown = head.text;
 
   // Follow the end while the reader is at it; stop once they scroll up.
   useLayoutEffect(() => {
@@ -466,8 +468,8 @@ export function JobOutputPane({
     <div className={tailClass()} data-testid="job-output">
       <p className="text-muted-foreground">
         {title}
-        {pane.omitted > 0 &&
-          ` · ${t('Earlier {{size}} not shown', { size: kilobytes(pane.omitted) })}`}
+        {head.omittedBytes > 0 &&
+          ` · ${t('Earlier {{size}} not shown', { size: kilobytesLabel(head.omittedBytes) })}`}
       </p>
       {pane.gone ? (
         <p className="text-muted-foreground">

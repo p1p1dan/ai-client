@@ -45,7 +45,11 @@
           "timestamp": "<ms>",
           "blocks": [],
           "incomplete": true,
-          "stopReason": "error"
+          "stopReason": "error",
+          "failure": {
+            "errorCode": "PROVIDER_ERROR",
+            "error": "500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}"
+          }
         }
       ],
       "offset": 0,

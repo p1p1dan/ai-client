@@ -420,6 +420,24 @@ export interface ChatMessage {
    * (`dshTimelineRowModel.ts`). Set once, never mutated after.
    */
   noticeKind?: string;
+  /**
+   * dsh-rebase P1-7e (problem 7, decision 140; optional-field addition, same
+   * discipline as `noticeKind`): replay only — this system row stands where a
+   * turn ended with no reply saved: it failed (with what the log recorded
+   * about it), the user stopped it, or it was cut off. The timeline draws it
+   * as a note in the reader's language, never as a reply, and the turn it
+   * ends reports no completion time. Set once by the replay, never mutated.
+   */
+  turnEnd?: ChatTurnEnd;
+}
+
+/** See {@link ChatMessage.turnEnd}. */
+export interface ChatTurnEnd {
+  kind: 'failed' | 'stopped' | 'interrupted';
+  /** `failed` only: our code for the failure, as the live card had it. */
+  errorCode?: string;
+  /** `failed` only: the engine's own sentence, the card's detail. */
+  error?: string;
 }
 
 interface PendingPermission {
@@ -1017,25 +1035,58 @@ function mapHistoryAttachment(attachment: HistoryAttachment): ChatMessageAttachm
   };
 }
 
-function mapHistoryMessageToChatMessage(
+/**
+ * dsh-rebase P1-7e (problem 7, decision 140): what an assistant row that saved
+ * nothing stands for — a failed turn (with the failure the history recorded),
+ * a stopped one, or one cut off. `null` for every row that saved something.
+ */
+function turnEndOf(historyMessage: HistoryMessage, blockCount: number): ChatTurnEnd | null {
+  if (!historyMessage.incomplete || blockCount > 0 || historyMessage.role !== 'assistant') {
+    return null;
+  }
+  if (historyMessage.stopReason === 'error') {
+    const { errorCode, error } = historyMessage.failure ?? {};
+    return {
+      kind: 'failed',
+      ...(typeof errorCode === 'string' && errorCode ? { errorCode } : {}),
+      ...(typeof error === 'string' && error ? { error } : {}),
+    };
+  }
+  return { kind: historyMessage.stopReason === 'aborted' ? 'stopped' : 'interrupted' };
+}
+
+/** The English text of a `turnEnd` row, for any surface that reads a row's text, not its marker. */
+const TURN_END_TEXT: Record<ChatTurnEnd['kind'], string> = {
+  failed: 'This turn did not finish. No reply was saved.',
+  stopped: 'This turn was stopped. No reply was saved.',
+  interrupted: 'This turn was interrupted. No reply was saved.',
+};
+
+export function mapHistoryMessageToChatMessage(
   sessionId: string,
   historyMessage: HistoryMessage
 ): ChatMessage {
   const blocks = historyMessage.blocks
     .map(mapHistoryBlock)
     .filter((block): block is ChatBlock => block !== null);
+  // Problem 7: a turn that saved no reply used to replay an English sentence
+  // AS its reply — under 「最终输出」, with 「完成于」 beside it — which read
+  // like a turn that finished. It is a note now, like the interrupted-turn
+  // note, drawn in the reader's language by the timeline.
+  const turnEnd = turnEndOf(historyMessage, blocks.length);
   if (historyMessage.incomplete && blocks.length === 0) {
     blocks.push({
       id: `${historyMessage.id}:interrupted`,
       type: 'text',
-      text: 'Response interrupted before any assistant content was saved.',
+      text: TURN_END_TEXT[turnEnd?.kind ?? 'interrupted'],
     });
   }
   return {
     id: historyMessage.id,
     sessionId,
-    role: historyMessage.role,
+    role: turnEnd ? 'system' : historyMessage.role,
     blocks,
+    ...(turnEnd ? { turnEnd } : {}),
     ...(historyMessage.incomplete ? { incomplete: true } : {}),
     ...(historyMessage.stopReason ? { stopReason: historyMessage.stopReason } : {}),
     ...(historyMessage.stopCause ? { stopCause: historyMessage.stopCause } : {}),

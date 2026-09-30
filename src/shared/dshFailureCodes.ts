@@ -27,6 +27,21 @@ export const MODEL_NOT_CONFIGURED = 'MODEL_NOT_CONFIGURED';
  */
 export const TOOL_CALL_REPETITION_CODE = 'tool_call_repetition';
 
+/**
+ * dsh-rebase P1-7e (decision 140): a company gateway's stream gate refused the
+ * reply before the model's first byte (`stream_gate_precommit`, reason
+ * `prebuffer_overflow`). The same request fails the same way again, so it is
+ * never retried automatically, and its card says so.
+ */
+export const GATEWAY_STREAM_GATE = 'GATEWAY_STREAM_GATE';
+
+/**
+ * dsh-rebase P1-7e (decision 140): the provider refused a request parameter
+ * this model does not take (`"thinking.type.disabled" is not supported for
+ * this model`). Resending changes nothing until the model's settings do.
+ */
+export const MODEL_SETTING_UNSUPPORTED = 'MODEL_SETTING_UNSUPPORTED';
+
 export type DshMappedFailureCode =
   | typeof CREDENTIALS_UNAVAILABLE
   | 'PROVIDER_UNAUTHORIZED'
@@ -36,7 +51,9 @@ export type DshMappedFailureCode =
   | 'TIMEOUT'
   | 'NETWORK_ERROR'
   | 'PROVIDER_ERROR'
-  | typeof TOOL_CALL_REPETITION_CODE;
+  | typeof TOOL_CALL_REPETITION_CODE
+  | typeof GATEWAY_STREAM_GATE
+  | typeof MODEL_SETTING_UNSUPPORTED;
 
 /**
  * DSH 0.1.7-rc.2's failure codes (`LlmFailure.code` on `turn/end`): the
@@ -78,4 +95,50 @@ export function mapDshFailureCode(code: unknown): DshMappedFailureCode | undefin
   return typeof code === 'string' && Object.hasOwn(DSH_FAILURE_CODES, code)
     ? DSH_FAILURE_CODES[code]
     : undefined;
+}
+
+// Either marker alone is enough: a gateway may name only the gate or only its reason.
+const STREAM_GATE_PATTERN = /\bstream_gate_precommit\b|\bprebuffer_overflow\b/i;
+const MODEL_SETTING_PATTERN = /\bis not supported for this model\b/i;
+
+/**
+ * dsh-rebase P1-7e (decision 140): the two provider failures only their text
+ * tells apart, whatever class DSH gave them (a 5xx is `SERVER`, a 400 is
+ * `INVALID_REQUEST`, a body pi-ai could not read is `PI_AI_ERROR`). Neither
+ * marker is anything DSH writes itself, so a match is the provider's own
+ * account. The gate wins when a text carries both.
+ */
+export function classifyDshFailureText(
+  text: unknown
+): typeof GATEWAY_STREAM_GATE | typeof MODEL_SETTING_UNSUPPORTED | undefined {
+  if (typeof text !== 'string' || text.length === 0) return undefined;
+  if (STREAM_GATE_PATTERN.test(text)) return GATEWAY_STREAM_GATE;
+  if (MODEL_SETTING_PATTERN.test(text)) return MODEL_SETTING_UNSUPPORTED;
+  return undefined;
+}
+
+/**
+ * Our code for a DSH `LlmFailure` (`{ message, code, … }`): its text first
+ * (`classifyDshFailureText`), then its code (`mapDshFailureCode`). The live
+ * `session.failed` and the history's failed-turn row read it alike.
+ */
+export function dshFailureErrorCode(failure: unknown): DshMappedFailureCode | undefined {
+  const record =
+    typeof failure === 'object' && failure !== null
+      ? (failure as { message?: unknown; code?: unknown })
+      : undefined;
+  return classifyDshFailureText(record?.message) ?? mapDshFailureCode(record?.code);
+}
+
+/**
+ * Whether retrying the same request cannot help, by the failure's text alone
+ * (decision 140): the host's request-error hook refuses DSH's automatic retry
+ * for these, whatever the route's retry policy says about their class.
+ */
+export function isUnretryableDshFailure(failure: unknown): boolean {
+  const message =
+    typeof failure === 'object' && failure !== null
+      ? (failure as { message?: unknown }).message
+      : undefined;
+  return classifyDshFailureText(message) !== undefined;
 }

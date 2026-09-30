@@ -1,3 +1,4 @@
+import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resolveSendCwd } from '@/components/chat/composerTarget';
 import { decideSendPreamble } from '@/components/chat/sendPreamble';
@@ -12,6 +13,7 @@ import {
   materializeForkedChatSession,
   materializeIndexedPiChatSession,
   retargetChatSession,
+  showCompactionSummary,
   stopChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
@@ -1527,5 +1529,55 @@ describe('applyForkSessionTitle (decision 131)', () => {
     await pending;
 
     expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('Release notes');
+  });
+});
+
+/**
+ * dsh-rebase P1-7e (problem 10, decision 140): `/compact` succeeded and the
+ * worker handed back the context-summary row it wrote; the chat shows it at
+ * once, under the history id a reopen gives it, so the reopen replaces it.
+ */
+describe('showCompactionSummary', () => {
+  const summary: HistoryMessage = {
+    id: 'h:c1',
+    entryId: 'c1',
+    role: 'system',
+    timestamp: 5_000,
+    blocks: [
+      { type: 'text' as const, id: 'h:c1:summary:0', text: 'Context summary\n\n## Goal\n- ship' },
+    ],
+  };
+
+  it('[E2B-10-SHOW] appends the row as the history maps it, once', () => {
+    useChatSessionsStore.setState({
+      sessions: [makeSession()],
+      messages: {
+        'session-1': [
+          { id: 'm1', sessionId: 'session-1', role: 'user', blocks: [] },
+          { id: 'm2', sessionId: 'session-1', role: 'assistant', blocks: [] },
+        ],
+      },
+    });
+    expect(showCompactionSummary('session-1', summary)).toBe(true);
+    const bucket = useChatSessionsStore.getState().messages['session-1'] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['m1', 'm2', 'h:c1']);
+    expect(bucket[2]).toMatchObject({
+      id: 'h:c1',
+      sessionId: 'session-1',
+      role: 'system',
+      timestamp: 5_000,
+      blocks: [{ id: 'h:c1:summary:0', type: 'text', text: 'Context summary\n\n## Goal\n- ship' }],
+    });
+    // A second answer naming the same row adds nothing.
+    const before = useChatSessionsStore.getState().messages;
+    expect(showCompactionSummary('session-1', summary)).toBe(true);
+    expect(useChatSessionsStore.getState().messages).toBe(before);
+  });
+
+  it('[E2B-10-GONE] a chat that is gone gets nothing, and says so', () => {
+    useChatSessionsStore.setState({ sessions: [makeSession()], messages: {} });
+    const before = useChatSessionsStore.getState();
+    expect(showCompactionSummary('session-9', summary)).toBe(false);
+    expect(useChatSessionsStore.getState().messages).toBe(before.messages);
   });
 });

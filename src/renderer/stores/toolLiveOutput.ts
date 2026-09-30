@@ -22,6 +22,16 @@ interface ToolLiveOutputStoreState extends ToolLiveOutputState {
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
 
+/** The fold's fields of a state, without the store's own. */
+function pickOutputState(next: ToolLiveOutputState): ToolLiveOutputState {
+  return {
+    byCall: next.byCall,
+    order: next.order,
+    stopped: next.stopped,
+    stoppedOrder: next.stoppedOrder,
+  };
+}
+
 export const useToolLiveOutputStore = create<ToolLiveOutputStoreState>()((set, get) => ({
   ...initialToolLiveOutput,
   listening: false,
@@ -35,7 +45,7 @@ export const useToolLiveOutputStore = create<ToolLiveOutputStoreState>()((set, g
       if (isSessionRetired(event.sessionId)) return;
       set((state) => {
         const next = reduceToolLiveOutput(state, event);
-        return next === state ? state : { byCall: next.byCall, order: next.order };
+        return next === state ? state : pickOutputState(next);
       });
     });
     return () => {
@@ -47,6 +57,6 @@ export const useToolLiveOutputStore = create<ToolLiveOutputStoreState>()((set, g
   pruneSessions: (sessionIds) =>
     set((state) => {
       const next = pruneToolLiveOutput(state, sessionIds);
-      return next === state ? state : { byCall: next.byCall, order: next.order };
+      return next === state ? state : pickOutputState(next);
     }),
 }));

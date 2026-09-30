@@ -1,3 +1,4 @@
+import { isDshSummaryRow } from '@shared/dshHistory/types';
 import type { SessionRetryInfo, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import {
   ArrowDown,
@@ -135,9 +136,11 @@ import { streamingBlockIdForItem } from './streamingBlockId';
 import { delegateDisplayName } from './subagentActivityModel';
 import { ToolGroup, ToolRowTimelineContext, useUserDisclosureReport } from './ToolRows';
 import { TurnCeilingNotice } from './TurnCeilingNotice';
+import { TurnEndNotice } from './TurnEndNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
+import { turnEndNotesAfterWork, turnEndsWithoutReply } from './turnEndNotice';
 import {
   deriveSendStatusBinding,
   hasLiveTurnEvidence,
@@ -990,15 +993,23 @@ export function MessageTimeline({
                         // T135 / decision 045: retries the failed turn itself
                         // (no second copy of the prompt), and only once the
                         // failure has settled — see `retryLastTurn.ts`.
-                        <FailureContinueButton
-                          blockedReason={continueBlockedReason({
-                            failureSettled,
-                            sendInFlight: sendStatus != null,
-                          })}
-                          onContinue={() =>
-                            resumeMessageId && requestContinue(sessionId, resumeMessageId)
-                          }
-                        />
+                        // Decision 140: a failure retrying usually repeats
+                        // keeps its hint beside a button that says so.
+                        <>
+                          {failure.hintWithContinue && (
+                            <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
+                          )}
+                          <FailureContinueButton
+                            blockedReason={continueBlockedReason({
+                              failureSettled,
+                              sendInFlight: sendStatus != null,
+                            })}
+                            label={failure.continueLabel}
+                            onContinue={() =>
+                              resumeMessageId && requestContinue(sessionId, resumeMessageId)
+                            }
+                          />
+                        </>
                       ) : (
                         <p className="mt-1 text-muted-foreground">{t(failure.hint)}</p>
                       )}
@@ -2020,8 +2031,17 @@ const ChatTurn = memo(function ChatTurn({
   // history file gave it — as `completedAt` ONLY (`replayedSpanMetadata`), and
   // the LATER of its own and the latest entry folded into it, so a run that
   // stopped at a tool boundary still ends when its last call did.
+  //
+  // P1-7e (problem 10): a context summary is not the turn's work. `/compact`
+  // runs after the turn it follows, and its row (dated when the summary was
+  // written) would otherwise stretch that turn's 「已工作」 by the compaction.
   const bodyMetadata = useMemo(
-    () => turn.body.map((message) => getMetadata(message.id) ?? replayedSpanMetadata(message)),
+    () =>
+      turn.body.map((message) =>
+        isDshSummaryRow(message)
+          ? undefined
+          : (getMetadata(message.id) ?? replayedSpanMetadata(message))
+      ),
     [turn.body, getMetadata]
   );
 
@@ -2283,6 +2303,10 @@ const ChatTurn = memo(function ChatTurn({
   // copy is now the strip's entire contents.
   const showActions = actionsCopyText.length > 0;
 
+  // P1-7e (problem 7): an end note that follows saved work does not claim
+  // that nothing was saved.
+  const endNotesAfterWork = useMemo(() => turnEndNotesAfterWork(turn.body), [turn.body]);
+
   const renderItem = (item: TurnItem) => (
     <TurnItemView
       key={turnItemKey(item)}
@@ -2293,6 +2317,7 @@ const ChatTurn = memo(function ChatTurn({
       streamingBlockId={streamingBlockIdForItem(item, streamingBlockIdByMessage)}
       getThinkingDurationMs={getThinkingDurationMs}
       getToolStartedAtMs={rowToolStartedAtMs}
+      endNoteAfterWork={item.kind === 'notice' && endNotesAfterWork.has(item.messageId)}
     />
   );
 
@@ -2406,6 +2431,9 @@ const ChatTurn = memo(function ChatTurn({
     // dropping the clause.
     completedAtMs:
       metadata?.completedAt ?? (lastAssistant ? replayedCompletedAt(lastAssistant) : null) ?? null,
+    // P1-7e (problem 7): a turn that ended with no reply saved (failed,
+    // stopped, cut off) did not complete, and says no 「完成于」.
+    endedWithoutReply: turnEndsWithoutReply(turn.body),
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });
@@ -2832,6 +2860,8 @@ interface TurnItemViewProps {
   getThinkingDurationMs: (blockId: string) => number | null | undefined;
   /** Running rows' start stamps, see `ToolGroupItem`. The clock itself is context. */
   getToolStartedAtMs: (toolCallId: string) => number | null | undefined;
+  /** P1-7e (problem 7): a turn-end note after saved work (`turnEndNotesAfterWork`). */
+  endNoteAfterWork?: boolean;
 }
 
 /**
@@ -2937,6 +2967,7 @@ function TurnItemView({
   streamingBlockId,
   getThinkingDurationMs,
   getToolStartedAtMs,
+  endNoteAfterWork = false,
 }: TurnItemViewProps) {
   switch (item.kind) {
     /**
@@ -3021,6 +3052,11 @@ function TurnItemView({
     }
 
     case 'notice': {
+      // P1-7e (problem 7): a reopened turn that saved no reply ends on a note
+      // in the reader's language, not on an English sentence posing as a reply.
+      if (item.message.turnEnd) {
+        return <TurnEndNotice turnEnd={item.message.turnEnd} afterWork={endNoteAfterWork} />;
+      }
       // P1-7a: a DSH notice (a task's or a subagent's account, a command's
       // answer) is one light line; every other notice keeps its Alert.
       const row = dshNoticeRowView(item.message);

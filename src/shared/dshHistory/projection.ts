@@ -31,6 +31,7 @@
  * else's log, the tree, a golden test) no row carries it.
  */
 
+import { dshFailureErrorCode } from '../dshFailureCodes.ts';
 import { dshFileReview } from '../dshFileReview.ts';
 import { dshNoticeText, dshTurnHeadText, dshTurnOrigin } from '../dshNotices.ts';
 import type { DshToolPresenter, ToolCallPresentation } from '../dshToolPresentation.ts';
@@ -39,6 +40,7 @@ import type {
   HistoryAttachment,
   HistoryBlock,
   HistoryMessage,
+  HistoryTurnFailure,
   TurnStopCause,
 } from '../types/sessionHistory.ts';
 import { parseToolArguments, toolRowInput } from './toolInput.ts';
@@ -50,6 +52,7 @@ import {
   DSH_SOURCE_AICLIENT_RETRY,
   DSH_SOURCE_COMPACT_CHECKPOINT,
   DSH_SOURCE_USER,
+  DSH_SUMMARY_PART,
   DSH_TOOL_ABORTED,
   DSH_TOOL_ABORTED_BEFORE_DISPATCH,
   DSH_TOOL_NOT_STARTED,
@@ -57,6 +60,7 @@ import {
   type DshHistoryEntryType,
   type DshLogEvent,
   type DshToolResultBlock,
+  isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
   REVIEW_PATCH_MAX_LENGTH,
@@ -90,8 +94,8 @@ const CONTEXT_SUMMARY_TITLE = 'Context summary';
 const SUMMARY_OPEN_TAG = '<compacted-summary>';
 const SUMMARY_CLOSE_TAG = '</compacted-summary>';
 
-/** Block-id kinds `dshHistoryEntryType` reads back; the projection mints them. */
-const SUMMARY_PART = 'summary';
+/** Block-id kind `dshHistoryEntryType` reads back (`isDshSummaryRow`); the projection mints it. */
+const SUMMARY_PART = DSH_SUMMARY_PART;
 
 type Row = Record<string, unknown>;
 
@@ -146,8 +150,7 @@ export function aiclientEventName(type: string): string | undefined {
 /** A tree node's `entryType`, read back off the part ids this projection mints. */
 export function dshHistoryEntryType(message: HistoryMessage): DshHistoryEntryType {
   if (message.role !== 'system') return 'message';
-  const first = message.blocks[0];
-  return first && first.id === partId(message.id, SUMMARY_PART, 0) ? 'compaction' : 'notice';
+  return isDshSummaryRow(message) ? 'compaction' : 'notice';
 }
 
 /**
@@ -286,6 +289,24 @@ export function dshToolOutcomeFlags(
       ? { refused: true as const }
       : {}),
   };
+}
+
+/** How much of a failure's sentence a history row keeps (a provider may answer with a whole page). */
+const FAILURE_TEXT_LIMIT = 2_000;
+
+/**
+ * Decision 140: what a failed turn's `turn/end` recorded, for its placeholder
+ * row — our code (the live `session.failed`'s, by the same function) and DSH's
+ * sentence, bounded. Undefined when the reason carries neither.
+ */
+function turnFailureOf(reason: Row | null): HistoryTurnFailure | undefined {
+  const failure = recordOf(reason?.error);
+  const errorCode = dshFailureErrorCode(failure);
+  const text = stringOf(failure?.message) ?? stringOf(failure?.code);
+  const error =
+    text && text.length > FAILURE_TEXT_LIMIT ? `${text.slice(0, FAILURE_TEXT_LIMIT)}…` : text;
+  if (!errorCode && !error) return undefined;
+  return { ...(errorCode ? { errorCode } : {}), ...(error ? { error } : {}) };
 }
 
 /** The user's own reasons for an `aborted` turn; every other cause carries none. */
@@ -569,8 +590,10 @@ export class DshHistoryFold {
       }
     } else if (kind === 'error') {
       // DSH records the failed call as `assistant/attempt`, outside model
-      // history, so nothing stands for it yet.
+      // history, so nothing stands for it yet. Decision 140: the placeholder
+      // says why, as the live card did.
       if (turn.anchored) {
+        const failure = turnFailureOf(reason);
         hideable.push(
           this.append({
             id: historyId(`${turn.anchor}:end`),
@@ -580,6 +603,7 @@ export class DshHistoryFold {
             blocks: [],
             incomplete: true,
             stopReason: 'error',
+            ...(failure ? { failure } : {}),
           })
         );
       }

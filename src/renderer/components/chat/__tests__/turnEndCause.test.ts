@@ -36,6 +36,22 @@ describe('turnEndCause', () => {
     expect(turnEndCause([assistant({ stopReason: 'error' })])).toBeNull();
   });
 
+  it('[E2B-END-CAUSE] a replayed end note answers as the empty row it replaced (decision 140)', () => {
+    // Stop before any reply was saved: the note stands for the stopped row.
+    expect(
+      turnEndCause([{ role: 'system', stopCause: 'user_stop', turnEnd: { kind: 'stopped' } }])
+    ).toBe('user_stop');
+    expect(turnEndCause([{ role: 'system', turnEnd: { kind: 'stopped' } }])).toBe('user_stop');
+    // A failed or cut-off turn ended on its own, whatever came before the note.
+    expect(
+      turnEndCause([
+        assistant({ stopReason: 'aborted' }),
+        { role: 'system', turnEnd: { kind: 'failed' } },
+      ])
+    ).toBeNull();
+    expect(turnEndCause([{ role: 'system', turnEnd: { kind: 'interrupted' } }])).toBeNull();
+  });
+
   it('turnEndedByUser is the boolean view', () => {
     expect(turnEndedByUser([assistant({ stopCause: 'interjected' })])).toBe(true);
     expect(turnEndedByUser([assistant({ stopReason: 'stop' })])).toBe(false);

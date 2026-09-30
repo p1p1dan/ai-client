@@ -10,6 +10,7 @@ import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSettingsStore } from '@/stores/settings';
 import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
+import { useTurnTimingStore } from '@/stores/turnTimingRegistry';
 import { ChatComposer } from './ChatComposer';
 import { ChatWelcomeCard } from './ChatWelcomeCard';
 import { HostStatusBanner } from './HostStatusBanner';
@@ -213,6 +214,9 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     () => useMessageMetadataStore.getState().retain(resolveSessionModel),
     [resolveSessionModel]
   );
+  // P1-7e (decision 140): the same for the thought and tool stamps behind
+  // 「思考 N 秒」 and a running row's clock.
+  useEffect(() => useTurnTimingStore.getState().retain(), []);
 
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).

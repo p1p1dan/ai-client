@@ -1235,17 +1235,85 @@ describe('T32 Pi hydration generations and pagination', () => {
         hasMore: false,
       }),
     ]);
+    // P1-7e (problem 7, decision 140): a note, not a reply — a system row the
+    // timeline draws in the reader's language (`turnEnd`), with an English
+    // rendering for surfaces that do not read the marker.
     expect(lastPatch.messages?.[SESSION_ID]?.[0]).toMatchObject({
       id: 'h:empty-assistant',
+      role: 'system',
       incomplete: true,
       stopReason: 'interrupted',
+      turnEnd: { kind: 'interrupted' },
       blocks: [
         {
           type: 'text',
-          text: 'Response interrupted before any assistant content was saved.',
+          text: 'This turn was interrupted. No reply was saved.',
         },
       ],
     });
+  });
+
+  it('[E2B-TURN-END] a failed empty assistant becomes a note carrying the recorded failure; a stopped one says it stopped', () => {
+    const state = baseState({ sessions: [makeSession()] });
+    const { lastPatch } = applyAll(state, [
+      makeResumedEvent(),
+      makeHistoryEvent({
+        mode: 'initial',
+        messages: [
+          {
+            id: 'h:u1',
+            entryId: 'u1',
+            role: 'user',
+            blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'P1-FAIL: go' }],
+          },
+          {
+            id: 'h:u1:end',
+            entryId: 'u1:end',
+            role: 'assistant',
+            timestamp: 5_000,
+            blocks: [],
+            incomplete: true,
+            stopReason: 'error',
+            failure: { errorCode: 'PROVIDER_ERROR', error: 'P1-FAIL: upstream failed' },
+          },
+          {
+            id: 'h:u2',
+            entryId: 'u2',
+            role: 'user',
+            blocks: [{ type: 'text', id: 'h:u2:text:0', text: 'stop me' }],
+          },
+          {
+            id: 'h:u2:end',
+            entryId: 'u2:end',
+            role: 'assistant',
+            blocks: [],
+            incomplete: true,
+            stopReason: 'aborted',
+            stopCause: 'user_stop',
+          },
+        ],
+        totalCount: 4,
+        hasMore: false,
+      }),
+    ]);
+    const messages = lastPatch.messages?.[SESSION_ID] ?? [];
+    expect(messages[1]).toMatchObject({
+      id: 'h:u1:end',
+      role: 'system',
+      timestamp: 5_000,
+      turnEnd: {
+        kind: 'failed',
+        errorCode: 'PROVIDER_ERROR',
+        error: 'P1-FAIL: upstream failed',
+      },
+    });
+    expect(messages[1]?.blocks.map((block) => block.text)).toEqual([
+      'This turn did not finish. No reply was saved.',
+    ]);
+    expect(messages[3]).toMatchObject({ role: 'system', turnEnd: { kind: 'stopped' } });
+    // Rows that saved something are replies, as before.
+    expect(messages[0]).not.toHaveProperty('turnEnd');
+    expect(messages[0]?.role).toBe('user');
   });
 });
 

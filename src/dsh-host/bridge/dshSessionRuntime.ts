@@ -102,6 +102,7 @@ import {
   DSH_RETRY_CONTINUATION_TEXT,
   DSH_SOURCE_AICLIENT_RETRY,
   type DshLogEvent,
+  isDshSummaryRow,
 } from '../../shared/dshHistory/types.ts';
 import {
   createPermissionPrompt,
@@ -127,7 +128,7 @@ import {
   type PermissionGear,
   type RuntimePermissionSettings,
 } from '../../shared/types/runtimePermission.ts';
-import type { SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
+import type { HistoryMessage, SessionTreeSnapshot } from '../../shared/types/sessionHistory.ts';
 import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   STAGED_FORK_MARKER_SUFFIX,
@@ -1432,6 +1433,9 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       );
     }
     const budgetMs = this.deps.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
+    // Decision 140: the summary row already on the timeline, so the one this
+    // command writes is told apart from it.
+    const summaryBefore = (await this.historyCache.ready()) ? this.lastSummaryRow()?.id : undefined;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), budgetMs);
     let execution: DshCommandExecution | undefined;
@@ -1450,8 +1454,22 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       );
     }
     const outcome = compactOutcome(execution);
-    if ('compacted' in outcome) return outcome;
-    throw new PiWorkerSessionError(outcome.code, outcome.message);
+    if (!('compacted' in outcome)) throw new PiWorkerSessionError(outcome.code, outcome.message);
+    // Decision 140: the row the history will show for it, handed back with the
+    // answer (no live event: decision 113 rule 8 stands). A cache that cannot
+    // read it back costs the row only; the compaction itself succeeded.
+    const summary = (await this.historyCache.ready()) ? this.lastSummaryRow() : undefined;
+    return summary && summary.id !== summaryBefore ? { ...outcome, summary } : outcome;
+  }
+
+  /** The newest context-summary row of the timeline (`isDshSummaryRow`), if any. */
+  private lastSummaryRow(): HistoryMessage | undefined {
+    const messages = this.historyCache.messages();
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const message = messages[index];
+      if (message && isDshSummaryRow(message)) return message;
+    }
+    return undefined;
   }
 
   // ---- panels (P1-7a, decisions 072 rules 1-2, 113 rule 12, 118) ------------------

@@ -28,6 +28,7 @@ import {
 } from './dshSessionRuntime.ts';
 import { type DshBridgeModelPlan, DshModelRouter } from './modelRoute.ts';
 import { readSessionPage } from './readPage.ts';
+import { installRetryVeto, type RetryVetoContext } from './retryVeto.ts';
 import { type SeedSessionDeps, seedSession } from './seedSession.ts';
 import { collectOrphanSessions, type GcPersistence } from './sessionGc.ts';
 import { type DshToolRegistryView, dshToolPresenter } from './toolPresentation.ts';
@@ -107,6 +108,10 @@ function tenths(value: number): number {
 }
 
 export async function apply(ctx: BridgeRowContext): Promise<void> {
+  // Decision 140: a gateway's stream gate and a refused model parameter fail
+  // the same way on every retry; DSH's retry policy only sees their class.
+  // Installed before the inbox check: it guards every agent of the host.
+  installRetryVeto(ctx as unknown as RetryVetoContext);
   const inbox = (globalThis as Record<symbol, unknown>)[Symbol.for('aiclient.dsh.bridge')] as
     | BridgeInbox
     | undefined;

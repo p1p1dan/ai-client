@@ -241,7 +241,20 @@
     "compacted": {
       "ok": true,
       "result": {
-        "compacted": true
+        "compacted": true,
+        "summary": {
+          "id": "h:id-15",
+          "entryId": "id-15",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-15:summary:0",
+              "text": "Context summary\n\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n\n## Current Work\n- (none)"
+            }
+          ]
+        }
       }
     },
     "eventsAfter": 0

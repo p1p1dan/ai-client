@@ -19,6 +19,7 @@
  * instructions typed after `/compact`, which clearing would have thrown away.
  */
 
+import type { HistoryMessage } from '@shared/types/sessionHistory';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 
 /**
@@ -30,7 +31,11 @@ import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 export const COMPACT_INSTRUCTIONS_UNSUPPORTED = 'WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED';
 
 export type CompactCommandOutcome =
-  | { kind: 'compacted' }
+  /**
+   * dsh-rebase P1-7e (problem 10, decision 140): with the summary row the
+   * worker read back, when it could — the caller shows it right away.
+   */
+  | { kind: 'compacted'; summary?: HistoryMessage }
   /** A turn is running; nothing was sent to Main. */
   | { kind: 'turn-running' }
   /** The engine takes `/compact` alone; nothing ran, and the typed text is still there. */
@@ -45,8 +50,8 @@ export async function runCompactCommand(input: {
 }): Promise<CompactCommandOutcome> {
   if (input.turnRunning) return { kind: 'turn-running' };
   try {
-    await input.compact();
-    return { kind: 'compacted' };
+    const summary = compactionSummaryOf(await input.compact());
+    return summary ? { kind: 'compacted', summary } : { kind: 'compacted' };
   } catch (error) {
     const reason = unwrapIpcErrorMessage(error);
     if (reason.includes(COMPACT_INSTRUCTIONS_UNSUPPORTED)) {
@@ -54,4 +59,19 @@ export async function runCompactCommand(input: {
     }
     return { kind: 'failed', reason };
   }
+}
+
+/**
+ * The summary row a `worker.compact` answer carries (`WorkerCompactResult.summary`),
+ * read defensively: an older worker sends none, and anything that is not a
+ * history row with an `h:` id and blocks is no row at all.
+ */
+export function compactionSummaryOf(result: unknown): HistoryMessage | undefined {
+  if (typeof result !== 'object' || result === null) return undefined;
+  const summary = (result as { summary?: unknown }).summary;
+  if (typeof summary !== 'object' || summary === null) return undefined;
+  const row = summary as Partial<HistoryMessage>;
+  return typeof row.id === 'string' && row.id.startsWith('h:') && Array.isArray(row.blocks)
+    ? (summary as HistoryMessage)
+    : undefined;
 }

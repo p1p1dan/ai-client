@@ -210,6 +210,8 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'PROVIDER_RATE_LIMITED',
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
+      'GATEWAY_STREAM_GATE',
+      'MODEL_SETTING_UNSUPPORTED',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });
@@ -342,6 +344,8 @@ describe('every failure sentence has a Chinese entry', () => {
       'PROVIDER_RATE_LIMITED',
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
+      'GATEWAY_STREAM_GATE',
+      'MODEL_SETTING_UNSUPPORTED',
       'unknown',
     ]) {
       const view = deriveSessionFailure({ errorCode: code });
@@ -353,5 +357,55 @@ describe('every failure sentence has a Chinese entry', () => {
 
   it('translates the Continue button', () => {
     expect(zh('Continue')).toBeTruthy();
+    // Decision 140: and every label a view gives it instead.
+    expect(zh('Continue anyway')).toBe('仍然继续');
+  });
+});
+
+/**
+ * dsh-rebase P1-7e (decision 140): the two provider failures the bridge reads
+ * off their text. Their cards say what the user can do, since retrying
+ * the same request does not help.
+ */
+describe('the gateway stream gate and a refused model setting', () => {
+  const zh = (key: string) => zhTranslations[key];
+
+  it('[E2B-CARD-GATE] names the company gateway, keeps its hint beside a Continue that says it is a long shot', () => {
+    const view = deriveSessionFailure({
+      errorCode: 'GATEWAY_STREAM_GATE',
+      error: '{"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow"}}',
+    });
+    expect(zh(view.title)).toBe('公司网关中断了这次回复');
+    expect(zh(view.reason)).toBe('公司网关在模型开始回答之前中断了这次回复。');
+    expect(zh(view.hint)).toBe(
+      '重试同一请求通常还会失败。请换一个模型或调低思考档位，并把错误详情转给网关管理员。'
+    );
+    expect(view.action).toBe('continue');
+    expect(canContinueSession(view, true)).toBe(true);
+    expect(view.hintWithContinue).toBe(true);
+    expect(view.continueLabel).toBe('Continue anyway');
+    // The raw text is what the gateway administrator needs.
+    expect(view.showsDetail).toBe(true);
+  });
+
+  it('[E2B-CARD-SETTING] sends the user to the thinking settings, with no Continue', () => {
+    const view = deriveSessionFailure({
+      errorCode: 'MODEL_SETTING_UNSUPPORTED',
+      error: '"thinking.type.disabled" is not supported for this model',
+    });
+    expect(zh(view.title)).toBe('模型设置与该模型不兼容');
+    expect(zh(view.hint)).toContain('思考相关配置');
+    expect(view.action).toBe('configure');
+    expect(canContinueSession(view, true)).toBe(false);
+    expect(view.showsDetail).toBe(true);
+    expect(view).not.toHaveProperty('continueLabel');
+    expect(view).not.toHaveProperty('hintWithContinue');
+  });
+
+  it('[E2B-CARD-WIRING] the card shows the hint beside the button when the view says so, with its label', () => {
+    const timeline = code(source('MessageTimeline.tsx'));
+    expect(timeline).toContain('failure.hintWithContinue');
+    expect(timeline).toContain('label={failure.continueLabel}');
+    expect(code(source('FailureContinueButton.tsx'))).toContain('{t(label)}');
   });
 });

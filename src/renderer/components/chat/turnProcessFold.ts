@@ -471,6 +471,12 @@ export function deriveTurnWorkZone(input: {
   /** Whole-turn span once settled, or `null` when the turn replayed no timing. */
   workedMs: number | null;
   completedAtMs: number | null;
+  /**
+   * dsh-rebase P1-7e (problem 7, decision 140): the turn ends on a note that
+   * no reply was saved (failed, stopped, cut off). It did not complete, so it
+   * says no 「完成于」, whatever date its last row carries.
+   */
+  endedWithoutReply?: boolean;
   toolCalls: number;
   thinkingMs: number | null;
 }): TurnWorkZone {
@@ -484,7 +490,7 @@ export function deriveTurnWorkZone(input: {
   return {
     kind: 'worked',
     worked: input.workedMs === null ? null : splitWorkedForDuration(input.workedMs),
-    completedAtMs: input.completedAtMs,
+    completedAtMs: input.endedWithoutReply ? null : input.completedAtMs,
     toolCalls: input.toolCalls > 0 ? input.toolCalls : null,
     thinkingMs: input.thinkingMs,
   };

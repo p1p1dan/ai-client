@@ -7,16 +7,23 @@
  * and stops once they scroll up.
  */
 
-import { useLayoutEffect, useRef } from 'react';
+import { useLayoutEffect, useMemo, useRef } from 'react';
 import { useI18n } from '@/i18n';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
+import { kilobytesLabel, startAtLine } from './toolOutputHead';
 
 export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
   const { t } = useI18n();
   const output = useToolLiveOutputStore((state) => state.byCall[toolCallId]);
   const scroller = useRef<HTMLPreElement | null>(null);
   const following = useRef(true);
-  const text = output?.text ?? '';
+  // P1-7e (problem 21): a tail read from a byte offset opens on a whole line;
+  // the cut part counts toward what the note says was left out.
+  const shown = useMemo(
+    () => startAtLine(output?.text ?? '', output?.omittedBytes ?? 0),
+    [output?.text, output?.omittedBytes]
+  );
+  const text = shown.text;
 
   useLayoutEffect(() => {
     const element = scroller.current;
@@ -28,10 +35,8 @@ export function LiveToolOutput({ toolCallId }: { toolCallId: string }) {
     <div className="ml-0.5 border-l border-border pl-3.5" data-testid="live-tool-output">
       <p className="pt-1 text-meta text-muted-foreground tabular-nums">
         {t('Live output')}
-        {output.omittedBytes > 0 &&
-          ` · ${t('Earlier {{size}} not shown', {
-            size: `${Math.max(1, Math.round(output.omittedBytes / 1024))} KB`,
-          })}`}
+        {shown.omittedBytes > 0 &&
+          ` · ${t('Earlier {{size}} not shown', { size: kilobytesLabel(shown.omittedBytes) })}`}
       </p>
       <pre
         ref={scroller}

@@ -312,6 +312,20 @@ export interface HistoryMessage {
    * text (`historyReplayMerge.ts`). Absent on migrated and non-DSH history.
    */
   liveMessageId?: string;
+  /**
+   * dsh-rebase P1-7e (decision 140): on the placeholder row of a turn that
+   * FAILED, what the log recorded about the failure — our code for it (the
+   * one the live `session.failed` carried, `dshFailureErrorCode`) and the
+   * engine's own sentence, bounded. Absent on every other row, and when the
+   * log recorded neither. Optional-field addition; older readers ignore it.
+   */
+  failure?: HistoryTurnFailure;
+}
+
+/** See {@link HistoryMessage.failure}. */
+export interface HistoryTurnFailure {
+  errorCode?: string;
+  error?: string;
 }
 
 /**

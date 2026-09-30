@@ -480,6 +480,66 @@ describe('DshSessionRuntime — worker.compact (P1-4d2, decisions 099 rule 10, 1
     expect(emitted).toEqual([]);
   });
 
+  it('[E2B-COMPACT-SUMMARY] hands back the context-summary row the command wrote (decision 140)', async () => {
+    const host = fakeHost();
+    let runs = 0;
+    let writes = true;
+    fakeCommands(host, {
+      compact: {
+        description: 'compact',
+        handler: () => {
+          runs += 1;
+          // DSH names a summary the cache never saw (it read the log elsewhere).
+          if (!writes)
+            return { kind: 'success', text: 'Compacted 2 history items', sourceEventSeq: 99 };
+          const event = host.append('user/message', {
+            id: `c${runs}`,
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'This is an automatically generated checkpoint ...\n\n<compacted-summary>',
+              },
+              { type: 'text', text: `## Current Work\n- round ${runs}` },
+              { type: 'text', text: '</compacted-summary>' },
+            ],
+            source: { kind: 'compact-checkpoint', compactionId: `x${runs}` },
+          });
+          return { kind: 'success', text: 'Compacted 4 history items', sourceEventSeq: event.seq };
+        },
+      },
+    });
+    const emitted: Emitted[] = [];
+    const bridge = runtime(host.ctx, emitted);
+    await bridge.bootstrap();
+
+    // The row exactly as the history shows it on the next reopen (same `h:` id).
+    const first = await bridge.compact({ logicalSessionId: LOGICAL });
+    expect(first).toEqual({
+      compacted: true,
+      summary: {
+        id: 'h:c1',
+        entryId: 'c1',
+        role: 'system',
+        timestamp: 1_790_000_000_001,
+        blocks: [
+          {
+            type: 'text',
+            id: 'h:c1:summary:0',
+            text: 'Context summary\n\n## Current Work\n- round 1',
+          },
+        ],
+      },
+    });
+    const { page } = await bridge.history({ logicalSessionId: LOGICAL, offset: 0, limit: 50 });
+    expect(page.messages.find((message) => message.id === 'h:c1')).toEqual(first.summary);
+    // A run whose row the cache does not hold hands back none: the old row is not this one's.
+    writes = false;
+    expect(await bridge.compact({ logicalSessionId: LOGICAL })).toEqual({ compacted: true });
+    // Still not a send: nothing is echoed live (decision 113 rule 8).
+    expect(emitted).toEqual([]);
+  });
+
   it('[D2-COMPACT-INSTRUCTIONS] refuses instructions with its own code before anything runs', async () => {
     const host = fakeHost();
     const commands = fakeCommands(host, { compact: { description: 'compact' } });

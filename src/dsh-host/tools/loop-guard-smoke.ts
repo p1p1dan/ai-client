@@ -16,6 +16,10 @@
  *             `turn/end error{tool_call_repetition}`; the next request of the
  *             session does not carry the cut reply.
  *   E1 ctl    P1-FAIL in the same host is retried (`llm/retry`): mode always is live.
+ *   E1 gate   P1-GATE, a 502 whose body is a company gateway's stream-gate
+ *             refusal, is NOT retried even in mode always: one request, no
+ *             `llm/retry`, `turn/end error` (the bridge row's retry veto,
+ *             decision 140; it guards every agent of the host).
  *   G2        P8-VARIED: 40 distinct `job_output`; cut at the seventeenth.
  *   G3        P8-FANOUT: ten distinct `subagent` calls run, nothing is cut.
  *   G7/E3     P8-SUBREPEAT: the child's own degenerate reply is cut in the
@@ -369,6 +373,21 @@ async function hostA(port: number, gatewayRoot: string) {
       retries: sessionView(host, ctl).retries,
     };
 
+    // E1 gate (decision 140): a stream-gate refusal is left terminal, as a 5xx
+    // and in mode always, by the bridge row's veto.
+    const gate = await session('p8-gate-control');
+    facts.gateTurn = await runTurn(host, gate, 'P1-GATE control');
+    // Long enough for a first backoff (200 ms here) to have fired.
+    await sleep(1_500);
+    const gateView = sessionView(host, gate);
+    facts.gateControl = {
+      requests: gatewayRequests(gatewayRoot, /^P1-GATE/).length,
+      retries: gateView.retries,
+      turnEnd: gateView.turnEnds.at(-1),
+    };
+    // Mode always would retry a failed veto without end: stop it either way.
+    await call(host, 'close-session', { sessionId: gate });
+
     // G2
     const g2 = await session('p8-g2');
     facts.g2Turn = await runTurn(
@@ -581,6 +600,13 @@ function verdictOf(report: Line): Record<string, boolean> {
     );
     const ctl = a.failControl as Line;
     v.e1ControlAlwaysRetries = Number(ctl.requests) >= 2 && Number(ctl.retries) >= 1;
+    const gateCtl = (a.gateControl ?? {}) as Line;
+    const gateError = (reasonOf(gateCtl.turnEnd as Line).error ?? {}) as Line;
+    v.e1GateNotRetried =
+      gateCtl.requests === 1 &&
+      gateCtl.retries === 0 &&
+      reasonOf(gateCtl.turnEnd as Line).kind === 'error' &&
+      String(gateError.message).includes('stream_gate_precommit');
     const g2 = a.g2 as Line;
     const g2Close = (g2.close ?? {}) as Line;
     v.g2CutAtSeventeenth =

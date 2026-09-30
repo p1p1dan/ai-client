@@ -18,6 +18,7 @@ import {
 } from '../projection.ts';
 import {
   type DshLogEvent,
+  isDshSummaryRow,
   PI_BRANCH_SUMMARY_PREFIX,
   PI_BRANCH_SUMMARY_SUFFIX,
   REVIEW_PATCH_MAX_LENGTH,
@@ -181,6 +182,21 @@ describe('projectDshHistory — human messages', () => {
       ],
     });
     expect(row && dshHistoryEntryType(row)).toBe('compaction');
+    // Decision 140: the renderer reads the same row back by the same rule.
+    expect(row && isDshSummaryRow(row)).toBe(true);
+  });
+
+  it('[E2B-SUMMARY-ROW] only a system row opening on a summary part is a context summary', () => {
+    const row = (id: string, role: string, blockId: string) => ({
+      id,
+      role,
+      blocks: [{ id: blockId }],
+    });
+    expect(isDshSummaryRow(row('h:c1', 'system', 'h:c1:summary:0'))).toBe(true);
+    expect(isDshSummaryRow(row('h:c1', 'assistant', 'h:c1:summary:0'))).toBe(false);
+    expect(isDshSummaryRow(row('h:c1', 'system', 'h:c1:notice:0'))).toBe(false);
+    expect(isDshSummaryRow(row('h:c1', 'system', 'h:c2:summary:0'))).toBe(false);
+    expect(isDshSummaryRow({ id: 'h:c1', role: 'system', blocks: [] })).toBe(false);
   });
 
   it('shows a notice-form context message as a system note with its summary', () => {
@@ -446,6 +462,38 @@ describe('projectDshHistory — how a turn ended', () => {
       incomplete: true,
       stopReason: 'error',
     });
+  });
+
+  it('[E2B-FAIL-ROW] the failed placeholder carries our code for the failure and its sentence (decision 140)', () => {
+    const failedWith = (error: Record<string, unknown>) =>
+      projectDshHistory(log().turn(1).user('u1', 'go').end(1, { kind: 'error', error }).events)[1];
+    expect(failedWith({ message: 'P1-FAIL: upstream failed', code: 'SERVER' })?.failure).toEqual({
+      errorCode: 'PROVIDER_ERROR',
+      error: 'P1-FAIL: upstream failed',
+    });
+    // The same text rule as the live `session.failed` (`dshFailureErrorCode`).
+    expect(
+      failedWith({
+        message: '502 {"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow"}}',
+        code: 'SERVER',
+      })?.failure?.errorCode
+    ).toBe('GATEWAY_STREAM_GATE');
+    // A code this build does not know keeps the sentence alone.
+    expect(failedWith({ message: 'odd', code: 'UNKNOWN' })?.failure).toEqual({ error: 'odd' });
+    // Bounded: a provider may answer with a whole page.
+    const long = failedWith({ message: 'x'.repeat(5_000), code: 'SERVER' })?.failure?.error;
+    expect(long).toHaveLength(2_001);
+    expect(long?.endsWith('…')).toBe(true);
+    // Nothing recorded, nothing carried.
+    expect(failedWith({})).not.toHaveProperty('failure');
+    // Only the failed placeholder: a stopped one has no failure to carry.
+    const stopped = projectDshHistory(
+      log()
+        .turn(1)
+        .user('u1', 'go')
+        .end(1, { kind: 'aborted', reason: { kind: 'user' } }).events
+    )[1];
+    expect(stopped).not.toHaveProperty('failure');
   });
 
   it('notes a turn the engine never closed, and marks its last step incomplete', () => {

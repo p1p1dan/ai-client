@@ -43,6 +43,7 @@ import {
 // every dev-mode session die with ERR_MODULE_NOT_FOUND. Keep any future value
 // import from this file suffixed too.
 import {
+  type HistoryMessage,
   PI_SESSION_TREE_BACKEND_LIMIT,
   type PiLeafCheckpoint,
   type SessionHistoryPage,
@@ -389,6 +390,14 @@ export const WORKER_COMPACT_REQUEST_TIMEOUT_MS = 60_000;
 
 export interface WorkerCompactResult {
   compacted: true;
+  /**
+   * dsh-rebase P1-7e (decision 140): the context-summary row the compaction
+   * wrote, exactly as the session's history shows it (same `h:` id), so the
+   * window can show it the moment `/compact` succeeds instead of on the next
+   * reopen; a later history replay replaces it by that id. Absent when the
+   * worker could not read it back. Optional-field addition.
+   */
+  summary?: HistoryMessage;
 }
 
 /**

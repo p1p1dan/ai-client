@@ -27,12 +27,30 @@ export interface ToolLiveOutputState {
   byCall: Readonly<Record<string, ToolLiveOutput>>;
   /** Calls in arrival order of their first tail, for the bound below. */
   order: readonly string[];
+  /**
+   * dsh-rebase P1-7e (problem 20, decision 140): the last tail of each call
+   * Stop cut short, keyed by chat and call (`stoppedKey`: a call id is the
+   * model's, and two chats may carry the same one). DSH records such a call
+   * as the one sentence `Error: tool call aborted`, so this tail is the only
+   * copy of what the command had printed; the settled row shows it in place
+   * of that sentence. Memory only, like the tails: a restart has nothing left.
+   */
+  stopped: Readonly<Record<string, ToolLiveOutput>>;
+  /** Keys of `stopped` in the order the calls stopped, for their own bound. */
+  stoppedOrder: readonly string[];
 }
 
-export const initialToolLiveOutput: ToolLiveOutputState = { byCall: {}, order: [] };
+export const initialToolLiveOutput: ToolLiveOutputState = {
+  byCall: {},
+  order: [],
+  stopped: {},
+  stoppedOrder: [],
+};
 
 /** Running calls kept at once; past it the oldest goes (one agent runs one command at a time). */
 export const TOOL_LIVE_OUTPUT_MAX_CALLS = 16;
+/** Stopped calls whose last tail is kept; past it the oldest stop's goes. */
+export const TOOL_STOPPED_OUTPUT_MAX_CALLS = 32;
 /** What a pane holds at most, in characters (the bridge sends at most 16 KiB). */
 export const TOOL_LIVE_OUTPUT_MAX_CHARS = 32_768;
 
@@ -68,7 +86,46 @@ function without(state: ToolLiveOutputState, callIds: ReadonlySet<string>): Tool
   if (![...callIds].some((id) => id in state.byCall)) return state;
   const byCall: Record<string, ToolLiveOutput> = {};
   for (const [id, entry] of Object.entries(state.byCall)) if (!callIds.has(id)) byCall[id] = entry;
-  return { byCall, order: state.order.filter((id) => !callIds.has(id)) };
+  return { ...state, byCall, order: state.order.filter((id) => !callIds.has(id)) };
+}
+
+/** Whether a `tool.completed` reports a call Stop cut short (`details.stopped`, decision 099 rule 5). */
+function isStoppedCompletion(payload: unknown): boolean {
+  const output = (payload as { output?: unknown } | null)?.output;
+  if (typeof output !== 'object' || output === null) return false;
+  const details = (output as { details?: unknown }).details;
+  return (
+    typeof details === 'object' &&
+    details !== null &&
+    (details as { stopped?: unknown }).stopped === true
+  );
+}
+
+/** Where `stopped` keeps a call of a chat. */
+function stoppedKey(sessionId: string, toolCallId: string): string {
+  return `${sessionId}\u0000${toolCallId}`;
+}
+
+/** The call's running tail, kept as what it printed before Stop cut it short. */
+function keepStopped(
+  state: ToolLiveOutputState,
+  sessionId: string,
+  toolCallId: string
+): ToolLiveOutputState {
+  const entry = state.byCall[toolCallId];
+  // The tail under this id may be another chat's call with the same id.
+  if (!entry || !entry.text || entry.sessionId !== sessionId) return state;
+  const key = stoppedKey(entry.sessionId, toolCallId);
+  let stoppedOrder = [...state.stoppedOrder.filter((id) => id !== key), key];
+  let stopped: Record<string, ToolLiveOutput> = { ...state.stopped, [key]: entry };
+  if (stoppedOrder.length > TOOL_STOPPED_OUTPUT_MAX_CALLS) {
+    const dropped = new Set(
+      stoppedOrder.slice(0, stoppedOrder.length - TOOL_STOPPED_OUTPUT_MAX_CALLS)
+    );
+    stoppedOrder = stoppedOrder.filter((id) => !dropped.has(id));
+    stopped = Object.fromEntries(Object.entries(stopped).filter(([id]) => !dropped.has(id)));
+  }
+  return { ...state, stopped, stoppedOrder };
 }
 
 /**
@@ -99,10 +156,16 @@ export function reduceToolLiveOutput(
         order = order.slice(-TOOL_LIVE_OUTPUT_MAX_CALLS);
         byCall = Object.fromEntries(Object.entries(byCall).filter(([id]) => !dropped.includes(id)));
       }
-      return { byCall, order };
+      return { ...state, byCall, order };
     }
-    case 'tool.completed':
-      return without(state, new Set([event.payload.toolCallId]));
+    case 'tool.completed': {
+      // P1-7e (problem 20): Stop's cut keeps what the command had printed.
+      const toolCallId = event.payload.toolCallId;
+      const kept = isStoppedCompletion(event.payload)
+        ? keepStopped(state, event.sessionId, toolCallId)
+        : state;
+      return without(kept, new Set([toolCallId]));
+    }
     case 'session.completed':
     case 'session.failed':
     case 'session.stopped':
@@ -133,5 +196,28 @@ export function pruneToolLiveOutput(
   const gone = Object.entries(state.byCall)
     .filter(([, entry]) => !live.has(entry.sessionId))
     .map(([id]) => id);
-  return gone.length === 0 ? state : without(state, new Set(gone));
+  const pruned = gone.length === 0 ? state : without(state, new Set(gone));
+  const goneStopped = new Set(
+    Object.entries(pruned.stopped)
+      .filter(([, entry]) => !live.has(entry.sessionId))
+      .map(([id]) => id)
+  );
+  if (goneStopped.size === 0) return pruned;
+  return {
+    ...pruned,
+    stopped: Object.fromEntries(
+      Object.entries(pruned.stopped).filter(([id]) => !goneStopped.has(id))
+    ),
+    stoppedOrder: pruned.stoppedOrder.filter((id) => !goneStopped.has(id)),
+  };
+}
+
+/** The kept output of a stopped call of `sessionId`, if its last tail is still held. */
+export function stoppedToolOutput(
+  state: Pick<ToolLiveOutputState, 'stopped'>,
+  sessionId: string | undefined,
+  toolCallId: string | undefined
+): ToolLiveOutput | undefined {
+  if (!sessionId || !toolCallId) return undefined;
+  return state.stopped[stoppedKey(sessionId, toolCallId)];
 }

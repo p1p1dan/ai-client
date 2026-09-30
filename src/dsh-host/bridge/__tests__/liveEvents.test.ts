@@ -567,6 +567,46 @@ describe('DshLiveEvents — retries and endings (decision 099 rules 3, 4)', () =
     expect(h.events.at(-1)).toMatchObject({ type: 'session.status', payload: { status: 'idle' } });
   });
 
+  it('[E2B-FAIL-TEXT] a gateway stream gate and a refused model setting are read off their text (decision 140)', () => {
+    const gate = harness();
+    gate.durable('turn/end', {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: {
+          message:
+            '502 {"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow","family":"anthropic"}}',
+          code: 'SERVER',
+          status: 502,
+        },
+      },
+    });
+    expect(gate.of('session.failed')[0]?.payload).toEqual({
+      error:
+        '502 {"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow","family":"anthropic"}}',
+      errorCode: 'GATEWAY_STREAM_GATE',
+    });
+    const setting = harness();
+    setting.durable('turn/end', {
+      turn: 1,
+      reason: {
+        kind: 'error',
+        error: {
+          message: '400 "thinking.type.disabled" is not supported for this model',
+          code: 'INVALID_REQUEST',
+        },
+      },
+    });
+    expect(setting.of('session.failed')[0]?.payload.errorCode).toBe('MODEL_SETTING_UNSUPPORTED');
+    // Any other text keeps the code's own mapping.
+    const plain = harness();
+    plain.durable('turn/end', {
+      turn: 1,
+      reason: { kind: 'error', error: { message: '500 upstream exploded', code: 'SERVER' } },
+    });
+    expect(plain.of('session.failed')[0]?.payload.errorCode).toBe('PROVIDER_ERROR');
+  });
+
   it('[D1-FAIL-REPETITION] the loop guard cut keeps its own code, which has its own card', () => {
     const h = harness();
     h.durable('turn/end', {

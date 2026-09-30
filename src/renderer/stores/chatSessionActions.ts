@@ -7,6 +7,7 @@
  */
 
 import { resolveAgentWireName } from '@shared/types/agentWire';
+import type { HistoryMessage } from '@shared/types/sessionHistory';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { pathsEqual } from '@/App/storage';
 import {
@@ -21,7 +22,11 @@ import {
 } from '@/components/chat/sessionIndex/sessionTitle';
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
 import { uniqueId } from '@/lib/uniqueId';
-import { type ChatSession, useChatSessionsStore } from './chatSessions';
+import {
+  type ChatSession,
+  mapHistoryMessageToChatMessage,
+  useChatSessionsStore,
+} from './chatSessions';
 import { hasPendingDraftTitle, settleDraftSessionTitle } from './draftSessionTitles';
 import { useScratchWorkspaceStore } from './scratchWorkspace';
 import { isFreshEmptySession } from './sessionFreshness';
@@ -235,6 +240,31 @@ export function materializeIndexedPiChatSession(
 
 /** Backward-compatible name for the T33 fork caller. */
 export const materializeForkedChatSession = materializeIndexedPiChatSession;
+
+/**
+ * dsh-rebase P1-7e (problem 10, decision 140): `/compact` succeeded, and the
+ * worker handed back the context-summary row it wrote. It goes at the end of
+ * the chat's timeline under its own history id, exactly as a reopen shows it;
+ * a later replay of the history supersedes it by that id (`h:` rows are
+ * always replaced by a fresh replay), so it is never shown twice. Returns
+ * whether the chat now shows the row (false only when the chat is gone).
+ */
+export function showCompactionSummary(sessionId: string, summary: HistoryMessage): boolean {
+  let shown = false;
+  useChatSessionsStore.setState((state) => {
+    if (!state.sessions.some((session) => session.id === sessionId)) return state;
+    shown = true;
+    const bucket = state.messages[sessionId] ?? [];
+    if (bucket.some((message) => message.id === summary.id)) return state;
+    return {
+      messages: {
+        ...state.messages,
+        [sessionId]: [...bucket, mapHistoryMessageToChatMessage(sessionId, summary)],
+      },
+    };
+  });
+  return shown;
+}
 
 /**
  * T-27 retarget: move the active session's projectId/workspaceId in place.

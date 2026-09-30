@@ -5,8 +5,10 @@ import {
   normalizeTerminalText,
   pruneToolLiveOutput,
   reduceToolLiveOutput,
+  stoppedToolOutput,
   TOOL_LIVE_OUTPUT_MAX_CALLS,
   TOOL_LIVE_OUTPUT_MAX_CHARS,
+  TOOL_STOPPED_OUTPUT_MAX_CALLS,
   type ToolLiveOutputState,
 } from '../toolLiveOutputModel';
 
@@ -107,6 +109,105 @@ describe('reduceToolLiveOutput', () => {
     const pruned = pruneToolLiveOutput(state, ['s2']);
     expect(Object.values(pruned.byCall).every((entry) => entry.sessionId === 's2')).toBe(true);
     expect(pruneToolLiveOutput(pruned, ['s2'])).toBe(pruned);
+  });
+});
+
+/**
+ * dsh-rebase P1-7e (problem 20, decision 140): DSH records a command Stop cut
+ * short as `Error: tool call aborted`, so the last tail is the only copy of
+ * what it printed. It outlives the call and the turn, for the settled row.
+ */
+describe('reduceToolLiveOutput — what a stopped call printed', () => {
+  function completed(
+    toolCallId: string,
+    details: Record<string, unknown> | null,
+    sessionId = 's1'
+  ): RuntimeEvent {
+    return {
+      type: 'tool.completed',
+      seq: 2,
+      timestamp: 2,
+      sessionId,
+      payload: {
+        messageId: 'm1',
+        toolCallId,
+        ok: false,
+        ...(details
+          ? {
+              output: {
+                content: [{ type: 'text', text: 'Error: tool call aborted' }],
+                details,
+              },
+            }
+          : {}),
+        error: 'Error: tool call aborted',
+      },
+    } as RuntimeEvent;
+  }
+  const stoppedEvent = (sessionId: string): RuntimeEvent =>
+    ({ type: 'session.stopped', seq: 3, timestamp: 3, sessionId, payload: {} }) as RuntimeEvent;
+
+  it('[E2B-STOP-KEEP] keeps the last tail of a call Stop cut short, past the call and the turn', () => {
+    const state = fold([
+      output('c1', 'sleep-tool c5 started\n', 's1', 22),
+      completed('c1', { stopped: true }),
+      stoppedEvent('s1'),
+    ]);
+    expect(state.byCall).toEqual({});
+    expect(stoppedToolOutput(state, 's1', 'c1')).toEqual({
+      sessionId: 's1',
+      jobId: 'bash-1',
+      text: 'sleep-tool c5 started\n',
+      omittedBytes: 0,
+      totalBytes: 22,
+    });
+  });
+
+  it('[E2B-STOP-OTHER] a call that ended any other way, or printed nothing, keeps nothing', () => {
+    for (const details of [null, {}, { stopped: false }, { refused: true }]) {
+      const state = fold([output('c1', 'partial'), completed('c1', details)]);
+      expect(state.stopped, JSON.stringify(details)).toEqual({});
+    }
+    // No tail ever arrived: nothing to keep, and the same state comes back.
+    const none = fold([output('c2', 'x')]);
+    expect(reduceToolLiveOutput(none, completed('c1', { stopped: true })).stopped).toEqual({});
+    const empty = fold([output('c3', ''), completed('c3', { stopped: true })]);
+    expect(empty.stopped).toEqual({});
+  });
+
+  it('[E2B-STOP-SCOPE] kept per chat and call, bounded, and pruned with its chat', () => {
+    const both = fold([
+      output('c1', 'one', 's1'),
+      completed('c1', { stopped: true }, 's1'),
+      output('c1', 'two', 's2'),
+      completed('c1', { stopped: true }, 's2'),
+    ]);
+    // A completion never keeps another chat's tail that happens to share the id.
+    const crossed = fold([output('c9', 'theirs', 's2'), completed('c9', { stopped: true }, 's1')]);
+    expect(crossed.stopped).toEqual({});
+    expect(stoppedToolOutput(both, 's1', 'c1')?.text).toBe('one');
+    expect(stoppedToolOutput(both, 's2', 'c1')?.text).toBe('two');
+    expect(stoppedToolOutput(both, 's3', 'c1')).toBeUndefined();
+    expect(stoppedToolOutput(both, undefined, 'c1')).toBeUndefined();
+    expect(stoppedToolOutput(both, 's1', undefined)).toBeUndefined();
+
+    const pruned = pruneToolLiveOutput(both, ['s2']);
+    expect(stoppedToolOutput(pruned, 's1', 'c1')).toBeUndefined();
+    expect(stoppedToolOutput(pruned, 's2', 'c1')?.text).toBe('two');
+    expect(pruned.stoppedOrder).toHaveLength(1);
+    expect(pruneToolLiveOutput(pruned, ['s2'])).toBe(pruned);
+
+    const many = fold(
+      Array.from({ length: TOOL_STOPPED_OUTPUT_MAX_CALLS + 3 }, (_, index) => [
+        output(`k${index}`, `out ${index}`),
+        completed(`k${index}`, { stopped: true }),
+      ]).flat()
+    );
+    expect(many.stoppedOrder).toHaveLength(TOOL_STOPPED_OUTPUT_MAX_CALLS);
+    expect(stoppedToolOutput(many, 's1', 'k0')).toBeUndefined();
+    expect(stoppedToolOutput(many, 's1', `k${TOOL_STOPPED_OUTPUT_MAX_CALLS + 2}`)?.text).toBe(
+      `out ${TOOL_STOPPED_OUTPUT_MAX_CALLS + 2}`
+    );
   });
 });
 
