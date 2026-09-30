@@ -21,7 +21,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 - **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
-  3. P1-7d GUI 点验与真实网关 R1～R10 一起做，期间不跑代理；R1～R10 要用户在开发版里登录公司账号，编排者不经手凭据；
+  3. ✅ P1-7d GUI 点验三批做完（50 项）；修复分五组做（P1-7e，进行中）。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
   4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
@@ -64,6 +64,10 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-30 P1-7d GUI 点验三批做完（开发机 Linux，隔离 HOME、本地假网关、CDP 驱动；证据 [p1-7d-gui-2026-09-30.md](evidence/p1-7d-gui-2026-09-30.md)，提交 `bd1b9daf`、`9692c532`、`963bd44d`）：
+  - 共 50 项：35 项符合，11 项有出入，3 项不符合，1 项只做了一部分。不符合的三项：A3 回退后提示没回到输入框；A4 新建分叉打开时时间线为空；E6 右列终端 Ctrl+F 打不开搜索。
+  - 另记问题 1～35，按五组修，见 [topics/p1-7e-pointcheck-fixes.md](topics/p1-7e-pointcheck-fixes.md)（P1-7e）；侧栏改版（决策 137）并入第一组。
+  - F4、F5 的分叉是在应用停着时往旧文件末尾追加一问一答模拟的，不是回装 1.0.x；要 Windows 或真实网关的项目（清单 J 节）没做。
 - 2026-09-29 Windows 打包冒烟 L1 三项失败修复 `6db5a949`、`4ba4992e`（取舍见[决策 134](decisions/134-windows-packaged-smoke-fixes.md)，待审批）：
   - **产品缺陷**：Windows 上工作区内的 read / grep / glob / pwsh 全都弹审批。根因经 CI 诊断证实：`%TEMP%` 是 8.3 短名时，闸门的工作区用 JS 版 `realpathSync`（保留短名），目标用 `fs/promises` 的 `realpath`（libuv，展开成长名），两边对不上。工作区、spill 根、附件根改用 `realpathSync.native`；闸门新增 `cwdAliases`，会话打开时的写法也算工作区，经链接逃出工作区的仍按规范写法询问。Linux 上同类缺陷（accept-edits 下按链接写法写操作数的 shell 命令会弹卡）一并修掉。
   - **冒烟盲区**：DSH 在 Windows 上经 `dsh-subprocess-local` 的 Job runner（node.exe）拉起 rg 与 pwsh，冒烟改为拆开派生链再判 rg 来自产物。
