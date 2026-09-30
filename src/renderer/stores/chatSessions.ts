@@ -641,6 +641,18 @@ const INITIAL_MESSAGES: Record<string, ChatMessage[]> = {
   ],
 };
 
+/**
+ * Write a session's runtime status.
+ *
+ * dsh-rebase decision 138 (point-check issue 3): this no longer touches
+ * `updatedAt`. That field is the sidebar's "last activity" — Recent's order and
+ * its 48h window, the folders' order — and a status write is not activity: the
+ * pool reclaiming an idle worker (`disconnected`) or the engine restarting and
+ * reopening every session (`idle`) wrote one to chats nobody had touched, which
+ * then jumped to the top as "now". Real activity stamps it through
+ * {@link touchSessionActivity}: a turn starting (the user message) and a turn
+ * ending, plus the renderer's own actions (create, rename, retarget).
+ */
 function upsertSessionStatus(
   sessions: ChatSession[],
   sessionId: string,
@@ -653,9 +665,23 @@ function upsertSessionStatus(
   retry?: SessionRetryInfo
 ): ChatSession[] {
   return sessions.map((session) =>
-    session.id === sessionId
-      ? { ...withoutFailureSettled(session), status, retry, updatedAt: Date.now() }
-      : session
+    session.id === sessionId ? { ...withoutFailureSettled(session), status, retry } : session
+  );
+}
+
+/**
+ * Decision 138: stamp real activity on one session — never backwards, and the
+ * same array back when nothing changes.
+ */
+function touchSessionActivity(
+  sessions: ChatSession[],
+  sessionId: string,
+  now = Date.now()
+): ChatSession[] {
+  const current = sessions.find((session) => session.id === sessionId);
+  if (!current || current.updatedAt >= now) return sessions;
+  return sessions.map((session) =>
+    session.id === sessionId ? { ...session, updatedAt: now } : session
   );
 }
 
@@ -671,7 +697,9 @@ function withoutFailureSettled(session: ChatSession): ChatSession {
  *
  * Keeps `status: 'failed'` so the failure card stays up, and records that the
  * run is at rest. Everything else a status write does still happens: `retry`
- * is cleared (the idle carries none) and `updatedAt` moves.
+ * is cleared (the idle carries none). Like every status write it leaves
+ * `updatedAt` alone (decision 138) — the `session.failed` before it already
+ * stamped the turn's end.
  */
 function settleFailedStatus(
   sessions: ChatSession[],
@@ -680,7 +708,7 @@ function settleFailedStatus(
 ): ChatSession[] {
   return sessions.map((session) =>
     session.id === sessionId
-      ? { ...session, status: 'failed', failureSettled: true, retry, updatedAt: Date.now() }
+      ? { ...session, status: 'failed', failureSettled: true, retry }
       : session
   );
 }
@@ -1207,6 +1235,11 @@ function applyRuntimeEventCore(
       const hostBoundSessionIds = state.hostBoundSessionIds.includes(sessionId)
         ? state.hostBoundSessionIds
         : [...state.hostBoundSessionIds, sessionId];
+      // Decision 138: a create is the first send, so it is activity. A resume
+      // is not by itself — Main reopens every session after an engine restart,
+      // and a click can fall back to one — and the turn it serves stamps the
+      // row anyway when its user message starts.
+      const created = event.type === 'session.created';
       return {
         hostBoundSessionIds,
         sessions: state.sessions.map((session) =>
@@ -1215,7 +1248,7 @@ function applyRuntimeEventCore(
                 ...session,
                 runtimeIdentity: runtimeIdentity ?? session.runtimeIdentity,
                 agent: agent ?? session.agent,
-                updatedAt: Date.now(),
+                ...(created ? { updatedAt: Math.max(session.updatedAt, Date.now()) } : {}),
               }
             : session
         ),
@@ -1382,15 +1415,20 @@ function applyRuntimeEventCore(
       // delegates kept running — a card still here is a delegate's live
       // question, and clearing it would leave that delegate waiting on an
       // answer nobody can give.
+      // Decision 138: a turn ending is activity.
+      const sessions = touchSessionActivity(
+        upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        sessionId
+      );
       if (event.payload?.stopCause === 'interjected') {
         return {
-          sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+          sessions,
           unreadSessionIds: markSessionUnread(state, sessionId),
           ...withRunStopCause(state, sessionId, 'interjected'),
         };
       }
       return {
-        sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        sessions,
         unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
       };
@@ -1398,7 +1436,10 @@ function applyRuntimeEventCore(
 
     case 'session.failed': {
       return {
-        sessions: upsertSessionStatus(state.sessions, sessionId, 'failed'),
+        sessions: touchSessionActivity(
+          upsertSessionStatus(state.sessions, sessionId, 'failed'),
+          sessionId
+        ),
         lastError: event.payload?.error ?? 'Session failed',
         unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
@@ -1413,7 +1454,11 @@ function applyRuntimeEventCore(
         return settleNoActiveTurn(state, sessionId);
       }
       return {
-        sessions: upsertSessionStatus(state.sessions, sessionId, 'idle'),
+        // Decision 138: a turn cut off is a turn ended — activity.
+        sessions: touchSessionActivity(
+          upsertSessionStatus(state.sessions, sessionId, 'idle'),
+          sessionId
+        ),
         ...withoutSessionPermissions(state, sessionId),
         ...withRunStopCause(state, sessionId, 'user_stop'),
       };
@@ -1437,7 +1482,14 @@ function applyRuntimeEventCore(
         ...(event.payload.origin ? { origin: event.payload.origin } : {}),
       };
       const bucket = state.messages[sessionId] ?? [];
-      return { messages: withBucket(state, sessionId, upsertMessage(bucket, message)) };
+      const messages = withBucket(state, sessionId, upsertMessage(bucket, message));
+      // Decision 138: a user message is a turn starting — the send, a queued
+      // message released, or a turn the engine started itself (a goal round).
+      // Replayed history never arrives this way (`session.history` dates the
+      // row from its own timestamps), so viewing a chat does not move it.
+      if (event.payload.role !== 'user') return { messages };
+      const sessions = touchSessionActivity(state.sessions, sessionId);
+      return sessions === state.sessions ? { messages } : { messages, sessions };
     }
 
     case 'message.delta': {
@@ -1987,8 +2039,8 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
 
   selectSession: (sessionId) => {
     // H/18 S3: opening a conversation IS reading it. Done here rather than in
-    // the sidebar so every entry point counts — the center tab strip and the
-    // folder-header activation reach this same action.
+    // the sidebar so every entry point counts — the center tab strip and a
+    // reused blank chat (decision 138) reach this same action.
     set((state) => ({
       activeSessionId: sessionId,
       lastError: null,

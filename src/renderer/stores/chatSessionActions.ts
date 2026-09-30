@@ -22,6 +22,7 @@ import {
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
 import { uniqueId } from '@/lib/uniqueId';
 import { type ChatSession, useChatSessionsStore } from './chatSessions';
+import { hasPendingDraftTitle, settleDraftSessionTitle } from './draftSessionTitles';
 import { useScratchWorkspaceStore } from './scratchWorkspace';
 import { isFreshEmptySession } from './sessionFreshness';
 import { markSessionsLive } from './sessionRetirement';
@@ -314,6 +315,11 @@ export function createOrReuseChatSessionOnWorkspace(workspaceId: string): string
   const state = useChatSessionsStore.getState();
   const activeSessionId = state.activeSessionId;
   if (!isFreshEmptySession(state, activeSessionId) || hasSendInFlight(activeSessionId)) {
+    // Decision 138 (point-check issue 4): an untouched chat already waiting in
+    // this workspace is the new chat — typically the one the app opened on at
+    // launch, left behind when the user opened another conversation.
+    const draft = findReusableDraft(state, (session) => session.workspaceId === workspaceId);
+    if (draft) return reopenDraft(draft.id);
     return createChatSessionOnWorkspace(workspaceId);
   }
   const activeSession = state.sessions.find((item) => item.id === activeSessionId);
@@ -370,17 +376,63 @@ export function createOrReuseChatSessionOnWorkspace(workspaceId: string): string
 export function createOrReuseUnboundChatSession(): string | null {
   const state = useChatSessionsStore.getState();
   const activeSessionId = state.activeSessionId;
+  const isUnboundTarget = (session: ChatSession): boolean =>
+    !isTargetableWorkspace(state.workspaces.find((item) => item.id === session.workspaceId));
   if (isFreshEmptySession(state, activeSessionId) && !hasSendInFlight(activeSessionId)) {
     const activeSession = state.sessions.find((item) => item.id === activeSessionId);
-    const workspace = activeSession
-      ? state.workspaces.find((item) => item.id === activeSession.workspaceId)
-      : undefined;
-    if (activeSession && !isTargetableWorkspace(workspace)) {
+    if (activeSession && isUnboundTarget(activeSession)) {
       // Both the active session and the click target are unbound — stay put.
       return activeSession.id;
     }
   }
+  // Decision 138: the same reuse as the bound branch, for an untouched chat
+  // that has no folder either.
+  const draft = findReusableDraft(state, isUnboundTarget);
+  if (draft) return reopenDraft(draft.id);
   return createUnboundChatSession();
+}
+
+/**
+ * Decision 138 (point-check issue 4) — an untouched, never-sent chat on the
+ * target a "New" click asks for, newest first; `undefined` when there is none.
+ *
+ * "Untouched" is exactly `isFreshEmptySession` (no messages, never bound to the
+ * engine, idle, still a placeholder title — a chat the user named is theirs,
+ * not a blank to recycle) plus no send in flight, the T091 handshake window.
+ * Without this, opening another conversation and then pressing New left the
+ * first blank chat behind and added a second one next to it.
+ */
+function findReusableDraft(
+  state: ReturnType<typeof useChatSessionsStore.getState>,
+  onTarget: (session: ChatSession) => boolean
+): ChatSession | undefined {
+  return state.sessions
+    .filter(
+      (session) =>
+        onTarget(session) && isFreshEmptySession(state, session.id) && !hasSendInFlight(session.id)
+    )
+    .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+}
+
+/**
+ * Open a reused blank chat the way a freshly created one opens: selected, at
+ * the head of the recent list, and dated now — the New click is the activity.
+ */
+function reopenDraft(sessionId: string): string {
+  const now = Date.now();
+  useChatSessionsStore.setState((state) => ({
+    sessions: state.sessions.map((session) =>
+      session.id === sessionId
+        ? { ...session, updatedAt: Math.max(session.updatedAt, now) }
+        : session
+    ),
+    recentSessionIds: [sessionId, ...state.recentSessionIds.filter((id) => id !== sessionId)].slice(
+      0,
+      20
+    ),
+  }));
+  useChatSessionsStore.getState().selectSession(sessionId);
+  return sessionId;
 }
 
 /**
@@ -446,6 +498,10 @@ const autoTitleInFlight = new Set<string>();
  * No-ops (leaving the placeholder in place) when: the session cannot be
  * found, its title is not a placeholder (already titled or user-renamed),
  * or the message has no derivable title (empty / symbols-only / etc.).
+ *
+ * Decision 138: one exception to "user-renamed means no-op" — a name given
+ * before the chat had an index row (`draftSessionTitles.ts`) is written to the
+ * row here, since this first send is what created it.
  */
 export async function applyAutoSessionTitle(
   sessionId: string,
@@ -457,7 +513,24 @@ export async function applyAutoSessionTitle(
     return;
   }
   const session = useChatSessionsStore.getState().sessions.find((item) => item.id === sessionId);
-  if (!session || !isPlaceholderTitle(session.title)) {
+  if (!session) {
+    return;
+  }
+  // Decision 138 (point-check issue 34): the user named this chat before it had
+  // an index row, so the name lives on the live row only. This first send just
+  // recorded the row; write the name into it rather than deriving one.
+  if (hasPendingDraftTitle(sessionId) && !isPlaceholderTitle(session.title)) {
+    autoTitleInFlight.add(sessionId);
+    try {
+      const saved = await renameSessionIndexEntry(sessionId, session.title, async () => {});
+      if (saved) settleDraftSessionTitle(sessionId);
+    } finally {
+      autoTitleInFlight.delete(sessionId);
+    }
+    return;
+  }
+  settleDraftSessionTitle(sessionId);
+  if (!isPlaceholderTitle(session.title)) {
     return;
   }
   const title = deriveSessionTitleFromFirstMessage(firstMessageText);

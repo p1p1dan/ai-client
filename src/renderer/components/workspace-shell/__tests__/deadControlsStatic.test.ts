@@ -198,9 +198,9 @@ describe('LeftNav pins (T-23 removals)', () => {
  * F4 (D29 adversarial-review, minor): pins the activation wiring so a future
  * edit cannot quietly grow a second activation path. `selectSession` is the
  * red-line store's raw setter (no derivation, no guard) — every activation
- * decision (a session row click, a folder-crossing click) must route through
- * `handleSelectSession` instead of calling it directly, and
- * `resolveFolderClickActivation`'s `activateSessionId` must feed nothing else.
+ * decision (a session row click) must route through `handleSelectSession`
+ * instead of calling it directly. A folder header click activates nothing
+ * since decision 137 §3.
  */
 describe('LeftNav activation wiring (D29 / F4)', () => {
   const CODE = codeOf(join(SHELL_DIR, 'LeftNav.tsx'));
@@ -217,12 +217,14 @@ describe('LeftNav activation wiring (D29 / F4)', () => {
     expect(CODE.split('activateSession(').length - 1).toBe(1);
   });
 
-  it("feeds resolveFolderClickActivation's activateSessionId into nothing but handleSelectSession", () => {
-    // Exactly three appearances: the destructure, the null-check, and the
-    // one call it is allowed to reach — a fourth means a new path opened up.
-    expect(CODE.split('activateSessionId').length - 1).toBe(3);
-    expect(CODE).toContain('const { activateSessionId, nextExpanded } =');
-    expect(CODE).toContain('if (activateSessionId) {');
-    expect(CODE.split('handleSelectSession(activateSessionId)').length - 1).toBe(1);
+  // Decision 137 §3 (user ruling 2026-09-29) retired D29's folder-crossing
+  // activation: a folder header click folds or unfolds that folder and opens
+  // nothing. This used to pin where the activation could flow; it now pins
+  // that there is none.
+  it('a folder header click only flips its own expansion (decision 137 §3)', () => {
+    expect(CODE).not.toContain('resolveFolderClickActivation');
+    expect(CODE).not.toContain('activateSessionId');
+    expect(CODE).not.toContain('setFocusedProjectId(folder.projectId)');
+    expect(CODE).toContain('[folder.projectId]: !expanded,');
   });
 });

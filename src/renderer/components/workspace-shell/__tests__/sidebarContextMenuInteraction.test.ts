@@ -2,6 +2,7 @@
 import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { STORAGE_KEYS } from '@/App/storage';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { ESCAPE_OWNING_POPUP_SELECTOR } from '../shellLayoutModel';
 
@@ -57,6 +58,9 @@ let root: ReturnType<typeof createRoot>;
 
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+  // Recent starts collapsed since decision 137 §2; the unread case below
+  // counts its row, so it is opened the way a user who expanded it would.
+  localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
   useChatSessionsStore.setState({
     projects: [{ id: PROJECT_ID, name: 'alpha' }],
     workspaces: [

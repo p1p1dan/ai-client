@@ -915,6 +915,12 @@ export const zhTranslations: Record<string, string> = {
   Result: '结果',
   'Show more': '显示更多',
   'Show less': '收起',
+  // dsh-rebase decision 137: the sidebar section of conversations started on
+  // the engine in this run, and the row that ends a folder capped at 8.
+  'Active now': '正在活动',
+  'View more ({{count}})': '查看更多（{{count}}）',
+  // Decision 138 (point-check issue 34): a sidebar rename that did not land.
+  'Could not rename the chat': '重命名失败',
   'Filter sessions': '筛选会话',
   'Expand Recent': '展开最近',
   'Collapse Recent': '收起最近',

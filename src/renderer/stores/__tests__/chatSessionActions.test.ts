@@ -15,6 +15,11 @@ import {
   stopChatSession,
 } from '../chatSessionActions';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '../chatSessions';
+import {
+  applyDraftSessionTitle,
+  hasPendingDraftTitle,
+  resetDraftSessionTitles,
+} from '../draftSessionTitles';
 import { isFreshEmptySession } from '../sessionFreshness';
 import { useTurnSendStatusStore } from '../turnSendStatus';
 
@@ -520,6 +525,100 @@ describe('createOrReuseChatSessionOnWorkspace (idempotent New button, A/B/C tier
   });
 
   /**
+   * Decision 138 (point-check issue 4): the chat the app opened on at launch
+   * (or an earlier New) is still blank in this workspace while the user reads
+   * another conversation. New goes back to it instead of adding a second blank
+   * chat next to it.
+   */
+  it('[D138] reopens a blank chat already waiting in the target workspace instead of adding another', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const launchDraft = makeSession({
+      id: 'session-live-1',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'Live Agent Host',
+      updatedAt: 10,
+    });
+    const reading = makeSession({
+      id: 'reading',
+      workspaceId: 'ws-a',
+      projectId: 'proj-a',
+      title: 'Parser rewrite',
+      runtimeIdentity: '/x.dsh.json',
+      updatedAt: 20,
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [reading, launchDraft],
+      activeSessionId: 'reading',
+      recentSessionIds: ['reading', 'session-live-1'],
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    const state = useChatSessionsStore.getState();
+    expect(result).toBe('session-live-1');
+    expect(state.sessions).toHaveLength(2);
+    expect(state.activeSessionId).toBe('session-live-1');
+    expect(state.recentSessionIds[0]).toBe('session-live-1');
+    // Dated like a chat created by this click.
+    expect(state.sessions.find((item) => item.id === 'session-live-1')?.updatedAt).toBeGreaterThan(
+      20
+    );
+  });
+
+  it('[D138] reverse: a chat the user named, or one in another workspace, is not reused', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const wsB = makeWorkspace({ id: 'ws-b', projectId: 'proj-b', path: '/b' });
+    const named = makeSession({ id: 'named', workspaceId: 'ws-a', title: 'My plan' });
+    const elsewhere = makeSession({ id: 'elsewhere', workspaceId: 'ws-b', title: 'New chat' });
+    const reading = makeSession({
+      id: 'reading',
+      workspaceId: 'ws-a',
+      title: 'Parser rewrite',
+      runtimeIdentity: '/x.dsh.json',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA, wsB],
+      sessions: [reading, named, elsewhere],
+      activeSessionId: 'reading',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    expect(['named', 'elsewhere', 'reading']).not.toContain(result);
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(4);
+  });
+
+  it('[D138] a blank chat whose send is in flight is not reused', () => {
+    const wsA = makeWorkspace({ id: 'ws-a', projectId: 'proj-a', path: '/a' });
+    const sending = makeSession({ id: 'sending', workspaceId: 'ws-a', title: 'New chat' });
+    const reading = makeSession({
+      id: 'reading',
+      workspaceId: 'ws-a',
+      title: 'Parser rewrite',
+      runtimeIdentity: '/x.dsh.json',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [wsA],
+      sessions: [reading, sending],
+      activeSessionId: 'reading',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+    armSendInFlight('sending');
+
+    const result = createOrReuseChatSessionOnWorkspace('ws-a');
+
+    expect(result).not.toBe('sending');
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(3);
+  });
+
+  /**
    * T091, field repro A-b (2026-09-19) — THE acceptance point for this task.
    *
    * Click Send, then click New 0.7s later. The Host has not answered yet, so
@@ -691,6 +790,30 @@ describe('createOrReuseUnboundChatSession (idempotent New button — unbound bra
     expect(result).not.toBe('has-history');
     expect(state.sessions).toHaveLength(2);
     expect(state.activeSessionId).toBe(result);
+  });
+
+  it('[D138] reopens a blank temporary chat left behind instead of adding another', () => {
+    const blank = makeSession({ id: 'blank', workspaceId: '', projectId: '', title: 'New chat' });
+    const withHistory = makeSession({
+      id: 'has-history',
+      workspaceId: '',
+      projectId: '',
+      title: 'Scratch notes',
+      runtimeIdentity: '/x.dsh.json',
+    });
+    useChatSessionsStore.setState({
+      workspaces: [],
+      sessions: [withHistory, blank],
+      activeSessionId: 'has-history',
+      messages: {},
+      hostBoundSessionIds: [],
+    });
+
+    const result = createOrReuseUnboundChatSession();
+
+    expect(result).toBe('blank');
+    expect(useChatSessionsStore.getState().sessions).toHaveLength(2);
+    expect(useChatSessionsStore.getState().activeSessionId).toBe('blank');
   });
 
   it('is not tier A when the fresh active session is bound to a real, usable workspace (only the CLICK TARGET is unbound)', () => {
@@ -1109,6 +1232,48 @@ describe('applyAutoSessionTitle (T-27 round-3, point-check #10)', () => {
     expect(renameSession).toHaveBeenCalled();
     const updated = useChatSessionsStore.getState().sessions.find((item) => item.id === 's1');
     expect(updated?.title).toBe('New chat');
+  });
+
+  // Decision 138 (point-check issue 34): the other half of naming a chat
+  // before its first send — that send writes the name to the new index row.
+  describe('a name given before the chat was indexed', () => {
+    beforeEach(() => resetDraftSessionTitles());
+
+    it('is written to the index by the first send instead of a derived title', async () => {
+      const renameSession = vi.fn().mockResolvedValue(true);
+      stubRenameSession(renameSession);
+      useChatSessionsStore.setState({ sessions: [makeSession({ id: 's1', title: 'New chat' })] });
+      applyDraftSessionTitle('s1', 'My plan');
+
+      await applyAutoSessionTitle('s1', 'Fix the login flow.');
+
+      expect(renameSession).toHaveBeenCalledWith({ sessionId: 's1', title: 'My plan' });
+      expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('My plan');
+      expect(hasPendingDraftTitle('s1')).toBe(false);
+    });
+
+    it('stays pending when that write fails', async () => {
+      stubRenameSession(vi.fn().mockResolvedValue(false));
+      useChatSessionsStore.setState({ sessions: [makeSession({ id: 's1', title: 'New chat' })] });
+      applyDraftSessionTitle('s1', 'My plan');
+
+      await applyAutoSessionTitle('s1', 'Fix the login flow.');
+
+      expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('My plan');
+      expect(hasPendingDraftTitle('s1')).toBe(true);
+    });
+
+    it('reverse: a name set back to a placeholder lets the message name the chat', async () => {
+      const renameSession = vi.fn().mockResolvedValue(true);
+      stubRenameSession(renameSession);
+      useChatSessionsStore.setState({ sessions: [makeSession({ id: 's1', title: 'New chat' })] });
+      applyDraftSessionTitle('s1', 'New chat');
+
+      await applyAutoSessionTitle('s1', 'Fix the login flow.');
+
+      expect(renameSession).toHaveBeenCalledWith({ sessionId: 's1', title: 'Fix the login flow' });
+      expect(hasPendingDraftTitle('s1')).toBe(false);
+    });
   });
 
   // R2: race convergence between the auto-title IPC round-trip and a

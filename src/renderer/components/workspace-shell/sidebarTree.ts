@@ -11,7 +11,9 @@
  * `addRepositoryEntry.ts` / `hostStatus.ts`.
  */
 
+import { translate } from '@shared/i18n';
 import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
+import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isUsableWorkspace } from './addRepositoryEntry';
@@ -27,6 +29,21 @@ export const LEGACY_DIVERGED_HINT =
 export const RECENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 /** Recent shows 7 rows by default, the rest behind "Show more" (openchamber rule). */
 export const RECENT_DEFAULT_LIMIT = 7;
+/**
+ * Decision 137 §4: each folder lists this many rows until "View more" is
+ * pressed. Search lifts it (`limitFolderRows`).
+ */
+export const FOLDER_DEFAULT_LIMIT = 8;
+
+/**
+ * Decision 137 §2: Recent starts collapsed. Only a value the user wrote by
+ * toggling the section counts — nothing stored (first run, cleared storage)
+ * means collapsed, and so does anything that is not the literal `'false'`
+ * the toggle writes for "expanded".
+ */
+export function resolveRecentCollapsed(stored: string | null): boolean {
+  return stored !== 'false';
+}
 
 export interface SidebarChip {
   /**
@@ -104,6 +121,15 @@ const BUSY_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
 
 export function isBusySessionStatus(status: SessionRuntimeStatus): boolean {
   return BUSY_STATUSES.has(status);
+}
+
+/**
+ * Decision 137 §1: the busy statuses in which the turn is parked on the user
+ * (an approval card or a question) rather than working. The row marks these
+ * with an attention dot instead of the spinner.
+ */
+export function isWaitingSessionStatus(status: SessionRuntimeStatus): boolean {
+  return status === 'waiting_permission' || status === 'waiting_question';
 }
 
 /**
@@ -310,32 +336,6 @@ export function buildUnboundFolder(input: {
   };
 }
 
-/**
- * F3 (D29 adversarial-review, minor): the ACTIVE session's project, resolved
- * through its workspace — same authority `buildSidebarFolders` groups by, so a
- * stale `session.projectId` cannot misjudge "same folder" after a rebind.
- * `null` when nothing is active or the active session is an orphan.
- *
- * Extracted because LeftNav previously ran this same
- * activeSessionId → sessions → workspaceId → workspaces → projectId chain
- * inline as a render-body snapshot — the fourth inline copy of the chain in
- * this file — and the folder-click handler needs a FRESH read at click time
- * (`resolveActiveProjectId(useChatSessionsStore.getState())`), not the
- * snapshot captured when the render that scheduled the click started.
- *
- * Input shape mirrors the store's own field names so a caller can pass
- * `useChatSessionsStore.getState()` straight through without reshaping it.
- */
-export function resolveActiveProjectId(input: {
-  activeSessionId: string | null;
-  sessions: readonly Pick<ChatSession, 'id' | 'workspaceId'>[];
-  workspaces: readonly Pick<ChatWorkspace, 'id' | 'projectId'>[];
-}): string | null {
-  const session = input.sessions.find((item) => item.id === input.activeSessionId);
-  const workspace = input.workspaces.find((ws) => ws.id === session?.workspaceId);
-  return workspace?.projectId ?? null;
-}
-
 export interface NewSessionTarget {
   workspaceId: string | null;
   /** Folder name for the resolved target — drives the header "New" button's
@@ -349,7 +349,8 @@ export interface NewSessionTarget {
  * button) should target, and which folder that resolves to.
  *
  * Resolution order (round-5 D1 ruling): the folder the user last focused
- * (header click or a session pick inside it) → the active session's
+ * (a session picked in it — decision 137 §3 took the header click out, so the
+ * selected conversation decides) → the active session's
  * workspace (pre-existing fallback) → the first usable workspace that belongs
  * to a folder actually on screen (pre-existing fallback, tightened below).
  *
@@ -401,82 +402,149 @@ export function resolveNewSessionTarget(input: {
 }
 
 /**
- * Result of a repository-folder header click: whether to activate a session
- * and what the folder's expansion state should become afterward. A single
- * return value so the two effects can never be applied from two different
- * reads of "did this click cross projects" (F1 adversarial-review fix).
+ * Decision 137 §3 (user ruling 2026-09-29) replaced D29 (open-q #28 A): a
+ * folder header click is the collapse / expand gesture and nothing else. It no
+ * longer activates the folder's newest session and no longer moves where the
+ * next "New" lands — that stays with the selected conversation. Hence no
+ * helper here any more: the header's only effect is flipping its own entry in
+ * `expandedProjects`.
  */
-export interface FolderClickActivation {
-  /** `null` means "leave the active session alone". */
-  activateSessionId: string | null;
-  /** What `expandedProjects[folder.projectId]` should become after this click. */
-  nextExpanded: boolean;
+
+export interface FolderRowsLimitInput {
+  /** The folder's rows as derived — sorted `updatedAt` desc, query applied. */
+  rows: readonly SidebarSessionRow[];
+  /** The user pressed "View more" on this folder in this run. */
+  showAll: boolean;
+  /** A search is active: every match is listed, the cap does not apply. */
+  queryActive: boolean;
+  /** Kept visible below the cap — decision 137 §4. */
+  activeSessionId?: string | null;
+}
+
+export interface FolderRowsLimitResult {
+  rows: SidebarSessionRow[];
+  /** Rows behind "View more (N)"; 0 when nothing is hidden. */
+  hiddenCount: number;
+  /** Show "Show less": the list is expanded AND there is something to fold. */
+  collapsible: boolean;
 }
 
 /**
- * D29 (open-q #28, ruling A): which session a repository-folder click should
- * activate, and what the folder's expansion should become.
+ * Decision 137 §4: a folder lists its first {@link FOLDER_DEFAULT_LIMIT} rows
+ * and hides the rest behind "View more (N)".
  *
- * Why this exists: the right-hand git panel, the file tree and the session cwd
- * all follow the ACTIVE session's workspace. A folder header click only moved
- * `focusedProjectId` (where the next "New" lands) and toggled expansion, so
- * clicking a repository produced no visible change anywhere — the field
- * complaint "the git panel does not follow the sidebar". Activating the
- * folder's most recent session gives the click a visible consequence.
- *
- * Rules, exactly as ruled:
- * - Only a click that crosses into a DIFFERENT project activates anything.
- *   Clicking inside the already-active project is the collapse/expand gesture
- *   and must not be hijacked.
- * - An empty folder activates nothing and never auto-creates: the same click
- *   already pointed `focusedProjectId` at this folder, so "New" is one further
- *   click away.
- * - Temp is an ordinary project here — no special case.
- *
- * Expansion (F1 adversarial-review fix): a plain unconditional toggle in the
- * caller collapsed the very folder a cross-repo click just activated whenever
- * it happened to already be expanded — the just-activated session row vanished
- * off-screen instead of coming into view. So expansion is decided HERE,
- * together with activation, instead of the caller toggling blindly first:
- * - Activation succeeds (cross-project click, non-empty folder): `nextExpanded`
- *   is always `true` — the folder must be open for the newly-activated row to
- *   be visible, regardless of its state before the click.
- * - Activation is a no-op (same-project click, or an empty folder): the plain
- *   collapse/expand gesture applies, `nextExpanded = !currentExpanded`.
- *
- * PRECONDITION (F5 adversarial-review fix): `folder.rows` must already be
- * sorted by `updatedAt` descending — exactly what `buildSidebarFolders`
- * hands every caller. Under that precondition the most-recent row is always
- * `rows[0]`, so this no longer scans for a max; a tie is whatever `rows[0]`
- * is, which is also the topmost row on screen.
+ * - The selected conversation is never hidden: when it sorts past the cap it
+ *   is appended after the capped rows (above "View more"), so the sidebar
+ *   always shows the row the main pane is displaying. It is not counted in N.
+ * - `showAll` lifts the cap; the list then ends in "Show less" when there is
+ *   anything to fold back.
+ * - A search lists every match — the query already narrowed the list, and
+ *   hiding a hit behind a button would read as "no such chat".
  */
-export function resolveFolderClickActivation(input: {
-  folder: {
-    projectId: string;
-    /** Same rows the folder renders — already query-filtered and sorted
-     * `updatedAt` desc, so a click while searching activates a session the
-     * user can actually see, and `rows[0]` is always the most recent one. */
-    rows: readonly Pick<SidebarSessionRow, 'sessionId'>[];
-  };
-  /**
-   * Project of the ACTIVE session's workspace — the workspace is authoritative
-   * for grouping (same rule as `buildSidebarFolders`), so a stale
-   * `session.projectId` cannot misjudge "same folder" after a rebind. `null`
-   * when nothing is active or the active session is an orphan, which counts as
-   * a different project and therefore activates.
-   */
-  activeProjectId: string | null;
-  /** This folder's expansion state BEFORE the click. */
-  currentExpanded: boolean;
-}): FolderClickActivation {
-  if (input.folder.projectId === input.activeProjectId) {
-    return { activateSessionId: null, nextExpanded: !input.currentExpanded };
+export function limitFolderRows(input: FolderRowsLimitInput): FolderRowsLimitResult {
+  const total = input.rows.length;
+  if (input.queryActive || total <= FOLDER_DEFAULT_LIMIT) {
+    return { rows: [...input.rows], hiddenCount: 0, collapsible: false };
   }
-  const newestSessionId = input.folder.rows[0]?.sessionId ?? null;
-  if (!newestSessionId) {
-    return { activateSessionId: null, nextExpanded: !input.currentExpanded };
+  if (input.showAll) {
+    return { rows: [...input.rows], hiddenCount: 0, collapsible: true };
   }
-  return { activateSessionId: newestSessionId, nextExpanded: true };
+  const visible = input.rows.slice(0, FOLDER_DEFAULT_LIMIT);
+  const pinned =
+    input.activeSessionId != null
+      ? input.rows
+          .slice(FOLDER_DEFAULT_LIMIT)
+          .find((row) => row.sessionId === input.activeSessionId)
+      : undefined;
+  if (pinned) visible.push(pinned);
+  return { rows: visible, hiddenCount: total - visible.length, collapsible: false };
+}
+
+export interface ActiveRowsInput {
+  sessions: readonly ChatSession[];
+  workspaces: readonly ChatWorkspace[];
+  /** The store's `hostBoundSessionIds`: started on the engine in this run. */
+  hostBoundSessionIds: readonly string[];
+  query?: string;
+  /** T091: exempt from the title query — see `matchesQuery`. */
+  activeSessionId?: string | null;
+}
+
+/**
+ * Decision 137 §1 — the "Active now" section above Recent.
+ *
+ * A conversation is listed while its session is started on the engine in this
+ * run (`hostBoundSessionIds`: a send created or resumed it; a preview never
+ * does) or while a turn of it is running. The binding is dropped when the pool
+ * reclaims the session, the engine restarts, or the user ends the
+ * conversation, so such a row leaves this section by itself.
+ *
+ * Running turns come first, the rest by last activity. The same orphan and
+ * search rules as Recent apply, so a search narrows this section too and an
+ * unbound (temporary) chat is not mistaken for an orphan.
+ */
+export function deriveActiveRows(input: ActiveRowsInput): SidebarSessionRow[] {
+  const normalized = normalizeQuery(input.query);
+  const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
+  const bound = new Set(input.hostBoundSessionIds);
+  return input.sessions
+    .filter((session) => {
+      if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
+        return false;
+      }
+      if (!matchesQuery(session, normalized, input.activeSessionId)) {
+        return false;
+      }
+      return bound.has(session.id) || isBusySessionStatus(session.status);
+    })
+    .map((session) =>
+      toRow(
+        session,
+        isUnboundSessionRow(session) ? undefined : workspaceById.get(session.workspaceId)
+      )
+    )
+    .sort((a, b) => Number(b.busy) - Number(a.busy) || byUpdatedAtDesc(a, b));
+}
+
+/**
+ * The two renderings of the interim title a chat moved over from a 1.0.x
+ * continuation carries (`LEGACY_FORK_TITLE_KEY`, written by Main in the locale
+ * of the moment): the text that follows `{{title}}`. A locale that puts the
+ * title anywhere but first is skipped — splitting it would misread the title.
+ */
+const BRANCH_SUFFIXES: readonly string[] = (['zh', 'en'] as const)
+  .map((locale) => translate(locale, LEGACY_FORK_TITLE_KEY, { title: '\u0000' }).split('\u0000'))
+  .filter((parts) => parts.length === 2 && parts[0] === '' && (parts[1]?.trim().length ?? 0) > 0)
+  .map((parts) => parts[1] as string);
+
+export interface TitleParts {
+  /** The part that may be cut with an ellipsis. */
+  base: string;
+  /** The branch suffix, trimmed, or null when the title has none. */
+  suffix: string | null;
+  /** The suffix was separated from the base by whitespace (the English form). */
+  spaced: boolean;
+}
+
+/**
+ * Point-check issue 32 (decision 138): split a title ending in the 1.0.x
+ * branch suffix so the row can keep the suffix whole and cut only the part
+ * before it. Decision 131 relies on that suffix to tell the moved copy from
+ * the original, and at the default sidebar width a long title used to lose it
+ * to the ellipsis.
+ *
+ * Matched on the text rather than on `forkTitlePending`: an image-only first
+ * message keeps the interim title for good while clearing the flag.
+ */
+export function splitBranchSuffix(title: string): TitleParts {
+  for (const suffix of BRANCH_SUFFIXES) {
+    if (title.length > suffix.length && title.endsWith(suffix)) {
+      const base = title.slice(0, title.length - suffix.length);
+      if (base.trim().length === 0) break;
+      return { base, suffix: suffix.trim(), spaced: /^\s/.test(suffix) };
+    }
+  }
+  return { base: title, suffix: null, spaced: false };
 }
 
 export interface RecentRowsInput {

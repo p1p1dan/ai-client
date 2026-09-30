@@ -2,6 +2,7 @@ import { PI_AGENT } from '@shared/types/agentWire';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import { hasPendingDraftTitle, resetDraftSessionTitles } from '@/stores/draftSessionTitles';
 import {
   isSessionRetired,
   markSessionsLive,
@@ -14,6 +15,7 @@ import {
   closeSessionAndRemoveRow,
   dropDismissedSessions,
   registerSessionIndexEntry,
+  renameSessionOrDraft,
   resetDismissedSessionRows,
 } from '../useSessionIndex';
 
@@ -506,5 +508,71 @@ describe('registerSessionIndexEntry', () => {
     } as unknown as typeof globalThis.window;
 
     await expect(registerSessionIndexEntry('s1', '/repo')).resolves.toBe(false);
+  });
+});
+
+/**
+ * Point-check issue 34 (decision 138): renaming a chat before its first send.
+ * It has no index row (lazy indexing, R5 round-2 A3), so Main's rename answers
+ * false — and the sidebar used to put the old title back without a word.
+ */
+describe('renameSessionOrDraft', () => {
+  function stubRename(result: boolean | Error) {
+    const renameSession =
+      result instanceof Error
+        ? vi.fn().mockRejectedValue(result)
+        : vi.fn().mockResolvedValue(result);
+    const registerSession = vi.fn().mockResolvedValue(true);
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { chat: { renameSession, registerSession } },
+    } as unknown as typeof globalThis.window;
+    return { renameSession, registerSession };
+  }
+
+  beforeEach(() => {
+    resetDraftSessionTitles();
+  });
+
+  it('renames an indexed chat through Main and refreshes', async () => {
+    const api = stubRename(true);
+    seedStore([session('s1', { runtimeIdentity: '/x.dsh.json' })]);
+
+    await expect(renameSessionOrDraft('s1', 'Named', refresh)).resolves.toBe(true);
+    expect(api.renameSession).toHaveBeenCalledWith({ sessionId: 's1', title: 'Named' });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(hasPendingDraftTitle('s1')).toBe(false);
+  });
+
+  it('names a never-sent chat on its live row, without putting it on disk', async () => {
+    const api = stubRename(false);
+    seedStore([session('draft', { title: 'Live Agent Host', updatedAt: 1000 })]);
+
+    await expect(renameSessionOrDraft('draft', 'My plan', refresh)).resolves.toBe(true);
+    const row = useChatSessionsStore.getState().sessions.find((item) => item.id === 'draft');
+    expect(row?.title).toBe('My plan');
+    // A rename is activity.
+    expect(row?.updatedAt).toBeGreaterThan(1000);
+    // Remembered for the first send, and nothing registered: an unsent chat
+    // still does not survive a restart (A3).
+    expect(hasPendingDraftTitle('draft')).toBe(true);
+    expect(api.registerSession).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
+  });
+
+  it('reports a refused rename of a chat that exists on disk', async () => {
+    stubRename(false);
+    seedStore([session('s1', { title: 'Old', runtimeIdentity: '/x.dsh.json' })]);
+
+    await expect(renameSessionOrDraft('s1', 'New', refresh)).resolves.toBe(false);
+    expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('Old');
+    expect(hasPendingDraftTitle('s1')).toBe(false);
+  });
+
+  it('reports a refused rename of a chat bound to the engine', async () => {
+    stubRename(new Error('ipc down'));
+    seedStore([session('s1', { title: 'Old' })], { hostBoundSessionIds: ['s1'] });
+
+    await expect(renameSessionOrDraft('s1', 'New', refresh)).resolves.toBe(false);
+    expect(useChatSessionsStore.getState().sessions[0]?.title).toBe('Old');
   });
 });

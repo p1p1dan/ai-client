@@ -430,6 +430,11 @@ export class SessionIndexService {
           `Session index identity mismatch for ${input.sessionId}: expected ${existing.runtimeIdentity ?? 'none'}, got ${input.runtimeIdentity}`
         );
       }
+      // dsh-rebase decision 138 (point-check issue 3): `updatedAt` is the
+      // chat's last activity, and reopening a session is not activity — Main
+      // reopens every one of them after an engine restart, and a resume can
+      // also be nothing more than opening a chat to read it. The turn that
+      // follows dates the row when it ends.
       const next: SessionIndexEntry = {
         ...existing,
         workspacePath: input.workspacePath,
@@ -437,7 +442,6 @@ export class SessionIndexService {
         agent: input.agent,
         model: input.model ?? existing.model,
         piLeaf: input.piLeaf ?? existing.piLeaf,
-        updatedAt: now(),
       };
       this.entries.set(input.sessionId, next);
       try {

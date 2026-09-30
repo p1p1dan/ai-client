@@ -468,6 +468,38 @@ describe('SessionIndexService', () => {
     });
 
     /**
+     * dsh-rebase decision 138 (P1-7d point-check issue 3). `updatedAt` is the
+     * chat's last activity, which orders the sidebar. Main reopens every
+     * session after an engine restart, and each reopen used to re-date its row,
+     * so untouched chats rose to the top at the next index refresh.
+     */
+    it('[D138] a resume keeps the row dated by its last activity', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      try {
+        const { SessionIndexService } = await import('../SessionIndexService');
+        const service = new SessionIndexService();
+        vi.setSystemTime(1_000_000);
+        await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a', agent: DSH_AGENT });
+        await service.bindRuntimeIdentity('s1', '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json');
+        const before = (await service.list())[0]?.updatedAt;
+
+        vi.setSystemTime(9_000_000);
+        await service.commitResumed({
+          sessionId: 's1',
+          workspacePath: '/ws/a',
+          runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-s1.dsh.json',
+          agent: DSH_AGENT,
+        });
+
+        expect(before).toBe(1_000_000);
+        expect((await service.list())[0]?.updatedAt).toBe(before);
+        expect(readIndexFile().find((row) => row.sessionId === 's1')?.updatedAt).toBe(before);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    /**
      * dsh-rebase P1-1. `commitResumed` used to stamp a literal `pi` on every
      * resume, which would rebind each resumed DSH session to the retired
      * engine — read-only from then on. It writes the engine it is given, and

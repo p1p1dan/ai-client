@@ -22,7 +22,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import type { Repository } from '@/App/constants';
 import { STORAGE_KEYS } from '@/App/storage';
 import { RepositorySettingsDialog } from '@/components/repository/RepositorySettingsDialog';
@@ -46,6 +46,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Spinner } from '@/components/ui/spinner';
+import { toastManager } from '@/components/ui/toast';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import {
@@ -65,14 +67,17 @@ import { sumFolderDiffTotals } from './folderDiffStats';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
+  deriveActiveRows,
   deriveRecentRows,
   formatRelativeAge,
+  isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
+  limitFolderRows,
   RECENT_DEFAULT_LIMIT,
-  resolveActiveProjectId,
-  resolveFolderClickActivation,
   resolveNewSessionTarget,
+  resolveRecentCollapsed,
   type SidebarSessionRow,
+  splitBranchSuffix,
   UNBOUND_FOLDER_ID,
 } from './sidebarTree';
 import { useActivateSession } from './useActivateSession';
@@ -116,16 +121,22 @@ export function LeftNav({
   // (folder click is UI-only, e.g. expandedProjects above) — this stays local
   // to LeftNav and only feeds the header "New" button's target resolution,
   // it never becomes the source of truth for "where to run" (that's the
-  // Composer target bar, T-27).
+  // Composer target bar, T-27). Decision 137 §3: only picking a conversation
+  // writes it now; a folder header click no longer does.
   const [focusedProjectId, setFocusedProjectId] = useState<string | null>(null);
+  // Decision 137 §2: collapsed unless the user expanded it before (same key).
   const [recentCollapsed, setRecentCollapsed] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED) === 'true';
+      return resolveRecentCollapsed(localStorage.getItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED));
     } catch {
-      return false;
+      return true;
     }
   });
   const [recentShowAll, setRecentShowAll] = useState(false);
+  // Decision 137 §4: folders whose "View more" was pressed. Memory only, so it
+  // holds across conversation switches and a folder collapse, and a restart
+  // brings every folder back to its first rows.
+  const [folderShowAll, setFolderShowAll] = useState<Record<string, boolean>>({});
   const [searchVisible, setSearchVisible] = useState(true);
   const [repoToRemove, setRepoToRemove] = useState<Repository | null>(null);
   const [repoToConfigure, setRepoToConfigure] = useState<Repository | null>(null);
@@ -220,6 +231,19 @@ export function LeftNav({
   const { refresh } = useSessionIndex();
   const { rename, archive, archiveMany, close } = useSessionIndexMutations(refresh);
 
+  // Point-check issue 34 (decision 138): a rename that did not land says so.
+  // A chat that has never been sent is renamed on its live row instead (see
+  // `renameSessionOrDraft`), so what is left here is a real failure. Compared
+  // with `false` on purpose: only an explicit refusal is reported.
+  const renameRow = useCallback(
+    async (sessionId: string, title: string) => {
+      if ((await rename(sessionId, title)) === false) {
+        toastManager.add({ type: 'error', title: t('Could not rename the chat') });
+      }
+    },
+    [rename, t]
+  );
+
   // D08: activation (select + resume-if-needed) moved into `useActivateSession`
   // so the center tab strip can start a session the same way this list does —
   // a persisted tab reopened after a restart has no timeline either.
@@ -310,6 +334,14 @@ export function LeftNav({
     query,
     activeSessionId,
   });
+  // Decision 137 §1: started on the engine in this run, or running a turn.
+  const activeRows = deriveActiveRows({
+    sessions,
+    workspaces,
+    hostBoundSessionIds,
+    query,
+    activeSessionId,
+  });
   const queryActive = query.trim().length > 0;
   // While searching, folders with zero hits collapse away instead of leaving
   // a wall of empty headers; without a query every folder stays visible so
@@ -368,6 +400,41 @@ export function LeftNav({
   };
 
   /**
+   * Decision 137 §4: the row that ends a capped folder — "View more (N)" while
+   * rows are hidden, "Show less" once they are all listed. Nothing when the
+   * folder fits. Shared by the repository folders and the temporary-chat group
+   * so the two read the same.
+   */
+  const renderFolderLimitToggle = (
+    projectId: string,
+    limited: ReturnType<typeof limitFolderRows>
+  ) => {
+    if (limited.hiddenCount > 0) {
+      return (
+        <button
+          type="button"
+          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground hover:bg-hover focus-visible:bg-hover"
+          onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}
+        >
+          {t('View more ({{count}})', { count: limited.hiddenCount })}
+        </button>
+      );
+    }
+    if (limited.collapsible) {
+      return (
+        <button
+          type="button"
+          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground hover:bg-hover focus-visible:bg-hover"
+          onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: false }))}
+        >
+          {t('Show less')}
+        </button>
+      );
+    }
+    return null;
+  };
+
+  /**
    * U13 — the temporary-chat group.
    *
    * Rendered from a helper rather than folded into the `visibleFolders` map
@@ -377,13 +444,19 @@ export function LeftNav({
    * user with a sidebar that admits to no sessions at all while their history
    * sits on disk.
    *
-   * The header only expands/collapses: the cross-folder activation rule
-   * (D29) is about following a repository into its git/file panels, and this
-   * group has no repository behind it.
+   * The header only expands/collapses — as every folder header does since
+   * decision 137 §3 — and the group lists its first rows behind the same
+   * "View more" as a repository folder (§4).
    */
   const renderUnboundSection = () => {
     if (!unboundFolder) return null;
     const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
+    const limited = limitFolderRows({
+      rows: unboundFolder.rows,
+      showAll: folderShowAll[UNBOUND_FOLDER_ID] === true,
+      queryActive,
+      activeSessionId,
+    });
     return (
       // S1 (H/18): the partition's own right-click. It covers the header and
       // the gaps between rows; a right-click that lands ON a row opens that
@@ -409,7 +482,7 @@ export function LeftNav({
           </div>
           {expanded && (
             <div className="mt-1 space-y-0.5 pl-3">
-              {unboundFolder.rows.map((row) => (
+              {limited.rows.map((row) => (
                 <SessionRow
                   key={row.sessionId}
                   row={row}
@@ -423,10 +496,11 @@ export function LeftNav({
                   pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                   onSelect={() => handleSelectSession(row.sessionId)}
                   onClose={() => void close(row.sessionId)}
-                  onRename={(title) => void rename(row.sessionId, title)}
+                  onRename={(title) => void renameRow(row.sessionId, title)}
                   onArchive={() => void archive(row.sessionId, true)}
                 />
               ))}
+              {renderFolderLimitToggle(UNBOUND_FOLDER_ID, limited)}
             </div>
           )}
         </ContextMenuPrimitive.Trigger>
@@ -561,6 +635,42 @@ export function LeftNav({
             </>
           ) : (
             <>
+              {/* Decision 137 §1: conversations started on the engine in this
+                  run, running turns first. The section is absent, header
+                  included, while there are none. */}
+              {activeRows.length > 0 && (
+                <section>
+                  <div className="flex h-7 items-center px-2">
+                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
+                      {t('Active now')}
+                    </p>
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {activeRows.map((row) => (
+                      <SessionRow
+                        key={`active-${row.sessionId}`}
+                        row={row}
+                        now={now}
+                        active={activeSessionId === row.sessionId}
+                        started={hostBoundSessionIds.includes(row.sessionId)}
+                        unread={unreadSessionIds.includes(row.sessionId)}
+                        {...(selecting
+                          ? {
+                              selected: selection.has(row.sessionId),
+                              onToggleSelect: toggleSelected,
+                            }
+                          : {})}
+                        pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
+                        onSelect={() => handleSelectSession(row.sessionId)}
+                        onClose={() => void close(row.sessionId)}
+                        onRename={(title) => void renameRow(row.sessionId, title)}
+                        onArchive={() => void archive(row.sessionId, true)}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <section>
                 <div className="flex h-7 items-center px-2">
                   <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
@@ -599,7 +709,7 @@ export function LeftNav({
                         pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
                         onSelect={() => handleSelectSession(row.sessionId)}
                         onClose={() => void close(row.sessionId)}
-                        onRename={(title) => void rename(row.sessionId, title)}
+                        onRename={(title) => void renameRow(row.sessionId, title)}
                         onArchive={() => void archive(row.sessionId, true)}
                       />
                     ))}
@@ -672,6 +782,12 @@ export function LeftNav({
 
                   {visibleFolders.map((folder) => {
                     const expanded = isProjectExpanded(folder.projectId);
+                    const limited = limitFolderRows({
+                      rows: folder.rows,
+                      showAll: folderShowAll[folder.projectId] === true,
+                      queryActive,
+                      activeSessionId,
+                    });
                     const newSessionWorkspaceId = folder.newSessionWorkspaceId;
                     const folderRepo = repoByProjectId.get(folder.projectId);
                     const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
@@ -709,43 +825,16 @@ export function LeftNav({
                         <button
                           type="button"
                           className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                          onClick={() => {
-                            // D1 (round-5): a folder header click also targets
-                            // the global "New" button at this folder, in sync
-                            // with handleSelectSession's session-pick path.
-                            setFocusedProjectId(folder.projectId);
-                            // F3 (D29 adversarial-review, minor): read fresh
-                            // store state at click time rather than the
-                            // render-body `activeSession` snapshot — this
-                            // handler can fire well after the render that
-                            // captured it scheduled this closure.
-                            const activeProjectId = resolveActiveProjectId(
-                              useChatSessionsStore.getState()
-                            );
-                            // D29 (open-q #28 A) + F1 (adversarial-review
-                            // major): activation and expansion are decided
-                            // together by one pure call, so a cross-repo
-                            // click can never toggle the just-activated
-                            // folder closed — the old code toggled expansion
-                            // unconditionally BEFORE deciding activation,
-                            // which could collapse the row it had just
-                            // activated. Routed through the very same
-                            // handler a session row click uses — no second
-                            // activation path.
-                            const { activateSessionId, nextExpanded } =
-                              resolveFolderClickActivation({
-                                folder,
-                                activeProjectId,
-                                currentExpanded: expanded,
-                              });
+                          // Decision 137 §3 (user ruling, replaces D29): the
+                          // header folds and unfolds this folder and does
+                          // nothing else — no conversation is opened and the
+                          // "New" target is left to the selected conversation.
+                          onClick={() =>
                             setExpandedProjects((prev) => ({
                               ...prev,
-                              [folder.projectId]: nextExpanded,
-                            }));
-                            if (activateSessionId) {
-                              handleSelectSession(activateSessionId);
-                            }
-                          }}
+                              [folder.projectId]: !expanded,
+                            }))
+                          }
                         >
                           {expanded ? (
                             <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
@@ -844,7 +933,7 @@ export function LeftNav({
 
                         {expanded && (
                           <div className="mt-1 space-y-0.5 pl-3">
-                            {folder.rows.map((row) => {
+                            {limited.rows.map((row) => {
                               const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
                               return (
                                 <SessionRow
@@ -865,7 +954,7 @@ export function LeftNav({
                                   }
                                   onSelect={() => handleSelectSession(row.sessionId)}
                                   onClose={() => void close(row.sessionId)}
-                                  onRename={(title) => void rename(row.sessionId, title)}
+                                  onRename={(title) => void renameRow(row.sessionId, title)}
                                   onArchive={() => void archive(row.sessionId, true)}
                                   onDeleteTemp={
                                     tempItemId && onRequestTempDelete
@@ -875,6 +964,7 @@ export function LeftNav({
                                 />
                               );
                             })}
+                            {renderFolderLimitToggle(folder.projectId, limited)}
                             {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
                               <button
                                 type="button"
@@ -989,6 +1079,19 @@ export function LeftNav({
   );
 }
 
+/**
+ * Issue 26: how many focus thefts one rename edit undoes before it gives up and
+ * commits what was typed. Two covers the menu's late focus return plus one
+ * straggler; more would only prolong a fight with a dialog's focus trap.
+ */
+const RENAME_REFOCUS_BUDGET = 2;
+/**
+ * Issue 26: a blur within this long after a pointer press elsewhere (or Tab,
+ * or a shortcut) is the user leaving the editor. The press and the blur are one
+ * gesture, so the window only has to cover event dispatch.
+ */
+const RENAME_LEAVE_INTENT_MS = 1000;
+
 interface SessionRowProps {
   row: SidebarSessionRow;
   now: number;
@@ -1046,20 +1149,92 @@ function SessionRow({
   const unreadLabel = row.failed
     ? t('Failed while you were away')
     : t('Finished while you were away');
+  const waitingLabel =
+    row.status === 'waiting_question' ? t('Waiting for an answer') : t('Waiting for approval');
+  const titleParts = splitBranchSuffix(row.title);
+
+  // Point-check issue 26 (decision 138). The editor used to lose focus to the
+  // chat composer 1–3 ms after it appeared, and its blur then ended the edit
+  // with the old title. The thief was the context menu handing focus back as
+  // it unmounted: its trigger (this row) was gone, so Base UI fell back to the
+  // last element in its module-wide "previously focused" list — the composer,
+  // whenever some earlier popup had been opened from it.
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Set while an edit is open. The row's menu reads it through `finalFocus` and
+  // leaves focus alone instead of returning it.
+  const renamingRef = useRef(false);
+  // When the pointer or the keyboard last asked to leave the editor. A blur
+  // without one was not the user's doing.
+  const leaveIntentAtRef = useRef(0);
+  // How many times a blur the user did not ask for is undone per edit — a cap
+  // so the editor cannot fight a dialog's focus trap forever.
+  const refocusBudgetRef = useRef(0);
+
+  const endEditing = () => {
+    renamingRef.current = false;
+    setEditing(false);
+  };
 
   const commitRename = () => {
+    if (!renamingRef.current) return;
     const trimmed = draft.trim();
     if (trimmed && trimmed !== row.title) {
       onRename(trimmed);
     } else {
       setDraft(row.title);
     }
-    setEditing(false);
+    endEditing();
+  };
+
+  const cancelRename = () => {
+    setDraft(row.title);
+    endEditing();
   };
 
   const beginRename = () => {
+    renamingRef.current = true;
+    leaveIntentAtRef.current = 0;
+    refocusBudgetRef.current = RENAME_REFOCUS_BUDGET;
     setDraft(row.title);
     setEditing(true);
+  };
+
+  // A pointer press anywhere but the editor is the user leaving it. Capture
+  // phase, so a handler that stops propagation cannot hide the press.
+  useEffect(() => {
+    if (!editing) return;
+    const markLeave = (event: Event) => {
+      const input = inputRef.current;
+      if (input && event.target instanceof Node && input.contains(event.target)) return;
+      leaveIntentAtRef.current = Date.now();
+    };
+    document.addEventListener('pointerdown', markLeave, true);
+    document.addEventListener('mousedown', markLeave, true);
+    return () => {
+      document.removeEventListener('pointerdown', markLeave, true);
+      document.removeEventListener('mousedown', markLeave, true);
+    };
+  }, [editing]);
+
+  const handleEditorBlur = () => {
+    if (!renamingRef.current) return;
+    if (Date.now() - leaveIntentAtRef.current < RENAME_LEAVE_INTENT_MS) {
+      commitRename();
+      return;
+    }
+    // The window itself lost focus (another app, a devtools window): keep the
+    // edit open; the editor gets focus back with the window.
+    if (typeof document.hasFocus === 'function' && !document.hasFocus()) return;
+    // Code moved focus away. Take it back instead of treating it as "done" —
+    // committing here is what used to end the edit with the old title.
+    if (refocusBudgetRef.current > 0) {
+      refocusBudgetRef.current -= 1;
+      setTimeout(() => {
+        if (renamingRef.current) inputRef.current?.focus();
+      }, 0);
+      return;
+    }
+    commitRename();
   };
 
   const requestArchive = () => {
@@ -1075,18 +1250,21 @@ function SessionRow({
     return (
       <div className="flex h-7 w-full items-center gap-1 rounded-md px-1">
         <Input
+          ref={inputRef}
           autoFocus
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
-          onBlur={commitRename}
+          onBlur={handleEditorBlur}
           onKeyDown={(event) => {
             if (event.key === 'Enter') {
               event.preventDefault();
               commitRename();
             } else if (event.key === 'Escape') {
               event.preventDefault();
-              setDraft(row.title);
-              setEditing(false);
+              cancelRename();
+            } else if (event.key === 'Tab' || event.ctrlKey || event.metaKey || event.altKey) {
+              // Tab and shortcuts move focus on the user's behalf.
+              leaveIntentAtRef.current = Date.now();
             }
           }}
           className="h-6 flex-1 text-ui"
@@ -1153,12 +1331,21 @@ function SessionRow({
               is what ends the run), and `unread` outranks `started` because
               "attached in the background" is exactly the state every unread row
               is in — showing the ring there would say the less useful half. */}
+          {/* Decision 137 §1: a running turn spins; a turn parked on an
+              approval card or a question shows an attention dot instead,
+              because the next move is the user's. Both carry their state in
+              words for the tooltip and screen readers. */}
           {onToggleSelect ? null : row.busy ? (
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-full bg-status-running"
-              title={t('Running')}
-            />
+            isWaitingSessionStatus(row.status) ? (
+              <span
+                role="img"
+                aria-label={waitingLabel}
+                title={waitingLabel}
+                className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+              />
+            ) : (
+              <Spinner aria-label={t('Running')} className="size-3 shrink-0 text-status-running" />
+            )
           ) : unread ? (
             // Not `aria-hidden` like its neighbours: the run-state dots restate
             // something the row's own text already implies, while this one is
@@ -1186,7 +1373,23 @@ function SessionRow({
           leftovers are ~16px — a bare ellipsis. Budget for an indented row at
           the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
           the agent chip alone claims ~63 of it. */}
-          <span className="min-w-20 flex-1 truncate">{row.title}</span>
+          {titleParts.suffix === null ? (
+            <span className="min-w-20 flex-1 truncate">{row.title}</span>
+          ) : (
+            // Point-check issue 32 (decision 138): the 1.0.x branch suffix is
+            // what tells a moved copy from its original (decision 131), so it
+            // stays whole and only the part before it gives way. The row's
+            // `title` still holds the whole string for the tooltip.
+            <span
+              className={cn(
+                'flex min-w-20 flex-1 items-baseline overflow-hidden',
+                titleParts.spaced && 'gap-1'
+              )}
+            >
+              <span className="min-w-0 truncate">{titleParts.base}</span>
+              <span className="shrink-0 text-muted-foreground">{titleParts.suffix}</span>
+            </span>
+          )}
           {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated
               chat, continued in 1.0.x since. It sits next to the migrated
               chat under the same title, so the mark is what tells the two
@@ -1301,7 +1504,15 @@ function SessionRow({
           </div>
         </ContextMenuPrimitive.Trigger>
 
-        <MenuPopup align="start" side="bottom" className="min-w-40">
+        <MenuPopup
+          align="start"
+          side="bottom"
+          className="min-w-40"
+          // Issue 26: once Rename replaced this row with the editor, handing
+          // focus "back" can only land on some stale element — the composer.
+          // Any other close returns focus as usual.
+          finalFocus={() => !renamingRef.current}
+        >
           <MenuItem onClick={beginRename}>
             <Pencil className="size-4" />
             {t('Rename')}

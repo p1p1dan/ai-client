@@ -1,6 +1,7 @@
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import { useCallback, useEffect, useState } from 'react';
 import { type ChatSession, type ChatWorkspace, useChatSessionsStore } from '@/stores/chatSessions';
+import { applyDraftSessionTitle, settleDraftSessionTitle } from '@/stores/draftSessionTitles';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { markSessionsLive, markSessionsRetired } from '@/stores/sessionRetirement';
 import { restoreIndexedSessionModels } from '../sessionGenerationPreferences';
@@ -164,6 +165,34 @@ export async function renameSessionIndexEntry(
   } catch {
     return false;
   }
+}
+
+/**
+ * Point-check issue 34 (dsh-rebase decision 138): the sidebar's rename.
+ *
+ * A chat that has never been sent has no index row — indexing is lazy (R5
+ * round-2 A3) — so `renameSessionIndexEntry` answers false for it, and the
+ * sidebar used to drop the new name without a word. Such a chat (never bound
+ * to the engine, no session file: `isLiveOnlySession`) is renamed on its live
+ * row instead, and its first send writes the name to the index
+ * (`applyAutoSessionTitle`). Registering it now would put an unsent chat on
+ * disk, which A3 exists to prevent.
+ *
+ * Anything else that answers false is a real failure and is returned as such,
+ * for the caller to report.
+ */
+export async function renameSessionOrDraft(
+  sessionId: string,
+  title: string,
+  refresh: () => Promise<void>
+): Promise<boolean> {
+  if (await renameSessionIndexEntry(sessionId, title, refresh)) {
+    // The index has a name now; an earlier draft name has nothing left to do.
+    settleDraftSessionTitle(sessionId);
+    return true;
+  }
+  if (!isLiveOnlySession(sessionId)) return false;
+  return applyDraftSessionTitle(sessionId, title);
 }
 
 /**
@@ -436,7 +465,7 @@ export async function closeSessionAndRemoveRow(
 export function useSessionIndexMutations(refresh: () => Promise<void>) {
   const rename = useCallback(
     (sessionId: string, title: string): Promise<boolean> =>
-      renameSessionIndexEntry(sessionId, title, refresh),
+      renameSessionOrDraft(sessionId, title, refresh),
     [refresh]
   );
 

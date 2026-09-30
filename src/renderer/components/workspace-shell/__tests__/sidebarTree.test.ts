@@ -1,19 +1,24 @@
 import { zhTranslations } from '@shared/i18n';
+import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
   chipForWorkspace,
+  deriveActiveRows,
   deriveRecentRows,
+  FOLDER_DEFAULT_LIMIT,
   formatRelativeAge,
+  isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
+  limitFolderRows,
   RECENT_DEFAULT_LIMIT,
   RECENT_WINDOW_MS,
-  resolveActiveProjectId,
-  resolveFolderClickActivation,
   resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
+  resolveRecentCollapsed,
+  splitBranchSuffix,
   UNBOUND_FOLDER_ID,
 } from '../sidebarTree';
 
@@ -49,10 +54,9 @@ function session(overrides: Partial<ChatSession> & { id: string }): ChatSession 
   };
 }
 
-/** Shared by the folder-click / active-project describes below: builds the
- * one folder under test through the real `buildSidebarFolders`, so its
- * `rows` are genuinely `updatedAt`-desc sorted the way the sidebar renders
- * them (resolveFolderClickActivation's `rows[0]` precondition). */
+/** Builds the one folder under test through the real `buildSidebarFolders`,
+ * so its `rows` are genuinely `updatedAt`-desc sorted the way the sidebar
+ * renders them (the input `limitFolderRows` is given). */
 function folderOf(projectId: string, sessions: ChatSession[]) {
   const built = buildSidebarFolders({
     projects: [...projects, { id: projectId, name: projectId }].filter(
@@ -306,154 +310,218 @@ describe('resolveNewSessionTarget', () => {
   });
 });
 
-describe('resolveFolderClickActivation (D29, open-q #28 A; F1/F5 adversarial-review fixes)', () => {
-  it('activates the most recent session in the folder when the click crosses projects, forcing it open', () => {
-    const folder = folderOf('p-ai', [
-      session({ id: 's-old', workspaceId: 'ws-main', updatedAt: NOW - 5000 }),
-      session({ id: 's-new', workspaceId: 'ws-wt', updatedAt: NOW }),
-      session({ id: 's-mid', workspaceId: 'ws-main', updatedAt: NOW - 1000 }),
-    ]);
-
-    // F1: activation forces nextExpanded=true regardless of the prior state —
-    // a cross-repo click must never leave the just-activated row collapsed.
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: true })
-    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: false })
-    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
-    // Nothing active at all is also "a different project" — the click should
-    // still land the user somewhere visible.
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: null, currentExpanded: false })
-    ).toEqual({ activateSessionId: 's-new', nextExpanded: true });
-  });
-
-  it('never hijacks a click inside the already-active project, and keeps the plain toggle', () => {
-    const folder = folderOf('p-ai', [
-      session({ id: 's-old', workspaceId: 'ws-main', updatedAt: NOW - 5000 }),
-      session({ id: 's-new', workspaceId: 'ws-wt', updatedAt: NOW }),
-    ]);
-
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: true })
-    ).toEqual({ activateSessionId: null, nextExpanded: false });
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: false })
-    ).toEqual({ activateSessionId: null, nextExpanded: true });
-  });
-
-  it('returns null for an empty folder instead of auto-creating a session, and keeps the plain toggle', () => {
-    const folder = folderOf('p-empty', []);
-    expect(folder.rows).toEqual([]);
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: true })
-    ).toEqual({ activateSessionId: null, nextExpanded: false });
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-ai', currentExpanded: false })
-    ).toEqual({ activateSessionId: null, nextExpanded: true });
-    // The "New" affordance still points here — that path is untouched (D29 ④).
-    expect(folder.newSessionWorkspaceId).toBe('ws-empty');
-  });
-
-  it('breaks an updatedAt tie toward rows[0], under the sorted-input precondition (F5)', () => {
-    const tied = [
-      session({ id: 's-first', workspaceId: 'ws-main', updatedAt: NOW }),
-      session({ id: 's-second', workspaceId: 'ws-wt', updatedAt: NOW }),
-    ];
-    const folder = folderOf('p-ai', tied);
-    // buildSidebarFolders sorts updatedAt desc with a stable sort, so the tie
-    // keeps input order — and the resolver must agree with what is on screen.
-    expect(folder.rows.map((row) => row.sessionId)).toEqual(['s-first', 's-second']);
-    expect(
-      resolveFolderClickActivation({ folder, activeProjectId: 'p-empty', currentExpanded: false })
-        .activateSessionId
-    ).toBe('s-first');
-
-    // Same rule with the inputs reversed: the tie follows row order, never id
-    // or workspace ordering.
-    const reversed = folderOf('p-ai', [...tied].reverse());
-    expect(reversed.rows.map((row) => row.sessionId)).toEqual(['s-second', 's-first']);
-    expect(
-      resolveFolderClickActivation({
-        folder: reversed,
-        activeProjectId: 'p-empty',
-        currentExpanded: false,
-      }).activateSessionId
-    ).toBe('s-second');
-  });
-
-  it('treats Temp as an ordinary project — no special case', () => {
-    const tempFolder = folderOf('p-temp', [
-      session({ id: 's-temp', workspaceId: 'ws-temp', updatedAt: NOW }),
-    ]);
-    expect(
-      resolveFolderClickActivation({
-        folder: tempFolder,
-        activeProjectId: 'p-ai',
-        currentExpanded: false,
-      })
-    ).toEqual({ activateSessionId: 's-temp', nextExpanded: true });
-    expect(
-      resolveFolderClickActivation({
-        folder: tempFolder,
-        activeProjectId: 'p-temp',
-        currentExpanded: true,
-      })
-    ).toEqual({ activateSessionId: null, nextExpanded: false });
+describe('decision 137 §3: a folder header click no longer activates anything', () => {
+  it('the D29 activation helpers are gone from the module', async () => {
+    // The header's only effect is its own expansion entry (LeftNav). Pinned
+    // here so a helper that decides "which session a folder click opens"
+    // cannot quietly come back.
+    const mod = (await import('../sidebarTree')) as Record<string, unknown>;
+    expect(mod.resolveFolderClickActivation).toBeUndefined();
+    expect(mod.resolveActiveProjectId).toBeUndefined();
   });
 });
 
-describe('resolveActiveProjectId (F3, D29 adversarial-review)', () => {
-  it('resolves through the active session workspace, not a stale session.projectId', () => {
-    expect(
-      resolveActiveProjectId({
-        activeSessionId: 's-stale',
-        sessions: [session({ id: 's-stale', projectId: 'p-empty', workspaceId: 'ws-main' })],
-        workspaces,
-      })
-    ).toBe('p-ai');
+describe('resolveRecentCollapsed (decision 137 §2)', () => {
+  it('starts collapsed when nothing was stored', () => {
+    expect(resolveRecentCollapsed(null)).toBe(true);
   });
 
-  it('returns null when nothing is active', () => {
-    expect(resolveActiveProjectId({ activeSessionId: null, sessions: [], workspaces })).toBeNull();
+  it('remembers what the toggle wrote, under the same key as before', () => {
+    expect(resolveRecentCollapsed('true')).toBe(true);
+    expect(resolveRecentCollapsed('false')).toBe(false);
   });
 
-  it('returns null for an orphan active session (workspace missing)', () => {
-    expect(
-      resolveActiveProjectId({
-        activeSessionId: 's-orphan',
-        sessions: [session({ id: 's-orphan', workspaceId: 'ws-gone' })],
-        workspaces,
-      })
-    ).toBeNull();
+  it('reads anything but an explicit expand as collapsed', () => {
+    expect(resolveRecentCollapsed('')).toBe(true);
+    expect(resolveRecentCollapsed('garbage')).toBe(true);
+  });
+});
+
+describe('limitFolderRows (decision 137 §4)', () => {
+  const rows = (count: number) =>
+    folderOf(
+      'p-ai',
+      Array.from({ length: count }, (_, i) => session({ id: `s-${i}`, updatedAt: NOW - i }))
+    ).rows;
+
+  it('lists a folder of 8 or fewer rows whole, with nothing to toggle', () => {
+    const limited = limitFolderRows({ rows: rows(8), showAll: false, queryActive: false });
+    expect(limited.rows).toHaveLength(8);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
   });
 
-  // F4 (store-shape case): the active session sits on a DIFFERENT worktree of
-  // the SAME project as the clicked folder (ws-wt vs ws-main, both p-ai) —
-  // resolveActiveProjectId must still land on 'p-ai' through the workspace,
-  // so the folder click resolves to "no switch", not a false activation.
-  it('a worktree of the same project as the clicked folder resolves to no switch', () => {
-    const aiFolder = folderOf('p-ai', [
-      session({ id: 's-main', workspaceId: 'ws-main', updatedAt: NOW - 1000 }),
-      session({ id: 's-wt', workspaceId: 'ws-wt', updatedAt: NOW }),
+  it('shows the first 8 and counts the rest behind "View more"', () => {
+    const limited = limitFolderRows({ rows: rows(11), showAll: false, queryActive: false });
+    expect(limited.rows.map((row) => row.sessionId)).toEqual(
+      Array.from({ length: FOLDER_DEFAULT_LIMIT }, (_, i) => `s-${i}`)
+    );
+    expect(limited).toMatchObject({ hiddenCount: 3, collapsible: false });
+  });
+
+  it('lists everything once expanded, ending in "Show less"', () => {
+    const limited = limitFolderRows({ rows: rows(11), showAll: true, queryActive: false });
+    expect(limited.rows).toHaveLength(11);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: true });
+  });
+
+  it('keeps the selected conversation visible below the cap, without counting it as hidden', () => {
+    const limited = limitFolderRows({
+      rows: rows(11),
+      showAll: false,
+      queryActive: false,
+      activeSessionId: 's-9',
+    });
+    expect(limited.rows.map((row) => row.sessionId)).toEqual([
+      ...Array.from({ length: FOLDER_DEFAULT_LIMIT }, (_, i) => `s-${i}`),
+      's-9',
     ]);
-    const activeProjectId = resolveActiveProjectId({
-      activeSessionId: 's-wt',
+    expect(limited.hiddenCount).toBe(2);
+  });
+
+  it('does not duplicate a selected conversation already inside the first 8', () => {
+    const limited = limitFolderRows({
+      rows: rows(11),
+      showAll: false,
+      queryActive: false,
+      activeSessionId: 's-2',
+    });
+    expect(limited.rows).toHaveLength(FOLDER_DEFAULT_LIMIT);
+    expect(limited.hiddenCount).toBe(3);
+  });
+
+  it('lists every match while a search is active', () => {
+    const limited = limitFolderRows({ rows: rows(11), showAll: false, queryActive: true });
+    expect(limited.rows).toHaveLength(11);
+    expect(limited).toMatchObject({ hiddenCount: 0, collapsible: false });
+  });
+});
+
+describe('deriveActiveRows (decision 137 §1)', () => {
+  it('lists conversations started on the engine in this run, and nothing merely previewed', () => {
+    const rows = deriveActiveRows({
       sessions: [
-        session({ id: 's-main', workspaceId: 'ws-main' }),
-        session({ id: 's-wt', workspaceId: 'ws-wt' }),
+        session({ id: 's-bound', updatedAt: NOW - 5000 }),
+        // Previewed: has a transcript identity but no binding, no turn.
+        session({ id: 's-previewed', runtimeIdentity: '/x.dsh.json', updatedAt: NOW }),
       ],
       workspaces,
+      hostBoundSessionIds: ['s-bound'],
     });
-    expect(activeProjectId).toBe('p-ai');
+    expect(rows.map((row) => row.sessionId)).toEqual(['s-bound']);
+  });
+
+  it('adds any conversation running a turn, bound or not', () => {
+    const rows = deriveActiveRows({
+      sessions: [session({ id: 's-running', status: 'running' })],
+      workspaces,
+      hostBoundSessionIds: [],
+    });
+    expect(rows.map((row) => row.sessionId)).toEqual(['s-running']);
+  });
+
+  it('puts running turns first, then the rest by last activity', () => {
+    const rows = deriveActiveRows({
+      sessions: [
+        session({ id: 's-idle-new', updatedAt: NOW }),
+        session({ id: 's-running-old', status: 'running', updatedAt: NOW - 9000 }),
+        session({ id: 's-waiting', status: 'waiting_permission', updatedAt: NOW - 5000 }),
+        session({ id: 's-idle-old', updatedAt: NOW - 1000 }),
+      ],
+      workspaces,
+      hostBoundSessionIds: ['s-idle-new', 's-running-old', 's-waiting', 's-idle-old'],
+    });
+    expect(rows.map((row) => row.sessionId)).toEqual([
+      's-waiting',
+      's-running-old',
+      's-idle-new',
+      's-idle-old',
+    ]);
+  });
+
+  it('is empty when nothing is started, so the section can disappear', () => {
     expect(
-      resolveFolderClickActivation({
-        folder: aiFolder,
-        activeProjectId,
-        currentExpanded: true,
-      })
-    ).toEqual({ activateSessionId: null, nextExpanded: false });
+      deriveActiveRows({ sessions: [session({ id: 's-a' })], workspaces, hostBoundSessionIds: [] })
+    ).toEqual([]);
+  });
+
+  it('a conversation the pool reclaimed leaves with its binding', () => {
+    const sessions = [session({ id: 's-a', status: 'disconnected' })];
+    expect(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: ['s-a'] })).toHaveLength(
+      1
+    );
+    expect(deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: [] })).toEqual([]);
+  });
+
+  it('keeps a bound temporary chat and drops an orphan, like Recent', () => {
+    const rows = deriveActiveRows({
+      sessions: [
+        session({ id: 's-temp', projectId: '', workspaceId: '' }),
+        session({ id: 's-orphan', workspaceId: 'ws-gone' }),
+      ],
+      workspaces,
+      hostBoundSessionIds: ['s-temp', 's-orphan'],
+    });
+    expect(rows.map((row) => row.sessionId)).toEqual(['s-temp']);
+  });
+
+  it('applies the title query, exempting the open conversation', () => {
+    const sessions = [
+      session({ id: 's-open', title: 'Untitled' }),
+      session({ id: 's-hit', title: 'Parser rewrite' }),
+      session({ id: 's-miss', title: 'Docs' }),
+    ];
+    const rows = deriveActiveRows({
+      sessions,
+      workspaces,
+      hostBoundSessionIds: ['s-open', 's-hit', 's-miss'],
+      query: 'parser',
+      activeSessionId: 's-open',
+    });
+    expect(rows.map((row) => row.sessionId).sort()).toEqual(['s-hit', 's-open']);
+  });
+});
+
+describe('isWaitingSessionStatus', () => {
+  it('is the two statuses that park a turn on the user', () => {
+    expect(isWaitingSessionStatus('waiting_permission')).toBe(true);
+    expect(isWaitingSessionStatus('waiting_question')).toBe(true);
+    expect(isWaitingSessionStatus('running')).toBe(false);
+    expect(isWaitingSessionStatus('idle')).toBe(false);
+  });
+});
+
+describe('splitBranchSuffix (point-check issue 32, decision 138)', () => {
+  it('splits the Chinese interim title Main writes', () => {
+    expect(splitBranchSuffix('旧会话己：一直在被写（1.0.x 分支）')).toEqual({
+      base: '旧会话己：一直在被写',
+      suffix: '（1.0.x 分支）',
+      spaced: false,
+    });
+  });
+
+  it('splits the English one and remembers the space', () => {
+    expect(splitBranchSuffix('Old chat: tidy notes (1.0.x branch)')).toEqual({
+      base: 'Old chat: tidy notes',
+      suffix: '(1.0.x branch)',
+      spaced: true,
+    });
+  });
+
+  it('builds both suffixes from the dictionary entry Main uses', () => {
+    expect(zhTranslations[LEGACY_FORK_TITLE_KEY]).toBe('{{title}}（1.0.x 分支）');
+    expect(LEGACY_FORK_TITLE_KEY).toBe('{{title}} (1.0.x branch)');
+  });
+
+  it('leaves every other title whole', () => {
+    expect(splitBranchSuffix('Parser rewrite')).toEqual({
+      base: 'Parser rewrite',
+      suffix: null,
+      spaced: false,
+    });
+    // A suffix alone is not a title with a suffix.
+    expect(splitBranchSuffix('（1.0.x 分支）').suffix).toBeNull();
+    // Only at the end.
+    expect(splitBranchSuffix('（1.0.x 分支）之后的笔记').suffix).toBeNull();
   });
 });
 
