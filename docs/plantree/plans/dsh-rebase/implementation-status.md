@@ -21,7 +21,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 - **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
-  3. ✅ P1-7d GUI 点验三批做完（50 项）；修复分五组做（P1-7e，进行中）。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
+  3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
   4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
@@ -64,6 +64,11 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-30 P1-7e 点验问题修复五组全部落地（分组见 [topics/p1-7e-pointcheck-fixes.md](topics/p1-7e-pointcheck-fixes.md)；决策 138～144 待审批，其中 138 第 21 条用户选丙，140 的问题 31 与 143 的问题 30 用户按建议裁决）：
+  - e1 侧栏 `47eb2d36`（决策 137、138）；e2a 时间线与会话 `e482d3ce`（139）；e2b 失败注记、Stop 保留输出、`/compact` 摘要、网关流闸门与参数不兼容错误卡 `e35bbee2`（140）；e3 浮窗、终端、toast、对比度与 e5 插件自动重启、旧资产提示、会话授权活动行、图片上限 `0f04c61c`（142、143）；e4 文案与问答卡 `6fc05ddb`（144）。
+  - 另：P1-13d 复核修复 `70956bf7`；`encryptedRead/` 纳入宿主 tsc `51ed11de`；模型计划对只支持 adaptive 的模型不下发 off `1c3f9fc9`（141）；旧会话投影金样本补 `failure` `7ec5ba47`。
+  - 编排器复跑（`6fc05ddb` 前后）：四套 tsc；渲染层全部 316 个文件、5275 例；Main 与 preload 1750 例；dsh-host、shared、scripts 2339 例；Static / Scan / Wiring 752 例；集成 35/35；bridge-smoke 66 项；`--check` 28 个场景无差异。
+  - 下一步：只对改过的项目再点验一遍（GUI），然后与用户一起做真实网关 R1～R10。
 - 2026-09-30 用户在 1.0.4 上遇到两个真实网关错误（Claude Opus 5.5），只读调查结论：
   - 压缩报 `"thinking.type.disabled" is not supported for this model`：1.0.4 的手动 `/compact` 不带思考档位，pi-ai 对 anthropic 行发 `thinking:{type:"disabled"}`，只支持 adaptive 的模型拒收。DSH 分支按现有模型计划不会触发；[决策 141](decisions/141-model-plan-adaptive-thinking-hardening.md)（`1c3f9fc9`）再把两种少见配置也堵上。1.0.x 不出修复版（用户没要），临时办法是 models.json 该行加 `"thinkingLevelMap": {"off": null}` 与 `"compat": {"forceAdaptiveThinking": true}`。
   - `stream_gate_precommit` / `prebuffer_overflow`：公司网关（luban）的流闸门，缓冲约 10 KiB 仍等不到可提交的帧就中断；Opus 开头是长思考，同一请求重试基本必然失败。给网关管理员的说明已交用户转发。客户端归类（不自动重试、专门卡片）并入 e2b（决策 140）。
