@@ -13,19 +13,32 @@
  *   readBytes                same, with the caller's `maxBytes` enforced
  *                            against the plaintext length
  *   readByteRange            the byte window taken from the plaintext
- *   editText                 a clear `FS_ENCRYPTED` refusal — its private
- *                            `readForEdit` reads through node:fs directly,
- *                            so without this the model would meet the
- *                            misleading "binary file" error instead
+ *   editText                 TSD ciphertext in, plaintext from the fallback
+ *                            reader out for a literal search/replace, written
+ *                            back through the service's own version-guarded
+ *                            `writeText` (P1-13d; decision 135)
  *
  * A file whose node-visible prefix does NOT start with the marker is left to
  * the original method untouched; the only extra cost of a normal read is the
  * 16-byte prefix read. Every fallback outcome that is not trusted plaintext
  * raises `FS_ENCRYPTED` — ciphertext never reaches the model.
+ *
+ * The encrypted edit is optimistic rather than a lock: the version is read
+ * before the fallback read, and the write-back carries it as
+ * `replaceIfVersion`, so any external writer between the two fails the edit
+ * with `FS_STALE_VERSION` instead of overwriting. That is stricter than
+ * dsh-fs-local's edit-inside-the-lock (this row cannot take that lock without
+ * copying its critical section) and deliberate (decision 135).
  */
 
 import { BINARY_SAMPLE_BYTES, FALLBACK_MAX_PLAINTEXT_BYTES, FS_ENCRYPTED } from './constants.ts';
-import type { FallbackReader, FsErrorCtor, FsReadService, Platform } from './dshTypes.ts';
+import type { FallbackReader, FsErrorCtor, FsReadService, FsTarget, Platform } from './dshTypes.ts';
+import {
+  applyLiteralEdit,
+  detectLineEndings,
+  normalizeLineEndings,
+  restoreLineEndings,
+} from './replaceSemantics.ts';
 import { isTsdHeader, readFilePrefix } from './tsdHeader.ts';
 
 /** Marks a service this installer already wrapped; a second install is a no-op. */
@@ -243,9 +256,100 @@ export function installEncryptedRead(
     return Buffer.from(plain.subarray(range.offset, range.offset + range.length));
   };
 
+  /**
+   * The encrypted edit (P1-13d; decision 135): read the plaintext through the
+   * fallback, apply dsh-fs-local's literal replace to it, and write the result
+   * back through the service's own `writeText` carrying the version read
+   * before the fallback ran. The fence, the version compare and the atomic
+   * publication all stay the backend's; only the read basis changes.
+   *
+   * Error order mirrors dsh-fs-local's `editText`: a missing file, a
+   * non-regular file and a caller-supplied `expected` mismatch are decided
+   * from the fresh stat, then the content is read and matched.
+   */
+  const editEncrypted = async (
+    target: FsTarget,
+    edit: { oldString: string; newString: string; replaceAll?: boolean },
+    expected: unknown,
+    signal: AbortSignal | undefined,
+    sandboxPolicy: unknown
+  ): Promise<unknown> => {
+    // The service's own stat: the same probe `writeText` compares against, so
+    // this version and the guarded write agree by construction.
+    const before = await service.stat(target, signal);
+    if (before === undefined) {
+      throw new createError(
+        `cannot edit "${target.displayPath}": file changed since it was read`,
+        'FS_STALE_VERSION'
+      );
+    }
+    if (before.type !== 'file') {
+      throw new createError(
+        `cannot edit "${target.displayPath}": not a regular file`,
+        'FS_NOT_REGULAR_FILE'
+      );
+    }
+    const guard = expected as { kind?: unknown; version?: unknown } | undefined;
+    if (guard !== undefined && before.version !== guard.version) {
+      throw new createError(
+        `cannot edit "${target.displayPath}": file changed since it was read`,
+        'FS_STALE_VERSION'
+      );
+    }
+
+    const plain = await fallbackPlaintext(
+      reader,
+      target.targetKey,
+      target.displayPath,
+      signal,
+      createError
+    );
+    // `readForEdit` scans the WHOLE buffer for NUL and decodes strictly: the
+    // same judgement, on the plaintext the fallback returned instead.
+    if (plain.subarray(0, plain.length).includes(0)) {
+      throw new createError(`cannot edit "${target.displayPath}": binary file`, 'FS_NOT_TEXT');
+    }
+    let raw: string;
+    try {
+      raw = new TextDecoder('utf-8', { fatal: true }).decode(plain);
+    } catch (error) {
+      if (!(error instanceof TypeError)) throw error;
+      throw new createError(
+        `cannot edit "${target.displayPath}": invalid UTF-8 text`,
+        'FS_NOT_TEXT'
+      );
+    }
+
+    const original = normalizeLineEndings(raw);
+    const edited = applyLiteralEdit(original, edit, target.displayPath, createError);
+    const content = restoreLineEndings(edited.content, detectLineEndings(raw));
+
+    // The write goes through the service, so the sandbox fence and the
+    // version guard are the backend's own; the file is re-encrypted by the
+    // policy afterwards, which is the expected round trip (decision 135).
+    const outcome = await service.writeText(
+      target,
+      content,
+      { kind: 'replaceIfVersion', version: before.version },
+      signal,
+      sandboxPolicy
+    );
+    return {
+      version: outcome.version,
+      before: original,
+      after: edited.content,
+    };
+  };
+
   service.editText = async (target, edit, expected, signal, sandboxPolicy) => {
     if (!signal?.aborted && (await needsFallback(target.targetKey, signal))) {
-      throw new createError(encryptedRefusal(target.displayPath, 'edit'), FS_ENCRYPTED);
+      return editEncrypted(
+        target,
+        edit as { oldString: string; newString: string; replaceAll?: boolean },
+        expected,
+        signal,
+        sandboxPolicy
+      );
     }
     return originalEditText(target, edit, expected, signal, sandboxPolicy);
   };

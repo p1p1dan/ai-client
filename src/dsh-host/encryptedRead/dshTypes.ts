@@ -21,6 +21,31 @@ export interface FsByteRange {
   readonly length: number;
 }
 
+/** dsh-fs `FsStat`: what `stat` returns for an existing path. */
+export interface FsStatView {
+  readonly version: unknown;
+  readonly type: string;
+  readonly size: number;
+}
+
+/**
+ * dsh-fs `FsWriteIntent`: the optimistic guard a write carries. Only
+ * `replaceIfVersion` is built here — the encrypted-edit path writes back the
+ * exact version it read (P1-13d; decision 135).
+ */
+export interface ReplaceIfVersionIntent {
+  readonly kind: 'replaceIfVersion';
+  readonly version: unknown;
+}
+
+/** What `writeText` returns; only the fields the edit path reports back. */
+export interface FsWriteOutcome {
+  readonly operation: string;
+  readonly version: unknown;
+  readonly before: string | null;
+  readonly after: string;
+}
+
 /** dsh-fs `FsError`: a stable `code` plus a human-readable message. */
 export interface FsErrorView extends Error {
   readonly code: string;
@@ -38,6 +63,12 @@ export type FsErrorCtor = new (
  * `LocalFileSystem`, as extended by dsh-fs-sandbox `SandboxedFileSystem`):
  * the four read entrances plus `editText`, whose private `readForEdit` reads
  * through node:fs directly and therefore cannot be intercepted the same way.
+ *
+ * `stat` and `writeText` are on the same instance for the same reason: the
+ * encrypted-edit path (P1-13d; decision 135) checks the read's version through
+ * the service's own `stat` and writes back through its `writeText` with a
+ * `replaceIfVersion` guard, so both the version compare and the sandbox fence
+ * stay the backend's, never a copy.
  */
 export interface FsReadService {
   readText(target: FsTarget, signal?: AbortSignal): Promise<string>;
@@ -55,6 +86,14 @@ export interface FsReadService {
     signal?: AbortSignal,
     sandboxPolicy?: unknown
   ): Promise<unknown>;
+  stat(target: FsTarget, signal?: AbortSignal): Promise<FsStatView | undefined>;
+  writeText(
+    target: FsTarget,
+    content: string,
+    expected: unknown,
+    signal?: AbortSignal,
+    sandboxPolicy?: unknown
+  ): Promise<FsWriteOutcome>;
 }
 
 /**

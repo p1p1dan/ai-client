@@ -6,8 +6,10 @@
  *
  * On in the product bundle on every platform, but it wraps anything only on
  * Windows: `apply` returns immediately elsewhere, so Linux and macOS keep
- * byte-for-byte the behaviour and cost they had without this row. The row
- * injects `fs` for load ordering, then takes the registered instance itself
+ * byte-for-byte the behaviour and cost they had without this row. On the same
+ * footing, `AICLIENT_RUNTIME_ENCRYPTED_READ=0` (forwarded by Main) turns it
+ * off entirely — no method is wrapped and the row is inert. The row injects
+ * `fs` for load ordering, then takes the registered instance itself
  * (`ctx.get` hands over the stored value, not a per-access proxy) and wraps
  * the four read entrances and `editText` on it — every consumer calls those
  * through `ctx.fs` at call time, so the wrap is visible to all of them.
@@ -20,7 +22,7 @@
  */
 
 import { FsError } from '@deepseek-ai/dsh-fs';
-import { ENCRYPTED_READ_ROW } from './constants.ts';
+import { ENCRYPTED_READ_ENV, ENCRYPTED_READ_ROW } from './constants.ts';
 import type { EncryptedReadRowContext } from './dshTypes.ts';
 import { installEncryptedRead } from './encryptedRead.ts';
 import { createPowerShellReader } from './powershellReader.ts';
@@ -31,9 +33,29 @@ export const name = ENCRYPTED_READ_ROW;
 /** The row starts once the fs service exists; it wraps that very instance. */
 export const inject = ['fs'];
 
+/**
+ * Whether this row does anything in this process: the kill switch is off
+ * (only the exact value `0`) and the platform is Windows.
+ */
+export function isEncryptedReadEnabled(
+  platform: NodeJS.Platform | string,
+  env: Record<string, string | undefined>
+): boolean {
+  return env[ENCRYPTED_READ_ENV] !== '0' && platform === 'win32';
+}
+
 export function apply(ctx: EncryptedReadRowContext): void {
-  if (process.platform !== 'win32') return;
   const log = (line: string) => console.error(`[${ENCRYPTED_READ_ROW}] ${line}`);
+  if (!isEncryptedReadEnabled(process.platform, process.env)) {
+    // Escape hatch (decision 135): nothing is wrapped, so the service keeps
+    // answering exactly as it does on a machine without this row.
+    log(
+      process.env[ENCRYPTED_READ_ENV] === '0'
+        ? `disabled by ${ENCRYPTED_READ_ENV}=0: encrypted files read as ciphertext`
+        : 'not on win32: nothing to wrap'
+    );
+    return;
+  }
   const service = ctx.get('fs');
   if (service === undefined) {
     // inject: ['fs'] makes this unreachable; refusing loudly beats wrapping nothing.

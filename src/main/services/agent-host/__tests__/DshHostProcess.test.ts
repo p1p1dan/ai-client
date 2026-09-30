@@ -308,6 +308,24 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_LOOP_GUARD')).toBe(true);
   });
 
+  it('forwards the encrypted-read kill switch too, and nothing else of the AICLIENT_ family (P1-13d)', () => {
+    for (const isPackaged of [true, false]) {
+      const env = build({
+        isPackaged,
+        env: {
+          ...SHELL_ENV,
+          AICLIENT_RUNTIME_ENCRYPTED_READ: '0',
+          AICLIENT_RUNTIME_OTHER: '1',
+        },
+      });
+      expect(env.AICLIENT_RUNTIME_ENCRYPTED_READ, String(isPackaged)).toBe('0');
+      expect(env.AICLIENT_RUNTIME_OTHER, String(isPackaged)).toBeUndefined();
+    }
+    // Absent stays absent: no value means the row is on, its own default.
+    expect(build().AICLIENT_RUNTIME_ENCRYPTED_READ).toBeUndefined();
+    expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_ENCRYPTED_READ')).toBe(true);
+  });
+
   it('sets the permission agent directory only when given one, and never inherits it (P1-6c)', () => {
     expect(build({ permissionAgentDir: '/state/pi-agent' })).toEqual({
       ...INHERITED,
