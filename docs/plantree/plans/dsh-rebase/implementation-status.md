@@ -30,7 +30,8 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
     - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
     - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
   - P1-13c 的 Windows 端在真 Windows 桌面机上跑 L1 基线，也是 `l1RipgrepFromArtifact`、`nativesPtyRan` 两项失败（那时还没有 `l1PilotWriteAskedReadRan`），说明这两项不是 CI 环境特有。
-  - 下一步：派代理修这三项，另建只打包宿主的 Windows 冒烟工作流加快迭代。
+  - ✅ 已修（决策 134，`6db5a949`、`4ba4992e`）：只打包宿主的 Windows 冒烟第二轮 44 项全过；版本升到 `1.1.0-dsh.2` 后再触发整包 `build.yml` 确认。
+- 录制门禁 `dsh-bridge-gate.yml` 第一次在 CI 上跑就通过，整个 job 约 2 分钟，28 个场景 0 差异。
 - ✅ P1-13c 已合入 `f84f7bbd`（Windows 端 `801cac53`，决策 091 待审批）。
 - 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
 
@@ -62,6 +63,13 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-29 Windows 打包冒烟 L1 三项失败修复 `6db5a949`、`4ba4992e`（取舍见[决策 134](decisions/134-windows-packaged-smoke-fixes.md)，待审批）：
+  - **产品缺陷**：Windows 上工作区内的 read / grep / glob / pwsh 全都弹审批。根因经 CI 诊断证实：`%TEMP%` 是 8.3 短名时，闸门的工作区用 JS 版 `realpathSync`（保留短名），目标用 `fs/promises` 的 `realpath`（libuv，展开成长名），两边对不上。工作区、spill 根、附件根改用 `realpathSync.native`；闸门新增 `cwdAliases`，会话打开时的写法也算工作区，经链接逃出工作区的仍按规范写法询问。Linux 上同类缺陷（accept-edits 下按链接写法写操作数的 shell 命令会弹卡）一并修掉。
+  - **冒烟盲区**：DSH 在 Windows 上经 `dsh-subprocess-local` 的 Job runner（node.exe）拉起 rg 与 pwsh，冒烟改为拆开派生链再判 rg 来自产物。
+  - **探针问题**：旧探针同时带 `--import` 与 `--input-type`，node-pty 的 worker 线程继承后直接退出；另外 Windows 上终端自然退出后要再 `kill()` 才释放输出 worker。宿主里目前没有调用 node-pty 的地方，产品不受影响；将来启用要先补「退出后释放」（决策 134 规则 15）。
+  - 新增只打包宿主的 Windows 冒烟工作流 `dsh-host-windows-smoke.yml`（推到 `ci/dsh-host-windows-smoke` 触发）与诊断脚本；第二轮 Windows 44 项全过。
+  - 编排器复跑：四套 tsc；permissions、dsh-host、scripts 50 个文件、1157 例；Static / Scan / Wiring 74 个文件、743 例；`src/shared/__tests__`；集成 35/35；bridge-smoke 66 项；`--check` 无差异；L1 44 项。
+- 2026-09-29 `.gitattributes` 把 `.yml` / `.yaml` 检出固定为 LF `6e5ccea0`（P1-13c 在 `core.autocrlf=true` 的 Windows 机器上发现 `cordis.patch.yml` 检出成 CRLF，宿主静态测试失败）。
 - 2026-09-29 P1-13c Windows 加密文件读回退合入 `f84f7bbd`（Windows 端在加密机上开发，分支 `feat/dsh-p1-13c` 的 `801cac53`；取舍见[决策 091](decisions/091-p1-13c-windows-read-fallback.md)，待审批，**请重点看 §2 的 edit 不做明文编辑**）：
   - 新增宿主行 `aiclient-encrypted-read`，只在 Windows 上包装 fs 服务的四个读入口与 `editText`；读普通文件的额外开销只是读开头 16 字节。
   - 开头是 TSD 头时经 PowerShell 5.1 回读（绝对路径、`-EncodedCommand`、路径走环境变量、10 秒超时、并发 2、明文上限 32 MiB）；读出仍是密文或失败就报 `FS_ENCRYPTED`，密文不交给模型。
