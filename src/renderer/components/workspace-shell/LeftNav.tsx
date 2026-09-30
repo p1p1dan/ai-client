@@ -64,6 +64,7 @@ import {
 import { projectIdForRepo, workspaceIdFor } from './deriveChatWorkspaceTree';
 import { endSessionRuntime } from './endSessionRuntime';
 import { sumFolderDiffTotals } from './folderDiffStats';
+import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
@@ -311,7 +312,15 @@ export function LeftNav({
   const now = Date.now();
   // T091: `activeSessionId` is passed to every list derivation so a title query
   // never hides the conversation that is currently open — see `matchesQuery`.
-  const folders = buildSidebarFolders({ projects, workspaces, sessions, query, activeSessionId });
+  // Decision 145: `t` so a search also matches the titles as shown.
+  const folders = buildSidebarFolders({
+    projects,
+    workspaces,
+    sessions,
+    query,
+    activeSessionId,
+    t,
+  });
   // U13: rendered next to the repository folders but deliberately NOT part of
   // `folders` — it has no workspace to create a chat in, so letting the "New"
   // target resolver see it would only produce a disabled button pointing at a
@@ -326,6 +335,7 @@ export function LeftNav({
     name: t('Temporary chats'),
     query,
     activeSessionId,
+    t,
   });
   const recent = deriveRecentRows({
     sessions,
@@ -334,6 +344,7 @@ export function LeftNav({
     showAll: recentShowAll,
     query,
     activeSessionId,
+    t,
   });
   // Decision 137 §1: started on the engine in this run, or running a turn.
   const activeRows = deriveActiveRows({
@@ -342,6 +353,7 @@ export function LeftNav({
     hostBoundSessionIds,
     query,
     activeSessionId,
+    t,
   });
   const queryActive = query.trim().length > 0;
   // While searching, folders with zero hits collapse away instead of leaving
@@ -414,7 +426,7 @@ export function LeftNav({
       return (
         <button
           type="button"
-          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground hover:bg-hover focus-visible:bg-hover"
+          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
           onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}
         >
           {t('View more ({{count}})', { count: limited.hiddenCount })}
@@ -715,13 +727,15 @@ export function LeftNav({
                       />
                     ))}
                     {recent.hiddenCount > 0 ? (
+                      // P1-7e e6 (problem 40, decision 145): the same words as
+                      // a folder's cap (decision 137 §4), 「查看更多（N）」 —
+                      // it used to read 「显示更多 (N)」 with half-width brackets.
                       <button
                         type="button"
-                        className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
+                        className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover"
                         onClick={() => setRecentShowAll(true)}
                       >
-                        {t('Show more')} (<span className="tabular-nums">{recent.hiddenCount}</span>
-                        )
+                        {t('View more ({{count}})', { count: recent.hiddenCount })}
                       </button>
                     ) : (
                       recentShowAll &&
@@ -1092,6 +1106,8 @@ const RENAME_REFOCUS_BUDGET = 2;
  * gesture, so the window only has to cover event dispatch.
  */
 const RENAME_LEAVE_INTENT_MS = 1000;
+/** Problem 36 (decision 145): marks the rename editor as the owner of Escape. */
+const RENAME_EDITOR_HOLDS_ESCAPE = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 interface SessionRowProps {
   row: SidebarSessionRow;
@@ -1254,7 +1270,14 @@ function SessionRow({
 
   if (editing) {
     return (
-      <div className="flex h-7 w-full items-center gap-1 rounded-md px-1">
+      // P1-7e e6 (problem 36, decision 145): the editor owns Escape. The dock
+      // listens in the capture phase and used to take the key first, folding
+      // the whole sidebar away with the edit still open behind it; marked like
+      // any other surface that answers Escape itself (`SURFACE_ESCAPE_HOLD_ATTR`).
+      <div
+        className="flex h-7 w-full items-center gap-1 rounded-md px-1"
+        {...RENAME_EDITOR_HOLDS_ESCAPE}
+      >
         <Input
           ref={inputRef}
           autoFocus

@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 interface SearchOptions {
@@ -29,6 +30,7 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
     { isOpen, onClose, onFindNext, onFindPrevious, onClearSearch, theme },
     ref
   ) {
+    const { t } = useI18n();
     const inputRef = useRef<HTMLInputElement>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [caseSensitive, setCaseSensitive] = useState(false);
@@ -123,7 +125,10 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           value={searchTerm}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder="Search..."
+          // P1-7e e6 (problem 40, decision 145): the bar's words go through the
+          // catalog; the toggles reuse the global search's wording.
+          placeholder={t('Search…')}
+          aria-label={t('Search…')}
           className={cn(
             'w-40 bg-transparent text-sm outline-none placeholder:opacity-50',
             hasResults === false && searchTerm && 'text-red-400'
@@ -140,7 +145,9 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
             caseSensitive ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
-          title="Case Sensitive (Aa)"
+          title={t('Match case')}
+          aria-label={t('Match case')}
+          aria-pressed={caseSensitive}
         >
           Aa
         </button>
@@ -154,7 +161,9 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
             wholeWord ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
-          title="Whole Word"
+          title={t('Match whole word')}
+          aria-label={t('Match whole word')}
+          aria-pressed={wholeWord}
         >
           W
         </button>
@@ -168,7 +177,9 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
             regex ? 'bg-white/20' : 'opacity-50 hover:opacity-100'
           )}
           style={{ color: fgColor }}
-          title="Regular Expression"
+          title={t('Use regular expression')}
+          aria-label={t('Use regular expression')}
+          aria-pressed={regex}
         >
           .*
         </button>
@@ -181,7 +192,8 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={() => handleSearch('prev')}
           className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: fgColor }}
-          title="Previous (Shift+Enter)"
+          title={t('Previous match (Shift+Enter)')}
+          aria-label={t('Previous match (Shift+Enter)')}
         >
           <ChevronUp className="h-4 w-4" />
         </button>
@@ -192,7 +204,8 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={() => handleSearch('next')}
           className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: fgColor }}
-          title="Next (Enter)"
+          title={t('Next match (Enter)')}
+          aria-label={t('Next match (Enter)')}
         >
           <ChevronDown className="h-4 w-4" />
         </button>
@@ -203,7 +216,8 @@ export const TerminalSearchBar = forwardRef<TerminalSearchBarRef, TerminalSearch
           onClick={onClose}
           className="flex h-6 w-6 items-center justify-center rounded opacity-70 hover:opacity-100 transition-opacity"
           style={{ color: fgColor }}
-          title="Close (Esc)"
+          title={t('Close search (Esc)')}
+          aria-label={t('Close search (Esc)')}
         >
           <X className="h-4 w-4" />
         </button>

@@ -1,5 +1,6 @@
 import { Minus, Square, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 // 平台检查在模块级别进行，避免在组件内部违反 Hooks 规则
@@ -10,6 +11,9 @@ const isMac = typeof window !== 'undefined' && window.electronAPI?.env?.platform
  * Only rendered on Windows/Linux where we use frameless windows
  */
 export function WindowControls() {
+  // P1-7e e6 (decision 145): the three labels are what a screen reader
+  // announces, so they follow the UI language.
+  const { t } = useI18n();
   const [isMaximized, setIsMaximized] = useState(false);
   const [hoveredButton, setHoveredButton] = useState<'min' | 'max' | 'close' | null>(null);
 
@@ -56,7 +60,7 @@ export function WindowControls() {
           'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
-        aria-label="Minimize"
+        aria-label={t('Minimize')}
       >
         <Minus
           className={cn(
@@ -78,7 +82,7 @@ export function WindowControls() {
           'transition-colors duration-150 ease-out',
           'hover:bg-foreground/10 active:bg-foreground/15'
         )}
-        aria-label={isMaximized ? 'Restore' : 'Maximize'}
+        aria-label={isMaximized ? t('Restore') : t('Maximize')}
       >
         <div
           className={cn(
@@ -94,8 +98,7 @@ export function WindowControls() {
               fill="none"
               stroke="currentColor"
               strokeWidth="1"
-              role="img"
-              aria-label="Restore"
+              aria-hidden="true"
             >
               <path d="M2 3h5v5H2z" />
               <path d="M3 3V2h5v5H7" />
@@ -117,7 +120,7 @@ export function WindowControls() {
           'transition-colors duration-150 ease-out',
           'hover:bg-red-500 active:bg-red-600'
         )}
-        aria-label="Close"
+        aria-label={t('Close')}
       >
         <X
           className={cn(

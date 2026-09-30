@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import { dirname } from 'node:path';
+import { translate } from '@shared/i18n';
+import { forkSessionTitle } from '@shared/sessionTitles';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { type AgentWireName, DSH_AGENT } from '@shared/types/agentWire';
 import type {
@@ -17,6 +19,7 @@ import {
   type RuntimeEventDraft,
   SESSION_FAILED_ENGINE_RESTARTED,
   SESSION_FAILED_HOST_CRASHED,
+  type SessionDisconnectReason,
   type SessionRetryInfo,
   type SessionRuntimeStatus,
 } from '@shared/types/runtimeEvents';
@@ -105,6 +108,7 @@ import {
   sanitizeStderrLine,
 } from '../../../agent-host/stderrRedaction';
 import { sessionIndexService } from '../chat/SessionIndexService';
+import { getCurrentLocale } from '../i18n';
 import {
   type CreatedPiImport,
   createPiImport,
@@ -2113,7 +2117,11 @@ export class WorkerManager {
             piLeaf: created.bootstrap.leaf,
             agent: DSH_AGENT,
             workspacePath: source.cwd,
-            title: `${input.sourceTitle || 'Session'} (fork)`,
+            // P1-7e e6 (problem 40, decision 145): worded in the app's
+            // language when the fork is made, like decision 131's branch title.
+            title: forkSessionTitle(input.sourceTitle, (key, params) =>
+              translate(getCurrentLocale(), key, params)
+            ),
             ...(input.model ? { model: input.model } : {}),
             // session-index-02: the row has to carry the posture the spawn
             // above already inherited. `workspacePath` is the source's scratch
@@ -2725,7 +2733,9 @@ export class WorkerManager {
   invalidateAll(): Promise<void> {
     return this.serialize(async () => {
       this.configGeneration += 1;
-      await this.disposeEntries([...this.entriesBySession.values()], 'slot-replace');
+      // P1-7e e6 (problem 37, decision 145): nothing reopens these sessions,
+      // so each one says it went (`released`) and leaves "Active now".
+      await this.disposeEntries([...this.entriesBySession.values()], 'slot-replace', 'released');
       this.pendingHostRecovery.clear();
       this.updateManagerState();
       if (this.host) {
@@ -3386,18 +3396,27 @@ export class WorkerManager {
     const victims = [...this.entriesBySession.values()].filter(
       (entry) => this.isSafeToEvict(entry, busy) && entry.lastIdleAt <= cutoff
     );
-    const stuck = await this.disposeEntries(victims, 'slot-replace');
+    // P1-7e e6 (decision 145): `released`, not `capacity_reclaimed` — a
+    // timeout is not a full pool (D12), but the renderer still has to drop
+    // the binding of a session that is no longer on the engine.
+    const stuck = await this.disposeEntries(victims, 'slot-replace', 'released');
     await this.releaseStuckChannels(stuck);
     this.updateManagerState();
   }
 
-  /** Resolves the slots whose channel would not close (`dispose-failed`); never rejects. */
+  /**
+   * Resolves the slots whose channel would not close (`dispose-failed`); never rejects.
+   *
+   * `announce` — see `retireEntry`: every retired session says it went, with
+   * this reason. Omitted, only a session with a turn under way says so.
+   */
   private async disposeEntries(
     entries: ManagedSlot[],
-    reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace'
+    reason: 'app-shutdown' | 'slot-dispose' | 'slot-replace',
+    announce?: SessionDisconnectReason
   ): Promise<WorkerSlot[]> {
     const unique = [...new Set(entries)];
-    for (const entry of unique) this.retireEntry(entry);
+    for (const entry of unique) this.retireEntry(entry, announce);
     const stuck: WorkerSlot[] = [];
     const results = await Promise.allSettled(
       unique.map(async (entry) => {
@@ -3533,8 +3552,17 @@ export class WorkerManager {
    * of dialog cancellation to announce on the retired Extension UI chain
    * (decision 012). `slot.dispose(reason)` still carries it, which is where it
    * belongs.
+   *
+   * `announce` — P1-7e e6 (problem 37, decision 145): a retirement nothing
+   * reopens (`invalidateAll`, the idle sweep). The session says it went with
+   * this reason even when it was idle, so the renderer drops its host
+   * binding; a session mid-turn carries the same reason on the `disconnected`
+   * that follows its forced stop. Without it an idle session goes silently,
+   * which is what every other caller wants: it reopens the session itself
+   * (a crash, a user's resume) or announces on its own (`evictForCapacity`,
+   * `closeSession`).
    */
-  private retireEntry(entry: ManagedSlot): void {
+  private retireEntry(entry: ManagedSlot, announce?: SessionDisconnectReason): void {
     // decision 046 rule 3 — a turn in flight, or a Stop still waiting on one,
     // ends here for everyone outside the worker: its own terminal will meet the
     // closed gate below. Main says so, before the session goes disconnected.
@@ -3571,7 +3599,17 @@ export class WorkerManager {
         type: 'session.status',
         sessionId: entry.logicalSessionId,
         requestId,
-        payload: { status: 'disconnected' },
+        payload: {
+          status: 'disconnected',
+          ...(announce ? { disconnectReason: announce } : {}),
+        },
+      });
+    } else if (announce) {
+      this.dispatch({
+        type: 'session.status',
+        sessionId: entry.logicalSessionId,
+        requestId: nextRequestId('release'),
+        payload: { status: 'disconnected', disconnectReason: announce },
       });
     }
   }

@@ -146,3 +146,37 @@ export function nextFollowState(
 export function followAfterDisclosure(following: boolean, opened: boolean): boolean {
   return opened ? false : following;
 }
+
+export interface EndNoticeRevealInput {
+  /** The follow flag when the notice appeared. */
+  following: boolean;
+  /**
+   * How far the viewport was from the bottom at the last scroll or resize tick
+   * BEFORE the notice was laid out (`lastScrollHeight - clientHeight -
+   * lastScrollTop`).
+   */
+  previousDistance: number;
+}
+
+/**
+ * P1-7e e6 (problem 38, decision 145): does a notice that just appeared at the
+ * END of the timeline (the history card, the migration notice) get scrolled
+ * into view?
+ *
+ * Decision 139 §14 put them at the end because they answer something the user
+ * just did at the bottom — a send in an old chat, a retry, an open. It relied
+ * on the ordinary follower to bring them into view, and the follower missed
+ * the one that appears within a layout of the send (`source_missing`: 46px
+ * short, its last lines and 「详情」 behind the composer, with nothing
+ * afterwards to catch it up). So the notice's arrival is followed by itself:
+ * when the reader was following, or was anywhere short of where the
+ * jump-to-bottom button starts (`JUMP_TO_BOTTOM_THRESHOLD_PX`) — the dead band
+ * `nextFollowState` leaves between the two thresholds is exactly where a
+ * missed follow strands them. A reader scrolled further up is left alone.
+ */
+export function shouldRevealEndNotice(
+  input: EndNoticeRevealInput,
+  threshold: number = JUMP_TO_BOTTOM_THRESHOLD_PX
+): boolean {
+  return input.following || input.previousDistance <= threshold;
+}

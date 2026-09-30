@@ -94,13 +94,17 @@ export function GitMissingNotice() {
           {installError ? <div className="mt-1 text-destructive">{installError}</div> : null}
         </AlertDescription>
         <div className="flex shrink-0 items-center gap-1" data-slot="alert-action">
+          {/* P1-7e e6 (decision 145, as decision 144 §20): `normal-case`, since
+              the button base lowercases its text and the label holds the name
+              "Git" (design system: mixed-script button copy). */}
           {canInstall ? (
-            <Button disabled={installing} onClick={handleInstall} size="sm">
+            <Button className="normal-case" disabled={installing} onClick={handleInstall} size="sm">
               {installing ? <Loader2 className="animate-spin" /> : null}
               {t('Install Git')}
             </Button>
           ) : (
             <Button
+              className="normal-case"
               onClick={() => window.electronAPI.shell.openExternal(GIT_DOWNLOAD_URL)}
               size="sm"
               variant="outline"

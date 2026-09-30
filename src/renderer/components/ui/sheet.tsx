@@ -4,6 +4,7 @@ import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 const Sheet = SheetPrimitive.Root;
@@ -69,6 +70,7 @@ function SheetPopup({
   side?: 'right' | 'left' | 'top' | 'bottom';
   inset?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <SheetPortal>
       <SheetBackdrop />
@@ -95,7 +97,8 @@ function SheetPopup({
           {children}
           {showCloseButton && (
             <SheetPrimitive.Close
-              aria-label="Close"
+              // P1-7e e6 (decision 145): read aloud, so in the UI language.
+              aria-label={t('Close')}
               className="absolute end-2 top-2"
               render={<Button size="icon" variant="ghost" />}
             >

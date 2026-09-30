@@ -3,7 +3,12 @@ import { act, createElement } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { STORAGE_KEYS } from '@/App/storage';
-import { type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import { applyRuntimeEvents, type ChatSession, useChatSessionsStore } from '@/stores/chatSessions';
+import {
+  ESCAPE_OWNING_POPUP_SELECTOR,
+  SURFACE_ESCAPE_HOLD_ATTR,
+  shouldCloseOnEscape,
+} from '../shellLayoutModel';
 
 /**
  * Decision 137 (user ruling, sidebar) and decision 138 (P1-7e e1), rendered
@@ -218,6 +223,35 @@ describe('Active now (decision 137 §1)', () => {
     });
     expect(sectionTitled('Active now')).toBeNull();
   });
+
+  it('E6-37: chats the engine let go of (a plugin switch, the idle sweep) leave the section', async () => {
+    useChatSessionsStore.setState({
+      sessions: [chat('a'), chat('b')],
+      hostBoundSessionIds: ['a', 'b'],
+    });
+    await render();
+    expect(allRows(sectionTitled('Active now') as HTMLElement)).toHaveLength(2);
+
+    // What Main sends for each session `invalidateAll` retires (decision 145).
+    await act(async () => {
+      useChatSessionsStore.setState((state) =>
+        applyRuntimeEvents(
+          state,
+          ['a', 'b'].map((sessionId, index) => ({
+            type: 'session.status' as const,
+            seq: index + 1,
+            sessionId,
+            timestamp: NOW,
+            payload: { status: 'disconnected' as const, disconnectReason: 'released' as const },
+          }))
+        )
+      );
+    });
+    expect(sectionTitled('Active now')).toBeNull();
+    // Still in their folder, only no longer marked as running in the background.
+    expect(rows('Chat a')).toHaveLength(1);
+    expect(rows('Chat a')[0]?.querySelector('[title="Running in the background"]')).toBeNull();
+  });
 });
 
 describe('a folder header only folds (decision 137 §3)', () => {
@@ -278,6 +312,17 @@ describe('folders list 8 rows (decision 137 §4)', () => {
 
     await act(async () => buttonText('Show less')?.click());
     expect(allRows()).toHaveLength(9);
+  });
+
+  it('E6-40: Recent says "View more (N)" like a folder, not "Show more (N)"', async () => {
+    const ten = eleven.slice(0, 10);
+    useChatSessionsStore.setState({ sessions: ten });
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+    await render();
+    // Recent lists 7 (3 hidden), the folder lists 8 (2 hidden).
+    expect(buttonText('View more (3)')).toBeTruthy();
+    expect(buttonText('View more (2)')).toBeTruthy();
+    expect(container.textContent).not.toContain('Show more');
   });
 
   it('lists every match while searching', async () => {
@@ -404,6 +449,46 @@ describe('the rename editor keeps its focus (point-check issue 26)', () => {
     await flush();
     expect(editor()).toBeNull();
     expect(mocks.rename).not.toHaveBeenCalled();
+  });
+
+  it('E6-36: Escape inside the dock cancels the rename instead of folding the sidebar', async () => {
+    // The dock's own capture-phase rule, as `LeftDock` applies it to the panel
+    // that hosts this list (point-check issue 36: it took the key first).
+    const folded = vi.fn();
+    const dockCapture = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const holdsEscape = !!target?.closest?.(`[${SURFACE_ESCAPE_HOLD_ATTR}]`);
+      const popupOpen = !!document.querySelector(ESCAPE_OWNING_POPUP_SELECTOR);
+      if (!shouldCloseOnEscape({ key: event.key, isOpen: true, holdsEscape, popupOpen })) return;
+      folded();
+      event.stopPropagation();
+    };
+    container.addEventListener('keydown', dockCapture, true);
+    try {
+      await render();
+      await act(async () => {
+        rows('Chat a')[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      });
+      const input = editor() as HTMLInputElement;
+      await typeInto(input, 'Discarded');
+      await act(async () => {
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      });
+      await flush();
+      expect(folded).not.toHaveBeenCalled();
+      expect(editor()).toBeNull();
+      expect(mocks.rename).not.toHaveBeenCalled();
+
+      // The rule is live: Escape on a plain row still folds the dock.
+      await act(async () => {
+        rows('Chat a')[0]?.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+        );
+      });
+      expect(folded).toHaveBeenCalledTimes(1);
+    } finally {
+      container.removeEventListener('keydown', dockCapture, true);
+    }
   });
 });
 

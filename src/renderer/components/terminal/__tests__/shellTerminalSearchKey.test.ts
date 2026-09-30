@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const probe = vi.hoisted(() => {
   const write = vi.fn();
+  const focus = vi.fn();
   window.electronAPI = {
     env: { platform: 'linux' },
     session: { write },
@@ -23,6 +24,8 @@ const probe = vi.hoisted(() => {
   } as unknown as typeof window.electronAPI;
   return {
     write,
+    // P1-7e e6 (problem 41): the terminal the search hands focus back to.
+    terminal: { focus, hasSelection: () => false },
     onCustomKey: undefined as undefined | ((event: KeyboardEvent, ptyId: string) => boolean),
   };
 });
@@ -48,7 +51,7 @@ vi.mock('@/hooks/useXterm', async () => {
         findNext: () => false,
         findPrevious: () => false,
         clearSearch: () => {},
-        terminal: null,
+        terminal: probe.terminal,
         clear: () => {},
         refreshRenderer: () => {},
       };
@@ -64,6 +67,7 @@ let root: Root;
 beforeEach(async () => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   probe.write.mockClear();
+  probe.terminal.focus.mockClear();
   probe.onCustomKey = undefined;
   container = document.createElement('div');
   document.body.append(container);
@@ -123,5 +127,36 @@ describe('the terminal search chord (P1-7e problem 15)', () => {
     expect(container.querySelector('input')).toBeNull();
     expect(await press(key('keydown', { key: 'Enter', shiftKey: true }))).toBe(false);
     expect(probe.write).toHaveBeenCalledWith('pty-1', '\n');
+  });
+
+  it('[E6-41] Esc in the search field closes it and gives the keyboard back to the terminal', async () => {
+    await press(key('keydown', { key: 'f', ctrlKey: true }));
+    const input = container.querySelector('input');
+    expect(input).not.toBeNull();
+    await act(async () => {
+      input?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      );
+    });
+    expect(container.querySelector('input')).toBeNull();
+    expect(probe.terminal.focus).toHaveBeenCalledTimes(1);
+    // Nothing reached the shell on the way.
+    expect(probe.write).not.toHaveBeenCalled();
+  });
+
+  it('[E6-40] the search bar speaks the catalog: placeholder and every control labelled', async () => {
+    await press(key('keydown', { key: 'f', ctrlKey: true }));
+    expect(container.querySelector('input')?.getAttribute('placeholder')).toBe('Search…');
+    const labels = [...container.querySelectorAll('button')].map((b) =>
+      b.getAttribute('aria-label')
+    );
+    expect(labels).toEqual([
+      'Match case',
+      'Match whole word',
+      'Use regular expression',
+      'Previous match (Shift+Enter)',
+      'Next match (Enter)',
+      'Close search (Esc)',
+    ]);
   });
 });

@@ -195,6 +195,7 @@ function SendToSessionButton({ title, description, onClose }: SendToSessionButto
 }
 
 function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
+  const { t } = useI18n();
   const { toasts, close } = Toast.useToastManager();
   const isTop = position.startsWith('top');
   const visibleToasts = [...new Map(toasts.map((toast) => [toast.id, toast])).values()];
@@ -302,8 +303,9 @@ function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
             >
               <Toast.Content className="pointer-events-auto relative px-3.5 py-3 text-sm transition-opacity duration-250 data-behind:pointer-events-none data-behind:opacity-0 data-expanded:opacity-100">
                 {/* Close button - top right */}
+                {/* P1-7e e6 (decision 145): read aloud, so in the UI language. */}
                 <Toast.Close
-                  aria-label="Close notification"
+                  aria-label={t('Close notification')}
                   className="absolute right-2 top-2 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                   data-slot="toast-close"
                 >

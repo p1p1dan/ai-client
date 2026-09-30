@@ -12,20 +12,19 @@
  */
 
 import { englishTranslate, type Translate } from '@shared/i18n';
+import { LEGACY_SEED_TITLE, NEW_CHAT_TITLE } from '@shared/sessionTitles';
 
 /**
- * The title every "new chat" path gives a chat before its first message names
- * it (`createChatSessionOnWorkspace`, `createUnboundChatSession`, the fork
- * target, and — dsh-rebase decision 144 — the start-up seed). Stored as this
- * English identifier; {@link displaySessionTitle} is how it reads on screen.
+ * `NEW_CHAT_TITLE` is the title every "new chat" path gives a chat before its
+ * first message names it (`createChatSessionOnWorkspace`,
+ * `createUnboundChatSession`, the fork target, and — dsh-rebase decision 144 —
+ * the start-up seed), stored as that English identifier; {@link
+ * displaySessionTitle} is how it reads on screen. `LEGACY_SEED_TITLE` is the
+ * start-up seed's pre-decision-144 title. Both live in `@shared/sessionTitles`
+ * since decision 145, where Main reads them to name a fork of a chat that
+ * still carries one.
  */
-export const NEW_CHAT_TITLE = 'New chat';
-
-/**
- * The start-up seed's title before decision 144 (a development-era demo name).
- * No longer written; still a placeholder, because rows carrying it may exist.
- */
-export const LEGACY_SEED_TITLE = 'Live Agent Host';
+export { LEGACY_SEED_TITLE, NEW_CHAT_TITLE };
 
 /** Id prefix of the empty chat the app opens on at start-up (`useSyncChatWorkspaceTree`). */
 export const STARTUP_SEED_ID_PREFIX = 'session-live';

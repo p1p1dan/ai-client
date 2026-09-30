@@ -1,4 +1,4 @@
-import { zhTranslations } from '@shared/i18n';
+import { translate, zhTranslations } from '@shared/i18n';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import { describe, expect, it } from 'vitest';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
@@ -856,6 +856,55 @@ describe('the active session is never filtered out by a title query (T091)', () 
         deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft', activeSessionId })
       ).toEqual(deriveRecentRows({ sessions, workspaces, now: NOW, query: 'draft' }));
     }
+  });
+});
+
+describe('a search matches a title as the sidebar shows it (P1-7e e6, decision 145)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const placeholder = session({ id: 'placeholder', title: 'New chat' });
+  const named = session({ id: 'named', title: '新建一个脚本' });
+  const other = session({ id: 'other', title: 'Fix the build' });
+  const sessions = [placeholder, named, other];
+  const ids = (rows: { sessionId: string }[]) => rows.map((row) => row.sessionId).sort();
+
+  it('finds a `New chat` row by 「新建」 in Chinese, in every section', () => {
+    const [folder] = buildSidebarFolders({ projects, workspaces, sessions, query: '新建', t: zh });
+    expect(ids(folder?.rows ?? [])).toEqual(['named', 'placeholder']);
+    expect(
+      ids(deriveRecentRows({ sessions, workspaces, now: NOW, query: '新建', t: zh }).rows)
+    ).toEqual(['named', 'placeholder']);
+    expect(
+      ids(
+        deriveActiveRows({
+          sessions,
+          workspaces,
+          hostBoundSessionIds: ['placeholder', 'other'],
+          query: '新建',
+          t: zh,
+        })
+      )
+    ).toEqual(['placeholder']);
+    const unbound = buildUnboundFolder({
+      sessions: [{ ...placeholder, workspaceId: '' }],
+      name: 'Temporary chats',
+      query: '新建',
+      t: zh,
+    });
+    expect(ids(unbound?.rows ?? [])).toEqual(['placeholder']);
+  });
+
+  it('still matches the stored identifier, and nothing changes without a translator', () => {
+    const [byIdentifier] = buildSidebarFolders({
+      projects,
+      workspaces,
+      sessions,
+      query: 'new chat',
+      t: zh,
+    });
+    expect(ids(byIdentifier?.rows ?? [])).toEqual(['placeholder']);
+    const [english] = buildSidebarFolders({ projects, workspaces, sessions, query: '新建' });
+    expect(ids(english?.rows ?? [])).toEqual(['named']);
   });
 });
 

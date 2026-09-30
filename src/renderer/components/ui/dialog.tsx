@@ -4,6 +4,7 @@ import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { XIcon } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTrafficLightsGuard } from '@/hooks/useTrafficLightsGuard';
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
 
@@ -70,6 +71,7 @@ function DialogPopup({
   showBackdrop?: boolean;
   zIndexLevel?: 'base' | 'nested';
 }) {
+  const { t } = useI18n();
   const mergedStyle = disableNestedTransform
     ? ({ ...(style ?? {}), '--nested-dialogs': 0 } as React.CSSProperties)
     : style;
@@ -101,7 +103,8 @@ function DialogPopup({
           {children}
           {showCloseButton && (
             <DialogPrimitive.Close
-              aria-label="Close"
+              // P1-7e e6 (decision 145): read aloud, so in the UI language.
+              aria-label={t('Close')}
               className="absolute end-3 top-2.5 z-50 flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
             >
               <XIcon className="h-4 w-4" />

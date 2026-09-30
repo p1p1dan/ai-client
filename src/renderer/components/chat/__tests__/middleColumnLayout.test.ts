@@ -1,4 +1,4 @@
-import { zhTranslations } from '@shared/i18n';
+import { translate, zhTranslations } from '@shared/i18n';
 import {
   CHAT_BODY_FONT_SIZE_MAX,
   CHAT_BODY_FONT_SIZE_MIN,
@@ -46,6 +46,7 @@ import {
   shouldRenderTargetRow,
   shouldShowStatusLine,
   TIMELINE_PADDING_CLASS,
+  TURN_RUNNING_PLACEHOLDER,
   targetRowClass,
   targetRowSlots,
   targetTriggerClass,
@@ -1298,7 +1299,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 0,
         })
-      ).toBe('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
+      ).toBe('Turn in progress — Enter queues, Ctrl+Enter adds to this turn…');
 
       // U28: no session is no longer a blocker with its own copy — the first
       // send creates one. With `unbound` set (which is what ChatComposer passes
@@ -1391,7 +1392,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 0,
       })
-    ).toBe('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
+    ).toBe('Turn in progress — Enter queues, Ctrl+Enter adds to this turn…');
   });
 
   it('T-19: a non-empty queue reports its count instead of the busy copy', () => {
@@ -1675,5 +1676,29 @@ describe('composerPlaceholder', () => {
         zhTranslations['Read-only until migration — start a new chat to continue']
       ).toBeUndefined();
     });
+  });
+});
+
+describe('the running placeholder names the turn (P1-7e e6, problem 40, decision 145)', () => {
+  it('reads 「回合进行中」 in Chinese, with no engine process name in either language', () => {
+    const zh = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    const busy = composerPlaceholder(
+      {
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: false,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: 0,
+      },
+      zh
+    );
+    expect(busy).toBe('回合进行中 —— Enter 排队，Ctrl+Enter 并入当前回合…');
+    expect(TURN_RUNNING_PLACEHOLDER).not.toContain('Agent Host');
+    expect(
+      zhTranslations['Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…']
+    ).toBeUndefined();
   });
 });

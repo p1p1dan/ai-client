@@ -126,6 +126,14 @@ export function ShellTerminal({
   });
   runtimeStateRef.current = runtimeState;
   const _xtermKeybindings = useSettingsStore((state) => state.xtermKeybindings);
+
+  // P1-7e e6 (problem 41, decision 145): the search was opened from the
+  // terminal, so closing it (Esc in the field, or its ✕) hands the keyboard
+  // back there; it used to fall to the page, and the next keys went nowhere.
+  const closeSearch = useCallback(() => {
+    setIsSearchOpen(false);
+    terminal?.focus();
+  }, [terminal]);
   const { showScrollToBottom, handleScrollToBottom } = useTerminalScrollToBottom(terminal);
 
   // Handle keyboard shortcuts
@@ -218,7 +226,7 @@ export function ShellTerminal({
       <TerminalSearchBar
         ref={searchBarRef}
         isOpen={isSearchOpen}
-        onClose={() => setIsSearchOpen(false)}
+        onClose={closeSearch}
         onFindNext={findNext}
         onFindPrevious={findPrevious}
         onClearSearch={clearSearch}

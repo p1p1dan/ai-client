@@ -219,3 +219,54 @@ describe('where the notices sit (P1-7e problem 25)', () => {
     expect(follows(notice as Element, elementWithText('Old answer.'))).toBe(true);
   });
 });
+
+/**
+ * P1-7e e6 (problem 38, decision 145): the `source_missing` card landed within
+ * a layout of the send and the follower left it 46px short, its last lines and
+ * 「详情」 behind the composer. The card's arrival now scrolls it into view by
+ * itself. happy-dom lays nothing out, so the viewport's geometry is given.
+ */
+describe('a notice at the end brings itself into view (P1-7e e6, problem 38)', () => {
+  function viewportWithGeometry(clientHeight: number) {
+    const viewport = container.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]');
+    if (!viewport) throw new Error('no timeline viewport');
+    const geometry = { scrollHeight: 1000 };
+    Object.defineProperty(viewport, 'scrollHeight', {
+      configurable: true,
+      get: () => geometry.scrollHeight,
+    });
+    Object.defineProperty(viewport, 'clientHeight', {
+      configurable: true,
+      get: () => clientHeight,
+    });
+    return { viewport, geometry };
+  }
+
+  async function scrollTo(viewport: HTMLElement, top: number) {
+    await act(async () => {
+      viewport.scrollTop = top;
+      viewport.dispatchEvent(new Event('scroll'));
+    });
+  }
+
+  it('[E6-38-MOUNT] from the dead band the follower leaves (46px short), the card ends in view', async () => {
+    await render();
+    const { viewport, geometry } = viewportWithGeometry(500);
+    // 46px from the bottom: past the follow threshold, short of the jump button.
+    await scrollTo(viewport, 454);
+    geometry.scrollHeight = 1200;
+    await act(async () => failWith(FINAL));
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(viewport.scrollTop).toBe(700);
+  });
+
+  it('[E6-38-MOUNT-AWAY] a reader scrolled well up keeps their place', async () => {
+    await render();
+    const { viewport, geometry } = viewportWithGeometry(500);
+    await scrollTo(viewport, 100);
+    geometry.scrollHeight = 1200;
+    await act(async () => failWith(FINAL));
+    expect(container.querySelector('[role="alert"]')).not.toBeNull();
+    expect(viewport.scrollTop).toBe(100);
+  });
+});

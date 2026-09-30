@@ -140,8 +140,10 @@ export function SessionBar({
       <span className="min-w-0 truncate font-medium text-foreground text-meta">
         {activeSession ? displaySessionTitle(activeSession.title, t) : t('No conversation open')}
       </span>
+      {/* P1-7e e6 (decision 145): 「临时」 is CJK, so the title's own
+          `text-meta`, not 10px (design system, CJK cascade rule 3). */}
       {activeSession?.unbound && (
-        <span className="shrink-0 rounded-xs border px-1 text-2xs text-muted-foreground">
+        <span className="shrink-0 rounded-xs border px-1 text-meta text-muted-foreground">
           {t('Temporary')}
         </span>
       )}

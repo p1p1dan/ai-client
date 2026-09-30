@@ -1442,19 +1442,33 @@ function applyRuntimeEventCore(
       // engine and this session's connection went with it. Main reopens it by
       // itself (its `session.resumed` binds it again); if that cannot happen,
       // the next send resumes instead of addressing a connection that is gone.
+      //
+      // P1-7e e6 (problem 37, decision 145): `released` too — Main let the
+      // session go (a login, model or plugin change rebuilt the engine, or the
+      // idle sweep) and does not reopen it, so it leaves "Active now".
+      const reason = event.payload.disconnectReason;
       const hostBoundSessionIds =
-        event.payload.disconnectReason === 'capacity_reclaimed' ||
-        event.payload.disconnectReason === 'engine_restarted'
+        reason === 'capacity_reclaimed' || reason === 'engine_restarted' || reason === 'released'
           ? state.hostBoundSessionIds.filter((id) => id !== sessionId)
           : state.hostBoundSessionIds;
+      const previousStatus = state.sessions.find((session) => session.id === sessionId)?.status;
       // D1: a failed run closes with this idle. Letting it overwrite `failed`
       // is what kept the failure card off the screen on every path.
-      const closesFailure =
-        event.payload.status === 'idle' &&
-        state.sessions.find((session) => session.id === sessionId)?.status === 'failed';
-      const status = closesFailure
-        ? settleFailedStatus(state.sessions, sessionId, event.payload.retry)
-        : upsertSessionStatus(state.sessions, sessionId, event.payload.status, event.payload.retry);
+      const closesFailure = event.payload.status === 'idle' && previousStatus === 'failed';
+      // Decision 145: a release takes nothing the user is looking at. A failure
+      // on screen keeps its card and its sidebar badge; otherwise one plugin
+      // switch or login would wipe both from every failed chat at once.
+      const keepsFailure = reason === 'released' && previousStatus === 'failed';
+      const status = keepsFailure
+        ? state.sessions
+        : closesFailure
+          ? settleFailedStatus(state.sessions, sessionId, event.payload.retry)
+          : upsertSessionStatus(
+              state.sessions,
+              sessionId,
+              event.payload.status,
+              event.payload.retry
+            );
       // T034 (session-02): the file this session was opened from had to be
       // repaired. Applied as a second pass rather than as another
       // `upsertSessionStatus` argument precisely so it is NOT cleared when the

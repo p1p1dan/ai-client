@@ -214,8 +214,17 @@ export interface SessionLivenessNote {
  * the shared DSH host on purpose (Stop ladder B, or the user's "Restart
  * engine"), which took this session's connection with it. Main reopens the
  * session by itself; the renderer drops the host binding and says so once.
+ *
+ * dsh-rebase P1-7e e6 (problem 37, decision 145) adds `released`: Main let the
+ * session's engine connection go on its own schedule and does NOT reopen it —
+ * a login, logout, model plan, provider or plugin change rebuilt the engine
+ * (`invalidateAll`), or the idle sweep closed a session nobody used for a
+ * while. The renderer drops the host binding silently, so the chat leaves
+ * "Active now" (decision 137 §1) and its next send resumes it; nothing is
+ * said, because nothing was lost and the user did not lose a running turn to
+ * it (a turn cut short is still reported as `session.stopped{forced}`).
  */
-export type SessionDisconnectReason = 'capacity_reclaimed' | 'engine_restarted';
+export type SessionDisconnectReason = 'capacity_reclaimed' | 'engine_restarted' | 'released';
 
 /**
  * dsh-rebase P1-3c (decision 020) — `errorCode` of the `session.failed` Main

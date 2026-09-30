@@ -2804,7 +2804,22 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       // explicit `false` override (decision 110), not just an untouched
       // plugin, so the test still exercises the override path even though
       // the fixture's own defaultEnabled is already false.
+      //
+      // P1-7e e6 (problem 37, decision 145): a chat left open and idle across
+      // the switch is told it went (`released`), so it leaves "Active now";
+      // nothing reopens it on the new host.
+      await manager.createSession({
+        ...BYPASS,
+        sessionId: 'pl-idle',
+        workspacePath: workspace,
+        ownerWebContentsId: 92,
+      });
+      const beforeSwitch = events.length;
       await select({ [kit.FIXTURE_PLUGIN]: false });
+      expect(told('pl-idle', beforeSwitch)).toEqual(['status:disconnected/released']);
+      expect(manager.getSlotSnapshots().some((slot) => slot.logicalSessionId === 'pl-idle')).toBe(
+        false
+      );
       // P1-7e e5: the restarted host has already reported, before any chat.
       expect(supervisor.pluginReport()?.plugins[0]).toMatchObject({
         name: kit.FIXTURE_PLUGIN,

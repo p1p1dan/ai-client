@@ -148,6 +148,12 @@ export interface SidebarTreeInput {
    * pre-T091 behaviour exactly.
    */
   activeSessionId?: string | null;
+  /**
+   * P1-7e e6 (decision 145): the UI language, so the query also matches a
+   * title as the sidebar shows it (`New chat` reads 「新建对话」). English
+   * when omitted, where the two are the same.
+   */
+  t?: Translate;
 }
 
 const BUSY_STATUSES: ReadonlySet<SessionRuntimeStatus> = new Set([
@@ -239,11 +245,17 @@ export function isUnboundSessionRow(
 function matchesQuery(
   session: ChatSession,
   normalized: string,
-  activeSessionId?: string | null
+  activeSessionId?: string | null,
+  t: Translate = englishTranslate
 ): boolean {
   if (normalized.length === 0) return true;
   if (activeSessionId != null && session.id === activeSessionId) return true;
-  return session.title.toLowerCase().includes(normalized);
+  if (session.title.toLowerCase().includes(normalized)) return true;
+  // P1-7e e6 (decision 145): what the row SHOWS is what the user types. The
+  // stored placeholder `New chat` reads 「新建对话」 (decision 144), so 「新建」
+  // has to find it; the stored identifier still matches as before.
+  const shown = displaySessionTitle(session.title, t);
+  return shown !== session.title && shown.toLowerCase().includes(normalized);
 }
 
 function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): SidebarSessionRow {
@@ -314,7 +326,7 @@ export function buildSidebarFolders(input: SidebarTreeInput): SidebarFolder[] {
     if (!workspace || isUnboundSessionRow(session)) {
       continue;
     }
-    if (!matchesQuery(session, normalized, input.activeSessionId)) {
+    if (!matchesQuery(session, normalized, input.activeSessionId, input.t)) {
       continue;
     }
     // The workspace is authoritative for grouping: a stale session.projectId
@@ -356,12 +368,15 @@ export function buildUnboundFolder(input: {
   query?: string;
   /** T091: exempt from the title query — see `matchesQuery`. */
   activeSessionId?: string | null;
+  /** Decision 145: see `SidebarTreeInput.t`. */
+  t?: Translate;
 }): SidebarFolder | null {
   const normalized = normalizeQuery(input.query);
   const rows = input.sessions
     .filter(
       (session) =>
-        isUnboundSessionRow(session) && matchesQuery(session, normalized, input.activeSessionId)
+        isUnboundSessionRow(session) &&
+        matchesQuery(session, normalized, input.activeSessionId, input.t)
     )
     .map((session) => toRow(session, undefined))
     .sort(byUpdatedAtDesc);
@@ -507,6 +522,8 @@ export interface ActiveRowsInput {
   query?: string;
   /** T091: exempt from the title query — see `matchesQuery`. */
   activeSessionId?: string | null;
+  /** Decision 145: see `SidebarTreeInput.t`. */
+  t?: Translate;
 }
 
 /**
@@ -531,7 +548,7 @@ export function deriveActiveRows(input: ActiveRowsInput): SidebarSessionRow[] {
       if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
         return false;
       }
-      if (!matchesQuery(session, normalized, input.activeSessionId)) {
+      if (!matchesQuery(session, normalized, input.activeSessionId, input.t)) {
         return false;
       }
       return bound.has(session.id) || isBusySessionStatus(session.status);
@@ -596,6 +613,8 @@ export interface RecentRowsInput {
   query?: string;
   /** T091: exempt from the title query — see `matchesQuery`. */
   activeSessionId?: string | null;
+  /** Decision 145: see `SidebarTreeInput.t`. */
+  t?: Translate;
 }
 
 export interface RecentRowsResult {
@@ -628,7 +647,7 @@ export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
       if (!isUnboundSessionRow(session) && !workspaceById.has(session.workspaceId)) {
         return false;
       }
-      if (!matchesQuery(session, normalized, input.activeSessionId)) {
+      if (!matchesQuery(session, normalized, input.activeSessionId, input.t)) {
         return false;
       }
       return (

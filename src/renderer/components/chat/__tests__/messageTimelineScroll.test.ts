@@ -4,6 +4,7 @@ import {
   JUMP_TO_BOTTOM_THRESHOLD_PX,
   nextFollowState,
   STICK_TO_BOTTOM_THRESHOLD_PX,
+  shouldRevealEndNotice,
   shouldShowJumpToBottom,
   shouldStickToBottom,
 } from '../messageTimelineScroll';
@@ -175,5 +176,25 @@ describe('followAfterDisclosure', () => {
     ).toBe(false);
     // The reader scrolled back to the bottom: following resumes.
     expect(nextFollowState({ ...geometry, scrollTop: 1300, following: paused })).toBe(true);
+  });
+});
+
+describe('shouldRevealEndNotice (P1-7e e6, problem 38, decision 145)', () => {
+  it('reveals the notice for a reader who was following, wherever the follower left them', () => {
+    expect(shouldRevealEndNotice({ following: true, previousDistance: 0 })).toBe(true);
+    expect(shouldRevealEndNotice({ following: true, previousDistance: 900 })).toBe(true);
+  });
+
+  it('reveals it from the dead band a missed follow leaves (the field case: 46px short)', () => {
+    expect(shouldRevealEndNotice({ following: false, previousDistance: 46 })).toBe(true);
+    expect(
+      shouldRevealEndNotice({ following: false, previousDistance: JUMP_TO_BOTTOM_THRESHOLD_PX })
+    ).toBe(true);
+  });
+
+  it('leaves a reader who scrolled up past the jump button alone', () => {
+    expect(
+      shouldRevealEndNotice({ following: false, previousDistance: JUMP_TO_BOTTOM_THRESHOLD_PX + 1 })
+    ).toBe(false);
   });
 });

@@ -86,8 +86,9 @@ describe('what a session had under way (P1-7e problem 11)', () => {
     expect(work.get('s1')).toEqual({ turn: false, jobs: true });
     const same = noteSessionWork(work, event('s1', 'message.delta', { text: 'hi' }));
     expect(same).toBe(work);
-    // The disconnect itself is not what the session was doing.
-    expect(noteSessionWork(work, reclaimed('s1'))).toBe(work);
+    // P1-7e e6 (problem 39, decision 145): a disconnect is the worker going
+    // away, and what it had under way goes with it.
+    expect(noteSessionWork(work, reclaimed('s1')).get('s1')).toEqual({ turn: false, jobs: false });
   });
 
   it('[E3-11-COPY] 「已停止运行」 only for a session that was working', () => {
@@ -148,5 +149,22 @@ describe('the reclaim toast (P1-7e problem 11)', () => {
     );
     // One at a time: the first toast goes when the second comes.
     expect(probe.closed).toEqual(['toast-1']);
+  });
+
+  it('[E6-39] jobs the engine took down with it do not make a later reclaim say 「已停止运行」', () => {
+    const send = (e: RuntimeEvent) => probe.listener?.(e);
+    send(
+      event('s1', 'session.projection', {
+        key: 'jobs',
+        view: [{ id: 'bash-1', kind: 'bash', label: 'ticker', status: 'running', startedAt: 1 }],
+      })
+    );
+    // The host crashed: Main says `disconnected` (no reason) and reopens the
+    // session; its jobs read 「引擎重启，任务已结束」. Minutes later the pool
+    // reclaims it.
+    send(event('s1', 'session.status', { status: 'disconnected' }));
+    send(reclaimed('s1'));
+    expect(probe.added.at(-1)?.description).toContain('空闲的「整理笔记」已转入后台');
+    expect(probe.added.at(-1)?.description).not.toContain('已停止运行');
   });
 });

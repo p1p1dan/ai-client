@@ -40,6 +40,7 @@ vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => ()
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
 
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageMetadataStore } from '@/stores/messageMetadataRegistry';
 import { MessageTimeline } from '../MessageTimeline';
 import { formatAbsoluteTime } from '../messageMetadata';
 
@@ -59,7 +60,7 @@ function seed(messages: ChatMessage[]) {
   } as never);
 }
 
-async function mountTimeline() {
+async function mountTimeline(status: 'idle' | 'failed' = 'idle') {
   const container = document.createElement('div');
   document.body.append(container);
   const root = createRoot(container);
@@ -69,7 +70,7 @@ async function mountTimeline() {
       createElement(
         QueryClientProvider,
         { client },
-        createElement(MessageTimeline, { sessionId: 's', status: 'idle', thinkingEnabled: false })
+        createElement(MessageTimeline, { sessionId: 's', status, thinkingEnabled: false })
       )
     )
   );
@@ -230,5 +231,45 @@ it('[E2B-7-MOUNT-AFTER-WORK] a turn that failed after saving steps does not clai
     );
   } finally {
     await view.unmount();
+  }
+});
+
+it('[E6-43-MOUNT] live, a turn the session failed on says no 「完成于」 either, as it will once reopened', async () => {
+  // P1-7e e6 (problem 43, decision 145). The live shape: the user's message
+  // and a reply that started and never completed (`P1-FAIL`, `P1-GATE`).
+  const live: ChatMessage[] = [
+    {
+      id: 'u1',
+      sessionId: 's',
+      role: 'user',
+      timestamp: T0,
+      blocks: [{ id: 'u1:text:0', type: 'text', text: 'P1-FAIL: go' }],
+    },
+    { id: 'a1', sessionId: 's', role: 'assistant', timestamp: T0 + 2_000, blocks: [] },
+  ];
+  const finished = zh('Completed at {{time}}', { time: formatAbsoluteTime(T0 + 2_000) });
+  useMessageMetadataStore.setState({
+    bySession: { s: { byMessage: { a1: { startedAt: T0 + 500 } }, bySessionLastAssistant: {} } },
+  });
+
+  // Control: the same turn on a session at rest carries the time.
+  seed(live);
+  const settled = await mountTimeline('idle');
+  try {
+    expect(settled.container.textContent ?? '').toContain(finished);
+  } finally {
+    await settled.unmount();
+  }
+
+  seed(live);
+  useChatSessionsStore.setState((state) => ({
+    sessions: state.sessions.map((session) => ({ ...session, status: 'failed' as const })),
+  }));
+  const failed = await mountTimeline('failed');
+  try {
+    expect(failed.container.textContent ?? '').not.toContain(finished);
+  } finally {
+    await failed.unmount();
+    useMessageMetadataStore.setState({ bySession: {} });
   }
 });

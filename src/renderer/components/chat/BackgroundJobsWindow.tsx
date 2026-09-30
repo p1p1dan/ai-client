@@ -273,13 +273,16 @@ function JobRow({
         </div>
         <div className="flex h-6 min-w-0 items-center gap-1.5 pl-5 text-muted-foreground">
           <span className="min-w-0 truncate">{jobStatusLabel(row.status, row.stop, t)}</span>
+          {/* P1-7e e6 (decision 145): both badges are CJK in Chinese, so the
+              badge's large size (14px on desktop) like the sidebar's (decision
+              144 §2); the small size is 10px. */}
           {row.promoted && (
-            <Badge variant="outline" size="sm" className="font-normal">
+            <Badge variant="outline" size="lg" className="font-normal">
               {t('Timed out into the background')}
             </Badge>
           )}
           {row.exitCode !== undefined && (
-            <Badge variant="outline" size="sm" className="font-normal tabular-nums">
+            <Badge variant="outline" size="lg" className="font-normal tabular-nums">
               {t('Exit code {{code}}', { code: row.exitCode })}
             </Badge>
           )}

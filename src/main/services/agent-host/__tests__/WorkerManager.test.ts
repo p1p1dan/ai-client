@@ -914,9 +914,11 @@ describe('WorkerManager identity and capacity', () => {
     });
   });
 
-  it('D12: the idle sweep stays silent — it is a different line from capacity', async () => {
+  it('D12: the idle sweep never claims a full pool; it says `released` (decision 145)', async () => {
     // Announcing a 15-minute timeout as `capacity_reclaimed` would tell the user
-    // the pool is full when it is not. D12 left the idle sweep alone.
+    // the pool is full when it is not. D12 left the idle sweep's wording alone;
+    // P1-7e e6 (problem 37) has it say `released`, so the renderer drops the
+    // binding of a session that is no longer on the engine, without a toast.
     let clock = 0;
     const base = createHarness({ capacity: 3, now: () => clock });
     const events: Array<Record<string, unknown>> = [];
@@ -940,6 +942,13 @@ describe('WorkerManager identity and capacity', () => {
           'capacity_reclaimed'
       )
     ).toBe(false);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'session.status',
+        sessionId: 'idle',
+        payload: { status: 'disconnected', disconnectReason: 'released' },
+      })
+    );
   });
 
   it('reclaims only expired safe idle slots', async () => {
@@ -2667,11 +2676,18 @@ describe('WorkerManager dispose drain window', () => {
 
     await h.manager.invalidateAll();
 
+    // P1-7e e6 (decision 145): Main's own `released` comes first, at the
+    // retirement; the drained resolutions follow it.
     expect(h.events.map((event) => event.type)).toEqual([
+      'session.status',
       'permission.resolved',
       'question.resolved',
     ]);
     expect(h.events[0]).toMatchObject({
+      sessionId: 's1',
+      payload: { status: 'disconnected', disconnectReason: 'released' },
+    });
+    expect(h.events[1]).toMatchObject({
       sessionId: 's1',
       payload: { permissionId: 'perm-1', autoReason: 'session_closed' },
     });
@@ -2683,7 +2699,7 @@ describe('WorkerManager dispose drain window', () => {
       sessionId: 's1',
       payload: { permissionId: 'perm-late', allow: false },
     });
-    expect(h.events).toHaveLength(2);
+    expect(h.events).toHaveLength(3);
   });
 
   it('opens the window for resolutions only, not for the rest of the stream', async () => {
@@ -2709,7 +2725,8 @@ describe('WorkerManager dispose drain window', () => {
 
     await h.manager.invalidateAll();
 
-    expect(h.events).toEqual([]);
+    // Only Main's own `released` (decision 145); nothing the worker said.
+    expect(h.events.map((event) => event.type)).toEqual(['session.status']);
   });
 
   it('drops a drain resolution that names another session', async () => {
@@ -2729,7 +2746,10 @@ describe('WorkerManager dispose drain window', () => {
 
     await h.manager.invalidateAll();
 
-    expect(h.events).toEqual([]);
+    // Only Main's own `released` for `s1` (decision 145).
+    expect(h.events.map((event) => [event.type, event.sessionId])).toEqual([
+      ['session.status', 's1'],
+    ]);
   });
 });
 
@@ -4584,6 +4604,41 @@ describe('WorkerManager on one shared DSH host (P1-3c)', () => {
     h.manager.forceKillAllNow();
     expect(h.host?.forceKillNow).toHaveBeenCalledTimes(1);
     for (const record of h.records) expect(record.forceKillNow).toHaveBeenCalledTimes(1);
+  });
+
+  it('[E6-37] invalidation tells every session it went (`released`), the one mid-turn after its forced stop', async () => {
+    // P1-7e e6 (problem 37, decision 145): nothing reopens these sessions, and
+    // an idle one used to go silently, so the renderer kept it in "Active now".
+    const h = createHarness({ host: true });
+    await create(h.manager, 'idle', 7);
+    await create(h.manager, 'busy');
+    const turn = await running(h, 'busy', 7);
+    h.events.length = 0;
+
+    await h.manager.invalidateAll();
+
+    expect(trace(h.events, 'idle')).toEqual(['status:disconnected/released']);
+    expect(trace(h.events, 'busy')).toEqual(['stopped(forced)', 'status:disconnected/released']);
+    expect(
+      h.events.filter((event) => event.sessionId === 'busy').every((e) => e.requestId === turn)
+    ).toBe(true);
+    // Never the capacity sentence or the engine-restart one: neither is true.
+    expect(
+      h.events.some((event) =>
+        ['capacity_reclaimed', 'engine_restarted'].includes(
+          String((event.payload as { disconnectReason?: string }).disconnectReason)
+        )
+      )
+    ).toBe(false);
+    expect(h.manager.getSlotSnapshots()).toEqual([]);
+  });
+
+  it('[E6-37] ending a conversation does not say `released`: the renderer unbinds it itself', async () => {
+    const h = createHarness({ host: true });
+    await create(h.manager, 's1', 7);
+    h.events.length = 0;
+    await h.manager.closeSession('s1');
+    expect(trace(h.events, 's1')).not.toContain('status:disconnected/released');
   });
 
   it('[WMH-08] invalidation disposes every session, then stops the host', async () => {

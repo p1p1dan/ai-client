@@ -1105,6 +1105,15 @@ export const MOVES_ON_SEND_PLACEHOLDER =
 export const MIGRATING_SESSION_PLACEHOLDER = 'Moving this chat to the current engine…';
 
 /**
+ * A turn is running, so Enter queues and Ctrl+Enter joins this turn. P1-7e e6
+ * (problem 40, decision 145): it used to open with 「Agent Host 正在运行」,
+ * the development name of the engine process, the same leftover as the
+ * `Live Agent Host` decision 144 removed.
+ */
+export const TURN_RUNNING_PLACEHOLDER =
+  'Turn in progress — Enter queues, Ctrl+Enter adds to this turn…';
+
+/**
  * Composer placeholder text. Sending/busy/no-session/no-workspace states are
  * identical in both modes; only the default "ready to type" copy differs —
  * the docked composer asks for a follow-up instead of the initial prompt.
@@ -1218,8 +1227,9 @@ export function composerPlaceholder(
     // The Ctrl+Enter affordance has no button of its own — it is a key on a
     // field the user is already typing in — so the busy copy is the only place
     // it can be discovered. Said here rather than globally: it names a key that
-    // only does anything while a turn is running.
-    return t('Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…');
+    // only does anything while a turn is running. P1-7e e6 (problem 40,
+    // decision 145): it names the turn, not the process that runs it.
+    return t(TURN_RUNNING_PLACEHOLDER);
   }
   // U28 removed a `!hasSession -> "Select a session in the left nav"` branch
   // here. It named a prerequisite that no longer exists: `runSend` creates the

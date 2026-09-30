@@ -60,7 +60,15 @@ export function noteSessionWork(
   if (!sessionId) return work;
   const current = work.get(sessionId) ?? { turn: false, jobs: false };
   let next: SessionWork | undefined;
-  if (event.type === 'session.status' && event.payload.status !== 'disconnected') {
+  if (event.type === 'session.status' && event.payload.status === 'disconnected') {
+    // P1-7e e6 (problem 39, decision 145): the worker went away — a host
+    // crash, an engine restart, a release or this very reclaim — and took
+    // whatever it had under way with it (its jobs read 「引擎重启，任务已结
+    // 束」). A later reclaim of the same session must not say it was stopped.
+    // The reclaim toast reads the record from BEFORE this event, so a
+    // reclaim's own `disconnected` still counts what it cut short.
+    next = { turn: false, jobs: false };
+  } else if (event.type === 'session.status') {
     next = { ...current, turn: BUSY_STATUSES.has(event.payload.status) };
   } else if (
     event.type === 'session.completed' ||

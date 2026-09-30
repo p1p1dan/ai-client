@@ -269,6 +269,9 @@ export function AppearanceSettings() {
                 />
                 <Button
                   variant="outline"
+                  // P1-7e e6 (decision 145, as decision 144 §20): 「URL 模式」 keeps
+                  // its capitals; the button base lowercases its text.
+                  className={cn(backgroundSourceType === 'url' && 'normal-case')}
                   disabled={backgroundSourceType === 'url'}
                   onClick={
                     backgroundSourceType === 'folder' ? handleSelectFolder : handleSelectFile

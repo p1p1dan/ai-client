@@ -2792,8 +2792,6 @@ export const zhTranslations: Record<string, string> = {
   'Sending {{count}} attachments to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
   'Add more optional details…': '可以再补充一些信息…',
   'Queued {{count}} — type another follow-up…': '已排队 {{count}} 条 —— 可以接着输入…',
-  'Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…':
-    'Agent Host 正在运行 —— Enter 排队，Ctrl+Enter 并入当前回合…',
   'Active session has no workspace…': '当前会话没有工作区…',
   'Choose a working directory to start…': '先选一个工作目录…',
   'Send follow-up…': '继续输入…',
@@ -3845,4 +3843,26 @@ Object.assign(zhTranslations, {
   message: '消息',
   'context summary': '上下文摘要',
   notice: '通知',
+});
+
+/**
+ * dsh-rebase P1-7e group e6 (decision 145): the re-check's copy findings
+ * (problem 40) and the interface primitives decision 144 found still in
+ * English. The running placeholder and the fork title are reached through
+ * constants (`TURN_RUNNING_PLACEHOLDER`, `FORK_TITLE_KEY`), not a literal
+ * `t('…')`; their own tests hold them to this block.
+ */
+Object.assign(zhTranslations, {
+  // Composer placeholder while a turn runs (`middleColumnLayout.ts`).
+  'Turn in progress — Enter queues, Ctrl+Enter adds to this turn…':
+    '回合进行中 —— Enter 排队，Ctrl+Enter 并入当前回合…',
+  // A forked chat's title, written by Main when the fork is created (`sessionTitles.ts`).
+  '{{title}} (fork)': '{{title}}（分叉）',
+  // Terminal search bar (`TerminalSearchBar.tsx`).
+  'Search…': '搜索…',
+  'Previous match (Shift+Enter)': '上一个匹配（Shift+Enter）',
+  'Next match (Enter)': '下一个匹配（Enter）',
+  'Close search (Esc)': '关闭搜索（Esc）',
+  // Toast close button (`ui/toast.tsx`).
+  'Close notification': '关闭通知',
 });

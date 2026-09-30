@@ -18,7 +18,16 @@ import {
   ShieldAlert,
   TriangleAlert,
 } from 'lucide-react';
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Alert, AlertAction, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -115,6 +124,7 @@ import { formatAbsoluteTime, type MessageMetadata } from './messageMetadata';
 import {
   followAfterDisclosure,
   nextFollowState,
+  shouldRevealEndNotice,
   shouldShowJumpToBottom,
 } from './messageTimelineScroll';
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
@@ -748,6 +758,49 @@ export function MessageTimeline({
     observer.observe(viewport);
     return () => observer.disconnect();
   }, [sessionId, syncJumpToBottom]);
+
+  // P1-7e e6 (problem 38, decision 145): the notices at the END of the
+  // timeline (the history card, the migration notice) bring themselves into
+  // view when they appear, instead of relying on the follower above. That
+  // one missed the migration failure card that lands within a layout of
+  // the send, leaving it 46px short with 「详情」 behind the composer and
+  // nothing afterwards to catch it up. Before paint (layout effect), so the
+  // card is never drawn out of place, and once more on the next frame for
+  // anything that settles its height a frame late.
+  const endNoticeKey =
+    historyNotice.kind === 'error'
+      ? `error:${historyNotice.error.code}:${historyError ?? ''}`
+      : historyNotice.kind === 'migrating'
+        ? 'migrating'
+        : null;
+  useLayoutEffect(() => {
+    if (!endNoticeKey) return undefined;
+    const viewport = findViewport(scrollRootRef.current);
+    if (!viewport) return undefined;
+    const previousDistance =
+      lastScrollHeightRef.current - viewport.clientHeight - lastScrollTopRef.current;
+    if (!shouldRevealEndNotice({ following: stickToBottomRef.current, previousDistance })) {
+      return undefined;
+    }
+    const reveal = () => {
+      stickToBottomRef.current = true;
+      lastScrollHeightRef.current = viewport.scrollHeight;
+      const bottom = Math.max(0, viewport.scrollHeight - viewport.clientHeight);
+      if (Math.abs(viewport.scrollTop - bottom) > 1) viewport.scrollTop = bottom;
+      lastScrollTopRef.current = viewport.scrollTop;
+      // At the bottom now: nothing below to jump to (as `jumpToBottom`).
+      if (showJumpToBottomRef.current) {
+        showJumpToBottomRef.current = false;
+        setShowJumpToBottom(false);
+      }
+    };
+    reveal();
+    const frame = requestAnimationFrame(() => {
+      // A reader who scrolled away in between keeps their place.
+      if (stickToBottomRef.current) reveal();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [endNoticeKey]);
 
   if (!sessionId) {
     return (
@@ -2441,8 +2494,12 @@ const ChatTurn = memo(function ChatTurn({
     completedAtMs:
       metadata?.completedAt ?? (lastAssistant ? replayedCompletedAt(lastAssistant) : null) ?? null,
     // P1-7e (problem 7): a turn that ended with no reply saved (failed,
-    // stopped, cut off) did not complete, and says no 「完成于」.
-    endedWithoutReply: turnEndsWithoutReply(turn.body),
+    // stopped, cut off) did not complete, and says no 「完成于」. That note
+    // only exists once the turn is read back from history; live, the failure
+    // this turn owns (its status row reads 'failed', F4's `ownsSessionFailure`)
+    // says the same thing (P1-7e e6, problem 43, decision 145), so the line
+    // reads the same before and after a reopen.
+    endedWithoutReply: turnEndsWithoutReply(turn.body) || status?.kind === 'failed',
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });

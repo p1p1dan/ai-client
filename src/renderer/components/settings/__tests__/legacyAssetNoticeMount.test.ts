@@ -239,6 +239,23 @@ describe('LegacyAssetNoticePrompt — the startup dialog', () => {
     expect(api.markSeen).not.toHaveBeenCalled();
   });
 
+  /**
+   * P1-7e e6 (problem 35's second half, decision 145): the dialog opened with
+   * focus on the list's scroll area, which wore the orange focus ring. Focus
+   * starts on the answer instead.
+   */
+  it('[LAN-E6-35] opens with focus on 「知道了」, not on the scroll area', async () => {
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
+    await settle();
+    await settle();
+    const gotIt = button('Got it');
+    expect(gotIt).toBeDefined();
+    expect(document.activeElement).toBe(gotIt);
+    expect(
+      (document.activeElement as HTMLElement | null)?.closest('[data-slot="scroll-area-viewport"]')
+    ).toBeNull();
+  });
+
   it('[LAN-07] opens the agent folder from the dialog', async () => {
     await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
     await act(async () => button('Open agent folder')?.click());

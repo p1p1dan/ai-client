@@ -253,6 +253,12 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
   }, [repoPath]);
 
   const canShow = useModalQueueSlot('legacyAssetNotice', open);
+  // P1-7e e6 (problem 35, decision 145): the dialog opens by itself, so where
+  // focus lands is ours to pick. Left to the default it went to the first
+  // tabbable element, the list's scroll area (a long list makes it tabbable),
+  // which then wore the orange focus ring. The one action that answers the
+  // notice is the natural place: Enter dismisses it, Shift+Tab reaches the list.
+  const gotItRef = useRef<HTMLButtonElement>(null);
 
   const close = useCallback(() => {
     answered.current = true;
@@ -270,7 +276,7 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
         if (!next) close();
       }}
     >
-      <DialogPopup className="sm:max-w-xl" showCloseButton={false}>
+      <DialogPopup className="sm:max-w-xl" showCloseButton={false} initialFocus={gotItRef}>
         <DialogHeader>
           <DialogTitle>{t('Some things from the previous version no longer apply')}</DialogTitle>
           <DialogDescription>
@@ -300,7 +306,9 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
             <FolderOpen className="h-4 w-4" />
             {t('Open agent folder')}
           </Button>
-          <Button onClick={close}>{t('Got it')}</Button>
+          <Button ref={gotItRef} onClick={close}>
+            {t('Got it')}
+          </Button>
         </DialogFooter>
       </DialogPopup>
     </Dialog>

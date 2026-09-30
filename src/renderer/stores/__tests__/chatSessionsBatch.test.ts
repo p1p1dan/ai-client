@@ -450,6 +450,49 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(reopened.hostBoundSessionIds).toEqual(['other', SESSION_ID]);
   });
 
+  // P1-7e e6 (problem 37, decision 145): Main let the session go and will not
+  // reopen it (a plugin switch, a login, the idle sweep).
+  it('E6-37: a release drops the host binding and keeps the transcript', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'idle' })],
+      hostBoundSessionIds: [SESSION_ID, 'other'],
+      messages: { [SESSION_ID]: [makeMessage({ id: 'm1', role: 'user' })] },
+    });
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', disconnectReason: 'released' },
+      },
+    ]);
+    expect(patch.hostBoundSessionIds).toEqual(['other']);
+    expect(patch.messages).toBeUndefined();
+    expect(patch.sessions?.find((session) => session.id === SESSION_ID)?.status).toBe(
+      'disconnected'
+    );
+  });
+
+  it('E6-37: a release leaves a failure on screen as it was', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'failed' })],
+      hostBoundSessionIds: [SESSION_ID],
+    });
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', disconnectReason: 'released' },
+      },
+    ]);
+    expect(patch.hostBoundSessionIds).toEqual([]);
+    const session = (patch.sessions ?? base.sessions).find((item) => item.id === SESSION_ID);
+    expect(session?.status).toBe('failed');
+  });
+
   it('D12: an ordinary status change leaves the host binding alone', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'running' })],

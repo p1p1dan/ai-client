@@ -139,7 +139,9 @@ export function SessionReviewPanel({
         {entries.map((entry) => (
           <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenDiff={onClose} />
         ))}
-        <p className="px-1 pt-3 text-2xs text-muted-foreground">
+        {/* P1-7e e6 (problem 42, decision 145): `text-meta`, the smallest size
+            the design system lets CJK sit at; it was 10px (`text-2xs`). */}
+        <p className="px-1 pt-3 text-meta text-muted-foreground">
           {/* Decision 144: DSH's file tools are `edit` and `write` (the list is
               `sessionReview.ts`'s); the sentence names them as tools rather
               than as the capitalised pi / Claude names it used to. */}
@@ -239,7 +241,8 @@ function ReviewEntry({
       </div>
       <CollapsiblePanel>
         {entry.preview && (
-          <p className="px-2 py-1 text-2xs text-muted-foreground">
+          // Decision 145: a Chinese sentence, so `text-meta` rather than 10px.
+          <p className="px-2 py-1 text-meta text-muted-foreground">
             {t(
               entry.preview.source === 'sdk'
                 ? 'Historical tool diff'
