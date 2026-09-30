@@ -64,6 +64,9 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-30 用户在 1.0.4 上遇到两个真实网关错误（Claude Opus 5.5），只读调查结论：
+  - 压缩报 `"thinking.type.disabled" is not supported for this model`：1.0.4 的手动 `/compact` 不带思考档位，pi-ai 对 anthropic 行发 `thinking:{type:"disabled"}`，只支持 adaptive 的模型拒收。DSH 分支按现有模型计划不会触发；[决策 141](decisions/141-model-plan-adaptive-thinking-hardening.md)（`1c3f9fc9`）再把两种少见配置也堵上。1.0.x 不出修复版（用户没要），临时办法是 models.json 该行加 `"thinkingLevelMap": {"off": null}` 与 `"compat": {"forceAdaptiveThinking": true}`。
+  - `stream_gate_precommit` / `prebuffer_overflow`：公司网关（luban）的流闸门，缓冲约 10 KiB 仍等不到可提交的帧就中断；Opus 开头是长思考，同一请求重试基本必然失败。给网关管理员的说明已交用户转发。客户端归类（不自动重试、专门卡片）并入 e2b（决策 140）。
 - 2026-09-30 P1-7d GUI 点验三批做完（开发机 Linux，隔离 HOME、本地假网关、CDP 驱动；证据 [p1-7d-gui-2026-09-30.md](evidence/p1-7d-gui-2026-09-30.md)，提交 `bd1b9daf`、`9692c532`、`963bd44d`）：
   - 共 50 项：35 项符合，11 项有出入，3 项不符合，1 项只做了一部分。不符合的三项：A3 回退后提示没回到输入框；A4 新建分叉打开时时间线为空；E6 右列终端 Ctrl+F 打不开搜索。
   - 另记问题 1～35，按五组修，见 [topics/p1-7e-pointcheck-fixes.md](topics/p1-7e-pointcheck-fixes.md)（P1-7e）；侧栏改版（决策 137）并入第一组。
