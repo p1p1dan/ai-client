@@ -1,0 +1,385 @@
+{
+  "sid": "session-1790738205587-hwrwuuo",
+  "gear": "执行 · 全自动",
+  "turn": {
+    "settled": true,
+    "status": "idle",
+    "statuses": [
+      {
+        "dt": 361,
+        "status": "idle"
+      },
+      {
+        "dt": 765,
+        "status": "waiting_permission"
+      },
+      {
+        "dt": 1171,
+        "status": "idle"
+      }
+    ],
+    "cards": [
+      {
+        "dt": 767,
+        "card": "P1-JOBKILL: start a ticker in the background (C6). | ✻ 工作中 · 运行中 | 运行中 | for i in $(seq 1 600); do echo tick $i; … | 子代理 | 当前没有子代理 | 权限 | 高风险 | Bash — 在工作区运行命令 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 工作目录：/tmp/aiclient-p17d2/workspace | 这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认 | 项目：/tmp/aiclient-p17d2/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 seq, echo, sl"
+      }
+    ]
+  },
+  "sizes": [
+    {
+      "requested": [1400, 900],
+      "via": "window.resizeTo (the real window)",
+      "error": "'Browser.getWindowForTarget' wasn't found (-32601)",
+      "browserError": "'Browser.getWindowForTarget' wasn't found",
+      "viewport": {
+        "innerWidth": 1400,
+        "innerHeight": 900,
+        "outerWidth": 1400,
+        "outerHeight": 900,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 1076,
+        "h": 36
+      },
+      "buttons": [
+        {
+          "key": null,
+          "title": "会话分支",
+          "text": "会话分支",
+          "labelVisible": true,
+          "badge": null,
+          "w": 91
+        },
+        {
+          "key": null,
+          "title": "审阅",
+          "text": "审阅",
+          "labelVisible": true,
+          "badge": null,
+          "w": 62
+        },
+        {
+          "key": null,
+          "title": "新建对话",
+          "text": "",
+          "labelVisible": null,
+          "badge": null,
+          "w": 24
+        },
+        {
+          "key": "closed",
+          "title": "终端",
+          "text": "终端",
+          "labelVisible": true,
+          "badge": null,
+          "w": 62
+        },
+        {
+          "key": "jobs",
+          "title": "后台任务",
+          "text": "后台任务 1",
+          "labelVisible": true,
+          "badge": "1",
+          "w": 110
+        },
+        {
+          "key": "agents",
+          "title": "子代理",
+          "text": "子代理",
+          "labelVisible": true,
+          "badge": null,
+          "w": 76
+        }
+      ]
+    },
+    {
+      "requested": [1280, 800],
+      "via": "window.resizeTo (the real window)",
+      "error": "'Browser.getWindowForTarget' wasn't found (-32601)",
+      "browserError": "'Browser.getWindowForTarget' wasn't found",
+      "viewport": {
+        "innerWidth": 1280,
+        "innerHeight": 800,
+        "outerWidth": 1280,
+        "outerHeight": 800,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 956,
+        "h": 36
+      },
+      "buttons": [
+        {
+          "key": null,
+          "title": "会话分支",
+          "text": "会话分支",
+          "labelVisible": true,
+          "badge": null,
+          "w": 91
+        },
+        {
+          "key": null,
+          "title": "审阅",
+          "text": "审阅",
+          "labelVisible": true,
+          "badge": null,
+          "w": 62
+        },
+        {
+          "key": null,
+          "title": "新建对话",
+          "text": "",
+          "labelVisible": null,
+          "badge": null,
+          "w": 24
+        },
+        {
+          "key": "closed",
+          "title": "终端",
+          "text": "终端",
+          "labelVisible": true,
+          "badge": null,
+          "w": 62
+        },
+        {
+          "key": "jobs",
+          "title": "后台任务",
+          "text": "后台任务 1",
+          "labelVisible": true,
+          "badge": "1",
+          "w": 110
+        },
+        {
+          "key": "agents",
+          "title": "子代理",
+          "text": "子代理",
+          "labelVisible": true,
+          "badge": null,
+          "w": 76
+        }
+      ]
+    },
+    {
+      "requested": [1279, 800],
+      "via": "window.resizeTo (the real window)",
+      "error": "'Browser.getWindowForTarget' wasn't found (-32601)",
+      "browserError": "'Browser.getWindowForTarget' wasn't found",
+      "viewport": {
+        "innerWidth": 1279,
+        "innerHeight": 800,
+        "outerWidth": 1279,
+        "outerHeight": 800,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 955,
+        "h": 36
+      },
+      "buttons": [
+        {
+          "key": null,
+          "title": "会话分支",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "审阅",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "新建对话",
+          "text": "",
+          "labelVisible": null,
+          "badge": null,
+          "w": 24
+        },
+        {
+          "key": "closed",
+          "title": "终端",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": "jobs",
+          "title": "后台任务",
+          "text": "1",
+          "labelVisible": false,
+          "badge": "1",
+          "w": 50
+        },
+        {
+          "key": "agents",
+          "title": "子代理",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        }
+      ]
+    },
+    {
+      "requested": [1200, 800],
+      "via": "Emulation.setDeviceMetricsOverride (viewport only, for this CDP connection)",
+      "error": "'Browser.getWindowForTarget' wasn't found (-32601)",
+      "browserError": "'Browser.getWindowForTarget' wasn't found",
+      "viewport": {
+        "innerWidth": 1200,
+        "innerHeight": 800,
+        "outerWidth": 1244,
+        "outerHeight": 800,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 876,
+        "h": 36
+      },
+      "buttons": [
+        {
+          "key": null,
+          "title": "会话分支",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "审阅",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "新建对话",
+          "text": "",
+          "labelVisible": null,
+          "badge": null,
+          "w": 24
+        },
+        {
+          "key": "closed",
+          "title": "终端",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": "jobs",
+          "title": "后台任务",
+          "text": "1",
+          "labelVisible": false,
+          "badge": "1",
+          "w": 50
+        },
+        {
+          "key": "agents",
+          "title": "子代理",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        }
+      ]
+    },
+    {
+      "requested": [1024, 768],
+      "via": "Emulation.setDeviceMetricsOverride (viewport only, for this CDP connection)",
+      "error": "'Browser.getWindowForTarget' wasn't found (-32601)",
+      "browserError": "'Browser.getWindowForTarget' wasn't found",
+      "viewport": {
+        "innerWidth": 1024,
+        "innerHeight": 768,
+        "outerWidth": 1244,
+        "outerHeight": 768,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 876,
+        "h": 36
+      },
+      "buttons": [
+        {
+          "key": null,
+          "title": "会话分支",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "审阅",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": null,
+          "title": "新建对话",
+          "text": "",
+          "labelVisible": null,
+          "badge": null,
+          "w": 24
+        },
+        {
+          "key": "closed",
+          "title": "终端",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        },
+        {
+          "key": "jobs",
+          "title": "后台任务",
+          "text": "1",
+          "labelVisible": false,
+          "badge": "1",
+          "w": 50
+        },
+        {
+          "key": "agents",
+          "title": "子代理",
+          "text": "",
+          "labelVisible": false,
+          "badge": null,
+          "w": 30
+        }
+      ]
+    }
+  ],
+  "shot1280": "shots/C6-width-1280.png",
+  "shot1279": "shots/C6-narrow-1279.png",
+  "shot1200": "shots/C6-narrow-1200-emulated.png",
+  "restored": {
+    "innerWidth": 1400,
+    "innerHeight": 900,
+    "outerWidth": 1400,
+    "outerHeight": 900,
+    "dpr": 1
+  }
+}

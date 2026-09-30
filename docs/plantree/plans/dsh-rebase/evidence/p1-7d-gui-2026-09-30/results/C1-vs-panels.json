@@ -1,0 +1,25 @@
+{
+  "suffix": "jlaku4o",
+  "needle": "设定目标",
+  "open": {
+    "id": "session-1790738705807-jlaku4o",
+    "active": "session-1790738705807-jlaku4o",
+    "tried": 1
+  },
+  "clicked": true,
+  "box": {
+    "head": "设定目标\nP0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\n{\n  \"objective\": \"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\",\n  \"max_goal_rounds\": 4\n}\n{\"goal\":{\"id\":\"goal-0710c5c7-baf7-4f54-ab13-f62b3ca40af5\",\"revision\":1,\"objective\":\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\",\"phase\":\"active\",\"roundsStarted\":0,\"maxGoalRounds\":4},\"activation\":\"armed\"}",
+    "tail": "gress.txt in the workspace, then verify it\",\n  \"max_goal_rounds\": 4\n}\n{\"goal\":{\"id\":\"goal-0710c5c7-baf7-4f54-ab13-f62b3ca40af5\",\"revision\":1,\"objective\":\"P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it\",\"phase\":\"active\",\"roundsStarted\":0,\"maxGoalRounds\":4},\"activation\":\"armed\"}",
+    "length": 420
+  },
+  "row": [
+    {
+      "text": "设定目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+      "icon": "lucide-target",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    }
+  ],
+  "shot": "shots/C1-windows-above-goal-and-todo.png"
+}

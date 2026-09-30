@@ -14,6 +14,25 @@
  *   - every screenshot passes a privacy check first (no /home/, host name or
  *     user@host text on the page), and lands in ../shots/.
  *
+ * Batch 2 (sections C, D, E; driven by p1-7d-items-cde.mjs) added, without
+ * changing any batch-1 step:
+ *   - a scratch ~/.bash_profile and ~/.bashrc setting PS1='$ ', so the
+ *     right-column terminal's prompt never shows a user or host name;
+ *   - a recorder of every pty byte the renderer receives (`__p17dTermText`),
+ *     which the privacy check scans too: xterm paints on a WebGL canvas, so
+ *     the terminal's text is not in `document.body.innerText`;
+ *   - `bounds <w> <h>` (window size: CDP `Browser.setWindowBounds` first;
+ *     Electron has no `Browser.getWindowForTarget`, so in practice the real
+ *     window is resized with `window.resizeTo`, and only if that does not
+ *     take, `Emulation.setDeviceMetricsOverride`) and `theme <light|dark>`
+ *     (the settings store's own `setTheme`);
+ *   - `pumpFrames` (lib) and `front`: on this box the app window gets no
+ *     frames while it is not composited (requestAnimationFrame measured at 0/s,
+ *     `Page.bringToFront` does not help), so xterm never mounts and layouts
+ *     driven by ResizeObserver lag; every `Page.captureScreenshot` forces a
+ *     frame, so a loop of 4×4-pixel captures keeps ~25 frames/s going. `shot`
+ *     now pumps 0.8 s of frames before it captures.
+ *
  *   node p1-7d-gui.mjs setup            scratch dirs, fake env, model catalog, gateway (--reset)
  *   node p1-7d-gui.mjs gateway-start    start the gateway alone (no --reset)
  *   node p1-7d-gui.mjs gateway-stop     stop the gateway by exact pid
@@ -30,6 +49,9 @@
  *   node p1-7d-gui.mjs state            store: active session, sessions, statuses
  *   node p1-7d-gui.mjs expand           open every settled work group (<details>)
  *   node p1-7d-gui.mjs kill-host        SIGKILL the one DSH host of this run (exact pid)
+ *   node p1-7d-gui.mjs bounds <w> <h>   resize the window (see batch 2 above)
+ *   node p1-7d-gui.mjs theme <name>     light | dark, through the settings store
+ *   node p1-7d-gui.mjs front            raise the window (Page.bringToFront), print the frame rate
  *   node p1-7d-gui.mjs quit             graceful quit (app IPC + confirm), wait for exit
  *   node p1-7d-gui.mjs stop             stop what is left, by exact pid (never pkill)
  *
@@ -90,11 +112,29 @@ function writeResult(name, value) {
   log(`wrote ${path.relative(repoRoot, file)}`);
 }
 
-/** Text a screenshot could show: body text, field values, visible titles. */
+/**
+ * Text a screenshot could show: body text, field values, visible titles, and
+ * (batch 2) every byte a pty sent this page since `enter`, because xterm's
+ * WebGL canvas keeps the terminal's text out of the DOM.
+ */
 const PAGE_PRIVACY_TEXT = `(() => {
   const parts = [document.body.innerText];
   for (const n of document.querySelectorAll('textarea, input')) parts.push(n.value || '');
+  if (typeof window.__p17dTermText === 'string') parts.push(window.__p17dTermText);
   return parts.join('\\n');
+})()`;
+
+/** Batch 2: keep the last 256 KB of pty output the renderer received (idempotent). */
+const INSTALL_TERM_RECORDER = `(() => {
+  if (window.__p17dTermInstalled) return 'already';
+  const api = window.electronAPI?.terminal;
+  if (!api?.onData) return 'no terminal api';
+  window.__p17dTermInstalled = true;
+  window.__p17dTermText = '';
+  api.onData((event) => {
+    window.__p17dTermText = (window.__p17dTermText + String(event?.data ?? '')).slice(-262144);
+  });
+  return 'installed';
 })()`;
 
 function privacyHits(text) {
@@ -271,6 +311,16 @@ function writeScratchConfig() {
     path.join(dirs.workspace, 'README.md'),
     '# P1-7d scratch workspace\n\nThrowaway; the GUI point-check runs its tools here.\n'
   );
+  // Batch 2: the right-column terminal runs `bash -i -l` in this HOME. The
+  // system bashrc's PS1 is `\u@\h:\w\$ `; these run after it and replace it.
+  const bashPrompt = [
+    '# P1-7d scratch shell: a prompt with no user or host name in it.',
+    "export PS1='$ '",
+    'unset PROMPT_COMMAND',
+    '',
+  ].join('\n');
+  fs.writeFileSync(path.join(dirs.home, '.bashrc'), bashPrompt);
+  fs.writeFileSync(path.join(dirs.home, '.bash_profile'), bashPrompt);
   fs.writeFileSync(
     path.join(piAgentDir, 'models.json'),
     `${JSON.stringify(
@@ -549,6 +599,10 @@ async function shot(cdp, name, { force = false } = {}) {
     );
   }
   fs.mkdirSync(shotsDir, { recursive: true });
+  // Batch 2: a covered window paints nothing until a capture asks for a frame,
+  // and a layout that ResizeObserver drives needs a second frame to show, so
+  // run a few frames first (see pumpFrames) or the shot can be one layout old.
+  await pumpFrames(cdp, 800);
   const { data } = await cdp.send('Page.captureScreenshot', { format: 'png' });
   const file = path.join(shotsDir, name.endsWith('.png') ? name : `${name}.png`);
   fs.writeFileSync(file, Buffer.from(data, 'base64'));
@@ -694,11 +748,13 @@ async function enter() {
     if (closed.length === 0 && round >= 2) break;
   }
   const recorders = await cdp.evaluate(INSTALL_RECORDERS);
+  const termRecorder = await cdp.evaluate(INSTALL_TERM_RECORDER);
   const out = {
     language,
     entered,
     dialogs,
     recorders,
+    termRecorder,
     buttons: await cdp.evaluate(VISIBLE_BUTTONS),
     problems: cdp.problems.slice(0, 10),
   };
@@ -917,6 +973,205 @@ async function expandStep() {
   console.log(JSON.stringify(out, null, 2));
 }
 
+/**
+ * Batch 2: resize the app window. CDP `Browser.setWindowBounds` moves the real
+ * window (so CSS breakpoints, container queries and the shell's width rules
+ * all see a real size), unlike `Emulation.setDeviceMetricsOverride`, which only
+ * fakes the viewport. Tried on the page connection first, then on the browser
+ * connection (`/json/version`) with the page's target id; Electron answers
+ * neither, so `window.resizeTo` does the real resize.
+ */
+async function setBounds(cdp, width, height) {
+  const out = { requested: { width, height } };
+  const call = async (client, params) => {
+    const found = await client.send('Browser.getWindowForTarget', params);
+    await client.send('Browser.setWindowBounds', {
+      windowId: found.windowId,
+      bounds: { windowState: 'normal' },
+    });
+    await sleep(300);
+    await client.send('Browser.setWindowBounds', {
+      windowId: found.windowId,
+      bounds: { width, height },
+    });
+    await sleep(1200);
+    return {
+      before: found.bounds,
+      after: (await client.send('Browser.getWindowForTarget', params)).bounds,
+    };
+  };
+  try {
+    Object.assign(out, await call(cdp, {}), { via: 'Browser.setWindowBounds (page connection)' });
+  } catch (pageError) {
+    out.pageError = String(pageError.message ?? pageError);
+    try {
+      const version = await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json();
+      const targets = await (await fetch(`http://127.0.0.1:${PORT}/json/list`)).json();
+      const page = targets.find((t) => t.type === 'page' && /^https?:\/\//.test(t.url ?? ''));
+      // Minimal request/response over the browser socket (Cdp's own #connect is private).
+      const ws = new WebSocket(version.webSocketDebuggerUrl);
+      await new Promise((resolve, reject) => {
+        ws.addEventListener('open', resolve);
+        ws.addEventListener('error', () => reject(new Error('browser socket error')));
+      });
+      let id = 0;
+      const pending = new Map();
+      ws.addEventListener('message', (event) => {
+        const frame = JSON.parse(event.data);
+        const waiter = pending.get(frame.id);
+        if (!waiter) return;
+        pending.delete(frame.id);
+        if (frame.error) waiter.reject(new Error(frame.error.message));
+        else waiter.resolve(frame.result);
+      });
+      const client = {
+        send: (method, params = {}) =>
+          new Promise((resolve, reject) => {
+            id += 1;
+            pending.set(id, { resolve, reject });
+            ws.send(JSON.stringify({ id, method, params }));
+          }),
+      };
+      Object.assign(out, await call(client, { targetId: page.id }), {
+        via: 'Browser.setWindowBounds (browser connection)',
+      });
+      ws.close();
+    } catch (browserError) {
+      out.browserError = String(browserError.message ?? browserError);
+      // Electron's DevTools server has no Browser.getWindowForTarget (-32601).
+      // `window.resizeTo` does move Electron's real (frameless) window, but on
+      // this box (VM, no GPU, window not focused) the renderer's viewport stays
+      // at the old size until a frame is produced; a (discarded) screenshot
+      // produces one. Then wait for innerWidth/innerHeight.
+      await cdp.evaluate(`(() => { window.resizeTo(${width}, ${height}); return true; })()`);
+      const deadline = Date.now() + 20_000;
+      let seen = null;
+      while (Date.now() < deadline) {
+        await cdp.send('Page.captureScreenshot', { format: 'png' }).catch(() => undefined);
+        seen = await cdp.evaluate('({ w: innerWidth, h: innerHeight })');
+        if (seen.w === width && seen.h === height) break;
+        await sleep(300);
+      }
+      if (seen?.w === width && seen?.h === height) {
+        await sleep(2000);
+        out.via = 'window.resizeTo (the real window)';
+      } else {
+        // Last resort, the viewport override: media and container queries read
+        // it, but it lasts only as long as THIS CDP connection.
+        out.resizeToSeen = seen;
+        await cdp.send('Emulation.setDeviceMetricsOverride', {
+          width,
+          height,
+          deviceScaleFactor: 0,
+          mobile: false,
+        });
+        await sleep(1200);
+        out.via = 'Emulation.setDeviceMetricsOverride (viewport only, for this CDP connection)';
+      }
+    }
+  }
+  out.viewport = await cdp.evaluate(
+    '({ innerWidth, innerHeight, outerWidth, outerHeight, dpr: devicePixelRatio })'
+  );
+  return out;
+}
+
+/** Drop a viewport override `setBounds` fell back to (no-op otherwise). */
+async function clearBounds(cdp) {
+  await cdp.send('Emulation.clearDeviceMetricsOverride').catch(() => undefined);
+  await sleep(1000);
+  return cdp.evaluate('({ innerWidth, innerHeight })');
+}
+
+async function boundsStep(width, height) {
+  const cdp = await attach(30_000);
+  const out = await setBounds(cdp, Number(width), Number(height));
+  cdp.close();
+  console.log(JSON.stringify(out, null, 2));
+}
+
+/** Batch 2: requestAnimationFrame callbacks in one second (0 = no frames: the window is occluded). */
+const RAF_RATE = `(async () => {
+  const t0 = performance.now();
+  return await new Promise((res) => {
+    let c = 0;
+    const tick = () => { c += 1; if (performance.now() - t0 < 1000) requestAnimationFrame(tick); else res(c); };
+    requestAnimationFrame(tick);
+    setTimeout(() => res(c), 1500);
+  });
+})()`;
+
+/**
+ * Batch 2: raise the app window (CDP `Page.bringToFront`). A window another
+ * one covers produces no frames on this box: requestAnimationFrame stops,
+ * xterm never mounts, and the shell's measured widths lag until something
+ * (a screenshot) forces a frame. Returns the frame rate before and after.
+ */
+async function bringToFront(cdp) {
+  const rate = async () =>
+    (
+      await cdp.send('Runtime.evaluate', {
+        expression: RAF_RATE,
+        awaitPromise: true,
+        returnByValue: true,
+      })
+    ).result.value;
+  const before = await rate();
+  await cdp.send('Page.bringToFront').catch(() => undefined);
+  await sleep(800);
+  return { before, after: await rate(), focus: await cdp.evaluate('document.hasFocus()') };
+}
+
+/**
+ * Batch 2: keep frames coming for `ms`. Raising the window does not help on
+ * this box (the session's screen is not being composited), but every
+ * `Page.captureScreenshot` makes the renderer produce a frame, so a loop of
+ * 4×4-pixel captures runs requestAnimationFrame and ResizeObserver at about
+ * 25 frames a second (measured) — enough for xterm to mount and fit.
+ */
+async function pumpFrames(cdp, ms) {
+  const until = Date.now() + ms;
+  let frames = 0;
+  while (Date.now() < until) {
+    await cdp
+      .send('Page.captureScreenshot', {
+        format: 'jpeg',
+        quality: 1,
+        clip: { x: 0, y: 0, width: 4, height: 4, scale: 1 },
+      })
+      .catch(() => undefined);
+    frames += 1;
+  }
+  return frames;
+}
+
+async function frontStep() {
+  const cdp = await attach(30_000);
+  const out = await bringToFront(cdp);
+  cdp.close();
+  console.log(JSON.stringify(out, null, 2));
+}
+
+/** Batch 2: the app theme, through the settings store's own setter (what the settings page calls). */
+async function setTheme(cdp, theme) {
+  const evalAsync = makeEval(cdp, 'p17dtheme');
+  return evalAsync(
+    `const m = await import(/* @vite-ignore */ '/stores/settings/index.ts');
+     m.useSettingsStore.getState().setTheme(${JSON.stringify(theme)});
+     await new Promise((r) => setTimeout(r, 600));
+     return { theme: m.useSettingsStore.getState().theme,
+              htmlClass: document.documentElement.className };`,
+    { label: `theme ${theme}` }
+  );
+}
+
+async function themeStep(theme) {
+  const cdp = await attach(30_000);
+  const out = await setTheme(cdp, theme);
+  cdp.close();
+  console.log(JSON.stringify(out, null, 2));
+}
+
 // ---- exports for item drivers ----------------------------------------------------------------
 
 export const lib = {
@@ -952,6 +1207,15 @@ export const lib = {
   SCRATCH,
   outDir,
   killHost,
+  // batch 2
+  INSTALL_TERM_RECORDER,
+  setBounds,
+  clearBounds,
+  setTheme,
+  bringToFront,
+  pumpFrames,
+  privacyHits,
+  PAGE_PRIVACY_TEXT,
 };
 
 const step = process.argv[2];
@@ -978,6 +1242,9 @@ const steps = {
   provider: providerStep,
   bottom: () => jsStep(SCROLL_BOTTOM),
   'kill-host': async () => console.log(killHost()),
+  bounds: () => boundsStep(process.argv[3], process.argv[4]),
+  front: frontStep,
+  theme: () => themeStep(process.argv[3]),
   quit,
   stop: () => stop(),
 };

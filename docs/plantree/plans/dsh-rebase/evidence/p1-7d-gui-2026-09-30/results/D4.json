@@ -1,0 +1,423 @@
+{
+  "key": {
+    "sid": "session-1790738742895-nirnfis",
+    "trace": [
+      {
+        "dt": 488,
+        "status": "idle",
+        "card": "模型服务不接受密钥 | 模型服务不接受本应用为这个模型发送的密钥：密钥无效、已过期，或者没有使用这个模型的权限。 | 401 {\"type\":\"error\",\"",
+        "retry": null
+      }
+    ],
+    "card": {
+      "text": "模型服务不接受密钥 | 模型服务不接受本应用为这个模型发送的密钥：密钥无效、已过期，或者没有使用这个模型的权限。 | 401 {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"P1-ECHOKEY: invalid x-api-key [redacted] for this fake upstream\"}} | 重新登录或在设置里检查模型后，再发一次消息。",
+      "svg": 0,
+      "buttons": []
+    },
+    "shot": "shots/D4-card-key.png",
+    "contrast": {
+      "theme": "",
+      "rows": [],
+      "cardTitle": {
+        "label": "card title",
+        "ratio": 5.38,
+        "fg": "oklch(0.5042 0.1648 27.84)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      },
+      "cardBody": {
+        "label": "card body",
+        "ratio": 6.17,
+        "fg": "oklch(0.4531 0.005 91.5)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      }
+    }
+  },
+  "server": {
+    "sid": "session-1790738747470-hgyftr2",
+    "trace": [
+      {
+        "dt": 398,
+        "status": "idle",
+        "card": null,
+        "retry": null
+      },
+      {
+        "dt": 802,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  3s 后重试 · SERVER  "
+      },
+      {
+        "dt": 1207,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  2s 后重试 · SERVER  "
+      },
+      {
+        "dt": 2423,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  1s 后重试 · SERVER  "
+      },
+      {
+        "dt": 3237,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  <1s 后重试 · SERVER "
+      },
+      {
+        "dt": 3642,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  6s 后重试 · SERVER  "
+      },
+      {
+        "dt": 4047,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  5s 后重试 · SERVER  "
+      },
+      {
+        "dt": 5262,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  4s 后重试 · SERVER  "
+      },
+      {
+        "dt": 6073,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  3s 后重试 · SERVER  "
+      },
+      {
+        "dt": 7289,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  2s 后重试 · SERVER  "
+      },
+      {
+        "dt": 8100,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  1s 后重试 · SERVER  "
+      },
+      {
+        "dt": 9315,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  <1s 后重试 · SERVER "
+      },
+      {
+        "dt": 9720,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  13s 后重试 · SERVER "
+      },
+      {
+        "dt": 10125,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  12s 后重试 · SERVER "
+      },
+      {
+        "dt": 11363,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  11s 后重试 · SERVER "
+      },
+      {
+        "dt": 12172,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  10s 后重试 · SERVER "
+      },
+      {
+        "dt": 13387,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  9s 后重试 · SERVER  "
+      },
+      {
+        "dt": 14197,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  8s 后重试 · SERVER  "
+      },
+      {
+        "dt": 15413,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  7s 后重试 · SERVER  "
+      },
+      {
+        "dt": 16223,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  6s 后重试 · SERVER  "
+      },
+      {
+        "dt": 17036,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  5s 后重试 · SERVER  "
+      },
+      {
+        "dt": 18256,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  4s 后重试 · SERVER  "
+      },
+      {
+        "dt": 19065,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  3s 后重试 · SERVER  "
+      },
+      {
+        "dt": 20280,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  2s 后重试 · SERVER  "
+      },
+      {
+        "dt": 21090,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  <1s 后重试 · SERVER "
+      },
+      {
+        "dt": 22314,
+        "status": "failed",
+        "card": "模型服务返回了错误 | 模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。 | 500 {\"type\":\"error\",\"error\":{\"type",
+        "retry": null
+      }
+    ],
+    "card": {
+      "text": "模型服务返回了错误 | 模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。 | 500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}} | 继续",
+      "svg": 1,
+      "buttons": ["继续"]
+    },
+    "shot": "shots/D4-card-server-error.png",
+    "contrast": {
+      "theme": "",
+      "rows": [],
+      "cardTitle": {
+        "label": "card title",
+        "ratio": 5.38,
+        "fg": "oklch(0.5042 0.1648 27.84)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      },
+      "cardBody": {
+        "label": "card body",
+        "ratio": 6.17,
+        "fg": "oklch(0.4531 0.005 91.5)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      }
+    }
+  },
+  "rate": {
+    "backup": {
+      "runtimeError": "500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}",
+      "runtimeErrorCode": "PROVIDER_ERROR"
+    },
+    "card": {
+      "text": "模型服务在限流 | 请求太多，或者这个模型的额度已用完，模型服务拒绝了这次请求。 | 429 rate_limit_error: synthetic, for the point-check (the fake gateway has no 429 marker) | 继续",
+      "svg": 1,
+      "buttons": ["继续"]
+    },
+    "shot": "shots/D4-card-rate-limited-synthetic.png",
+    "restored": {
+      "runtimeErrorCode": "PROVIDER_ERROR"
+    }
+  },
+  "gatewayStopped": [486432],
+  "network": {
+    "sid": "session-1790738777161-tv4z4qd",
+    "trace": [
+      {
+        "dt": 343,
+        "status": "idle",
+        "card": null,
+        "retry": null
+      },
+      {
+        "dt": 747,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  3s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 1152,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  2s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 2367,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 1/3 · 本回合仍在进行  1s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 3211,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  7s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 4426,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  6s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 5235,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  5s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 6046,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  4s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 7271,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  3s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 8080,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  2s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 9296,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 2/3 · 本回合仍在进行  <1s 后重试 · TRANSPO"
+      },
+      {
+        "dt": 9711,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  12s 后重试 · TRANSPO"
+      },
+      {
+        "dt": 10116,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  11s 后重试 · TRANSPO"
+      },
+      {
+        "dt": 11364,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  10s 后重试 · TRANSPO"
+      },
+      {
+        "dt": 12177,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  9s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 13392,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  8s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 14202,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  7s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 15417,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  6s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 16227,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  5s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 17037,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  4s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 18252,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  3s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 19082,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  2s 后重试 · TRANSPOR"
+      },
+      {
+        "dt": 20296,
+        "status": "running",
+        "card": null,
+        "retry": "网络重试中 · 3/3 · 本回合仍在进行  <1s 后重试 · TRANSPO"
+      },
+      {
+        "dt": 21431,
+        "status": "running",
+        "card": "连不上模型服务 | 在收到回复之前，与模型服务的连接就失败了。 | Connection error. | 继续",
+        "retry": null
+      },
+      {
+        "dt": 21837,
+        "status": "failed",
+        "card": "连不上模型服务 | 在收到回复之前，与模型服务的连接就失败了。 | Connection error. | 继续",
+        "retry": null
+      }
+    ],
+    "card": {
+      "text": "连不上模型服务 | 在收到回复之前，与模型服务的连接就失败了。 | Connection error. | 继续",
+      "svg": 1,
+      "buttons": ["继续"]
+    },
+    "shot": "shots/D4-card-network.png",
+    "contrast": {
+      "theme": "",
+      "rows": [],
+      "cardTitle": {
+        "label": "card title",
+        "ratio": 5.38,
+        "fg": "oklch(0.5042 0.1648 27.84)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      },
+      "cardBody": {
+        "label": "card body",
+        "ratio": 6.17,
+        "fg": "oklch(0.4531 0.005 91.5)",
+        "opacity": 1,
+        "bg": "rgb(247,233,224)"
+      }
+    }
+  },
+  "gatewayRestarted": 494460,
+  "gatewayHealth": {
+    "ok": true,
+    "plan": "dsh-p0-2",
+    "count": 84
+  }
+}

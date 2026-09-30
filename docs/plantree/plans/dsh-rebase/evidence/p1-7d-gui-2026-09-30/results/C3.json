@@ -1,0 +1,587 @@
+{
+  "sid": "session-1790737024816-djxeztl",
+  "gear": "执行 · 全自动",
+  "startA": [
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 427,
+          "status": "idle"
+        },
+        {
+          "dt": 832,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 1239,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 837,
+          "card": "P1-JOBKILL: start ticker a-1 in the background. | ✻ 工作中 · 运行中 | 运行中 | for i in $(seq 1 600); do echo tick $i; … | 后台任务 | 当前没有后台任务 | 权限 | 高风险 | Bash — 在工作区运行命令 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 工作目录：/tmp/aiclient-p17d2/workspace | 这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认 | 项目：/tmp/aiclient-p17d2/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 seq, echo, sle"
+        }
+      ]
+    },
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 11,
+          "status": "idle"
+        },
+        {
+          "dt": 415,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 823,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 419,
+          "card": "P1-JOBKILL: start ticker a-1 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 22:57 · 1 次工具调用 | P1-JOBKILL: start ticker a-2 in the background. | ✻ 工作中 · 运行中 | 运行中 | for i in $(seq 1 600); do echo tick $i; … | 后台任务 | 1 运行中 | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止 | 权限 | 高风险 | Bash — 在工作区运行命令 | for i in $(seq 1 600); do e"
+        }
+      ]
+    }
+  ],
+  "windowTwoRunning": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704,
+      "right": 1400,
+      "bottom": 772
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 170,
+        "right": 1388,
+        "bottom": 246
+      },
+      "dragged": null,
+      "text": "后台任务 | 2 运行中 | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止 | bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+      "rows": [
+        {
+          "status": "running",
+          "text": "bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        },
+        {
+          "status": "running",
+          "text": "bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        }
+      ],
+      "output": [],
+      "header": ["关闭", "全部停止"]
+    },
+    "agents": null,
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 781,
+      "w": 702,
+      "h": 26,
+      "right": 1213,
+      "bottom": 807
+    }
+  },
+  "barTwoRunning": {
+    "bar": {
+      "x": 324,
+      "y": 32,
+      "w": 1076,
+      "h": 36
+    },
+    "buttons": [
+      {
+        "key": null,
+        "text": "会话分支",
+        "title": "会话分支",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 930,
+          "y": 36,
+          "w": 91,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "审阅",
+        "title": "审阅",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1029,
+          "y": 36,
+          "w": 62,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "",
+        "title": "新建对话",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": null,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1099,
+          "y": 38,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "key": "closed",
+        "text": "终端",
+        "title": "终端",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1140,
+          "y": 38,
+          "w": 62,
+          "h": 24
+        }
+      },
+      {
+        "key": "jobs",
+        "text": "后台任务 2",
+        "title": "后台任务",
+        "pressed": "true",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": {
+          "text": "2",
+          "bg": "oklch(0.5665 0.1523 45.02)",
+          "color": "oklch(0.9931 0.012 96.42)",
+          "rect": {
+            "x": 1290,
+            "y": 42,
+            "w": 16,
+            "h": 16
+          }
+        },
+        "dot": false,
+        "rect": {
+          "x": 1204,
+          "y": 38,
+          "w": 110,
+          "h": 24
+        }
+      },
+      {
+        "key": "agents",
+        "text": "子代理",
+        "title": "子代理",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1316,
+          "y": 38,
+          "w": 76,
+          "h": 24
+        }
+      }
+    ]
+  },
+  "shotTwo": "shots/C3-two-running.png",
+  "clickStopAll": true,
+  "confirm": {
+    "text": "停止全部后台任务？ | 运行中的命令与一次性子代理都会停止；运行中的子代理会被打断，之后还能续聊。 | 取消 | 全部停止",
+    "buttons": ["取消", "全部停止"]
+  },
+  "shotConfirm": "shots/C3-stop-all-confirm.png",
+  "confirmed": true,
+  "windowAfterStopAll": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704,
+      "right": 1400,
+      "bottom": 772
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 170,
+        "right": 1388,
+        "bottom": 246
+      },
+      "dragged": null,
+      "text": "后台任务 | 0 运行中 · 2 已结束 | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除 | bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除",
+      "rows": [
+        {
+          "status": "killed",
+          "text": "bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除",
+          "buttons": ["输出", "移除"]
+        },
+        {
+          "status": "killed",
+          "text": "bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除",
+          "buttons": ["输出", "移除"]
+        }
+      ],
+      "output": [],
+      "header": ["关闭"]
+    },
+    "agents": null,
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 781,
+      "w": 702,
+      "h": 26,
+      "right": 1213,
+      "bottom": 807
+    }
+  },
+  "shotAfterStopAll": "shots/C3-after-stop-all.png",
+  "wakeTurns": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790737024816-djxeztl",
+    "status": "idle",
+    "messages": 10,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790737040814,
+        "status": "idle"
+      }
+    ]
+  },
+  "wakeTurns2": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790737024816-djxeztl",
+    "status": "idle",
+    "messages": 10,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790737047847,
+        "status": "idle"
+      }
+    ]
+  },
+  "startB": [
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 298,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 745,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 341,
+          "card": "P1-JOBKILL: start ticker a-1 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 22:57 · 1 次工具调用 | P1-JOBKILL: start ticker a-2 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 22:57 · 1 次工具调用 | 后台任务已结束，自动继续 · bash for i in $(seq 1 600); do echo tick $i; sleep 0.1; done [status: killed, signal: SIGTERM; stopped by the user from… | 22:57 | 已工作 "
+        }
+      ]
+    },
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 317,
+          "status": "idle"
+        },
+        {
+          "dt": 721,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 1162,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 735,
+          "card": "P1-JOBKILL: start ticker a-1 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 22:57 · 1 次工具调用 | P1-JOBKILL: start ticker a-2 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 22:57 · 1 次工具调用 | 后台任务已结束，自动继续 · bash for i in $(seq 1 600); do echo tick $i; sleep 0.1; done [status: killed, signal: SIGTERM; stopped by the user from… | 22:57 | 已工作 "
+        }
+      ]
+    }
+  ],
+  "windowBeforeKill": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704,
+      "right": 1400,
+      "bottom": 772
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 274,
+        "right": 1388,
+        "bottom": 350
+      },
+      "dragged": null,
+      "text": "后台任务 | 2 运行中 · 2 已结束 | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除 | bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除 | bash-6 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止 | bash-7 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+      "rows": [
+        {
+          "status": "killed",
+          "text": "bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除",
+          "buttons": ["输出", "移除"]
+        },
+        {
+          "status": "killed",
+          "text": "bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除",
+          "buttons": ["输出", "移除"]
+        },
+        {
+          "status": "running",
+          "text": "bash-6 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        },
+        {
+          "status": "running",
+          "text": "bash-7 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        }
+      ],
+      "output": [],
+      "header": ["关闭", "全部停止"]
+    },
+    "agents": null,
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 781,
+      "w": 702,
+      "h": 26,
+      "right": 1213,
+      "bottom": 807
+    }
+  },
+  "shotBeforeKill": "shots/C3-before-host-kill.png",
+  "hostsBefore": [487176],
+  "killed": 487176,
+  "killTrace": [
+    {
+      "dt": 53,
+      "status": "idle",
+      "hosts": 0,
+      "rows": [
+        "killed | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除 | 输出,移除",
+        "killed | bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除 | 输出,移除",
+        "running | bash-6 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止 | 输出,停止",
+        "running | bash-7 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止 | 输出,停止"
+      ],
+      "count": "2 运行中 · 2 已结束"
+    },
+    {
+      "dt": 331,
+      "status": "disconnected",
+      "hosts": 1,
+      "rows": [
+        "killed | bash-4 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:06 | 已停止 | 输出 | 移除 | 输出,移除",
+        "killed | bash-5 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:04 | 已停止 | 输出 | 移除 | 输出,移除",
+        "lost | bash-6 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 输出 | 移除 | 输出,移除",
+        "lost | bash-7 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 输出 | 移除 | 输出,移除"
+      ],
+      "count": "0 运行中 · 4 已结束"
+    },
+    {
+      "dt": 1752,
+      "status": "idle",
+      "hosts": 1,
+      "rows": [],
+      "count": "当前没有后台任务"
+    }
+  ],
+  "killShots": {
+    "lost": "shots/C3-after-host-kill-lost.png"
+  },
+  "windowAfterKill": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704,
+      "right": 1400,
+      "bottom": 772
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 127,
+        "right": 1388,
+        "bottom": 203
+      },
+      "dragged": null,
+      "text": "后台任务 | 当前没有后台任务",
+      "rows": [],
+      "output": [],
+      "header": ["关闭"]
+    },
+    "agents": null,
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 781,
+      "w": 702,
+      "h": 26,
+      "right": 1213,
+      "bottom": 807
+    }
+  },
+  "barAfterKill": {
+    "bar": {
+      "x": 324,
+      "y": 32,
+      "w": 1076,
+      "h": 36
+    },
+    "buttons": [
+      {
+        "key": null,
+        "text": "会话分支",
+        "title": "会话分支",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 950,
+          "y": 36,
+          "w": 91,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "审阅",
+        "title": "审阅",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1049,
+          "y": 36,
+          "w": 62,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "",
+        "title": "新建对话",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": null,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1119,
+          "y": 38,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "key": "closed",
+        "text": "终端",
+        "title": "终端",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1160,
+          "y": 38,
+          "w": 62,
+          "h": 24
+        }
+      },
+      {
+        "key": "jobs",
+        "text": "后台任务",
+        "title": "后台任务",
+        "pressed": "true",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1224,
+          "y": 38,
+          "w": 90,
+          "h": 24
+        }
+      },
+      {
+        "key": "agents",
+        "text": "子代理",
+        "title": "子代理",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1316,
+          "y": 38,
+          "w": 76,
+          "h": 24
+        }
+      }
+    ]
+  },
+  "shotAfterKill": "shots/C3-after-host-kill.png",
+  "orphanTickers": []
+}

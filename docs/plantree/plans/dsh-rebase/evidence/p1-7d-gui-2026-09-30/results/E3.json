@@ -1,0 +1,153 @@
+{
+  "open": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "tried": 2
+  },
+  "buttonStart": {
+    "state": "open",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "true",
+    "dot": false,
+    "text": "终端"
+  },
+  "shells0": [
+    {
+      "pid": 496961,
+      "cwd": "/workspace"
+    }
+  ],
+  "hide": true,
+  "buttonHidden": {
+    "state": "hidden",
+    "title": "终端（仍在运行）",
+    "aria": "终端（仍在运行）",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "false",
+    "dot": true,
+    "text": "终端"
+  },
+  "columnHidden": {
+    "terminal": {
+      "rect": {
+        "x": 862,
+        "y": 32,
+        "w": 538,
+        "h": 868
+      },
+      "tab": {
+        "text": "",
+        "rect": {
+          "x": 863,
+          "y": 32,
+          "w": 105,
+          "h": 36
+        }
+      },
+      "close": {
+        "aria": "关闭终端",
+        "title": "关闭终端"
+      },
+      "dir": null,
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": true
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": false,
+    "activeElement": "BODY.bg-background text-foreground antialiase",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "shellsHidden": [
+    {
+      "pid": 496961,
+      "cwd": "/workspace"
+    }
+  ],
+  "shotHidden": "shots/E3-terminal-hidden-dot.png",
+  "show": true,
+  "buttonShown": {
+    "state": "open",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "true",
+    "dot": false,
+    "text": ""
+  },
+  "shellsShown": [
+    {
+      "pid": 496961,
+      "cwd": "/workspace"
+    }
+  ],
+  "tailShown": "$ \r\r$ \r\r$ $ echo P1-7D-TERM-$((6*7)); pwd\r\n\rP1-7D-TERM-42\r\n/tmp/aiclient-p17d2/workspace\r\n$ \r\r$ \r\r$ \r\r$ \r\r$ \r\r$ \r\r$ echo E3-BEFORE-HIDE\r\n\rE3-BEFORE-HIDE\r\n$ echo E3-AFTER-SHOW $$\r\n\rE3-AFTER-SHOW 496961\r\n$ ",
+  "shotShown": "shots/E3-terminal-shown-again.png",
+  "buttonAfterExit": {
+    "state": "closed",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "false",
+    "dot": false,
+    "text": "终端"
+  },
+  "columnAfterExit": {
+    "terminal": null,
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": false,
+    "activeElement": "BODY.bg-background text-foreground antialiase",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "shellsAfterExit": [],
+  "shotAfterExit": "shots/E3-after-exit.png",
+  "shellsReopened": [
+    {
+      "pid": 498323,
+      "cwd": "/workspace"
+    }
+  ],
+  "closeClicked": true,
+  "buttonAfterClose": {
+    "state": "closed",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "false",
+    "dot": false,
+    "text": "终端"
+  },
+  "columnAfterClose": {
+    "terminal": null,
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": false,
+    "activeElement": "BODY.bg-background text-foreground antialiase",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "shellsAfterClose": [],
+  "shotAfterClose": "shots/E3-after-close-x.png"
+}

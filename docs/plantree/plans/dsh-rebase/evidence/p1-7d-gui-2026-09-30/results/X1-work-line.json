@@ -1,0 +1,36 @@
+{
+  "sid": "session-1790739394532-ym9e7z1",
+  "turn": {
+    "settled": true,
+    "sid": "session-1790739394532-ym9e7z1",
+    "status": "idle",
+    "messages": 2,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790739396926,
+        "status": "idle"
+      },
+      {
+        "t": 1790739397430,
+        "status": "running"
+      },
+      {
+        "t": 1790739399965,
+        "status": "idle"
+      }
+    ]
+  },
+  "live": ["已工作 3 秒", "✻ 完成于 23:36"],
+  "shotLive": "shots/X1-work-line-live.png",
+  "away": {
+    "id": "session-1790738742895-nirnfis",
+    "active": "session-1790738742895-nirnfis"
+  },
+  "back": {
+    "id": "session-1790739394532-ym9e7z1",
+    "active": "session-1790739394532-ym9e7z1"
+  },
+  "afterSwitch": ["已工作 3 秒", "✻ 完成于 23:36"],
+  "shotAfter": "shots/X1-work-line-after-switch.png"
+}

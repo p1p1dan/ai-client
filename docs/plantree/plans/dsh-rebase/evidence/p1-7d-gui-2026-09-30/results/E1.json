@@ -1,0 +1,156 @@
+{
+  "sid": "session-1790739656944-i7qgryl",
+  "shellsBefore": [],
+  "size1440": {
+    "requested": {
+      "width": 1440,
+      "height": 900
+    },
+    "pageError": "'Browser.getWindowForTarget' wasn't found (-32601)",
+    "browserError": "'Browser.getWindowForTarget' wasn't found",
+    "via": "window.resizeTo (the real window)",
+    "viewport": {
+      "innerWidth": 1440,
+      "innerHeight": 900,
+      "outerWidth": 1440,
+      "outerHeight": 900,
+      "dpr": 1
+    }
+  },
+  "buttonBefore": {
+    "state": "closed",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "false",
+    "dot": false,
+    "text": "终端"
+  },
+  "opened": true,
+  "framesAfterOpen": 42,
+  "xtermMounted": true,
+  "typed": true,
+  "column1440": {
+    "terminal": {
+      "rect": {
+        "x": 882,
+        "y": 32,
+        "w": 558,
+        "h": 868
+      },
+      "tab": {
+        "text": "终端",
+        "rect": {
+          "x": 883,
+          "y": 32,
+          "w": 105,
+          "h": 36
+        }
+      },
+      "close": {
+        "aria": "关闭终端",
+        "title": "关闭终端"
+      },
+      "dir": "会话目录 /tmp/aiclient-p17d2/workspace",
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": true
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea",
+    "viewport": {
+      "w": 1440,
+      "h": 900
+    }
+  },
+  "buttonOpen": {
+    "state": "open",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "true",
+    "dot": false,
+    "text": ""
+  },
+  "termTail": "$ \r\r$ \r\r$ $ echo P1-7D-TERM-$((6*7)); pwd\r\n\rP1-7D-TERM-42\r\n/tmp/aiclient-p17d2/workspace\r\n$ ",
+  "shellsOpen": [
+    {
+      "pid": 496961,
+      "cwd": "/workspace"
+    }
+  ],
+  "shot1440": "shots/E1-terminal-1440x900.png",
+  "size1280": {
+    "requested": {
+      "width": 1280,
+      "height": 720
+    },
+    "pageError": "'Browser.getWindowForTarget' wasn't found (-32601)",
+    "browserError": "'Browser.getWindowForTarget' wasn't found",
+    "via": "window.resizeTo (the real window)",
+    "viewport": {
+      "innerWidth": 1280,
+      "innerHeight": 720,
+      "outerWidth": 1280,
+      "outerHeight": 720,
+      "dpr": 1
+    }
+  },
+  "column1280": {
+    "terminal": {
+      "rect": {
+        "x": 760,
+        "y": 32,
+        "w": 520,
+        "h": 688
+      },
+      "tab": {
+        "text": "终端",
+        "rect": {
+          "x": 761,
+          "y": 32,
+          "w": 105,
+          "h": 36
+        }
+      },
+      "close": {
+        "aria": "关闭终端",
+        "title": "关闭终端"
+      },
+      "dir": "会话目录 /tmp/aiclient-p17d2/workspace",
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": true
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea",
+    "viewport": {
+      "w": 1280,
+      "h": 720
+    }
+  },
+  "shot1280": "shots/E1-terminal-1280x720.png",
+  "back": {
+    "innerWidth": 1400,
+    "innerHeight": 900,
+    "outerWidth": 1400,
+    "outerHeight": 900,
+    "dpr": 1
+  }
+}

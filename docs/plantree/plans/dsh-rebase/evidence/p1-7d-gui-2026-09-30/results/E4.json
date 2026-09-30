@@ -1,0 +1,160 @@
+{
+  "open": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "already": true
+  },
+  "steps": [
+    {
+      "name": "1-terminal",
+      "terminal": true,
+      "review": false,
+      "editor": false,
+      "editorTabTexts": [],
+      "geometry": {
+        "terminalBar": {
+          "x": 863,
+          "y": 32,
+          "w": 537,
+          "h": 40
+        },
+        "terminalPathRow": {
+          "x": 863,
+          "y": 72,
+          "w": 537,
+          "h": 30
+        },
+        "editorBar": null,
+        "editorPathRow": null,
+        "reviewHead": null
+      },
+      "filesButtonInTerminalBar": false,
+      "terminalButton": "open",
+      "shot": "shots/E4-1-terminal.png"
+    },
+    {
+      "name": "2-file-opened-terminal-steps-back",
+      "terminal": false,
+      "review": false,
+      "editor": true,
+      "editorTabTexts": ["README.md"],
+      "geometry": {
+        "terminalBar": null,
+        "terminalPathRow": null,
+        "editorBar": {
+          "x": 863,
+          "y": 32,
+          "w": 443,
+          "h": 40
+        },
+        "editorPathRow": null,
+        "reviewHead": null
+      },
+      "filesButtonInTerminalBar": true,
+      "terminalButton": "hidden",
+      "shot": "shots/E4-2-file-opened-terminal-steps-back.png"
+    },
+    {
+      "name": "3-review-on-top",
+      "terminal": false,
+      "review": true,
+      "editor": false,
+      "editorTabTexts": [],
+      "geometry": {
+        "terminalBar": null,
+        "terminalPathRow": null,
+        "editorBar": null,
+        "editorPathRow": null,
+        "reviewHead": {
+          "x": 863,
+          "y": 32,
+          "w": 537,
+          "h": 36
+        }
+      },
+      "filesButtonInTerminalBar": true,
+      "terminalButton": "hidden",
+      "shot": "shots/E4-3-review-on-top.png"
+    },
+    {
+      "name": "4-review-closed-files-shown",
+      "terminal": false,
+      "review": false,
+      "editor": true,
+      "editorTabTexts": ["README.md"],
+      "geometry": {
+        "terminalBar": null,
+        "terminalPathRow": null,
+        "editorBar": {
+          "x": 863,
+          "y": 32,
+          "w": 443,
+          "h": 40
+        },
+        "editorPathRow": null,
+        "reviewHead": null
+      },
+      "filesButtonInTerminalBar": true,
+      "terminalButton": "hidden",
+      "shot": "shots/E4-4-review-closed-files-shown.png"
+    },
+    {
+      "name": "5-terminal-front-over-files",
+      "terminal": true,
+      "review": false,
+      "editor": false,
+      "editorTabTexts": [],
+      "geometry": {
+        "terminalBar": {
+          "x": 863,
+          "y": 32,
+          "w": 537,
+          "h": 40
+        },
+        "terminalPathRow": {
+          "x": 863,
+          "y": 72,
+          "w": 537,
+          "h": 30
+        },
+        "editorBar": null,
+        "editorPathRow": null,
+        "reviewHead": null
+      },
+      "filesButtonInTerminalBar": true,
+      "terminalButton": "open",
+      "shot": "shots/E4-5-terminal-front-over-files.png"
+    },
+    {
+      "name": "6-terminal-closed-files-back",
+      "terminal": false,
+      "review": false,
+      "editor": true,
+      "editorTabTexts": ["README.md"],
+      "geometry": {
+        "terminalBar": null,
+        "terminalPathRow": null,
+        "editorBar": {
+          "x": 863,
+          "y": 32,
+          "w": 443,
+          "h": 40
+        },
+        "editorPathRow": null,
+        "reviewHead": null
+      },
+      "filesButtonInTerminalBar": false,
+      "terminalButton": "closed",
+      "shot": "shots/E4-6-terminal-closed-files-back.png"
+    }
+  ],
+  "fileRail": true,
+  "treeItems": ["SPAN  README.md"],
+  "fileClicked": true,
+  "chatRail": true,
+  "reviewClicked": true,
+  "reviewClosed": true,
+  "front": true,
+  "closeX": true,
+  "shells": []
+}

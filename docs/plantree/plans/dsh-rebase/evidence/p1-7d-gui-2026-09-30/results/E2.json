@@ -1,0 +1,48 @@
+{
+  "created": {
+    "id": "session-1790739995659-qyz7hy2",
+    "unbound": false,
+    "workspaceId": ""
+  },
+  "button": {
+    "state": "unavailable",
+    "title": "会话未绑定目录，无法打开终端",
+    "aria": "会话未绑定目录，无法打开终端",
+    "wrapperTitle": "会话未绑定目录，无法打开终端",
+    "disabled": true,
+    "pressed": "false",
+    "dot": false,
+    "text": ""
+  },
+  "clicked": false,
+  "column": {
+    "terminal": {
+      "rect": {
+        "x": 862,
+        "y": 32,
+        "w": 538,
+        "h": 868
+      },
+      "tab": null,
+      "close": null,
+      "dir": null,
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": false
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": false,
+    "activeElement": "BODY.bg-background text-foreground antialiase",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "shot": "shots/E2-unbound-terminal-disabled.png"
+}

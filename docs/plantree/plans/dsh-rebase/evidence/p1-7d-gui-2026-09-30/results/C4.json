@@ -1,0 +1,246 @@
+{
+  "sid": "session-1790737143345-a5hafqq",
+  "gear": "执行 · 全自动",
+  "emptyWindow": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 670,
+      "right": 1400,
+      "bottom": 738
+    },
+    "jobs": null,
+    "agents": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 127,
+        "right": 1388,
+        "bottom": 203
+      },
+      "dragged": null,
+      "text": "子代理 | 当前没有子代理",
+      "rows": [],
+      "output": [],
+      "header": ["关闭"]
+    },
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 775,
+      "w": 702,
+      "h": 56,
+      "right": 1213,
+      "bottom": 831
+    }
+  },
+  "shotEmpty": "shots/C4-agents-window-empty.png",
+  "trace": [
+    {
+      "dt": 101,
+      "status": "idle",
+      "badge": null,
+      "rows": []
+    },
+    {
+      "dt": 914,
+      "status": "idle",
+      "badge": "1",
+      "rows": ["running | 子代理 | · | Continuable probe | 0:00 | 打断 | 定位 | 打断,定位"]
+    },
+    {
+      "dt": 2050,
+      "status": "idle",
+      "badge": null,
+      "rows": ["running | 子代理 | · | Continuable probe | 0:00 | 打断 | 定位 | 打断,定位"]
+    },
+    {
+      "dt": 2163,
+      "status": "idle",
+      "badge": "1",
+      "rows": ["running | 子代理 | · | Continuable probe | 0:00 | 打断 | 定位 | 打断,定位"]
+    },
+    {
+      "dt": 3093,
+      "status": "idle",
+      "badge": null,
+      "rows": ["running | 子代理 | · | Continuable probe | 0:00 | 打断 | 定位 | 打断,定位"]
+    },
+    {
+      "dt": 3209,
+      "status": "idle",
+      "badge": null,
+      "rows": [
+        "completed | 子代理 | · | Continuable probe | 0:00 | 144 tokens · 0 次调用 | 定位 | 定位"
+      ]
+    }
+  ],
+  "runningShots": {
+    "running": "shots/C4-subagent-running.png"
+  },
+  "windowDone": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704,
+      "right": 1400,
+      "bottom": 772
+    },
+    "jobs": null,
+    "agents": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 118,
+        "right": 1388,
+        "bottom": 194
+      },
+      "dragged": null,
+      "text": "子代理 | 共 1 个 | 子代理 | · | Continuable probe | 0:00 | 144 tokens · 0 次调用 | 定位",
+      "rows": [
+        {
+          "status": "completed",
+          "text": "子代理 | · | Continuable probe | 0:00 | 144 tokens · 0 次调用 | 定位",
+          "buttons": ["定位"]
+        }
+      ],
+      "output": [],
+      "header": ["关闭"]
+    },
+    "goalBar": null,
+    "todoCard": null,
+    "composer": {
+      "x": 511,
+      "y": 781,
+      "w": 702,
+      "h": 26,
+      "right": 1213,
+      "bottom": 807
+    }
+  },
+  "barDone": {
+    "bar": {
+      "x": 324,
+      "y": 32,
+      "w": 1076,
+      "h": 36
+    },
+    "buttons": [
+      {
+        "key": null,
+        "text": "会话分支",
+        "title": "会话分支",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 950,
+          "y": 36,
+          "w": 91,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "审阅",
+        "title": "审阅",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1049,
+          "y": 36,
+          "w": 62,
+          "h": 28
+        }
+      },
+      {
+        "key": null,
+        "text": "",
+        "title": "新建对话",
+        "pressed": null,
+        "disabled": false,
+        "labelVisible": null,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1119,
+          "y": 38,
+          "w": 24,
+          "h": 24
+        }
+      },
+      {
+        "key": "closed",
+        "text": "终端",
+        "title": "终端",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1160,
+          "y": 38,
+          "w": 62,
+          "h": 24
+        }
+      },
+      {
+        "key": "jobs",
+        "text": "后台任务",
+        "title": "后台任务",
+        "pressed": "false",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1224,
+          "y": 38,
+          "w": 90,
+          "h": 24
+        }
+      },
+      {
+        "key": "agents",
+        "text": "子代理",
+        "title": "子代理",
+        "pressed": "true",
+        "disabled": false,
+        "labelVisible": true,
+        "badge": null,
+        "dot": false,
+        "rect": {
+          "x": 1316,
+          "y": 38,
+          "w": 76,
+          "h": 24
+        }
+      }
+    ]
+  },
+  "shotDone": "shots/C4-agents-window-done.png",
+  "locate": "clicked",
+  "located": {
+    "top": 192,
+    "h": 21,
+    "bg": "oklch(0.91 0.0109 95.17)",
+    "text": "已委派\nContinuable probe"
+  },
+  "shotLocate": "shots/C4-locate.png",
+  "locatedAfter": false,
+  "laneOpen": "已委派\nContinuable probe",
+  "lane": "已委派 | Continuable probe | 回复 | Child done: the probe ran. | 续聊 | 22:59 | 回复 | Child done: the probe ran. | 状态 | Continuable probe · 0 个工具 · 144 tokens | 结果",
+  "shotLane": "shots/C4-lane-continued.png",
+  "transcript": "P1-SUBCONT: delegate to a continuable subagent.\n已工作 1 秒\n已委派\nContinuable probe\n回复\nChild done: the probe ran.\n续聊\n22:59\n回复\nChild done: the probe ran.\n状态\nContinuable probe · 0 个工具 · 144 tokens\n结果\n最终输出\nDelegated; the subagent reports back when it is done.\n✻ 完成于 22:59 · 1 次工具调用\n子代理已完成，自动继续 · Background subagent ad8b94d4-effb-4532-91f2-4676a03387d2 finished and will do no further work unless you send it more.\n22:59\n已工作 1 秒\n最终输出\nSent the subagent one more message.\n✻ 完成于 22:59 · 1 次工具调用\n子代理已完成，自动继续 · Background subagent ad8b94d4-effb-4532-91f2-4676a03387d2 finished and will do no further work unless you send it more.\n22:59\n已工作 1 秒\n最终输出\nBoth runs of the subagent reported back.\n✻ 完成于 22:59"
+}

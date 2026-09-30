@@ -1,0 +1,885 @@
+{
+  "theme": {
+    "theme": "dark",
+    "htmlClass": "dark"
+  },
+  "shots": [
+    {
+      "suffix": "pzwuebm",
+      "name": "D5-dark-D1-tool-rows",
+      "open": {
+        "id": "session-1790738505056-pzwuebm",
+        "active": "session-1790738505056-pzwuebm"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "终端 echo \"bridge tool row ok\"; pwd; ls -a",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 notes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d796",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 *（workspace） **/",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 PERM-SECRET（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · ba",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": [
+              {
+                "label": "tool-row-job",
+                "ratio": 3.13,
+                "fg": "oklab(0.50655 0.00075696 0.0067375)",
+                "opacity": 1,
+                "bg": "rgb(23,21,21)"
+              }
+            ]
+          },
+          {
+            "text": "后台列表 全部后台任务",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "后台输出 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null
+      },
+      "file": "shots/D5-dark-D1-tool-rows.png"
+    },
+    {
+      "suffix": "pzwuebm",
+      "name": "D5-dark-D1-glob-row",
+      "open": {
+        "id": "session-1790738505056-pzwuebm",
+        "active": "session-1790738505056-pzwuebm",
+        "already": true
+      },
+      "opened": true,
+      "box": {
+        "head": "搜索\nPERM-SECRET（workspace）\nNo matches found",
+        "tail": "搜索\nPERM-SECRET（workspace）\nNo matches found",
+        "length": 42
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "终端 echo \"bridge tool row ok\"; pwd; ls -a",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 notes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d796",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 *（workspace） **/",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 PERM-SECRET（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · ba",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": [
+              {
+                "label": "tool-row-job",
+                "ratio": 3.13,
+                "fg": "oklab(0.50655 0.00075696 0.0067375)",
+                "opacity": 1,
+                "bg": "rgb(23,21,21)"
+              }
+            ]
+          },
+          {
+            "text": "后台列表 全部后台任务",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "后台输出 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null
+      },
+      "file": "shots/D5-dark-D1-glob-row.png"
+    },
+    {
+      "suffix": "9bnyyg3",
+      "name": "D5-dark-D2-exit-code",
+      "open": {
+        "id": "session-1790738611838-9bnyyg3",
+        "active": "session-1790738611838-9bnyyg3"
+      },
+      "opened": true,
+      "box": {
+        "head": "读取\nmarker.txt ./\n读取\nedit-target.txt ./\n编辑\nedit-target.txt ./\n读取\nedit-target.txt ./\n编辑\ndsh-written-d2.txt ./\n读取\ndsh-written-d2.txt ./\n搜索\nD2MARK（workspace）\n搜索\n*.txt（workspace）\n终端\ncat './marker.txt'\n· 退出码 1\n终端\nprintf '%s\\n' 'D2MARK SHELL-d2' > './she…\n终端\nfor i in $(seq 1 4000); do echo \"spill-l…\n· 已允许\n# Print a large output\nfor i in $(seq 1 4000); do echo \"spill-line $i d2\"; done\nll-line 612 d2\nspill-line 613 d2\nspill-line 614 d2\nspill-line 615 d2\nspill-line 616 d2\nspill-line 617 d2\nspill-line 618 ",
+        "tail": "output: /tmp/dsh-subprocess-L9zNep/dsh-subprocess-489200-1-4372587631a0-stdout.log]\n\n(Omitted 14376 bytes. Full formatted result stored at: /tmp/dsh-spill-HaYGrV/session-702ef23f2da6/a97e6bf7e26e-bash.txt. Use read with offset/limit, or grep this path to search within it.)\n读取\nshell-written-d2.txt ./",
+        "length": 50338
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "读取 marker.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.1,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.1,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "编辑 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.1,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.1,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "编辑 dsh-written-d2.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 dsh-written-d2.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 D2MARK（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "搜索 *.txt（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 cat './marker.txt' · 退出码 1",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": [
+              {
+                "label": "tool-row-exit",
+                "ratio": 3.13,
+                "fg": "oklab(0.50655 0.00075696 0.0067375)",
+                "opacity": 1,
+                "bg": "rgb(23,21,21)"
+              }
+            ]
+          },
+          {
+            "text": "终端 printf '%s\\n' 'D2MARK SHELL-d2' > './she…",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "读取 shell-written-d2.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null
+      },
+      "file": "shots/D5-dark-D2-exit-code.png"
+    },
+    {
+      "suffix": "7gel5pc",
+      "name": "D5-dark-D2-stopped",
+      "open": {
+        "id": "session-1790737301604-7gel5pc",
+        "active": "session-1790737301604-7gel5pc"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "终端 echo slow tool started; sleep 5; echo sl…",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 echo \"sleep-tool c5 started\"; sleep 40; … · 已停止",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": [
+              {
+                "label": "tool-row-outcome",
+                "ratio": 3.13,
+                "fg": "oklab(0.50655 0.00075696 0.0067375)",
+                "opacity": 1,
+                "bg": "rgb(23,21,21)"
+              }
+            ]
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null
+      },
+      "file": "shots/D5-dark-D2-stopped.png"
+    },
+    {
+      "suffix": "jlaku4o",
+      "name": "D5-dark-D3-todo",
+      "open": {
+        "id": "session-1790738705807-jlaku4o",
+        "active": "session-1790738705807-jlaku4o"
+      },
+      "opened": false,
+      "box": null,
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "设定目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, ",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "规划 0/2 已完成",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 echo round-1 > progress.txt && cat progr…",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "终端 cat progress.txt",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "规划 2/2 已完成",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "查看目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, ",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          },
+          {
+            "text": "完成目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, ",
+            "icon": {
+              "label": "icon",
+              "ratio": 2.45,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 0.8,
+              "bg": "rgb(23,21,21)"
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)"
+            },
+            "trailing": []
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null
+      },
+      "file": "shots/D5-dark-D3-todo.png"
+    },
+    {
+      "suffix": "nirnfis",
+      "name": "D5-dark-D4-card-key",
+      "open": {
+        "id": "session-1790738742895-nirnfis",
+        "active": "session-1790738742895-nirnfis"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [],
+        "cardTitle": {
+          "label": "card title",
+          "ratio": 3.84,
+          "fg": "oklch(0.597 0.1692 28.38)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        },
+        "cardBody": {
+          "label": "card body",
+          "ratio": 6.12,
+          "fg": "oklch(0.6956 0.0103 93.62)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        }
+      },
+      "file": "shots/D5-dark-D4-card-key.png"
+    },
+    {
+      "suffix": "hgyftr2",
+      "name": "D5-dark-D4-card-server-error",
+      "open": {
+        "id": "session-1790738747470-hgyftr2",
+        "active": "session-1790738747470-hgyftr2"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [],
+        "cardTitle": {
+          "label": "card title",
+          "ratio": 3.84,
+          "fg": "oklch(0.597 0.1692 28.38)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        },
+        "cardBody": {
+          "label": "card body",
+          "ratio": 6.12,
+          "fg": "oklch(0.6956 0.0103 93.62)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        }
+      },
+      "file": "shots/D5-dark-D4-card-server-error.png"
+    },
+    {
+      "suffix": "hgyftr2",
+      "name": "D5-dark-D4-card-rate-limited-synthetic",
+      "open": {
+        "id": "session-1790738747470-hgyftr2",
+        "active": "session-1790738747470-hgyftr2",
+        "already": true
+      },
+      "synthetic": {
+        "runtimeError": "500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}",
+        "runtimeErrorCode": "PROVIDER_ERROR"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [],
+        "cardTitle": {
+          "label": "card title",
+          "ratio": 3.84,
+          "fg": "oklch(0.597 0.1692 28.38)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        },
+        "cardBody": {
+          "label": "card body",
+          "ratio": 6.12,
+          "fg": "oklch(0.6956 0.0103 93.62)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        }
+      },
+      "file": "shots/D5-dark-D4-card-rate-limited-synthetic.png",
+      "restored": {
+        "runtimeErrorCode": "PROVIDER_ERROR"
+      }
+    },
+    {
+      "suffix": "tv4z4qd",
+      "name": "D5-dark-D4-card-network",
+      "open": {
+        "id": "session-1790738777161-tv4z4qd",
+        "active": "session-1790738777161-tv4z4qd"
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [],
+        "cardTitle": {
+          "label": "card title",
+          "ratio": 3.84,
+          "fg": "oklch(0.597 0.1692 28.38)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        },
+        "cardBody": {
+          "label": "card body",
+          "ratio": 6.12,
+          "fg": "oklch(0.6956 0.0103 93.62)",
+          "opacity": 1,
+          "bg": "rgb(41,27,26)"
+        }
+      },
+      "file": "shots/D5-dark-D4-card-network.png"
+    }
+  ],
+  "back": {
+    "theme": "light",
+    "htmlClass": ""
+  }
+}

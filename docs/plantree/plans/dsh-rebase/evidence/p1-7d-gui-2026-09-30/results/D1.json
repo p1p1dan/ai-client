@@ -1,0 +1,277 @@
+{
+  "sid": "session-1790738505056-pzwuebm",
+  "gear": "执行 · 全自动",
+  "turns": {
+    "tool": {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 83,
+          "status": "idle"
+        },
+        {
+          "dt": 755,
+          "status": "running"
+        },
+        {
+          "dt": 1158,
+          "status": "idle"
+        }
+      ],
+      "cards": []
+    },
+    "fileread": {
+      "settled": false,
+      "neverBusy": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 4,
+          "status": "idle"
+        }
+      ],
+      "cards": []
+    },
+    "search": {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 442,
+          "status": "running"
+        },
+        {
+          "dt": 845,
+          "status": "idle"
+        }
+      ],
+      "cards": []
+    }
+  },
+  "paste": {
+    "defaultPrevented": true
+  },
+  "shotJobsLive": "shots/D1-jobs-row-live.png",
+  "jobsLive": [
+    {
+      "dt": 297,
+      "key": "[\"运行中 for i in 1 2 3; do echo tick-$i; sleep 1…\"]"
+    },
+    {
+      "dt": 539,
+      "card": "P0-TOOL: list the workspace. | 已工作 1 秒 | 最终输出 | Tool row finished: the workspace listing is above. | ✻ 完成于 23:21 · 1 次工具调用 | notes.txt | P1-FILEREAD: read the attached notes. | 已工作 1 秒 | 最终输出 | P1-FILEREAD read: FILE-MARKER-NOTES. | ✻ 完成于 23:21 · 1 次工具调用 | P1-PERM-SEARCH: glob and grep the workspace. | 已工作 1 秒 | 最终输出 | P1-PERM-SEARCH finished. | ✻ 完成于 23:22 · 2 次工具调用 | P0-JOBS: run a background ti"
+    },
+    {
+      "dt": 543,
+      "key": "[\"运行中 for i in 1 2 3; do echo tick-$i; sleep 1…\"]"
+    },
+    {
+      "dt": 747,
+      "key": "[\"终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · bash-9\",\"后台列表 全部后台任务\",\"等待中 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done\"]"
+    },
+    {
+      "dt": 1566,
+      "key": "[\"终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · bash-9\",\"后台列表 全部后台任务\",\"等待中 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done · 1s\"]"
+    },
+    {
+      "dt": 2998,
+      "key": "[\"终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · bash-9\",\"后台列表 全部后台任务\",\"等待中 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done · 2s\"]"
+    }
+  ],
+  "rows": [
+    {
+      "text": "终端 echo \"bridge tool row ok\"; pwd; ls -a",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "读取 notes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d79698f0c1d4d96f104fd/",
+      "icon": "lucide-file-text",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "搜索 *（workspace） **/",
+      "icon": "lucide-search",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "搜索 PERM-SECRET（workspace）",
+      "icon": "lucide-search",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · bash-9",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": ["tool-row-job=· 后台 · bash-9"]
+    },
+    {
+      "text": "后台列表 全部后台任务",
+      "icon": "lucide-layers",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "后台输出 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done",
+      "icon": "lucide-layers",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    }
+  ],
+  "contrast": {
+    "theme": "",
+    "rows": [
+      {
+        "text": "终端 echo \"bridge tool row ok\"; pwd; ls -a",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "读取 notes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d796",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "搜索 *（workspace） **/",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "搜索 PERM-SECRET（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "终端 for i in 1 2 3; do echo tick-$i; sleep 1… · 已允许 · 后台 · ba",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": [
+          {
+            "label": "tool-row-job",
+            "ratio": 3.06,
+            "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+            "opacity": 1,
+            "bg": "rgb(255,253,244)"
+          }
+        ]
+      },
+      {
+        "text": "后台列表 全部后台任务",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "后台输出 bash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      }
+    ],
+    "cardTitle": null,
+    "cardBody": null
+  },
+  "shotTop": "shots/D1-tool-rows-top.png",
+  "shotBottom": "shots/D1-tool-rows-bottom.png",
+  "transcript": "P0-TOOL: list the workspace.\n已工作 1 秒\n终端\necho \"bridge tool row ok\"; pwd; ls -a\n最终输出\nTool row finished: the workspace listing is above.\n✻ 完成于 23:21 · 1 次工具调用\nnotes.txt\nP1-FILEREAD: read the attached notes.\n已工作 1 秒\n读取\nnotes.txt d0dcf05b445978e538b07399f3c729daf67fe393be5d79698f0c1d4d96f104fd/\n最终输出\nP1-FILEREAD read: FILE-MARKER-NOTES.\n✻ 完成于 23:21 · 1 次工具调用\nP1-PERM-SEARCH: glob and grep the workspace.\n已工作 1 秒\n搜索\n*（workspace） **/\n搜索\nPERM-SECRET（workspace）\n最终输出\nP1-PERM-SEARCH finished.\n✻ 完成于 23:22 · 2 次工具调用\nP0-JOBS: run a background ticker and collect it.\n已工作 4 秒\n终端\nfor i in 1 2 3; do echo tick-$i; sleep 1…\n· 已允许\n· 后台 · bash-9\n后台列表\n全部后台任务\n后台输出\nbash-9 · for i in 1 2 3; do echo tick-$i; sleep 1; done\n最终输出\nBackground job collected.\n✻ 完成于 23:22 · 3 次工具调用"
+}

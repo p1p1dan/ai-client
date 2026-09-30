@@ -1,0 +1,25 @@
+{
+  "suffix": "9bnyyg3",
+  "needle": "cat './marker.txt'",
+  "open": {
+    "id": "session-1790738611838-9bnyyg3",
+    "active": "session-1790738611838-9bnyyg3",
+    "already": true
+  },
+  "clicked": true,
+  "box": {
+    "head": "终端\ncat './marker.txt'\n· 退出码 1\n# Read the marker file\ncat './marker.txt'\n[stderr]\ncat: ./marker.txt: No such file or directory\n[exit code: 1]",
+    "tail": "终端\ncat './marker.txt'\n· 退出码 1\n# Read the marker file\ncat './marker.txt'\n[stderr]\ncat: ./marker.txt: No such file or directory\n[exit code: 1]",
+    "length": 140
+  },
+  "row": [
+    {
+      "text": "终端 cat './marker.txt' · 退出码 1",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": ["tool-row-exit=· 退出码 1"]
+    }
+  ],
+  "shot": "shots/D2-shell-exit-code.png"
+}

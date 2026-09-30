@@ -1,0 +1,356 @@
+{
+  "sid": "session-1790738611838-9bnyyg3",
+  "gear": "执行 · 全自动",
+  "turn": {
+    "settled": true,
+    "status": "idle",
+    "statuses": [
+      {
+        "dt": 449,
+        "status": "idle"
+      },
+      {
+        "dt": 952,
+        "status": "running"
+      },
+      {
+        "dt": 1654,
+        "status": "waiting_permission"
+      },
+      {
+        "dt": 2061,
+        "status": "idle"
+      }
+    ],
+    "cards": [
+      {
+        "dt": 1657,
+        "card": "P0-FS {\"dir\":\".\",\"marker\":\"D2MARK\",\"token\":\"d2\",\"tag\":\"d2\",\"shell\":\"bash\"} walk the file tools. | ✻ 工作中 1 秒 · 运行中 | 读取 | marker.txt ./ | 读取 | edit-target.txt ./ | 编辑 | edit-target.txt ./ | 读取 | edit-target.txt ./ | 编辑 | dsh-written-d2.txt ./ | 读取 | dsh-written-d2.txt ./ | 搜索 | D2MARK（workspace） | 搜索 | *.txt（workspace） | 终端 | cat './marker.txt' | · 退出码 1 | 终端 | printf '%s\\n' 'D2MARK SHELL-d2' > './"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "text": "读取 marker.txt ./",
+      "icon": "lucide-file-text",
+      "color": "oklch(0.5042 0.1648 27.84)",
+      "red": true,
+      "slots": []
+    },
+    {
+      "text": "读取 edit-target.txt ./",
+      "icon": "lucide-file-text",
+      "color": "oklch(0.5042 0.1648 27.84)",
+      "red": true,
+      "slots": []
+    },
+    {
+      "text": "编辑 edit-target.txt ./",
+      "icon": "lucide-pencil-line",
+      "color": "oklch(0.5042 0.1648 27.84)",
+      "red": true,
+      "slots": []
+    },
+    {
+      "text": "读取 edit-target.txt ./",
+      "icon": "lucide-file-text",
+      "color": "oklch(0.5042 0.1648 27.84)",
+      "red": true,
+      "slots": []
+    },
+    {
+      "text": "编辑 dsh-written-d2.txt ./",
+      "icon": "lucide-pencil-line",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "读取 dsh-written-d2.txt ./",
+      "icon": "lucide-file-text",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "搜索 D2MARK（workspace）",
+      "icon": "lucide-search",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "搜索 *.txt（workspace）",
+      "icon": "lucide-search",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "终端 cat './marker.txt' · 退出码 1",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": ["tool-row-exit=· 退出码 1"]
+    },
+    {
+      "text": "终端 printf '%s\\n' 'D2MARK SHELL-d2' > './she…",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "读取 shell-written-d2.txt ./",
+      "icon": "lucide-file-text",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    }
+  ],
+  "contrast": {
+    "theme": "",
+    "rows": [
+      {
+        "text": "读取 marker.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 4.33,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "读取 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 4.33,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "编辑 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 4.33,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "读取 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 4.33,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "编辑 dsh-written-d2.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "读取 dsh-written-d2.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "搜索 D2MARK（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "搜索 *.txt（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "终端 cat './marker.txt' · 退出码 1",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": [
+          {
+            "label": "tool-row-exit",
+            "ratio": 3.06,
+            "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+            "opacity": 1,
+            "bg": "rgb(255,253,244)"
+          }
+        ]
+      },
+      {
+        "text": "终端 printf '%s\\n' 'D2MARK SHELL-d2' > './she…",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      },
+      {
+        "text": "读取 shell-written-d2.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 2.35,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 0.8,
+          "bg": "rgb(255,253,244)"
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)"
+        },
+        "trailing": []
+      }
+    ],
+    "cardTitle": null,
+    "cardBody": null
+  },
+  "shotRows": "shots/D2-fs-rows.png",
+  "openCat": false,
+  "catBody": null,
+  "shotExit": "shots/D2-shell-exit-code.png",
+  "openSpill": false,
+  "spillBody": null,
+  "shotSpill": "shots/D2-shell-large-output.png"
+}

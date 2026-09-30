@@ -1,0 +1,251 @@
+{
+  "sid": "session-1790737301604-7gel5pc",
+  "gear": "执行 · 全自动",
+  "slowRowSeen": true,
+  "slowClick": true,
+  "shotSlowEarly": "shots/C5-live-output-first-line.png",
+  "shotSlowLate": "shots/C5-slowtool-settled.png",
+  "slowSamples": [
+    {
+      "t": 1790737307941,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 2s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737308552,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 2s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737309064,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 3s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737310229,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 4s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737310732,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 4s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737311236,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 5s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737311740,
+      "live": {
+        "head": "实时输出",
+        "text": "slow tool started\n",
+        "atBottom": true
+      },
+      "rows": ["运行中 echo slow tool started; sleep 5; echo sl… · 5s · 2m 后转后台"]
+    },
+    {
+      "t": 1790737312243,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737312751,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737313254,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737313758,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737314261,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737314766,
+      "live": null,
+      "rows": [""]
+    },
+    {
+      "t": 1790737315807,
+      "live": null,
+      "rows": [""]
+    }
+  ],
+  "slowTurn": {
+    "settled": false,
+    "neverBusy": true,
+    "sid": "session-1790737301604-7gel5pc",
+    "status": "idle",
+    "messages": 3,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790737316314,
+        "status": "idle"
+      }
+    ]
+  },
+  "sleepClick": true,
+  "shotClock": "shots/C5-sleeptool-clock.png",
+  "clock": [
+    {
+      "t": 1790737344445,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 2s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 2s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    },
+    {
+      "t": 1790737346451,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 4s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 4s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    },
+    {
+      "t": 1790737348457,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 6s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 6s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    },
+    {
+      "t": 1790737350463,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 8s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 8s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    },
+    {
+      "t": 1790737352470,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 10s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 10s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    },
+    {
+      "t": 1790737354476,
+      "row": {
+        "text": "运行中 echo \"sleep-tool c5 started\"; sleep 40; … · 12s · 2m 后转后台",
+        "icon": "lucide-square-terminal",
+        "color": "oklab(0.6583 -0.000591029 0.00763034)",
+        "red": false,
+        "slots": ["tool-row-clock=· 12s · 2m 后转后台"]
+      },
+      "live": {
+        "head": "实时输出",
+        "text": "sleep-tool c5 started\n",
+        "atBottom": true
+      }
+    }
+  ],
+  "stopClicked": true,
+  "stopTurn": {
+    "settled": true,
+    "sid": "session-1790737301604-7gel5pc",
+    "status": "idle",
+    "messages": 5,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790737355502,
+        "status": "stopping"
+      },
+      {
+        "t": 1790737356008,
+        "status": "idle"
+      }
+    ]
+  },
+  "rowsAfterStop": [
+    {
+      "text": "终端 echo slow tool started; sleep 5; echo sl…",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    },
+    {
+      "text": "终端 echo \"sleep-tool c5 started\"; sleep 40; … · 已停止",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": ["tool-row-outcome=· 已停止"]
+    }
+  ],
+  "shotStopped": "shots/D2-shell-stopped.png"
+}

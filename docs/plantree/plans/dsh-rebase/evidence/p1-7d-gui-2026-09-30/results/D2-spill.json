@@ -1,0 +1,25 @@
+{
+  "suffix": "9bnyyg3",
+  "needle": "seq 1 4000",
+  "open": {
+    "id": "session-1790738611838-9bnyyg3",
+    "active": "session-1790738611838-9bnyyg3",
+    "already": true
+  },
+  "clicked": true,
+  "box": {
+    "head": "终端\nfor i in $(seq 1 4000); do echo \"spill-l…\n· 已允许\n# Print a large output\nfor i in $(seq 1 4000); do echo \"spill-line $i d2\"; done\nll-line 612 d2\nspill-line 613 d2\nspill-line 614 d2\nspill-line 615 d2\nspill-line 616 d2\nspill-line 617 d2\nspill-line 618 d2\nspill-line 619 d2\nspill-line 620 d2\nspill-line 621 d2\nspill-line 622 d2\nspill-line 623 d2\nspill-line 624 d2\nspill-line 625 d2\nspill-line 626 d2\nspill-line 627 d2\nspill-line 628 d2\nspill-line 629 d2\nspill-line 630 d2\nspill-line 631 d2\nspill-line 6",
+    "tail": "2\n\n[output truncated; full output: /tmp/dsh-subprocess-L9zNep/dsh-subprocess-489200-1-4372587631a0-stdout.log]\n\n(Omitted 14376 bytes. Full formatted result stored at: /tmp/dsh-spill-HaYGrV/session-702ef23f2da6/a97e6bf7e26e-bash.txt. Use read with offset/limit, or grep this path to search within it.)",
+    "length": 50062
+  },
+  "row": [
+    {
+      "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+      "icon": "lucide-square-terminal",
+      "color": "oklab(0.6583 -0.000591029 0.00763034)",
+      "red": false,
+      "slots": []
+    }
+  ],
+  "shot": "shots/D2-shell-large-output.png"
+}

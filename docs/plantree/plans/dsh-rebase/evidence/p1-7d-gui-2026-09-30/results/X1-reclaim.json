@@ -1,0 +1,50 @@
+{
+  "suffix": "ym9e7z1",
+  "before": ["已工作 3 秒", "✻ 完成于 23:36"],
+  "fillers": [
+    {
+      "sid": "session-1790739478045-jsq3onq",
+      "settled": true
+    },
+    {
+      "sid": "session-1790739483896-e3z6kth",
+      "settled": true
+    },
+    {
+      "sid": "session-1790739489771-hduxl2x",
+      "settled": true
+    },
+    {
+      "sid": "session-1790739495747-wksusp0",
+      "settled": true
+    },
+    {
+      "sid": "session-1790739501435-9wnttmm",
+      "settled": true
+    },
+    {
+      "sid": "session-1790739507612-29j5s4o",
+      "settled": true
+    }
+  ],
+  "open1": {
+    "id": "session-1790739394532-ym9e7z1",
+    "active": "session-1790739394532-ym9e7z1",
+    "already": true
+  },
+  "status": {
+    "status": "disconnected",
+    "hostBound": false
+  },
+  "open2": {
+    "id": "session-1790739394532-ym9e7z1",
+    "active": "session-1790739394532-ym9e7z1"
+  },
+  "after": ["已工作"],
+  "statusAfter": {
+    "status": "disconnected",
+    "hostBound": false,
+    "keys": ["id", "sessionId", "role", "blocks"]
+  },
+  "shot": "shots/X1-work-line-after-reclaim.png"
+}

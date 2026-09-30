@@ -1,0 +1,130 @@
+{
+  "open": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "already": true
+  },
+  "sizes": [
+    {
+      "requested": [1400, 900],
+      "via": "window.resizeTo (the real window)",
+      "viewport": {
+        "innerWidth": 1400,
+        "innerHeight": 900,
+        "outerWidth": 1400,
+        "outerHeight": 900,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 538,
+        "h": 36
+      },
+      "barRight": 862,
+      "terminalColumn": {
+        "x": 862,
+        "w": 538
+      },
+      "overlap": false,
+      "buttons": [
+        {
+          "key": "审阅",
+          "labelVisible": false,
+          "right": 711
+        },
+        {
+          "key": "新建对话",
+          "labelVisible": null,
+          "right": 743
+        },
+        {
+          "key": "open",
+          "labelVisible": false,
+          "right": 790
+        },
+        {
+          "key": "jobs",
+          "labelVisible": false,
+          "right": 822
+        },
+        {
+          "key": "agents",
+          "labelVisible": false,
+          "right": 854
+        }
+      ],
+      "terminalBar": {
+        "x": 863,
+        "y": 32,
+        "w": 537,
+        "h": 40
+      },
+      "shot": "shots/E5-bar-with-right-column-1400.png"
+    },
+    {
+      "requested": [1920, 1080],
+      "via": "window.resizeTo (the real window)",
+      "viewport": {
+        "innerWidth": 1920,
+        "innerHeight": 1080,
+        "outerWidth": 1920,
+        "outerHeight": 1080,
+        "dpr": 1
+      },
+      "bar": {
+        "x": 324,
+        "y": 32,
+        "w": 798,
+        "h": 36
+      },
+      "barRight": 1122,
+      "terminalColumn": {
+        "x": 1122,
+        "w": 798
+      },
+      "overlap": false,
+      "buttons": [
+        {
+          "key": "审阅",
+          "labelVisible": true,
+          "right": 833
+        },
+        {
+          "key": "新建对话",
+          "labelVisible": null,
+          "right": 865
+        },
+        {
+          "key": "open",
+          "labelVisible": true,
+          "right": 944
+        },
+        {
+          "key": "jobs",
+          "labelVisible": true,
+          "right": 1036
+        },
+        {
+          "key": "agents",
+          "labelVisible": true,
+          "right": 1114
+        }
+      ],
+      "terminalBar": {
+        "x": 1123,
+        "y": 32,
+        "w": 797,
+        "h": 40
+      },
+      "shot": "shots/E5-bar-with-right-column-1920.png"
+    }
+  ],
+  "back": {
+    "innerWidth": 1400,
+    "innerHeight": 900,
+    "outerWidth": 1400,
+    "outerHeight": 900,
+    "dpr": 1
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "sid": "session-1790738705807-jlaku4o",
+  "gear": "执行 · 全自动",
+  "goal": "目标已完成 · 共 2 轮 · P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it 收起",
+  "allRows": [
+    "lucide-target | 设定目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+    "lucide-list-checks | 规划 0/2 已完成",
+    "lucide-square-terminal | 终端 echo round-1 > progress.txt && cat progr…",
+    "lucide-square-terminal | 终端 cat progress.txt",
+    "lucide-list-checks | 规划 2/2 已完成",
+    "lucide-target | 查看目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it",
+    "lucide-target | 完成目标 P0-GOAL-COMPLETE: write progress.txt in the workspace, then verify it"
+  ],
+  "opened": 2,
+  "bodies": [
+    "规划\n0/2 已完成\nWrite progress.txt\nVerify progress.txt",
+    "规划\n2/2 已完成\nWrite progress.txt\nVerify progress.txt"
+  ],
+  "shotTodo": "shots/D3-todo-rows-expanded.png"
+}

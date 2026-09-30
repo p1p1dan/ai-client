@@ -1,0 +1,137 @@
+{
+  "a": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "already": true
+  },
+  "shellsA": [
+    {
+      "pid": 499181,
+      "cwd": "/workspace"
+    }
+  ],
+  "layersA": [
+    {
+      "key": "/tmp/aiclient-p17d2/workspace",
+      "shown": true
+    }
+  ],
+  "b": {
+    "id": "session-1790738611838-9bnyyg3",
+    "active": "session-1790738611838-9bnyyg3",
+    "tried": 1
+  },
+  "buttonB": {
+    "state": "open",
+    "title": "终端",
+    "aria": "终端",
+    "wrapperTitle": null,
+    "disabled": false,
+    "pressed": "true",
+    "dot": false,
+    "text": ""
+  },
+  "columnB": {
+    "terminal": {
+      "rect": {
+        "x": 862,
+        "y": 32,
+        "w": 538,
+        "h": 868
+      },
+      "tab": {
+        "text": "终端",
+        "rect": {
+          "x": 863,
+          "y": 32,
+          "w": 105,
+          "h": 36
+        }
+      },
+      "close": {
+        "aria": "关闭终端",
+        "title": "关闭终端"
+      },
+      "dir": "会话目录 /tmp/aiclient-p17d2/workspace",
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": true
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "shellsB": [
+    {
+      "pid": 499181,
+      "cwd": "/workspace"
+    }
+  ],
+  "tailB": "BEFORE-HIDE\r\n$ echo E3-AFTER-SHOW $$\r\n\rE3-AFTER-SHOW 496961\r\n$ exit\r\n\rlogout\r\n$ $ $ $ $ \r\r$ \r\r$ \r\r$ \r\r$ echo E6-FROM-A pid=$$\r\n\rE6-FROM-A pid=499181\r\n$ echo E6-FROM-B pid=$$\r\n\rE6-FROM-B pid=499181\r\n$ ",
+  "shotB": "shots/E6-same-shell-in-chat-b.png",
+  "a2": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "tried": 2
+  },
+  "focusAfterSwitchBack": true,
+  "activeAfterSwitchBack": "TEXTAREA.xterm-helper-textarea",
+  "searchAfterCtrlF": [],
+  "globalSearchOpen": [],
+  "shotSearch": "(deleted: no search bar opened; see E6-keys.json and shots/E6-ctrl-f-no-search-bar.png)",
+  "searchAfterEsc": [],
+  "columnAfterEsc": {
+    "terminal": {
+      "rect": {
+        "x": 862,
+        "y": 32,
+        "w": 538,
+        "h": 868
+      },
+      "tab": {
+        "text": "终端",
+        "rect": {
+          "x": 863,
+          "y": 32,
+          "w": 105,
+          "h": 36
+        }
+      },
+      "close": {
+        "aria": "关闭终端",
+        "title": "关闭终端"
+      },
+      "dir": "会话目录 /tmp/aiclient-p17d2/workspace",
+      "xterm": true,
+      "layers": [
+        {
+          "key": "/tmp/aiclient-p17d2/workspace",
+          "shown": true
+        }
+      ],
+      "search": []
+    },
+    "editorTabs": [],
+    "review": null,
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea",
+    "viewport": {
+      "w": 1400,
+      "h": 900
+    }
+  },
+  "tailAfterEsc": "$ exit\r\n\rlogout\r\n$ $ $ $ $ \r\r$ \r\r$ \r\r$ \r\r$ echo E6-FROM-A pid=$$\r\n\rE6-FROM-A pid=499181\r\n$ echo E6-FROM-B pid=$$\r\n\rE6-FROM-B pid=499181\r\n$ \r\r$ \r\r$ \u0007at -v\r\n\r^[\r\n",
+  "escReachedShell": true,
+  "shotEsc": "(superseded by E6-keys.json: this run's Esc reached bash as Meta, see its tail)",
+  "tailEnd": " 'at' not found, but can be installed with:\r\nsudo apt install at\r\n$ \u0007\r\r\nlogout\r\n"
+}

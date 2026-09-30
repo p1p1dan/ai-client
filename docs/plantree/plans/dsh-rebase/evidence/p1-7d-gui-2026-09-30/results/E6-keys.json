@@ -1,0 +1,37 @@
+{
+  "open": {
+    "id": "session-1790739656944-i7qgryl",
+    "active": "session-1790739656944-i7qgryl",
+    "already": true
+  },
+  "ctrlF": {
+    "listeners": [
+      {
+        "key": "f",
+        "ctrl": true,
+        "phase": 1,
+        "prevented": false
+      },
+      {
+        "capture": "f",
+        "ctrl": true
+      }
+    ],
+    "ptyEcho": "\"\\u0007\"",
+    "searchInputs": []
+  },
+  "shotCtrlF": "shots/E6-ctrl-f-no-search-bar.png",
+  "esc": {
+    "ptyEcho": "\"^[\\r\\n^[\\r\\n\"",
+    "column": "terminal still shown",
+    "button": "open",
+    "reachedCat": true
+  },
+  "shotEsc": "shots/E6-esc-reaches-shell.png",
+  "shells": [
+    {
+      "pid": 499343,
+      "cwd": "/workspace"
+    }
+  ]
+}
