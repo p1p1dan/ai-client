@@ -1,3 +1,5 @@
+import { CONTEXT_SUMMARY_TITLE } from '@shared/dshHistory/types';
+import type { Translate } from '@shared/i18n';
 import type { TurnOrigin } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
 
@@ -87,4 +89,19 @@ export function autoTurnHeadView(message: ChatMessage | null): AutoTurnHeadView 
       message.origin.kind === 'agent-message' &&
       (detail.includes('\n') || detail.length > NOTICE_LINE_CHARS),
   };
+}
+
+/**
+ * dsh-rebase P1-7e (decision 144; decision 140 rule 16 left it here): a
+ * context summary's text opens with `CONTEXT_SUMMARY_TITLE`, in English
+ * because the row is projected transcript data. Shown, that title follows the
+ * UI language; the summary after it is the model's own text and stays as it
+ * is. Text that does not open with the title as a whole word comes back
+ * untouched, so this is safe on any string the caller is unsure about.
+ */
+export function localizeContextSummaryTitle(text: string, t: Translate): string {
+  if (!text.startsWith(CONTEXT_SUMMARY_TITLE)) return text;
+  const rest = text.slice(CONTEXT_SUMMARY_TITLE.length);
+  if (rest !== '' && !/^\s/.test(rest)) return text;
+  return `${t(CONTEXT_SUMMARY_TITLE)}${rest}`;
 }

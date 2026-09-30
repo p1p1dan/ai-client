@@ -383,6 +383,59 @@ it('renders the frozen question card in Chinese — answered and skipped headers
   }
 });
 
+it('tells a stopped question from a skipped one, and lists a multi-select answer (decision 144)', async () => {
+  const stopped = {
+    id: 'q4',
+    type: 'question',
+    questionId: 'q4',
+    resolved: true,
+    questionOutcome: 'cancelled',
+    questionStopped: true,
+    questions: [{ question: '要先跑哪一套测试？', options: [] }],
+  } as unknown as ChatBlock;
+  const picked = {
+    id: 'q5',
+    type: 'question',
+    questionId: 'q5',
+    resolved: true,
+    questionOutcome: 'answered',
+    questions: [
+      {
+        id: 'checks',
+        question: '跑哪些检查？',
+        multiSelect: true,
+        options: [{ label: 'tsc' }, { label: 'smoke, then record' }],
+      },
+    ],
+    questionAnswers: { checks: 'tsc, smoke, then record, typed, note' },
+  } as unknown as ChatBlock;
+  const { container, root } = mount();
+  try {
+    await act(async () =>
+      root.render(
+        createElement(
+          Fragment,
+          null,
+          createElement(QuestionCard, { key: 's', variant: 'frozen', block: stopped }),
+          createElement(QuestionCard, { key: 'p', variant: 'frozen', block: picked })
+        )
+      )
+    );
+    const text = container.textContent ?? '';
+    expect(text).toContain('提问已停止');
+    expect(text).toContain('已停止');
+    expect(text).not.toContain('已跳过');
+    // One line per pick; the label that holds a comma stays whole, and the
+    // Other text is marked as such.
+    const items = [...container.querySelectorAll('li')].map((node) => node.textContent);
+    expect(items).toEqual(['tsc', 'smoke, then record', '其他：typed, note']);
+    expect(text).not.toMatch(/Questions stopped|Stopped|Other:/);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+  }
+});
+
 /**
  * T062 round-2 (2026-09-17 re-verification) — the send path, end to end.
  *
@@ -455,15 +508,16 @@ it('renders the model-missing recovery card in Chinese when a SEND fails (T062)'
         'This chat is pinned to a model this app does not have, so it could not be started. This app uses its own agent directory, and AI services you set up in your own Pi directory do not come across on their own.'
       )
     );
-    expect(text).toContain('到「设置 · Pi」把 AI 服务迁移或补上');
-    expect(text).toContain('去 Pi 设置补上模型');
+    // Decision 144: the settings page is 「模型」 now, and migration has its own page.
+    expect(text).toContain('到「设置 · 数据迁移」把 AI 服务迁移过来，或到「设置 · 模型」补上');
+    expect(text).toContain('打开模型设置');
     // The sentence names WHICH model, which is the one part of the raw
     // diagnostic worth keeping — losing it makes two stale chats identical.
     expect(text).toContain('vllmproxy-old/claude-does-not-exist');
     // Reverse: the dictionary KEYS are what the strip used to print.
     expect(text).not.toContain('Model is not available here');
-    expect(text).not.toContain('Migrate or add the AI service');
-    expect(text).not.toContain('Add the model in Pi settings');
+    expect(text).not.toContain('Migrate the AI service');
+    expect(text).not.toContain('Open model settings');
   } finally {
     await act(async () => root.unmount());
     container.remove();

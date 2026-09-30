@@ -1243,7 +1243,8 @@ export function composerPlaceholder(
     // something the user has to deal with first, which a legacy chat can meet
     // like any other (its workspace gone, a queue waiting).
     if (input.movesOnSend) return t(MOVES_ON_SEND_PLACEHOLDER);
-    return input.mode === 'session' ? t('Send follow-up…') : t('Message Pi…');
+    // Decision 144: no engine name (the 1.0.x prompt named Pi).
+    return input.mode === 'session' ? t('Send follow-up…') : t('Send a message…');
   }
   return t('Cannot send right now…');
 }

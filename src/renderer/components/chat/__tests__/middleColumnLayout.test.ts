@@ -1271,7 +1271,7 @@ describe('composerPlaceholder', () => {
         hasWorkspace: true,
         attachmentCount: 0,
       })
-    ).toBe('Message Pi…');
+    ).toBe('Send a message…');
   });
 
   it('reports sending / busy / no-session / no-workspace states identically in both modes', () => {
@@ -1315,7 +1315,7 @@ describe('composerPlaceholder', () => {
           unbound: true,
           attachmentCount: 0,
         })
-      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Pi…');
+      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Send a message…');
 
       // The workspace complaint is now scoped to a session that EXISTS: it
       // describes a broken binding, which a chat that was never created cannot
@@ -1537,7 +1537,7 @@ describe('composerPlaceholder', () => {
           attachmentCount: 0,
           queuedCount: 0,
         })
-      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Message Pi…');
+      ).toBe(mode === 'session' ? 'Send follow-up…' : 'Send a message…');
     }
   });
 

@@ -76,9 +76,11 @@ export function LegacyAssetsSettings({ repoPath }: { repoPath?: string }) {
               : t('Open a workspace to also check its project files.')}
           </p>
           {count > 0 && (
+            // `normal-case`: the Chinese label holds the word "Agent", which the
+            // button base would lowercase (decision 144, problem 35).
             <Button
               variant="outline"
-              className="w-fit"
+              className="w-fit normal-case"
               onClick={() => void openLegacyAgentFolder().then(setOpenError)}
             >
               <FolderOpen className="h-4 w-4" />

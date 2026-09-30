@@ -22,6 +22,7 @@
  */
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useEffect, useRef } from 'react';
+import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { addToast, toastManager } from '@/components/ui/toast';
 import { type TFunction, useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
@@ -151,7 +152,7 @@ export function useCapacityReclaimNotice(): void {
       const had = before.get(event.sessionId);
       const copy = capacityReclaimCopy(
         {
-          ...(session ? { name: session.title } : {}),
+          ...(session ? { name: displaySessionTitle(session.title, t) } : {}),
           working: had?.turn === true || had?.jobs === true,
         },
         t

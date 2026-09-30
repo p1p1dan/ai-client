@@ -95,9 +95,10 @@ export function describeHostStatus(status: HostStatus): HostStatusBannerModel | 
       return {
         tone: 'error',
         // `lastFatalError` is the Host's own text and stays verbatim; the
-        // fallback and every fixed string below are dictionary keys.
-        title: status.lastFatalError ?? 'Pi session service failed',
-        guidance: 'Press Retry to reinitialise the Pi session service',
+        // fallback and every fixed string below are dictionary keys. Decision
+        // 144: they name the chat engine, not 1.0.x's Pi session service.
+        title: status.lastFatalError ?? 'The chat engine failed',
+        guidance: 'Press Retry to restart the chat engine',
         showRetry: true,
       };
     case 'stopped':
@@ -105,14 +106,14 @@ export function describeHostStatus(status: HostStatus): HostStatusBannerModel | 
         tone: 'notice',
         // Reachable only when Main was asked and answered `stopped` — i.e. the
         // `ensureHost` prime failed or the app is shutting down.
-        title: 'Pi session service stopped',
-        guidance: 'Press Retry to initialise the Pi session service',
+        title: 'The chat engine is stopped',
+        guidance: 'Press Retry to start the chat engine',
         showRetry: true,
       };
     case 'starting':
       return {
         tone: 'notice',
-        title: 'Pi session service is starting…',
+        title: 'The chat engine is starting…',
         guidance: '',
         showRetry: false,
       };

@@ -956,6 +956,13 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
      * are sent the CLI shows the model only response — treat as exclusive.
      */
     response?: string;
+    /**
+     * dsh-rebase P1-7e problem 8 (decision 144): on a `cancelled` outcome,
+     * nobody answered — the turn was stopped or the session closed while the
+     * card was up. Absent on a Skip, which is `cancelled` too. Only the DSH
+     * bridge sends it; an older sender's cancel reads as a Skip, as before.
+     */
+    stopped?: true;
   };
 }
 

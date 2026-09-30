@@ -11,10 +11,11 @@
  * `addRepositoryEntry.ts` / `hostStatus.ts`.
  */
 
-import { translate } from '@shared/i18n';
+import { englishTranslate, type Translate, translate } from '@shared/i18n';
 import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isUsableWorkspace } from './addRepositoryEntry';
 
@@ -52,6 +53,44 @@ export interface SidebarChip {
    */
   variant: 'branch' | 'kind';
   label: string;
+}
+
+/**
+ * dsh-rebase P1-7e problem 9 (decision 144): a kind chip's `label` is an
+ * identifier (`temporary`, `temp`, `remote`), so it is shown through the
+ * catalog; a branch chip is the branch's own name and is shown as it is.
+ */
+const KIND_CHIP_KEYS: Readonly<Record<string, string>> = {
+  temporary: 'Temporary',
+  temp: 'Temporary',
+  remote: 'Remote',
+};
+
+/** The text a row's chip shows. An unknown kind label falls back to itself. */
+export function sidebarChipText(chip: SidebarChip, t: Translate = englishTranslate): string {
+  if (chip.variant !== 'kind') return chip.label;
+  const key = KIND_CHIP_KEYS[chip.label];
+  return key ? t(key) : chip.label;
+}
+
+/**
+ * Decision 144: a row as the sidebar paints it — its placeholder title
+ * (`displaySessionTitle`) and its kind chip (`sidebarChipText`) in the UI
+ * language. Derivation keeps the identifiers (ordering, search and the chip's
+ * `variant` read those); only the row component asks for this. The same row
+ * comes back when there is nothing to word.
+ */
+export function sidebarRowForDisplay(
+  row: SidebarSessionRow,
+  t: Translate = englishTranslate
+): SidebarSessionRow {
+  const title = displaySessionTitle(row.title, t);
+  let chip = row.chip;
+  if (chip) {
+    const label = sidebarChipText(chip, t);
+    if (label !== chip.label) chip = { ...chip, label };
+  }
+  return title === row.title && chip === row.chip ? row : { ...row, title, chip };
 }
 
 export interface SidebarSessionRow {

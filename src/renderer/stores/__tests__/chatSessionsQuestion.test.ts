@@ -47,7 +47,7 @@ function requestedEvent(questionId: string | undefined, sessionId = 's1'): Runti
 function resolvedEvent(
   questionId: string | undefined,
   outcome: 'answered' | 'cancelled' | 'rejected',
-  extra: { answers?: Record<string, string>; response?: string } = {},
+  extra: { answers?: Record<string, string>; response?: string; stopped?: true } = {},
   sessionId = 's1'
 ): RuntimeEvent {
   return {
@@ -164,6 +164,42 @@ describe('applyRuntimeEvent — question events (C-04)', () => {
       questionOutcome: 'cancelled',
     });
     expect(patch.pendingQuestions).toEqual([]);
+  });
+
+  it('question.resolved (cancelled, stopped) marks the block stopped, not skipped (decision 144)', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(
+      afterRequested,
+      resolvedEvent('q1', 'cancelled', { stopped: true })
+    );
+
+    const block = patch.messages?.s1
+      ?.find((item) => item.id === 'asst-1')
+      ?.blocks.find((item) => item.id === 'q1');
+    expect(block).toMatchObject({
+      resolved: true,
+      questionOutcome: 'cancelled',
+      questionStopped: true,
+    });
+    expect(patch.pendingQuestions).toEqual([]);
+  });
+
+  it('question.resolved ignores `stopped` on an answered card', () => {
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    const afterRequested = { ...baseState(), ...requested } as ChatSessionsState;
+
+    const patch = applyRuntimeEvent(
+      afterRequested,
+      resolvedEvent('q1', 'answered', { answers: { 'Which approach?': 'A' }, stopped: true })
+    );
+
+    const block = patch.messages?.s1
+      ?.find((item) => item.id === 'asst-1')
+      ?.blocks.find((item) => item.id === 'q1');
+    expect(block?.questionOutcome).toBe('answered');
+    expect(block?.questionStopped).toBeUndefined();
   });
 
   it('question.resolved (rejected) freezes the block with the rejected outcome and freeform response', () => {

@@ -72,7 +72,9 @@ export function SettingsContent({
     { id: 'terminal', icon: Terminal, label: t('Terminal') },
     { id: 'editor', icon: FileCode, label: t('Editor') },
     { id: 'git', icon: GitBranch, label: t('Git') },
-    { id: 'pi', icon: Sparkles, label: t('Pi') },
+    // Decision 144: named for what the page holds (AI services, model
+    // management, request settings), not for the 1.0.x engine. The id stays.
+    { id: 'pi', icon: Sparkles, label: t('Models') },
     { id: 'extensions', icon: Blocks, label: t('Extensions') },
     { id: 'migration', icon: ArrowRightLeft, label: t('Data migration') },
     { id: 'keybindings', icon: Keyboard, label: t('Keybindings') },

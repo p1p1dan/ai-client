@@ -11,6 +11,45 @@
  * never drift between the two call sites.
  */
 
+import { englishTranslate, type Translate } from '@shared/i18n';
+
+/**
+ * The title every "new chat" path gives a chat before its first message names
+ * it (`createChatSessionOnWorkspace`, `createUnboundChatSession`, the fork
+ * target, and — dsh-rebase decision 144 — the start-up seed). Stored as this
+ * English identifier; {@link displaySessionTitle} is how it reads on screen.
+ */
+export const NEW_CHAT_TITLE = 'New chat';
+
+/**
+ * The start-up seed's title before decision 144 (a development-era demo name).
+ * No longer written; still a placeholder, because rows carrying it may exist.
+ */
+export const LEGACY_SEED_TITLE = 'Live Agent Host';
+
+/** Id prefix of the empty chat the app opens on at start-up (`useSyncChatWorkspaceTree`). */
+export const STARTUP_SEED_ID_PREFIX = 'session-live';
+
+/**
+ * The start-up chat while it is still the untouched seed: its id and the
+ * placeholder it was created with. A row still carrying the pre-decision-144
+ * seed title counts on the title alone, as every row did before the rename.
+ */
+export function isStartupSeedSession(session: { id: string; title: string }): boolean {
+  if (session.title === LEGACY_SEED_TITLE) return true;
+  return session.id.startsWith(STARTUP_SEED_ID_PREFIX) && session.title === NEW_CHAT_TITLE;
+}
+
+/**
+ * dsh-rebase P1-7e problem 9 (decision 144): the stored placeholder titles are
+ * identifiers, not copy. The sidebar, the session bar and the dialogs that
+ * name a chat show them in the UI language; anything else — a derived or a
+ * user-given title — is printed as it is.
+ */
+export function displaySessionTitle(title: string, t: Translate = englishTranslate): string {
+  return title === NEW_CHAT_TITLE || title === LEGACY_SEED_TITLE ? t('New chat') : title;
+}
+
 /**
  * R4 fix: single source for the `Session xxxxxx` fallback title shape — both
  * the FORMATTER (this function) and the RECOGNIZER (`isPlaceholderTitle`
@@ -41,15 +80,15 @@ const SESSION_FALLBACK_TITLE_PATTERN = /^Session \S{1,6}$/;
 /**
  * True when `title` is one of the app's own placeholder values and should be
  * replaced by something more useful once real content is available:
- * empty/whitespace-only, the literal seed titles (`createChatSessionOnWorkspace`'s
- * `'New chat'` default, the DEMO seed's `'Live Agent Host'`), or the
- * `Session xxxxxx` last-resort fallback (`fallbackSessionTitle` above).
+ * empty/whitespace-only, the literal seed titles (`NEW_CHAT_TITLE`, and the
+ * pre-decision-144 seed's `LEGACY_SEED_TITLE`), or the `Session xxxxxx`
+ * last-resort fallback (`fallbackSessionTitle` above).
  */
 export function isPlaceholderTitle(title: string | null | undefined): boolean {
   if (!title || title.trim() === '') {
     return true;
   }
-  if (title === 'New chat' || title === 'Live Agent Host') {
+  if (title === NEW_CHAT_TITLE || title === LEGACY_SEED_TITLE) {
     return true;
   }
   return SESSION_FALLBACK_TITLE_PATTERN.test(title);

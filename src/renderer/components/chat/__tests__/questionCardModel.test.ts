@@ -36,6 +36,7 @@ import {
   emptySelection,
   isMaskedAnswer,
   isQuestionAnswered,
+  OTHER_ANSWER_LINE,
   PERMISSION_ACTION_LABELS,
   PERMISSION_ALLOW_SESSION_NOTE,
   PERMISSION_ASK_REASON_CALL,
@@ -49,6 +50,8 @@ import {
   permissionSecondsLeft,
   questionReactKey,
   SECRET_MASK,
+  STOPPED_MARK,
+  STOPPED_TITLE,
   selectPendingQuestionBlock,
   setOtherText,
   toggleOption,
@@ -103,6 +106,18 @@ describe('deriveQuestionCardState / deriveCardTitle', () => {
   it('treats outcome "rejected" as skipped too', () => {
     const block = questionBlock({ resolved: true, questionOutcome: 'rejected' });
     expect(deriveQuestionCardState(block)).toBe('skipped');
+  });
+
+  it('treats a cancel the turn stopped as stopped, not skipped (decision 144)', () => {
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'cancelled',
+      questionStopped: true,
+    });
+    expect(deriveQuestionCardState(block)).toBe('stopped');
+    expect(deriveCardTitle('stopped')).toBe(STOPPED_TITLE);
+    expect(translate('zh', deriveCardTitle('stopped'))).toBe('提问已停止');
+    expect(translate('zh', STOPPED_MARK)).toBe('已停止');
   });
 });
 
@@ -412,6 +427,95 @@ describe('deriveFrozenPairs', () => {
   it('returns an empty array when questions is missing', () => {
     const block = questionBlock({ resolved: true, questionOutcome: 'answered' });
     expect(deriveFrozenPairs(block)).toEqual([]);
+  });
+
+  it('stopped: every question is marked stopped as well as skipped (decision 144)', () => {
+    const block = questionBlock({
+      resolved: true,
+      questionOutcome: 'cancelled',
+      questionStopped: true,
+      questions: items,
+    });
+    expect(deriveFrozenPairs(block)).toEqual([
+      { key: '0', question: 'Q1', answer: null, skipped: true, stopped: true },
+      { key: '1', question: 'Q2', answer: null, skipped: true, stopped: true },
+    ]);
+  });
+
+  describe('a multi-select answer (decision 144, point-check problem 8)', () => {
+    const checks = questionItem(['tsc', 'smoke, then record'], {
+      id: 'checks',
+      question: 'Which checks?',
+      multiSelect: true,
+    });
+
+    it('is split into its picks, a comma-holding label kept whole, Other text last', () => {
+      const block = questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [checks],
+        questionAnswers: { checks: 'tsc, smoke, then record, A11-OTHER, typed note' },
+      });
+      const [pair] = deriveFrozenPairs(block);
+      expect(pair?.answer).toBe('tsc, smoke, then record, A11-OTHER, typed note');
+      expect(pair?.answerParts).toEqual([
+        { text: 'tsc' },
+        { text: 'smoke, then record' },
+        { text: 'A11-OTHER, typed note', other: true },
+      ]);
+    });
+
+    it('splits what the payload builder joined', () => {
+      let sel = toggleOption(emptySelection, 0, 'smoke, then record', true);
+      sel = toggleOption(sel, 0, 'tsc', true);
+      sel = toggleOther(sel, 0, true);
+      sel = setOtherText(sel, 0, 'also, lint');
+      const { answers } = buildRespondPayload(sel, [checks]);
+      const block = questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [checks],
+        questionAnswers: answers,
+      });
+      expect(deriveFrozenPairs(block)[0]?.answerParts).toEqual([
+        { text: 'smoke, then record' },
+        { text: 'tsc' },
+        { text: 'also, lint', other: true },
+      ]);
+    });
+
+    it('leaves a free-text response, a single-select answer and a masked one as one line', () => {
+      const free = questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [checks],
+        questionResponse: 'tsc, smoke',
+      });
+      expect(deriveFrozenPairs(free)[0]?.answerParts).toBeUndefined();
+
+      const single = questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [questionItem(['smoke, then record'], { id: 'one' })],
+        questionAnswers: { one: 'smoke, then record' },
+      });
+      expect(deriveFrozenPairs(single)[0]?.answerParts).toBeUndefined();
+
+      const secret = questionBlock({
+        resolved: true,
+        questionOutcome: 'answered',
+        questions: [{ ...checks, isSecret: true }],
+        questionAnswers: { checks: 'tsc, hunter2' },
+      });
+      const [masked] = deriveFrozenPairs(secret);
+      expect(masked?.answer).toBe(SECRET_MASK);
+      expect(masked?.answerParts).toBeUndefined();
+    });
+
+    it('words the Other line in both languages', () => {
+      expect(translate('en', OTHER_ANSWER_LINE, { text: 'x' })).toBe('Other: x');
+      expect(translate('zh', OTHER_ANSWER_LINE, { text: 'x' })).toBe('其他：x');
+    });
   });
 
   it('with no item.id, the answer is still looked up by the question text — the protocol key equals the question', () => {

@@ -1,4 +1,5 @@
 import { englishTranslate, type Translate } from '@shared/i18n';
+import { joinQuestionAnswer, splitQuestionAnswer } from '@shared/questionAnswer';
 import type {
   PermissionAutoReason,
   PermissionDecisionId,
@@ -22,12 +23,18 @@ import type { ToolRowView } from './toolCard';
 
 // ---- State ----
 
-export type QuestionCardState = 'pending' | 'answered' | 'skipped';
+export type QuestionCardState = 'pending' | 'answered' | 'skipped' | 'stopped';
 
-/** `resolved !== true` -> 'pending'; outcome 'answered' -> 'answered'; 'cancelled' | 'rejected' -> 'skipped'. */
+/**
+ * `resolved !== true` -> 'pending'; outcome 'answered' -> 'answered'; a
+ * cancel nobody answered because the turn stopped or the session closed
+ * (`questionStopped`, decision 144) -> 'stopped'; any other 'cancelled' |
+ * 'rejected' -> 'skipped'.
+ */
 export function deriveQuestionCardState(block: ChatBlock): QuestionCardState {
   if (block.resolved !== true) return 'pending';
-  return block.questionOutcome === 'answered' ? 'answered' : 'skipped';
+  if (block.questionOutcome === 'answered') return 'answered';
+  return block.questionStopped ? 'stopped' : 'skipped';
 }
 
 /**
@@ -43,11 +50,14 @@ export function deriveQuestionCardState(block: ChatBlock): QuestionCardState {
 export const QUESTION_TITLE = 'Questions';
 export const ANSWERS_TITLE = 'Answers';
 export const SKIPPED_TITLE = 'Questions skipped';
+/** Decision 144: the turn stopped (or the session closed) before an answer. */
+export const STOPPED_TITLE = 'Questions stopped';
 
-/** Header copy KEY: Questions / Answers / Questions skipped (A07 :2654/:2679). */
+/** Header copy KEY: Questions / Answers / Questions skipped / stopped (A07 :2654/:2679). */
 export function deriveCardTitle(state: QuestionCardState): string {
   if (state === 'answered') return ANSWERS_TITLE;
   if (state === 'skipped') return SKIPPED_TITLE;
+  if (state === 'stopped') return STOPPED_TITLE;
   return QUESTION_TITLE;
 }
 
@@ -212,7 +222,7 @@ export function buildRespondPayload(
       if (text.length > 0) parts.push(text);
     }
     if (parts.length > 0) {
-      answers[answerKeyFor(item)] = parts.join(', ');
+      answers[answerKeyFor(item)] = joinQuestionAnswer(parts);
     }
   });
   return { answers };
@@ -228,6 +238,13 @@ export const SKIP_LABEL = 'Skip';
 export const CONTINUE_LABEL = 'Continue';
 export const CONTINUE_KBD = '⏎';
 export const SKIPPED_MARK = 'Skipped';
+/**
+ * Decision 144: a question the turn's Stop (or the session closing) took down.
+ * The same word the tool row ends with when Stop cut it (`TOOL_RUN_OUTCOME_LABEL`).
+ */
+export const STOPPED_MARK = 'Stopped';
+/** Decision 144: the Other text in a frozen multi-select answer. */
+export const OTHER_ANSWER_LINE = 'Other: {{text}}';
 /**
  * The submit chord, a key rather than a literal so a platform or locale that
  * words it differently has somewhere to say so. The zh entry is the same text
@@ -344,6 +361,35 @@ export interface FrozenPair {
   question: string;
   answer: string | null;
   skipped: boolean;
+  /** Decision 144: skipped because the turn stopped, not by the user's Skip. */
+  stopped?: true;
+  /**
+   * Decision 144 (problem 8): a multi-select answer, split back into what was
+   * picked — one entry per option label, then the Other text (`other`). The
+   * joined `answer` reads ambiguously when a label itself holds ", ". Absent
+   * for single-select, free text and a masked answer, which are one line.
+   */
+  answerParts?: FrozenAnswerPart[];
+}
+
+export interface FrozenAnswerPart {
+  text: string;
+  /** The free text typed into Other, as opposed to an option's label. */
+  other?: true;
+}
+
+/**
+ * A multi-select answer's parts, split the way the bridge split it for the
+ * model (`@shared/questionAnswer`), so the card lists exactly what was sent.
+ */
+function multiSelectAnswerParts(item: QuestionItem, answer: string): FrozenAnswerPart[] {
+  const { selected, rest } = splitQuestionAnswer(
+    item.options.map((option) => option.label),
+    answer
+  );
+  const parts: FrozenAnswerPart[] = selected.map((label) => ({ text: label }));
+  if (rest.length > 0) parts.push({ text: rest, other: true });
+  return parts;
 }
 
 /**
@@ -382,22 +428,33 @@ export function deriveFrozenPairs(block: ChatBlock): FrozenPair[] {
   const items = block.questions ?? [];
   if (items.length === 0) return [];
 
-  if (deriveQuestionCardState(block) === 'skipped') {
+  const state = deriveQuestionCardState(block);
+  if (state === 'skipped' || state === 'stopped') {
     return items.map((item, index) => ({
       key: questionReactKey(item, index),
       question: item.question,
       answer: null,
       skipped: true,
+      ...(state === 'stopped' ? { stopped: true as const } : {}),
     }));
   }
 
   return items.map((item, index) => {
-    const answer = block.questionAnswers?.[answerKeyFor(item)] ?? block.questionResponse ?? null;
+    const keyed = block.questionAnswers?.[answerKeyFor(item)];
+    const answer = keyed ?? block.questionResponse ?? null;
+    const masked = isMaskedAnswer(item, answer);
+    // Only a keyed multi-select value is a join; a free-text `response` is one
+    // piece of text however many commas it holds.
+    const answerParts =
+      !masked && item.multiSelect === true && keyed !== undefined && keyed.length > 0
+        ? multiSelectAnswerParts(item, keyed)
+        : undefined;
     return {
       key: questionReactKey(item, index),
       question: item.question,
-      answer: isMaskedAnswer(item, answer) ? SECRET_MASK : answer,
+      answer: masked ? SECRET_MASK : answer,
       skipped: false,
+      ...(answerParts ? { answerParts } : {}),
     };
   });
 }

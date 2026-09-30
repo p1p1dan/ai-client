@@ -2051,7 +2051,10 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
           STOP_WATCHDOG_BOUND_MS
         )
       ).toBe(true);
-      expect(ofType(from, 'question.resolved')).toEqual([{ questionId, outcome: 'cancelled' }]);
+      // Decision 144: a card taken down by Stop says so (`stopped`), unlike a Skip.
+      expect(ofType(from, 'question.resolved')).toEqual([
+        { questionId, outcome: 'cancelled', stopped: true },
+      ]);
       expect(forSession('g1', from).some((e) => e.type === 'session.stopped')).toBe(true);
       expect(
         await manager.respondQuestion({

@@ -112,6 +112,14 @@ export const REVIEW_PATCH_MAX_LENGTH = 64 * 1024;
 export const DSH_SUMMARY_PART = 'summary';
 
 /**
+ * The first line of a context-summary row's text, above the summary itself.
+ * The row is transcript data, so it is written in English like every other
+ * projected byte; the renderer shows this line in the UI language
+ * (dsh-rebase decision 144) and leaves the summary under it as it is.
+ */
+export const CONTEXT_SUMMARY_TITLE = 'Context summary';
+
+/**
  * Whether a timeline row is a context summary, by the id of its first block —
  * a history row as the projection wrote it, or the same row in the renderer's
  * store, which keeps block ids as they came. dsh-rebase P1-7e (decision 140):

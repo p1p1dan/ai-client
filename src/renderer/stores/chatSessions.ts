@@ -38,6 +38,7 @@ import {
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
 import { isSessionDismissed } from '@/components/chat/sessionIndex/dismissedSessions';
+import { NEW_CHAT_TITLE } from '@/components/chat/sessionIndex/sessionTitle';
 import { uniqueId } from '@/lib/uniqueId';
 // Leaf module as well (shared-types import only) — see its header for the
 // replay-coverage rules the `session.history` reducer delegates to, and for
@@ -327,6 +328,11 @@ export interface ChatBlock {
   questionId?: string;
   questions?: QuestionItem[];
   questionOutcome?: 'answered' | 'cancelled' | 'rejected';
+  /**
+   * Decision 144: a `cancelled` card nobody answered, because the turn was
+   * stopped or the session closed — not a Skip (`question.resolved.stopped`).
+   */
+  questionStopped?: true;
   /**
    * Opaque key -> answer. S2 (C8): mixed key space — Claude rows are keyed by
    * question text, Codex rows by `QuestionItem.id`. Replay must not look a
@@ -628,7 +634,8 @@ const DEMO_SESSIONS: ChatSession[] = [
     id: 'session-live',
     projectId: DEMO_PROJECT.id,
     workspaceId: 'ws-main',
-    title: 'Live Agent Host',
+    // Decision 144: named like every chat "New" creates.
+    title: NEW_CHAT_TITLE,
     status: 'idle',
     updatedAt: Date.now(),
   },
@@ -1989,7 +1996,7 @@ function applyRuntimeEventCore(
     }
 
     case 'question.resolved': {
-      const { questionId, outcome, answers, response } = event.payload;
+      const { questionId, outcome, answers, response, stopped } = event.payload;
       const bucket = state.messages[sessionId];
       // Retire only the entry this event names. A resolution for another
       // session, or one the worker emits for a request that never produced a
@@ -2013,6 +2020,7 @@ function applyRuntimeEventCore(
                 questionOutcome: outcome,
                 ...(answers ? { questionAnswers: answers } : {}),
                 ...(response ? { questionResponse: response } : {}),
+                ...(stopped && outcome === 'cancelled' ? { questionStopped: true as const } : {}),
               }
             : block
         ),

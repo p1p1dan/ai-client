@@ -1,6 +1,7 @@
 import { ArrowLeftRight, GitBranch, Layers, Plus, Terminal, Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { SessionTreeDialog } from '@/components/chat/SessionTreeDialog';
+import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
 import { deriveJobsWindowView, deriveSubagentsWindowView } from '@/components/chat/subwindowsModel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -137,7 +138,7 @@ export function SessionBar({
     <div className="flex min-w-0 items-center gap-1.5">
       {busy && <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-status-running" />}
       <span className="min-w-0 truncate font-medium text-foreground text-meta">
-        {activeSession?.title ?? t('No conversation open')}
+        {activeSession ? displaySessionTitle(activeSession.title, t) : t('No conversation open')}
       </span>
       {activeSession?.unbound && (
         <span className="shrink-0 rounded-xs border px-1 text-2xs text-muted-foreground">

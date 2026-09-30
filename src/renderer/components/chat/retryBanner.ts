@@ -121,6 +121,28 @@ export function deriveRetryCountdown(
   return delayMs === null ? null : { kind: 'static', delayMs };
 }
 
+/**
+ * dsh-rebase P1-7e problem 9 (decision 144): `retry.error` is a failure class,
+ * not a sentence — on DSH the bridge copies `failure.code` (the `dsh-llm`
+ * taxonomy; `DEFAULT_RETRYABLE_CODES` is the five below) and fills `unknown`
+ * when there is none. The banner used to print it raw (「… · SERVER 500」).
+ * These are its catalog keys; a class this build does not know is shown as it
+ * came, since an identifier is still better than nothing.
+ */
+const RETRY_ERROR_KEYS: Readonly<Record<string, string>> = {
+  SERVER: 'server error',
+  TRANSPORT: 'connection error',
+  TIMEOUT: 'timed out',
+  RATE_LIMIT: 'rate limited',
+  EMPTY_RESPONSE: 'empty response',
+  unknown: 'unknown',
+};
+
+export function retryErrorLabel(code: string, t: Translate = englishTranslate): string {
+  const key = RETRY_ERROR_KEYS[code];
+  return key ? t(key) : code;
+}
+
 /** The one place either surface turns a {@link RetryCountdown} into words. */
 export function retryCountdownLabel(
   countdown: RetryCountdown | null,
@@ -160,7 +182,9 @@ export function deriveRetryBanner(
   const countdown = retryCountdownLabel(deriveRetryCountdown(input.retry, input.nowMs), t);
   if (countdown !== null) segments.push(countdown);
   const error =
-    typeof input.retry.error === 'string' && input.retry.error !== '' ? input.retry.error : null;
+    typeof input.retry.error === 'string' && input.retry.error !== ''
+      ? retryErrorLabel(input.retry.error, t)
+      : null;
   const errorStatus =
     typeof input.retry.errorStatus === 'string' && input.retry.errorStatus !== ''
       ? input.retry.errorStatus

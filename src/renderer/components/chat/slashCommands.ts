@@ -16,6 +16,8 @@
  * as prose too.
  */
 
+import { englishTranslate, type Translate } from '@shared/i18n';
+
 /** A command as it will be shown in the menu, whatever its origin. */
 export interface SlashCatalogItem {
   /** Invocation name without the leading slash; skills read `skill:<name>`. */
@@ -127,6 +129,39 @@ export function buildSlashCatalog(
     })
   );
   return [...runtime, ...builtins].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * dsh-rebase P1-7e problem 9 (decision 144): the menu row's source tag, as a
+ * catalog key. `source` is an identifier — `builtin` is this window's own,
+ * `command` a DSH command, `skill` a skill, and 1.0.x's pi also sent `prompt`
+ * and `extension` — so it is never printed raw. An origin this build does not
+ * know is shown as it came rather than guessed at.
+ */
+const SLASH_SOURCE_KEYS: Readonly<Record<string, string>> = {
+  builtin: 'Built in',
+  command: 'Command',
+  skill: 'Skill',
+  prompt: 'Prompt template',
+  extension: 'Extension',
+};
+
+export function slashSourceLabel(source: string, t: Translate = englishTranslate): string {
+  const key = SLASH_SOURCE_KEYS[source];
+  return key ? t(key) : source;
+}
+
+/**
+ * The menu's rows as painted: `source` in words ({@link slashSourceLabel}).
+ * Only the menu reads these. Picking a row inserts its `name`, and running a
+ * command looks its `source` up in the catalog again (`resolveSlashAction`),
+ * never on a painted row.
+ */
+export function slashRowsForDisplay(
+  items: readonly SlashCatalogItem[],
+  t: Translate = englishTranslate
+): SlashCatalogItem[] {
+  return items.map((item) => ({ ...item, source: slashSourceLabel(item.source, t) }));
 }
 
 /**

@@ -176,8 +176,10 @@ it('[E2B-10-MOUNT] a compaction after a turn does not count toward that turn’s
     expect(text).toContain(zh('Worked for {{seconds}}s', { seconds: 3 }));
     expect(text).not.toContain(zh('Worked for {{seconds}}s', { seconds: 13 }));
     expect(text).toContain(zh('Completed at {{time}}', { time: formatAbsoluteTime(T0 + 3_000) }));
-    // The summary itself is still on the timeline, as the reopen shows it.
-    expect(text).toContain('Context summary');
+    // The summary itself is still on the timeline, as the reopen shows it —
+    // its title in the UI language since decision 144.
+    expect(text).toContain(`${zh('Context summary')}\n\n## Current Work`);
+    expect(text).not.toContain('Context summary');
   } finally {
     await view.unmount();
   }

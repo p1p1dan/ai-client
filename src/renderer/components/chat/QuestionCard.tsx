@@ -24,6 +24,7 @@ import {
   emptySelection,
   type FrozenPair,
   type OptionRow,
+  OTHER_ANSWER_LINE,
   PERMISSION_DIFF_CLAMPED_MARK,
   PERMISSION_WAITING,
   type PermissionDetailView,
@@ -36,6 +37,7 @@ import {
   questionReactKey,
   SKIP_LABEL,
   SKIPPED_MARK,
+  STOPPED_MARK,
   setOtherText,
   toggleOption,
   toggleOther,
@@ -324,6 +326,7 @@ function QaOptionRow({
   onOtherTextChange,
   secret,
 }: QaOptionRowProps) {
+  const { t } = useI18n();
   const showOtherInput = option.isOther && selected && onOtherTextChange;
   return (
     <div
@@ -373,12 +376,12 @@ function QaOptionRow({
       {showOtherInput && (
         <Input
           autoFocus
-          aria-label="Your answer"
+          aria-label={t('Your answer')}
           type={secret ? 'password' : 'text'}
           value={otherText ?? ''}
           onChange={(event) => onOtherTextChange(event.target.value)}
           disabled={disabled}
-          placeholder={secret ? 'Value is hidden while you type' : 'Type your answer…'}
+          placeholder={secret ? t('Value is hidden while you type') : t('Type your answer…')}
           // A credential must not reach the browser's autofill store or the
           // spellchecker (which ships text to the platform on some systems).
           autoComplete={secret ? 'off' : undefined}
@@ -402,7 +405,19 @@ function QaFrozenPairs({ pairs }: { pairs: FrozenPair[] }) {
         >
           <span className="text-foreground">{pair.question}</span>
           {pair.skipped ? (
-            <span className="italic text-muted-foreground">{t(SKIPPED_MARK)}</span>
+            <span className="italic text-muted-foreground">
+              {t(pair.stopped ? STOPPED_MARK : SKIPPED_MARK)}
+            </span>
+          ) : pair.answerParts ? (
+            // Decision 144 (problem 8): one line per pick. Joined with ", " the
+            // answer could not be read when a label itself holds a comma.
+            <ul className="list-disc space-y-0.5 pl-5 text-foreground">
+              {pair.answerParts.map((part) => (
+                <li key={`${part.other ? 'other' : 'label'}:${part.text}`}>
+                  {part.other ? t(OTHER_ANSWER_LINE, { text: part.text }) : part.text}
+                </li>
+              ))}
+            </ul>
           ) : (
             <span className="text-foreground">{pair.answer}</span>
           )}

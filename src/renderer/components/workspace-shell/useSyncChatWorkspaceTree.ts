@@ -13,6 +13,11 @@ import {
   dropDismissedSessions,
   hasDismissedSessions,
 } from '@/components/chat/sessionIndex/dismissedSessions';
+import {
+  LEGACY_SEED_TITLE,
+  NEW_CHAT_TITLE,
+  STARTUP_SEED_ID_PREFIX,
+} from '@/components/chat/sessionIndex/sessionTitle';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { uniqueId } from '@/lib/uniqueId';
 import {
@@ -31,7 +36,11 @@ import {
   workspaceTreeSignature,
 } from './deriveChatWorkspaceTree';
 
-const LIVE_SESSION_TITLE = 'Live Agent Host';
+/**
+ * dsh-rebase decision 144: the start-up chat is named like every chat "New"
+ * creates. It used to carry the development-era demo name `Live Agent Host`.
+ */
+const LIVE_SESSION_TITLE = NEW_CHAT_TITLE;
 
 function readRepositoriesFromStorage(): Repository[] {
   try {
@@ -49,7 +58,7 @@ function readRepositoriesFromStorage(): Repository[] {
 
 function createLiveSession(workspace: ChatWorkspace): ChatSession {
   return {
-    id: uniqueId('session-live'),
+    id: uniqueId(STARTUP_SEED_ID_PREFIX),
     projectId: workspace.projectId,
     workspaceId: workspace.id,
     title: LIVE_SESSION_TITLE,
@@ -169,8 +178,12 @@ function rebindSessionsToTree(
     });
   }
 
+  // By id: the seed's title is now the same `New chat` any draft carries, so
+  // the title alone no longer tells the seed apart. A row with the old seed
+  // title still counts, as it did before the rename.
   const hasLive = remapped.some(
-    (session) => session.title === LIVE_SESSION_TITLE || session.id.startsWith('session-live')
+    (session) =>
+      session.title === LEGACY_SEED_TITLE || session.id.startsWith(STARTUP_SEED_ID_PREFIX)
   );
   let seeded = false;
   if (!hasLive && allowSeed) {
@@ -182,7 +195,7 @@ function rebindSessionsToTree(
   for (let i = 0; i < remapped.length; i++) {
     const session = remapped[i];
     if (session?.id === 'session-live') {
-      const nextId = uniqueId('session-live');
+      const nextId = uniqueId(STARTUP_SEED_ID_PREFIX);
       nextBound.delete('session-live');
       remapped[i] = {
         ...session,

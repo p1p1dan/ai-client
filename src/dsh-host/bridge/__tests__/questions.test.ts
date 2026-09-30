@@ -242,7 +242,11 @@ describe('createDshQuestionPrompt', () => {
     controller.abort();
     await expect(asked).rejects.toBeInstanceOf(DshQuestionWithdrawn);
     expect(events.map((event) => event.type)).toEqual(['question.requested', 'question.resolved']);
-    expect(events[1]).toMatchObject({ payload: { outcome: 'cancelled' } });
+    // Decision 144: marked `stopped`, so the card does not read as a Skip.
+    expect(events[1]).toEqual({
+      type: 'question.resolved',
+      payload: { questionId: 'dsh-question-1', outcome: 'cancelled', stopped: true },
+    });
     expect(questions.respond({ questionId: 'dsh-question-1', answers: { scope: 'A' } })).toBe(
       false
     );
@@ -265,7 +269,13 @@ describe('createDshQuestionPrompt', () => {
     questions.drain('closing');
     await expect(first).rejects.toThrow('closing');
     await expect(second).rejects.toThrow('closing');
-    expect(events.filter((event) => event.type === 'question.resolved')).toHaveLength(2);
+    const resolved = events.filter((event) => event.type === 'question.resolved');
+    expect(resolved).toHaveLength(2);
+    // Decision 144: nobody answered these either.
+    expect(resolved.map((event) => event.payload)).toEqual([
+      expect.objectContaining({ outcome: 'cancelled', stopped: true }),
+      expect.objectContaining({ outcome: 'cancelled', stopped: true }),
+    ]);
     expect(questions.pending).toBe(0);
   });
 });

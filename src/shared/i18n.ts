@@ -9,8 +9,7 @@ export const zhTranslations: Record<string, string> = {
   Center: '居中',
   Network: '网络',
   Advanced: '高级',
-  Pi: 'Pi',
-  // Settings nav categories split out of the Pi page.
+  // Settings nav categories split out of the Pi page (now `Models`, decision 144).
   Extensions: '扩展',
   'Data migration': '数据迁移',
   // T099: why every control in the migration pane is greyed out.
@@ -36,13 +35,13 @@ export const zhTranslations: Record<string, string> = {
   'Model catalog unreachable — showing the list this build shipped with':
     '模型目录不可达 —— 正在显示本次构建随包的基线列表',
   'Local setup': '本地配置',
-  'Pi model management': 'Pi 模型管理',
+  'Model management': '模型管理',
   Syncing: '同步中',
   'Sync now': '立即同步',
   'Model metadata is synced to the managed directory. Your account supplies the API key.':
     '登录模式从管理端同步模型元数据到隔离目录；API key 仍由账号登录注入。',
-  'Using your own setup. Pi reads your configuration from ~/.pi/agent.':
-    '当前是 “Use my own setup”，Pi 会直接读取你自己的 ~/.pi/agent 配置。',
+  'Using your own setup: the models come from the AI services you add above.':
+    '当前是「使用本机已有配置」：可用的模型来自上方你自己添加的 AI 服务。',
   'Management server': '管理端',
   'Configuration URL': '配置地址',
   Providers: '渠道',
@@ -70,8 +69,8 @@ export const zhTranslations: Record<string, string> = {
   'Reset my permission overrides': '清空我的设置，恢复出厂策略',
   'Remove this protection?': '确认取消这一层保护？',
   'Allow anyway': '仍然直接允许',
-  'Review the policy applied before Pi tool calls and edit your own overrides.':
-    'Pi 后端每次调用工具前都会先过这道闸。这里能看到它当前的判断依据，并修改属于你的那一层。',
+  'Review the policy applied before each tool call and edit your own overrides.':
+    '每次调用工具前都会先过这道闸。这里能看到它当前的判断依据，并修改属于你的那一层。',
   'Changes take effect in conversations started afterwards; one already open keeps the policy it started with.':
     '改动在之后新建的对话里生效；已经打开的对话仍沿用它启动时的那份策略。',
   'Permission rules': '权限规则',
@@ -1005,8 +1004,8 @@ export const zhTranslations: Record<string, string> = {
   'Load earlier changes': '加载更早的修改记录',
   'Open file': '打开文件',
   'No file changes recorded in this conversation yet.': '当前对话尚无文件修改记录。',
-  'Changes recorded by Edit and Write in this conversation. Shell and external edits are not tracked.':
-    '记录当前对话中 Edit 和 Write 的修改；不包含命令行及外部编辑。',
+  'Changes made by the file tools (edit, write) in this conversation. Shell commands and external edits are not tracked.':
+    '记录当前对话中文件工具（edit、write）所做的修改；不包含命令行及外部编辑。',
   'Diff exceeds the preview limit.': '差异超过预览大小限制。',
   'Binary content has no text diff.': '二进制内容无法展示文本差异。',
   'Previous content could not be read; no diff is available.': '未能读取修改前内容，无法展示差异。',
@@ -2798,7 +2797,7 @@ export const zhTranslations: Record<string, string> = {
   'Active session has no workspace…': '当前会话没有工作区…',
   'Choose a working directory to start…': '先选一个工作目录…',
   'Send follow-up…': '继续输入…',
-  'Message Pi…': '给 Pi 发消息…',
+  'Send a message…': '输入消息…',
   'Cannot send right now…': '现在无法发送…',
   'Move queued message up': '把排队消息上移',
   'Move queued message down': '把排队消息下移',
@@ -2860,7 +2859,7 @@ export const zhTranslations: Record<string, string> = {
   // 中文一律改成「英文即键」，和批次 4 的工具动词同一套办法——纯函数模块吐键，
   // 渲染那一层统一翻一次。这样切到英文界面时它们才会跟着变。
   '(no preview)': '（无预览）',
-  'Add the model in Pi settings': '去 Pi 设置补上模型',
+  'Open model settings': '打开模型设置',
   'Asks before each write, edit and command.': '写入、编辑和命令逐条询问。',
   'Auto-accept edits': '自动接受编辑',
   // D14 第四档：完全放行（bypass）。它不会成为新会话默认，所以只在已有会话里可选。
@@ -2907,8 +2906,8 @@ export const zhTranslations: Record<string, string> = {
   'Loading Mermaid diagram...': '加载 Mermaid 图表…',
   'Loading PDF...': '加载 PDF…',
   'Mermaid render error': 'Mermaid 渲染错误',
-  'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.':
-    '到「设置 · Pi」把 AI 服务迁移或补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
+  'Migrate the AI service under Settings · Data migration, or add it under Settings · Models, and this chat can continue; you can also switch to a model this app already has, from above the composer.':
+    '到「设置 · 数据迁移」把 AI 服务迁移过来，或到「设置 · 模型」补上，这个会话就能继续；也可以在输入框上方改用一个本应用已有的模型。',
   'Model is not available here': '本应用没有这个模型',
   // `PiModelSyncNotice` — the login-time managed model sync failed. The keys
   // are read through `t(view.title)` from `piModelSyncNoticeModel.ts`, so the
@@ -2949,12 +2948,12 @@ export const zhTranslations: Record<string, string> = {
   'Open it from the workspace it belongs to, or start a new chat.':
     '请从该会话原本的工作区打开，或新建会话继续。',
   'Permission change did not take': '权限未生效',
-  'Pi models and credentials are active for this session.': 'Pi 模型与凭据已在本次会话中生效。',
-  'Pi session service is starting…': 'Pi session service 正在启动…',
-  'Pi session service stopped': 'Pi session service 已停止',
-  'Pi session service failed': 'Pi session service 出错',
-  'Press Retry to initialise the Pi session service': '点击「重试」初始化 Pi session service',
-  'Press Retry to reinitialise the Pi session service': '点击「重试」重新初始化 Pi session service',
+  'Models and credentials are active for this session.': '模型与凭据已在本次会话中生效。',
+  'The chat engine is starting…': '对话引擎正在启动…',
+  'The chat engine is stopped': '对话引擎已停止',
+  'The chat engine failed': '对话引擎出错',
+  'Press Retry to start the chat engine': '点击「重试」启动对话引擎',
+  'Press Retry to restart the chat engine': '点击「重试」重新启动对话引擎',
   'Reading or parsing the history file failed, so the history below may be missing or incomplete.':
     '读取或解析历史文件时出错，下面的历史可能缺失或不完整。',
   Resend: '重新发送',
@@ -3355,8 +3354,8 @@ export const zhTranslations: Record<string, string> = {
   // --- 模型未声明图片输入（T3）---------------------------------------------------
   // 只有「自己添加的 AI 服务」能在设置里改输入类型（ProviderSetupDialog 的
   // 各模型元数据）；管理员下发的模型没有编辑入口，所以不许诺。
-  'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Pi · AI services → Edit → Per-model metadata.':
-    '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · Pi · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。',
+  'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Models · AI services → Edit → Per-model metadata.':
+    '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。',
 };
 
 export function normalizeLocale(input?: string): Locale {
@@ -3761,7 +3760,7 @@ Object.assign(zhTranslations, {
   'Earlier output not shown': '已省略前面的输出',
   'Conversation compacted': '对话已压缩',
   'The summary shows as "Context summary" when this chat is reopened.':
-    '摘要会在重新打开这个对话时显示为「Context summary」。',
+    '摘要会在重新打开这个对话时显示为「上下文摘要」。',
   'The company gateway cut off this reply': '公司网关中断了这次回复',
   'The company gateway stopped this reply before the model started to answer.':
     '公司网关在模型开始回答之前中断了这次回复。',
@@ -3784,4 +3783,66 @@ Object.assign(zhTranslations, {
     '为了给新对话腾出位置，空闲的「{{name}}」已转入后台，内容都还在。点开它就能接着聊。',
   'An idle older conversation moved to the background to make room for a new one. Nothing is lost.':
     '为了给新对话腾出位置，一个空闲的较早对话已转入后台，内容都还在。',
+});
+
+/**
+ * dsh-rebase P1-7e group e4 (decision 144): English and 1.0.x (pi) leftovers
+ * the P1-7d point-check found on screen, plus the question card's stopped
+ * state and multi-select lines. Several are reached through a table rather
+ * than a literal `t('…')` (effort levels, catalog notices, slash sources,
+ * retry classes, tree labels); `e4CatalogKeys.test.ts` holds those tables to
+ * this block.
+ */
+Object.assign(zhTranslations, {
+  // Timeline and composer.
+  'Select a chat to start.': '选择一个对话开始。',
+  'No messages yet. Send a message to start.': '还没有消息，发一条消息开始对话。',
+  'Load earlier messages': '加载更早的消息',
+  'Copy reply': '复制回复',
+  'Context summary': '上下文摘要',
+  'Attach files': '添加附件',
+  'Remove {{name}}': '移除 {{name}}',
+  'Dismiss attachment notice': '关闭附件提示',
+  'Dismiss queue notice': '关闭排队提示',
+  // Question card.
+  'Your answer': '你的回答',
+  'Type your answer…': '输入你的回答…',
+  'Value is hidden while you type': '输入内容不会显示',
+  'Questions stopped': '提问已停止',
+  'Other: {{text}}': '其他：{{text}}',
+  // Model menu: reasoning levels (`efforts.ts`) and catalog notices (`piModelCatalog.ts`).
+  Minimal: '极低',
+  'X-High': '极高',
+  Max: '最高',
+  'No reasoning at all': '完全不推理',
+  'Barely any reasoning; fastest responses': '几乎不推理，响应最快',
+  'Light reasoning': '轻度推理',
+  'Moderate reasoning; used when no level is chosen': '中等推理；没有选择档位时使用这一档',
+  'Deep reasoning': '深度推理',
+  'Deeper than High; only on models that declare it': '比「高」更深；仅限声明支持的模型',
+  'Maximum reasoning; only on models that declare it': '最深的推理；仅限声明支持的模型',
+  'Model catalog unreachable — no models available': '模型目录不可达 —— 没有可用的模型',
+  'Model catalog is out of date — showing the last known list':
+    '模型目录已过期 —— 正在显示上次获取的列表',
+  'Waiting for Agent Host to become ready': '正在等待对话引擎就绪',
+  'No models offered for this agent — Automatic will be used': '没有可用的模型 —— 将自动选择',
+  'No models are enabled by the administrator — Automatic will be used':
+    '管理员没有启用任何模型 —— 将自动选择',
+  'Refreshing…': '正在刷新…',
+  // Slash menu source tags (`slashCommands.ts`).
+  'Prompt template': '提示词模板',
+  Extension: '扩展',
+  // Retry banner failure classes (`retryBanner.ts`).
+  'server error': '服务端错误',
+  'connection error': '连接失败',
+  'rate limited': '请求过于频繁',
+  'empty response': '空回复',
+  unknown: '未知错误',
+  // Session branches dialog (`sessionTree.ts`).
+  'user message': '用户消息',
+  'assistant message': '助手消息',
+  'system message': '系统消息',
+  message: '消息',
+  'context summary': '上下文摘要',
+  notice: '通知',
 });

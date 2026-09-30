@@ -48,6 +48,7 @@ import {
   AICLIENT_INTERJECT_REASON,
   AICLIENT_LOOP_GUARD_DENIAL,
   AICLIENT_PERMISSION_DENIAL,
+  CONTEXT_SUMMARY_TITLE,
   DSH_SOURCE_AICLIENT_PI_BRANCH_SUMMARY,
   DSH_SOURCE_AICLIENT_RETRY,
   DSH_SOURCE_COMPACT_CHECKPOINT,
@@ -90,7 +91,6 @@ export const INTERRUPTED_TURN_NOTICE_KEY =
 export const IMPORTED_HISTORY_NOTICE_KEY =
   'This history was imported from a {{sourceKind}} session ({{sourceSessionId}}). You can keep talking here; the original run state — tools, permissions — did not come across.';
 
-const CONTEXT_SUMMARY_TITLE = 'Context summary';
 const SUMMARY_OPEN_TAG = '<compacted-summary>';
 const SUMMARY_CLOSE_TAG = '</compacted-summary>';
 

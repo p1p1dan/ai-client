@@ -329,16 +329,19 @@ function SessionModelTrigger({
   // deliberately the same string: a trigger reading `gpt-5.5` next to a menu row
   // reading `gpt-5.5 · unverified` would read as two different selections.
   const unknownLabel = verification === 'unverified' ? unverifiedModelLabel(model) : undefined;
+  // Decision 144: `Automatic` and the effort words are catalog keys; a model's
+  // own label is a name and stays as it is.
   const modelLabel = isAutomatic
-    ? AUTOMATIC_MODEL_LABEL
+    ? t(AUTOMATIC_MODEL_LABEL)
     : (options.find((option) => option.id === model)?.label ?? unknownLabel ?? model);
-  const { base, suffix } = composerModelLabelParts({ modelLabel, effort });
+  const { base, suffix } = composerModelLabelParts({ modelLabel, effort }, t);
   const menu = composerModelMenuModel({
     options,
     selectedModel: model,
     selectedEffort: effort,
     unknownModelLabel: unknownLabel,
     efforts: availableEfforts,
+    t,
   });
 
   const handleSelect = (sectionId: ComposerMenuSection['id'], itemId: string) => {
@@ -483,7 +486,8 @@ function SessionModelTrigger({
             <MenuSeparator />
             <div className="flex items-center gap-2 px-2 py-1.5 text-meta text-muted-foreground">
               <span className="min-w-0 flex-1 truncate" title={status.reason ?? undefined}>
-                {status.message}
+                {/* A catalog key (`piModelCatalog.ts`'s notices). */}
+                {t(status.message)}
               </span>
               {status.retryable && (
                 <button
@@ -492,7 +496,7 @@ function SessionModelTrigger({
                   onClick={retry}
                   type="button"
                 >
-                  Retry
+                  {t('Retry')}
                 </button>
               )}
             </div>

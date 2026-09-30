@@ -18,14 +18,16 @@
  *        a single-select value is one label or the Other text (`custom`)
  *   response (free text instead of options) -> `custom` of every unanswered question
  *   cancel (the card's Skip)  -> {id, selected: []} for every question
- *   the asker's signal aborts -> the card is taken down (`cancelled`), the
- *                                waterfall rejects, DSH answers ASK_ABORTED
+ *   the asker's signal aborts -> the card is taken down (`cancelled`, marked
+ *                                `stopped`), the waterfall rejects, DSH
+ *                                answers ASK_ABORTED
  *
  * The card's answers are keyed by `QuestionItem.id`. DSH ids are the model's
  * own and may repeat within one call, so a repeated id is given a unique key
  * here (`<id>#<n>`) and mapped back to the model's id in the answer.
  */
 
+import { splitQuestionAnswer } from '../../shared/questionAnswer.ts';
 import type { QuestionItem, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
 
 /** DSH's `AskUserQuestionItem` (dsh-user-questions), as read here. */
@@ -68,9 +70,6 @@ export interface DshQuestionResponse {
 /** Prefix of the card ids the bridge mints: one per request, a UUID after it. */
 export const DSH_QUESTION_ID_PREFIX = 'dsh-question-';
 
-/** Joins a multi-select answer's parts on the card (`questionCardModel.buildRespondPayload`). */
-const ANSWER_SEPARATOR = ', ';
-
 /** The card's key for each question: the model's id, made unique where it repeats. */
 export function questionKeys(questions: readonly DshQuestionItem[]): string[] {
   const seen = new Map<string, number>();
@@ -105,7 +104,8 @@ export function questionItemFor(question: DshQuestionItem, key: string): Questio
 /**
  * One card answer back in DSH's shape. Multi-select: the labels the value
  * starts with, longest label first at each position (a label may itself hold
- * ", "), and whatever follows the last one is the Other text. Single-select:
+ * ", "), and whatever follows the last one is the Other text — the split the
+ * frozen card lists its answer by (`@shared/questionAnswer`). Single-select:
  * one label, or the Other text, which DSH reads as overriding the choice.
  */
 export function answerItemFor(
@@ -121,22 +121,7 @@ export function answerItemFor(
   if (!question.multiSelect) {
     return labels.includes(value) ? { id, selected: [value] } : { id, selected: [], custom: value };
   }
-  const byLength = [...new Set(labels)].filter(Boolean).sort((a, b) => b.length - a.length);
-  const selected: string[] = [];
-  let at = 0;
-  while (at < value.length) {
-    const label = byLength.find(
-      (candidate) =>
-        value.startsWith(candidate, at) &&
-        (at + candidate.length === value.length ||
-          value.startsWith(ANSWER_SEPARATOR, at + candidate.length))
-    );
-    if (label === undefined) break;
-    selected.push(label);
-    at += label.length;
-    if (at < value.length) at += ANSWER_SEPARATOR.length;
-  }
-  const rest = value.slice(at);
+  const { selected, rest } = splitQuestionAnswer(labels, value);
   return rest.length > 0 ? { id, selected, custom: rest } : { id, selected };
 }
 
@@ -196,6 +181,13 @@ export interface DshQuestionPrompt {
 interface CardAnswer {
   answers?: Record<string, string>;
   response?: string;
+  /**
+   * dsh-rebase P1-7e problem 8 (decision 144): nobody answered — the turn was
+   * stopped (the asker's signal) or the session closed (`drain`). A Skip is
+   * `cancelled` too, and without this the frozen card could not tell the two
+   * apart.
+   */
+  stopped?: true;
 }
 
 interface Parked {
@@ -245,13 +237,16 @@ export function createDshQuestionPrompt(options: DshQuestionPromptOptions): DshQ
               outcome,
               ...(card.answers ? { answers: card.answers } : {}),
               ...(card.response ? { response: card.response } : {}),
+              ...(card.stopped ? { stopped: true as const } : {}),
             },
           });
           if (result instanceof Error) reject(result);
           else resolve(result);
         };
         function onAbort() {
-          settle('cancelled', new DshQuestionWithdrawn('the asker aborted the question'));
+          settle('cancelled', new DshQuestionWithdrawn('the asker aborted the question'), {
+            stopped: true,
+          });
         }
         parked.set(questionId, { settle, questions, keys });
         signal?.addEventListener('abort', onAbort, { once: true });
@@ -284,7 +279,7 @@ export function createDshQuestionPrompt(options: DshQuestionPromptOptions): DshQ
     drain(reason) {
       // Copied first: settling deletes from the map being walked.
       for (const entry of [...parked.values()]) {
-        entry.settle('cancelled', new DshQuestionWithdrawn(reason));
+        entry.settle('cancelled', new DshQuestionWithdrawn(reason), { stopped: true });
       }
     },
   };

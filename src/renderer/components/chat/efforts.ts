@@ -30,12 +30,20 @@ export interface ChatEffort {
 /**
  * UI copy per level, keyed by the wire vocabulary so the compiler rejects a
  * level that has no label — the catalog below cannot silently omit one.
+ *
+ * Both fields are catalog KEYS (dsh-rebase decision 144): the menu, the
+ * trigger and the run panel translate them where they paint.
+ * `e4CatalogKeys.test.ts` holds every one of them to a Chinese entry, since
+ * the i18n coverage scan only sees translator calls with a literal key.
+ *
+ * `medium`'s hint says what DSH does now (decision 040 rule 2): a chat with no
+ * level chosen sends `medium` when the model supports it.
  */
 const EFFORT_COPY: Record<SessionEffortLevel, { label: string; hint: string }> = {
   off: { label: 'Off', hint: 'No reasoning at all' },
   minimal: { label: 'Minimal', hint: 'Barely any reasoning; fastest responses' },
   low: { label: 'Low', hint: 'Light reasoning' },
-  medium: { label: 'Medium', hint: 'Moderate reasoning; Pi applies this by default' },
+  medium: { label: 'Medium', hint: 'Moderate reasoning; used when no level is chosen' },
   high: { label: 'High', hint: 'Deep reasoning' },
   xhigh: { label: 'X-High', hint: 'Deeper than High; only on models that declare it' },
   max: { label: 'Max', hint: 'Maximum reasoning; only on models that declare it' },

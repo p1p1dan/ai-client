@@ -19,6 +19,7 @@ import { restoreIndexedSessionModels } from '@/components/chat/sessionGeneration
 import {
   deriveSessionTitleFromFirstMessage,
   isPlaceholderTitle,
+  NEW_CHAT_TITLE,
 } from '@/components/chat/sessionIndex/sessionTitle';
 import { renameSessionIndexEntry } from '@/components/chat/sessionIndex/useSessionIndex';
 import { uniqueId } from '@/lib/uniqueId';
@@ -39,7 +40,7 @@ import { hasSendInFlight } from './turnSendStatus';
  */
 export function createChatSessionOnWorkspace(
   workspaceId: string,
-  title = 'New chat'
+  title = NEW_CHAT_TITLE
 ): string | null {
   const state = useChatSessionsStore.getState();
   const workspace = state.workspaces.find((item) => item.id === workspaceId);
@@ -134,7 +135,7 @@ export function createChatSessionInCurrentDirectory(sending = false): string | n
  * handshake). Writing a guess would be a fake cwd of the kind U13 exists to
  * prevent.
  */
-export function createUnboundChatSession(title = 'New chat'): string {
+export function createUnboundChatSession(title = NEW_CHAT_TITLE): string {
   const state = useChatSessionsStore.getState();
   const sessionId = uniqueId('session');
   const session: ChatSession = {

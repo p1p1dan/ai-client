@@ -88,7 +88,7 @@ import {
   type TurnSegment,
 } from './chatTurn';
 import { AutoTurnHead, DshNoticeRow } from './DshTimelineRows';
-import { dshNoticeRowView } from './dshTimelineRowModel';
+import { dshNoticeRowView, localizeContextSummaryTitle } from './dshTimelineRowModel';
 import { FailureContinueButton } from './FailureContinueButton';
 import {
   deriveHistoryNotice,
@@ -752,7 +752,7 @@ export function MessageTimeline({
   if (!sessionId) {
     return (
       <div className="flex flex-1 items-center justify-center text-ui text-muted-foreground">
-        Select a session to start chatting.
+        {t('Select a chat to start.')}
       </div>
     );
   }
@@ -802,13 +802,14 @@ export function MessageTimeline({
                     onClick={() => void loadOlderHistory()}
                   >
                     {loadingOlderHistory ? <Spinner className="h-3.5 w-3.5" /> : <RefreshCw />}
-                    Load earlier messages
+                    {t('Load earlier messages')}
                   </Button>
                 </div>
               )}
               {historyNotice.kind === 'empty' && pendingSendStatus == null ? (
+                // Decision 144: says what to do, not which process answers it.
                 <p className="text-ui text-muted-foreground">
-                  No messages yet. Send a prompt to stream from the Agent Host.
+                  {t('No messages yet. Send a message to start.')}
                 </p>
               ) : (
                 turns.map((turn, index) => {
@@ -1022,7 +1023,7 @@ export function MessageTimeline({
                           className="mt-2 h-6 text-ui"
                           onClick={() => void stopChatSession(sessionId)}
                         >
-                          Stop
+                          {t('Stop')}
                         </Button>
                       )}
                     </>
@@ -1293,7 +1294,9 @@ function HistoryErrorNotice({ view, sessionId, status }: HistoryErrorNoticeProps
               onClick={() => void handleRetry()}
             >
               <RefreshCw className={cn(retrying && 'animate-spin')} />
-              Retry
+              {/* Decision 144 (decision 123's known issue): the guidance above
+                  says 「重试」, so the button must too. */}
+              {t('Retry')}
             </Button>
           )}
           {/* concurrency-02: second, never first. Retry is the harmless answer
@@ -1452,6 +1455,8 @@ function UserBubble({ message }: { message: ChatMessage }) {
 function NoticeMessage({ message }: { message: ChatMessage }) {
   const { t } = useI18n();
   const isError = message.role === 'error';
+  // Decision 144: a context summary's leading title line follows the language.
+  const summaryRow = isDshSummaryRow(message);
   // D47 S5 §3: a spawn-gate rejection (resolveSpawnGateDecision,
   // @shared/authGate) landing in this card as raw text — swap in mapped
   // copy + a re-login action instead of the raw diagnostic.
@@ -1475,7 +1480,7 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
   return (
     <Alert variant={isError ? 'error' : 'default'} role={isError ? 'alert' : 'status'}>
       <AlertDescription>
-        {message.blocks.map((block) =>
+        {message.blocks.map((block, index) =>
           block.type === 'text' ? (
             <p
               key={block.id}
@@ -1496,7 +1501,9 @@ function NoticeMessage({ message }: { message: ChatMessage }) {
                     // printed exactly as it arrived.
                     block.notice
                     ? t(block.notice.key, block.notice.params)
-                    : block.text}
+                    : summaryRow && index === 0
+                      ? localizeContextSummaryTitle(block.text ?? '', t)
+                      : block.text}
             </p>
           ) : null
         )}
@@ -3144,6 +3151,7 @@ const ToolGroupItem = memo(function ToolGroupItem({
 const COPY_CONFIRM_MS = 1500;
 
 function TurnCopyButton({ text }: { text: string }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
 
@@ -3167,7 +3175,7 @@ function TurnCopyButton({ text }: { text: string }) {
     timerRef.current = window.setTimeout(() => setCopied(false), COPY_CONFIRM_MS);
   };
 
-  const label = copied ? 'Copied' : 'Copy reply';
+  const label = copied ? t('Copied') : t('Copy reply');
   return (
     <button
       type="button"

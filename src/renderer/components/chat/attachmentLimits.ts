@@ -241,6 +241,6 @@ export function modelLacksImageInput(input: {
  */
 export function imageInputUnsupportedHint(t: Translate = englishTranslate): string {
   return t(
-    'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Pi · AI services → Edit → Per-model metadata.'
+    'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Models · AI services → Edit → Per-model metadata.'
   );
 }

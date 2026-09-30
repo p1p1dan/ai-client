@@ -1,6 +1,7 @@
 import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import { Paperclip, Plus } from 'lucide-react';
 import { Menu, MenuPopup } from '@/components/ui/menu';
+import { useI18n } from '@/i18n';
 import {
   composerAttachButtonClass,
   composerMenuItemClass,
@@ -44,6 +45,7 @@ interface ComposerAttachMenuProps {
 }
 
 export function ComposerAttachMenu({ mode, disabled, onAttachFiles }: ComposerAttachMenuProps) {
+  const { t } = useI18n();
   return (
     <Menu>
       <MenuPrimitive.Trigger
@@ -52,8 +54,8 @@ export function ComposerAttachMenu({ mode, disabled, onAttachFiles }: ComposerAt
         // The previous label promised a file REFERENCE and said so explicitly,
         // because that was all the button could honestly do. It can attach
         // real files now, so the label says that instead.
-        aria-label="Attach files"
-        title="Attach files"
+        aria-label={t('Attach files')}
+        title={t('Attach files')}
         render={<button type="button" />}
       >
         <Plus className="size-3.5" />
@@ -69,7 +71,7 @@ export function ComposerAttachMenu({ mode, disabled, onAttachFiles }: ComposerAt
       >
         <MenuPrimitive.Item className={composerMenuItemClass()} onClick={onAttachFiles}>
           <Paperclip className="size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 truncate">Attach files</span>
+          <span className="min-w-0 flex-1 truncate">{t('Attach files')}</span>
         </MenuPrimitive.Item>
       </MenuPopup>
     </Menu>

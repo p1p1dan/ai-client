@@ -88,7 +88,9 @@ export const MODEL_MISSING_ERROR_VIEW: ModelMissingErrorView = {
   // there is no `~/.pi/agent` to copy from, so copy that promised only a
   // migration would send some users to a pane with no such control. The same
   // pane always carries the AI services editor, which is the other way in.
-  hint: 'Migrate or add the AI service under Settings · Pi and this chat can continue; you can also switch to a model this app already has, from above the composer.',
-  actionLabel: 'Add the model in Pi settings',
+  // Decision 144: the settings page is `Models` now, and the migration moved
+  // to its own `Data migration` page when the Pi page was split.
+  hint: 'Migrate the AI service under Settings · Data migration, or add it under Settings · Models, and this chat can continue; you can also switch to a model this app already has, from above the composer.',
+  actionLabel: 'Open model settings',
   settingsCategory: 'pi',
 };

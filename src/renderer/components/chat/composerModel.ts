@@ -16,6 +16,7 @@
  * Kept free of React so it is testable under the repo's node-env vitest.
  */
 
+import { englishTranslate, type Translate } from '@shared/i18n';
 import {
   CHAT_EFFORTS,
   type ChatEffort,
@@ -49,17 +50,21 @@ export interface ComposerModelLabelParts {
  * one: a newer Host, or a stored selection from a future build. Both are cases
  * where "show what is actually set" beats "show a level that is not set".
  */
-export function composerModelLabelParts(input: {
-  modelLabel: string;
-  effort?: string | null;
-}): ComposerModelLabelParts {
+export function composerModelLabelParts(
+  input: {
+    modelLabel: string;
+    effort?: string | null;
+  },
+  // Decision 144: a known level is a catalog key; the raw echo below is not.
+  t: Translate = englishTranslate
+): ComposerModelLabelParts {
   const base = input.modelLabel;
   const effort = input.effort;
   if (!effort || effort === EFFORT_DEFAULT_ID) {
     return { base, suffix: null };
   }
   if (isEffortLevel(effort)) {
-    return { base, suffix: effortLabel(effort) };
+    return { base, suffix: t(effortLabel(effort)) };
   }
   return { base, suffix: effort };
 }
@@ -142,7 +147,14 @@ export function composerModelMenuModel(input: {
   unknownModelLabel?: string;
   /** T25 model-declared levels; defaults to the legacy shared catalog. */
   efforts?: readonly ChatEffort[];
+  /**
+   * dsh-rebase decision 144: the section headings and the effort rows are
+   * catalog keys. Model rows are ids and names, and an unknown level is the
+   * raw stored value — neither goes through it.
+   */
+  t?: Translate;
 }): ComposerModelMenuViewModel {
+  const t = input.t ?? englishTranslate;
   const { options } = input;
   const efforts = input.efforts ?? CHAT_EFFORTS;
 
@@ -215,21 +227,21 @@ export function composerModelMenuModel(input: {
     ...(unknownEffort ? [{ id: unknownEffort, label: unknownEffort, selected: true }] : []),
     {
       id: EFFORT_DEFAULT_ID,
-      label: 'Default',
+      label: t('Default'),
       selected: effectiveEffort === EFFORT_DEFAULT_ID,
     },
     ...efforts.map((effort) => ({
       id: effort.id as string,
-      label: effort.label,
-      hint: effort.hint,
+      label: t(effort.label),
+      hint: t(effort.hint),
       selected: effort.id === effectiveEffort,
     })),
   ];
 
   return {
     sections: [
-      { id: 'model', label: 'Model', items: modelItems },
-      { id: 'effort', label: 'Reasoning effort', items: effortItems },
+      { id: 'model', label: t('Model'), items: modelItems },
+      { id: 'effort', label: t('Reasoning effort'), items: effortItems },
     ],
   };
 }

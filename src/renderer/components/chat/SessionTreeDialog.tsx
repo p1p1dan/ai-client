@@ -32,7 +32,7 @@ import {
   runAfterLegacyMigration,
 } from './sessionIndex/legacyMigration';
 import { useResumeSession } from './sessionIndex/useResumeSession';
-import { capSessionTreeForDisplay, sessionTreeNodeTitle } from './sessionTree';
+import { capSessionTreeForDisplay, sessionTreeNodeTag, sessionTreeNodeTitle } from './sessionTree';
 import { useResolvedSessionModel } from './useResolvedSessionModel';
 
 interface SessionTreeDialogProps {
@@ -259,11 +259,11 @@ export function SessionTreeDialog({
                   )}
                   style={{ paddingLeft: `${node.depth * 12 + 8}px` }}
                 >
-                  <span className="min-w-0 flex-1 truncate" title={sessionTreeNodeTitle(node)}>
-                    {sessionTreeNodeTitle(node)}
+                  <span className="min-w-0 flex-1 truncate" title={sessionTreeNodeTitle(node, t)}>
+                    {sessionTreeNodeTitle(node, t)}
                   </span>
                   <span className="shrink-0 text-meta text-muted-foreground">
-                    {node.role ?? node.entryType}
+                    {sessionTreeNodeTag(node, t)}
                   </span>
                   {node.leaf && <Badge variant="info">{t('active')}</Badge>}
                   <Button
@@ -319,7 +319,7 @@ export function SessionTreeDialog({
             <AlertDialogDescription>
               {t(
                 'The active conversation will move to “{{node}}”. Later messages remain available as another branch; nothing is deleted.',
-                { node: rewindTarget ? sessionTreeNodeTitle(rewindTarget) : '' }
+                { node: rewindTarget ? sessionTreeNodeTitle(rewindTarget, t) : '' }
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

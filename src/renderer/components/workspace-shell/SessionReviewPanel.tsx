@@ -140,8 +140,11 @@ export function SessionReviewPanel({
           <ReviewEntry key={entry.id} entry={entry} defaultOpen={false} onOpenDiff={onClose} />
         ))}
         <p className="px-1 pt-3 text-2xs text-muted-foreground">
+          {/* Decision 144: DSH's file tools are `edit` and `write` (the list is
+              `sessionReview.ts`'s); the sentence names them as tools rather
+              than as the capitalised pi / Claude names it used to. */}
           {t(
-            'Changes recorded by Edit and Write in this conversation. Shell and external edits are not tracked.'
+            'Changes made by the file tools (edit, write) in this conversation. Shell commands and external edits are not tracked.'
           )}
         </p>
       </div>

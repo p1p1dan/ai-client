@@ -95,7 +95,7 @@ export function PiModelManagementSettings() {
   return (
     <div className="space-y-6">
       <SettingsSectionBlock
-        title={t('Pi model management')}
+        title={t('Model management')}
         description={t(
           'Model metadata is synced to the managed directory. Your account supplies the API key.'
         )}
@@ -104,7 +104,9 @@ export function PiModelManagementSettings() {
       {!snapshot?.managed && (
         <div className="flex gap-3 rounded-md border border-info/30 bg-info/10 p-3 text-ui text-info">
           <TriangleAlert className="h-4 w-4 shrink-0 mt-0.5" />
-          {t('Using your own setup. Pi reads your configuration from ~/.pi/agent.')}
+          {/* Decision 144: on DSH the local route's models are the AI services
+              above (P1-5); `~/.pi/agent` is no longer read. */}
+          {t('Using your own setup: the models come from the AI services you add above.')}
         </div>
       )}
 

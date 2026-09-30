@@ -329,7 +329,7 @@ function PanelHeading() {
       title={t('Permission policy')}
       description={
         <>
-          <p>{t('Review the policy applied before Pi tool calls and edit your own overrides.')}</p>
+          <p>{t('Review the policy applied before each tool call and edit your own overrides.')}</p>
           <p>
             {t(
               'Changes take effect in conversations started afterwards; one already open keeps the policy it started with.'

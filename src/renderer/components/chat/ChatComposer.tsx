@@ -180,6 +180,7 @@ import {
   replaceSlashCommand,
   resolveSlashAction,
   type SlashCatalogItem,
+  slashRowsForDisplay,
 } from './slashCommands';
 import { useComposerAttachments } from './useComposerAttachments';
 import { useComposerPopupPlacement } from './useComposerPopupPlacement';
@@ -322,6 +323,7 @@ const AttachmentChip = memo(function AttachmentChip({
   sending,
   onRemove,
 }: AttachmentChipProps) {
+  const { t } = useI18n();
   const chip = toAttachmentChip(draft);
   // The clipboard is invisible — a thumbnail is the only way to confirm what
   // was actually pasted. Large images fall back to the icon: a data: URI is
@@ -353,7 +355,7 @@ const AttachmentChip = memo(function AttachmentChip({
         type="button"
         onClick={() => onRemove(draft.id)}
         disabled={sending}
-        aria-label={`Remove ${chip.title}`}
+        aria-label={t('Remove {{name}}', { name: chip.title })}
         className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground disabled:pointer-events-none disabled:opacity-64"
       >
         <X className="size-3" />
@@ -3634,7 +3636,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         <button
           type="button"
           onClick={attachments.dismissNotice}
-          aria-label="Dismiss attachment notice"
+          aria-label={t('Dismiss attachment notice')}
           className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
         >
           <X className="size-3" />
@@ -3679,7 +3681,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         <button
           type="button"
           onClick={() => setQueueNotice(null)}
-          aria-label="Dismiss queue notice"
+          aria-label={t('Dismiss queue notice')}
           className="flex size-4 shrink-0 items-center justify-center rounded-xs text-muted-foreground transition-colors duration-150 hover:bg-accent/50 hover:text-foreground"
         >
           <X className="size-3" />
@@ -4166,7 +4168,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             style={{ maxHeight: popupPlacement.maxHeight }}
           >
             <div className="min-h-0 flex-1 overflow-y-auto py-1">
-              {slashResults.map((item, i) => (
+              {/* Decision 144: painted rows, `source` in words. */}
+              {slashRowsForDisplay(slashResults, t).map((item, i) => (
                 <button
                   type="button"
                   key={`${item.source}:${item.name}`}
@@ -4274,19 +4277,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   ↑↓
                 </kbd>
-                Navigate
+                {t('Navigate')}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   Enter
                 </kbd>
-                Select
+                {t('Select')}
               </span>
               <span className="flex items-center gap-1">
                 <kbd className="rounded border bg-muted px-1 py-0.5 font-mono text-2xs leading-none">
                   Esc
                 </kbd>
-                Close
+                {t('Close')}
               </span>
               {/* T-07③: searching `chat` here matches 304 files but only 10
                     render — say so instead of truncating silently. */}

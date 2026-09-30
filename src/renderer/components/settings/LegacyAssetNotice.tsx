@@ -289,9 +289,12 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
           </div>
         </DialogPanel>
         <DialogFooter variant="bare">
+          {/* P1-7e problem 35 (decision 144): `normal-case`, because the
+              button base lowercases its text and the Chinese label holds the
+              word "Agent" (design system: mixed-script button copy). */}
           <Button
             variant="ghost"
-            className="mr-auto"
+            className="mr-auto normal-case"
             onClick={() => void openLegacyAgentFolder().then(setError)}
           >
             <FolderOpen className="h-4 w-4" />

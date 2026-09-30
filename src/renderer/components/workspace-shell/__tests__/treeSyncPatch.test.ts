@@ -60,7 +60,9 @@ describe('resolveTreeSyncPatch — auto-seed gate', () => {
     const result = patch(prevState());
 
     expect(result.sessions).toHaveLength(1);
-    expect(result.sessions[0]?.title).toBe('Live Agent Host');
+    // Decision 144: named like every chat "New" creates, not `Live Agent Host`.
+    expect(result.sessions[0]?.title).toBe('New chat');
+    expect(result.sessions[0]?.id.startsWith('session-live')).toBe(true);
     expect(result.activeSessionId).toBe(result.sessions[0]?.id);
     expect(result.recentSessionIds).toEqual([result.sessions[0]?.id]);
   });
@@ -75,6 +77,20 @@ describe('resolveTreeSyncPatch — auto-seed gate', () => {
     expect(result.sessions).toEqual([]);
     expect(result.activeSessionId).toBeNull();
     expect(result.recentSessionIds).toEqual([]);
+  });
+
+  it('renames the retired DEMO seed to the new-chat title (decision 144)', () => {
+    const result = patch(
+      prevState({
+        sessions: [session('session-live', { title: 'Live Agent Host' })],
+        activeSessionId: 'session-live',
+      })
+    );
+
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.id).not.toBe('session-live');
+    expect(result.sessions[0]?.id.startsWith('session-live')).toBe(true);
+    expect(result.sessions[0]?.title).toBe('New chat');
   });
 
   it('does not seed while any session already exists', () => {

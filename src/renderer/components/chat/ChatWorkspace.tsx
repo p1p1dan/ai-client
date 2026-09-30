@@ -27,6 +27,7 @@ import { PendingQuestionDock } from './PendingQuestionDock';
 import type { RunSendOrigin } from './queueRelease';
 import { SessionPanelStrips } from './SessionPanelStrips';
 import { SubwindowRegion } from './SessionSubwindows';
+import { isStartupSeedSession } from './sessionIndex/sessionTitle';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
@@ -241,8 +242,7 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     if (activeSessionId && sessions.some((session) => session.id === activeSessionId)) {
       return;
     }
-    const fallback =
-      sessions.find((session) => session.title === 'Live Agent Host') ?? sessions[0] ?? null;
+    const fallback = sessions.find(isStartupSeedSession) ?? sessions[0] ?? null;
     if (fallback) {
       selectSession(fallback.id);
     }

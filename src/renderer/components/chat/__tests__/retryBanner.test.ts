@@ -194,8 +194,9 @@ describe('deriveRetryBanner — live countdown (T093)', () => {
     expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 })?.detail).toBe(
       'Retrying now… · unknown'
     );
+    // Decision 144: the failure class is words in Chinese too, not `unknown`.
     expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 }, zhTranslate)?.detail).toBe(
-      '正在重试… · unknown'
+      '正在重试… · 未知错误'
     );
     // The title never claims the turn died: the retry IS the turn continuing.
     expect(deriveRetryBanner({ ...LIVE, nowMs: AT + 45_000 })?.title).toContain(TITLE_TAIL);

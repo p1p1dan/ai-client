@@ -359,7 +359,7 @@ export function OnboardingView({
       {step === 'result' && registerResult?.ok && (
         <>
           <SectionHeader
-            description={t('Pi models and credentials are active for this session.')}
+            description={t('Models and credentials are active for this session.')}
             icon={<CheckCircle2Icon className="h-5 w-5 text-success" />}
             title={t('Signed in')}
           />

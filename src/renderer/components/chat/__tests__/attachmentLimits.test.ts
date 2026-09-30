@@ -367,7 +367,7 @@ describe('modelLacksImageInput (T3)', () => {
     expect(english).toContain('Per-model metadata');
     const chinese = imageInputUnsupportedHint((key, params) => translate('zh', key, params));
     expect(chinese).toBe(
-      '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · Pi · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。'
+      '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。'
     );
   });
 });

@@ -80,7 +80,7 @@ describe('permission policy panel disclosure', () => {
 
     expect(container.textContent).toContain('Permission policy');
     expect(container.textContent).toContain(
-      'Review the policy applied before Pi tool calls and edit your own overrides.'
+      'Review the policy applied before each tool call and edit your own overrides.'
     );
     expect(trigger()).toBeDefined();
     expect(piPermissions.get).not.toHaveBeenCalled();

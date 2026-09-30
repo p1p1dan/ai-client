@@ -77,6 +77,7 @@ import {
   resolveNewSessionTarget,
   resolveRecentCollapsed,
   type SidebarSessionRow,
+  sidebarRowForDisplay,
   splitBranchSuffix,
   UNBOUND_FOLDER_ID,
 } from './sidebarTree';
@@ -1127,7 +1128,7 @@ interface SessionRowProps {
 }
 
 function SessionRow({
-  row,
+  row: sourceRow,
   now,
   active,
   pendingApprovalCount,
@@ -1142,6 +1143,11 @@ function SessionRow({
   onDeleteTemp,
 }: SessionRowProps) {
   const { t } = useI18n();
+  // Decision 144: the row as shown. A placeholder title (`New chat`) and a kind
+  // chip (`temporary`) are identifiers; every use below reads them in the UI
+  // language, so a rename that leaves the shown title untouched is still "no
+  // change".
+  const row = useMemo(() => sidebarRowForDisplay(sourceRow, t), [sourceRow, t]);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
@@ -1423,9 +1429,12 @@ function SessionRow({
               {pendingApprovalCount}
             </Badge>
           )}
+          {/* Decision 144: in the UI language, and at the badge's large size
+              (14px on desktop) because the word is CJK in Chinese — the design
+              system does not let CJK sit at the small size's 10px. */}
           {row.failed && (
-            <Badge variant="destructive" size="sm" className="shrink-0">
-              failed
+            <Badge variant="destructive" size="lg" className="shrink-0">
+              {t('Failed')}
             </Badge>
           )}
           {row.chip && (
@@ -1437,7 +1446,9 @@ function SessionRow({
             // deficit here; dropping either sends it back to the title.
             <Badge
               variant="outline"
-              size="sm"
+              // Decision 144: a kind chip is a word in the UI language (CJK in
+              // Chinese), so it takes the 14px size; a branch name keeps 10px.
+              size={row.chip.variant === 'kind' ? 'lg' : 'sm'}
               className="min-w-0 max-w-24 shrink"
               title={row.chip.label}
             >

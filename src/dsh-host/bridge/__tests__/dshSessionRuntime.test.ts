@@ -1422,11 +1422,14 @@ describe('DshSessionRuntime — questions (P1-4d3, decisions 098 and 114)', () =
     const closing = dsh.ask({ questions: [QUESTION], agent: { id: DSH_ID } }, next);
     await session.dispose();
     await expect(closing).rejects.toThrow('closed before the user answered');
-    expect(cards().map((event) => [event.type, event.payload?.outcome])).toEqual([
-      ['question.requested', undefined],
-      ['question.resolved', 'cancelled'],
-      ['question.requested', undefined],
-      ['question.resolved', 'cancelled'],
+    // Decision 144: both are `stopped`, which tells them apart from a Skip.
+    expect(
+      cards().map((event) => [event.type, event.payload?.outcome, event.payload?.stopped])
+    ).toEqual([
+      ['question.requested', undefined, undefined],
+      ['question.resolved', 'cancelled', true],
+      ['question.requested', undefined, undefined],
+      ['question.resolved', 'cancelled', true],
     ]);
     expect(next).not.toHaveBeenCalled();
   });
