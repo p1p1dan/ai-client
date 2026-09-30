@@ -83,7 +83,9 @@ export interface FsReadService {
   editText(
     target: FsTarget,
     edit: unknown,
-    expected: unknown,
+    // Optional, matching dsh-fs-local's and dsh-fs-sandbox's real signatures
+    // (both declare `expected?: ...`): a caller may omit the guard entirely.
+    expected?: unknown,
     signal?: AbortSignal,
     sandboxPolicy?: unknown
   ): Promise<unknown>;

@@ -41,6 +41,10 @@ function makeService(): FsReadService {
     readBytes: async () => new Uint8Array([1, 2, 3]),
     readByteRange: async () => new Uint8Array([9, 9]),
     editText: async () => ({ original: true }),
+    // Read-only tests: neither is ever called, so a fixed shape is enough to
+    // satisfy `FsReadService`.
+    stat: async () => ({ version: 1, type: 'file', size: 0 }),
+    writeText: async () => ({ operation: 'update', version: 1, before: null, after: '' }),
   };
 }
 

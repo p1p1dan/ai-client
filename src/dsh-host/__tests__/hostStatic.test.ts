@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,128 @@ import { describe, expect, it } from 'vitest';
 const HOST_DIR = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (...parts: string[]) => readFileSync(join(HOST_DIR, ...parts), 'utf8');
 const host = read('host.ts');
+
+/**
+ * Strips `//` and `/* *\/` comments from a JSONC document, respecting string
+ * literals (so a glob pattern's own slashes are never mistaken for the start
+ * of a comment). `tsconfig.json` is JSONC, not JSON — `JSON.parse` alone
+ * cannot read it.
+ */
+function stripJsonComments(text: string): string {
+  let out = '';
+  let inString = false;
+  let inLineComment = false;
+  let inBlockComment = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text[i];
+    const next = text[i + 1];
+    if (inLineComment) {
+      if (c === '\n') {
+        inLineComment = false;
+        out += c;
+      }
+      continue;
+    }
+    if (inBlockComment) {
+      if (c === '*' && next === '/') {
+        inBlockComment = false;
+        i += 1;
+      }
+      continue;
+    }
+    if (inString) {
+      out += c;
+      if (c === '\\') {
+        out += next;
+        i += 1;
+      } else if (c === '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (c === '"') {
+      inString = true;
+      out += c;
+    } else if (c === '/' && next === '/') {
+      inLineComment = true;
+      i += 1;
+    } else if (c === '/' && next === '*') {
+      inBlockComment = true;
+      i += 1;
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+/** True if `dir`, or any directory nested under it, holds at least one `.ts` file. */
+function containsTsFile(dir: string): boolean {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (containsTsFile(full)) return true;
+    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+describe('every TS source directory under src/dsh-host/ is in the tsconfig gate', () => {
+  /**
+   * Excluded top-level directories, and why — none of these are this row's
+   * own TypeScript source, so a `.ts` file inside them (now or later) should
+   * not pull them into `tsconfig.json`'s `include`:
+   *   - `node_modules`: the vendored dependency tree (P0-3's own docstring:
+   *     this package has its own `node_modules`); not this project's source,
+   *     and already outside `tsc`'s reach via tsconfig's own `exclude`.
+   *   - `bundle`: the compiled Cordis patch bundle `scripts/build-dsh-host.mjs`
+   *     writes over (plugin.ts's docstring); its `lib/*.js` are pre-built
+   *     one-line re-exports, and the directory is already in tsconfig's own
+   *     `exclude`.
+   *   - `plugins`: plugin allowlist data (`allowlist.json`) and review notes
+   *     (`reviews/*.md`) — no TypeScript source, ever.
+   * If P1-13c/13d's miss (encryptedRead/ shipped with no include entry, so no
+   * tsc gate ever checked it) happens again for some other row, this test
+   * catches it: any other new top-level directory with a `.ts` file must earn
+   * its own `include` entry or this suite fails.
+   */
+  const EXCLUDED_DIRS = new Set(['node_modules', 'bundle', 'plugins']);
+
+  const tsconfig = JSON.parse(stripJsonComments(read('tsconfig.json'))) as {
+    include: readonly string[];
+  };
+
+  const tsDirs = readdirSync(HOST_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !EXCLUDED_DIRS.has(entry.name))
+    .map((entry) => entry.name)
+    .filter((name) => containsTsFile(join(HOST_DIR, name)))
+    .sort();
+
+  it('the scan itself finds the rows this suite already knows about', () => {
+    // A silently broken scan (e.g. returning []) would make every it.each
+    // below vacuously pass; pin known rows so that cannot happen unnoticed.
+    expect(tsDirs).toEqual(
+      expect.arrayContaining([
+        '__tests__',
+        'bridge',
+        'credentials',
+        'encryptedRead',
+        'lib',
+        'loopGuard',
+        'permissions',
+        'tools',
+      ])
+    );
+  });
+
+  it.each(tsDirs)('%s is covered by a tsconfig.json include entry', (dirName) => {
+    const prefix = `${dirName}/`;
+    const covered = tsconfig.include.some((pattern) => pattern.startsWith(prefix));
+    expect(covered, `no "include" entry starts with "${prefix}"`).toBe(true);
+  });
+});
 
 describe('host.ts reads no .env file (HS-01, decision 023)', () => {
   it('never calls a DSH .env loader, not even by name', () => {

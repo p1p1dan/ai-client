@@ -23,7 +23,7 @@
 
 import { FsError } from '@deepseek-ai/dsh-fs';
 import { ENCRYPTED_READ_ENV, ENCRYPTED_READ_ROW } from './constants.ts';
-import type { EncryptedReadRowContext } from './dshTypes.ts';
+import type { EncryptedReadRowContext, FsErrorCtor } from './dshTypes.ts';
 import { installEncryptedRead } from './encryptedRead.ts';
 import { createPowerShellReader } from './powershellReader.ts';
 
@@ -65,7 +65,12 @@ export function apply(ctx: EncryptedReadRowContext): void {
     service,
     reader: createPowerShellReader(),
     platform: process.platform,
-    createError: FsError,
+    // `FsError`'s real constructor narrows `code` to dsh-fs's own
+    // `FsErrorCode` union, which does not include this row's own
+    // `FS_ENCRYPTED` extension (constants.ts) — that is the only reason this
+    // needs a cast; `FsError` does not validate `code` at runtime, so passing
+    // a code outside that union is safe and behaves exactly as declared here.
+    createError: FsError as unknown as FsErrorCtor,
     log,
   });
   if (!wrapped) log('the fs service was already wrapped by an earlier start');

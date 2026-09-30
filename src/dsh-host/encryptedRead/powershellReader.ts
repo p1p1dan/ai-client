@@ -157,7 +157,11 @@ export function createPowerShellReader(options: PowerShellReaderOptions = {}): F
           child.kill();
           reject(error);
         } else {
-          resolve(value);
+          // Every call site passes a real Uint8Array when `error` is
+          // undefined (the success branch in `close` below); `error`/`value`
+          // are independent optional parameters, so the type checker cannot
+          // see that link on its own.
+          resolve(value as Uint8Array);
         }
       };
 
