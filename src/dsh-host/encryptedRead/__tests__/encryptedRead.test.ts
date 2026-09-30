@@ -88,7 +88,7 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
     return path;
   };
 
-  it('wraps nothing outside win32', () => {
+  it('wraps nothing outside win32', async () => {
     const service = makeService();
     const reader = makeReader(() => PLAINTEXT);
     const result = installEncryptedRead({
@@ -100,7 +100,7 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
     expect(result).toEqual({ wrapped: false, entries: [] });
     const cipher = targetOf(writeTemp('linux-inert.yml', CIPHERTEXT));
     // The untouched service answers with its own sentinel, reader never runs.
-    expect(service.readText(cipher)).resolves.toBe('ORIGINAL-TEXT');
+    await expect(service.readText(cipher)).resolves.toBe('ORIGINAL-TEXT');
     expect(reader).not.toHaveBeenCalled();
   });
 
@@ -262,9 +262,10 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
       () => service.readBytes(cipher, undefined, 100),
       () => service.readByteRange(cipher, { offset: 0, length: 10 }),
     ]) {
+      // The read entrances keep the `read` verb; the edit has its own.
       await expect(run()).rejects.toMatchObject({
         code: 'FS_ENCRYPTED',
-        message: expect.stringContaining('returned ciphertext too'),
+        message: `cannot read "${cipher.displayPath}": the file is protected by a disk-encryption policy — the decryption fallback returned ciphertext too`,
       });
     }
   });
@@ -299,7 +300,10 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
       createError: FakeFsError,
     });
     const cipher = targetOf(writeTemp('aborted.yml', CIPHERTEXT));
-    await expect(service.readText(cipher)).rejects.toMatchObject({ code: 'FS_ABORTED' });
+    await expect(service.readText(cipher)).rejects.toMatchObject({
+      code: 'FS_ABORTED',
+      message: 'read aborted',
+    });
   });
 
   it('editText edits an encrypted file through the fallback and delegates every other file', async () => {
@@ -374,7 +378,7 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
     });
     expect(again.wrapped).toBe(false);
     // The first wrap still works after the refused second install.
-    expect(service.readText(cipher)).resolves.toBe(new TextDecoder().decode(PLAINTEXT));
+    await expect(service.readText(cipher)).resolves.toBe(new TextDecoder().decode(PLAINTEXT));
   });
 });
 

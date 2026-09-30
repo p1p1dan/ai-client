@@ -72,7 +72,7 @@ Windows 加密机（装了公司加密策略；仓库公开，机器与账号信
 
 ### 4.2 拒绝场景
 
-- **回退解不出明文的加密文件**（TSD 头 + 二进制体，PowerShell 原样读回）：编辑被拒，`FS_ENCRYPTED`，文案为决策 091 里 edit 的那句（"cannot edit … the file is protected by a disk-encryption policy — … returned ciphertext too"）；**文件字节逐一不变**。
+- **回退解不出明文的加密文件**（TSD 头 + 二进制体，PowerShell 原样读回）：编辑被拒，`FS_ENCRYPTED`；**文件字节逐一不变**。文案：实测时的代码在 edit 路径把动词写死成 read，实际给出的是 `cannot read "…": the file is protected by a disk-encryption policy — the decryption fallback returned ciphertext too`（当时的断言只查子串 `returned ciphertext too`，没发现）。编排者复核后（2026-09-30）已改为决策 091 里 edit 那句的主干：`cannot edit "…": the file is protected by a disk-encryption policy — the decryption fallback returned ciphertext too`，由 Linux 单测钉住，未回加密机复测（见决策 136 修订记录）。
 - **rb / docx / pptx**：本机 PowerShell 写入这三类**不加密**（与决策 135 的 settled 复测一致），所以 node 视角是普通明文文件，编辑按普通文件处理（未被本行包装），可正常编辑。若在其他机器上它们被加密且 PowerShell 读不出，则落入上面那条，明确拒绝。
 - 结果：回退读不出明文的加密文件**明确拒绝、不写入**，符合决策 135 第 5 条。
 
@@ -117,7 +117,7 @@ Windows 加密机（装了公司加密策略；仓库公开，机器与账号信
 
 - `markerEditOk = true`、`markerEditMs = 25 ms`（编辑成功）；
 - `markerRereadSeesEdit = true`（复读拿到 `ENC-EDITED-<token>`，该串只存在于编辑后的文件）；
-- `uneditableRefused = true`、`uneditableRefusalMs = 198 ms`（解不出的文件明确拒绝）；
+- `uneditableRefused = true`、`uneditableRefusalMs = 198 ms`（解不出的文件被明确拒绝。这一项测的是 **read** 拒绝：`refuseName` 插入的是一次 `read`；读失败的文件再 edit 会先被观察策略以 `FS_NOT_OBSERVED` 拦下，所以「edit 仍是密文的文件被拒」只有单测覆盖，见决策 136 第 19 条）；
 - `ciphertextNeverServed = true`（任何 read 的输出都不含密文体）；
 - `powershellSpawns = 1`（探针日志确认只拉起一次 PowerShell）；
 - `plaintextEditStillWorks = true`（明文文件的编辑未受影响）。

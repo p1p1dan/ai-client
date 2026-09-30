@@ -68,7 +68,8 @@ export type FsErrorCtor = new (
  * encrypted-edit path (P1-13d; decision 135) checks the read's version through
  * the service's own `stat` and writes back through its `writeText` with a
  * `replaceIfVersion` guard, so both the version compare and the sandbox fence
- * stay the backend's, never a copy.
+ * stay the backend's, never a copy; `checkedTarget` (optional) lets the edit
+ * run that fence before its fallback read rather than only at write time.
  */
 export interface FsReadService {
   readText(target: FsTarget, signal?: AbortSignal): Promise<string>;
@@ -94,6 +95,14 @@ export interface FsReadService {
     signal?: AbortSignal,
     sandboxPolicy?: unknown
   ): Promise<FsWriteOutcome>;
+  /**
+   * dsh-fs-sandbox `SandboxedFileSystem.checkedTarget`: the per-call policy
+   * fence its own `writeText` and `editText` run first, returning the exact
+   * target the mutation must use or throwing `FS_SANDBOX_DENIED`. The
+   * encrypted edit runs it before its fallback read, as the native edit
+   * does. Absent on the unfenced dsh-fs-local backend.
+   */
+  checkedTarget?(target: FsTarget, sandboxPolicy?: unknown): Promise<FsTarget>;
 }
 
 /**

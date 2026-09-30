@@ -13,10 +13,11 @@
  *   readBytes                same, with the caller's `maxBytes` enforced
  *                            against the plaintext length
  *   readByteRange            the byte window taken from the plaintext
- *   editText                 TSD ciphertext in, plaintext from the fallback
+ *   editText                 TSD ciphertext in, the service's own sandbox
+ *                            fence first, then plaintext from the fallback
  *                            reader out for a literal search/replace, written
  *                            back through the service's own version-guarded
- *                            `writeText` (P1-13d; decision 135)
+ *                            `writeText` (P1-13d; decisions 135, 136)
  *
  * A file whose node-visible prefix does NOT start with the marker is left to
  * the original method untouched; the only extra cost of a normal read is the
@@ -44,10 +45,12 @@ import { isTsdHeader, readFilePrefix } from './tsdHeader.ts';
 /** Marks a service this installer already wrapped; a second install is a no-op. */
 const INSTALL_MARK = Symbol('aiclient-encrypted-read');
 
-/** The refusal message every encrypted-file outcome shares. */
-function encryptedRefusal(displayPath: string, verb: 'read' | 'edit', reason?: string): string {
-  const head = `cannot ${verb} "${displayPath}": the file is protected by a disk-encryption policy`;
-  return reason === undefined ? `${head} and cannot be read here` : `${head} — ${reason}`;
+/** The operation a fallback serves; it names the verb in refusals and aborts. */
+type FallbackVerb = 'read' | 'edit';
+
+/** The refusal message every encrypted-file outcome shares, with its cause. */
+function encryptedRefusal(displayPath: string, verb: FallbackVerb, reason: string): string {
+  return `cannot ${verb} "${displayPath}": the file is protected by a disk-encryption policy — ${reason}`;
 }
 
 function isAbortError(error: unknown): boolean {
@@ -63,29 +66,32 @@ function reasonOf(error: unknown): string {
 /**
  * Read the file through the fallback reader and validate what came back:
  * still-ciphertext, an aborted read, a failed reader or an oversized result
- * all raise; only plaintext the marker check accepts gets through.
+ * all raise; only plaintext the marker check accepts gets through. `verb` is
+ * the operation the caller serves, so an edit refuses as `cannot edit` and
+ * aborts as `edit aborted`, the words dsh-fs-local uses for its own edit.
  */
 async function fallbackPlaintext(
   reader: FallbackReader,
-  targetKey: string,
-  displayPath: string,
+  target: FsTarget,
+  verb: FallbackVerb,
   signal: AbortSignal | undefined,
   createError: FsErrorCtor
 ): Promise<Uint8Array> {
+  const { targetKey, displayPath } = target;
   let plain: Uint8Array;
   try {
     plain = await reader(targetKey, signal);
   } catch (error) {
-    if (isAbortError(error)) throw new createError('read aborted', 'FS_ABORTED');
+    if (isAbortError(error)) throw new createError(`${verb} aborted`, 'FS_ABORTED');
     throw new createError(
-      encryptedRefusal(displayPath, 'read', `the decryption fallback failed: ${reasonOf(error)}`),
+      encryptedRefusal(displayPath, verb, `the decryption fallback failed: ${reasonOf(error)}`),
       FS_ENCRYPTED,
       { cause: error }
     );
   }
   if (isTsdHeader(plain)) {
     throw new createError(
-      encryptedRefusal(displayPath, 'read', 'the decryption fallback returned ciphertext too'),
+      encryptedRefusal(displayPath, verb, 'the decryption fallback returned ciphertext too'),
       FS_ENCRYPTED
     );
   }
@@ -93,7 +99,7 @@ async function fallbackPlaintext(
     throw new createError(
       encryptedRefusal(
         displayPath,
-        'read',
+        verb,
         `the decrypted file is larger than the ${FALLBACK_MAX_PLAINTEXT_BYTES}-byte fallback limit`
       ),
       FS_ENCRYPTED
@@ -181,13 +187,7 @@ export function installEncryptedRead(
     if (signal?.aborted || !(await needsFallback(target.targetKey, signal))) {
       return originalReadText(target, signal);
     }
-    const plain = await fallbackPlaintext(
-      reader,
-      target.targetKey,
-      target.displayPath,
-      signal,
-      createError
-    );
+    const plain = await fallbackPlaintext(reader, target, 'read', signal, createError);
     return decodeFallbackText(plain, target.displayPath, createError);
   };
 
@@ -195,13 +195,7 @@ export function installEncryptedRead(
     if (signal?.aborted || !(await needsFallback(target.targetKey, signal))) {
       return originalStreamText(target, signal);
     }
-    const plain = await fallbackPlaintext(
-      reader,
-      target.targetKey,
-      target.displayPath,
-      signal,
-      createError
-    );
+    const plain = await fallbackPlaintext(reader, target, 'read', signal, createError);
     const text = decodeFallbackText(plain, target.displayPath, createError);
     // Chunk boundaries carry no meaning downstream; one chunk is a valid stream.
     return (async function* singleChunk() {
@@ -213,13 +207,7 @@ export function installEncryptedRead(
     if (signal?.aborted || !(await needsFallback(target.targetKey, signal))) {
       return originalReadBytes(target, signal, maxBytes);
     }
-    const plain = await fallbackPlaintext(
-      reader,
-      target.targetKey,
-      target.displayPath,
-      signal,
-      createError
-    );
+    const plain = await fallbackPlaintext(reader, target, 'read', signal, createError);
     if (maxBytes !== undefined && plain.length > maxBytes) {
       throw new createError(
         `cannot read "${target.displayPath}": ${plain.length} bytes exceeds the ${maxBytes}-byte limit`,
@@ -244,13 +232,7 @@ export function installEncryptedRead(
         'FS_IO_ERROR'
       );
     }
-    const plain = await fallbackPlaintext(
-      reader,
-      target.targetKey,
-      target.displayPath,
-      signal,
-      createError
-    );
+    const plain = await fallbackPlaintext(reader, target, 'read', signal, createError);
     if (range.length === 0) return new Uint8Array(0);
     // A window at or past the end is empty, as in the original.
     return Buffer.from(plain.subarray(range.offset, range.offset + range.length));
@@ -263,17 +245,28 @@ export function installEncryptedRead(
    * before the fallback ran. The fence, the version compare and the atomic
    * publication all stay the backend's; only the read basis changes.
    *
-   * Error order mirrors dsh-fs-local's `editText`: a missing file, a
+   * Error order mirrors the host's `SandboxedFileSystem.editText`: the sandbox
+   * fence first, then dsh-fs-local's own order — a missing file, a
    * non-regular file and a caller-supplied `expected` mismatch are decided
    * from the fresh stat, then the content is read and matched.
    */
   const editEncrypted = async (
-    target: FsTarget,
+    requested: FsTarget,
     edit: { oldString: string; newString: string; replaceAll?: boolean },
     expected: unknown,
     signal: AbortSignal | undefined,
     sandboxPolicy: unknown
   ): Promise<unknown> => {
+    // Fence first, as the sandboxed backend does before its own edit: an edit
+    // the policy refuses fails with the sandbox's error before any stat,
+    // fallback read or match, and every later step uses the target the fence
+    // returned, so the checked identity is the edited one. An unfenced
+    // backend has no `checkedTarget` and goes straight on.
+    const target =
+      typeof service.checkedTarget === 'function'
+        ? await service.checkedTarget(requested, sandboxPolicy)
+        : requested;
+
     // The service's own stat: the same probe `writeText` compares against, so
     // this version and the guarded write agree by construction.
     const before = await service.stat(target, signal);
@@ -297,13 +290,7 @@ export function installEncryptedRead(
       );
     }
 
-    const plain = await fallbackPlaintext(
-      reader,
-      target.targetKey,
-      target.displayPath,
-      signal,
-      createError
-    );
+    const plain = await fallbackPlaintext(reader, target, 'edit', signal, createError);
     // `readForEdit` scans the WHOLE buffer for NUL and decodes strictly: the
     // same judgement, on the plaintext the fallback returned instead.
     if (plain.subarray(0, plain.length).includes(0)) {
@@ -324,9 +311,10 @@ export function installEncryptedRead(
     const edited = applyLiteralEdit(original, edit, target.displayPath, createError);
     const content = restoreLineEndings(edited.content, detectLineEndings(raw));
 
-    // The write goes through the service, so the sandbox fence and the
-    // version guard are the backend's own; the file is re-encrypted by the
-    // policy afterwards, which is the expected round trip (decision 135).
+    // The write goes through the service, so the version guard and the
+    // atomic publication are the backend's own; a sandboxed backend fences
+    // again here, which is redundant but harmless. The policy leaves node's
+    // write as plaintext (decision 135, revised 2026-09-30).
     const outcome = await service.writeText(
       target,
       content,

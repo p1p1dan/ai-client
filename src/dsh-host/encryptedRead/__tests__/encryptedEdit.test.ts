@@ -361,7 +361,11 @@ describe('editing an encrypted file (P1-13d, decision 135)', () => {
     });
   });
 
-  it('refuses FS_ENCRYPTED when the fallback still returns ciphertext', async () => {
+  /** The edit refusal: decision 091's edit sentence, carrying the fallback's cause. */
+  const editRefusal = (target: FsTarget, reason: string) =>
+    `cannot edit "${target.displayPath}": the file is protected by a disk-encryption policy — ${reason}`;
+
+  it('refuses FS_ENCRYPTED when the fallback still returns ciphertext, in the edit wording', async () => {
     const service = makeService();
     install(service, makeReader(new Uint8Array([...TSD_HEADER, 1, 2, 3])));
     const target = cipherTarget();
@@ -369,28 +373,129 @@ describe('editing an encrypted file (P1-13d, decision 135)', () => {
       service.editText(target, { oldString: 'a', newString: 'b' })
     ).rejects.toMatchObject({
       code: 'FS_ENCRYPTED',
-      message: expect.stringContaining('returned ciphertext too'),
+      message: editRefusal(target, 'the decryption fallback returned ciphertext too'),
     });
     expect(service.writes).toHaveLength(0);
   });
 
-  it('refuses FS_ENCRYPTED when the fallback reader fails, and FS_ABORTED when it aborts', async () => {
+  it('refuses FS_ENCRYPTED when the fallback reader fails, and FS_ABORTED as `edit aborted` when it aborts', async () => {
     const failing = makeService();
     install(failing, makeReader(new Error('spawn exploded')));
+    const failingTarget = cipherTarget();
     await expect(
-      failing.editText(cipherTarget(), { oldString: 'a', newString: 'b' })
+      failing.editText(failingTarget, { oldString: 'a', newString: 'b' })
     ).rejects.toMatchObject({
       code: 'FS_ENCRYPTED',
-      message: expect.stringContaining('the decryption fallback failed'),
+      message: editRefusal(failingTarget, 'the decryption fallback failed: spawn exploded'),
     });
 
     const aborted = makeService();
     const abortError = new Error('aborted');
     abortError.name = 'AbortError';
     install(aborted, makeReader(abortError));
+    // dsh-fs-local's own edit aborts with exactly this message and code.
     await expect(
       aborted.editText(cipherTarget(), { oldString: 'a', newString: 'b' })
-    ).rejects.toMatchObject({ code: 'FS_ABORTED' });
+    ).rejects.toMatchObject({ code: 'FS_ABORTED', message: 'edit aborted' });
+    expect(failing.writes).toHaveLength(0);
+    expect(aborted.writes).toHaveLength(0);
+  });
+
+  it('refuses FS_ENCRYPTED for plaintext above the fallback cap, in the edit wording', async () => {
+    const service = makeService();
+    install(service, makeReader(new Uint8Array(32 * 1024 * 1024 + 1)));
+    const target = cipherTarget();
+    await expect(
+      service.editText(target, { oldString: 'a', newString: 'b' })
+    ).rejects.toMatchObject({
+      code: 'FS_ENCRYPTED',
+      message: editRefusal(
+        target,
+        'the decrypted file is larger than the 33554432-byte fallback limit'
+      ),
+    });
+    expect(service.writes).toHaveLength(0);
+  });
+
+  it('runs the sandbox fence before anything else, so a refused edit never spawns the fallback', async () => {
+    const service = makeService();
+    const reader = makeReader('alpha\nbeta\n');
+    const checkedTarget = vi.fn(async (target: FsTarget, policy: unknown) => {
+      service.calls.push({ method: 'checkedTarget', args: [target, policy] });
+      throw new FakeFsError(
+        `cannot write "${target.displayPath}": file access denied under read-only mode`,
+        'FS_SANDBOX_DENIED'
+      );
+    });
+    Object.assign(service, { checkedTarget });
+    install(service, reader);
+    const target = cipherTarget();
+    const policy = { mode: 'read-only' };
+
+    // `nowhere` does not occur in the plaintext: the sandbox's refusal wins
+    // over the FS_EDIT_NOT_FOUND a late fence would have let through first.
+    await expect(
+      service.editText(
+        target,
+        { oldString: 'nowhere', newString: 'x' },
+        undefined,
+        undefined,
+        policy
+      )
+    ).rejects.toMatchObject({
+      code: 'FS_SANDBOX_DENIED',
+      message: `cannot write "${target.displayPath}": file access denied under read-only mode`,
+    });
+    expect(checkedTarget).toHaveBeenCalledWith(target, policy);
+    expect(reader).not.toHaveBeenCalled();
+    expect(service.calls.map((call) => call.method)).toEqual(['checkedTarget']);
+    expect(service.writes).toHaveLength(0);
+  });
+
+  it('carries on with the target the fence returned, and still writes back through writeText', async () => {
+    const service = makeService({ version: 'v3' });
+    const reader = makeReader('alpha\nbeta\n');
+    const requested = cipherTarget();
+    // A fence may hand back a freshly resolved target (dsh-fs-sandbox does in
+    // workspace-write mode); the stat, the read and the write must all use it.
+    const fresh: FsTarget = {
+      targetKey: `${requested.targetKey}.fresh`,
+      displayPath: 'fresh/cipher.yml',
+    };
+    const checkedTarget = vi.fn(async (target: FsTarget, policy: unknown) => {
+      service.calls.push({ method: 'checkedTarget', args: [target, policy] });
+      return fresh;
+    });
+    Object.assign(service, { checkedTarget });
+    install(service, reader);
+    const policy = { mode: 'workspace-write' };
+
+    await service.editText(
+      requested,
+      { oldString: 'beta', newString: 'BETA' },
+      undefined,
+      undefined,
+      policy
+    );
+
+    expect(service.calls.map((call) => call.method)).toEqual([
+      'checkedTarget',
+      'stat',
+      'writeText',
+    ]);
+    expect(checkedTarget).toHaveBeenCalledWith(requested, policy);
+    expect(service.calls[1]?.args[0]).toBe(fresh);
+    expect(reader).toHaveBeenCalledWith(fresh.targetKey, undefined);
+    // The five-argument write still carries the caller's policy: the backend
+    // fences once more at write time, which is redundant but harmless.
+    expect(service.calls[2]?.args[0]).toBe(fresh);
+    expect(service.writes).toEqual([
+      {
+        content: 'alpha\nBETA\n',
+        expected: { kind: 'replaceIfVersion', version: 'v3' },
+        sandboxPolicy: policy,
+      },
+    ]);
   });
 
   it('leaves the plaintext path untouched: no stat, no fallback, the original edit answers', async () => {

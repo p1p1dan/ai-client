@@ -60,6 +60,9 @@ describe('the five wrapped entrances keep their names and signatures (P1-13c)', 
     expect(sandbox).toMatch(/async editText\(target, edit, expected, signal, sandboxPolicy\)/);
     // The wrapper passes a fifth argument through to the sandbox fence.
     expect(sandbox).toContain('super.editText(await this.checkedTarget(target, sandboxPolicy)');
+    // The encrypted edit runs that same public fence before its fallback read
+    // (decision 136, revised); a rename would only move the fence to write time.
+    expect(sandbox).toContain('async checkedTarget(target, sandboxPolicy) {');
   });
 });
 
