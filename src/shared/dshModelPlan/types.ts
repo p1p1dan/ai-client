@@ -84,7 +84,11 @@ export type DshFieldDropReason =
   | 'sampling_params'
   | 'reserved_header'
   | 'unresolved_header'
-  | 'invalid_header';
+  | 'invalid_header'
+  /** Decision 141: `off` cannot be offered to a row forced onto adaptive thinking. */
+  | 'adaptive_thinking_forced'
+  /** Decision 141: advisory only — a reasoning row with no declared adaptive-only compat. */
+  | 'adaptive_thinking_undeclared';
 
 export type DshPlanDrop =
   | {

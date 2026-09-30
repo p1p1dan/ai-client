@@ -227,8 +227,39 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     return Object.keys(out).length > 0 ? out : undefined;
   };
 
+  /**
+   * Decision 141: this row's effective `compat.forceAdaptiveThinking`, if any
+   * layer set it.
+   *
+   * A row's own switch wins field by field over the provider's, mirroring
+   * `dsh-llm-pi-ai`'s own route/model compat merge (`resolveModelCompat`) — a
+   * route declaring it once for every model under it (the shipped `claude`
+   * provider) must still take effect per model. `declared` is true whenever
+   * either layer named the field at all, even as `false`: a row that opted out
+   * on purpose is not the undeclared case the advisory below warns about.
+   */
+  const adaptiveThinkingCompat = (
+    api: DshProtocol,
+    rowCompat: unknown,
+    providerCompat: unknown
+  ): { declared: boolean; forced: boolean } => {
+    if (api !== 'anthropic-messages') return { declared: false, forced: false };
+    const rowValue = isRecord(rowCompat) ? rowCompat.forceAdaptiveThinking : undefined;
+    if (rowValue !== undefined) return { declared: true, forced: rowValue === true };
+    const providerValue = isRecord(providerCompat)
+      ? providerCompat.forceAdaptiveThinking
+      : undefined;
+    if (providerValue !== undefined) return { declared: true, forced: providerValue === true };
+    return { declared: false, forced: false };
+  };
+
   /** R7 / R8 for one row. */
-  const planModel = (model: AcceptedModel, api: DshProtocol, providerId: string): DshPlanModel => {
+  const planModel = (
+    model: AcceptedModel,
+    api: DshProtocol,
+    providerId: string,
+    providerCompat: unknown
+  ): DshPlanModel => {
     const { raw, id } = model;
     const name = nonEmptyString(raw.name);
     const contextWindow = positiveInteger(raw.contextWindow);
@@ -246,13 +277,34 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     if (raw.samplingParams !== undefined) {
       dropField(providerId, id, 'samplingParams', 'sampling_params');
     }
+    let reasoningEfforts = translateReasoningEfforts(raw.reasoning, raw.thinkingLevelMap);
+    const adaptive = adaptiveThinkingCompat(api, raw.compat, providerCompat);
+    if (adaptive.forced) {
+      // Decision 141: pi-ai's anthropic-messages path sends `thinking:{type:
+      // "disabled"}` for any non-null `off`, which an adaptive-only model's API
+      // refuses with a 400 (user report: Opus 5.5 on 1.0.4's manual compaction).
+      // Adaptive thinking has no "disabled" state, so `off` is withheld no
+      // matter what models.json declares for it — the row loses `off` from its
+      // effort menu, never the other levels.
+      if (reasoningEfforts !== false && reasoningEfforts.off !== undefined) {
+        const { off: _off, ...rest } = reasoningEfforts;
+        reasoningEfforts = rest;
+        dropField(providerId, id, 'reasoningEfforts.off', 'adaptive_thinking_forced');
+      }
+    } else if (api === 'anthropic-messages' && raw.reasoning === true && !adaptive.declared) {
+      // Decision 141: advisory only. A model id alone cannot tell us whether it
+      // is adaptive-only, so this is a hint for whoever edits models.json next,
+      // not a behavior change. A row (or its provider) that already declared
+      // the switch, even as `false`, made that call on purpose.
+      dropField(providerId, id, 'compat.forceAdaptiveThinking', 'adaptive_thinking_undeclared');
+    }
     return {
       id,
       ...(name ? { name } : {}),
       ...(contextWindow ? { contextWindow } : {}),
       ...(maxTokens ? { maxTokens } : {}),
       ...(input.length > 0 ? { input } : {}),
-      reasoningEfforts: translateReasoningEfforts(raw.reasoning, raw.thinkingLevelMap),
+      reasoningEfforts,
       ...(compat ? { compat } : {}),
     };
   };
@@ -346,7 +398,7 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     for (const model of accepted) {
       const group = groups[model.group] as RouteGroup;
       const route = routeKeys[model.group] as string;
-      const planned = planModel(model, group.api, providerId);
+      const planned = planModel(model, group.api, providerId, provider.compat);
       (routes[route] as DshPlanRoute).models.push(planned);
       index[`${providerId}/${model.id}`] = {
         route,

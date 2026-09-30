@@ -137,6 +137,143 @@ describe('MP-04 compat (R6)', () => {
   });
 });
 
+describe('adaptive-only thinking hardening (decision 141)', () => {
+  it('withholds off from a row whose own compat forces adaptive thinking, and records why', () => {
+    const p = plan({
+      claude: provider('anthropic-messages', [
+        {
+          id: 'opus',
+          reasoning: true,
+          thinkingLevelMap: { off: 'none', high: 'high' },
+          compat: { forceAdaptiveThinking: true },
+        },
+      ]),
+    });
+    expect(p.routes.claude?.models[0]?.reasoningEfforts).toStrictEqual({
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.index['claude/opus']?.efforts).toEqual(['low', 'medium', 'high']);
+    expect(p.dropped).toContainEqual({
+      kind: 'field',
+      providerId: 'claude',
+      modelId: 'opus',
+      field: 'reasoningEfforts.off',
+      reason: 'adaptive_thinking_forced',
+    });
+    expect(p.dropped).not.toContainEqual(
+      expect.objectContaining({ reason: 'adaptive_thinking_undeclared' })
+    );
+  });
+
+  it("inherits the provider-level switch, matching dsh-llm-pi-ai's own route/model compat merge", () => {
+    const p = plan({
+      claude: provider(
+        'anthropic-messages',
+        [{ id: 'opus', reasoning: true, thinkingLevelMap: { off: 'none', high: 'high' } }],
+        { compat: { forceAdaptiveThinking: true } }
+      ),
+    });
+    expect(p.routes.claude?.models[0]?.reasoningEfforts).toStrictEqual({
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.dropped).toEqual([
+      {
+        kind: 'field',
+        providerId: 'claude',
+        modelId: 'opus',
+        field: 'reasoningEfforts.off',
+        reason: 'adaptive_thinking_forced',
+      },
+    ]);
+  });
+
+  it('lets a row opt back out of the provider-level switch (model wins field by field)', () => {
+    const p = plan({
+      claude: provider(
+        'anthropic-messages',
+        [
+          {
+            id: 'legacy',
+            reasoning: true,
+            thinkingLevelMap: { off: 'none', high: 'high' },
+            compat: { forceAdaptiveThinking: false },
+          },
+        ],
+        { compat: { forceAdaptiveThinking: true } }
+      ),
+    });
+    expect(p.routes.claude?.models[0]?.reasoningEfforts).toStrictEqual({
+      off: 'none',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.dropped).toEqual([]);
+  });
+
+  it('leaves a legacy anthropic-messages row with no forceAdaptiveThinking unchanged, but hints at declaring it', () => {
+    const p = plan({
+      claude: provider('anthropic-messages', [
+        { id: 'legacy', reasoning: true, thinkingLevelMap: { off: 'none', high: 'high' } },
+      ]),
+    });
+    expect(p.routes.claude?.models[0]?.reasoningEfforts).toStrictEqual({
+      off: 'none',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.index['claude/legacy']?.efforts).toEqual(['off', 'low', 'medium', 'high']);
+    expect(p.dropped).toEqual([
+      {
+        kind: 'field',
+        providerId: 'claude',
+        modelId: 'legacy',
+        field: 'compat.forceAdaptiveThinking',
+        reason: 'adaptive_thinking_undeclared',
+      },
+    ]);
+  });
+
+  it('gives neither diagnostic to a non-reasoning row, or to any row on another protocol', () => {
+    const p = plan({
+      claude: provider('anthropic-messages', [{ id: 'plain', reasoning: false }]),
+      china: provider('openai-completions', [
+        { id: 'glm', reasoning: true, thinkingLevelMap: { off: 'none', high: 'high' } },
+      ]),
+    });
+    expect(p.routes.claude?.models[0]?.reasoningEfforts).toBe(false);
+    expect(p.routes.china?.models[0]?.reasoningEfforts).toStrictEqual({
+      off: 'none',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.dropped).toEqual([]);
+  });
+
+  it('leaves the zai thinking-disabled path untouched (openai-completions is never adaptive-only here)', () => {
+    const p = plan({
+      z: provider(
+        'openai-completions',
+        [{ id: 'glm', reasoning: true, thinkingLevelMap: { off: 'none', high: 'high' } }],
+        { compat: { thinkingFormat: 'zai' } }
+      ),
+    });
+    expect(p.routes.z?.models[0]?.reasoningEfforts).toStrictEqual({
+      off: 'none',
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.dropped).toEqual([]);
+  });
+});
+
 describe('MP-05 protocols and defaults (R2, R7, decision 036)', () => {
   const ALL_TEN = [
     'openai-completions',
