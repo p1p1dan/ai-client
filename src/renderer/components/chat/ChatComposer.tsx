@@ -15,6 +15,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -37,6 +38,11 @@ import {
   statusForNextTurn,
   useChatSessionsStore,
 } from '@/stores/chatSessions';
+import {
+  mergeOfferedText,
+  switchComposerDraft,
+  useComposerDraftsStore,
+} from '@/stores/composerDrafts';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import { useFileOpenIntentStore } from '@/stores/fileOpenIntent';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
@@ -482,7 +488,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // "the last turn failed" signal. Carries `drafts` (T-18's `{ text }`
   // upgraded per decision 2.2) so Retry replays the EXACT attachments that
   // failed, not whatever happens to be in the live list.
+  //
+  // P1-7e (problem 33): it also names the chat it failed in. A send can fail
+  // after the user switched chats, and an unscoped snapshot put that chat's
+  // Retry — and its text — under the chat on screen.
   const [retryable, setRetryable] = useState<{
+    sessionId: string;
     text: string;
     drafts: readonly AttachmentDraft[];
   } | null>(null);
@@ -630,6 +641,14 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
   const activeSessionId = useChatSessionsStore((state) => state.activeSessionId);
+  /**
+   * P1-7e (problem 33, decision 139): the chat whose draft the composer holds.
+   * It trails `activeSessionId` by the render in which a switch lands: the
+   * layout effect below parks the outgoing chat's draft, takes the incoming
+   * one's, and only then moves this. Anything that writes a draft for a chat
+   * asks this, not `activeSessionId`, whether that chat is the one in the box.
+   */
+  const draftOwnerRef = useRef<string | null>(activeSessionId);
   /**
    * T091: the send in flight belongs to the session on screen. This is what
    * every user-facing affordance reads — Stop, the placeholder, the status line,
@@ -807,8 +826,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // U28: `!activeSessionId` no longer locks it either — "nowhere to put this
   // draft" stopped being true once the first send creates the session.
   const attachments = useComposerAttachments({ disabled: Boolean(disabled) });
-  const { clearDrafts: clearAttachmentDrafts, dismissNotice: dismissAttachmentNotice } =
-    attachments;
+  const {
+    dismissNotice: dismissAttachmentNotice,
+    getLiveDrafts: getLiveAttachmentDrafts,
+    replaceDrafts: replaceAttachmentDrafts,
+  } = attachments;
   // dsh-rebase P1-4c2 (decision 096): the engine refused an attachment of a
   // send or an interjection. Said next to the attachments, which stay in the
   // composer with the text for the user to remove or replace.
@@ -851,6 +873,15 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // be clobbered.
   const restoreDraftIfComposerEmpty = useCallback(
     (sessionId: string, payload: { text: string; drafts: readonly AttachmentDraft[] }): boolean => {
+      // P1-7e (problem 33): a send can fail after the user left its chat. Its
+      // payload goes back to THAT chat's parked draft, under the same "only
+      // into an empty one" rule, and never into the box of the chat on screen.
+      // No provenance marker: the marker describes the box on screen.
+      if (sessionId !== draftOwnerRef.current) {
+        return useComposerDraftsStore
+          .getState()
+          .fillIfEmpty(sessionId, { text: payload.text, attachments: payload.drafts });
+      }
       const composerIsEmpty =
         valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
       // D15 round-2: the caller needs to know a refusal happened. A declined
@@ -903,20 +934,63 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // and unrelated visual context, invisible in the timeline either way. The
   // failure state is scoped the same way: session A's Retry must not appear
   // over session B.
-  useEffect(() => {
+  //
+  // dsh-rebase P1-7e (problem 33, decision 139): the text too, and neither is
+  // thrown away any more. The outgoing chat's text and attachments are parked
+  // and the incoming chat's handed back (`switchComposerDraft`), so a message a
+  // failed send returned to chat A stays with A instead of going out in B. A
+  // layout effect: the incoming chat must never paint with the outgoing one's
+  // text, even for a frame.
+  useLayoutEffect(() => {
+    const from = draftOwnerRef.current;
+    draftOwnerRef.current = activeSessionId;
     // T-27 fix: a fork (useComposerTarget's selectTarget / applyPendingTarget
     // marking `markForkDraftCarry`) intentionally carries the composer's
-    // in-flight state onto the new session — the textarea `value` state is
-    // never touched here either way, so text + attachments land together on
-    // the forked session instead of being wiped by the switch below.
-    if (activeSessionId && consumeForkDraftCarry(activeSessionId)) return;
-    clearAttachmentDrafts();
+    // in-flight state onto the new session: text + attachments land together
+    // on the forked session, and nothing is parked for the one it came from.
+    const carry = activeSessionId !== null && consumeForkDraftCarry(activeSessionId);
+    const next = switchComposerDraft({
+      from,
+      to: activeSessionId,
+      carry,
+      live: { text: valueRef.current, attachments: getLiveAttachmentDrafts() },
+    });
+    if (next) {
+      // A restore marker describes the draft that just left the box.
+      restoredDraftRef.current = null;
+      updateValue(next.text);
+      replaceAttachmentDrafts(next.attachments);
+    }
+    if (carry) return;
     dismissAttachmentNotice();
-    setRetryable(null);
+    // A Retry armed for the chat arriving on screen (its send failed while the
+    // user was elsewhere) is that chat's own and stays.
+    setRetryable((current) => (current?.sessionId === activeSessionId ? current : null));
     // T-19: a stale "queue full" rejection belongs to the session that
     // rejected it, not to whatever session is now active.
     setQueueNotice(null);
-  }, [activeSessionId, clearAttachmentDrafts, dismissAttachmentNotice]);
+  }, [
+    activeSessionId,
+    dismissAttachmentNotice,
+    getLiveAttachmentDrafts,
+    replaceAttachmentDrafts,
+    updateValue,
+  ]);
+
+  // P1-7e (problem 1, decision 139): text offered to this chat's composer from
+  // outside it — a rewind handing back the prompt it rewound to. Taken only
+  // while its chat is the one in the box (the layout effect above has run by
+  // now), and merged after anything already typed rather than over it.
+  const offeredText = useComposerDraftsStore((state) =>
+    activeSessionId ? state.offered[activeSessionId] : undefined
+  );
+  useEffect(() => {
+    if (!activeSessionId || offeredText === undefined) return;
+    if (draftOwnerRef.current !== activeSessionId) return;
+    const text = useComposerDraftsStore.getState().takeOffered(activeSessionId);
+    if (text === undefined) return;
+    updateValue(mergeOfferedText(valueRef.current, text));
+  }, [activeSessionId, offeredText, updateValue]);
 
   // B9 (round-4 point-check fix, Codex 2.3): `mode` flipping empty->session
   // (the FIRST send) remounts `textareaEl` under a structurally different
@@ -1032,6 +1106,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   const runBuiltinSlash = async (trimmed: string): Promise<boolean> => {
     const parsed = parseSlashLine(trimmed);
     if (!parsed || attachments.drafts.length > 0) return false;
+    // P1-7e (problem 33): the chat the command was typed in. `/archive` ends
+    // with another chat in the box (the archived one is gone), and a slow
+    // `/compact` may too; clearing "the box" then would wipe that chat's draft.
+    const typedIn = draftOwnerRef.current;
     const source = buildSlashCatalog(slashCatalog, t).find(
       (item) => item.name === parsed.name
     )?.source;
@@ -1125,7 +1203,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         break;
       }
     }
-    updateValue('');
+    // Cleared from the box only while it still holds the chat the command was
+    // typed in. If the box moved on meanwhile, the command went with that
+    // chat's parked draft, and that is where it is cleared from.
+    if (draftOwnerRef.current !== typedIn) useComposerDraftsStore.getState().take(typedIn);
+    else updateValue('');
     setSlashQuery(null);
     return true;
   };
@@ -1280,8 +1362,18 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       onSendStart?.('direct');
       // Committed: the running turn has it. Only what was sent is cleared —
       // anything typed while the IPC was in flight stays.
-      if (valueRef.current.trim() === text) updateValue('');
-      attachments.removeDrafts(drafts.map((draft) => draft.id));
+      if (draftOwnerRef.current === sessionId) {
+        if (valueRef.current.trim() === text) updateValue('');
+        attachments.removeDrafts(drafts.map((draft) => draft.id));
+      } else {
+        // P1-7e (problem 33): the user left this chat while the IPC was in
+        // flight, so the draft went with it — clear what was sent from there.
+        useComposerDraftsStore.getState().consumeSent(
+          sessionId,
+          text,
+          drafts.map((draft) => draft.id)
+        );
+      }
       return 'interjected';
     } catch (error) {
       usePendingUserMessagesStore.getState().clear(attemptId);
@@ -1471,8 +1563,10 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // Retry is now offered ONLY off this component's own `retryable` snapshot
   // — a session reopened already-`failed` with no local snapshot gets the
   // error banner and Send, never an auto-derived one-click resend.
-  const retryText = retryable?.text;
-  const lastTurnFailed = retryable !== null;
+  // P1-7e (problem 33): only the snapshot of the chat on screen is its Retry.
+  const ownRetryable = retryable !== null && retryable.sessionId === activeSessionId;
+  const retryText = ownRetryable ? retryable.text : undefined;
+  const lastTurnFailed = ownRetryable;
   // m11 fix: no live-list fallback here. `retryable.drafts` is a snapshot
   // taken at failure time (decision 2.2) — falling back to the CURRENT
   // `attachments.drafts` meant a text-only status-'failed' reopen could
@@ -1480,7 +1574,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // consumption would make that chip vanish the instant Retry fired. The
   // reopened-failed fallback stays text-only; there is no reliable snapshot
   // to recover attachments from in that case anyway.
-  const retryDrafts = retryable?.drafts ?? [];
+  const retryDrafts = ownRetryable ? retryable.drafts : [];
   const retryAttachmentCount = retryDrafts.length;
   // T-19 decision 2.2: the Retry button's title carries the attachment count
   // that commit-time consumption made invisible in the draft area.
@@ -1837,7 +1931,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       if (retryLastTurn) return outcome;
       const affordance = decideFailureAffordance(outcome, origin, context);
       if (affordance === 'resend') {
-        setRetryable(committed);
+        setRetryable({ sessionId, ...committed });
       } else if (affordance === 'restore-draft') {
         // F2 §5.3: the lifted, provenance-writing version (see its definition
         // above) — the same one the confirmed-death listener uses, so both
@@ -1848,7 +1942,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // call, not this branch's — it answers `'resend'` only for the turn
         // that was never dispatched, and `'none'` for an admitted one.
         if (!restored && decideDeclinedRestore(outcome, origin, context) === 'resend') {
-          setRetryable(committed);
+          setRetryable({ sessionId, ...committed });
         }
       }
       if (shouldPauseQueueOnRejection(outcome, origin)) {
@@ -2790,10 +2884,19 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       // goes back into an empty composer, unsent, and the user decides.
       if (retryUnavailable) {
         const fallback = retryLastTurn?.fallbackText.trim() ?? '';
-        const composerEmpty =
-          valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
-        const prefilled = fallback.length > 0 && composerEmpty;
-        if (prefilled) updateValue(fallback);
+        // P1-7e (problem 33): into this chat's draft, wherever the user is now
+        // — the same "only into an empty draft" rule as D1's restore.
+        let prefilled = false;
+        if (fallback.length > 0 && sessionId === draftOwnerRef.current) {
+          const composerEmpty =
+            valueRef.current.trim().length === 0 && attachments.getLiveDraftCount() === 0;
+          prefilled = composerEmpty;
+          if (prefilled) updateValue(fallback);
+        } else if (fallback.length > 0) {
+          prefilled = useComposerDraftsStore
+            .getState()
+            .fillIfEmpty(sessionId, { text: fallback, attachments: [] });
+        }
         // The card has said all it can: its Continue would only be refused
         // again, and the composer now holds the way forward.
         useChatSessionsStore.setState((state) => ({

@@ -1217,9 +1217,16 @@ function applyRuntimeEventCore(
       // Watermark for the replay-coverage merge (round-6 Bug B v2): only
       // messages that already exist NOW may be folded by this resume's
       // `session.history`; anything echoed after this point is a new turn
-      // the replay cannot know about. Resume only — a created session has
-      // no replay coming.
-      if (event.type === 'session.resumed' && event.requestId) {
+      // the replay cannot know about.
+      //
+      // dsh-rebase P1-7e (problem 2, decision 139): a create too. A fork is
+      // created WITH its history — Main publishes the branch it inherited as
+      // an `initial` page under the create's own request id — and without
+      // this watermark the `initial` guard below dropped that page, so a new
+      // fork opened on an empty timeline until the next cold start. A first
+      // send's create publishes no page, and its watermark is simply
+      // superseded by the next resume.
+      if (event.requestId) {
         snapshotResumeCandidates(
           sessionId,
           event.requestId,

@@ -802,17 +802,6 @@ export function MessageTimeline({
                   </Button>
                 </div>
               )}
-              {historyNotice.kind === 'error' && (
-                // Keyed by session: detail/retry state must not follow the user
-                // across sessions when React reuses this slot.
-                <HistoryErrorNotice
-                  key={sessionId}
-                  view={historyNotice.error}
-                  sessionId={sessionId}
-                  status={status}
-                />
-              )}
-              {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
               {historyNotice.kind === 'empty' && pendingSendStatus == null ? (
                 <p className="text-ui text-muted-foreground">
                   No messages yet. Send a prompt to stream from the Agent Host.
@@ -877,6 +866,25 @@ export function MessageTimeline({
                   nowMs={nowMs}
                 />
               )}
+              {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
+                and the migration notice sit at the END of the timeline, beside
+                the session-failed card below, not above the first turn. Both
+                usually answer something the user just did — sending in an old
+                chat moves it, and a move or an open that fails says why here —
+                and the user is at the bottom when they do it: drawn first, a
+                chat with history put them hundreds of pixels out of sight. In
+                an empty chat the two places are the same place. */}
+              {historyNotice.kind === 'error' && (
+                // Keyed by session: detail/retry state must not follow the user
+                // across sessions when React reuses this slot.
+                <HistoryErrorNotice
+                  key={sessionId}
+                  view={historyNotice.error}
+                  sessionId={sessionId}
+                  status={status}
+                />
+              )}
+              {historyNotice.kind === 'migrating' && <LegacyMigrationProgressNotice />}
               {/* T-31 §9-ζ: stays SESSION-level and stays here, after the last
                 turn. Folding it into the failing turn would leave a
                 session-level failure (one that belongs to no turn) with
@@ -1092,7 +1100,8 @@ const HISTORY_ERROR_ICON = {
 /**
  * dsh-rebase P1-9e (decisions 050, 123): a chat from the previous version is
  * being moved to the current engine by this window's resume. Sits where the
- * history card sits, and replaces it while the move runs: the card of an
+ * history card sits (the end of the timeline since P1-7e), and replaces it
+ * while the move runs: the card of an
  * earlier attempt is what its answer will replace. Nothing to press — the
  * move cannot be cancelled halfway, and Stop on the send that started it only
  * stops waiting for it.
@@ -1113,8 +1122,9 @@ function LegacyMigrationProgressNotice() {
 /**
  * T-03: non-fatal per-session history read failure.
  *
- * Rendered as the first timeline item — it sits where the missing history would
- * have been and scrolls away as the conversation grows. Deliberately not a top
+ * Rendered at the end of the timeline, next to the composer (P1-7e problem 25:
+ * as the first item it sat above a chat's history, out of sight of the user who
+ * had just pressed Send at the bottom). Deliberately not a top
  * ribbon: that form (HostStatusBanner) means the Host itself is down, and the
  * protocol says a history read failure leaves the session fully usable. Retry
  * only shows for transient read failures and reuses the existing resume action,

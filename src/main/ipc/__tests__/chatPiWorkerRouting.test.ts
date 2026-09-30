@@ -71,7 +71,6 @@ const recordCreated = vi.fn(async () => undefined);
 const removeUncommittedCreated = vi.fn(async () => true);
 /** U04 — Main answers from the cached bootstrap; `null` = no live worker. */
 const getSessionCapabilities = vi.fn((_sessionId: string) => null as unknown);
-const clearUnwrittenRuntimeIdentity = vi.fn(async () => true);
 const handleRuntimeEvent = vi.fn();
 /** P1-9d — the sidebar's rows (decision 051). */
 const listForDisplay = vi.fn(async () => [] as unknown[]);
@@ -146,11 +145,9 @@ vi.mock('../../services/chat/SessionIndexService', () => ({
       archived: false,
       runtimeIdentity: '/session.jsonl',
       // A row that can be resumed has run at least one turn, so it carries a
-      // leaf checkpoint. Its absence is how the handler recognises a session
-      // whose JSONL Pi never actually wrote.
+      // leaf checkpoint. Since P1-7e (decision 139) nothing here reads it.
       piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
     })),
-    clearUnwrittenRuntimeIdentity,
     recordCreated,
     removeUncommittedCreated,
     list: vi.fn(async () => []),
@@ -880,22 +877,31 @@ describe('Pi WorkerSlot chat routing', () => {
   });
 
   /**
-   * Pi reserves a session's JSONL name at creation and writes it only when the
-   * first assistant message lands, so older builds could index a path that
-   * never became a file. Resume can only ever fail on such a row, which left
-   * the chat permanently unopenable even though it had lost nothing.
+   * dsh-rebase P1-7e (problem 28, decision 139). A legacy row with no `piLeaf`
+   * whose file is gone used to be "repaired" into a new, empty DSH session: the
+   * resume answered with a create, the renderer (which waits for
+   * `session.resumed`) timed out, and the message and the transcript's context
+   * were both lost. It now goes through the migration like any legacy row, and
+   * the migration's own stat reports the file missing.
    */
-  it('repairs a row whose Pi session file was never written instead of resuming it', async () => {
+  it('migrates a legacy row without a leaf too, so a missing file fails as source_missing', async () => {
     const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
-    vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+    const row = {
       sessionId: 's1',
       agent: 'pi',
       workspacePath: '/repo',
-      title: 'Never ran a turn',
+      title: 'Written before piLeaf existed',
       updatedAt: 1,
       archived: false,
-      // No piLeaf: no turn ever ended, so nothing was ever persisted.
+      // No piLeaf, and the file is gone: a reserved name OR a real transcript
+      // from a build that predates the field — the row cannot say which.
       runtimeIdentity: '/never-written.jsonl',
+    };
+    vi.mocked(sessionIndexService.get).mockResolvedValueOnce(row);
+    prepareResume.mockImplementationOnce(async () => {
+      throw new Error(
+        'legacy_migration_failed:read/source_missing: Session s1 could not be moved to the current chat engine'
+      );
     });
 
     await expect(
@@ -904,23 +910,20 @@ describe('Pi WorkerSlot chat routing', () => {
         runtimeIdentity: '/never-written.jsonl',
         workspacePath: '/repo',
       })
-    ).resolves.toEqual({ requestId: 'create-1' });
+    ).rejects.toThrow(/^legacy_migration_failed:read\/source_missing: /);
 
-    expect(clearUnwrittenRuntimeIdentity).toHaveBeenCalledWith('s1', '/never-written.jsonl');
+    expect(prepareResume).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionId: 's1',
+        agent: 'pi',
+        runtimeIdentity: '/never-written.jsonl',
+      }),
+      '/repo'
+    );
+    // Nothing is created in its place, and the row is not rebound.
+    expect(createSession).not.toHaveBeenCalled();
+    expect(recordCreated).not.toHaveBeenCalled();
     expect(resumeSession).not.toHaveBeenCalled();
-    // P1-1: the repaired chat is a DSH session, and the row says so before the
-    // spawn — not after, where a crash would leave a `pi` row naming a DSH stub.
-    expect(recordCreated).toHaveBeenCalledWith(
-      expect.objectContaining({ sessionId: 's1', workspacePath: '/repo', agent: 'dsh' })
-    );
-    expect(recordCreated.mock.invocationCallOrder[0]).toBeLessThan(
-      createSession.mock.invocationCallOrder[0]
-    );
-    expect(createSession).toHaveBeenCalledWith({
-      sessionId: 's1',
-      workspacePath: '/repo',
-      ownerWebContentsId: 7,
-    });
   });
 
   it('still resumes a DSH row whose identity is gone, so the loss surfaces as such', async () => {
@@ -932,9 +935,9 @@ describe('Pi WorkerSlot chat routing', () => {
       title: 'Deleted identity',
       updatedAt: 1,
       archived: false,
-      // No leaf and no file: for a pi row that meant "never written", but a DSH
-      // stub is only written once the log is on disk (decision 007), so a
-      // missing one is lost data — the bridge answers `dsh_session_missing`.
+      // No leaf and no file. A DSH stub is only written once the log is on
+      // disk (decision 007), so a missing one is lost data — the bridge
+      // answers `dsh_session_missing`.
       runtimeIdentity: '/dsh-home/aiclient-sessions/aiclient-gone.dsh.json',
     });
 
@@ -946,7 +949,6 @@ describe('Pi WorkerSlot chat routing', () => {
       })
     ).resolves.toEqual({ requestId: 'resume-1' });
 
-    expect(clearUnwrittenRuntimeIdentity).not.toHaveBeenCalled();
     expect(createSession).not.toHaveBeenCalled();
   });
 
@@ -1040,7 +1042,6 @@ describe('Pi WorkerSlot chat routing', () => {
         unbound: true,
       });
       expect(createSession).not.toHaveBeenCalled();
-      expect(clearUnwrittenRuntimeIdentity).not.toHaveBeenCalled();
     });
 
     it.each([

@@ -24,6 +24,7 @@ import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { materializeForkedChatSession } from '@/stores/chatSessionActions';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useComposerDraftsStore } from '@/stores/composerDrafts';
 import { resetSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import {
   isLegacyMigrationRequiredError,
@@ -151,6 +152,12 @@ export function SessionTreeDialog({
         })
       );
       resetSessionScopedRendererState(sessionId);
+      // P1-7e (problem 1, decision 139): a rewind to a prompt hands that
+      // prompt back — into THIS chat's composer, merged after anything the
+      // user already typed there (`mergeOfferedText`), never over it.
+      if (result.editorText) {
+        useComposerDraftsStore.getState().offerText(sessionId, result.editorText);
+      }
       setSnapshot(result.tree);
       setRewindTarget(null);
     } catch (cause) {

@@ -4,8 +4,9 @@
  * fork's source* clears them. This is a plain in-memory flag rather than
  * store state because it only needs to survive the single render tick
  * between `createChatSessionOnWorkspace` (in `useComposerTarget.ts`) and the
- * `activeSessionId`-keyed reset effect in `ChatComposer.tsx` that would
- * otherwise wipe the drafts.
+ * `activeSessionId`-keyed draft swap in `ChatComposer.tsx`, which would
+ * otherwise park the draft with the source chat (P1-7e, `composerDrafts.ts`)
+ * and hand the fork an empty box.
  */
 
 let carrySessionId: string | null = null;

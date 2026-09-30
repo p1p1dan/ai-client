@@ -7,7 +7,6 @@ import {
  * Forwards Host Runtime Events to all BrowserWindows.
  */
 
-import { stat } from 'node:fs/promises';
 import { IPC_CHANNELS } from '@shared/types';
 import type { SessionEffortLevel } from '@shared/types/agentHost';
 import {
@@ -82,26 +81,6 @@ function claimSessionForSender(
     });
   }
   return webContentsId;
-}
-
-/**
- * Was this indexed Pi session ever actually written?
- *
- * A row can name a JSONL that has never existed: Pi reserves the filename when
- * a session is created and writes it only when the first assistant message
- * lands, and builds before that was understood indexed the reservation. Such a
- * row has no `piLeaf` either — a leaf checkpoint is only committed once a turn
- * has ended — and that pair is what separates "Pi never wrote this" from "the
- * user deleted a real transcript", which keeps its leaf and must still fail
- * loudly rather than be quietly replaced with an empty session.
- */
-async function isUnwrittenPiSession(row: SessionIndexEntry): Promise<boolean> {
-  if (!row.runtimeIdentity || row.piLeaf) return false;
-  try {
-    return !(await stat(row.runtimeIdentity)).isFile();
-  } catch {
-    return true;
-  }
 }
 
 function broadcastRuntimeEvent(event: RuntimeEvent): void {
@@ -513,11 +492,6 @@ export function registerChatHandlers(): void {
           'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
         );
       }
-      // A legacy row whose transcript was never written lost nothing: the
-      // repair further down turns it into a new DSH session. One that names a
-      // real transcript is migrated below, on this its first continue
-      // (decision 050, P1-9d), before the resume opens it.
-      const unwrittenLegacy = indexed.agent === PI_AGENT && (await isUnwrittenPiSession(row));
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
       // U05-a: an unbound chat's directory was wiped when the app last quit,
       // so recreate it (empty) at the exact path the index still names before
@@ -543,49 +517,19 @@ export function registerChatHandlers(): void {
         // this app creates and the user can delete underneath a live row.
         await adoptTempWorkspace(workspacePath);
       }
-      if (unwrittenLegacy) {
-        // Repair, not resume: there is no file to reopen and nothing was ever
-        // persisted, so drop the phantom identity and give the chat a real
-        // session. Without this the row stays unopenable for good — resume can
-        // only ever fail on it, and the UI tells the user to abandon a chat
-        // that never lost anything.
-        //
-        // Only for legacy rows: a DSH identity is written after the DSH log is
-        // on disk (decision 007), so a DSH stub that is missing is lost data
-        // and must fail as such (`dsh_session_missing`).
-        assertAgentSpawnAllowed();
-        await sessionIndexService.clearUnwrittenRuntimeIdentity(
-          payload.sessionId,
-          row.runtimeIdentity
-        );
-        // Rebind the row to DSH before the spawn, as a create does. Left to the
-        // `session.created` event, a crash between the identity commit and
-        // that event would leave a `pi` row naming a DSH stub: read-only for good.
-        await sessionIndexService.recordCreated({
-          sessionId: payload.sessionId,
-          workspacePath,
-          ...(payload.model ? { model: payload.model } : {}),
-          agent: DSH_AGENT,
-          unbound,
-        });
-        // concurrency-02: no `forceTakeover` here. This branch creates a brand
-        // new session file, which no other writer can be holding.
-        const repaired = await workerManager.createSession({
-          sessionId: payload.sessionId,
-          workspacePath,
-          ...(payload.model ? { model: payload.model } : {}),
-          ...(payload.effort ? { effort: payload.effort } : {}),
-          ...spawnTier(payload.tier),
-          ...spawnPermissions(payload.permissions),
-          ownerWebContentsId,
-          ...(unbound ? { unbound: true } : {}),
-        });
-        return { requestId: repaired };
-      }
       // Decision 050: the first continue of a legacy chat migrates it, into
       // the workspace this resume uses (the DSH session's cwd is fixed). A
       // failure rejects with `legacy_migration_failed:<stage>/<code>` and
       // leaves the row `pi` and its preview as they were.
+      //
+      // dsh-rebase P1-7e (problem 28, decision 139): every legacy row, with or
+      // without `piLeaf`. A row whose file is gone used to be "repaired" into
+      // a new, empty session when it had no leaf, on the theory that 1.0.x
+      // had only reserved the name. Rows from before `piLeaf` existed break
+      // that theory — their transcript was real — and the repair answered a
+      // resume with a create the renderer never waits for, so the message was
+      // lost too. Such a row now fails like one with a leaf:
+      // `read/source_missing`, the card that says the file is gone.
       const prepared = await legacyMigrationService.prepareResume(row, workspacePath);
       row = prepared.row;
       const posture = legacyPosture(prepared.migration, payload);

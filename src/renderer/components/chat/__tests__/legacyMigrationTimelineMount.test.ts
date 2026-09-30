@@ -182,3 +182,40 @@ describe('moving a legacy chat, in the timeline (P1-9e)', () => {
     expect(container.textContent ?? '').not.toContain('Moving this chat');
   });
 });
+
+/**
+ * dsh-rebase P1-7e (problem 25, decision 139). Both notices used to be the
+ * timeline's FIRST item: in a chat with history the user, who had just pressed
+ * Send at the bottom, saw only their message bounce back into the composer —
+ * the card saying why, and its Retry, were hundreds of pixels up. They now
+ * come after the conversation, where the session-failed card is.
+ */
+describe('where the notices sit (P1-7e problem 25)', () => {
+  /** The element whose own text is exactly `text`. */
+  function elementWithText(text: string): Element {
+    const found = [...container.querySelectorAll('*')].find(
+      (element) => element.childElementCount === 0 && element.textContent?.trim() === text
+    );
+    if (!found) throw new Error(`no element reads ${text}`);
+    return found;
+  }
+
+  const follows = (later: Element, earlier: Element) =>
+    (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+
+  it('[P7E-25-CARD] the failure card comes after the last turn', async () => {
+    failWith(FINAL);
+    await render();
+    const card = container.querySelector('[role="alert"]');
+    expect(card?.textContent).toContain('This chat could not be moved to the current engine');
+    expect(follows(card as Element, elementWithText('Old answer.'))).toBe(true);
+  });
+
+  it('[P7E-25-PROGRESS] so does the notice while the move runs', async () => {
+    await render();
+    await act(async () => useLegacyMigrationStore.getState().begin('s1'));
+    const notice = container.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain('Moving this chat to the current engine…');
+    expect(follows(notice as Element, elementWithText('Old answer.'))).toBe(true);
+  });
+});

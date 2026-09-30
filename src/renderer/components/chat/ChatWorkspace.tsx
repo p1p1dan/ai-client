@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageMetadataStore } from '@/stores/messageMetadataRegistry';
 import { pruneSessionScopedRendererState } from '@/stores/sessionLifecycle';
 import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { markSessionsLive } from '@/stores/sessionRetirement';
@@ -28,6 +29,7 @@ import { SubwindowRegion } from './SessionSubwindows';
 import { isThinkingCapable } from './thinkingCard';
 import { deriveRepoName } from './toolCard';
 import { useHostStatus } from './useHostStatus';
+import { useResolvedSessionModel } from './useResolvedSessionModel';
 
 interface ChatWorkspaceProps {
   className?: string;
@@ -201,6 +203,16 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
     // discipline — its first `tool.output` may land before its row is open.
     return useToolLiveOutputStore.getState().init();
   }, []);
+
+  // dsh-rebase P1-7e (problem 16): the turn clock's live stamps, held for the
+  // whole run. The timeline unmounts whenever this column shows the start
+  // screen, and a turn can end while another chat is on screen; neither may
+  // cost a turn its 「已工作 N 秒」 / 「完成于」.
+  const resolveSessionModel = useResolvedSessionModel();
+  useEffect(
+    () => useMessageMetadataStore.getState().retain(resolveSessionModel),
+    [resolveSessionModel]
+  );
 
   // Review fix: the latch would otherwise grow unbounded across a long run —
   // prune ids whose sessions no longer exist (removed / retired by tree sync).

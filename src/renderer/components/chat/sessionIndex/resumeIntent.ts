@@ -151,9 +151,9 @@ export function shouldResumeSession(
  * The same rule Main applies (`assertCreatableIndexRow`, `prepareResume`): a
  * `pi` binding that names a transcript. It is a prediction, which is all the
  * renderer needs it for — saying "moving this chat" while that resume is in
- * flight, and "your first message moves it" before: Main alone can tell a
- * transcript that was never written (it repairs that row into a new DSH
- * session instead), and once either has happened `session.created` /
+ * flight, and "your first message moves it" before. Since P1-7e (decision
+ * 139) it is also exact: Main no longer repairs a row whose file was never
+ * written, every such row goes through the move, and once it has happened
  * `session.resumed` rebinds the row here to `dsh` and this turns false.
  */
 export function willMigrateOnResume(

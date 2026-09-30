@@ -48,6 +48,7 @@ vi.mock('../sessionIndex/useResumeSession', () => {
   return { useResumeSession: () => result };
 });
 
+import { resetComposerDraftsForTests, useComposerDraftsStore } from '@/stores/composerDrafts';
 import { SessionTreeDialog } from '../SessionTreeDialog';
 
 function node(
@@ -197,5 +198,36 @@ it('explains the background-job refusal instead of showing its code', async () =
   const text = document.body.textContent ?? '';
   expect(text).toContain('这个会话还有后台任务在运行。请等它结束或先停止它，再回退。');
   expect(text).not.toContain('WORKER_REWIND_JOBS_RUNNING');
+  await act(async () => root.unmount());
+});
+
+/**
+ * dsh-rebase P1-7e (problem 1, decision 139): the bridge answers a rewind to a
+ * prompt with that prompt's text (`editorText`), and it goes back to THIS
+ * chat's composer — as an offer the composer takes when this chat is in it.
+ */
+async function rewindTo(preview: string) {
+  await act(async () => row(preview).rewind.click());
+  const confirm = [...document.body.querySelectorAll('button')].find(
+    (button) => button.textContent === zh('Rewind')
+  );
+  await act(async () => confirm?.click());
+}
+
+it('hands the prompt it rewound to back to this chat’s composer (problem 1)', async () => {
+  resetComposerDraftsForTests();
+  api.chat.rewindSession.mockResolvedValue({ tree: SNAPSHOT, editorText: 'second prompt' });
+  const root = await openDialog();
+  await rewindTo('preview u2');
+  expect(useComposerDraftsStore.getState().offered).toEqual({ s1: 'second prompt' });
+  await act(async () => root.unmount());
+});
+
+it('offers nothing for a rewind to an answer, which hands no prompt back', async () => {
+  resetComposerDraftsForTests();
+  api.chat.rewindSession.mockResolvedValue({ tree: SNAPSHOT });
+  const root = await openDialog();
+  await rewindTo('preview a2');
+  expect(useComposerDraftsStore.getState().offered).toEqual({});
   await act(async () => root.unmount());
 });

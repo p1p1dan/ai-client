@@ -105,6 +105,13 @@ export interface ComposerAttachments {
    * to cause it to either clobber a new draft or skip a restore it owed).
    */
   getLiveDraftCount: () => number;
+  /**
+   * P1-7e (problem 33): the live list itself, off the same ref, so a session
+   * switch can park exactly what is attached right now with the text beside it.
+   */
+  getLiveDrafts: () => readonly AttachmentDraft[];
+  /** P1-7e (problem 33): swap the whole list in one write — a session's parked drafts. */
+  replaceDrafts: (drafts: readonly AttachmentDraft[]) => void;
 }
 
 export function useComposerAttachments(options: { disabled: boolean }): ComposerAttachments {
@@ -388,6 +395,18 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
 
   const getLiveDraftCount = useCallback(() => draftsRef.current.length, []);
 
+  const getLiveDrafts = useCallback((): readonly AttachmentDraft[] => draftsRef.current, []);
+
+  const replaceDrafts = useCallback(
+    (next: readonly AttachmentDraft[]) => {
+      // Same no-op guard as clearDrafts: switching between two chats with no
+      // attachments must not render for nothing.
+      if (next.length === 0 && draftsRef.current.length === 0) return;
+      applyDrafts(() => [...next]);
+    },
+    [applyDrafts]
+  );
+
   const totalBytes = useMemo(() => totalAttachmentBytes(drafts), [drafts]);
 
   return {
@@ -404,5 +423,7 @@ export function useComposerAttachments(options: { disabled: boolean }): Composer
     dismissNotice,
     showNotice,
     getLiveDraftCount,
+    getLiveDrafts,
+    replaceDrafts,
   };
 }

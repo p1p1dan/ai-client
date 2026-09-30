@@ -694,39 +694,6 @@ export class SessionIndexService {
   }
 
   /**
-   * Forget a runtime identity that never named a real file.
-   *
-   * Builds before this method existed indexed the JSONL path Pi *reserved* at
-   * session creation, but Pi writes nothing until the first assistant message —
-   * so a session that never got one left behind a row pointing at a file that
-   * never existed, and every later resume failed on it forever. Clearing the
-   * identity returns the row to "created but never run", which is what it
-   * always was; the next send mints a real Pi session for it.
-   *
-   * Refuses if the row now names a different identity, so a repair racing a
-   * live binding cannot unbind the winner.
-   */
-  async clearUnwrittenRuntimeIdentity(
-    sessionId: string,
-    runtimeIdentity: string
-  ): Promise<boolean> {
-    await this.ensureLoaded();
-    return this.queueMutation(async () => {
-      const existing = this.entries.get(sessionId);
-      if (!existing || existing.runtimeIdentity !== runtimeIdentity) return false;
-      const { runtimeIdentity: _dropped, ...rest } = existing;
-      this.entries.set(sessionId, { ...rest, updatedAt: now() });
-      try {
-        await this.flush();
-      } catch (error) {
-        this.entries.set(sessionId, existing);
-        throw error;
-      }
-      return true;
-    });
-  }
-
-  /**
    * Any rename settles the title, so it ends a forked chat's wait for its
    * first message too (decision 131): a name the user gave must not be
    * replaced by that message afterwards.

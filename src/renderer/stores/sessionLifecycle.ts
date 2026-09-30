@@ -1,5 +1,7 @@
 import type { SubagentActivityState } from '@/components/chat/subagentActivityModel';
 import type { SessionRuntimeFactsState } from '@/components/workspace-shell/surfaces/contextSurfaceModel';
+import { useComposerDraftsStore } from './composerDrafts';
+import { useMessageMetadataStore } from './messageMetadataRegistry';
 import { useMessageQueueStore } from './messageQueue';
 import { usePendingUserMessagesStore } from './pendingUserMessages';
 import { useSessionPanelsStore } from './sessionPanels';
@@ -64,6 +66,10 @@ export function resetSessionScopedRendererState(sessionId: string): void {
   useToolExpansionStore.setState((state) => ({
     bySession: omitSession(state.bySession, sessionId),
   }));
+  // P1-7e (problem 16): the live stamps name messages of the branch being
+  // replaced. The composer's draft is NOT cleared here: it is what the user
+  // typed, and a rewind hands its prompt back into it (problem 1).
+  useMessageMetadataStore.getState().resetSession(sessionId);
   useSubagentActivityStore.setState((state) => {
     const liveSessionIds = [
       ...new Set(
@@ -101,4 +107,8 @@ export function pruneSessionScopedRendererState(sessionIds: readonly string[]): 
   // dsh-rebase P1-7b: the live output of running commands and the jobs window's put-away list.
   useToolLiveOutputStore.getState().pruneSessions(sessionIds);
   useSessionSubwindowsStore.getState().pruneSessions(sessionIds);
+  // dsh-rebase P1-7e: the turn clock's live stamps (problem 16) and the parked
+  // composer drafts (problem 33) of chats that are gone.
+  useMessageMetadataStore.getState().pruneSessions(sessionIds);
+  useComposerDraftsStore.getState().pruneSessions(sessionIds);
 }

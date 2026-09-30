@@ -1387,3 +1387,75 @@ describe('applyRuntimeEvent — a warm resume on a live DSH slot (dsh-rebase P1-
     expect(bucket[0] && ('origin' in bucket[0] || 'liveMessageId' in bucket[0])).toBe(false);
   });
 });
+
+/**
+ * dsh-rebase P1-7e (problem 2, decision 139): a fork is CREATED with its
+ * history. Main publishes `session.created`, then the branch the fork
+ * inherited as an `initial` page under the same request id. The `initial`
+ * guard only knew resume watermarks, so it dropped that page and a new fork
+ * opened on an empty timeline until the next cold start.
+ */
+describe('a fork opens with the history it was created with (P1-7e problem 2)', () => {
+  function makeCreatedEvent(requestId: string): RuntimeEvent {
+    return {
+      type: 'session.created',
+      seq: 0,
+      sessionId: SESSION_ID,
+      requestId,
+      timestamp: 1000,
+      payload: { agent: 'dsh', runtimeIdentity: '/dsh/aiclient-fork.dsh.json' },
+    };
+  }
+
+  it('accepts the initial page that carries the create request id', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession()] }), [
+      makeCreatedEvent('fork-1'),
+      makeHistoryEvent({ mode: 'initial', messages: HISTORY_MESSAGES, totalCount: 2 }, 'fork-1'),
+    ]);
+    expect(state.messages[SESSION_ID]?.map((message) => message.id)).toEqual([
+      'h:uuid-1',
+      'h:uuid-2',
+    ]);
+    expect(state.historyPagination?.[SESSION_ID]).toMatchObject({ hydratedCount: 2 });
+    expect(state.hostBoundSessionIds).toContain(SESSION_ID);
+  });
+
+  it('lands even before the row exists (the fork row is added when the IPC answers)', () => {
+    const { state } = applyAll(baseState(), [
+      makeCreatedEvent('fork-1'),
+      makeHistoryEvent({ mode: 'initial', messages: HISTORY_MESSAGES }, 'fork-1'),
+    ]);
+    expect(state.messages[SESSION_ID]).toHaveLength(2);
+  });
+
+  it('still refuses an initial page of any other request', () => {
+    const { state: created } = applyAll(baseState({ sessions: [makeSession()] }), [
+      makeCreatedEvent('fork-1'),
+    ]);
+    expect(
+      applyRuntimeEvent(
+        created,
+        makeHistoryEvent({ mode: 'initial', messages: HISTORY_MESSAGES }, 'req-other')
+      )
+    ).toEqual({});
+  });
+
+  it('lets a later resume take the watermark over, as before', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession()] }), [
+      makeCreatedEvent('create-1'),
+      makeResumedEvent('resume-2'),
+    ]);
+    expect(
+      applyRuntimeEvent(
+        state,
+        makeHistoryEvent({ mode: 'initial', messages: HISTORY_MESSAGES }, 'create-1')
+      )
+    ).toEqual({});
+    expect(
+      applyRuntimeEvent(
+        state,
+        makeHistoryEvent({ mode: 'initial', messages: HISTORY_MESSAGES }, 'resume-2')
+      ).messages?.[SESSION_ID]
+    ).toHaveLength(2);
+  });
+});
