@@ -716,6 +716,13 @@ async function level1(ctx, gateway) {
  * refuses to start ("--input-type can only be used with string input") and
  * exits 1, which node-pty reports as `exitCode -1` with no output. So the
  * probe is CommonJS `-e`.
+ *
+ * And on Windows the probe releases the terminal once it has exited, with
+ * `kill()`, as node-pty's own consumers do (VS Code's terminal process):
+ * node-pty stops that worker only in `kill()`, never on a natural exit, and a
+ * live worker keeps the process from exiting (decision 134, round 2: the probe
+ * lived until the 60 s kill). The probe must still exit 0 by itself with no
+ * leftover descendant; if something else holds it, it says what, on stderr.
  */
 async function nativeProbe(ctx) {
   const script = `
@@ -749,9 +756,23 @@ async function nativeProbe(ctx) {
         term._agent?.onError?.((error) => { reason = String(error?.message ?? error); });
         const timer = setTimeout(() => { try { term.kill(); } catch {} done({ text, timedOut: true, reason }); }, 20000);
         term.onData((chunk) => { text += chunk; });
-        term.onExit(({ exitCode }) => { clearTimeout(timer); done({ text: text.slice(-200), exitCode, ...(reason ? { reason } : {}) }); });
+        term.onExit(({ exitCode }) => {
+          clearTimeout(timer);
+          // A tick later: node-pty tells its own listeners the reason after the exit.
+          setImmediate(() => {
+            done({ text: text.slice(-200), exitCode, ...(reason ? { reason } : {}) });
+            // Windows: release the ConPTY session (its output worker); POSIX needs nothing.
+            if (process.platform === 'win32') {
+              try { term.kill(); } catch (error) { process.stderr.write('pty kill: ' + String(error) + '\\n'); }
+            }
+          });
+        });
       });
       process.stdout.write(JSON.stringify(out));
+      // Informational only: whatever still holds the process 10 s on is named.
+      setTimeout(() => {
+        process.stderr.write('natives probe still alive: ' + JSON.stringify(process.getActiveResourcesInfo()) + '\\n');
+      }, 10000).unref();
     })().catch((error) => { process.stdout.write(JSON.stringify({ error: String(error?.stack ?? error) })); });
   `;
   const hookLog = path.join(path.dirname(ctx.hookLog), 'natives-hooks.jsonl');
@@ -785,6 +806,7 @@ async function nativeProbe(ctx) {
   } catch {
     result.error = `no result: ${stdout.slice(-300)} ${stderr}`;
   }
+  if (stderr) result.stderrTail = stderr.slice(-1500);
   result.leftovers = await leftovers(child.pid, watcher.stop());
   return result;
 }

@@ -8,6 +8,7 @@
 - [决策 017](017-packaged-smoke-runs-tool-turns.md)：打包冒烟要跑工具回合。
 - [决策 090](090-user-rulings-2026-09-28.md)：默认跟随 DSH 的做法；只做 Linux 与 Windows。
 - 权限行的相关决策：042、047、048、097、112。
+- 快速工作流第一轮（run 36649278998，提交 `6db5a949`）：原来的 3 项都过了，诊断印证了三项根因；新败 1 项 `nativesExitedZero`（见规则 13～15）。
 
 ## 结论一览
 
@@ -16,8 +17,9 @@
 | `l1PilotWriteAskedReadRan`（Windows 上工作区内的 read / grep / glob 全都弹卡） | 目标路径用原生 realpath（展开 8.3 短名），闸门的 cwd 用 JS 版 `realpathSync`（保留 8.3 短名）。runner 的 `%TEMP%` 是 `C:\Users\RUNNER~1\...`，于是工作区里的文件都被判到工作区外 | **产品缺陷**。用户名超过 8 个字符的真实用户，工作区在 `%TEMP%` 下时同样会遇到 | 各个根目录和目标用同一族解析函数；闸门同时认工作区的两种写法（规则 1～5） |
 | `l1RipgrepFromArtifact`（钩子只记到一个 node.exe） | DSH 在 win32 上的普通子进程都经 dsh-subprocess-local 的 Job runner 拉起，而冒烟只会拆 systemd-run 这一层 | **冒烟的观测盲区**。rg 用的是随包的那份 | 冒烟把 DSH 的两种 node runner 也拆开，判据不变（规则 6～8） |
 | `nativesPtyRan`（探针 `exitCode -1`、无输出） | 探针以 `--import 钩子 --input-type=module -e` 起 node。node-pty 在 Windows 上靠 worker 线程读 ConPTY 输出，worker 继承了这两个参数后拒绝启动 | **探针自身的问题**。产品没有任何路径会用到宿主里的 node-pty | 探针改为和宿主相同的启动方式（规则 9～12） |
+| `nativesExitedZero`（第一轮新败：pty 正常退出后探针进程不退，60 秒后被强杀） | node-pty 在 Windows 上只在 `kill()` 里停掉那个输出 worker，自然退出时不停；活着的 worker 让事件循环不结束 | **探针用法不全**。node-pty 的使用方（VS Code）在终端退出后都会再 `kill()` 一次。产品目前不受影响，将来若用要补上（规则 15） | 探针在 Windows 上终端退出后 `kill()` 释放，判据不变（规则 13、14） |
 
-目前 Linux 上的证据：机制都已复现，单测覆盖。Windows 上的实证要等快速工作流跑第一轮（规则 13、14），在「遗留」一节列出要看的输出。
+第一轮 Windows 结果：A、B、C 三项都过了，诊断印证了根因。`nativesExitedZero` 的修法待第二轮实证，在「遗留」一节列出要看的输出。
 
 ## 落地了什么
 
@@ -96,8 +98,9 @@
    - 同时继承了 `--import` 和 `--input-type` 的 worker 会报「--input-type can only be used with string input via --eval, --print, or STDIN」并以 1 退出。
    - node-pty 随后走 `_failPtyConnection`，报 `exitCode -1`，没有任何输出。
    - 已在 Linux 上用 node 24.18.0 和 22 复现：两个参数同时存在时 worker 就会失败，只有其中一个则没事（测试 `[worker-exec-argv]`）。
-   - node-pty 在 Windows 上的这一段是推断，待工作流的诊断输出 node-pty 自己给的原因来确认。
-   - 与 conpty 是否需要控制台、`useConptyDll` 无关（诊断里有对照组）。
+   - 第一轮 Windows 诊断印证：只有「`--import` 加 `--input-type`」的两种形态是 `exitCode -1`；去掉 `--input-type` 的、新探针形态、文件入口都输出 `pty-ok`。
+   - node-pty 自己给的原因那一轮没记到：它先通知自己的监听者（发出 exit），再通知我们的，我们的 `onExit` 已经结算了。第二轮起晚一个 tick 结算。
+   - 与 conpty 是否需要控制台、`useConptyDll`、`windowsHide` 都无关（诊断的对照组）。
 10. **产品路径不受影响。**
     - 宿主里调用 node-pty 的只有 dsh-subprocess-local 的 `spawnTerminal`，而宿主里没有任何包调用它：DSH 自己的包、我们的几行、dsh-office-tools 都没有。bash / pwsh / grep 都走普通子进程。
     - 退一步说，宿主由 Main 以 `node --expose-internals host.js` 启动，没有 `--input-type`，即使将来用到也不会遇到这个问题。
@@ -111,9 +114,30 @@
     - `useConptyDll: true`：产品不用它，改了就是在测另一条路径。
     - 用文件入口：探针文件会落在宿主目录外，触发模块审计。
 
+### C 第二轮：探针进程在终端退出后不自己退出（`nativesExitedZero`）
+
+13. **根因（读 node-pty 1.2.0-beta.15 源码；第一轮诊断佐证）。**
+    - Windows 上终端自然退出时，node-pty 的 `_$onProcessExit` 只在 1 秒后销毁输出 socket。读 ConPTY 输出的那个 worker 线程（`ConoutConnection`）只有 `kill()` 或启动失败时才会停。活着的 Worker 让事件循环不结束，所以进程不退。
+    - 原生层还有一处：退出等待线程在 shell 退出时，把这个终端的记录从表里删掉，但没有 `ClosePseudoConsole`。所以自然退出之后再 `kill()`，原生那一半什么也不做：伪控制台（conhost）要等本进程的管道关掉才走。这是 node-pty 上游的泄漏。
+    - 第一轮诊断：凡是跑出 `pty-ok` 的形态，终端退出 5 秒后进程都还活着，与钩子、`-e` 或文件入口、`windowsHide` 都无关。
+    - node-pty 1.1.0（根依赖，Main 用的那份）的 JS 退出路径与此相同。
+14. **这是用法问题，修法是按 node-pty 使用方的做法在退出后 `kill()`。**
+    - VS Code 的终端进程在 `onExit` 之后仍会 `kill()` 一次（「可能已经 kill 过，但要确保」）。探针原来没这么做。
+    - 探针改为：Windows 上终端退出后（晚一个 tick，先记下结果）调用 `term.kill()`。它停掉输出 worker（1 秒后 terminate）；在另一个 node 子进程里查一次控制台进程列表，shell 已退则为空。
+    - 这个子进程由 node-pty 用 `fork` 起，带父进程的 execArgv。Node 在 fork 时会去掉 `-e`，所以不会递归跑探针。
+    - POSIX 上不调：没有要释放的东西，而且对已退出的 pid 发信号有 pid 被复用的风险。
+    - 判据不变：探针要自己以 0 退出，且没有遗留的子孙进程。探针里没有 `process.exit`。
+    - 另加一个不占住进程的 10 秒计时器（`unref`）：若届时进程还活着，在 stderr 写出 `process.getActiveResourcesInfo()`。冒烟报告的 `natives.stderrTail` 会带上它。
+    - node-pty 的 `kill()` 会结束它查到的控制台进程。在 shell 退出后的这一秒里，理论上存在 pid 被复用的风险，这是 node-pty 对所有使用方的行为，这里不另外处理。
+15. **产品：目前不受影响；将来若在宿主里用 node-pty 要补上。**
+    - 宿主里没有任何包调用 `spawnTerminal`（规则 10）。
+    - 若将来用到：dsh-subprocess-local 的终端句柄在 Windows 上自然退出后不会 `kill()`（`stopShellWindows` 见到已退出就跳过）。于是每个结束的终端都会在宿主里留下一个 worker 线程和一个伪控制台，直到宿主退出。这是泄漏，不是挂死：宿主关停时 dispose 后 3 秒会强制退出，并记下残留的资源（`host.ts` 的 `stopOnce`）。
+    - 到那时要在我们这边或 DSH 上游补「退出后释放」，并把 node-pty 原生层的泄漏报上游。
+    - P1-11 右列终端（Main 的 `PtyManager`，node-pty 1.1.0）在自然退出时只释放订阅、不 `kill()`，按同样的路径，推断每个退出的 shell 会在 Electron 主进程里留一个 worker 线程。这不影响应用退出，未验证，不在本项范围，另记。
+
 ### 快速工作流与诊断
 
-13. **`.github/workflows/dsh-host-windows-smoke.yml`（新）。**
+16. **`.github/workflows/dsh-host-windows-smoke.yml`（新）。**
     - 触发：推送到 `ci/dsh-host-windows-smoke`，或手动触发。权限 `contents: read`，镜像 `windows-2022`。
     - 步骤：
       - 根依赖只装不跑脚本：`pnpm install --ignore-scripts`，因为 build-dsh-host 只要 esbuild；
@@ -123,10 +147,12 @@
       - 诊断：`if: always()`、`continue-on-error: true`；
       - 上传：`if: always()`。
     - 不打 Electron 包。
-14. **`scripts/dsh-host-windows-diag.mjs`（新）。** 输出只含 runner 的路径，不打印环境变量全集，也不含凭据。三段：
+17. **`scripts/dsh-host-windows-diag.mjs`（新）。** 输出只含 runner 的路径，不打印环境变量全集，也不含凭据。三段：
     - `paths`：`%TEMP%`、家目录，以及 `%TEMP%` 下一个长名目录和它的 8.3 写法。用随包 node 分别跑三种 realpath，并判断规范目标在哪种根目录下「在工作区内」。
     - `spawns`：从冒烟钩子日志还原 DSH 的派生链；列出产物里解析出的 `rgPath`、Job runner 和 ACL runner 的路径。
-    - `pty`：九种组合各跑一次 node-pty，记录退出码、输出和 node-pty 给出的原因。组合为：旧探针形态、旧形态加 `useConptyDll`、不带钩子的 `--input-type`、新探针形态、文件入口带或不带钩子、文件入口加 `useConptyDll`、稍长寿命的 powershell、`windowsHide: false`。
+    - `pty`：各种组合各跑一次 node-pty，记录退出码、输出、node-pty 给出的原因；终端退出 5 秒后进程还活着的，写出占着它的资源。
+      - 第一轮九种：旧探针形态、旧形态加 `useConptyDll`、不带钩子的 `--input-type`、新探针形态、文件入口带或不带钩子、文件入口加 `useConptyDll`、稍长寿命的 powershell、`windowsHide: false`；
+      - 第二轮加三种「退出后 `kill()`」：新探针形态、文件入口、文件入口加 `useConptyDll`。
 
 ## 测试
 
@@ -143,18 +169,26 @@
   - 默认解析与 `fs/promises` 的结果一致；
   - `[win32-8dot3]`：只在 win32 且 `%TEMP%` 含 `~N` 时跑。
 - `src/dsh-host/permissions/__tests__/canonicalRootsStatic.test.ts`（新，3 例）：禁止直接调用 JS 版 `realpathSync`，并钉住接线。
-- `scripts/__tests__/dsh-host-windows-smoke.test.mjs`（新，11 例）：
+- `scripts/__tests__/dsh-host-windows-smoke.test.mjs`（新，12 例）：
   - `spawnTarget`：Job runner、ACL 嵌套、systemd-run、同步派生；
   - 探针不带 `--input-type`；
   - worker 继承参数的机制；
+  - `[pty-release]`：探针只在 Windows 上、终端退出后才 `kill()`，自己不调 `process.exit`，残留资源的计时器不占住进程；
   - 工作流的结构。
 
 ## 遗留
 
-- **Windows 实证**：请编排者推送到 `ci/dsh-host-windows-smoke` 跑一轮，要看：
-  - 冒烟 44 项全过；
-  - `diag.paths` 里 JS 版根目录的 `targetInside` 为 false，原生版为 true；
-  - `diag.spawns` 里 rg 经 Job runner、`rgPath` 在 out-dsh-host 下；
-  - `diag.pty` 旧形态的 reason 是「Conout worker exited before connecting (code 1)」，新形态为 `pty-ok`。
+- **Windows 实证**：
+  - 第一轮（run 36649278998）已印证：
+    - A：`realpathSync` 保留 `RUNNER~1`，另两种展开；
+    - B：派生链是 node.exe → dsh-subprocess-local 的 runner.js → rg.exe；
+    - C：只有旧形态是 -1。
+  - 第二轮要看：
+    - 冒烟 44 项全过，`natives.exit` 为 `{code: 0}` 且没有 `forced`，`leftovers` 为空；
+    - `diag.pty` 里三种「退出后 `kill()`」没有「still alive」，不释放的对照组仍有，并写出占着它的资源（预期有 Worker）；
+    - 旧形态的 `reason` 这次应该记得到。
+  - 若 `kill()` 后仍不退，看 `natives.stderrTail` 里的资源列表再定。
 - 审批卡在 8.3 或符号链接工作区里显示规范的绝对路径（规则 3），要不要改，待定。
+- 将来在宿主里启用 node-pty（`spawnTerminal`）时，先补「退出后释放」（规则 15），并把 node-pty 原生层的伪控制台泄漏报上游。
+- Main 的 `PtyManager` 在 Windows 上可能每个退出的 shell 留一个 worker 线程（规则 15 末条），未验证，另记。
 - build.yml 的 build-windows 用的是同一个冒烟脚本，改动合入后自然生效，本项没有动它。

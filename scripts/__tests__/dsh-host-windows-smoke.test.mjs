@@ -105,6 +105,16 @@ describe('the natives probe starts node as the host does (decision 134)', () => 
   const probe = smoke.slice(smoke.indexOf('async function nativeProbe'));
   const spawnCall = probe.slice(probe.indexOf('const child = spawn('), probe.indexOf('stdio:'));
 
+  it('[pty-release] releases the terminal with kill() once it exited, on Windows only, and never forces its own exit', () => {
+    const script = probe.slice(0, probe.indexOf('const hookLog'));
+    const onExit = script.slice(script.indexOf('term.onExit('));
+    expect(onExit).toMatch(/process\.platform === \x27win32\x27\) \{\s*try \{\s*term\.kill\(\);/);
+    // The criterion stays "exits 0 by itself": nothing in the probe calls process.exit.
+    expect(script).not.toContain('process.exit(');
+    // What still holds it is named, on a timer that holds nothing itself.
+    expect(script).toMatch(/getActiveResourcesInfo\(\)[\s\S]*?\}, 10000\)\.unref\(\)/);
+  });
+
   it('never passes --input-type, and runs with the host execArgv', () => {
     expect(spawnCall).toContain("'-e'");
     expect(spawnCall).toContain("'--expose-internals'");

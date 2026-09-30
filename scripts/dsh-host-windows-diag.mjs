@@ -15,8 +15,10 @@
  *            Job runner, a node.exe), and where the artifact's ripgrep resolves;
  *   pty      node-pty from the artifact under each way of starting node (the
  *            old smoke's `--input-type=module -e`, CommonJS `-e`, a file entry,
- *            with and without the hooks, `useConptyDll`, `windowsHide`), with
- *            the reason node-pty gives for a failed start.
+ *            with and without the hooks, `useConptyDll`, `windowsHide`, and
+ *            released with `kill()` once exited), with the reason node-pty
+ *            gives for a failed start and, for a process that does not exit
+ *            by itself, what still holds it (`getActiveResourcesInfo`).
  * Prints paths of this machine only; never an environment dump or a credential.
  * Runs on any platform (the pty variants use /bin/sh off Windows).
  */
@@ -260,15 +262,22 @@ async function run(opts) {
     term.onData((chunk) => { text += chunk; });
     term.onExit(({ exitCode, signal }) => {
       clearTimeout(timer);
-      done({ exitCode, signal, sawOk: text.includes('pty-ok'), text: text.slice(-300), reason, ms: Date.now() - started, execArgv: shortArgv() });
+      // A tick later: node-pty tells its own listeners the reason after the exit.
+      setImmediate(() => {
+        done({ exitCode, signal, sawOk: text.includes('pty-ok'), text: text.slice(-300), reason, released: opts.release === true, ms: Date.now() - started, execArgv: shortArgv() });
+        // What node-pty's consumers do once a terminal has exited (Windows only here).
+        if (opts.release && process.platform === 'win32') {
+          try { term.kill(); } catch (error) { process.stderr.write('kill: ' + String(error) + '\\n'); }
+        }
+      });
     });
   });
 }
-/** Print the result; a process something still holds after 5 s says so and exits. */
+/** Print the result; a process something still holds after 5 s says what, and exits. */
 function report(out) {
   process.stdout.write(JSON.stringify(out) + '\\n');
   setTimeout(() => {
-    process.stderr.write('probe: still alive 5 s after the terminal exited\\n');
+    process.stderr.write('probe: still alive 5 s after the terminal exited: ' + JSON.stringify(process.getActiveResourcesInfo()) + '\\n');
     process.exit(0);
   }, 5000).unref();
 }
@@ -332,6 +341,19 @@ async function ptySection(node, hostDir, scratch) {
       HOOKS,
       probe,
       opts(),
+    ],
+    // Round 2 of decision 134: released with kill() once exited, as the smoke now does.
+    'new-smoke, released after exit': [
+      '--expose-internals',
+      '--import',
+      HOOKS,
+      '-e',
+      cjsEval(opts({ release: true })),
+    ],
+    'file entry, released after exit': [probe, opts({ release: true })],
+    'file entry, useConptyDll, released after exit': [
+      probe,
+      opts({ useConptyDll: true, release: true }),
     ],
     'file entry, no hooks': [probe, opts()],
     'file entry, useConptyDll': [probe, opts({ useConptyDll: true })],
