@@ -1,0 +1,50 @@
+# 决策 135：用户裁决决策 091——加密文件要能 edit（P1-13d）
+
+日期：2026-09-29。**状态：用户裁决。**
+
+## 裁决
+
+- **决策 091 §2「edit 不做明文编辑」推翻，改为要做**，任务编号 P1-13d。实现方的自主取舍写进决策 136（预留）。
+- 决策 091 其余条目（错误码与文案、回退参数、不加紧急开关、范围外的项不动）用户没有点名，按决策 090 的惯例视为同意。紧急开关改为可选：可以顺手加一个 `AICLIENT_RUNTIME_ENCRYPTED_READ=0` 式的开关，不强制。
+
+## 用户定的实施方案：在 fs 服务层包装
+
+扩展现有的 `aiclient-encrypted-read` 行：在 fs 服务实例上，把 `editText` 的读基准换成 PowerShell 回退读出的明文。
+
+不采用的两种形式：
+- **新增一个 `edit_encrypted` 工具**：把学习成本转嫁给模型，而且原生 `edit` 对加密文件仍然失败；
+- **替换 `edit` 工具**：要复刻 `dsh-tool-fs` 的工具层（权限闸门、观察策略、沙箱升级、错误映射），比 fs 层更厚，违反「不要大段复制 DSH 代码」。
+
+## 实现要点（用户定）
+
+1. **替换语义自己写**（约 60 行）：
+   - 支持 `old_string` / `new_string` / `replace_all`；
+   - 按 LF 匹配，再按原文件的行尾风格写回；
+   - 错误码与文案和 `dsh-fs-local` 逐字对齐：`FS_STALE_VERSION`、`FS_NOT_REGULAR_FILE`、`FS_NOT_TEXT`、`FS_EDIT_NOT_FOUND`、`FS_AMBIGUOUS_EDIT`。
+2. **写回、版本守卫、沙箱围栏复用 fs 服务自己的公开方法**：`writeText` 的 `replaceIfVersion`、`stat`、`checkedTarget`。不复制 DSH 的「读-匹配-写」临界区。
+3. **并发语义用乐观版本守卫**：读之后，文件只要被任何人改过就拒绝写回（`FS_STALE_VERSION`）。这和 DSH 原实现「锁内读改写」略有差异，更严格，是有意为之。
+4. **范围**：
+   - 已加密且 PowerShell 能解密的 6 类（yml、php、ps1、cmd、sql、scss）可以编辑；
+   - rb、docx、pptx 维持 `FS_ENCRYPTED` 明确拒绝；
+   - 非 win32、以及没有 TSD 头的普通文件，行为零变化。
+5. **写回后文件会被策略重新加密**，这是预期语义，接受：下次读会自动走回退，形成闭环。
+
+## 验证要求（用户定）
+
+- 假读取器单测覆盖全部语义矩阵：每个错误码、行尾、版本守卫、写回的调用形态；
+- win32 真机：在真实加密的 `.yml` 上完成一次真实 edit，并复读验证；
+- 真宿主冒烟（fake 与 `--real` 两种模式）补上「对加密文件完成 edit」的场景。可以扩展现有的 `encrypted-read-smoke` 与假网关的 FS 脚本，但要保持向后兼容；
+- 四套 tsc、宿主构建、打包冒烟与基线相比零回归。
+
+## 用户补充的实测数据（比已入库的证据文档更精确，并入 P1-13d 证据）
+
+- settled 复测（PowerShell 写入后等 5.5 分钟）：
+  - yml、php、ps1、cmd、sql、scss 写入后 1～4 ms 即被加密；
+  - PowerShell 写的 rb、docx、pptx 过了 5.5 分钟仍未加密。P1-13b 那三个加密样本是其他写入者产生的既有文件，不是机器差异。
+- 「约 260 秒延迟」指的是读者视图的沉淀（例如 PowerShell 读 md、java，从明文变成密文），不是写入侧落盘的延迟。
+- 六类文件的回退读取稳定在 143～189 ms。
+
+## 执行安排（编排者）
+
+- 交给 Windows 加密机上的会话做，派工提示词见 [topics/p1-13d-encrypted-edit.md](../topics/p1-13d-encrypted-edit.md)。
+- 从已推送的 `feat/dsh-p0-probe` 最新头开分支 `feat/dsh-p1-13d`。这个头已经合入 `feat/dsh-p1-13c`（`801cac53`），代码基础相同，合回来时不会再有冲突。
