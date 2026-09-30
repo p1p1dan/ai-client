@@ -10,6 +10,16 @@
 export const ENCRYPTED_READ_ROW = 'aiclient-encrypted-read';
 
 /**
+ * Emergency kill switch, the loop guard's name shape (decision 065's
+ * `AICLIENT_RUNTIME_LOOP_GUARD`). Only the exact value `0` turns the row off,
+ * in which case it wraps nothing at all and behaves as if the row were not
+ * composed. Main strips `AICLIENT_*` from the host's environment and forwards
+ * this one explicitly (`dshHostEnvironment.ts`); the row stays in the
+ * composition's `REQUIRED_ENABLED` (decision 135 made this switch optional).
+ */
+export const ENCRYPTED_READ_ENV = 'AICLIENT_RUNTIME_ENCRYPTED_READ';
+
+/**
  * The disk-encryption policy's on-disk ciphertext marker: files the policy
  * encrypted start with these 16 ASCII bytes, `%TSD-Header-###%`. Only the
  * first 16 bytes of a file are ever compared, never a substring search

@@ -46,6 +46,9 @@ function makeService(): RecordingService {
         );
       if (method === 'readBytes') return Promise.resolve(new Uint8Array([1, 2, 3]));
       if (method === 'readByteRange') return Promise.resolve(new Uint8Array([9, 9]));
+      if (method === 'stat') return Promise.resolve({ version: 'v1', type: 'file', size: 3 });
+      if (method === 'writeText')
+        return Promise.resolve({ operation: 'update', version: 'v2', before: null, after: '' });
       return Promise.resolve({ original: true });
     };
   const service = {
@@ -55,6 +58,8 @@ function makeService(): RecordingService {
     readBytes: record('readBytes'),
     readByteRange: record('readByteRange'),
     editText: record('editText'),
+    stat: record('stat'),
+    writeText: record('writeText'),
   } as unknown as RecordingService;
   return service;
 }
@@ -297,23 +302,28 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
     await expect(service.readText(cipher)).rejects.toMatchObject({ code: 'FS_ABORTED' });
   });
 
-  it('editText refuses an encrypted file with the same clear error, and delegates the rest', async () => {
+  it('editText edits an encrypted file through the fallback and delegates every other file', async () => {
     const service = makeService();
     installEncryptedRead({
       service,
-      reader: makeReader(() => PLAINTEXT),
+      reader: makeReader(() => new TextEncoder().encode('ALPHA\n')),
       platform: 'win32',
       createError: FakeFsError,
     });
     const cipher = targetOf(writeTemp('edit.yml', CIPHERTEXT));
-    await expect(
-      service.editText(cipher, { oldString: 'a', newString: 'b' }, undefined, undefined, {
-        mode: 'danger-full-access',
-      })
-    ).rejects.toMatchObject({
-      code: 'FS_ENCRYPTED',
-      message: expect.stringContaining('cannot edit'),
-    });
+    // P1-13d (decision 135): the encrypted file is edited on the fallback's
+    // plaintext; the write is the service's own, version-guarded.
+    expect(
+      await service.editText(
+        cipher,
+        { oldString: 'ALPHA', newString: 'BETA' },
+        undefined,
+        undefined,
+        { mode: 'danger-full-access' }
+      )
+    ).toEqual({ version: 'v2', before: 'ALPHA\n', after: 'BETA\n' });
+    expect(service.calls.map((call) => call.method)).toEqual(['stat', 'writeText']);
+    expect(service.calls[1]?.args[2]).toEqual({ kind: 'replaceIfVersion', version: 'v1' });
 
     const plain = targetOf(writeTemp('edit-plain.md', new TextEncoder().encode('hello')));
     const edit = { oldString: 'hello', newString: 'hi' };
@@ -322,6 +332,9 @@ describe('installEncryptedRead (P1-13c, decision 091)', () => {
     expect(await service.editText(plain, edit, expected, undefined, policy)).toEqual({
       original: true,
     });
+    // The plaintext edit reaches the original method unchanged, adding the
+    // one recorded call the encrypted path never made.
+    expect(service.calls.map((call) => call.method)).toEqual(['stat', 'writeText', 'editText']);
     expect(service.calls.at(-1)).toEqual({
       method: 'editText',
       args: [plain, edit, expected, undefined, policy],

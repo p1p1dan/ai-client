@@ -11,17 +11,26 @@
  * workspace), the host is the packaged artifact with the product composition,
  * and the session runs over the same worker RPC Main uses.
  *
- * Fake mode (default): `marker.txt` carries the 16-byte ciphertext marker over
- * arbitrary bytes. PowerShell reads such a file back verbatim, so the expected
- * outcome is the model seeing the clear FS_ENCRYPTED refusal — proof the read
- * went node → prefix check → PowerShell → refusal, never ciphertext.
+ * Fake mode (default): `cipher-not-editable.txt` carries the 16-byte
+ * ciphertext marker over binary bytes, and `marker.txt` wears the marker over
+ * readable text. PowerShell reads either back verbatim, so the first file's
+ * expected outcome is the model seeing the clear FS_ENCRYPTED refusal — proof
+ * the read went node → prefix check → PowerShell → refusal, never ciphertext —
+ * and the second's is a completed edit plus a re-read carrying it, with the
+ * file's own bytes back at the marker. The edit half of the encrypted path
+ * (decision 135) is therefore exercised in both modes, while the policy's own
+ * decryption needs a policy machine and is only real in --real.
  *
  * Real mode (--real): `marker.yml` is written BY Windows PowerShell 5.1 (the
  * process the policy decrypts for), then the tool waits for the policy to
  * encrypt it (P1-13b: about 260 s) before the turn. The expected outcome is
  * the marker's plaintext in the read result — the full fallback round trip on
- * a machine behind the policy. `--workspace` overrides where (default: the
- * user profile, not the sandboxed temp tree).
+ * a machine behind the policy — plus, since P1-13d, a real edit of that file
+ * and a re-read that carries the edit. `--workspace` overrides where (default:
+ * the user profile, not the sandboxed temp tree). Whether the policy then
+ * re-encrypts the edited file is recorded, not required: node's own atomic
+ * write is not re-encrypted on this machine within minutes, and the durable
+ * check is that the edited plaintext is what reads back.
  *
  * Windows-safe by design: the scratch tree sits under os.tmpdir(), the host
  * entry and the probe hooks load through file:// URLs, and nothing reads
@@ -387,11 +396,16 @@ async function main(): Promise<void> {
   } else {
     // The synthetic ciphertext: the marker over a body no reader can mistake
     // for plaintext. PowerShell reads it back verbatim, so the fallback must
-    // refuse it as still-ciphertext.
+    // refuse it as still-ciphertext. Two files, because one covers each half
+    // of the range (decision 135): a marker file PowerShell CAN decrypt — the
+    // fake stands in for the policy here, since PowerShell reads a plain file
+    // back verbatim — is edited end to end, and a marker file it cannot is
+    // left alone with a refusal.
     writeFileSync(
-      join(workspace, markerName),
+      join(workspace, 'cipher-not-editable.txt'),
       Buffer.concat([TSD_HEADER, Buffer.from('fake ciphertext body \u0000 bytes', 'latin1')])
     );
+    writeFileSync(join(workspace, markerName), `${marker} fake decryptable content\nsecond line\n`);
     writeFileSync(join(workspace, 'plain.txt'), `${marker} plaintext control\n`);
   }
 
@@ -458,6 +472,10 @@ async function main(): Promise<void> {
       token,
       shell: isWindows ? 'pwsh' : 'bash',
       markerName,
+      // P1-13d: the script reads a file the fallback cannot decrypt (the
+      // still-ciphertext refusal), then edits the marker file and re-reads it.
+      ...(realMode ? {} : { refuseName: 'cipher-not-editable.txt' }),
+      editInMarker: true,
     })}`;
     const turnStarted = performance.now();
     const eventsBefore = client.events.length;
@@ -490,8 +508,29 @@ async function main(): Promise<void> {
     // The marker string also lives in the plaintext fixtures, so the checks
     // name what only the encrypted file's own bytes could produce.
     const reads = tools.filter((tool) => tool.name === 'read');
+    const edits = tools.filter((tool) => tool.name === 'edit');
     const policyRefusals = reads.filter((tool) => /disk-encryption policy/.test(tool.text));
     checks.plaintextEditStillWorks = reads.some((tool) => tool.text.includes(`EDITED-${token}`));
+    // P1-13d: the marker file's own edit, and the re-read that follows it.
+    // `ENC-EDITED-<token>` exists nowhere else in the fixtures, so a read
+    // result carrying it can only come from the edited marker file. This is
+    // the encrypted-edit round trip in both modes: in --real the file is
+    // policy-encrypted and the fallback really decrypts it; fake mode's marker
+    // file is PowerShell-readable plaintext wearing the marker, which is the
+    // same node-sees-the-marker shape (the policy's decryption itself needs
+    // the machine, so only --real can pin that half).
+    //
+    // The edit's own result text names no path, so the marker edit is found by
+    // order: the first edit after a successful read of the marker file.
+    const markerReads = reads.filter((tool) => tool.text.includes(markerName));
+    const markerEdit = markerReads.length > 0 ? edits[0] : undefined;
+    const markerReread = reads.filter(
+      (tool) => tool.ok && tool.text.includes(`ENC-EDITED-${token}`)
+    );
+    checks.markerEditAttempted = markerEdit !== undefined;
+    checks.markerEditOk = markerEdit?.ok === true;
+    checks.markerEditMs = markerEdit?.ms ?? null;
+    checks.markerRereadSeesEdit = markerReread.length > 0;
     if (realMode) {
       // Only marker.yml carries this line: finding it in a read result is the
       // full fallback round trip on a policy-encrypted file.
@@ -501,9 +540,38 @@ async function main(): Promise<void> {
       checks.markerReadAsPlaintext = markerRead !== undefined;
       checks.readDurationMs = markerRead?.ms ?? null;
       checks.noReadRefused = policyRefusals.length === 0;
+      // The write-back went through the fs service. Whether the policy then
+      // re-encrypts the file is the policy's business and is NOT required for
+      // correctness: node's own write path (staging dir + rename, as
+      // dsh-fs-local writes) is not re-encrypted on this machine within
+      // minutes, so the durable, load-bearing check is that a node-side read
+      // still yields the edited plaintext — which the re-read above pinned.
+      // This records which state the file was left in, for the evidence.
+      const reEncryptDeadline = Date.now() + 30_000;
+      let reEncrypted = false;
+      for (;;) {
+        reEncrypted = nodePrefix(join(workspace, markerName), 16)?.equals(TSD_HEADER) === true;
+        if (reEncrypted || Date.now() > reEncryptDeadline) break;
+        await sleep(3000);
+      }
+      checks.markerReEncryptedAfterEdit = reEncrypted;
+      checks.markerNodePrefix = nodePrefix(join(workspace, markerName), 16)
+        ?.toString('latin1')
+        .slice(0, 16);
+      // And the plaintext is on disk, node-readable, exactly as read back.
+      try {
+        checks.markerOnDiskHasEdit = readFileSync(join(workspace, markerName), 'utf8').includes(
+          `ENC-EDITED-${token}`
+        );
+      } catch {
+        checks.markerOnDiskHasEdit = false;
+      }
     } else {
-      checks.markerRefused = policyRefusals.length > 0;
-      checks.refusalDurationMs = policyRefusals[0]?.ms ?? null;
+      // A marker file the fallback cannot decrypt keeps the clear refusal and
+      // is never edited: decision 135's out-of-range case.
+      const refusal = policyRefusals.find((tool) => tool.text.includes('cipher-not-editable'));
+      checks.uneditableRefused = refusal !== undefined;
+      checks.uneditableRefusalMs = refusal?.ms ?? null;
       // The ciphertext body never reached the model through any read.
       checks.ciphertextNeverServed = !reads.some((tool) =>
         tool.text.includes('fake ciphertext body')
@@ -557,8 +625,15 @@ async function main(): Promise<void> {
 
   log(`checks: ${JSON.stringify(checks)}`);
   const pass = realMode
-    ? checks.markerReadAsPlaintext === true && checks.noReadRefused === true
-    : checks.markerRefused === true && checks.ciphertextNeverServed === true;
+    ? checks.markerReadAsPlaintext === true &&
+      checks.noReadRefused === true &&
+      checks.markerEditOk === true &&
+      checks.markerRereadSeesEdit === true &&
+      checks.markerOnDiskHasEdit === true
+    : checks.markerEditOk === true &&
+      checks.markerRereadSeesEdit === true &&
+      checks.uneditableRefused === true &&
+      checks.ciphertextNeverServed === true;
   process.exit(pass ? 0 : 1);
 }
 

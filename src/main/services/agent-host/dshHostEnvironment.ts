@@ -34,9 +34,11 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
 /**
  * App switches the host itself reads, forwarded packaged or not: the loop
  * guard's emergency kill switch (dsh-rebase decision 065; `0` turns the
- * `aiclient-loop-guard` row off), under 1.0.x's name.
+ * `aiclient-loop-guard` row off), under 1.0.x's name; and the encrypted-read
+ * row's (P1-13d, decision 135; `0` leaves the fs service unwrapped), whose
+ * name follows the same family.
  */
-const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD'];
+const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD', 'AICLIENT_RUNTIME_ENCRYPTED_READ'];
 
 /**
  * dsh-rebase P1-6c: the app's pi-agent directory (`<agentDir>`), whose policy
