@@ -30,7 +30,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
     - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
     - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
   - P1-13c 的 Windows 端在真 Windows 桌面机上跑 L1 基线，也是 `l1RipgrepFromArtifact`、`nativesPtyRan` 两项失败（那时还没有 `l1PilotWriteAskedReadRan`），说明这两项不是 CI 环境特有。
-  - ✅ 已修（决策 134，`6db5a949`、`4ba4992e`）：只打包宿主的 Windows 冒烟第二轮 44 项全过；版本升到 `1.1.0-dsh.2` 后再触发整包 `build.yml` 确认。
+  - ✅ 已修（决策 134，`6db5a949`、`4ba4992e`）：只打包宿主的 Windows 冒烟第二轮 44 项全过；版本升到 `1.1.0-dsh.2` 后整包 `build.yml`（run 36651305647，提交 `a3a25495`）全部 job 通过：gate（含全量单测与录制检查）、Windows / Linux / macOS 整包与打包冒烟、远程 runtime；产物只作 Actions artifact，不建 Release。
 - 录制门禁 `dsh-bridge-gate.yml` 第一次在 CI 上跑就通过，整个 job 约 2 分钟，28 个场景 0 差异。
 - ✅ P1-13c 已合入 `f84f7bbd`（Windows 端 `801cac53`，决策 091 待审批）。
 - 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
