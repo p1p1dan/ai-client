@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
  * Plugins, mounted: one row per allowlisted plugin with its facts and a
  * switch, the engine's last word on each, the "takes effect at the next
  * engine start" notice after a switch, and nothing to install or remove.
+ * P1-7e e5 (decision 143): and the page following the engine's restarts.
  */
 
 // Anything that imports `useSettingsStore` rehydrates zustand persist at
@@ -62,9 +63,28 @@ function snapshot(extra: Partial<DshPluginsState> = {}): DshPluginsState {
   };
 }
 
+/** P1-7e e5: the page's subscription to Main's pushes; `push` stands in for Main. */
+const pushes = {
+  listeners: new Set<(state: DshPluginsState) => void>(),
+  unsubscribed: 0,
+};
+
+async function push(state: DshPluginsState): Promise<void> {
+  await act(async () => {
+    for (const listener of pushes.listeners) listener(state);
+  });
+}
+
 const api = {
   list: vi.fn<() => Promise<DshPluginsState>>(),
   setEnabled: vi.fn<(name: string, enabled: boolean) => Promise<DshPluginsState>>(),
+  onChanged: vi.fn((listener: (state: DshPluginsState) => void) => {
+    pushes.listeners.add(listener);
+    return () => {
+      pushes.unsubscribed += 1;
+      pushes.listeners.delete(listener);
+    };
+  }),
 };
 
 let container: HTMLDivElement;
@@ -72,6 +92,8 @@ let root: Root;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  pushes.listeners.clear();
+  pushes.unsubscribed = 0;
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   api.list.mockResolvedValue(snapshot());
   window.electronAPI = {
@@ -286,6 +308,73 @@ describe('DshPluginsSettings', () => {
     expect(text()).toContain(
       'The chat engine could not read the plugin settings when it last started, so it loaded no plugin.'
     );
+  });
+
+  /**
+   * P1-7e e5 (problem 29, decision 143): the engine restarts on its own after
+   * a switch, and Main pushes what the new start loaded. The page follows it:
+   * the badge turns to Loaded and the notice goes, with no re-entry.
+   */
+  it('[PLS-15] follows the engine restart a switch caused, without reopening the page', async () => {
+    api.setEnabled.mockResolvedValue(
+      snapshot({
+        plugins: [
+          plugin({
+            enabled: true,
+            overridden: true,
+            host: { state: 'disabled' },
+            pendingRestart: true,
+          }),
+        ],
+      })
+    );
+    await render();
+    await act(async () => switches()[0]?.click());
+    await settle();
+    expect(text()).toContain(RESTART_NOTICE);
+    expect(text()).toContain('Restart pending');
+    expect(text()).toContain('Switched off');
+
+    await push(
+      snapshot({
+        plugins: [
+          plugin({
+            enabled: true,
+            overridden: true,
+            host: { state: 'loaded' },
+            pendingRestart: false,
+          }),
+        ],
+      })
+    );
+    expect(text()).toContain('Loaded');
+    expect(text()).not.toContain('Switched off');
+    expect(text()).not.toContain('Restart pending');
+    expect(text()).not.toContain(RESTART_NOTICE);
+    expect(switches()[0]?.hasAttribute('data-checked')).toBe(true);
+    expect(api.list).toHaveBeenCalledTimes(1);
+  });
+
+  it('[PLS-16] a first engine start while the page is open fills in what it loaded', async () => {
+    api.list.mockResolvedValue(
+      snapshot({ hostReported: false, plugins: [plugin({ host: null })] })
+    );
+    await render();
+    expect(text()).toContain('The chat engine has not started since the app opened');
+    await push(snapshot());
+    expect(text()).not.toContain('The chat engine has not started since the app opened');
+    expect(text()).toContain('Switched off');
+  });
+
+  it('[PLS-17] a push that still disagrees keeps the notice; leaving the page unsubscribes', async () => {
+    await render();
+    await push(snapshot({ plugins: [plugin({ enabled: true, pendingRestart: true })] }));
+    expect(text()).toContain(RESTART_NOTICE);
+    expect(pushes.listeners.size).toBe(1);
+    await act(() => root.unmount());
+    expect(pushes.unsubscribed).toBe(1);
+    expect(pushes.listeners.size).toBe(0);
+    root = createRoot(container);
   });
 
   it('[PLS-14] never mentions pi extensions', async () => {

@@ -64,3 +64,35 @@ it('keeps `includeAllowed` as the documented way back to the quiet records', asy
     }
   );
 });
+
+/**
+ * P1-7e e5 (problem 30, decision 143): a call a session grant let through has
+ * no card, so its `session_grant` record is drawn without `includeAllowed`,
+ * next to the denials; the other allows stay off screen.
+ */
+it('draws a session grant by default, and still no other allow', async () => {
+  const blocks: ChatBlock[] = [
+    ...AUDIT_BLOCKS,
+    {
+      id: 'granted',
+      type: 'permission_activity',
+      permissionActivity: {
+        requestId: 'granted',
+        phase: 'decision',
+        surface: 'bash',
+        value: 'echo two',
+        result: 'allow',
+        resolution: 'session_grant',
+      },
+    },
+  ];
+  await render(createElement(PermissionActivityRows, { blocks }), (container) => {
+    const rows = [...container.querySelectorAll(':scope > ul > li')];
+    expect(rows).toHaveLength(4);
+    const granted = rows.at(-1);
+    expect(granted?.getAttribute('data-tone')).toBe('auto');
+    expect(granted?.textContent).toContain('Allowed {{surface}}');
+    expect(granted?.textContent).toContain('echo two');
+    expect(granted?.textContent).toContain('session grant');
+  });
+});

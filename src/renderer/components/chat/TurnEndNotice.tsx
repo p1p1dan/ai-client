@@ -3,7 +3,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Ident } from '@/components/ui/ident';
 import { useI18n } from '@/i18n';
 import type { ChatTurnEnd } from '@/stores/chatSessions';
-import { deriveTurnEndNotice } from './turnEndNotice';
+import { deriveTurnEndNotice } from './turnEndNoticeModel';
 
 /**
  * dsh-rebase P1-7e (problem 7, decision 140): a reopened turn that saved no

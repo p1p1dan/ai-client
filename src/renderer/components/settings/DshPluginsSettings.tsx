@@ -14,6 +14,10 @@
  * rule 7). The page says so and never claims the change is live. What the
  * engine actually did at its last start is shown per row (loaded, off,
  * missing, refused and why); plugins it no longer ships are listed apart.
+ *
+ * P1-7e e5 (decision 143): the page follows the engine. Main pushes the whole
+ * state after every engine start (`dshPlugins.onChanged`), so the restart a
+ * switch caused shows up here — badge and notice — without reopening the page.
  */
 
 import type { DshPluginsState, DshPluginView } from '@shared/dshPluginSettings';
@@ -241,16 +245,28 @@ export function DshPluginsSettings() {
 
   useEffect(() => {
     let cancelled = false;
+    // A push is newer than any answer to the read below still on its way.
+    let pushed = false;
+    const unsubscribe = window.electronAPI.dshPlugins.onChanged((next) => {
+      if (cancelled) return;
+      pushed = true;
+      setState(next);
+      setLoadError(null);
+      // The engine has reported on the selection as it stands now; from here
+      // on each row's own `pendingRestart` says what is still waiting.
+      if (next.hostReported) setChanged(false);
+    });
     window.electronAPI.dshPlugins.list().then(
       (next) => {
-        if (!cancelled) setState(next);
+        if (!cancelled && !pushed) setState(next);
       },
       (cause: unknown) => {
-        if (!cancelled) setLoadError(messageOf(cause));
+        if (!cancelled && !pushed) setLoadError(messageOf(cause));
       }
     );
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

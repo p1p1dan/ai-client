@@ -256,6 +256,8 @@ export const IPC_CHANNELS = {
   // list them, switch one on or off. No install, no removal.
   DSH_PLUGINS_LIST: 'dshPlugins:list',
   DSH_PLUGINS_SET_ENABLED: 'dshPlugins:setEnabled',
+  // P1-7e e5 (decision 143): Main -> renderer, the new state after a host start.
+  DSH_PLUGINS_CHANGED: 'dshPlugins:changed',
 
   // P5-2-5 — managing the native subagent definitions.
   PI_SUBAGENTS_LIST: 'piSubagents:list',

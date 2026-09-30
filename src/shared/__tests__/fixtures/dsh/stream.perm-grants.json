@@ -295,6 +295,19 @@
   {
     "sessionId": "rec-perm-grants",
     "requestId": "turn-PERM-GRANTS",
+    "type": "permission.activity",
+    "payload": {
+      "phase": "decision",
+      "requestId": "toolu_id-8",
+      "surface": "bash",
+      "value": "echo perm-grant-b",
+      "result": "allow",
+      "resolution": "session_grant"
+    }
+  },
+  {
+    "sessionId": "rec-perm-grants",
+    "requestId": "turn-PERM-GRANTS",
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-grants-t1-s2",

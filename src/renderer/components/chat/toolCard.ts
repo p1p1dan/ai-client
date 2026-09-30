@@ -493,6 +493,13 @@ export interface ToolRowView {
    */
   argKind?: 'ident' | 'prose';
   /**
+   * dsh-rebase P1-7e (problem 18, decision 142): `arg` is a search pattern
+   * (grep, glob, find), shown as written. A path-shaped arg has its file name
+   * moved in front of its directory; `**\/*` is not a path, and splitting it
+   * drew 「*（workspace） **\/」.
+   */
+  argPattern?: true;
+  /**
    * The row is still in flight: present-tense verb, and a live body where the
    * row has one.
    *
@@ -779,6 +786,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
       : toolIconKind(run.toolName),
     arg: argDetail?.text,
     argKind: argDetail?.kind,
+    ...(argDetail?.pattern ? { argPattern: true } : {}),
     ...(argRef ? { argRef } : {}),
     running,
     failed,
@@ -2019,6 +2027,8 @@ function firstHeadingOf(markdown: string): string | undefined {
 interface ToolArgDetail {
   text: string;
   kind?: ToolArgKind;
+  /** A search pattern (`ToolRowView.argPattern`): never split like a path. */
+  pattern?: true;
 }
 
 /**
@@ -2048,6 +2058,7 @@ function formatToolArgDetail(
 
   let raw: string | undefined;
   let kind: ToolArgKind | undefined;
+  let isPattern = false;
   switch (run.toolName) {
     // ─── pi built-ins (T12-b). Argument names per the SDK schemas; see
     // `PI_TOOL_NAMES`. Without these every pi call fell to `default:`, whose
@@ -2059,15 +2070,18 @@ function formatToolArgDetail(
       // and what pi and our retired runtime sent.
       const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
       if (path) {
+        // P1-7e (problem 12): an attached file by the name it was attached under.
+        const attached = attachmentFileName(path);
+        const shown = attached ? t('Attachment · {{name}}', { name: attached }) : shortPath(path);
         const offset = numberField(rec, 'offset');
         if (offset != null) {
           const limit = numberField(rec, 'limit');
           const endLine = limit != null ? offset + limit - 1 : offset;
-          raw = `${shortPath(path)} L${offset}-${endLine}`;
+          raw = `${shown} L${offset}-${endLine}`;
         } else {
-          raw = shortPath(path);
+          raw = shown;
         }
-        kind = 'ident';
+        kind = attached ? 'prose' : 'ident';
       }
       break;
     }
@@ -2084,8 +2098,13 @@ function formatToolArgDetail(
     // ─── dsh-rebase P1-7c: DSH's own tools (plan P1-7 shard 04 §2, §3) ───
     case DSH_TOOL_NAMES.readImage: {
       const path = stringField(rec, 'file_path') ?? stringField(rec, 'path');
-      raw = path ? shortPath(path) : undefined;
-      if (raw) kind = 'ident';
+      const attached = path ? attachmentFileName(path) : undefined;
+      raw = attached
+        ? t('Attachment · {{name}}', { name: attached })
+        : path
+          ? shortPath(path)
+          : undefined;
+      if (raw) kind = attached ? 'prose' : 'ident';
       break;
     }
     case DSH_TOOL_NAMES.pwsh: {
@@ -2215,8 +2234,9 @@ function formatToolArgDetail(
     // the `default:` branch showed the `path` it was narrowed to instead.
     case RUNTIME_TOOL_NAMES.glob: {
       // The pattern is the point of the call; `path`/`glob` only narrow it.
-      const pattern = stringField(rec, 'pattern');
-      raw = pattern ? inRepo(pattern) : pattern;
+      const searched = stringField(rec, 'pattern');
+      raw = searched ? inRepo(searched) : searched;
+      isPattern = Boolean(searched);
       break;
     }
     case RUNTIME_TOOL_NAMES.browserPreview: {
@@ -2308,8 +2328,9 @@ function formatToolArgDetail(
     }
     case 'Grep':
     case 'Glob': {
-      const pattern = stringField(rec, 'pattern');
-      raw = pattern ? inRepo(pattern) : pattern;
+      const searched = stringField(rec, 'pattern');
+      raw = searched ? inRepo(searched) : searched;
+      isPattern = Boolean(searched);
       break;
     }
     case 'WebSearch':
@@ -2404,7 +2425,7 @@ function formatToolArgDetail(
   }
 
   if (raw == null) return undefined;
-  return { text: raw.replace(/[\r\n]+/g, ' '), kind };
+  return { text: raw.replace(/[\r\n]+/g, ' '), kind, ...(isPattern ? { pattern: true } : {}) };
 }
 
 /** Argument text. Never contains a literal newline (truncation is CSS's job, not this function's). */
@@ -2452,6 +2473,20 @@ export function deriveFileLink(run: ToolRun): FileLinkTarget | null {
 }
 
 /** Short path: keep the last `segments` path components (default 2). */
+/**
+ * dsh-rebase P1-7e (problem 12, decision 142): where DSH keeps a file the
+ * user attached — `DSH_HOME/attachments/v1/files/<sha[0..2]>/<sha256>/<name>`
+ * (`dsh-attachment-local`'s layout). The model reads it by that path, which
+ * says nothing to the user; the name they attached it under does.
+ */
+const DSH_ATTACHMENT_FILE =
+  /[\\/]attachments[\\/]v1[\\/]files[\\/][0-9a-f]{2}[\\/][0-9a-f]{64}[\\/]([^\\/]+)$/i;
+
+/** The attached file's own name when `path` is one of DSH's attachment copies. */
+export function attachmentFileName(path: string): string | undefined {
+  return DSH_ATTACHMENT_FILE.exec(path)?.[1];
+}
+
 export function shortPath(path: string, segments: number = 2): string {
   if (!path) return path;
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);

@@ -1,10 +1,11 @@
 /**
  * T-18 image pixel bounds read from the file header — pure, no bitmap decode.
  *
- * The 8000x8000 API cap has to be enforced BEFORE a bitmap exists. A 12000px
- * flat-colour PNG compresses to far under the byte budget, so learning its size
- * via createImageBitmap() would allocate ~576 MB of RGBA in the renderer just to
- * reject it — the guard would crash on exactly the input it exists to block.
+ * The longer-edge cap (the engine's 8192, `MAX_IMAGE_EDGE_PX`) has to be
+ * enforced BEFORE a bitmap exists. A 12000px flat-colour PNG compresses to
+ * far under the byte budget, so learning its size via createImageBitmap()
+ * would allocate ~576 MB of RGBA in the renderer just to reject it — the
+ * guard would crash on exactly the input it exists to block.
  * Parsing the header costs a few dozen bytes of the ArrayBuffer we already read,
  * and being pure it is also the only version of this check that vitest (node
  * environment, no createImageBitmap) can cover.

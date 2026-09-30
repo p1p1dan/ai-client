@@ -87,8 +87,21 @@ export interface PermissionActivityRecord {
   requesterAgentName?: string;
 }
 
+/**
+ * An allow nobody needs to see: kept in the blocks, drawn nowhere (the user
+ * decision of 2026-09-18, see `PermissionActivityRows`).
+ *
+ * Except `session_grant` (P1-7e e5, decision 143; decision 129 rule 16): a
+ * call a remembered "allow for this session" let through has no card, and so
+ * no permission word on its tool row — this row ("Allowed bash … · session
+ * grant") is the only thing on screen saying it was gated, and by what.
+ */
 export function isQuietPermissionActivity(record: PermissionActivityRecord | undefined): boolean {
-  return record?.result === 'allow' && !record.resolution?.includes('error');
+  return (
+    record?.result === 'allow' &&
+    !record.resolution?.includes('error') &&
+    record.resolution !== 'session_grant'
+  );
 }
 
 /**

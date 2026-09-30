@@ -360,3 +360,166 @@ describe('sessionPanelsModel — the jobs key (P1-7b, decision 119)', () => {
     expect(hydrated.bySession.s2?.jobs).toEqual([job]);
   });
 });
+
+/**
+ * dsh-rebase P1-7e e3 (decision 142). Problem 5: DSH commits a resume as the
+ * goal's change and then its activation edge — two events, verified on a real
+ * host with the fake gateway (goal `active rev3` one millisecond before
+ * `activation armed rev3`). Problem 17: the jobs a worker listed when it went
+ * away stay as former rows.
+ */
+describe('sessionPanelsModel — a resumed goal (P1-7e problem 5)', () => {
+  const at = (revision: number, activation: 'armed' | 'disarmed') =>
+    ({
+      key: 'goalActivation',
+      view: { goalId: 'goal-1', revision, activation },
+    }) as const;
+
+  it('[P7E-GOAL-RESUME] paused → active reads as armed until the new edge; the edge decides after', () => {
+    const paused = panelsWith(
+      { key: 'goal', view: goal('paused', { revision: 2 }) },
+      at(2, 'disarmed')
+    );
+    expect(deriveGoalBarView(paused, false)?.state).toBe('paused');
+    let state: SessionPanelsState = { bySession: { s1: paused } };
+    state = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'goal', view: goal('active', { revision: 3 }) })
+    );
+    // The moment between the goal's change and its activation edge.
+    expect(state.bySession.s1?.resumedGoal).toEqual({ goalId: 'goal-1', revision: 3 });
+    expect(deriveGoalBarView(state.bySession.s1, false)?.state).toBe('waiting');
+    expect(deriveGoalBarView(state.bySession.s1, true)?.state).toBe('running');
+    state = reduceSessionPanels(state, projection('s1', at(3, 'armed')));
+    expect(deriveGoalBarView(state.bySession.s1, false)?.state).toBe('waiting');
+    // A real disarm of the resumed revision (a Stop outside the round) is believed.
+    state = reduceSessionPanels(state, projection('s1', at(3, 'disarmed')));
+    expect(deriveGoalBarView(state.bySession.s1, false)?.state).toBe('suspended');
+  });
+
+  it('[P7E-GOAL-RESUME-BLOCKED] blocked → active is a resume too', () => {
+    let state: SessionPanelsState = {
+      bySession: {
+        s1: panelsWith(
+          {
+            key: 'goal',
+            view: goal('blocked', {
+              revision: 5,
+              blockedReason: { code: 'model-reported', message: 'Config missing' },
+            }),
+          },
+          at(5, 'disarmed')
+        ),
+      },
+    };
+    state = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'goal', view: goal('active', { revision: 6 }) })
+    );
+    expect(deriveGoalBarView(state.bySession.s1, true)?.state).toBe('running');
+  });
+
+  it('[P7E-GOAL-EDIT-SUSPENDED] editing a suspended goal keeps it suspended (DSH sends no edge)', () => {
+    let state: SessionPanelsState = {
+      bySession: {
+        s1: panelsWith({ key: 'goal', view: goal('active', { revision: 3 }) }, at(3, 'disarmed')),
+      },
+    };
+    expect(deriveGoalBarView(state.bySession.s1, false)?.state).toBe('suspended');
+    state = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'goal', view: goal('active', { revision: 4 }) })
+    );
+    expect(state.bySession.s1?.resumedGoal).toBeUndefined();
+    expect(deriveGoalBarView(state.bySession.s1, false)?.state).toBe('suspended');
+  });
+
+  it('[P7E-GOAL-RESUME-NOT-LIVE] a resumed goal with no live worker is still suspended', () => {
+    let state: SessionPanelsState = {
+      bySession: {
+        s1: panelsWith({ key: 'goal', view: goal('paused', { revision: 2 }) }, at(2, 'disarmed')),
+      },
+    };
+    state = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'goal', view: goal('active', { revision: 3 }) })
+    );
+    state = reduceSessionPanels(state, {
+      type: 'session.status',
+      sessionId: 's1',
+      seq: 99,
+      timestamp: 99,
+      payload: { status: 'disconnected', disconnectReason: 'engine_restarted' },
+    } as RuntimeEvent);
+    expect(deriveGoalBarView(state.bySession.s1, false)).toMatchObject({
+      state: 'suspended',
+      action: null,
+    });
+  });
+});
+
+describe('sessionPanelsModel — a worker that went away (P1-7e problem 17)', () => {
+  const job = (id: string, status: 'running' | 'completed' | 'killed') => ({
+    id,
+    kind: 'bash',
+    label: `job ${id}`,
+    status,
+    startedAt: 1,
+  });
+  const gone = (sessionId = 's1'): RuntimeEvent =>
+    ({
+      type: 'session.status',
+      sessionId,
+      seq: 77,
+      timestamp: 77,
+      payload: { status: 'disconnected', disconnectReason: 'engine_restarted' },
+    }) as RuntimeEvent;
+
+  it('[P7E-JOBS-CARRY] the listed jobs move to formerJobs with their worker, and the list empties', () => {
+    let state = reduceSessionPanels(
+      initialSessionPanels,
+      projection('s1', { key: 'jobs', view: [job('bash-2', 'running'), job('bash-4', 'killed')] })
+    );
+    state = reduceSessionPanels(state, gone());
+    const panels = state.bySession.s1;
+    expect(panels?.live).toBe(false);
+    expect(panels?.jobs).toEqual([]);
+    expect(panels?.workerEpoch).toBe(1);
+    expect(panels?.formerJobs?.map((entry) => [entry.id, entry.status, entry.epoch])).toEqual([
+      ['bash-2', 'running', 0],
+      ['bash-4', 'killed', 0],
+    ]);
+    // The next worker's list replaces `jobs` and leaves the former rows alone.
+    state = reduceSessionPanels(
+      state,
+      projection('s1', { key: 'jobs', view: [job('bash-2', 'running')] })
+    );
+    expect(state.bySession.s1?.formerJobs).toHaveLength(2);
+    expect(state.bySession.s1?.jobs?.map((entry) => entry.id)).toEqual(['bash-2']);
+    // A second loss stamps the second worker; a disconnect of a session no longer live does nothing.
+    state = reduceSessionPanels(state, gone());
+    expect(state.bySession.s1?.formerJobs?.map((entry) => entry.epoch)).toEqual([0, 0, 1]);
+    expect(reduceSessionPanels(state, gone())).toBe(state);
+  });
+
+  it('[P7E-JOBS-CARRY-CAP] keeps the newest eight; a worker with no jobs only moves the epoch', () => {
+    let state = reduceSessionPanels(
+      initialSessionPanels,
+      projection('s1', {
+        key: 'jobs',
+        view: Array.from({ length: 10 }, (_, index) => job(`bash-${index + 1}`, 'completed')),
+      })
+    );
+    state = reduceSessionPanels(state, gone());
+    expect(state.bySession.s1?.formerJobs?.map((entry) => entry.id)).toEqual(
+      Array.from({ length: 8 }, (_, index) => `bash-${index + 3}`)
+    );
+    let empty = reduceSessionPanels(
+      initialSessionPanels,
+      projection('s2', { key: 'goal', view: goal('active') })
+    );
+    empty = reduceSessionPanels(empty, gone('s2'));
+    expect(empty.bySession.s2?.workerEpoch).toBe(1);
+    expect(empty.bySession.s2?.formerJobs).toBeUndefined();
+  });
+});

@@ -11,6 +11,7 @@
  */
 
 import { englishTranslate } from '@shared/i18n';
+import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { act, createElement, type ReactElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +21,7 @@ import { useSubagentActivityStore } from '@/stores/subagentActivity';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
 import { LiveToolOutput } from '../LiveToolOutput';
 import { SessionSubwindows } from '../SessionSubwindows';
+import { reduceSessionPanels, type SessionPanelsState } from '../sessionPanelsModel';
 import type { SubagentLane } from '../subagentActivityModel';
 
 const api = vi.hoisted(() => {
@@ -254,5 +256,109 @@ describe('the background jobs and subagents windows (P1-7b)', () => {
     expect(pane.textContent).toContain('Earlier 2 KB not shown');
     await act(async () => root?.render(createElement(LiveToolOutput, { toolCallId: 'other' })));
     expect(container.querySelector('[data-testid="live-tool-output"]')).toBeNull();
+  });
+});
+
+/**
+ * dsh-rebase P1-7e e3 (decision 142). Problem 14: a docked window dragged by
+ * its title follows the whole drag — it used to be drawn in another branch
+ * once it had a position, so the first move remounted it and the drag (and its
+ * pointer capture) ended after one step. Problem 17: after the engine restarts,
+ * the jobs the old worker listed stay in the window until the user removes them.
+ */
+describe('the sub-windows after P1-7e', () => {
+  /** A layer of 800×600 at the origin, a 340×200 card wherever its style puts it. */
+  function stubBoxes() {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      if (this.dataset.testid === 'session-subwindows') {
+        return { left: 0, top: 0, width: 800, height: 600, right: 800, bottom: 600 } as DOMRect;
+      }
+      if (this.dataset.testid?.startsWith('subwindow-')) {
+        const left = this.style.left ? Number.parseFloat(this.style.left) : 448;
+        const top = this.style.top ? Number.parseFloat(this.style.top) : 8;
+        return {
+          left,
+          top,
+          width: 340,
+          height: 200,
+          right: left + 340,
+          bottom: top + 200,
+        } as DOMRect;
+      }
+      return { left: 0, top: 0, width: 0, height: 0, right: 0, bottom: 0 } as DOMRect;
+    });
+  }
+
+  function pointer(type: string, target: Element, x: number, y: number) {
+    const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y });
+    Object.defineProperty(event, 'pointerId', { value: 7 });
+    Object.defineProperty(event, 'button', { value: 0 });
+    target.dispatchEvent(event);
+  }
+
+  it('[P7E-DRAG] a docked window follows every step of one drag, and is never remounted', async () => {
+    seed({ jobs: true, agents: false });
+    stubBoxes();
+    await render();
+    const card = container.querySelector('[data-testid="subwindow-jobs"]') as HTMLElement;
+    const handle = card.firstElementChild as HTMLElement;
+    expect(card.getAttribute('data-dragged')).toBeNull();
+
+    await act(async () => pointer('pointerdown', handle, 500, 20));
+    await act(async () => pointer('pointermove', handle, 480, 30));
+    await act(async () => pointer('pointermove', handle, 400, 90));
+    await act(async () => pointer('pointermove', handle, 300, 160));
+    await act(async () => pointer('pointerup', handle, 300, 160));
+
+    // Same node: the window stayed in its place in the tree.
+    expect(container.querySelector('[data-testid="subwindow-jobs"]')).toBe(card);
+    expect(card.getAttribute('data-dragged')).toBe('true');
+    // (-200, +140) from where it was docked (448, 8).
+    expect(useSessionSubwindowsStore.getState().positions.jobs).toEqual({ left: 248, top: 148 });
+    expect(card.style.left).toBe('248px');
+    expect(card.style.top).toBe('148px');
+  });
+
+  it('[P7E-JOBS-KEPT] after an engine restart the old rows stay, without output or stop, until removed', async () => {
+    seed({ jobs: true, agents: false });
+    // The subagent-activity store settles its lanes on the same disconnect.
+    useSubagentActivityStore.setState({ lanes: {}, agentIndex: {} });
+    // The worker goes, the next one reports an empty list.
+    useSessionPanelsStore.setState((state) => {
+      let next: SessionPanelsState = { bySession: state.bySession };
+      next = reduceSessionPanels(next, {
+        type: 'session.status',
+        sessionId: 's1',
+        seq: 50,
+        timestamp: 50,
+        payload: { status: 'disconnected', disconnectReason: 'engine_restarted' },
+      } as RuntimeEvent);
+      next = reduceSessionPanels(next, {
+        type: 'session.projection',
+        sessionId: 's1',
+        seq: 51,
+        timestamp: 51,
+        payload: { key: 'jobs', view: [] },
+      } as RuntimeEvent);
+      return { bySession: next.bySession };
+    });
+    await render();
+    const window = container.querySelector('[data-testid="subwindow-jobs"]') as HTMLElement;
+    const rows = [...window.querySelectorAll('[data-testid="job-row"]')];
+    expect(rows.map((row) => row.getAttribute('data-status'))).toEqual(['lost', 'lost', 'failed']);
+    expect(rows[0]?.textContent).toContain('Engine restarted; the task ended');
+    expect(buttonNamed(rows[0] as HTMLElement, 'Output')).toBeUndefined();
+    expect(buttonNamed(rows[0] as HTMLElement, 'Stop')).toBeUndefined();
+    expect(window.textContent).toContain('0 running · 3 ended');
+
+    await act(async () => buttonNamed(rows[0] as HTMLElement, 'Remove')?.click());
+    expect(useSessionSubwindowsStore.getState().hiddenJobs.s1).toEqual(['bash-2']);
+    expect(
+      [...window.querySelectorAll('[data-testid="job-row"]')].map((row) =>
+        row.getAttribute('data-status')
+      )
+    ).toEqual(['lost', 'failed']);
   });
 });

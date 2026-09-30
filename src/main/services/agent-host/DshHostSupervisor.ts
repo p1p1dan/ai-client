@@ -64,7 +64,8 @@
  * selection as of its spawn (`AICLIENT_DSH_PLUGINS`); the supervisor remembers
  * it per host (`status().pluginSelection`) so WorkerManager can tell a host
  * that runs another set, and keeps the latest `ready.plugins` report past the
- * host's exit (`pluginReport()`).
+ * host's exit (`pluginReport()`), telling `onPluginReport` listeners of each
+ * new one (P1-7e e5).
  */
 
 import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:child_process';
@@ -577,6 +578,8 @@ export class DshHostSupervisor {
   private readonly pendingCompletions = new Map<number, PendingCompletion>();
   /** P1-10b: the plugin report of the latest `ready`, kept past that host's exit. */
   private lastPluginReport: DshPluginReport | null = null;
+  /** P1-7e e5: told whenever a `ready` replaces the plugin report (`onPluginReport`). */
+  private readonly pluginReportListeners = new Set<(report: DshPluginReport) => void>();
 
   private readonly channelLink: DshChannelLink = {
     send: (ch, rpc, onError) => {
@@ -654,6 +657,19 @@ export class DshHostSupervisor {
    */
   pluginReport(): DshPluginReport | undefined {
     return this.lastPluginReport ? structuredClone(this.lastPluginReport) : undefined;
+  }
+
+  /**
+   * P1-7e e5 (decision 143): call `listener` with each new plugin report, as
+   * soon as a host start stores it, so the settings page can follow a
+   * restart instead of showing what it read when it opened. Returns the
+   * unsubscribe. A listener that throws is logged and never reaches the host.
+   */
+  onPluginReport(listener: (report: DshPluginReport) => void): () => void {
+    this.pluginReportListeners.add(listener);
+    return () => {
+      this.pluginReportListeners.delete(listener);
+    };
   }
 
   /** Resolves once a host is ready; concurrent callers share one start. */
@@ -1310,6 +1326,13 @@ export class DshHostSupervisor {
       return;
     }
     this.lastPluginReport = structuredClone(ready.plugins);
+    for (const listener of this.pluginReportListeners) {
+      try {
+        listener(structuredClone(ready.plugins));
+      } catch (error) {
+        console.warn(`[dsh-host:g${host.generation}] a plugin report listener failed`, error);
+      }
+    }
     const troubled = ready.plugins.plugins.filter(
       (plugin) =>
         plugin.state === 'missing' ||

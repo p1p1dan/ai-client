@@ -26,8 +26,16 @@ export const SUPPORTED_IMAGE_MEDIA_TYPES = [
   'image/webp',
 ] as const;
 
-/** API hard limit: a longer edge than this fails with invalid_request_error. */
-export const MAX_IMAGE_EDGE_PX = 8000;
+/**
+ * The longer-edge cap, taken from the engine that admits the image (P1-7e e5,
+ * decision 143): DSH's `@deepseek-ai/dsh-attachment-local` (0.1.7-rc.2) refuses an image
+ * whose longer side exceeds `DEFAULT_MAX_IMAGE_DIMENSION` (8192, its per-side
+ * pixel limit) with `IMAGE_DIMENSION_TOO_LARGE`, and our host profile keeps
+ * that default. Admitted images are normalized by the engine before any model
+ * request, so the older 8000 px API cap no longer binds. Kept equal, so an
+ * image the engine would take is never refused here first.
+ */
+export const MAX_IMAGE_EDGE_PX = 8192;
 
 export interface AttachmentLimits {
   maxCount: number;
@@ -129,7 +137,7 @@ export type ImagePlan =
 
 /**
  * Gate an image on the two API constraints the byte budget cannot express:
- * the four-format whitelist and the 8000x8000 pixel cap.
+ * the four-format whitelist and the engine's longer-edge pixel cap.
  *
  * There is deliberately no `downscale` action. Re-encoding through a canvas
  * would be a lossy rewrite of user data, is untestable in the node test

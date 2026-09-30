@@ -1258,6 +1258,8 @@ const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
   fail: 'the failure card is live; the log keeps an empty reply, drawn as interrupted',
   fork: 'the source page is the one the fork left behind (asserted above)',
   rewind: 'the page after a rewind drops the retired turn (asserted above)',
+  'perm-grants': 'the session-grant activity row is live only (decision 143)',
+  'perm-restart': 'the session-grant activity row is live only (decision 143)',
   'perm-subagent': 'a child’s approval card is live only',
   question: 'the question card is live only; the answer stays in the ask_user_question row',
 };

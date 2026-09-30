@@ -1,6 +1,10 @@
 import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
-import { deriveTurnEndNotice, turnEndNotesAfterWork, turnEndsWithoutReply } from '../turnEndNotice';
+import {
+  deriveTurnEndNotice,
+  turnEndNotesAfterWork,
+  turnEndsWithoutReply,
+} from '../turnEndNoticeModel';
 
 /**
  * dsh-rebase P1-7e (problem 7, decision 140): the note a reopened turn that

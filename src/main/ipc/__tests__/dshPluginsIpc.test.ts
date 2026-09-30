@@ -43,14 +43,32 @@ const setDshPluginSelection = vi.fn((overrides: Record<string, boolean> | undefi
   return true;
 });
 const getDshPluginReport = vi.fn(() => state.report as DshPluginReport | undefined);
+/** P1-7e e5: who listens for a host start's new report (the IPC module, once). */
+const reportListeners = new Set<() => void>();
+const onDshPluginReport = vi.fn((listener: () => void) => {
+  reportListeners.add(listener);
+  return () => {
+    reportListeners.delete(listener);
+  };
+});
+
+/** Stand-ins for the app's windows; the push goes to each one that is not destroyed. */
+const windows = vi.hoisted(() => ({
+  list: [] as Array<{
+    isDestroyed: () => boolean;
+    webContents: { send: (...args: unknown[]) => void };
+  }>,
+}));
 
 vi.mock('electron', () => ({
   ipcMain: { handle: vi.fn((channel: string, handler: Handler) => handlers.set(channel, handler)) },
+  BrowserWindow: { getAllWindows: () => windows.list },
 }));
 vi.mock('../../services/agent-host/dshHostPlugins', () => ({
   getDshPluginSelection,
   setDshPluginSelection,
   getDshPluginReport,
+  onDshPluginReport,
 }));
 vi.mock('../../services/dshPlugins/pluginCatalog', () => ({
   readCurrentDshPluginCatalog: () => state.catalog,
@@ -196,6 +214,65 @@ describe('dshPlugins:setEnabled', () => {
   });
 });
 
+/**
+ * P1-7e e5 (problem 29, decision 143): an open plugins page follows the
+ * engine. After each host start that replaced the report, Main sends the
+ * page's whole new state to every window; nothing is written or restarted.
+ */
+describe('dshPlugins:changed', () => {
+  function fakeWindow(destroyed = false) {
+    return { isDestroyed: () => destroyed, webContents: { send: vi.fn() } };
+  }
+
+  it('subscribes once, at registration', () => {
+    expect(reportListeners.size).toBe(1);
+  });
+
+  it('sends the new state to every live window after a host start', () => {
+    const live = fakeWindow();
+    const gone = fakeWindow(true);
+    windows.list = [live, gone];
+    state.selection = { 'dsh-office-tools': true };
+    state.report = {
+      enabledFrom: 'main',
+      plugins: [
+        { name: 'dsh-office-tools', version: '1.0.4', defaultEnabled: false, state: 'loaded' },
+      ],
+      dropped: [],
+    } satisfies DshPluginReport;
+    for (const listener of reportListeners) listener();
+    expect(live.webContents.send).toHaveBeenCalledTimes(1);
+    const [channel, pushed] = live.webContents.send.mock.calls[0] as [string, DshPluginsState];
+    expect(channel).toBe(IPC_CHANNELS.DSH_PLUGINS_CHANGED);
+    expect(pushed).toMatchObject({ hostReported: true });
+    expect(pushed.plugins[0]).toMatchObject({
+      name: 'dsh-office-tools',
+      enabled: true,
+      host: { state: 'loaded' },
+      pendingRestart: false,
+    });
+    expect(gone.webContents.send).not.toHaveBeenCalled();
+    expect(setDshPluginSelection).not.toHaveBeenCalled();
+    windows.list = [];
+  });
+
+  it('sends nothing when the state cannot be read, and does not throw into the host', () => {
+    const live = fakeWindow();
+    windows.list = [live];
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    getDshPluginSelection.mockImplementationOnce(() => {
+      throw new Error('settings unreadable');
+    });
+    expect(() => {
+      for (const listener of reportListeners) listener();
+    }).not.toThrow();
+    expect(live.webContents.send).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+    windows.list = [];
+  });
+});
+
 describe('what the IPC module reaches', () => {
   const sourcePath = join(__dirname, '..', 'dshPlugins.ts');
   // Comments may name what the module deliberately does not touch.
@@ -203,7 +280,10 @@ describe('what the IPC module reaches', () => {
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/^\s*\/\/.*$/gm, '');
 
-  it('imports exactly the three calls of dshHostPlugins.ts from agent-host, and nothing else there', () => {
+  // P1-7e e5 (decision 143): a fourth call, `onDshPluginReport`, to follow
+  // the report after a host start. It only reads; the next test still pins
+  // that nothing here writes the selection or restarts the host.
+  it('imports exactly the calls of dshHostPlugins.ts from agent-host, and nothing else there', () => {
     const agentHostImports = [
       ...source.matchAll(/from '\.\.\/services\/agent-host\/([^']+)'/g),
     ].map((match) => match[1]);
@@ -217,7 +297,12 @@ describe('what the IPC module reaches', () => {
         .map((name) => name.trim())
         .filter(Boolean)
         .sort()
-    ).toEqual(['getDshPluginReport', 'getDshPluginSelection', 'setDshPluginSelection']);
+    ).toEqual([
+      'getDshPluginReport',
+      'getDshPluginSelection',
+      'onDshPluginReport',
+      'setDshPluginSelection',
+    ]);
   });
 
   it('writes no settings of its own and restarts nothing itself', () => {

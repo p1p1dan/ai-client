@@ -119,6 +119,9 @@ export function useEditor() {
       // returns is too late, because by then `openFile` has already run.
       options?: { stillValid?: () => boolean }
     ) => {
+      // P1-7e (problem 21): asking for a file brings the files to the front of
+      // the right column even when it is already the active tab.
+      useEditorStore.getState().requestReveal();
       const existingTab = useEditorStore.getState().tabs.find((t) => t.path === path);
 
       if (existingTab) {

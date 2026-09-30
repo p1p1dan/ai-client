@@ -34,10 +34,13 @@ import {
  * What deliberately stayed is this component: it renders the NON-quiet records
  * (denied, and gate errors) unconditionally, and it is the only visible exit a
  * refused authorization has. Removing it too would make a denial silent, which
- * is the opposite of what the decision asked for.
+ * is the opposite of what the decision asked for. P1-7e e5 (decision 143) adds
+ * one allow to them: a `session_grant`, the call a remembered "allow for this
+ * session" let through, which has no card and so nothing else saying so.
  *
- * The cost, recorded rather than hidden: a `policy_allow` gate now has no
- * surface at all in the UI. It is still in the message blocks and still in the
+ * The cost, recorded rather than hidden: a `policy_allow` gate (and a card's
+ * own allow, which its tool row already says) now has no surface at all in the
+ * UI. It is still in the message blocks and still in the
  * session log; `isQuietPermissionActivity` below is what draws the line, and
  * `includeAllowed` is the parameter that would bring them back.
  */

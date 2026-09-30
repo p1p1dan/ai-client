@@ -6,6 +6,21 @@ import { useI18n } from '@/i18n';
 import { useSettingsStore } from '@/stores/settings';
 import { TerminalSearchBar, type TerminalSearchBarRef } from './TerminalSearchBar';
 
+/**
+ * P1-7e (problem 15, decision 142): the terminal's search chord as the
+ * focused terminal sees it — Ctrl+F (Cmd+F on macOS), nothing else held. A
+ * chord with Alt or Shift, and plain keys (Esc for vim and less), stay the
+ * shell's.
+ */
+export function isTerminalSearchShortcut(
+  event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>,
+  platform: string | undefined
+): boolean {
+  const mac = platform === 'darwin';
+  const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  return mod && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f';
+}
+
 interface ShellTerminalProps {
   cwd?: string;
   backendSessionId?: string;
@@ -46,17 +61,43 @@ export function ShellTerminal({
 }: ShellTerminalProps) {
   const { t } = useI18n();
   const runtimeStateRef = useRef<'live' | 'reconnecting' | 'dead'>('live');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const isSearchOpenRef = useRef(isSearchOpen);
+  isSearchOpenRef.current = isSearchOpen;
+  const searchBarRef = useRef<TerminalSearchBarRef>(null);
+
+  const openSearch = useCallback(() => {
+    if (isSearchOpenRef.current) {
+      searchBarRef.current?.focus();
+    } else {
+      setIsSearchOpen(true);
+    }
+  }, []);
 
   // Handle Shift+Enter for newline (send LF character)
-  const handleCustomKey = useCallback((event: KeyboardEvent, ptyId: string) => {
-    if (event.key === 'Enter' && event.shiftKey) {
-      if (event.type === 'keydown' && runtimeStateRef.current === 'live') {
-        window.electronAPI.session.write(ptyId, '\x0a');
+  const handleCustomKey = useCallback(
+    (event: KeyboardEvent, ptyId: string) => {
+      if (event.key === 'Enter' && event.shiftKey) {
+        if (event.type === 'keydown' && runtimeStateRef.current === 'live') {
+          window.electronAPI.session.write(ptyId, '\x0a');
+        }
+        return false; // Prevent default Enter behavior
       }
-      return false; // Prevent default Enter behavior
-    }
-    return true;
-  }, []);
+      // P1-7e (problem 15, decision 142): with the terminal focused, xterm
+      // takes Ctrl+F before any window listener hears it and sends ^F to the
+      // shell. The search opens here instead; every other key, Esc included,
+      // still goes to the shell (vim, less).
+      if (isTerminalSearchShortcut(event, window.electronAPI.env.platform)) {
+        if (event.type === 'keydown') {
+          event.preventDefault();
+          openSearch();
+        }
+        return false;
+      }
+      return true;
+    },
+    [openSearch]
+  );
 
   const {
     containerRef,
@@ -84,26 +125,21 @@ export function ShellTerminal({
     onCustomKey: handleCustomKey,
   });
   runtimeStateRef.current = runtimeState;
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const searchBarRef = useRef<TerminalSearchBarRef>(null);
   const _xtermKeybindings = useSettingsStore((state) => state.xtermKeybindings);
   const { showScrollToBottom, handleScrollToBottom } = useTerminalScrollToBottom(terminal);
 
   // Handle keyboard shortcuts
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      // Cmd+F / Ctrl+F for search
+      // Cmd+F / Ctrl+F for search. With the terminal focused `handleCustomKey`
+      // has already opened it; opening twice is the same as once.
       if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
         e.preventDefault();
-        if (isSearchOpen) {
-          searchBarRef.current?.focus();
-        } else {
-          setIsSearchOpen(true);
-        }
+        openSearch();
         return;
       }
     },
-    [isSearchOpen]
+    [openSearch]
   );
 
   // Handle right-click context menu

@@ -57,6 +57,7 @@ import {
 import {
   chatTurnClass,
   readingColumnSpacingClass,
+  sessionFailureTitleClass,
   turnActionsInnerClass,
   turnActionsSlotClass,
   turnAnswerToneClass,
@@ -140,7 +141,7 @@ import { TurnEndNotice } from './TurnEndNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
-import { turnEndNotesAfterWork, turnEndsWithoutReply } from './turnEndNotice';
+import { turnEndNotesAfterWork, turnEndsWithoutReply } from './turnEndNoticeModel';
 import {
   deriveSendStatusBinding,
   hasLiveTurnEvidence,
@@ -899,10 +900,11 @@ export function MessageTimeline({
                   className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-meta"
                   role="alert"
                 >
-                  {/* T-30 P-06: only the title carries destructive weight — body
-                    and hint fall back to muted-foreground so a session-level
-                    failure doesn't stack a second red block on top of the
-                    already-red failed tool rows above it. */}
+                  {/* T-30 P-06: only the title carries weight — body and hint
+                    fall back to muted-foreground so a session-level failure
+                    doesn't stack a second red block on top of the already-red
+                    failed tool rows above it. P1-7e (decision 142): the title
+                    is body ink now; the red is the card's border and tint. */}
                   {/* 2026-09-21: the title used to be the bare words 「Session
                     failed」, which is the label of the sensor, not of the
                     event. It is now the KIND of stop ("Stopped at the
@@ -910,7 +912,7 @@ export function MessageTimeline({
                     a reason line and a next step under it. The user's report
                     was 「停下了很莫名其妙」, and the fix for that is naming what
                     happened, not repeating that something did. */}
-                  <p className="font-medium text-destructive">{t(failure.title)}</p>
+                  <p className={sessionFailureTitleClass()}>{t(failure.title)}</p>
                   {lastError && isAuthRequiredError(lastError) ? (
                     // D47 S5 §3: spawn-gate rejection (resolveSpawnGateDecision,
                     // @shared/authGate) — retrying won't help without a fresh

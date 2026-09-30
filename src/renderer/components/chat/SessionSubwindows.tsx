@@ -72,7 +72,6 @@ function SubwindowLayer({
   // 8 px from the top and from the composer's strips (the prototype's gap).
   const available = height - 2 * SUBWINDOW_GAP_PX;
   const maxHeight = subwindowMaxHeight(available, Number(jobs) + Number(agents));
-  const stacked = (jobs && !positions.jobs) || (agents && !positions.agents);
 
   return (
     <div
@@ -80,32 +79,40 @@ function SubwindowLayer({
       className="pointer-events-none absolute inset-0 z-20"
       data-testid="session-subwindows"
     >
-      {stacked && (
-        <div className="absolute top-2 right-3 flex max-w-[calc(100%-1.5rem)] flex-col items-end gap-2">
-          {jobs && !positions.jobs && (
-            <BackgroundJobsWindow sessionId={sessionId} layer={layer} maxHeight={maxHeight} />
-          )}
-          {agents && !positions.agents && (
-            <SubagentsWindow sessionId={sessionId} layer={layer} maxHeight={maxHeight} />
-          )}
-        </div>
-      )}
-      {jobs && positions.jobs && (
-        <BackgroundJobsWindow
-          sessionId={sessionId}
-          layer={layer}
-          maxHeight={maxHeight}
-          position={positions.jobs}
-        />
-      )}
-      {agents && positions.agents && (
-        <SubagentsWindow
-          sessionId={sessionId}
-          layer={layer}
-          maxHeight={maxHeight}
-          position={positions.agents}
-        />
-      )}
+      {/* P1-7e (problem 14, decision 142): each window has ONE place in the
+          tree, docked or dragged. A docked window flows in the stack at the
+          top right; a dragged one is taken out of the flow (`absolute`) and
+          placed by its corner — this box has the layer's own box, so the
+          corner is in the layer's coordinates either way. Drawing the two
+          states in two branches remounted the window on its first move,
+          which dropped the drag and its pointer capture after one step. */}
+      <div className={subwindowStackClass()}>
+        {jobs && (
+          <BackgroundJobsWindow
+            sessionId={sessionId}
+            layer={layer}
+            maxHeight={maxHeight}
+            position={positions.jobs}
+          />
+        )}
+        {agents && (
+          <SubagentsWindow
+            sessionId={sessionId}
+            layer={layer}
+            maxHeight={maxHeight}
+            position={positions.agents}
+          />
+        )}
+      </div>
     </div>
   );
+}
+
+/**
+ * The stack both windows live in: the layer's whole box, docked windows
+ * flowing down from its top right corner (8 px from the top, 12 px from the
+ * right, and at most the width that leaves 12 px on the left too).
+ */
+export function subwindowStackClass(): string {
+  return 'absolute inset-0 flex flex-col items-end gap-2 pt-2 pr-3 pl-3';
 }

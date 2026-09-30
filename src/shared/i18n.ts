@@ -3774,3 +3774,14 @@ Object.assign(zhTranslations, {
   'Check the thinking settings of this model in the model settings, then send your message again.':
     '请在模型设置里检查这个模型的思考相关配置，改好后再发一次消息。',
 });
+
+// dsh-rebase P1-7e e3 (decision 142): a read of an attached file names the
+// file, not DSH's content-hash folder; the pool's reclaim notice for a chat
+// that had nothing under way does not say it was stopped.
+Object.assign(zhTranslations, {
+  'Attachment · {{name}}': '附件 · {{name}}',
+  '“{{name}}” was idle and moved to the background to make room for a new one. Nothing is lost; open it to continue.':
+    '为了给新对话腾出位置，空闲的「{{name}}」已转入后台，内容都还在。点开它就能接着聊。',
+  'An idle older conversation moved to the background to make room for a new one. Nothing is lost.':
+    '为了给新对话腾出位置，一个空闲的较早对话已转入后台，内容都还在。',
+});

@@ -2668,12 +2668,25 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
           dsh?: { profile?: { bundles?: string[] } };
         }
       ).dsh?.profile?.bundles;
-    /** Main's side of a selection change: store it, reconcile, wait for the old host to go. */
+    /**
+     * Main's side of a selection change: store it, reconcile, and wait for
+     * the host to come back on it by itself (P1-7e e5, decision 143) — the
+     * old host gone first, one host after, and no session needed for it.
+     */
     async function select(next: Record<string, boolean> | undefined) {
+      const before = supervisor.status().generation;
+      const key = dshPluginSelectionKey(next);
       selection = next;
-      manager.reconcileHostPlugins(dshPluginSelectionKey(next));
-      expect(await until(() => supervisor.status().state !== 'ready', 30_000)).toBe(true);
-      expect(await until(() => liveScratchHosts().length === 0, 30_000)).toBe(true);
+      manager.reconcileHostPlugins(key);
+      expect(
+        await until(() => {
+          const status = supervisor.status();
+          return (
+            status.state === 'ready' && status.generation > before && status.pluginSelection === key
+          );
+        }, 60_000)
+      ).toBe(true);
+      expect(liveScratchHosts()).toHaveLength(1);
     }
 
     beforeAll(async () => {
@@ -2789,6 +2802,11 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       // plugin, so the test still exercises the override path even though
       // the fixture's own defaultEnabled is already false.
       await select({ [kit.FIXTURE_PLUGIN]: false });
+      // P1-7e e5: the restarted host has already reported, before any chat.
+      expect(supervisor.pluginReport()?.plugins[0]).toMatchObject({
+        name: kit.FIXTURE_PLUGIN,
+        state: 'disabled',
+      });
       const disabled = await streamTurn('pl2', 91);
       expect(disabled).toMatchObject({ settled: true, completed: true });
       expect(supervisor.status().pluginSelection).toBe(
@@ -2824,13 +2842,15 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
     it('[PLG-4] a plugin enabled but not installed is missing, and a stray bundle the profile lists is dropped', async () => {
       current = installs.good;
-      await select({ [kit.FIXTURE_PLUGIN]: true, [MISSING]: true });
+      // Tampered before the switch: since P1-7e e5 the host restarted for it
+      // comes straight back up, and that start is the one that must read it.
       const manifest = join(dshHome(), 'profiles', 'aiclient', 'package.json');
       const tampered = JSON.parse(readFileSync(manifest, 'utf8')) as Record<string, unknown>;
       writeFileSync(
         manifest,
         `${JSON.stringify({ ...tampered, dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@aiclient/dsh-app', '@evil/bundle'] } } }, null, 2)}\n`
       );
+      await select({ [kit.FIXTURE_PLUGIN]: true, [MISSING]: true });
       const result = await streamTurn('pl4', 93);
       expect(result).toMatchObject({ settled: true, completed: true });
       expect(supervisor.pluginReport()).toEqual({

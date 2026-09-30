@@ -10,7 +10,7 @@ import {
   TriangleAlertIcon,
   XIcon,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
 import { useI18n } from '@/i18n';
@@ -43,9 +43,112 @@ interface ToastProviderProps extends Toast.Provider.Props {
   position?: ToastPosition;
 }
 
+/**
+ * dsh-rebase P1-7e (problem 11, decision 142): how long a toast stays when
+ * nothing holds it. An explicit `timeout` wins (`0`: stays until closed);
+ * otherwise errors and warnings 10 s, everything else 5 s; a loading toast
+ * stays until it becomes something else. Every toast has its ✕.
+ */
+export const TOAST_LIFETIME_MS = { long: 10_000, short: 5_000 } as const;
+
+export function toastLifetimeMs(toast: { type?: string; timeout?: number }): number | null {
+  if (toast.type === 'loading') return null;
+  if (typeof toast.timeout === 'number') return toast.timeout > 0 ? toast.timeout : null;
+  return toast.type === 'error' || toast.type === 'warning'
+    ? TOAST_LIFETIME_MS.long
+    : TOAST_LIFETIME_MS.short;
+}
+
+/** At most this many toasts are drawn at once; an older one past it is hidden, then times out. */
+export const TOAST_STACK_LIMIT = 3;
+
+/** How often the lifetime watchdog looks, in ms. */
+const TOAST_WATCH_INTERVAL_MS = 500;
+
+/**
+ * Base UI's own toast timers pause while the window is blurred and resume
+ * only on a focus event aimed at an element, so a toast shown around a focus
+ * change could stay forever — the point-check saw exactly that. The lifetime
+ * is kept here instead: the Provider schedules nothing by itself
+ * (`timeout={0}`), and this watchdog closes a toast once its lifetime has
+ * passed while neither the pointer nor the keyboard focus is on the toasts.
+ */
+function useToastLifetimes(
+  toasts: readonly BaseToastObject[],
+  held: () => boolean,
+  close: (id: string) => void
+): void {
+  const since = useRef(new Map<string, { at: number; shape: string }>());
+  const latest = useRef(toasts);
+  latest.current = toasts;
+
+  useEffect(() => {
+    const now = Date.now();
+    const present = new Set<string>();
+    for (const toast of toasts) {
+      present.add(toast.id);
+      // A loading toast that becomes a result starts its lifetime then.
+      const shape = `${toast.type ?? ''}|${String(toast.timeout)}`;
+      const entry = since.current.get(toast.id);
+      if (!entry || entry.shape !== shape) since.current.set(toast.id, { at: now, shape });
+    }
+    for (const id of [...since.current.keys()]) {
+      if (!present.has(id)) since.current.delete(id);
+    }
+  }, [toasts]);
+
+  const hasToasts = toasts.length > 0;
+  useEffect(() => {
+    if (!hasToasts) return undefined;
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const due = latest.current.filter((toast) => {
+        if (toast.transitionStatus === 'ending') return false;
+        const lifetime = toastLifetimeMs(toast);
+        const entry = since.current.get(toast.id);
+        return lifetime !== null && entry !== undefined && now - entry.at >= lifetime;
+      });
+      if (due.length === 0 || held()) return;
+      for (const toast of due) close(toast.id);
+    }, TOAST_WATCH_INTERVAL_MS);
+    return () => window.clearInterval(timer);
+  }, [hasToasts, held, close]);
+}
+
+/**
+ * P1-7e (problem 11): toasts never cover the composer. Anything marked
+ * `data-toast-avoid` (the chat composer's host) pushes the stack up above
+ * its top edge; with nothing marked, the stack keeps its corner inset.
+ */
+function useToastBottomClearance(active: boolean): number {
+  const [clearance, setClearance] = useState(0);
+  useLayoutEffect(() => {
+    if (!active) return undefined;
+    const measure = () => {
+      let top = Number.POSITIVE_INFINITY;
+      for (const element of document.querySelectorAll('[data-toast-avoid]')) {
+        const box = element.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) top = Math.min(top, box.top);
+      }
+      setClearance(Number.isFinite(top) ? Math.max(0, Math.round(window.innerHeight - top)) : 0);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
+    for (const element of document.querySelectorAll('[data-toast-avoid]')) {
+      observer?.observe(element);
+    }
+    return () => {
+      window.removeEventListener('resize', measure);
+      observer?.disconnect();
+    };
+  }, [active]);
+  return clearance;
+}
+
 function ToastProvider({ children, position = 'bottom-right', ...props }: ToastProviderProps) {
   return (
-    <Toast.Provider timeout={5000} toastManager={toastManager} {...props}>
+    <Toast.Provider timeout={0} limit={TOAST_STACK_LIMIT} toastManager={toastManager} {...props}>
       {children}
       <Toasts position={position} />
     </Toast.Provider>
@@ -92,18 +195,44 @@ function SendToSessionButton({ title, description, onClose }: SendToSessionButto
 }
 
 function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
-  const { toasts } = Toast.useToastManager();
+  const { toasts, close } = Toast.useToastManager();
   const isTop = position.startsWith('top');
   const visibleToasts = [...new Map(toasts.map((toast) => [toast.id, toast])).values()];
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  const pointerInside = useRef(false);
+  // Held while the reader is on it: the pointer over the stack, or the
+  // keyboard focus inside it.
+  const held = useCallback(
+    () =>
+      pointerInside.current ||
+      (viewportRef.current?.contains(document.activeElement) === true &&
+        document.activeElement !== document.body),
+    []
+  );
+  useToastLifetimes(visibleToasts, held, close);
+  const clearance = useToastBottomClearance(!isTop && visibleToasts.length > 0);
+  // The last toast gone from under a still pointer sends no pointerleave.
+  useEffect(() => {
+    if (visibleToasts.length === 0) pointerInside.current = false;
+  }, [visibleToasts.length]);
 
   return (
     <Toast.Portal data-slot="toast-portal">
       <Toast.Viewport
+        ref={viewportRef}
+        onPointerEnter={() => {
+          pointerInside.current = true;
+        }}
+        onPointerLeave={() => {
+          pointerInside.current = false;
+        }}
+        style={{ '--toast-avoid-bottom': `${clearance}px` } as React.CSSProperties}
         className={cn(
           'fixed z-[9999] mx-auto flex w-[calc(100%-var(--toast-inset)*2)] max-w-[480px] [--toast-inset:--spacing(4)] sm:[--toast-inset:--spacing(8)]',
           // Vertical positioning
           'data-[position*=top]:top-(--toast-inset)',
-          'data-[position*=bottom]:bottom-(--toast-inset)',
+          // P1-7e (problem 11): never over the composer (`data-toast-avoid`).
+          'data-[position*=bottom]:bottom-[max(var(--toast-inset),calc(var(--toast-avoid-bottom,0px)+--spacing(2)))]',
           // Horizontal positioning
           'data-[position*=left]:left-(--toast-inset)',
           'data-[position*=right]:right-(--toast-inset)',
@@ -138,8 +267,8 @@ function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
                 // Default state transform
                 'data-[position*=top]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)+(var(--toast-index)*var(--toast-peek))+(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]',
                 'data-[position*=bottom]:transform-[translateX(var(--toast-swipe-movement-x))_translateY(calc(var(--toast-swipe-movement-y)-(var(--toast-index)*var(--toast-peek))-(var(--toast-shrink)*var(--toast-calc-height))))_scale(var(--toast-scale))]',
-                // Limited state
-                'data-limited:opacity-0',
+                // Limited state: past the stack limit it is neither seen nor clickable.
+                'data-limited:invisible data-limited:opacity-0',
                 // Expanded state
                 'data-expanded:h-(--toast-height)',
                 'data-position:data-expanded:transform-[translateX(var(--toast-swipe-movement-x))_translateY(var(--toast-calc-offset-y))]',
@@ -160,6 +289,7 @@ function Toasts({ position = 'bottom-right' }: { position: ToastPosition }) {
                 'data-expanded:data-ending-style:data-[swipe-direction=down]:transform-[translateY(calc(var(--toast-swipe-movement-y)+100%+var(--toast-inset)))]'
               )}
               data-position={position}
+              data-slot="toast"
               key={toast.id}
               swipeDirection={
                 position.includes('center')
@@ -391,30 +521,19 @@ type ToastOptions = Omit<BaseToastAddOptions, 'data'> & {
 };
 
 /**
- * Add a toast with smart timeout based on type.
+ * Add a toast; its lifetime follows its type (`toastLifetimeMs`):
  * - error/warning: 10s (longer for important messages)
  * - success/info: 5s (default)
  * - loading: no auto-dismiss
+ * An explicit `timeout` overrides it (`0`: until closed).
  */
 function addToast(options: ToastOptions) {
-  const defaultTimeouts: Record<ToastType, number> = {
-    error: 10000,
-    warning: 10000,
-    loading: 0,
-    success: 5000,
-    info: 5000,
-  };
-
-  const type = options.type;
-  const timeout = options.timeout ?? (type ? defaultTimeouts[type] : 5000);
-
   const { actions, data, ...rest } = options;
   const mergedData = actions ? { ...(data as object | undefined), actions } : data;
 
   return toastManager.add({
     ...(rest as BaseToastAddOptions),
     data: mergedData,
-    timeout,
   });
 }
 

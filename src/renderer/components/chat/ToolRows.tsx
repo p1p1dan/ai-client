@@ -37,7 +37,11 @@ import {
   useToolExpansionStore,
 } from '@/stores/toolExpansion';
 import { useToolLiveOutputStore } from '@/stores/toolLiveOutput';
-import { thoughtBodyMaxHeightClass, turnProcessToneClass } from './chatTimelineLayout';
+import {
+  thoughtBodyMaxHeightClass,
+  toolRowIconClass,
+  turnProcessToneClass,
+} from './chatTimelineLayout';
 import { HitListPopover } from './HitListPopover';
 import { LiveToolOutput } from './LiveToolOutput';
 import { deriveSubagentPanelRows } from './subagentActivityModel';
@@ -176,7 +180,7 @@ const ROW_ICONS: Record<string, typeof Wrench> = {
 
 function ToolRowIcon({ kind }: { kind?: string }) {
   const Icon = ROW_ICONS[kind ?? 'tool'] ?? Wrench;
-  return <Icon className="size-[13px] shrink-0 self-center opacity-80" aria-hidden />;
+  return <Icon className={toolRowIconClass()} aria-hidden />;
 }
 
 /** One `.ct-row`: verb + arg, optionally expandable into an output/detail/thinking body. */
@@ -594,8 +598,9 @@ function splitPathArg(arg: string): { name: string; dir: string } | null {
   return { name: [name, ...rest].join(' '), dir: `${head.slice(0, cut)}/` };
 }
 
-function ArgText({ arg }: { arg: string }) {
-  const split = splitPathArg(arg);
+function ArgText({ arg, pattern }: { arg: string; pattern?: boolean }) {
+  // P1-7e (problem 18): a search pattern (`**/*`) is shown as written.
+  const split = pattern ? null : splitPathArg(arg);
   if (!split) return <>{arg}</>;
   return (
     <>
@@ -634,7 +639,7 @@ function ToolRowArg({
           (onOpenFile ?? ((target: FileLinkTarget) => openFileTarget(target, 'tool-row')))(link);
         }}
       >
-        <ArgText arg={view.arg} />
+        <ArgText arg={view.arg} pattern={view.argPattern} />
       </button>
     );
   }
@@ -646,7 +651,7 @@ function ToolRowArg({
         onOpenFile={onOpenFile ?? ((target) => openFileTarget(target, 'hit-list'))}
       >
         <span className={argClass}>
-          <ArgText arg={view.arg} />
+          <ArgText arg={view.arg} pattern={view.argPattern} />
         </span>
       </HitListPopover>
     );

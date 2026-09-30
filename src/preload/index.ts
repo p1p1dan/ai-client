@@ -1262,12 +1262,19 @@ const electronAPI = {
    * this build ships. `setEnabled` stores one per-plugin override and answers
    * with the whole new state; the change reaches the chat engine at its next
    * start (a running engine restarts once no chat has work in flight). There
-   * is no install and no removal.
+   * is no install and no removal. `onChanged` (P1-7e e5, decision 143) hands
+   * over the whole state again after every engine start, so an open page
+   * shows what the restart loaded.
    */
   dshPlugins: {
     list: (): Promise<DshPluginsState> => ipcRenderer.invoke(IPC_CHANNELS.DSH_PLUGINS_LIST),
     setEnabled: (name: string, enabled: boolean): Promise<DshPluginsState> =>
       ipcRenderer.invoke(IPC_CHANNELS.DSH_PLUGINS_SET_ENABLED, { name, enabled }),
+    onChanged: (callback: (state: DshPluginsState) => void): (() => void) => {
+      const handler = (_: unknown, state: DshPluginsState) => callback(state);
+      ipcRenderer.on(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
+      return () => ipcRenderer.off(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
+    },
   },
 
   /**

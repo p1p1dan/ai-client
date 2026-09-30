@@ -304,7 +304,8 @@ export function ChatWorkspace({ className, onAddRepository }: ChatWorkspaceProps
           </div>
         </SubwindowRegion>
       )}
-      <div className={middleColumnHostClass(renderedMode)}>
+      {/* P1-7e (problem 11, decision 142): toasts stay above the composer. */}
+      <div className={middleColumnHostClass(renderedMode)} data-toast-avoid="">
         <ChatComposer
           mode={renderedMode}
           onAddRepository={onAddRepository}

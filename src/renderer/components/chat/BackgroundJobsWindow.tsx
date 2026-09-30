@@ -284,16 +284,20 @@ function JobRow({
             </Badge>
           )}
           <span className="ml-auto flex shrink-0 items-center gap-0.5">
-            <Button
-              size="xs"
-              variant="ghost"
-              className={cn(panelStripActionClass(), expanded && 'bg-selection')}
-              aria-expanded={expanded}
-              onClick={() => toggleExpanded(expandKey)}
-            >
-              <ScrollText className="size-3.5" />
-              {expandLabel}
-            </Button>
+            {/* P1-7e (problem 17): a job of a worker that went away has no
+                output left to read; its id may name another job now. */}
+            {!row.former && (
+              <Button
+                size="xs"
+                variant="ghost"
+                className={cn(panelStripActionClass(), expanded && 'bg-selection')}
+                aria-expanded={expanded}
+                onClick={() => toggleExpanded(expandKey)}
+              >
+                <ScrollText className="size-3.5" />
+                {expandLabel}
+              </Button>
+            )}
             {row.stop && (
               <Button
                 size="xs"
@@ -309,13 +313,13 @@ function JobRow({
                 {row.stop === 'interrupt' ? t('Interrupt') : t('Stop')}
               </Button>
             )}
-            {row.removable && row.jobId && (
+            {row.removable && row.hideKey && (
               <Button
                 size="xs"
                 variant="ghost"
                 className={panelStripActionClass()}
                 onClick={() => {
-                  if (row.jobId) hideJob(sessionId, row.jobId);
+                  if (row.hideKey) hideJob(sessionId, row.hideKey);
                 }}
               >
                 <EyeOff className="size-3.5" />
@@ -326,6 +330,7 @@ function JobRow({
         </div>
       </div>
       {expanded &&
+        !row.former &&
         (row.expand === 'activity' ? (
           <LaneActivity lane={lane} />
         ) : row.jobId ? (

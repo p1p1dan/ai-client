@@ -75,6 +75,13 @@ const FOUND: LegacyAssetReport = {
   delegationSwitchOff: true,
 };
 
+/** What a first start finds before its workspace is restored: the user level only. */
+const USER_ONLY: LegacyAssetReport = {
+  ...FOUND,
+  workspace: null,
+  skills: [],
+};
+
 const api = {
   inspect: vi.fn<(request?: { cwd?: string }) => Promise<LegacyAssetNoticeState>>(),
   markSeen: vi.fn(async () => undefined),
@@ -174,10 +181,62 @@ describe('LegacyAssetNoticePrompt — the startup dialog', () => {
     expect(api.inspect).toHaveBeenLastCalledWith({});
   });
 
-  it('[LAN-06] does not ask again for another workspace once it has been shown', async () => {
+  it('[LAN-06] does not ask again for another workspace once it has been closed', async () => {
     await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
+    await act(async () => button('Got it')?.click());
+    await settle();
     await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/other' }));
     expect(api.inspect).toHaveBeenCalledTimes(1);
+    expect(text()).not.toContain(TITLE);
+  });
+
+  /**
+   * P1-7e e5 (problem 27, decision 143): on a first start the workspace is
+   * restored after the user level was found. The dialog that opened on the
+   * user level takes that workspace's project files in, instead of settling
+   * on the first answer and never listing them.
+   */
+  it('[LAN-08] a workspace restored after the first check adds its project files to the open notice', async () => {
+    api.inspect.mockImplementation(async (request) =>
+      request?.cwd ? { report: FOUND, seen: false } : { report: USER_ONLY, seen: false }
+    );
+    await render(createElement(LegacyAssetNoticePrompt, {}));
+    expect(text()).toContain(TITLE);
+    expect(text()).toContain('helper');
+    expect(text()).not.toContain('Some_Thing');
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
+    expect(api.inspect).toHaveBeenLastCalledWith({ cwd: '/work/repo' });
+    expect(text()).toContain('Some_Thing');
+    expect(text()).toContain('helper');
+    // Still the one dialog, and nothing recorded until the user closes it.
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(api.markSeen).not.toHaveBeenCalled();
+    await act(async () => button('Got it')?.click());
+    await settle();
+    expect(api.markSeen).toHaveBeenCalledTimes(1);
+  });
+
+  it('[LAN-09] a later workspace with nothing to list keeps what the open notice shows', async () => {
+    api.inspect.mockImplementation(async (request) =>
+      request?.cwd === '/work/repo'
+        ? { report: FOUND, seen: false }
+        : { report: EMPTY, seen: false }
+    );
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
+    expect(text()).toContain('Some_Thing');
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/empty' }));
+    expect(api.inspect).toHaveBeenLastCalledWith({ cwd: '/work/empty' });
+    expect(text()).toContain(TITLE);
+    expect(text()).toContain('Some_Thing');
+  });
+
+  it('[LAN-10] a check that fails once the notice is open leaves it as it is', async () => {
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/repo' }));
+    api.inspect.mockRejectedValueOnce(new Error('disk on fire'));
+    await render(createElement(LegacyAssetNoticePrompt, { repoPath: '/work/other' }));
+    expect(text()).toContain(TITLE);
+    expect(text()).toContain('helper');
+    expect(api.markSeen).not.toHaveBeenCalled();
   });
 
   it('[LAN-07] opens the agent folder from the dialog', async () => {

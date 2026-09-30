@@ -295,6 +295,19 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-GRANT",
+    "type": "permission.activity",
+    "payload": {
+      "phase": "decision",
+      "requestId": "toolu_id-8",
+      "surface": "bash",
+      "value": "echo perm-session-second",
+      "result": "allow",
+      "resolution": "session_grant"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-GRANT",
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t1-s2",
@@ -552,6 +565,19 @@
   {
     "sessionId": "rec-perm-restart",
     "requestId": "turn-PERM-COVERED",
+    "type": "permission.activity",
+    "payload": {
+      "phase": "decision",
+      "requestId": "toolu_id-15",
+      "surface": "bash",
+      "value": "echo perm-session-first",
+      "result": "allow",
+      "resolution": "session_grant"
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
     "type": "tool.updated",
     "payload": {
       "messageId": "dsh-aiclient-rec-perm-restart-t2-s1",
@@ -657,6 +683,19 @@
         "totalTokens": 0,
         "costUsd": 0
       }
+    }
+  },
+  {
+    "sessionId": "rec-perm-restart",
+    "requestId": "turn-PERM-COVERED",
+    "type": "permission.activity",
+    "payload": {
+      "phase": "decision",
+      "requestId": "toolu_id-19",
+      "surface": "bash",
+      "value": "echo perm-session-second",
+      "result": "allow",
+      "resolution": "session_grant"
     }
   },
   {

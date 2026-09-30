@@ -3942,6 +3942,58 @@ describe('WorkerManager P1-1: every spawn path runs on DSH', () => {
     expect(h.events[0]).toMatchObject({ type: 'session.resumed', payload: { agent: 'dsh' } });
   });
 
+  it('[E3-4-WARM-TURN] a warm resume in the middle of a turn the worker started says it is running (P1-7e problem 4)', async () => {
+    const h = createHarness({ bootstrapFile: dshBootstrap });
+    const resume = () =>
+      h.manager.resumeSession({
+        sessionId: 's1',
+        sessionFile: stubFor('s1'),
+        workspacePath: '/repo',
+        ownerWebContentsId: 11,
+      });
+    const lastStatus = () =>
+      [...h.events].reverse().find((event) => event.type === 'session.status');
+    const sleepTicks = () => new Promise((resolve) => setTimeout(resolve, 20));
+    await resume();
+
+    // A goal round: the worker opens it by itself, under its own turn id; Main
+    // never sent it, so it has no active request of its own.
+    const turn = 'dsh-turn-aiclient-s1-2';
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: turn,
+      payload: { status: 'running' },
+    });
+    await sleepTicks();
+
+    // The window reloads and opens the chat again: warm, and mid-round.
+    h.events.length = 0;
+    await resume();
+    expect(h.createSlot).toHaveBeenCalledTimes(1);
+    expect(h.events[0]).toMatchObject({ type: 'session.resumed' });
+    expect(h.events.at(-1)).toMatchObject({ type: 'session.status' });
+    expect(lastStatus()).toMatchObject({
+      sessionId: 's1',
+      requestId: turn,
+      payload: { status: 'running' },
+    });
+
+    // The round ends: the next warm resume is idle again.
+    h.records[0].emit({ type: 'session.completed', sessionId: 's1', requestId: turn, payload: {} });
+    h.records[0].emit({
+      type: 'session.status',
+      sessionId: 's1',
+      requestId: turn,
+      payload: { status: 'idle' },
+    });
+    await sleepTicks();
+    h.events.length = 0;
+    await resume();
+    expect(lastStatus()).toMatchObject({ payload: { status: 'idle' } });
+    expect(lastStatus()?.requestId).not.toBe(turn);
+  });
+
   it('[P1-1-fork] opens the child stub in the target slot and indexes the fork as DSH', async () => {
     const h = createHarness({ bootstrapFile: dshBootstrap });
     await create(h.manager, 'source');
@@ -5031,6 +5083,58 @@ describe('WorkerManager — a host on another plugin selection (dsh-rebase P1-10
     h.host.busy.clear();
     await vi.advanceTimersByTimeAsync(5_000);
     expect(h.host.shutdown).not.toHaveBeenCalled();
+  });
+
+  /**
+   * P1-7e e5 (problem 29, decision 143): "restarts on its own" is a restart,
+   * not only a stop. The host comes back at once, with no session on it, so
+   * its `ready` reports what the new selection loaded and the settings page
+   * can show it before the next chat.
+   */
+  it('[WM-plugins-05] starts the host again at once, with no session on it (P1-7e e5)', async () => {
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.pluginSelection = 'default';
+    await create(h.manager, 's1', 7);
+    const starts = h.host.starts;
+    const ensures = h.host.ensureHost.mock.calls.length;
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.waitFor(() => expect(h.host?.starts).toBe(starts + 1));
+    expect(h.host.shutdown).toHaveBeenCalledWith('invalidate');
+    expect(h.host.state).toBe('ready');
+    // One start, and not as a user action: it never lifts a failed supervisor.
+    expect(h.host.ensureHost.mock.calls.slice(ensures)).toEqual([[]]);
+    // The session went with the old host; none was opened on the new one.
+    expect(h.records[0].dispose).toHaveBeenCalledWith('slot-replace');
+    expect(h.records).toHaveLength(1);
+  });
+
+  it('[WM-plugins-06] a model plan change alone still leaves the host down until a session needs it', async () => {
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.planRevision = 'rev-a';
+    await create(h.manager, 's1', 7);
+    const ensures = h.host.ensureHost.mock.calls.length;
+    h.manager.reconcileModelPlan('rev-b');
+    await vi.waitFor(() => expect(h.host?.shutdown).toHaveBeenCalledWith('invalidate'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.host.ensureHost.mock.calls.length).toBe(ensures);
+    expect(h.host.state).toBe('idle');
+  });
+
+  it('[WM-plugins-07] past the restart budget the host is left down, not failed by a start nobody asked for', async () => {
+    const h = createHarness({ host: true });
+    if (!h.host) throw new Error('no host');
+    h.host.pluginSelection = 'default';
+    await create(h.manager, 's1', 7);
+    const now = Date.now();
+    h.host.faults = [now, now, now, now];
+    const ensures = h.host.ensureHost.mock.calls.length;
+    h.manager.reconcileHostPlugins('["dsh-a"]');
+    await vi.waitFor(() => expect(h.host?.shutdown).toHaveBeenCalledWith('invalidate'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(h.host.ensureHost.mock.calls.length).toBe(ensures);
+    expect(h.host.state).toBe('idle');
   });
 
   it('[WM-plugins-04] one restart covers a stale plan and a stale selection together', async () => {

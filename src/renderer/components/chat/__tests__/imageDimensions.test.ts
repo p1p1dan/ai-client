@@ -186,7 +186,7 @@ describe('readImageDimensions (T-18 pixel cap without a decode)', () => {
   });
 });
 
-describe('readImageDimensions feeds the 8000px API cap', () => {
+describe('readImageDimensions feeds the 8192px engine cap', () => {
   it('accepts a normal screenshot', () => {
     const size = readImageDimensions(png(2560, 1440));
     expect(

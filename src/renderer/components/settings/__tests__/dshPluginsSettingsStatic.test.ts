@@ -48,11 +48,15 @@ describe('DSH plugins section (Settings → Extensions)', () => {
     expect(page).not.toContain('Download');
   });
 
-  it('talks to Main only through the two plugin channels', () => {
+  it('talks to Main only through the plugin channels', () => {
     const calls = [...page.matchAll(/window\.electronAPI\.(\w+)\.(\w+)/g)].map(
       (match) => `${match[1]}.${match[2]}`
     );
-    expect(new Set(calls)).toEqual(new Set(['dshPlugins.list', 'dshPlugins.setEnabled']));
+    // P1-7e e5 (decision 143): `onChanged` is Main's push after an engine
+    // start; it reads, and never writes or restarts anything.
+    expect(new Set(calls)).toEqual(
+      new Set(['dshPlugins.list', 'dshPlugins.setEnabled', 'dshPlugins.onChanged'])
+    );
   });
 
   it('never says the change is live: it waits for the next engine start (decision 108 rule 7)', () => {

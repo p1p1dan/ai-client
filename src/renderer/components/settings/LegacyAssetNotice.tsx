@@ -204,35 +204,46 @@ export async function openLegacyAgentFolder(): Promise<string | null> {
 /**
  * The startup dialog. `repoPath` is the workspace open right now: project
  * files (`.pi/prompts`, `.pi/mcp.json`, project skills) are only looked for
- * there (decision 104 rule 2). Until the notice has been shown, a workspace
- * that changes before the first answer arrives is looked at instead.
+ * there (decision 104 rule 2).
+ *
+ * The workspace is restored asynchronously, and on a first start it may
+ * arrive well after the user level has been found (P1-7e e5, decision 143):
+ * the dialog opens on what the first check found, and until the user closes
+ * it every workspace that arrives is checked again and its answer replaces
+ * the list — the same dialog, now with that workspace's project files. Once
+ * it has been closed, or when it was seen on an earlier launch, nothing is
+ * checked again this launch (decision 116 rule 13).
  */
 export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
   const { t } = useI18n();
   const [report, setReport] = useState<LegacyAssetReport | null>(null);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Settled for this launch: seen before, or already shown. Never asks again.
-  const settled = useRef(false);
+  // Answered for this launch: seen on an earlier one, or closed in this one.
+  // Never asks again. Shown but not yet closed is NOT answered: a workspace
+  // restored after the first check still adds its project files.
+  const answered = useRef(false);
 
   useEffect(() => {
-    if (settled.current) return;
+    if (answered.current) return;
     let cancelled = false;
     void (async () => {
       let state: LegacyAssetNoticeState;
       try {
         state = await window.electronAPI.legacyAssets.inspect(repoPath ? { cwd: repoPath } : {});
       } catch {
-        // A scan that failed is not a notice; the next launch asks again.
+        // A scan that failed is not a notice, and it takes nothing off one
+        // already open; the next launch asks again.
         return;
       }
-      if (cancelled || settled.current) return;
+      if (cancelled || answered.current) return;
       if (state.seen) {
-        settled.current = true;
+        answered.current = true;
         return;
       }
+      // Nothing here (no user level, and this workspace has nothing either):
+      // keep whatever an earlier workspace put in the open dialog.
       if (!shouldShowLegacyAssetNotice(state)) return;
-      settled.current = true;
       setReport(state.report);
       setOpen(true);
     })();
@@ -244,6 +255,7 @@ export function LegacyAssetNoticePrompt({ repoPath }: { repoPath?: string }) {
   const canShow = useModalQueueSlot('legacyAssetNotice', open);
 
   const close = useCallback(() => {
+    answered.current = true;
     setOpen(false);
     // A failed write only means the notice comes back next launch.
     void window.electronAPI.legacyAssets.markSeen().catch(() => undefined);

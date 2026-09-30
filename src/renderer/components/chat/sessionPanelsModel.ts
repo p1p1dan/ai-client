@@ -39,6 +39,25 @@ export interface SessionPanels {
   /** P1-7b: the session's background jobs (the bridge's `jobs`); the jobs window reads them. */
   jobs?: DshJobSummary[];
   /**
+   * P1-7e (problem 17, decision 142): the jobs a worker that went away still
+   * listed, kept by this window so the rows stay after the next worker's list
+   * replaces `jobs` — until the user removes them. Window-local, never sent.
+   */
+  formerJobs?: FormerJob[];
+  /**
+   * How many of this session's workers went away while this window watched.
+   * DSH numbers jobs per worker (`bash-2` comes back after a restart), so a
+   * job is told apart by the worker it ran on (`jobHideKey`).
+   */
+  workerEpoch?: number;
+  /**
+   * P1-7e (problem 5, decision 142): the goal revision a resume produced.
+   * DSH arms every goal it resumes and says so in a separate activation
+   * edge right after the goal's own change; until that edge is here, the
+   * activation this window holds is the one from before the resume.
+   */
+  resumedGoal?: { goalId: string; revision: number };
+  /**
    * A live worker spoke for this session: an event came in, or a rehydration
    * answered with something. Cleared when the session's connection goes. The
    * strips offer their buttons only while it holds — a command needs a worker
@@ -47,6 +66,23 @@ export interface SessionPanels {
   live: boolean;
   /** Live events per key, for the ordering rule in the header. */
   seq: Partial<Record<SessionProjectionKey, number>>;
+}
+
+/** A job the session's previous worker listed, and which worker that was. */
+export interface FormerJob extends DshJobSummary {
+  epoch: number;
+}
+
+/** How many former jobs a session keeps (the bridge keeps the newest 8 ended jobs too). */
+export const FORMER_JOBS_KEPT = 8;
+
+/**
+ * The key the jobs window's 「移除」 remembers a job by: its id on the first
+ * worker (what it always was), `<epoch>:<id>` on a later one, so hiding a job
+ * never hides another worker's job of the same number.
+ */
+export function jobHideKey(epoch: number, jobId: string): string {
+  return epoch === 0 ? jobId : `${epoch}:${jobId}`;
 }
 
 export interface SessionPanelsState {
@@ -142,7 +178,9 @@ function withProjection(panels: SessionPanels, payload: SessionProjectionPayload
     }
     case 'goal': {
       const goal = readGoal(payload.view);
-      return goal === undefined ? panels : { ...panels, goal };
+      if (goal === undefined) return panels;
+      const resumedGoal = resumedGoalOf(panels.goal, goal);
+      return resumedGoal ? { ...panels, goal, resumedGoal } : { ...panels, goal };
     }
     case 'goalActivation': {
       const goalActivation = readActivation(payload.view);
@@ -159,6 +197,48 @@ function withProjection(panels: SessionPanels, payload: SessionProjectionPayload
     default:
       return panels;
   }
+}
+
+/**
+ * P1-7e (problem 5, decision 142): a goal that went from paused or blocked to
+ * active was resumed — DSH's only way back to `active` — and DSH arms every
+ * resume (`GoalService.resume` commits `armed`). Its goal change and its
+ * activation edge are two events; this marks the revision in between.
+ */
+function resumedGoalOf(
+  previous: DshGoalProjection | null | undefined,
+  next: DshGoalProjection | null
+): SessionPanels['resumedGoal'] {
+  if (!previous || !next) return undefined;
+  const before = previous.goal;
+  const after = next.goal;
+  if (before.id !== after.id || after.revision <= before.revision) return undefined;
+  if (after.phase !== 'active' || (before.phase !== 'paused' && before.phase !== 'blocked')) {
+    return undefined;
+  }
+  return { goalId: after.id, revision: after.revision };
+}
+
+/**
+ * P1-7e (problem 17, decision 142): the worker went away. What it listed moves
+ * to `formerJobs`, stamped with the worker it ran on, and `jobs` is emptied for
+ * the next worker's list. A running job is gone with its worker: its row reads
+ * 「引擎重启，任务已结束」 until the user removes it.
+ */
+function withWorkerGone(panels: SessionPanels): SessionPanels {
+  const epoch = panels.workerEpoch ?? 0;
+  const carried = (panels.jobs ?? []).map((job) => ({ ...job, epoch }));
+  return {
+    ...panels,
+    live: false,
+    workerEpoch: epoch + 1,
+    ...(carried.length > 0
+      ? {
+          jobs: [],
+          formerJobs: [...(panels.formerJobs ?? []), ...carried].slice(-FORMER_JOBS_KEPT),
+        }
+      : {}),
+  };
 }
 
 function withSession(
@@ -191,7 +271,7 @@ export function reduceSessionPanels(
   if (event.type === 'session.status' && event.payload.status === 'disconnected') {
     const current = state.bySession[event.sessionId];
     if (!current?.live) return state;
-    return withSession(state, event.sessionId, { ...current, live: false });
+    return withSession(state, event.sessionId, withWorkerGone(current));
   }
   return state;
 }
@@ -320,8 +400,15 @@ export function deriveGoalBarView(
   const noRoomLeft = projection.roundsStarted >= goal.maxGoalRounds;
   switch (goal.phase) {
     case 'active': {
-      const activation =
-        panels.goalActivation?.goalId === goal.id ? panels.goalActivation.activation : undefined;
+      const held = panels.goalActivation?.goalId === goal.id ? panels.goalActivation : undefined;
+      // P1-7e (problem 5): the goal was just resumed and the activation held
+      // is still the one from before — DSH's armed edge is the next event.
+      const resumed =
+        panels.resumedGoal?.goalId === goal.id &&
+        panels.resumedGoal.revision === goal.revision &&
+        held !== undefined &&
+        held.revision < goal.revision;
+      const activation = resumed ? 'armed' : held?.activation;
       // Unknown activation on a live worker reads as armed: the bridge sends
       // it with every goal it reports, so "unknown" is only ever a moment.
       if (!live || activation === 'disarmed') {

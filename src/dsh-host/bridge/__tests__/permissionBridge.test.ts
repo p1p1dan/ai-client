@@ -185,6 +185,7 @@ async function until(check: () => boolean, timeoutMs = 2_000): Promise<void> {
 
 const cards = (events: Event[]) => events.filter((e) => e.type === 'permission.requested');
 const answers = (events: Event[]) => events.filter((e) => e.type === 'permission.resolved');
+const activity = (events: Event[]) => events.filter((e) => e.type === 'permission.activity');
 
 describe('the session gate is attached before the agent opens (decision 042)', () => {
   it('[perm-attach] attaches under the new session id, then creates the agent', async () => {
@@ -320,6 +321,66 @@ describe('cards round trip (decision 042 rule 5; P1-6 design 4.3)', () => {
     );
     expect(again.kind).toBe('allow');
     expect(cards(events)).toHaveLength(1);
+  });
+
+  /**
+   * P1-7e e5 (problem 30, decision 143; decision 129 rule 16): a call a
+   * session grant lets through raises no card, so it goes out as the 1.0.x
+   * runtime's `permission.activity` and the renderer draws "Allowed write …
+   * · session grant". Only those: the card's own answer and a policy allow
+   * send none.
+   */
+  it('[perm-grant-activity] a call a session grant lets through says so; nothing else does', async () => {
+    const dsh = fakeDsh();
+    const { bridge, events } = runtime(dsh.ctx);
+    await bridge.bootstrap();
+    await bridge.startSend({
+      logicalSessionId: LOGICAL,
+      requestId: 'req-1',
+      attemptId: 'attempt-1',
+      text: 'write it twice',
+    });
+    const first = dsh.host.preExecute(
+      call('write', { file_path: 'out.txt', content: 'a' }, { callId: 'call-g1' }),
+      allowNext
+    );
+    await until(() => cards(events).length === 1);
+    bridge.respondPermission({ permissionId: 'call-g1', decision: 'allow_session' });
+    expect((await first).kind).toBe('allow');
+    // A read the policy allows in ask: no card, and no activity either.
+    expect(
+      (
+        await dsh.host.preExecute(
+          call('read', { file_path: 'notes.txt' }, { callId: 'call-r1' }),
+          allowNext
+        )
+      ).kind
+    ).toBe('allow');
+    expect(activity(events)).toEqual([]);
+    const again = await dsh.host.preExecute(
+      call('write', { file_path: 'out.txt', content: 'b' }, { callId: 'call-g2' }),
+      allowNext
+    );
+    expect(again.kind).toBe('allow');
+    expect(cards(events)).toHaveLength(1);
+    expect(activity(events)).toEqual([
+      {
+        type: 'permission.activity',
+        sessionId: LOGICAL,
+        requestId: 'req-1',
+        payload: {
+          phase: 'decision',
+          requestId: 'call-g2',
+          surface: 'write',
+          value: join(ws, 'out.txt'),
+          result: 'allow',
+          resolution: 'session_grant',
+        },
+      },
+    ]);
+    // Closed: the gate's later records reach nobody.
+    await bridge.dispose();
+    expect(activity(events)).toHaveLength(1);
   });
 
   it('[perm-stop] Stop while a card is up takes it down as aborted, and the call is cancelled', async () => {

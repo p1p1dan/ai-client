@@ -327,6 +327,31 @@ export function turnProcessToneClass(): string {
 }
 
 /**
+ * dsh-rebase P1-7e (problem 19, decision 142; user 2026-09-30 「调深一点」):
+ * a tool row's icon, in its row's own colour at full strength. It used to sit
+ * at `opacity-80` on top of the dim tier, which put it at 2.36:1 (light) and
+ * 2.44:1 (dark) against the page — under the 3:1 a graphic needs. The row's
+ * tier itself (`--tool-arg`, 3.07:1 / 3.12:1) clears it; the icon no longer
+ * dims below the words it stands for.
+ */
+export function toolRowIconClass(): string {
+  return 'size-[13px] shrink-0 self-center';
+}
+
+/**
+ * dsh-rebase P1-7e (problem 19, decision 142): the session failure card's
+ * title. It was `text-destructive` on the card's `bg-destructive/10`: 5.42:1
+ * light, but 3.84:1 dark, and `--destructive` cannot reach 4.5:1 on the dark
+ * page at all (4.20:1, design-system「已知偏差」). The title takes the body
+ * ink (16.18:1 / 10.41:1); the card's red border and tint still say what
+ * kind of card it is. `dark:` is not a way out: it follows the system, not
+ * the app's theme.
+ */
+export function sessionFailureTitleClass(): string {
+  return 'font-medium text-foreground';
+}
+
+/**
  * How tall a thinking block's BODY may get before it scrolls internally
  * (decision 033 D3's replacement for a pinned fold header).
  *

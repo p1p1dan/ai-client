@@ -20,21 +20,112 @@
  * store's event reducer is pure. The reducer's half of this (dropping the host
  * binding) lives there; the sentence lives here.
  */
+import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { useEffect, useRef } from 'react';
-import { addToast } from '@/components/ui/toast';
-import { useI18n } from '@/i18n';
+import { addToast, toastManager } from '@/components/ui/toast';
+import { type TFunction, useI18n } from '@/i18n';
 import { useChatSessionsStore } from '@/stores/chatSessions';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 
 /** One engine restart reaches every session within this span; one notice covers them all. */
 const ENGINE_RESTART_NOTICE_WINDOW_MS = 5_000;
 
+/**
+ * dsh-rebase P1-7e (problem 11, decision 142): what each session had under
+ * way the last time it said so — a turn (any busy `session.status`, a goal
+ * round and a job's wake-up included) or a running background job. Read
+ * when the pool reclaims a session: only then does 「已停止运行」 say
+ * something true. Kept from the events themselves, so it does not matter
+ * whether the session store has already folded the disconnect.
+ */
+export interface SessionWork {
+  turn: boolean;
+  jobs: boolean;
+}
+
+const BUSY_STATUSES: ReadonlySet<string> = new Set([
+  'running',
+  'waiting_permission',
+  'waiting_question',
+  'stopping',
+]);
+
+/** The record after `event`; the same map when the event says nothing about work. */
+export function noteSessionWork(
+  work: ReadonlyMap<string, SessionWork>,
+  event: RuntimeEvent
+): ReadonlyMap<string, SessionWork> {
+  const sessionId = event.sessionId;
+  if (!sessionId) return work;
+  const current = work.get(sessionId) ?? { turn: false, jobs: false };
+  let next: SessionWork | undefined;
+  if (event.type === 'session.status' && event.payload.status !== 'disconnected') {
+    next = { ...current, turn: BUSY_STATUSES.has(event.payload.status) };
+  } else if (
+    event.type === 'session.completed' ||
+    event.type === 'session.failed' ||
+    event.type === 'session.stopped'
+  ) {
+    next = { ...current, turn: false };
+  } else if (event.type === 'session.projection' && event.payload.key === 'jobs') {
+    const jobs = Array.isArray(event.payload.view) ? event.payload.view : [];
+    next = {
+      ...current,
+      jobs: jobs.some((job) => job.status === 'running' || job.status === 'stopping'),
+    };
+  }
+  if (!next || (next.turn === current.turn && next.jobs === current.jobs)) return work;
+  const updated = new Map(work);
+  updated.set(sessionId, next);
+  return updated;
+}
+
+/**
+ * The reclaim toast. A session that had nothing under way lost nothing but
+ * its engine connection — it is not 「已停止运行」; one that was working was
+ * stopped, and says so.
+ */
+export function capacityReclaimCopy(
+  input: { name?: string; working: boolean },
+  t: TFunction
+): { title: string; description: string } {
+  const title = t('A conversation moved to the background');
+  if (input.working) {
+    return {
+      title,
+      description:
+        input.name !== undefined
+          ? t('“{{name}}” was stopped to make room for a new one. Open it to continue.', {
+              name: input.name,
+            })
+          : t('An older conversation was stopped to make room for a new one.'),
+    };
+  }
+  return {
+    title,
+    description:
+      input.name !== undefined
+        ? t(
+            '“{{name}}” was idle and moved to the background to make room for a new one. Nothing is lost; open it to continue.',
+            { name: input.name }
+          )
+        : t(
+            'An idle older conversation moved to the background to make room for a new one. Nothing is lost.'
+          ),
+  };
+}
+
 export function useCapacityReclaimNotice(): void {
   const { t } = useI18n();
   const lastEngineRestartNoticeAt = useRef(0);
+  const work = useRef<ReadonlyMap<string, SessionWork>>(new Map());
+  /** The reclaim toast on screen, if any: a second reclaim replaces it rather than stacking. */
+  const reclaimToastId = useRef<string | null>(null);
 
   useEffect(() => {
     return subscribeRuntimeEvent((event) => {
+      const before = work.current;
+      work.current = noteSessionWork(before, event);
       if (event.type !== 'session.status') return;
       if (event.payload.disconnectReason === 'engine_restarted') {
         const now = Date.now();
@@ -56,15 +147,19 @@ export function useCapacityReclaimNotice(): void {
       const session = useChatSessionsStore
         .getState()
         .sessions.find((item) => item.id === event.sessionId);
-      addToast({
-        type: 'info',
-        title: t('A conversation moved to the background'),
-        description: session
-          ? t('“{{name}}” was stopped to make room for a new one. Open it to continue.', {
-              name: session.title,
-            })
-          : t('An older conversation was stopped to make room for a new one.'),
-      });
+      // What the session had under way BEFORE this event.
+      const had = before.get(event.sessionId);
+      const copy = capacityReclaimCopy(
+        {
+          ...(session ? { name: session.title } : {}),
+          working: had?.turn === true || had?.jobs === true,
+        },
+        t
+      );
+      // Each new chat past the pool's size reclaims one: one toast says the
+      // latest, instead of a pile of them over the composer (P1-7e).
+      if (reclaimToastId.current) toastManager.close(reclaimToastId.current);
+      reclaimToastId.current = addToast({ type: 'info', ...copy });
     });
   }, [t]);
 }

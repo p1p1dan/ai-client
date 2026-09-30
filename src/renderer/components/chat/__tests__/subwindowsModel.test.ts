@@ -131,6 +131,42 @@ describe('deriveJobsWindowView — the background jobs window (prototype scene C
       canStopAll: false,
     });
   });
+
+  it('[P7E-JW-FORMER] rows of a worker that went away stay after the next worker’s list, first, until removed (P1-7e problem 17)', () => {
+    const next = panels({
+      workerEpoch: 1,
+      formerJobs: [
+        { ...jobSummary({ id: 'bash-2' }), epoch: 0 },
+        { ...jobSummary({ id: 'bash-4', status: 'killed', finishedAt: 5 }), epoch: 0 },
+      ],
+      // The new worker numbers its own jobs again.
+      jobs: [jobSummary({ id: 'bash-2', label: 'npm test' })],
+    });
+    const view = deriveJobsWindowView({ panels: next, lanes: [], hidden: [] });
+    expect(
+      view.rows.map((row) => [
+        row.key,
+        row.status,
+        row.stop,
+        row.removable,
+        row.hideKey,
+        row.former,
+      ])
+    ).toEqual([
+      ['former:0:bash-2', 'lost', null, true, 'bash-2', true],
+      ['former:0:bash-4', 'killed', null, true, 'bash-4', true],
+      ['bash-2', 'running', 'stop', false, '1:bash-2', undefined],
+    ]);
+    expect(view).toMatchObject({ running: 1, ended: 2, canStopAll: false });
+    // Removing the former bash-2 hides it and not the new worker's bash-2, and back.
+    const hiddenFormer = deriveJobsWindowView({ panels: next, lanes: [], hidden: ['bash-2'] });
+    expect(hiddenFormer.rows.map((row) => row.key)).toEqual(['former:0:bash-4', 'bash-2']);
+    const hiddenCurrent = deriveJobsWindowView({ panels: next, lanes: [], hidden: ['1:bash-2'] });
+    expect(hiddenCurrent.rows.map((row) => row.key)).toEqual([
+      'former:0:bash-2',
+      'former:0:bash-4',
+    ]);
+  });
 });
 
 describe('deriveSubagentsWindowView — the subagents window (prototype scene D)', () => {

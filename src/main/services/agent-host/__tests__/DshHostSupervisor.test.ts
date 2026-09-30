@@ -1846,4 +1846,43 @@ describe('DshHostSupervisor plugins (P1-10b, decision 108)', () => {
     const warned = consoleWarn.mock.calls.map((call) => call.join(' ')).join('\n');
     expect(warned).toContain('ready carried a malformed plugin report');
   });
+
+  it('[SH-PL4] tells its listeners each new report, as a copy, and only the good ones (P1-7e e5)', async () => {
+    const h = createFakeHostHarness();
+    const seen: unknown[] = [];
+    const unsubscribe = h.supervisor.onPluginReport((next) => {
+      seen.push(next);
+      next.plugins.pop();
+    });
+    const failing = h.supervisor.onPluginReport(() => {
+      throw new Error('listener broke');
+    });
+    const first = h.supervisor.ensureHost();
+    const child = h.child();
+    child.post({ type: 'ready', pid: child.pid, plugins: report });
+    await first;
+    expect(seen).toHaveLength(1);
+    // The listener's edit reached neither the stored report nor the host.
+    expect(h.supervisor.pluginReport()).toEqual(report);
+    expect(h.supervisor.status().state).toBe('ready');
+    const warned = consoleWarn.mock.calls.map((call) => call.join(' ')).join('\n');
+    expect(warned).toContain('a plugin report listener failed');
+    child.die(0);
+    await flushMicrotasks();
+    // A malformed report is not news; after unsubscribing, nothing is.
+    const second = h.supervisor.ensureHost();
+    const next = h.child();
+    next.post({ type: 'ready', pid: next.pid, plugins: { enabledFrom: 'user', plugins: 'x' } });
+    await second;
+    expect(seen).toHaveLength(1);
+    next.die(0);
+    await flushMicrotasks();
+    unsubscribe();
+    failing();
+    const third = h.supervisor.ensureHost();
+    const last = h.child();
+    last.post({ type: 'ready', pid: last.pid, plugins: report });
+    await third;
+    expect(seen).toHaveLength(1);
+  });
 });

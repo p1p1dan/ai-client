@@ -206,20 +206,39 @@ export function WorkspaceShell({
   const toggleReview = useCallback(() => setReviewRequested((open) => !open), []);
   const activeEditorPath = useEditorStore((state) => state.activeTabPath);
   const editorWorktreePath = useEditorStore((state) => state.currentWorktreePath);
-  const previousEditor = useRef({ worktreePath: editorWorktreePath, path: activeEditorPath });
+  // P1-7e (problem 21, decision 142): every request to show a file, the
+  // active one included, which changes no tab.
+  const revealSeq = useEditorStore((state) => state.revealSeq);
+  const previousEditor = useRef({
+    worktreePath: editorWorktreePath,
+    path: activeEditorPath,
+    revealSeq,
+  });
   useEffect(() => {
     // Opening a file puts the files on top: the review closes, and the
     // terminal steps behind them with its shell still running.
     if (
       fileIntentPending ||
+      previousEditor.current.revealSeq !== revealSeq ||
       (previousEditor.current.worktreePath === editorWorktreePath &&
         previousEditor.current.path !== activeEditorPath)
     ) {
       closeReview();
       hideTerminal();
     }
-    previousEditor.current = { worktreePath: editorWorktreePath, path: activeEditorPath };
-  }, [fileIntentPending, activeEditorPath, editorWorktreePath, closeReview, hideTerminal]);
+    previousEditor.current = {
+      worktreePath: editorWorktreePath,
+      path: activeEditorPath,
+      revealSeq,
+    };
+  }, [
+    fileIntentPending,
+    activeEditorPath,
+    editorWorktreePath,
+    revealSeq,
+    closeReview,
+    hideTerminal,
+  ]);
 
   // A workspace being deleted takes its column shells with it, through the
   // same hook the dock's terminal panel answers (`closeTerminalSessions`).

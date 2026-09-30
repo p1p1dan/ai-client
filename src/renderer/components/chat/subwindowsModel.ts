@@ -3,7 +3,7 @@ import type {
   DshSubagentCatalogEntry,
   SubagentRunStatus,
 } from '@shared/types/runtimeEvents';
-import type { SessionPanels } from './sessionPanelsModel';
+import { type FormerJob, jobHideKey, type SessionPanels } from './sessionPanelsModel';
 import type { SubagentLane } from './subagentActivityModel';
 
 /**
@@ -62,6 +62,14 @@ export interface JobRowView {
   expand: 'output' | 'activity' | 'stages';
   /** An ended row can be put away (this window only). */
   removable: boolean;
+  /** What 「移除」 remembers the row by (`jobHideKey`); absent on a subagent's row. */
+  hideKey?: string;
+  /**
+   * P1-7e (problem 17): a job of a worker that went away. Nothing can act on
+   * it any more — no stop, and no output to read (the next worker numbers its
+   * own jobs from 1, so reading by id would show another job's bytes).
+   */
+  former?: true;
 }
 
 export interface JobsWindowView {
@@ -85,7 +93,7 @@ function isRunningStatus(status: JobRowStatus): boolean {
   return status === 'running' || status === 'stopping';
 }
 
-function jobRow(job: DshJobSummary, live: boolean): JobRowView {
+function jobRow(job: DshJobSummary, live: boolean, epoch: number): JobRowView {
   const kind = jobRowKind(job.kind);
   const exit = job.detail ? EXIT_CODE.exec(job.detail) : null;
   const liveStatus = job.status === 'running' || job.status === 'stopping';
@@ -104,6 +112,20 @@ function jobRow(job: DshJobSummary, live: boolean): JobRowView {
     stop: running && status === 'running' ? 'stop' : null,
     expand: kind === 'workflow' ? 'stages' : 'output',
     removable: !running,
+    hideKey: jobHideKey(epoch, job.id),
+  };
+}
+
+/** A row the previous worker listed (`SessionPanels.formerJobs`): ended, or lost with it. */
+function formerJobRow(job: FormerJob): JobRowView {
+  const row = jobRow(job, false, job.epoch);
+  return {
+    ...row,
+    key: `former:${job.epoch}:${job.id}`,
+    stop: null,
+    // No longer running on anything: it can be put away like any ended row.
+    removable: true,
+    former: true,
   };
 }
 
@@ -120,9 +142,17 @@ export function deriveJobsWindowView(input: {
 }): JobsWindowView {
   const live = input.panels?.live === true;
   const hidden = new Set(input.hidden);
-  const rows: JobRowView[] = (input.panels?.jobs ?? [])
-    .filter((job) => !hidden.has(job.id))
-    .map((job) => jobRow(job, live));
+  const epoch = input.panels?.workerEpoch ?? 0;
+  // P1-7e (problem 17): what earlier workers listed stays until removed —
+  // older, so first — then the current worker's own list.
+  const rows: JobRowView[] = [
+    ...(input.panels?.formerJobs ?? [])
+      .filter((job) => !hidden.has(jobHideKey(job.epoch, job.id)))
+      .map(formerJobRow),
+    ...(input.panels?.jobs ?? [])
+      .filter((job) => !hidden.has(jobHideKey(epoch, job.id)))
+      .map((job) => jobRow(job, live, epoch)),
+  ];
   // Continuable children running now: DSH's other kind of background work.
   const continuable = continuableIds(input.panels?.subagentCatalog);
   for (const lane of input.lanes) {

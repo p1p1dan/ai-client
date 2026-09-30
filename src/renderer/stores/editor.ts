@@ -64,6 +64,16 @@ interface EditorState {
   worktreeStates: Record<string, WorktreeEditorState>;
   currentWorktreePath: string | null;
 
+  /**
+   * dsh-rebase P1-7e (problem 21, decision 142): counts the requests to show a
+   * file (`useEditor().navigateToFile`: the file tree, search results, a
+   * chat link). The right column brings the files in front of the terminal on
+   * each one — including a click on the file that is already the active tab,
+   * which changes no tab and so was invisible to the column.
+   */
+  revealSeq: number;
+  requestReveal: () => void;
+
   openFile: (file: Omit<EditorTab, 'title' | 'viewState'> & { title?: string }) => void;
   /**
    * D34-E introduced this as "open (or, if the SAME target is already open,
@@ -117,6 +127,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   navForwardStack: [],
   worktreeStates: {},
   currentWorktreePath: null,
+  revealSeq: 0,
+
+  requestReveal: () => set((state) => ({ revealSeq: state.revealSeq + 1 })),
 
   openFile: (file) =>
     set((state) => {
@@ -155,10 +168,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const path = diffTabPath(target);
       const title = diffTabTitle(target);
       const existingDiffIndex = state.tabs.findIndex((tab) => tab.diffTarget != null);
+      // P1-7e (problem 21): a diff asked for is a file asked for, even when
+      // it is the diff already showing.
+      const revealSeq = state.revealSeq + 1;
       if (existingDiffIndex === -1) {
         return {
           tabs: [...state.tabs, { path, title, content: '', isDirty: false, diffTarget: target }],
           activeTabPath: path,
+          revealSeq,
         };
       }
       // D35: replace the ONE existing diff tab in its own array slot (keeps
@@ -169,7 +186,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       const tabs = state.tabs.map((tab, index) =>
         index === existingDiffIndex ? { ...tab, path, title, diffTarget: target } : tab
       );
-      return { tabs, activeTabPath: path };
+      return { tabs, activeTabPath: path, revealSeq };
     }),
 
   closeFile: (path) =>

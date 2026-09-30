@@ -4,7 +4,11 @@
  *
  * Two channels and nothing else: `list` reads, `setEnabled` stores one
  * per-plugin override. There is no install and no removal (decisions 058,
- * 059): the plugins are the allowlisted ones this build ships.
+ * 059): the plugins are the allowlisted ones this build ships. One event goes
+ * the other way (P1-7e e5, decision 143): `changed`, the page's whole new
+ * state, sent to every window after each host start that replaced the plugin
+ * report — a restart a switch caused, or the first chat's start — so an open
+ * page follows it instead of showing what it read when it opened.
  *
  * The user's choice and the host's state go only through the three calls of
  * `services/agent-host/dshHostPlugins.ts` (decision 108 rule 7): the
@@ -21,10 +25,11 @@
 import type { DshPluginsState, SetDshPluginEnabledRequest } from '@shared/dshPluginSettings';
 import type { DshPluginReport } from '@shared/dshPlugins';
 import { IPC_CHANNELS } from '@shared/types';
-import { ipcMain } from 'electron';
+import { BrowserWindow, ipcMain } from 'electron';
 import {
   getDshPluginReport,
   getDshPluginSelection,
+  onDshPluginReport,
   setDshPluginSelection,
 } from '../services/agent-host/dshHostPlugins';
 import {
@@ -38,6 +43,21 @@ export interface DshPluginIpcDeps {
   getSelection: () => Record<string, boolean> | undefined;
   setSelection: (overrides: Record<string, boolean> | undefined) => boolean;
   report: () => DshPluginReport | undefined;
+  /** Be told when a host start replaced the report; returns the unsubscribe. */
+  onReport: (listener: () => void) => () => void;
+  /** Hand the page's new state to every window. */
+  broadcast: (state: DshPluginsState) => void;
+}
+
+function broadcastToWindows(state: DshPluginsState): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (win.isDestroyed()) continue;
+    try {
+      win.webContents.send(IPC_CHANNELS.DSH_PLUGINS_CHANGED, state);
+    } catch {
+      // The window may be closing mid-send.
+    }
+  }
 }
 
 const productionDeps: DshPluginIpcDeps = {
@@ -45,6 +65,8 @@ const productionDeps: DshPluginIpcDeps = {
   getSelection: () => getDshPluginSelection(),
   setSelection: (overrides) => setDshPluginSelection(overrides),
   report: () => getDshPluginReport(),
+  onReport: (listener) => onDshPluginReport(listener),
+  broadcast: broadcastToWindows,
 };
 
 function readRequest(payload: unknown): SetDshPluginEnabledRequest {
@@ -88,7 +110,22 @@ export function setDshPluginEnabled(
   return stateOf(deps, catalog);
 }
 
-export function registerDshPluginHandlers(deps: DshPluginIpcDeps = productionDeps): void {
+/**
+ * Registers the two channels and starts pushing `changed`; returns the
+ * unsubscribe from the report (the app never calls it: the handlers live as
+ * long as Main does).
+ */
+export function registerDshPluginHandlers(deps: DshPluginIpcDeps = productionDeps): () => void {
+  const unsubscribe = deps.onReport(() => {
+    let state: DshPluginsState;
+    try {
+      state = listDshPlugins(deps);
+    } catch (error) {
+      console.warn('[dsh-plugins] could not read the plugin state after a host start', error);
+      return;
+    }
+    deps.broadcast(state);
+  });
   ipcMain.handle(
     IPC_CHANNELS.DSH_PLUGINS_LIST,
     async (): Promise<DshPluginsState> => listDshPlugins(deps)
@@ -97,4 +134,5 @@ export function registerDshPluginHandlers(deps: DshPluginIpcDeps = productionDep
     IPC_CHANNELS.DSH_PLUGINS_SET_ENABLED,
     async (_event, payload: unknown): Promise<DshPluginsState> => setDshPluginEnabled(payload, deps)
   );
+  return unsubscribe;
 }

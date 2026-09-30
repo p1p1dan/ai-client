@@ -345,6 +345,29 @@ describe('the terminal in the right column', () => {
     expect(probe.unmounts).toEqual([]);
   });
 
+  it('[E3-21-REVEAL] steps behind a request for the file that is already the active tab (P1-7e problem 21)', async () => {
+    await click(terminalButton());
+    expect(terminalShowing()).toBe(true);
+    const before = useEditorStore.getState();
+    // The file tree's click on `a.ts`, already active: no tab changes, only the request.
+    await act(async () => useEditorStore.getState().requestReveal());
+    expect(useEditorStore.getState().activeTabPath).toBe(before.activeTabPath);
+    expect(useEditorStore.getState().tabs).toBe(before.tabs);
+    expect(editorShowing()).toBe(true);
+    expect(terminalShowing()).toBe(false);
+    // Still running behind the files.
+    expect(probe.unmounts).toEqual([]);
+    expect(terminalButton().getAttribute('data-session-terminal')).toBe('hidden');
+
+    // The same for the diff that is already showing (the git panel's click).
+    const target = { kind: 'workdir' as const, path: 'a.ts', staged: false };
+    await act(async () => useEditorStore.getState().openDiffTab(target));
+    await click(terminalButton());
+    expect(terminalShowing()).toBe(true);
+    await act(async () => useEditorStore.getState().openDiffTab(target));
+    expect(terminalShowing()).toBe(false);
+  });
+
   it('keeps one shell per folder across conversation switches', async () => {
     await click(terminalButton());
     // Another chat in the same folder shares the shell.

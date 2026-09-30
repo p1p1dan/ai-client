@@ -2,6 +2,7 @@ import { type Translate, translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   derivePermissionActivityRow,
+  isQuietPermissionActivity,
   mergePermissionActivity,
   type PermissionActivityRecord,
 } from '../permissionActivityRow';
@@ -288,5 +289,46 @@ describe('the PowerShell audit row (P1-6d)', () => {
         record({ surface: 'bash', result: 'allow', resolution: 'user_approved' })
       ).label
     ).toBe('Allowed bash');
+  });
+});
+
+/**
+ * P1-7e e5 (problem 30, decision 143; decision 129 rule 16): the DSH bridge
+ * sends a `session_grant` record for each call a remembered "allow for this
+ * session" let through. Unlike the other allows it is drawn: nothing else on
+ * screen says that call was gated.
+ */
+describe('the session-grant row (P1-7e e5)', () => {
+  const granted = record({
+    phase: 'decision',
+    surface: 'bash',
+    value: 'echo two',
+    result: 'allow',
+    resolution: 'session_grant',
+  });
+
+  it('is drawn, while every other allow stays quiet and every denial is drawn', () => {
+    expect(isQuietPermissionActivity(granted)).toBe(false);
+    for (const resolution of ['policy_allow', 'user_approved', undefined]) {
+      expect(isQuietPermissionActivity(record({ result: 'allow', resolution }))).toBe(true);
+    }
+    expect(isQuietPermissionActivity(record({ result: 'deny', resolution: 'policy_deny' }))).toBe(
+      false
+    );
+    expect(isQuietPermissionActivity(record({ phase: 'prompt' }))).toBe(false);
+    expect(isQuietPermissionActivity(undefined)).toBe(false);
+  });
+
+  it('reads "Allowed bash", the command, and that a session grant allowed it', () => {
+    expect(derivePermissionActivityRow(granted, zh)).toEqual({
+      requestId: 'r1',
+      tone: 'auto',
+      label: '已允许 bash',
+      detail: 'echo two',
+      note: '本会话已授权',
+    });
+    expect(
+      derivePermissionActivityRow({ ...granted, surface: 'pwsh', value: 'Get-ChildItem' }, zh).label
+    ).toBe('已允许 PowerShell');
   });
 });

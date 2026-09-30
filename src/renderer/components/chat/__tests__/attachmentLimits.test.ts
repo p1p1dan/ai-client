@@ -161,7 +161,7 @@ describe('planImageAttachment (T-18 E2/E3 — accept vs reject, no downscale)', 
     expect(plan.action === 'reject' && plan.message).toContain('WebP');
   });
 
-  it('rejects an image past the 8000px edge cap the API enforces', () => {
+  it('rejects an image past the 8192px edge cap the engine enforces', () => {
     const plan = planImageAttachment({
       name: 'huge.png',
       mediaType: 'image/png',
@@ -169,7 +169,24 @@ describe('planImageAttachment (T-18 E2/E3 — accept vs reject, no downscale)', 
       height: 800,
     });
     expect(plan).toMatchObject({ action: 'reject', reason: 'oversized-pixels' });
-    expect(plan.action === 'reject' && plan.message).toContain('8000px');
+    expect(plan.action === 'reject' && plan.message).toContain('8192px');
+  });
+
+  /**
+   * P1-7e e5 (decision 143): the cap is DSH's `DEFAULT_MAX_IMAGE_DIMENSION`
+   * (dsh-attachment-local), not the 8000px API cap it used to be. An image
+   * between the two is the engine's to take, so it must not be refused here.
+   */
+  it('matches the engine: 8192 is the cap, and 8001..8192 is admitted', () => {
+    expect(MAX_IMAGE_EDGE_PX).toBe(8192);
+    for (const width of [8001, 8192]) {
+      expect(
+        planImageAttachment({ name: 'wide.png', mediaType: 'image/png', width, height: 1 })
+      ).toEqual({ action: 'as-is' });
+    }
+    expect(
+      planImageAttachment({ name: 'wide.png', mediaType: 'image/png', width: 1, height: 8193 })
+    ).toMatchObject({ action: 'reject', reason: 'oversized-pixels' });
   });
 
   it('treats the edge cap as inclusive', () => {
@@ -290,7 +307,7 @@ describe('attachment copy in Chinese (T067 D26)', () => {
     ).toEqual({
       action: 'reject',
       reason: 'oversized-pixels',
-      message: '「wide.png」是 9000x100 像素，长边最大 8000 像素。',
+      message: '「wide.png」是 9000x100 像素，长边最大 8192 像素。',
     });
   });
 

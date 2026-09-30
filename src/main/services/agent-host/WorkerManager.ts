@@ -283,6 +283,15 @@ interface ManagedSlot {
    */
   reportedStatus?: SessionRuntimeStatus;
   /**
+   * dsh-rebase P1-7e (problem 4, decision 142) — the busy status the worker
+   * last reported for ANY turn, with the turn's request id, including the
+   * turns Main never sent (a goal round, a job's wake-up). `reportedStatus`
+   * only follows Main's own `activeRequestId`, so a warm resume told a window
+   * that had reloaded mid-round the session was idle. Cleared by the turn's
+   * end and by anything that takes the worker away.
+   */
+  workerTurn?: { status: SessionRuntimeStatus; requestId?: string };
+  /**
    * dsh-rebase decision 020 rule 5 — unplanned host exits in a row this session
    * was active at (a turn, a Stop, or its own recovery), plus Stop ladder B
    * restarts it caused. At {@link HOST_FAULT_SUSPECT_STREAK} it is no longer
@@ -2393,6 +2402,7 @@ export class WorkerManager {
       this.clearStopWatchdog(entry);
       entry.activeRequestId = null;
       entry.reportedStatus = undefined;
+      entry.workerTurn = undefined;
       entry.lastIdleAt = this.now();
     }
     if (latched) {
@@ -2748,7 +2758,9 @@ export class WorkerManager {
    * next launch will carry (`dshPluginSelectionKey`). The composition is
    * host-wide, so a running host launched with another selection goes the way
    * a new model plan takes it: `invalidateAll`, once no session has work under
-   * way. A host that is not running picks the selection up when it starts.
+   * way — and then, unlike a plan change, starts again at once (P1-7e e5,
+   * `startHostAfterPluginChange`). A host that is not running picks the
+   * selection up when it starts.
    */
   reconcileHostPlugins(selection: string): void {
     this.pendingPluginSelection = selection;
@@ -2789,9 +2801,36 @@ export class WorkerManager {
           `Main has ${String(selection)}; restarting it`
       );
     }
-    this.invalidateAll().catch((error: unknown) =>
-      this.log('[worker-manager] restart for a new model plan or plugin selection failed', error)
-    );
+    this.invalidateAll()
+      .then(() => (pluginsStale ? this.startHostAfterPluginChange() : undefined))
+      .catch((error: unknown) =>
+        this.log('[worker-manager] restart for a new model plan or plugin selection failed', error)
+      );
+  }
+
+  /**
+   * P1-7e e5 (decision 143) — the second half of a restart for a plugin
+   * change: the host that `invalidateAll` stopped comes back at once, with no
+   * session on it, so its `ready` reports what the new selection loaded and
+   * the settings page shows it without waiting for the next chat (decision
+   * 117 rule 13 said "restarts on its own"; before this it only stopped).
+   *
+   * Only from `idle`: a session that already started it, a failed supervisor
+   * and a disposed one are left as they are. Not user-initiated, and skipped
+   * past the restart budget, so a start nobody asked for never fails the
+   * supervisor. A host that stays unused stops again by the idle rule.
+   */
+  private async startHostAfterPluginChange(): Promise<void> {
+    const host = this.host;
+    if (!host) return;
+    const status = host.status();
+    if (status.state !== 'idle') return;
+    if (status.recentFaults > DSH_HOST_RESTART_BUDGET.restarts) return;
+    try {
+      await host.ensureHost();
+    } catch (error) {
+      this.log('[worker-manager] the DSH host did not come back after a plugin change', error);
+    }
   }
 
   /**
@@ -3253,11 +3292,17 @@ export class WorkerManager {
       },
     });
     this.dispatchHistory(entry, requestId, history, mode);
+    // P1-7e (problem 4, decision 142): a warm resume of a worker that is in
+    // the middle of a turn it started itself (a goal round, a job's wake-up)
+    // says so, under that turn's id — the window that reloaded knows nothing
+    // else about it. Only what the worker last reported is re-announced
+    // (decision 046); a fresh worker has reported nothing, so it reads idle.
+    const turn = entry.workerTurn;
     this.dispatch({
       type: 'session.status',
       sessionId: entry.logicalSessionId,
-      requestId,
-      payload: { status: 'idle' },
+      requestId: turn?.requestId ?? requestId,
+      payload: { status: turn?.status ?? 'idle' },
     });
   }
 
@@ -3497,6 +3542,7 @@ export class WorkerManager {
     const interrupted = turnId !== null || entry.stopWatchdog !== undefined;
     this.clearStopWatchdog(entry);
     entry.reportedStatus = undefined;
+    entry.workerTurn = undefined;
     entry.acceptEvents = false;
     // main-host-03: routing stops here, the event stream does not. The worker
     // emits its parked resolutions during `worker.dispose`, so the window
@@ -3571,6 +3617,15 @@ export class WorkerManager {
         ? undefined
         : event.payload.status;
     }
+    if (event.type === 'session.status') {
+      // P1-7e (problem 4): whoever started the turn.
+      entry.workerTurn = SETTLED_STATUSES.has(event.payload.status)
+        ? undefined
+        : {
+            status: event.payload.status,
+            ...(event.requestId ? { requestId: event.requestId } : {}),
+          };
+    }
     if (
       event.type === 'session.completed' ||
       event.type === 'session.failed' ||
@@ -3578,6 +3633,7 @@ export class WorkerManager {
     ) {
       entry.activeRequestId = null;
       entry.reportedStatus = undefined;
+      entry.workerTurn = undefined;
       entry.lastIdleAt = this.now();
       // decision 046: the turn a pending Stop was waiting on has ended.
       this.clearStopWatchdog(entry);
@@ -3878,6 +3934,7 @@ export class WorkerManager {
     const turnId = entry.activeRequestId;
     entry.activeRequestId = null;
     entry.reportedStatus = undefined;
+    entry.workerTurn = undefined;
     entry.lastIdleAt = this.now();
     return { turnId, stopping };
   }

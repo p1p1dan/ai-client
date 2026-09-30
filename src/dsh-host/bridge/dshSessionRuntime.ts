@@ -11,7 +11,9 @@
  *   live `agent/assistant-stream`  -> message.* / thinking.* / streaming tool rows
  *                                     (both translated by `liveEvents.ts`, P1-4d1)
  *   this session's PermissionGate  -> permission.requested / permission.resolved,
- *                                     answered by worker.permission.respond
+ *                                     answered by worker.permission.respond;
+ *                                     permission.activity for a call a
+ *                                     session grant let through (P1-7e e5)
  *
  * Permissions (P1-6b, decisions 041, 042): every tool call of the session and
  * its delegates is judged by one `PermissionGate` (the 1.0.x gate, from
@@ -104,11 +106,12 @@ import {
   type DshLogEvent,
   isDshSummaryRow,
 } from '../../shared/dshHistory/types.ts';
+import { permissionActivityEvent } from '../../shared/permissions/activity.ts';
 import {
   createPermissionPrompt,
   type PermissionPrompt,
 } from '../../shared/permissions/cardEmitter.ts';
-import { PermissionGate } from '../../shared/permissions/gate.ts';
+import { type PermissionActivityRecord, PermissionGate } from '../../shared/permissions/gate.ts';
 import type { PersistedGrants } from '../../shared/permissions/grants.ts';
 import {
   loadPermissionPolicy,
@@ -894,7 +897,10 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     this.listen();
     const requested = this.options.sessionFile;
     this.grantsFile ||= this.grantsSidecarPath(requested);
-    this.gate ??= await this.buildGate();
+    if (!this.gate) {
+      this.gate = await this.buildGate();
+      this.disposers.push(this.gate.onActivity((record) => this.onGateActivity(record)));
+    }
     let stubFile: string;
     let permissionGate: WorkerBootstrapResult['permissionGate'];
     try {
@@ -1015,6 +1021,27 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       },
       { persistGrants: (record) => this.persistGrants(record) }
     );
+  }
+
+  /**
+   * P1-7e e5 (problem 30, decision 143; decision 129 rule 16): a call that a
+   * remembered "allow for this session" let through raises no card, so the
+   * timeline said nothing about it being gated at all. It goes out as the
+   * 1.0.x runtime sent it, `permission.activity` built by the same
+   * `permissionActivityEvent` (the tool call id as `requestId`, `surface` =
+   * the tool, `value` = what was matched, `resolution: 'session_grant'`),
+   * and the renderer draws its activity row ("Allowed bash … · session
+   * grant"). Only these: a card's own answer already shows on its tool row,
+   * and the gate's other records stay off the stream, as they were on DSH.
+   */
+  private onGateActivity(record: PermissionActivityRecord): void {
+    if (this.disposed) return;
+    if (record.phase !== 'decision' || record.source !== 'session-grant') return;
+    const { sessionId: _sessionId, ...draft } = permissionActivityEvent(
+      this.logicalSessionId,
+      record
+    );
+    this.emit(draft as BridgeDraft);
   }
 
   /** The gate's `persistGrants`: the whole set, beside the stub, after every change. */
