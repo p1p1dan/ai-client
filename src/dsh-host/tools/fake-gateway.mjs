@@ -202,6 +202,13 @@
  *                       ```text fence), P1-COMPLETE-REVIEW (a review paced over six
  *                       text deltas, 100 ms apart) and P1-COMPLETE-SLOW (a review
  *                       paced over 60 deltas, 250 ms apart, for cancel and timeout).
+ *                       dsh-rebase P1-13c adds `markerName` to the P0-FS parameter
+ *                       object, so the encrypted-read smoke can point the first
+ *                       read at a policy-encrypted extension. dsh-rebase P1-13d
+ *                       adds `editInMarker` (default false): when true, the P0-FS
+ *                       script also edits the marker file itself and re-reads it,
+ *                       which is the encrypted-edit scenario. Both are additive —
+ *                       a prompt without them gets the unchanged default steps.
  *                       Every dsh-p0-2 log line also says whether the request carried
  *                       the one-shot system prompt (`completionSystem: true`).
  *                       dsh-rebase P1-6d adds P1-S18 (tools/perm-pwsh-probe.ts): the
@@ -866,12 +873,29 @@ const DSH_P0_2_SCRIPTS = {
   // dsh-rebase P0-4: file tools and the shell against an encrypted workspace.
   // P1-13c: `markerName` (default `marker.txt`) lets the encrypted-read smoke
   // point the first read at a policy-encrypted extension.
+  // P1-13d: `refuseName` (optional) inserts a read of a marker file the
+  // fallback cannot decrypt — the still-ciphertext refusal — and
+  // `editInMarker` (default false) inserts a literal edit against the marker
+  // file itself plus a re-read. Both are additive: a prompt without them gets
+  // exactly the steps and judgement it had before (decision 135).
   FS(_round, step, _calls, triggerText) {
     const p = p04Params(triggerText);
     const f = (name) => p04Join(p.dir, name);
     const written = f(`dsh-written-${p.token}.txt`);
+    const markerFile = f(p.markerName ?? 'marker.txt');
     const steps = [
-      tool('read', { file_path: f(p.markerName ?? 'marker.txt') }),
+      ...(p.refuseName === undefined ? [] : [tool('read', { file_path: f(p.refuseName) })]),
+      tool('read', { file_path: markerFile }),
+      ...(p.editInMarker === true
+        ? [
+            tool('edit', {
+              file_path: markerFile,
+              old_string: p.marker,
+              new_string: `${p.marker} ENC-EDITED-${p.token}`,
+            }),
+            tool('read', { file_path: markerFile }),
+          ]
+        : []),
       tool('read', { file_path: f('edit-target.txt') }),
       tool('edit', {
         file_path: f('edit-target.txt'),
