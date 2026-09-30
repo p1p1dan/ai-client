@@ -1,0 +1,619 @@
+{
+  "before": {
+    "rows": [
+      {
+        "section": "active",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "3m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "5m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "5m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "3m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "5m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "5m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+        "shownTitle": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:临时对话",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [
+          {
+            "text": "临时",
+            "h": 22,
+            "fontSize": "14px",
+            "size": null
+          }
+        ],
+        "age": "2m",
+        "h": 28
+      }
+    ],
+    "sections": [
+      {
+        "label": "正在活动",
+        "folderOpen": null,
+        "rows": 6,
+        "toggles": [],
+        "recentToggle": null
+      },
+      {
+        "label": "最近",
+        "folderOpen": null,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": "展开最近"
+      },
+      {
+        "label": "workspace",
+        "folderOpen": true,
+        "rows": 8,
+        "toggles": ["查看更多（17）"],
+        "recentToggle": null
+      },
+      {
+        "label": "workspace2",
+        "folderOpen": true,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": null
+      },
+      {
+        "label": "临时对话",
+        "folderOpen": true,
+        "rows": 1,
+        "toggles": [],
+        "recentToggle": null
+      }
+    ],
+    "newTitle": "在 workspace 中新建会话"
+  },
+  "at": {
+    "x": 295,
+    "y": 389
+  },
+  "after": {
+    "rows": [
+      {
+        "section": "active",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "4m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [
+          {
+            "text": "临时",
+            "h": 22,
+            "fontSize": "14px",
+            "size": null
+          }
+        ],
+        "age": "2m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "4m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "4m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+        "shownTitle": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:临时对话",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [
+          {
+            "text": "临时",
+            "h": 22,
+            "fontSize": "14px",
+            "size": null
+          }
+        ],
+        "age": "2m",
+        "h": 28
+      }
+    ],
+    "sections": [
+      {
+        "label": "正在活动",
+        "folderOpen": null,
+        "rows": 6,
+        "toggles": [],
+        "recentToggle": null
+      },
+      {
+        "label": "最近",
+        "folderOpen": null,
+        "rows": 7,
+        "toggles": ["显示更多(19)"],
+        "recentToggle": "收起最近"
+      },
+      {
+        "label": "workspace",
+        "folderOpen": true,
+        "rows": 8,
+        "toggles": ["查看更多（17）"],
+        "recentToggle": null
+      },
+      {
+        "label": "workspace2",
+        "folderOpen": true,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": null
+      },
+      {
+        "label": "临时对话",
+        "folderOpen": true,
+        "rows": 1,
+        "toggles": [],
+        "recentToggle": null
+      }
+    ],
+    "newTitle": "在 workspace 中新建会话"
+  },
+  "storage": "false",
+  "shot": "shots/e1-recent-expanded-before-restart.png"
+}

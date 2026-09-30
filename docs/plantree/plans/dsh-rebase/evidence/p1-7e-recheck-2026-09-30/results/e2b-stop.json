@@ -1,0 +1,269 @@
+{
+  "sid": "session-1790774705788-hkjisb4",
+  "gear": "执行 · 全自动",
+  "rowClick": true,
+  "live": [
+    {
+      "head": "实时输出",
+      "text": "sleep-tool e2b started\n"
+    },
+    {
+      "head": "实时输出",
+      "text": "sleep-tool e2b started\n"
+    },
+    {
+      "head": "实时输出",
+      "text": "sleep-tool e2b started\n"
+    },
+    {
+      "head": "实时输出",
+      "text": "sleep-tool e2b started\n"
+    },
+    {
+      "head": "实时输出",
+      "text": "sleep-tool e2b started\n"
+    }
+  ],
+  "sidebarRunning": [
+    {
+      "section": "active",
+      "title": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "shownTitle": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "spinner",
+      "markerBox": 17,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "active",
+      "title": "P1-THINK: think first, then answer",
+      "shownTitle": "P1-THINK: think first, then answer",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "1m",
+      "h": 28
+    },
+    {
+      "section": "active",
+      "title": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩",
+      "shownTitle": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "1m",
+      "h": 28
+    },
+    {
+      "section": "active",
+      "title": "P1-GATE: the company gateway refuses the stream",
+      "shownTitle": "P1-GATE: the company gateway refuses the stream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "2m",
+      "h": 28
+    },
+    {
+      "section": "active",
+      "title": "P1-FAIL: this request fails upstream",
+      "shownTitle": "P1-FAIL: this request fails upstream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "2m",
+      "h": 28
+    },
+    {
+      "section": "active",
+      "title": "P0-STREAM: E4-EMPTY 只有一轮",
+      "shownTitle": "P0-STREAM: E4-EMPTY 只有一轮",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "3m",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "shownTitle": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "spinner",
+      "markerBox": 17,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-THINK: think first, then answer",
+      "shownTitle": "P1-THINK: think first, then answer",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "1m",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩",
+      "shownTitle": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "1m",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-GATE: the company gateway refuses the stream",
+      "shownTitle": "P1-GATE: the company gateway refuses the stream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "2m",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-FAIL: this request fails upstream",
+      "shownTitle": "P1-FAIL: this request fails upstream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "2m",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P0-STREAM: E4-EMPTY 只有一轮",
+      "shownTitle": "P0-STREAM: E4-EMPTY 只有一轮",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": false,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "3m",
+      "h": 28
+    }
+  ],
+  "shotRunning": "shots/e1-active-now-spinner-and-e2b-live-output.png",
+  "stopClicked": true,
+  "stopTurn": {
+    "settled": true,
+    "sid": "session-1790774705788-hkjisb4",
+    "status": "idle",
+    "messages": 2,
+    "lastError": null,
+    "statuses": [
+      {
+        "t": 1790774747597,
+        "status": "stopping"
+      },
+      {
+        "t": 1790774748103,
+        "status": "idle"
+      }
+    ]
+  },
+  "rowsAfter": ["终端 echo \"sleep-tool e2b started\"; sleep 40;… · 已停止"],
+  "body": {
+    "head": "终端\necho \"sleep-tool e2b started\"; sleep 40;…\n· 已停止\n# Run a long command\necho \"sleep-tool e2b started\"; sleep 40; echo \"sleep-tool done\"\nsleep-tool e2b started\n",
+    "tail": "终端\necho \"sleep-tool e2b started\"; sleep 40;…\n· 已停止\n# Run a long command\necho \"sleep-tool e2b started\"; sleep 40; echo \"sleep-tool done\"\nsleep-tool e2b started\n",
+    "length": 159
+  },
+  "keptOutput": true,
+  "englishAbort": false,
+  "shotStopped": "shots/e2b-stop-keeps-output.png",
+  "sidebarAfter": [
+    {
+      "section": "active",
+      "title": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "shownTitle": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "shownTitle": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    }
+  ]
+}

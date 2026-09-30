@@ -1,0 +1,116 @@
+{
+  "sid": "session-1790775014492-j1khsnz",
+  "card1": {
+    "text": "提问\n0 / 2\nQ1\nQ2\n已答 0 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n还有 2 个未回答\n下一个未回答\n跳过\n继续\nctrl + enter",
+    "options": [
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ]
+  },
+  "pick": ["clicked", true, "clicked", "clicked", "clicked"],
+  "otherInput": {
+    "aria": "你的回答",
+    "placeholder": "输入你的回答…"
+  },
+  "shotFilled": "shots/e4-question-1-filled.png",
+  "submit": true,
+  "turn1": "idle",
+  "answer1": "P1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"E4-OTHER, typed note\"}]}",
+  "frozen1": [
+    {
+      "head": "回答",
+      "text": "回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc\nsmoke, then record\n其他：E4-OTHER, typed note",
+      "lis": ["tsc", "smoke, then record", "其他：E4-OTHER, typed note"]
+    }
+  ],
+  "shotAnswered": "shots/e4-question-2-answered-multiselect-lines.png",
+  "card2": {
+    "text": "提问\n0 / 2\nQ1\nQ2\n已答 0 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n还有 2 个未回答\n下一个未回答\n跳过\n继续\nctrl + enter",
+    "options": [
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ]
+  },
+  "skip": true,
+  "turn2": "idle",
+  "frozen2": [
+    {
+      "head": "回答",
+      "text": "回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc\nsmoke, then record\n其他：E4-OTHER, typed note",
+      "lis": ["tsc", "smoke, then record", "其他：E4-OTHER, typed note"]
+    },
+    {
+      "head": "已跳过提问",
+      "text": "已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过",
+      "lis": []
+    }
+  ],
+  "shotSkipped": "shots/e4-question-3-skipped.png",
+  "card3": {
+    "text": "提问\n0 / 2\nQ1\nQ2\n已答 0 / 2\nScope\nWhich part should change first?\nA\nBridge (Recommended)\nThe worker side of the card.\nB\nRenderer\nThe card itself.\nC\n其他…\n还有 2 个未回答\n下一个未回答\n跳过\n继续\nctrl + enter",
+    "options": [
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "A Bridge (Recommended) The worker side of the card."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "B Renderer The card itself."
+      },
+      {
+        "role": "radio",
+        "checked": "false",
+        "text": "C 其他…"
+      }
+    ]
+  },
+  "stop": true,
+  "turn3": "idle",
+  "frozen3": [
+    {
+      "head": "回答",
+      "text": "回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc\nsmoke, then record\n其他：E4-OTHER, typed note",
+      "lis": ["tsc", "smoke, then record", "其他：E4-OTHER, typed note"]
+    },
+    {
+      "head": "已跳过提问",
+      "text": "已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过",
+      "lis": []
+    },
+    {
+      "head": "提问已停止",
+      "text": "提问已停止\nWhich part should change first?\n已停止\nWhich checks should run afterwards?\n已停止",
+      "lis": []
+    }
+  ],
+  "transcript": "P1-QUESTION: ask me before you start.\n已工作 4 秒\n询问\nWhich part should change first?\n回答\nWhich part should change first?\nBridge (Recommended)\nWhich checks should run afterwards?\ntsc\nsmoke, then record\n其他：E4-OTHER, typed note\n最终输出\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[\"Bridge (Recommended)\"]},{\"id\":\"checks\",\"selected\":[\"tsc\",\"smoke, then record\"],\"custom\":\"E4-OTHER, typed note\"}]}\n✻ 完成于 09:30 · 1 次工具调用\nP1-QUESTION: ask me again, I will skip.\n已工作 1 秒\n询问\nWhich part should change first?\n已跳过提问\nWhich part should change first?\n已跳过\nWhich checks should run afterwards?\n已跳过\n最终输出\nP1-QUESTION got {\"answers\":[{\"id\":\"scope\",\"selected\":[]},{\"id\":\"checks\",\"selected\":[]}]}\n✻ 完成于 09:30 · 1 次工具调用\nP1-QUESTION: ask once more, then I press Stop.\n已工作 1 秒\n询问\nWhich part should change first?\n提问已停止\nWhich part should change first?\n已停止\nWhich checks should run afterwards?\n已停止\n✻ 完成于 09:30 · 1 次工具调用",
+  "shotStopped": "shots/e4-question-4-stopped.png"
+}

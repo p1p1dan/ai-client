@@ -1,0 +1,75 @@
+{
+  "sid": "session-1790776155528-ux3hvb6",
+  "before": {
+    "id": "session-1790776155528-ux3hvb6",
+    "title": "New chat",
+    "status": "idle",
+    "updatedAt": 1790776155528,
+    "hostBound": false,
+    "messages": 0
+  },
+  "rename": {
+    "menu": ["重命名", "归档"],
+    "focusHeldWholeTime": true,
+    "firstLoss": null,
+    "traceSamples": 9,
+    "traceFirst": {
+      "dt": 152,
+      "active": "INPUT:新建对话",
+      "fields": [
+        {
+          "value": "新建对话",
+          "focused": true
+        }
+      ]
+    },
+    "traceLast": {
+      "dt": 1556,
+      "active": "INPUT:新建对话",
+      "fields": [
+        {
+          "value": "新建对话",
+          "focused": true
+        }
+      ]
+    },
+    "typed": {
+      "active": "INPUT:E1 草稿里起的名字",
+      "fields": [
+        {
+          "value": "E1 草稿里起的名字",
+          "focused": true
+        }
+      ]
+    },
+    "finish": "enter",
+    "after": {
+      "active": "BODY",
+      "fields": []
+    }
+  },
+  "afterRename": {
+    "id": "session-1790776155528-ux3hvb6",
+    "title": "E1 草稿里起的名字",
+    "status": "idle",
+    "updatedAt": 1790776160180,
+    "hostBound": false,
+    "messages": 0
+  },
+  "shotRenamed": "shots/e1-draft-rename-1-before-send.png",
+  "turn": "idle",
+  "afterSend": {
+    "id": "session-1790776155528-ux3hvb6",
+    "title": "E1 草稿里起的名字",
+    "status": "idle",
+    "updatedAt": 1790776165104,
+    "hostBound": true,
+    "messages": 2
+  },
+  "index": [
+    {
+      "title": "E1 草稿里起的名字"
+    }
+  ],
+  "shotSent": "shots/e1-draft-rename-2-after-send.png"
+}

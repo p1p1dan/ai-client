@@ -1,0 +1,219 @@
+{
+  "sid": "session-1790774568240-wdv0kip",
+  "trace": [
+    {
+      "dt": 511,
+      "status": "idle",
+      "card": null,
+      "retry": "网络重试中 · 1/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 2247,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 1/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 3168,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 1/3 · 本回合仍在进行  <1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 3479,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  6s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 4097,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  5s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 5275,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  4s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 6198,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 7120,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  2s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 8043,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 2/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 9271,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  11s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 10190,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  10s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 11112,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  9s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 12337,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  8s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 13254,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  7s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 14177,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  6s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 15099,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  5s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 16321,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  4s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 17235,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 18153,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  2s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 19081,
+      "status": "running",
+      "card": null,
+      "retry": "网络重试中 · 3/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+    },
+    {
+      "dt": 20670,
+      "status": "failed",
+      "card": "模型服务返回了错误 | 模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。 | 500 {\"type\":\"error\",\"error\":{\"type",
+      "retry": null
+    }
+  ],
+  "retryShot": "shots/e4-e2b-fail-retry-banner.png",
+  "retryTexts": [
+    "网络重试中 · 1/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 1/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 1/3 · 本回合仍在进行  <1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  6s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  5s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  4s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  2s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 2/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  11s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  10s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  9s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  8s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  7s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  6s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  5s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  4s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  3s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  2s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机",
+    "网络重试中 · 3/3 · 本回合仍在进行  1s 后重试 · 服务端错误  立即放弃 执行 · 每次询问 自动 workspace 本机"
+  ],
+  "card": {
+    "text": "模型服务返回了错误 | 模型服务返回了错误，或者回复为空、格式不对，重试之后仍然如此。 | 500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}} | 继续",
+    "buttons": ["继续"]
+  },
+  "gatewayRequests": [
+    {
+      "status": 500,
+      "scenario": null
+    },
+    {
+      "status": 500,
+      "scenario": null
+    },
+    {
+      "status": 500,
+      "scenario": null
+    },
+    {
+      "status": 500,
+      "scenario": null
+    }
+  ],
+  "shotCard": "shots/e4-e2b-fail-card.png",
+  "sidebar": [
+    {
+      "section": "active",
+      "title": "P1-FAIL: this request fails upstream",
+      "shownTitle": "P1-FAIL: this request fails upstream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-FAIL: this request fails upstream",
+      "shownTitle": "P1-FAIL: this request fails upstream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    }
+  ]
+}

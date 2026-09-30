@@ -1,0 +1,72 @@
+{
+  "storeCount": 24,
+  "collapsed": {
+    "label": "workspace",
+    "folderOpen": true,
+    "rows": 8,
+    "toggles": ["查看更多（16）"],
+    "recentToggle": null
+  },
+  "collapsedRows": [
+    "P0-STREAM: E1 filler 6（把前面的对话挤",
+    "P0-STREAM: E1 filler 5（把前面的对话挤",
+    "P0-STREAM: E1 filler 4（把前面的对话挤",
+    "P0-STREAM: E1 filler 3（把前面的对话挤",
+    "P0-STREAM: E1 filler 2（把前面的对话挤",
+    "P0-STREAM: E1 filler 1（把前面的对话挤",
+    "P0-STREAM: E1-X 这一轮之后被挤出容量",
+    "P1-PERM-HOLD: hold at the gate"
+  ],
+  "shotCollapsed": "shots/e1-limit-1-eight-and-view-more.png",
+  "clickMore": "查看更多（16）",
+  "expanded": {
+    "label": "workspace",
+    "folderOpen": true,
+    "rows": 24,
+    "toggles": ["收起"],
+    "recentToggle": null
+  },
+  "expandedCount": 24,
+  "picked": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+  "pickClick": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+  "activeAfterPick": "session-1790775303910-yzf8w1z",
+  "clickLess": "收起",
+  "foldedWithSelected": {
+    "label": "workspace",
+    "folderOpen": true,
+    "rows": 9,
+    "toggles": ["查看更多（15）"],
+    "recentToggle": null
+  },
+  "foldedRows": [
+    "  P0-STREAM: E1 filler 6（把前面的对话挤",
+    "  P0-STREAM: E1 filler 5（把前面的对话挤",
+    "  P0-STREAM: E1 filler 4（把前面的对话挤",
+    "  P0-STREAM: E1 filler 3（把前面的对话挤",
+    "  P0-STREAM: E1 filler 2（把前面的对话挤",
+    "  P0-STREAM: E1 filler 1（把前面的对话挤",
+    "  P0-STREAM: E1-X 这一轮之后被挤出容量",
+    "  P1-PERM-HOLD: hold at the gate",
+    "* /goal P0-GOAL-PAUSE: run a slo"
+  ],
+  "shotFoldedSelected": "shots/e1-limit-2-selected-row-kept-at-end.png",
+  "searchShown": true,
+  "searchSet": true,
+  "searchMatchesInStore": 9,
+  "searchFolder": {
+    "label": "workspace",
+    "folderOpen": true,
+    "rows": 10,
+    "toggles": [],
+    "recentToggle": null
+  },
+  "searchRows": 10,
+  "shotSearch": "shots/e1-limit-3-search-lists-all.png",
+  "afterSearchCleared": {
+    "label": "workspace",
+    "folderOpen": true,
+    "rows": 9,
+    "toggles": ["查看更多（15）"],
+    "recentToggle": null
+  }
+}

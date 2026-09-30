@@ -1,0 +1,88 @@
+{
+  "trigger": {
+    "text": "自动",
+    "aria": "模型与思考强度：自动 —— 对下一轮生效",
+    "title": "自动 —— 点击可更换模型或思考强度（对下一轮生效）"
+  },
+  "composer": {
+    "value": "",
+    "placeholder": "输入消息…",
+    "disabled": false,
+    "chips": []
+  },
+  "openMenu": true,
+  "menu": [
+    {
+      "role": "presentation",
+      "checked": null,
+      "text": "模型",
+      "title": null
+    },
+    {
+      "role": "presentation",
+      "checked": null,
+      "text": "推理强度",
+      "title": null
+    },
+    {
+      "role": "menuitemradio",
+      "checked": "true",
+      "text": "默认",
+      "title": null
+    },
+    {
+      "role": "menuitemradio",
+      "checked": "false",
+      "text": "低",
+      "title": "轻度推理"
+    },
+    {
+      "role": "menuitemradio",
+      "checked": "false",
+      "text": "中",
+      "title": "中等推理；没有选择档位时使用这一档"
+    },
+    {
+      "role": "menuitemradio",
+      "checked": "false",
+      "text": "高",
+      "title": "深度推理"
+    }
+  ],
+  "menuText": ["模型\n推理强度\n默认\n低\n中\n高\n没有可用的模型 —— 将自动选择\n重试"],
+  "shotMenu": "shots/e4-menus-before-provider-model-menu.png",
+  "effortTitles": [
+    {
+      "text": "默认",
+      "title": null
+    },
+    {
+      "text": "低",
+      "title": "轻度推理"
+    },
+    {
+      "text": "中",
+      "title": "中等推理；没有选择档位时使用这一档"
+    },
+    {
+      "text": "高",
+      "title": "深度推理"
+    }
+  ],
+  "tooltip": [],
+  "shotEffortHover": "shots/e4-menus-before-provider-effort-hover.png",
+  "slash": [],
+  "slashFooter": [],
+  "shotSlash": "shots/e4-menus-before-provider-slash.png",
+  "at": [],
+  "atFooter": [
+    "workspace 本机 README.md ↑↓ 导航 Enter 选择 Esc 关闭 执行 · 每次询问 自动",
+    "workspace 本机 README.md ↑↓ 导航 Enter 选择 Esc 关闭 执行 · 每次询问 自动",
+    "README.md ↑↓ 导航 Enter 选择 Esc 关闭 执行 · 每次询问 自动",
+    "README.md ↑↓ 导航 Enter 选择 Esc 关闭",
+    "↑↓ 导航 Enter 选择 Esc 关闭",
+    "↑↓ 导航"
+  ],
+  "shotAt": "shots/e4-menus-before-provider-at.png",
+  "active": "session-live-1790774076953-suascfa"
+}

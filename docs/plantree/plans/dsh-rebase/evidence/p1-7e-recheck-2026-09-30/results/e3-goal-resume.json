@@ -1,0 +1,55 @@
+{
+  "sid": "session-1790775303910-yzf8w1z",
+  "gear": "执行 · 全自动",
+  "untilRunning": [
+    {
+      "dt": 40,
+      "status": "running",
+      "goal": "running | 目标 · 第 1/256 轮 · 进行中 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停"
+    }
+  ],
+  "pause": "clicked",
+  "untilPaused": [
+    {
+      "dt": 303,
+      "status": "running",
+      "goal": "paused | 目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 继续"
+    },
+    {
+      "dt": 457,
+      "status": "idle",
+      "goal": "paused | 目标已暂停 · 第 1/256 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 继续"
+    }
+  ],
+  "shotPaused": "shots/e3-goal-1-paused.png",
+  "resume": "clicked",
+  "afterResume": [
+    {
+      "dt": 572,
+      "status": "idle",
+      "goal": "waiting | 目标 · 第 1/256 轮 · 等待下一轮 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停"
+    },
+    {
+      "dt": 606,
+      "status": "idle",
+      "goal": "complete | 目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 收起"
+    }
+  ],
+  "inPage": [
+    {
+      "dt": 70,
+      "v": "waiting | 目标 · 第 2/256 轮 · 等待下一轮 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停"
+    },
+    {
+      "dt": 307,
+      "v": "running | 目标 · 第 2/256 轮 · 进行中 · P0-GOAL-PAUSE: run a slow check, then finish. 暂停"
+    },
+    {
+      "dt": 364,
+      "v": "complete | 目标已完成 · 共 2 轮 · P0-GOAL-PAUSE: run a slow check, then finish. 收起"
+    }
+  ],
+  "suspendedSeen": [],
+  "shotDone": "shots/e3-goal-2-resumed-complete.png",
+  "transcript": "/goal P0-GOAL-PAUSE: run a slow check, then finish.\n已工作\nGoal created\nStatus: active\nObjective: P0-GOAL-PAUSE: run a slow check, then finish.\nRounds: 0/256\nActivation: armed\nCommands: /goal edit <objective>, /goal pause, /goal clear\n目标 · 第 1/256 轮\n09:35\n已工作 1 秒\n终端\nsleep 8; echo slow-check-done\n· 已停止\n✻ 完成于 09:35 · 1 次工具调用\n目标 · 第 2/256 轮\n09:35\n已工作 1 秒\n最终输出\nWrapping up the goal for the user.\n✻ 完成于 09:35 · 2 次工具调用"
+}

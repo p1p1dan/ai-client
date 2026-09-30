@@ -1,0 +1,48 @@
+{
+  "reviewOpen": true,
+  "reviewNote": ["记录当前对话中文件工具（edit、write）所做的修改；不包含命令行及外部编辑。"],
+  "shotReview": "shots/e4-review-panel-note.png",
+  "nav": [
+    "通用",
+    "外观",
+    "终端",
+    "编辑器",
+    "Git",
+    "模型 *",
+    "扩展",
+    "数据迁移",
+    "快捷键",
+    "网络",
+    "高级"
+  ],
+  "headings": ["设置", "模型", "AI 服务", "模型管理", "提示词缓存", "模型请求超时"],
+  "piWords": [],
+  "ownSetupLine": ["当前是「使用本机已有配置」：可用的模型来自上方你自己添加的 AI 服务。"],
+  "shotSettings": "shots/e4-settings-models-page.png",
+  "temp": {
+    "id": "session-1790776276562-66lg42v"
+  },
+  "sidebar": [
+    {
+      "section": "folder:临时对话",
+      "title": "新建对话",
+      "shownTitle": "新建对话",
+      "suffix": null,
+      "titleTruncated": false,
+      "active": true,
+      "marker": null,
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "临时",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    }
+  ],
+  "shotTemp": "shots/e4-sidebar-badges-temp-failed.png"
+}

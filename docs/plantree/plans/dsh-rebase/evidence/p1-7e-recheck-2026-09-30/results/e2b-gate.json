@@ -1,0 +1,66 @@
+{
+  "sid": "session-1790774608359-2o6378p",
+  "trace": [
+    {
+      "dt": 492,
+      "status": "idle",
+      "card": "公司网关中断了这次回复 | 公司网关在模型开始回答之前中断了这次回复。 | 502 {\"error\":{\"type\":\"stream_gate_precommi",
+      "retry": null
+    }
+  ],
+  "retryShot": null,
+  "retryTexts": [],
+  "card": {
+    "text": "公司网关中断了这次回复 | 公司网关在模型开始回答之前中断了这次回复。 | 502 {\"error\":{\"type\":\"stream_gate_precommit\",\"reason\":\"prebuffer_overflow\",\"family\":\"anthropic\",\"message\":\"P1-GATE: the fake gateway gated this reply\"}} | 重试同一请求通常还会失败。请换一个模型或调低思考档位，并把错误详情转给网关管理员。 | 仍然继续",
+    "buttons": ["仍然继续"]
+  },
+  "gatewayRequests": [
+    {
+      "status": 502,
+      "scenario": null
+    }
+  ],
+  "shotCard": "shots/e2b-gate-card.png",
+  "sidebar": [
+    {
+      "section": "active",
+      "title": "P1-GATE: the company gateway refuses the stream",
+      "shownTitle": "P1-GATE: the company gateway refuses the stream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-GATE: the company gateway refuses the stream",
+      "shownTitle": "P1-GATE: the company gateway refuses the stream",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [
+        {
+          "text": "失败",
+          "h": 22,
+          "fontSize": "14px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    }
+  ]
+}

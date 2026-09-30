@@ -1,0 +1,98 @@
+{
+  "sid": "session-1790775100303-br39k5r",
+  "model": {
+    "opened": "自动",
+    "items": [
+      {
+        "role": "presentation",
+        "checked": null,
+        "text": "模型",
+        "title": null
+      },
+      {
+        "role": "menuitem",
+        "checked": null,
+        "text": "其他模型",
+        "title": null
+      },
+      {
+        "role": "presentation",
+        "checked": null,
+        "text": "推理强度",
+        "title": null
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "true",
+        "text": "默认",
+        "title": null
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "false",
+        "text": "低",
+        "title": "轻度推理"
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "false",
+        "text": "中",
+        "title": "中等推理；没有选择档位时使用这一档"
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "false",
+        "text": "高",
+        "title": "深度推理"
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "false",
+        "text": "fake-1",
+        "title": null
+      },
+      {
+        "role": "menuitemradio",
+        "checked": "false",
+        "text": "fake-vision",
+        "title": null
+      }
+    ],
+    "picked": true,
+    "trigger": {
+      "text": "fake-vision",
+      "aria": "模型与思考强度：fake-vision —— 对下一轮生效",
+      "title": "fake-vision —— 点击可更换模型或思考强度（对下一轮生效）"
+    }
+  },
+  "paste8192": {
+    "bytes": 276,
+    "dispatched": false,
+    "defaultPrevented": true
+  },
+  "after8192": {
+    "value": "",
+    "placeholder": "输入消息…",
+    "disabled": false,
+    "chips": ["移除 e5-8192x1.png"]
+  },
+  "toasts8192": [],
+  "shot8192": "shots/e5-image-8192-accepted-draft.png",
+  "turn8192": "idle",
+  "answer8192": "P1-IMAGE saw 1 image block(s).",
+  "shotSent": "shots/e5-image-8192-sent.png",
+  "paste8193": {
+    "bytes": 279,
+    "dispatched": false,
+    "defaultPrevented": true
+  },
+  "after8193": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "toasts8193": [],
+  "notice8193": "k(s).\n\n✻ 完成于 09:31\n「e5-8193x1.png」是 8193x1 像素，长边最大 8192 像素。\n执行 · 每次询问\n0%\nfake-vision\nworkspace\n本机",
+  "shot8193": "shots/e5-image-8193-refused.png"
+}

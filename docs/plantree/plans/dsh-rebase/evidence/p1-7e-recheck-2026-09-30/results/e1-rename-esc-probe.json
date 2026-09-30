@@ -1,0 +1,43 @@
+{
+  "asideWidth": 0,
+  "focus": {
+    "active": "TEXTAREA:composer",
+    "fields": [
+      {
+        "value": "E1 这个名字不该留下",
+        "focused": false
+      }
+    ]
+  },
+  "title": "E1 改名-回车生效",
+  "rail": {
+    "x": 22,
+    "y": 86
+  },
+  "asideWidthAfterReopen": 279,
+  "focusAfterReopen": {
+    "active": "BUTTON",
+    "fields": [
+      {
+        "value": "E1 这个名字不该留下",
+        "focused": false
+      }
+    ]
+  },
+  "shotReopened": "shots/e1-rename-esc-panel-reopened-field-still-open.png",
+  "timelineClick": {
+    "x": 862,
+    "y": 420
+  },
+  "focusAfterClickAway": {
+    "active": "BODY",
+    "fields": [
+      {
+        "value": "E1 这个名字不该留下",
+        "focused": false
+      }
+    ]
+  },
+  "titleAfterClickAway": "E1 改名-回车生效",
+  "shotAfter": "shots/e1-rename-esc-then-click-away.png"
+}

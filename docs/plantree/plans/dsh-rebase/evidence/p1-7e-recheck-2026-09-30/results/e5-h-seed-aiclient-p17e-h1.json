@@ -1,0 +1,12 @@
+{
+  "written": [
+    "home/.pilab/AGENTS.md",
+    "home/.agents/subagents/x.md",
+    "workspace/.pi/prompts/review.md",
+    "workspace/.pi/prompts/ship.md",
+    "workspace/.pi/mcp.json",
+    "home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md",
+    "workspace/.pi/skills/legacy-skill/SKILL.md",
+    "home/.pilab/jyw-ai-client-dev/settings.json"
+  ]
+}

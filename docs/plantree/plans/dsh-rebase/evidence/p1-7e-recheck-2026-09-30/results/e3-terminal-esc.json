@@ -1,0 +1,28 @@
+{
+  "column": {
+    "shown": true,
+    "search": [],
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea"
+  },
+  "at": {
+    "x": 1132,
+    "y": 501
+  },
+  "focus": {
+    "shown": true,
+    "search": [],
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea"
+  },
+  "started": "\"cat -v\\r\\n\\u001b[?2004l\\r\"",
+  "ptyEcho": "\"^[\\r\\n^[\\r\\n\"",
+  "reachedCat": true,
+  "after": {
+    "shown": true,
+    "search": [],
+    "focusInTerminal": true,
+    "activeElement": "TEXTAREA.xterm-helper-textarea"
+  },
+  "shot": "shots/e3-terminal-esc-reaches-cat.png"
+}

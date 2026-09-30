@@ -1,0 +1,86 @@
+{
+  "hostsBefore": [706019],
+  "state": {
+    "plugins": [
+      {
+        "name": "dsh-office-tools",
+        "version": "1.0.4",
+        "kind": "internal",
+        "defaultEnabled": false,
+        "description": "DSH model-facing Office tools: create, read, and update Word (.docx), Excel (.xlsx), and PowerPoint (.pptx) files inside the session workspace, entirely through the official DSH filesystem service.",
+        "readTools": ["excel_read", "ppt_read", "word_read"],
+        "writeTools": ["excel_create", "excel_update", "ppt_create", "word_create", "word_update"],
+        "askTools": [],
+        "unlistedToolsAsk": false,
+        "review": {
+          "date": "2026-09-28",
+          "verdict": "conditional"
+        },
+        "enabled": false,
+        "overridden": false,
+        "host": {
+          "state": "disabled"
+        },
+        "pendingRestart": false
+      }
+    ],
+    "delisted": [],
+    "hostReported": true,
+    "selectionInvalid": false,
+    "catalogError": null
+  },
+  "before": {
+    "text": "插件\n经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。\ndsh-office-tools\n1.0.4\n已关闭\n\n在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。\n\n第三方插件，已经过本应用审查\n2026-09-28 审查：有条件通过\n写入文件\nexcel_create, excel_update, ppt_create, word_create, word_update\n读取文件\nexcel_read, ppt_read, word_read",
+    "badges": ["已关闭", "写入文件", "读取文件"],
+    "switches": [
+      {
+        "checked": "false",
+        "disabled": false
+      }
+    ]
+  },
+  "shotBefore": "shots/e5-plugins-1-before.png",
+  "click": "clicked",
+  "samples": [
+    {
+      "dt": 59,
+      "badges": ["已关闭", "待重启生效", "写入文件", "读取文件"],
+      "hint": true,
+      "switches": [
+        {
+          "checked": "true",
+          "disabled": false
+        }
+      ],
+      "hosts": [706019]
+    },
+    {
+      "dt": 1645,
+      "badges": ["已加载", "写入文件", "读取文件"],
+      "hint": false,
+      "switches": [
+        {
+          "checked": "true",
+          "disabled": false
+        }
+      ],
+      "hosts": [706394]
+    }
+  ],
+  "shots": {
+    "pending": "shots/e5-plugins-2-pending.png",
+    "loaded": "shots/e5-plugins-3-loaded-same-page.png"
+  },
+  "loadedAfterMs": 1645,
+  "after": {
+    "text": "插件\n经本应用审查、随应用一起安装的插件。不会联网下载，这里也不能添加或删除插件。插件提供的工具和内置工具一样，要经过本应用的审批。\ndsh-office-tools\n1.0.4\n已加载\n\n在工作区里创建、读取和修改 Word、Excel、PowerPoint 文件。\n\n第三方插件，已经过本应用审查\n2026-09-28 审查：有条件通过\n写入文件\nexcel_create, excel_update, ppt_create, word_create, word_update\n读取文件\nexcel_read, ppt_read, word_read",
+    "badges": ["已加载", "写入文件", "读取文件"],
+    "switches": [
+      {
+        "checked": "true",
+        "disabled": false
+      }
+    ]
+  },
+  "hostsAfter": [706394]
+}

@@ -1,0 +1,91 @@
+{
+  "sid": "session-1790776155528-ux3hvb6",
+  "before": "E1 草稿里起的名字",
+  "rename": {
+    "menu": ["重命名", "结束对话", "归档"],
+    "focusHeldWholeTime": true,
+    "firstLoss": null,
+    "traceSamples": 8,
+    "traceFirst": {
+      "dt": 162,
+      "active": "INPUT:E1 草稿里起的名字",
+      "fields": [
+        {
+          "value": "E1 草稿里起的名字",
+          "focused": true
+        }
+      ]
+    },
+    "traceLast": {
+      "dt": 1549,
+      "active": "INPUT:E1 草稿里起的名字",
+      "fields": [
+        {
+          "value": "E1 草稿里起的名字",
+          "focused": true
+        }
+      ]
+    },
+    "typed": {
+      "active": "INPUT:这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+      "fields": [
+        {
+          "value": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+          "focused": true
+        }
+      ]
+    },
+    "finish": "enter",
+    "after": {
+      "active": "BODY",
+      "fields": []
+    }
+  },
+  "after": {
+    "id": "session-1790776155528-ux3hvb6",
+    "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+    "status": "idle",
+    "updatedAt": 1790776188265,
+    "hostBound": true,
+    "messages": 2
+  },
+  "rows": [
+    {
+      "section": "active",
+      "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+      "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+      "suffix": {
+        "text": "（1.0.x 分支）",
+        "w": 95,
+        "sw": 95,
+        "cw": 95
+      },
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+      "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+      "suffix": {
+        "text": "（1.0.x 分支）",
+        "w": 95,
+        "sw": 95,
+        "cw": 95
+      },
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    }
+  ],
+  "shot": "shots/e1-branch-suffix-not-truncated.png"
+}

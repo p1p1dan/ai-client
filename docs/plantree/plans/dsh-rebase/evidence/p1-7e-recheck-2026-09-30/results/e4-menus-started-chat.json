@@ -1,0 +1,83 @@
+{
+  "trigger": {
+    "text": "fake-vision",
+    "aria": "模型与思考强度：fake-vision —— 对下一轮生效",
+    "title": "fake-vision —— 点击可更换模型或思考强度（对下一轮生效）"
+  },
+  "composer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "openMenu": true,
+  "menu": [
+    {
+      "role": "presentation",
+      "checked": null,
+      "text": "模型",
+      "title": null
+    },
+    {
+      "role": "menuitem",
+      "checked": null,
+      "text": "其他模型",
+      "title": null
+    },
+    {
+      "role": "presentation",
+      "checked": null,
+      "text": "推理强度",
+      "title": null
+    },
+    {
+      "role": "menuitemradio",
+      "checked": "true",
+      "text": "默认",
+      "title": null
+    }
+  ],
+  "menuText": ["模型\n其他模型\n推理强度\n默认"],
+  "shotMenu": "shots/e4-menus-started-chat-model-menu.png",
+  "effortTitles": [
+    {
+      "text": "其他模型",
+      "title": null
+    },
+    {
+      "text": "默认",
+      "title": null
+    }
+  ],
+  "slash": [
+    "/archive",
+    "归档当前对话",
+    "内置",
+    "/compact",
+    "压缩当前对话的上下文",
+    "内置",
+    "/goal",
+    "Set or view the goal for a long-running task",
+    "命令",
+    "/new",
+    "开始一个新对话",
+    "内置",
+    "/settings",
+    "打开设置",
+    "内置"
+  ],
+  "shotSlash": "shots/e4-menus-started-chat-slash.png",
+  "atFooter": [
+    "dsh-written-e2b.txt",
+    "README.md",
+    "shell-written-e2b.txt",
+    "↑↓",
+    "导航",
+    "Enter",
+    "选择",
+    "Esc",
+    "关闭"
+  ],
+  "shotAt": "shots/e4-menus-started-chat-at.png",
+  "active": "session-1790776155528-ux3hvb6"
+}

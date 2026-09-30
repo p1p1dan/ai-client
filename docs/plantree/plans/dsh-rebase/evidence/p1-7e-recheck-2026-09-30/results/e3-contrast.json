@@ -1,0 +1,638 @@
+{
+  "chats": [
+    {
+      "theme": "light",
+      "suffix": "avq5t9w",
+      "open": {
+        "id": "session-1790774781303-avq5t9w",
+        "active": "session-1790774781303-avq5t9w",
+        "tried": 1
+      },
+      "contrast": {
+        "theme": "",
+        "rows": [
+          {
+            "text": "读取 marker.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "编辑 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 6.29,
+              "fg": "oklch(0.5042 0.1648 27.84)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "编辑 dsh-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 dsh-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 E2BMARK（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 *.txt（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 cat './marker.txt' · 退出码 1",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 printf '%s\\n' 'E2BMARK SHELL-e2b' > './s…",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 shell-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 **/*（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 PERM-SECRET（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 附件 · notes.txt",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.06,
+              "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+              "opacity": 1,
+              "bg": "rgb(255,253,244)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null,
+        "cardText": null
+      },
+      "shot": "shots/e3-contrast-light-avq5t9w.png"
+    },
+    {
+      "theme": "dark",
+      "suffix": "avq5t9w",
+      "open": {
+        "id": "session-1790774781303-avq5t9w",
+        "active": "session-1790774781303-avq5t9w",
+        "already": true
+      },
+      "contrast": {
+        "theme": "dark",
+        "rows": [
+          {
+            "text": "读取 marker.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "编辑 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "读取 edit-target.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 4.2,
+              "fg": "oklch(0.597 0.1692 28.38)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            }
+          },
+          {
+            "text": "编辑 dsh-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 dsh-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 E2BMARK（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 *.txt（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 cat './marker.txt' · 退出码 1",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 printf '%s\\n' 'E2BMARK SHELL-e2b' > './s…",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 shell-written-e2b.txt ./",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 **/*（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "搜索 PERM-SECRET（workspace）",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          },
+          {
+            "text": "读取 附件 · notes.txt",
+            "icon": {
+              "label": "icon",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": ""
+            },
+            "verb": {
+              "label": "verb",
+              "ratio": 3.13,
+              "fg": "oklab(0.50655 0.00075696 0.0067375)",
+              "opacity": 1,
+              "bg": "rgb(23,21,21)",
+              "cls": "group-hover/row:text-foreground"
+            }
+          }
+        ],
+        "cardTitle": null,
+        "cardBody": null,
+        "cardText": null
+      },
+      "shot": "shots/e3-contrast-dark-avq5t9w.png"
+    }
+  ],
+  "theme-light": {
+    "theme": "light",
+    "htmlClass": ""
+  },
+  "theme-dark": {
+    "theme": "dark",
+    "htmlClass": "dark"
+  },
+  "back": {
+    "theme": "light",
+    "htmlClass": ""
+  },
+  "summary": [
+    {
+      "theme": "light",
+      "suffix": "avq5t9w",
+      "minIcon": 3.06,
+      "iconOpacities": [1],
+      "cardTitle": null
+    },
+    {
+      "theme": "dark",
+      "suffix": "avq5t9w",
+      "minIcon": 3.13,
+      "iconOpacities": [1],
+      "cardTitle": null
+    }
+  ]
+}

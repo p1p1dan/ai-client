@@ -1,0 +1,22 @@
+{
+  "corpus": "src/shared/__tests__/fixtures/legacy-pi/v4-basic.jsonl",
+  "made": [
+    {
+      "key": "L1",
+      "title": "旧会话甲：文件一直在被写",
+      "use": "source_busy (retryable): 重试",
+      "sessionId": "session-1790690422763-lgl1",
+      "file": "home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17e-workspace--/2026-09-27T12-58-24-571Z_3af9170f-8af3-4556-99b5-815ea911c831.jsonl",
+      "bytes": 6778
+    },
+    {
+      "key": "L2",
+      "title": "旧会话乙：文件已删除",
+      "use": "source_missing (not retryable)",
+      "sessionId": "session-1790690362763-lgl2",
+      "file": "home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17e-workspace--/2026-09-27T12-58-24-571Z_79173a02-8882-4461-9fde-f5e271a7fe9c.jsonl",
+      "bytes": 6778
+    }
+  ],
+  "indexRowsBefore": 25
+}

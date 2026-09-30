@@ -1,0 +1,77 @@
+{
+  "sid": "session-1790775998082-d4r7d9m",
+  "gear": "执行 · 每次询问",
+  "rows": [
+    {
+      "section": "active",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "shownTitle": "P1-PERM-HOLD: hold at the gate",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "等待审批",
+      "markerBox": 6,
+      "badges": [
+        {
+          "text": "1",
+          "h": 16,
+          "fontSize": "10px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "shownTitle": "P1-PERM-HOLD: hold at the gate",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "等待审批",
+      "markerBox": 6,
+      "badges": [
+        {
+          "text": "1",
+          "h": 16,
+          "fontSize": "10px",
+          "size": null
+        }
+      ],
+      "age": "now",
+      "h": 28
+    }
+  ],
+  "shot": "shots/e1-waiting-approval-dot.png",
+  "stop": true,
+  "settled": "idle",
+  "rowsAfter": [
+    {
+      "section": "active",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "shownTitle": "P1-PERM-HOLD: hold at the gate",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "shownTitle": "P1-PERM-HOLD: hold at the gate",
+      "suffix": null,
+      "titleTruncated": true,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    }
+  ]
+}

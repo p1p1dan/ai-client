@@ -1,0 +1,69 @@
+{
+  "made": {
+    "key": "L2",
+    "title": "旧会话乙：文件已删除",
+    "use": "source_missing (not retryable)",
+    "sessionId": "session-1790690362763-lgl2",
+    "file": "home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17e-workspace--/2026-09-27T12-58-24-571Z_79173a02-8882-4461-9fde-f5e271a7fe9c.jsonl",
+    "bytes": 6778
+  },
+  "opened": {
+    "id": "session-1790690362763-lgl2",
+    "active": "session-1790690362763-lgl2",
+    "tried": 1
+  },
+  "preview": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用",
+  "deleted": true,
+  "send": {
+    "t0": 1790777082363,
+    "migratingShot": null,
+    "trace": [
+      {
+        "dt": 298,
+        "composerTop": 772,
+        "notice": [
+          {
+            "role": "alert",
+            "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 保存这个对话的文件已经不在磁盘上。 | 错误码：read/source_missing | 要继续工作请新建一个对话；这个对话会原样保留，仍然可以查看。 | 详情",
+            "buttons": ["详情"],
+            "top": 617,
+            "bottom": 810,
+            "inView": true,
+            "gapToComposer": -38
+          }
+        ],
+        "composer": {
+          "value": "E2A missing: 旧会话继续。",
+          "placeholder": "发送即可继续，这个对话会先迁移到当前引擎"
+        }
+      }
+    ]
+  },
+  "card": {
+    "composerTop": 772,
+    "notice": [
+      {
+        "role": "alert",
+        "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 保存这个对话的文件已经不在磁盘上。 | 错误码：read/source_missing | 要继续工作请新建一个对话；这个对话会原样保留，仍然可以查看。 | 详情",
+        "buttons": ["详情"],
+        "top": 617,
+        "bottom": 810,
+        "inView": true,
+        "gapToComposer": -38
+      }
+    ],
+    "composer": {
+      "value": "E2A missing: 旧会话继续。",
+      "placeholder": "发送即可继续，这个对话会先迁移到当前引擎"
+    }
+  },
+  "shotCard": "shots/e2a-e4-migration-missing-failure-card-no-scroll.png",
+  "row": {
+    "id": "session-1790690362763-lgl2",
+    "title": "旧会话乙：文件已删除",
+    "status": "idle",
+    "updatedAt": 1790513904636,
+    "hostBound": false,
+    "messages": 8
+  }
+}

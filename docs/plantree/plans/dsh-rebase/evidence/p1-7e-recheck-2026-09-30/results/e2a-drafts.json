@@ -1,0 +1,47 @@
+{
+  "a": {
+    "id": "session-1790774781303-avq5t9w",
+    "active": "session-1790774781303-avq5t9w",
+    "already": true
+  },
+  "paste": {
+    "defaultPrevented": true
+  },
+  "composerA": {
+    "value": "E2A-DRAFT 只属于 A 的草稿",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": ["移除 notes.txt"]
+  },
+  "shotA": "shots/e2a-drafts-1-typed-in-A.png",
+  "b": {
+    "id": "session-1790775266739-18zlgmc",
+    "active": "session-1790775266739-18zlgmc",
+    "tried": 2
+  },
+  "composerB": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "shotB": "shots/e2a-drafts-2-B-is-empty.png",
+  "back": {
+    "id": "session-1790774781303-avq5t9w",
+    "active": "session-1790774781303-avq5t9w",
+    "tried": 1
+  },
+  "composerA2": {
+    "value": "E2A-DRAFT 只属于 A 的草稿",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": ["移除 notes.txt"]
+  },
+  "shotA2": "shots/e2a-drafts-3-back-in-A.png",
+  "composerCleared": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  }
+}

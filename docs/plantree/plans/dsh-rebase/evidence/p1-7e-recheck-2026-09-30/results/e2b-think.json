@@ -1,0 +1,26 @@
+{
+  "sid": "session-1790774675726-s1lproy",
+  "t1": "idle",
+  "before": [
+    "已工作 1 秒 思考 片刻",
+    "已工作 1 秒",
+    "思考 片刻",
+    "思考",
+    "✻ 完成于 09:24 · 思考 1 秒"
+  ],
+  "shotBefore": "shots/e2b-think-1-live.png",
+  "away": "session-1790774705788-hkjisb4",
+  "back": {
+    "id": "session-1790774675726-s1lproy",
+    "active": "session-1790774675726-s1lproy",
+    "tried": 1
+  },
+  "after": [
+    "已工作 1 秒 思考 片刻",
+    "已工作 1 秒",
+    "思考 片刻",
+    "思考",
+    "✻ 完成于 09:24 · 思考 1 秒"
+  ],
+  "shotAfter": "shots/e2b-think-2-after-new-and-back.png"
+}

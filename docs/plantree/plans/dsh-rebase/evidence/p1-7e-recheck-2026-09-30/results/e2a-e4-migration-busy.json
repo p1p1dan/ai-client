@@ -1,0 +1,140 @@
+{
+  "made": {
+    "key": "L1",
+    "title": "旧会话甲：文件一直在被写",
+    "use": "source_busy (retryable): 重试",
+    "sessionId": "session-1790690422763-lgl1",
+    "file": "home/.pilab/jyw-ai-client-dev/pi-agent/sessions/--tmp-aiclient-p17e-workspace--/2026-09-27T12-58-24-571Z_3af9170f-8af3-4556-99b5-815ea911c831.jsonl",
+    "bytes": 6778
+  },
+  "opened": {
+    "id": "session-1790690422763-lgl1",
+    "active": "session-1790690422763-lgl1",
+    "tried": 1
+  },
+  "preview": "What do the notes say?\n已工作 1 秒\n最终输出\nThe notes say alpha and beta.\n✻ 完成于 08:58 · 1 次工具调用\npixel.png\nWhat is in this picture?\n已工作 1 秒\n最终输出\nA single red pixel.\n✻ 完成于 08:58\nWrite a short summary file.\n已工作 1 秒\n最终输出\nWrote out/summary.md.\n✻ 完成于 08:58 · 1 次工具调用",
+  "toucherPids": [707625, 707626, 707627],
+  "send": {
+    "t0": 1790777015510,
+    "migratingShot": "shots/e2a-e4-migration-busy-migrating.png",
+    "trace": [
+      {
+        "dt": 162,
+        "composerTop": 772,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "buttons": [],
+            "top": 784,
+            "bottom": 853,
+            "inView": false,
+            "gapToComposer": -81
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…"
+        }
+      },
+      {
+        "dt": 602,
+        "composerTop": 772,
+        "notice": [
+          {
+            "role": "status",
+            "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+            "buttons": [],
+            "top": 695,
+            "bottom": 764,
+            "inView": true,
+            "gapToComposer": 8
+          }
+        ],
+        "composer": {
+          "value": "",
+          "placeholder": "正在把这个对话迁移到当前引擎…"
+        }
+      },
+      {
+        "dt": 4565,
+        "composerTop": 772,
+        "notice": [
+          {
+            "role": "alert",
+            "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | 重试",
+            "buttons": ["详情", "重试"],
+            "top": 571,
+            "bottom": 764,
+            "inView": true,
+            "gapToComposer": 8
+          }
+        ],
+        "composer": {
+          "value": "E2A busy: 旧会话继续。",
+          "placeholder": "发送即可继续，这个对话会先迁移到当前引擎"
+        }
+      }
+    ]
+  },
+  "card": {
+    "composerTop": 772,
+    "notice": [
+      {
+        "role": "alert",
+        "text": "这个对话没能迁移到当前引擎 | 旧版本的对话会在第一次继续时迁移到当前引擎。这个对话没能迁移，所以没有打开。它仍然可以查看，原文件没有任何改动。 | 当时有其他程序正在写入它的文件。 | 错误码：read/source_busy | 点「重试」或再发一次消息，都会重新尝试迁移。 | 详情 | 重试",
+        "buttons": ["详情", "重试"],
+        "top": 571,
+        "bottom": 764,
+        "inView": true,
+        "gapToComposer": 8
+      }
+    ],
+    "composer": {
+      "value": "E2A busy: 旧会话继续。",
+      "placeholder": "发送即可继续，这个对话会先迁移到当前引擎"
+    }
+  },
+  "shotCard": "shots/e2a-e4-migration-busy-failure-card-no-scroll.png",
+  "touches": 5807835,
+  "retry": "重试",
+  "retryTrace": [
+    {
+      "dt": 2,
+      "composerTop": 772,
+      "notice": [
+        {
+          "role": "status",
+          "text": "正在把这个对话迁移到当前引擎… | 旧版本的对话在第一次继续时迁移，只迁移一次。原文件不会被改动。",
+          "buttons": [],
+          "top": 695,
+          "bottom": 764,
+          "inView": true,
+          "gapToComposer": 8
+        }
+      ],
+      "composer": {
+        "value": "E2A busy: 旧会话继续。",
+        "placeholder": "正在把这个对话迁移到当前引擎…"
+      }
+    },
+    {
+      "dt": 528,
+      "composerTop": 772,
+      "notice": [],
+      "composer": {
+        "value": "E2A busy: 旧会话继续。",
+        "placeholder": "继续输入…"
+      }
+    }
+  ],
+  "shotAfterRetry": "shots/e2a-e4-migration-busy-after-retry.png",
+  "row": {
+    "id": "session-1790690422763-lgl1",
+    "title": "旧会话甲：文件一直在被写",
+    "status": "idle",
+    "updatedAt": 1790513904636,
+    "hostBound": true,
+    "messages": 8
+  }
+}

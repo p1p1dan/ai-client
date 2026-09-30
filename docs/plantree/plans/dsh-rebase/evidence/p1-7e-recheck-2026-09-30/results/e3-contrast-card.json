@@ -1,0 +1,52 @@
+{
+  "sid": "session-1790775352596-1zhdgs3",
+  "card": true,
+  "theme-light": {
+    "theme": "light",
+    "htmlClass": ""
+  },
+  "light": {
+    "cardTitle": {
+      "label": "card title",
+      "ratio": 16.08,
+      "fg": "oklch(0.1696 0.0017 17.32)",
+      "opacity": 1,
+      "bg": "rgb(247,233,224)",
+      "cls": "text-foreground"
+    },
+    "cardBody": {
+      "label": "card body",
+      "ratio": 6.17,
+      "fg": "oklch(0.4531 0.005 91.5)",
+      "opacity": 1,
+      "bg": "rgb(247,233,224)",
+      "cls": "text-muted-foreground"
+    },
+    "cardText": "公司网关中断了这次回复\n\n公司网关在模型开始回答之前中断了这次回复。\n\n502 {\"error\":{\"type\":\"stream_gate_precommit\",\"reason\":\"prebuffer_overflow\",\"family\":\"anthropic\",\"message\":\"P1-GATE: the fake gateway gated this reply\"}}\n\n重试同一请求通常还会"
+  },
+  "shot-light": "shots/e3-contrast-card-title-light.png",
+  "theme-dark": {
+    "theme": "dark",
+    "htmlClass": "dark"
+  },
+  "dark": {
+    "cardTitle": {
+      "label": "card title",
+      "ratio": 10.4,
+      "fg": "oklch(0.8463 0.0137 102.05)",
+      "opacity": 1,
+      "bg": "rgb(41,27,26)",
+      "cls": "text-foreground"
+    },
+    "cardBody": {
+      "label": "card body",
+      "ratio": 6.12,
+      "fg": "oklch(0.6956 0.0103 93.62)",
+      "opacity": 1,
+      "bg": "rgb(41,27,26)",
+      "cls": "text-muted-foreground"
+    },
+    "cardText": "公司网关中断了这次回复\n\n公司网关在模型开始回答之前中断了这次回复。\n\n502 {\"error\":{\"type\":\"stream_gate_precommit\",\"reason\":\"prebuffer_overflow\",\"family\":\"anthropic\",\"message\":\"P1-GATE: the fake gateway gated this reply\"}}\n\n重试同一请求通常还会"
+  },
+  "shot-dark": "shots/e3-contrast-card-title-dark.png"
+}

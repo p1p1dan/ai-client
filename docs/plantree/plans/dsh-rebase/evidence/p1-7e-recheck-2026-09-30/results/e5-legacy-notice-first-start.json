@@ -1,0 +1,94 @@
+{
+  "tag": "e5-legacy-notice-first-start",
+  "seenBefore": {
+    "dshLegacyAssetNoticeSeen": null
+  },
+  "language": "zh",
+  "entered": null,
+  "otherDialogs": [
+    {
+      "dt": 487,
+      "title": "公告",
+      "closedWith": "知道了"
+    }
+  ],
+  "buttonsDom": [
+    {
+      "text": "打开 Agent 目录",
+      "textTransform": "none",
+      "cls": "normal-case"
+    },
+    {
+      "text": "知道了",
+      "textTransform": "lowercase",
+      "cls": "lowercase"
+    }
+  ],
+  "shot": "shots/e5-legacy-notice-first-start-notice.png",
+  "closed": "知道了",
+  "noticeTexts": [
+    {
+      "dt": 1353,
+      "text": "以下内容在新版中不再生效\n\n新版改用了新的对话引擎。下面这些内容在本机找到了，但新版不会再加载。这里只做列出，没有修改或删除任何文件，装回旧版仍可继续使用。\n\n自定义子代理\n\n子代理定义文件不再加载。对话改用内置的子代理，始终可用。\n\nx-reviewer\n/tmp/aiclient-p17e-h1/home/.agents/subagents/x.md\n提示词模板\n\n模板不再展开。想继续使用的，请改写成技能：存为 /tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。\n\n/review\n/tmp/aiclient-p17e-h1/workspace/.pi/prompts/review.md\n/ship\n/tmp/aiclient-p17e-h1/workspace/.pi/prompts/ship.md\n用户层指令文件\n\n旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 /tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md。\n\n/tmp/aiclient-p17e-h1/home/.pilab/AGENTS.md\nMCP 服务\n\n新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。\n\ndemo-files, demo-web\n/tmp/aiclient-p17e-h1/workspace/.pi/mcp.json\n不会加载的技能\n\n技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。\n\nBad_Skill\nname 不是小写字母、数字和短横线\n/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md\nlegacy-skill\n所在目录新版不扫描\n/tmp/aiclient-p17e-h1/workspace/.pi/skills/legacy-skill/SKILL.md\n子代理委派\n\n你曾关闭子代理委派。新版的子代理始终可用。\n\n之后可以在“设置 > 扩展”里再次查看这份清单。\n\n打开 Agent 目录\n知道了",
+      "buttons": ["打开 Agent 目录", "知道了"]
+    }
+  ],
+  "notice": {
+    "role": "dialog",
+    "text": "以下内容在新版中不再生效\n\n新版改用了新的对话引擎。下面这些内容在本机找到了，但新版不会再加载。这里只做列出，没有修改或删除任何文件，装回旧版仍可继续使用。\n\n自定义子代理\n\n子代理定义文件不再加载。对话改用内置的子代理，始终可用。\n\nx-reviewer\n/tmp/aiclient-p17e-h1/home/.agents/subagents/x.md\n提示词模板\n\n模板不再展开。想继续使用的，请改写成技能：存为 /tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/<name>/SKILL.md，frontmatter 里写上 name 和 description；只想由你手动触发的，再加一行 disable-model-invocation: true。之后在消息里输入 /<name> 即可使用。\n\n/review\n/tmp/aiclient-p17e-h1/workspace/.pi/prompts/review.md\n/ship\n/tmp/aiclient-p17e-h1/workspace/.pi/prompts/ship.md\n用户层指令文件\n\n旧版会把这个文件当作你的个人规则一并读取，新版不再读取。需要保留的规则请放进 /tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md。\n\n/tmp/aiclient-p17e-h1/home/.pilab/AGENTS.md\nMCP 服务\n\n新版暂不支持 MCP，这些服务不会启动。配置文件保持原样。\n\ndemo-files, demo-web\n/tmp/aiclient-p17e-h1/workspace/.pi/mcp.json\n不会加载的技能\n\n技能要放在技能目录的第一层（<name>/SKILL.md 或 <name>.md），frontmatter 里要有 description，以及只由小写字母、数字和短横线组成的 name，才会加载。\n\nBad_Skill\nname 不是小写字母、数字和短横线\n/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md\nlegacy-skill\n所在目录新版不扫描\n/tmp/aiclient-p17e-h1/workspace/.pi/skills/legacy-skill/SKILL.md\n子代理委派\n\n你曾关闭子代理委派。新版的子代理始终可用。\n\n之后可以在“设置 > 扩展”里再次查看这份清单。\n\n打开 Agent 目录\n知道了",
+    "buttons": ["打开 Agent 目录", "知道了"]
+  },
+  "captured": true,
+  "seenAfter": {
+    "dshLegacyAssetNoticeSeen": true
+  },
+  "inspect": {
+    "report": {
+      "agentDir": "/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent",
+      "instructionTarget": "/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/AGENTS.md",
+      "skillsTarget": "/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills",
+      "workspace": "/tmp/aiclient-p17e-h1/workspace",
+      "subagents": [
+        {
+          "name": "x-reviewer",
+          "path": "/tmp/aiclient-p17e-h1/home/.agents/subagents/x.md"
+        }
+      ],
+      "promptTemplates": [
+        {
+          "name": "review",
+          "path": "/tmp/aiclient-p17e-h1/workspace/.pi/prompts/review.md",
+          "scope": "project"
+        },
+        {
+          "name": "ship",
+          "path": "/tmp/aiclient-p17e-h1/workspace/.pi/prompts/ship.md",
+          "scope": "project"
+        }
+      ],
+      "instructionFile": "/tmp/aiclient-p17e-h1/home/.pilab/AGENTS.md",
+      "mcpConfigs": [
+        {
+          "path": "/tmp/aiclient-p17e-h1/workspace/.pi/mcp.json",
+          "scope": "project",
+          "servers": ["demo-files", "demo-web"],
+          "unreadable": false
+        }
+      ],
+      "skills": [
+        {
+          "name": "Bad_Skill",
+          "path": "/tmp/aiclient-p17e-h1/home/.pilab/jyw-ai-client-dev/pi-agent/skills/Bad_Skill/SKILL.md",
+          "issues": ["invalid-name"]
+        },
+        {
+          "name": "legacy-skill",
+          "path": "/tmp/aiclient-p17e-h1/workspace/.pi/skills/legacy-skill/SKILL.md",
+          "issues": ["unscanned-root"]
+        }
+      ],
+      "delegationSwitchOff": true
+    },
+    "seen": true
+  }
+}

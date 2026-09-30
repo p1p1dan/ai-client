@@ -1,0 +1,49 @@
+{
+  "dir": "/tmp/aiclient-p17e/workspace2",
+  "activeBefore": "session-1790776155528-ux3hvb6",
+  "open": true,
+  "dialog": "添加仓库\n\n添加本地仓库、从 Git 克隆，或绑定 SSH 主机上的仓库。\n\n本地\n克隆\nSSH\n仓库目录\n浏览\n\n选择计算机上的本地目录。\n\n取消\n添加",
+  "input": {
+    "x": 670,
+    "y": 345
+  },
+  "dialogFilled": {
+    "text": "添加仓库\n\n添加本地仓库、从 Git 克隆，或绑定 SSH 主机上的仓库。\n\n本地\n克隆\nSSH\n仓库目录\n浏览\n\n✓ 目录有效\n\n取消\n添加",
+    "inputs": ["/tmp/aiclient-p17e/workspace2", "/tmp/aiclient-p17e/workspace2"],
+    "buttons": ["本地", "克隆", "SSH", "", "浏览", "取消", "添加 [submit]", "Close"]
+  },
+  "shotDialog": "shots/e1-header-0-add-second-repository.png",
+  "submit": "添加",
+  "dialogAfter": null,
+  "sections": [
+    {
+      "label": "正在活动",
+      "folderOpen": null,
+      "rows": 6,
+      "toggles": [],
+      "recentToggle": null
+    },
+    {
+      "label": "最近",
+      "folderOpen": null,
+      "rows": 0,
+      "toggles": [],
+      "recentToggle": "展开最近"
+    },
+    {
+      "label": "workspace",
+      "folderOpen": true,
+      "rows": 8,
+      "toggles": ["查看更多（17）"],
+      "recentToggle": null
+    },
+    {
+      "label": "workspace2",
+      "folderOpen": true,
+      "rows": 0,
+      "toggles": [],
+      "recentToggle": null
+    }
+  ],
+  "activeAfter": "session-1790776155528-ux3hvb6"
+}

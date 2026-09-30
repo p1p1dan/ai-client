@@ -1,0 +1,66 @@
+{
+  "button": {
+    "state": "closed",
+    "disabled": false
+  },
+  "typed": true,
+  "ctrlF": {
+    "listeners": [
+      {
+        "phase": "window-capture",
+        "key": "f",
+        "target": "TEXTAREA",
+        "defaultPrevented": false
+      },
+      {
+        "capture": "f",
+        "ctrl": true
+      },
+      {
+        "phase": "window-bubble",
+        "key": "f",
+        "target": "TEXTAREA",
+        "defaultPrevented": true
+      },
+      {
+        "bubble": "f",
+        "ctrl": true
+      }
+    ],
+    "ptyEcho": "\"\"",
+    "column": {
+      "shown": true,
+      "search": [
+        {
+          "placeholder": "Search...",
+          "focused": true
+        }
+      ],
+      "focusInTerminal": true,
+      "activeElement": "INPUT.w-40 bg-transparent text-sm outline-none"
+    },
+    "bell": false
+  },
+  "shotSearch": "shots/e3-terminal-ctrl-f-search-bar.png",
+  "afterEscInSearch": {
+    "shown": true,
+    "search": [],
+    "focusInTerminal": false,
+    "activeElement": "BODY.bg-background text-foreground antialiase"
+  },
+  "esc": {
+    "ptyEcho": "\"\\u0007\"",
+    "column": {
+      "shown": true,
+      "search": [],
+      "focusInTerminal": true,
+      "activeElement": "TEXTAREA.xterm-helper-textarea"
+    },
+    "button": {
+      "state": "open",
+      "disabled": false
+    },
+    "reachedCat": false
+  },
+  "shotEsc": "(removed: cat -v never started here, see e3-terminal-esc.json)"
+}

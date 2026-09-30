@@ -1,0 +1,147 @@
+{
+  "success": {
+    "title": "E3 成功提示",
+    "type": "success",
+    "goneAt": 5788,
+    "movedAway": null,
+    "samples": [
+      {
+        "dt": 297,
+        "visible": true
+      },
+      {
+        "dt": 5788,
+        "visible": false
+      }
+    ]
+  },
+  "error": {
+    "title": "E3 错误提示",
+    "type": "error",
+    "goneAt": 10683,
+    "movedAway": null,
+    "samples": [
+      {
+        "dt": 334,
+        "visible": true
+      },
+      {
+        "dt": 10683,
+        "visible": false
+      }
+    ]
+  },
+  "hover": {
+    "title": "E3 悬停提示",
+    "type": "success",
+    "goneAt": 10373,
+    "movedAway": 9147,
+    "samples": [
+      {
+        "dt": 304,
+        "visible": true
+      },
+      {
+        "dt": 310,
+        "hovering": true
+      },
+      {
+        "dt": 603,
+        "visible": true
+      },
+      {
+        "dt": 9147,
+        "movedAway": true
+      },
+      {
+        "dt": 9446,
+        "visible": true
+      },
+      {
+        "dt": 10373,
+        "visible": false
+      }
+    ]
+  },
+  "stack": [
+    {
+      "title": "E3 叠放 5",
+      "text": "E3 叠放 5",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "rect": {
+        "x": 888,
+        "y": 718,
+        "w": 480,
+        "h": 46,
+        "bottom": 764
+      }
+    },
+    {
+      "title": "E3 叠放 4",
+      "text": "E3 叠放 4",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "rect": {
+        "x": 912,
+        "y": 706,
+        "w": 432,
+        "h": 41,
+        "bottom": 747
+      }
+    },
+    {
+      "title": "E3 叠放 3",
+      "text": "E3 叠放 3",
+      "visibility": "visible",
+      "opacity": "1",
+      "pointerEvents": "auto",
+      "rect": {
+        "x": 936,
+        "y": 694,
+        "w": 384,
+        "h": 37,
+        "bottom": 731
+      }
+    },
+    {
+      "title": "",
+      "text": "",
+      "visibility": "hidden",
+      "opacity": "0",
+      "pointerEvents": "auto",
+      "rect": {
+        "x": 960,
+        "y": 682,
+        "w": 336,
+        "h": 32,
+        "bottom": 714
+      }
+    },
+    {
+      "title": "",
+      "text": "",
+      "visibility": "hidden",
+      "opacity": "0",
+      "pointerEvents": "auto",
+      "rect": {
+        "x": 984,
+        "y": 670,
+        "w": 288,
+        "h": 28,
+        "bottom": 698
+      }
+    }
+  ],
+  "stackVisible": 3,
+  "avoid": {
+    "top": 772,
+    "bottom": 900
+  },
+  "lowestToastBottom": 764,
+  "gapAboveComposer": 8,
+  "shotStack": "shots/e3-toast-stack-of-five-three-shown.png",
+  "afterStack": []
+}

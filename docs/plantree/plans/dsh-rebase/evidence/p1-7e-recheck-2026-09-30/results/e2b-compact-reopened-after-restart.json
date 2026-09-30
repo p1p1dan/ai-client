@@ -1,0 +1,29 @@
+{
+  "open": {
+    "id": "session-1790774642024-te5357h",
+    "active": "session-1790774642024-te5357h",
+    "tried": 1
+  },
+  "work": ["已工作 3 秒", "✻ 完成于 09:24"],
+  "transcript": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n上下文摘要\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n## Current Work\n- (none)\n✻ 完成于 09:24",
+  "notes": [
+    {
+      "role": "status",
+      "text": "上下文摘要 | ## Primary Request and Intent | - P1-COMPACT: stream a paragraph, then list the workspace. | ## Current Work | - (none)",
+      "cls": "border bg-transparent dark:bg-input/32"
+    },
+    {
+      "role": "status",
+      "text": "本机",
+      "cls": ""
+    }
+  ],
+  "englishFallback": false,
+  "completedAt": true,
+  "roles": [
+    "user:text(P0-STREAM: E2B-COMPACT 先有一轮，再压缩。)",
+    "assistant:text(DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫)",
+    "system:text(Context summary\n\n## Primary Request and Intent\n- P)"
+  ],
+  "shot": "shots/e2b-compact-reopened-after-restart.png"
+}

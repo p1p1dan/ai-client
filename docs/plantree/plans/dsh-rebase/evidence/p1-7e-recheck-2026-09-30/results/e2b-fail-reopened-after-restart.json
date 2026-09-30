@@ -1,0 +1,29 @@
+{
+  "open": {
+    "id": "session-1790774568240-wdv0kip",
+    "active": "session-1790774568240-wdv0kip",
+    "tried": 1,
+    "viaViewMore": 1
+  },
+  "work": ["已工作 20 秒"],
+  "transcript": "P1-FAIL: this request fails upstream.\n已工作 20 秒\n这一轮没有完成：模型服务返回了错误，没有保存任何回复。\n500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}",
+  "notes": [
+    {
+      "role": "status",
+      "text": "这一轮没有完成：模型服务返回了错误，没有保存任何回复。 | 500 {\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"P1-FAIL: the fake upstream failed this request\"}}",
+      "cls": "border bg-transparent dark:bg-input/32"
+    },
+    {
+      "role": "status",
+      "text": "本机",
+      "cls": ""
+    }
+  ],
+  "englishFallback": false,
+  "completedAt": false,
+  "roles": [
+    "user:text(P1-FAIL: this request fails upstream.)",
+    "system:text(This turn did not finish. No reply was saved.)"
+  ],
+  "shot": "shots/e2b-fail-reopened-after-restart.png"
+}

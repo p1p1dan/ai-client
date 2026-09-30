@@ -1,0 +1,265 @@
+{
+  "sid": "session-live-1790774076953-suascfa",
+  "t1": "idle",
+  "t2": "idle",
+  "composerBefore": {
+    "value": "先打的字 E2A-TYPED",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "tree": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 4 个节点，显示 4 个\n刷新\nP0-STREAM: E2A-FIRST 第一轮。\n用户\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n助手\nP0-STREAM: E2A-SECOND 第二轮。\n用户\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n助手\n当前\n关闭",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: E2A-FIRST 第一轮。 用户",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 助手",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: E2A-SECOND 第二轮。 用户",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": false
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 助手 当前",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false
+      }
+    ]
+  },
+  "shotTree": "shots/e4-tree-dialog-labels.png",
+  "rewindIndex": 2,
+  "rewindClick": "clicked",
+  "confirm": {
+    "role": "alertdialog",
+    "text": "确认回退这个会话？\n\n当前对话会切到「P0-STREAM: E2A-SECOND 第二轮。」。之后的消息会保留为另一条分支，不会被删除。\n\n取消\n回退",
+    "buttons": ["取消", "回退"]
+  },
+  "confirmClick": "clicked",
+  "textsAfter": [
+    "user: P0-STREAM: E2A-FIRST 第一轮。",
+    "assistant: DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染"
+  ],
+  "composerAfter": {
+    "value": "先打的字 E2A-TYPED\n\nP0-STREAM: E2A-SECOND 第二轮。",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "handedBack": true,
+  "shotAfter": "shots/e2a-A3-rewind-prompt-back.png",
+  "titleBefore": "P0-STREAM: E2A-FIRST 第一轮",
+  "renameEnter": {
+    "menu": ["重命名", "结束对话", "归档"],
+    "focusHeldWholeTime": true,
+    "firstLoss": null,
+    "traceSamples": 11,
+    "traceFirst": {
+      "dt": 136,
+      "active": "INPUT:P0-STREAM: E2A-FIRST 第一轮",
+      "fields": [
+        {
+          "value": "P0-STREAM: E2A-FIRST 第一轮",
+          "focused": true
+        }
+      ]
+    },
+    "traceLast": {
+      "dt": 1648,
+      "active": "INPUT:P0-STREAM: E2A-FIRST 第一轮",
+      "fields": [
+        {
+          "value": "P0-STREAM: E2A-FIRST 第一轮",
+          "focused": true
+        }
+      ]
+    },
+    "typed": {
+      "active": "INPUT:E1 改名-回车生效",
+      "fields": [
+        {
+          "value": "E1 改名-回车生效",
+          "focused": true
+        }
+      ]
+    },
+    "finish": "enter",
+    "after": {
+      "active": "BODY",
+      "fields": []
+    }
+  },
+  "titleAfterEnter": "E1 改名-回车生效",
+  "sidebarAfterEnter": [
+    {
+      "section": "active",
+      "title": "E1 改名-回车生效",
+      "shownTitle": "E1 改名-回车生效",
+      "suffix": null,
+      "titleTruncated": false,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    },
+    {
+      "section": "folder:workspace",
+      "title": "E1 改名-回车生效",
+      "shownTitle": "E1 改名-回车生效",
+      "suffix": null,
+      "titleTruncated": false,
+      "active": true,
+      "marker": "started",
+      "markerBox": null,
+      "badges": [],
+      "age": "now",
+      "h": 28
+    }
+  ],
+  "shotRenamed": "shots/e1-rename-after-dialog-enter.png",
+  "renameEsc": {
+    "menu": ["重命名", "结束对话", "归档"],
+    "focusHeldWholeTime": true,
+    "firstLoss": null,
+    "traceSamples": 11,
+    "traceFirst": {
+      "dt": 165,
+      "active": "INPUT:E1 改名-回车生效",
+      "fields": [
+        {
+          "value": "E1 改名-回车生效",
+          "focused": true
+        }
+      ]
+    },
+    "traceLast": {
+      "dt": 1619,
+      "active": "INPUT:E1 改名-回车生效",
+      "fields": [
+        {
+          "value": "E1 改名-回车生效",
+          "focused": true
+        }
+      ]
+    },
+    "typed": {
+      "active": "INPUT:E1 这个名字不该留下",
+      "fields": [
+        {
+          "value": "E1 这个名字不该留下",
+          "focused": true
+        }
+      ]
+    },
+    "finish": "escape",
+    "after": {
+      "active": "BODY",
+      "fields": [
+        {
+          "value": "E1 这个名字不该留下",
+          "focused": false
+        }
+      ]
+    }
+  },
+  "titleAfterEsc": "E1 改名-回车生效",
+  "shotEsc": "shots/e1-rename-esc-attempt-panel-collapsed.png",
+  "tree2": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 4 个节点，显示 4 个\n刷新\nP0-STREAM: E2A-FIRST 第一轮。\n用户\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n助手\n当前\nP0-STREAM: E2A-SECOND 第二轮。\n用户\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n助手\n关闭",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: E2A-FIRST 第一轮。 用户",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 助手 当前",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false
+      },
+      {
+        "i": 2,
+        "text": "P0-STREAM: E2A-SECOND 第二轮。 用户",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false
+      },
+      {
+        "i": 3,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 助手",
+        "selected": false,
+        "rewindDisabled": false,
+        "forkDisabled": false
+      }
+    ]
+  },
+  "forkIndex": 1,
+  "forkClick": "clicked",
+  "forkId": "session-fork-8f310910-3bd4-422d-a14f-d1b3fd9a678d",
+  "forkSamples": [
+    {
+      "dt": 274,
+      "active": true,
+      "hasFirst": true,
+      "hasSecond": false,
+      "englishEmpty": false,
+      "chineseEmpty": false
+    },
+    {
+      "dt": 528,
+      "active": true,
+      "hasFirst": true,
+      "hasSecond": false,
+      "englishEmpty": false,
+      "chineseEmpty": false
+    },
+    {
+      "dt": 782,
+      "active": true,
+      "hasFirst": true,
+      "hasSecond": false,
+      "englishEmpty": false,
+      "chineseEmpty": false
+    },
+    {
+      "dt": 1037,
+      "active": true,
+      "hasFirst": true,
+      "hasSecond": false,
+      "englishEmpty": false,
+      "chineseEmpty": false
+    }
+  ],
+  "forkTranscript": "P0-STREAM: E2A-FIRST 第一轮。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n✻ 完成于 09:18",
+  "forkComposer": {
+    "value": "",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "shotFork": "shots/e2a-A4-fork-opened.png"
+}

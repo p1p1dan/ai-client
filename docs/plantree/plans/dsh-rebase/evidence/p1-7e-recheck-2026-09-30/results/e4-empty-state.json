@@ -1,0 +1,37 @@
+{
+  "sid": "session-1790774542462-uam4ww9",
+  "t1": "idle",
+  "tree": {
+    "open": "clicked",
+    "header": "会话分支 |  | 回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。",
+    "text": "会话分支\n\n回退只改变当前路径。之后的消息仍留在这棵树里，不会被删除。\n\n共 2 个节点，显示 2 个\n刷新\nP0-STREAM: E4-EMPTY 只有一轮。\n用户\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n助手\n当前\n关闭",
+    "nodes": [
+      {
+        "i": 0,
+        "text": "P0-STREAM: E4-EMPTY 只有一轮。 用户",
+        "selected": true,
+        "rewindDisabled": false,
+        "forkDisabled": true
+      },
+      {
+        "i": 1,
+        "text": "DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。 助手 当前",
+        "selected": true,
+        "rewindDisabled": true,
+        "forkDisabled": false
+      }
+    ]
+  },
+  "rewindClick": "clicked",
+  "confirmClick": "clicked",
+  "transcript": "还没有消息，发一条消息开始对话。",
+  "composer": {
+    "value": "P0-STREAM: E4-EMPTY 只有一轮。",
+    "placeholder": "继续输入…",
+    "disabled": false,
+    "chips": []
+  },
+  "emptyZh": true,
+  "emptyEn": false,
+  "shot": "shots/e4-empty-state.png"
+}

@@ -1,0 +1,28 @@
+{
+  "folder": "workspace",
+  "s0": {
+    "active": "session-1790776155528-ux3hvb6",
+    "newTitle": "在 workspace 中新建会话",
+    "folders": ["workspace open=true rows=8", "workspace2 open=true rows=0"]
+  },
+  "click1": {
+    "x": 158,
+    "y": 469
+  },
+  "s1": {
+    "active": "session-1790776155528-ux3hvb6",
+    "newTitle": "在 workspace 中新建会话",
+    "folders": ["workspace open=false rows=0", "workspace2 open=true rows=0"]
+  },
+  "shot1": "shots/e1-header-1-workspace-clicked.png",
+  "click2": {
+    "x": 158,
+    "y": 469
+  },
+  "s2": {
+    "active": "session-1790776155528-ux3hvb6",
+    "newTitle": "在 workspace 中新建会话",
+    "folders": ["workspace open=true rows=8", "workspace2 open=true rows=0"]
+  },
+  "shot2": "shots/e1-header-2-workspace-clicked-again.png"
+}

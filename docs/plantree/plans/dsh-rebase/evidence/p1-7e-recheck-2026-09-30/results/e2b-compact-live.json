@@ -1,0 +1,31 @@
+{
+  "sid": "session-1790774642024-te5357h",
+  "t1": "idle",
+  "workBefore": ["已工作 3 秒", "✻ 完成于 09:24"],
+  "secondEnter": true,
+  "samples": [
+    {
+      "dt": 4,
+      "status": "idle",
+      "summaryZh": false,
+      "summaryEn": false
+    },
+    {
+      "dt": 258,
+      "status": "idle",
+      "summaryZh": true,
+      "summaryEn": false
+    }
+  ],
+  "summaryAfterMs": 258,
+  "toasts": [],
+  "transcript": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩。\n已工作 3 秒\n最终输出\nDSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫秒送出，用来确认渲染层看到的是逐块增长的正文，而不是一次性出现的整段。\n上下文摘要\n## Primary Request and Intent\n- P1-COMPACT: stream a paragraph, then list the workspace.\n## Current Work\n- (none)\n✻ 完成于 09:24",
+  "roles": [
+    "user:text(P0-STREAM: E2B-COMPACT 先有一轮，再压缩。)",
+    "assistant:text(DSH 引擎经 aiclient-bridge 流式回复：这段文字分成二十小块，每块间隔约一百五十毫)",
+    "system:text(Context summary\n\n## Primary Request and Intent\n- P)"
+  ],
+  "workAfter": ["已工作 3 秒", "✻ 完成于 09:24"],
+  "summaryRow": null,
+  "shot": "shots/e2b-e4-compact-summary-live.png"
+}

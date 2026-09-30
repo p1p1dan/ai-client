@@ -1,0 +1,37 @@
+{
+  "title": "E1 改名-回车生效 (fork)",
+  "box": {
+    "x": 124,
+    "y": 411,
+    "rows": 2
+  },
+  "focusBefore": {
+    "active": "INPUT:E1 改名-回车生效 (fork)",
+    "fields": [
+      {
+        "value": "E1 改名-回车生效 (fork)",
+        "focused": true
+      }
+    ]
+  },
+  "keys": [
+    {
+      "phase": "window-capture",
+      "key": "Escape",
+      "target": "INPUT",
+      "defaultPrevented": false
+    }
+  ],
+  "asideWidth": 0,
+  "focusAfter": {
+    "active": "BODY",
+    "fields": [
+      {
+        "value": "E1 改名-回车生效 (fork)",
+        "focused": false
+      }
+    ]
+  },
+  "shot": "shots/e1-rename-esc-collapses-panel.png",
+  "active": "session-fork-8f310910-3bd4-422d-a14f-d1b3fd9a678d"
+}

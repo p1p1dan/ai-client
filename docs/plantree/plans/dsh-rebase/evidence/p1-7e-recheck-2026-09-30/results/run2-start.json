@@ -1,0 +1,501 @@
+{
+  "sidebar": {
+    "rows": [
+      {
+        "section": "recent",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "now",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "3m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "recent",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "now",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+        "shownTitle": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉",
+        "suffix": {
+          "text": "（1.0.x 分支）",
+          "w": 95,
+          "sw": 95,
+          "cw": 95
+        },
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "3m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "shownTitle": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "13m",
+        "h": 28
+      }
+    ],
+    "sections": [
+      {
+        "label": "最近",
+        "folderOpen": null,
+        "rows": 7,
+        "toggles": ["显示更多(21)"],
+        "recentToggle": "收起最近"
+      },
+      {
+        "label": "workspace",
+        "folderOpen": true,
+        "rows": 8,
+        "toggles": ["查看更多（20）"],
+        "recentToggle": null
+      },
+      {
+        "label": "workspace2",
+        "folderOpen": true,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": null
+      }
+    ],
+    "newTitle": "在 workspace 中新建会话"
+  },
+  "sessions": [
+    {
+      "id": "session-1790776155528-ux3hvb6",
+      "title": "这是一个很长很长的旧会话标题，用来看后缀会不会被截掉（1.0.x 分支）",
+      "status": "idle",
+      "updatedAt": 1790776662528,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776062856-lq35bz8",
+      "title": "P0-STREAM: E1 filler 6（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776067092,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776056802-4jm0khk",
+      "title": "P0-STREAM: E1 filler 5（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776061082,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776050471-7ciqaco",
+      "title": "P0-STREAM: E1 filler 4（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776054840,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776044380-bozznxw",
+      "title": "P0-STREAM: E1 filler 3（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776048618,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776037964-1xld3wx",
+      "title": "P0-STREAM: E1 filler 2（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776042311,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776031820-txeevyw",
+      "title": "P0-STREAM: E1 filler 1（把前面的对话挤出容量）",
+      "status": "idle",
+      "updatedAt": 1790776036167,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790776023491-w5r3q7v",
+      "title": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+      "status": "idle",
+      "updatedAt": 1790776028297,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775998082-d4r7d9m",
+      "title": "P1-PERM-HOLD: hold at the gate",
+      "status": "idle",
+      "updatedAt": 1790776002491,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775068559-qirvmns",
+      "title": "P1-PERM-GRANTS: echo three times",
+      "status": "idle",
+      "updatedAt": 1790775769429,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775100303-br39k5r",
+      "title": "P1-IMAGE: an image 8192 px wide",
+      "status": "idle",
+      "updatedAt": 1790775769418,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775266739-18zlgmc",
+      "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+      "status": "idle",
+      "updatedAt": 1790775769405,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775303910-yzf8w1z",
+      "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+      "status": "idle",
+      "updatedAt": 1790775769392,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775352596-1zhdgs3",
+      "title": "P1-GATE: a failure card for the contrast check",
+      "status": "idle",
+      "updatedAt": 1790775769373,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775744907-rdo7lsg",
+      "title": "P1-JOBKILL: start ticker e3-1 in the background",
+      "status": "idle",
+      "updatedAt": 1790775769323,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790775014492-j1khsnz",
+      "title": "P1-QUESTION: ask me before you start",
+      "status": "idle",
+      "updatedAt": 1790775031305,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774781303-avq5t9w",
+      "title": "P0-FS {\"dir\":\".\",\"marker\":\"E2BMARK\",\"token\":\"e2b\",\"tag\":\"e2…",
+      "status": "idle",
+      "updatedAt": 1790774815882,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774705788-hkjisb4",
+      "title": "P0-SLEEPTOOL {\"token\":\"e2b\",\"seconds\":40} run a long command",
+      "status": "idle",
+      "updatedAt": 1790774747234,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774675726-s1lproy",
+      "title": "P1-THINK: think first, then answer",
+      "status": "idle",
+      "updatedAt": 1790774678074,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774642024-te5357h",
+      "title": "P0-STREAM: E2B-COMPACT 先有一轮，再压缩",
+      "status": "idle",
+      "updatedAt": 1790774646716,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774608359-2o6378p",
+      "title": "P1-GATE: the company gateway refuses the stream",
+      "status": "idle",
+      "updatedAt": 1790774610736,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774568240-wdv0kip",
+      "title": "P1-FAIL: this request fails upstream",
+      "status": "idle",
+      "updatedAt": 1790774590427,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790774542462-uam4ww9",
+      "title": "P0-STREAM: E4-EMPTY 只有一轮",
+      "status": "idle",
+      "updatedAt": 1790774550377,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-fork-8f310910-3bd4-422d-a14f-d1b3fd9a678d",
+      "title": "E1 改名-回车生效 (fork)",
+      "status": "idle",
+      "updatedAt": 1790774356026,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-live-1790774076953-suascfa",
+      "title": "E1 改名-回车生效",
+      "status": "idle",
+      "updatedAt": 1790774348865,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790690422763-lgl1",
+      "title": "旧会话甲：文件一直在被写",
+      "status": "idle",
+      "updatedAt": 1790773222763,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-1790690362763-lgl2",
+      "title": "旧会话乙：文件已删除",
+      "status": "idle",
+      "updatedAt": 1790773162763,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    },
+    {
+      "id": "session-live-1790776866492-payfpxb",
+      "title": "New chat",
+      "status": "idle",
+      "updatedAt": 1790776866492,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    }
+  ],
+  "active": "session-live-1790776866492-payfpxb",
+  "composer": {
+    "value": "",
+    "placeholder": "输入消息…",
+    "disabled": false,
+    "chips": []
+  },
+  "storage": "false",
+  "liveAgentHostAnywhere": false,
+  "headerText": "新建对话\nworkspace · Main\n审阅\n终端\n后台任务\n子代理",
+  "bodyHead": "AI Client\n聊天\n新建\n添加仓库\n\n最近\n\n新建对话\nnow\n这是一个很长很长的旧会话标题，用来看后缀会不会被截掉\n（1.0.x 分支）\n3m\nP0-STREAM: E1 filler 6（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 5（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 4（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 3（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 2（把前面的对话挤出容量）\n13m\n显示更多 (\n21\n)\n\n仓库列表\n\nworkspace\n新建对话\nnow\n这是一个很长很长的旧会话标题，用来看后缀会不会被截掉\n（1.0.x 分支）\n3m\nP0-STREAM: E1 filler 6（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 5（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 4（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 3（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 2（把前面的对话挤出容量）\n13m\nP0-STREAM: E1 filler 1（把前面的对话挤出容量）\n13m\n查看更多（20）\nworkspa",
+  "shot": "shots/e1-run2-start.png"
+}

@@ -1,0 +1,673 @@
+{
+  "sid": "session-1790775744907-rdo7lsg",
+  "gear": "执行 · 全自动",
+  "turns": [
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 484,
+          "status": "idle"
+        },
+        {
+          "dt": 888,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 1302,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 893,
+          "card": "P1-JOBKILL: start ticker e3-1 in the background. | ✻ 工作中 · 运行中 | 运行中 | for i in $(seq 1 600); do echo tick $i; … | 权限 | 高风险 | Bash — 在工作区运行命令 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 工作目录：/tmp/aiclient-p17e/workspace | 这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确认 | 项目：/tmp/aiclient-p17e/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 seq, echo, sleep 开头的命令 · 对本次会话内的所"
+        }
+      ]
+    },
+    {
+      "settled": true,
+      "status": "idle",
+      "statuses": [
+        {
+          "dt": 438,
+          "status": "waiting_permission"
+        },
+        {
+          "dt": 861,
+          "status": "idle"
+        }
+      ],
+      "cards": [
+        {
+          "dt": 457,
+          "card": "P1-JOBKILL: start ticker e3-1 in the background. | 已工作 1 秒 | 最终输出 | P1-JOBKILL: started the ticker. | ✻ 完成于 09:42 · 1 次工具调用 | P1-JOBKILL: start ticker e3-2 in the background. | ✻ 工作中 · 运行中 | 运行中 | for i in $(seq 1 600); do echo tick $i; … | 权限 | 高风险 | Bash — 在工作区运行命令 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 工作目录：/tmp/aiclient-p17e/workspace | 这条命令含变量、命令替换或解释器，无法静态判断会碰哪些文件，所以需要你确"
+        }
+      ]
+    }
+  ],
+  "docked": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 170
+      },
+      "dragged": null,
+      "text": "后台任务 | 2 运行中 | bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止 | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+      "rows": [
+        {
+          "status": "running",
+          "text": "bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:05 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        },
+        {
+          "status": "running",
+          "text": "bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:02 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        }
+      ]
+    },
+    "agents": {
+      "rect": {
+        "x": 1048,
+        "y": 254,
+        "w": 340,
+        "h": 127
+      },
+      "dragged": null,
+      "text": "子代理 | 当前没有子代理",
+      "rows": []
+    }
+  },
+  "shotDocked": "shots/e3-drag-0-docked-two-running.png",
+  "dragJobs": {
+    "key": "jobs",
+    "from": {
+      "x": 1178,
+      "y": 92
+    },
+    "start": {
+      "x": 1048,
+      "y": 76,
+      "w": 340,
+      "h": 170
+    },
+    "steps": [
+      {
+        "step": 1,
+        "moved": {
+          "x": -47,
+          "y": 20
+        },
+        "wanted": {
+          "x": -47,
+          "y": 20
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 2,
+        "moved": {
+          "x": -95,
+          "y": 40
+        },
+        "wanted": {
+          "x": -95,
+          "y": 40
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 3,
+        "moved": {
+          "x": -142,
+          "y": 60
+        },
+        "wanted": {
+          "x": -142,
+          "y": 60
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 4,
+        "moved": {
+          "x": -190,
+          "y": 80
+        },
+        "wanted": {
+          "x": -190,
+          "y": 80
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 5,
+        "moved": {
+          "x": -237,
+          "y": 100
+        },
+        "wanted": {
+          "x": -237,
+          "y": 100
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 6,
+        "moved": {
+          "x": -285,
+          "y": 120
+        },
+        "wanted": {
+          "x": -285,
+          "y": 120
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 7,
+        "moved": {
+          "x": -332,
+          "y": 140
+        },
+        "wanted": {
+          "x": -332,
+          "y": 140
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 8,
+        "moved": {
+          "x": -380,
+          "y": 160
+        },
+        "wanted": {
+          "x": -380,
+          "y": 160
+        },
+        "dragged": "true"
+      }
+    ],
+    "end": {
+      "x": 668,
+      "y": 236,
+      "w": 340,
+      "h": 170
+    },
+    "followedEveryStep": true
+  },
+  "dragAgents": {
+    "key": "agents",
+    "from": {
+      "x": 1178,
+      "y": 92
+    },
+    "start": {
+      "x": 1048,
+      "y": 76,
+      "w": 340,
+      "h": 127
+    },
+    "steps": [
+      {
+        "step": 1,
+        "moved": {
+          "x": -37,
+          "y": 33
+        },
+        "wanted": {
+          "x": -37,
+          "y": 33
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 2,
+        "moved": {
+          "x": -75,
+          "y": 65
+        },
+        "wanted": {
+          "x": -75,
+          "y": 65
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 3,
+        "moved": {
+          "x": -112,
+          "y": 98
+        },
+        "wanted": {
+          "x": -112,
+          "y": 98
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 4,
+        "moved": {
+          "x": -150,
+          "y": 130
+        },
+        "wanted": {
+          "x": -150,
+          "y": 130
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 5,
+        "moved": {
+          "x": -187,
+          "y": 163
+        },
+        "wanted": {
+          "x": -187,
+          "y": 163
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 6,
+        "moved": {
+          "x": -225,
+          "y": 195
+        },
+        "wanted": {
+          "x": -225,
+          "y": 195
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 7,
+        "moved": {
+          "x": -262,
+          "y": 228
+        },
+        "wanted": {
+          "x": -262,
+          "y": 228
+        },
+        "dragged": "true"
+      },
+      {
+        "step": 8,
+        "moved": {
+          "x": -300,
+          "y": 260
+        },
+        "wanted": {
+          "x": -300,
+          "y": 260
+        },
+        "dragged": "true"
+      }
+    ],
+    "end": {
+      "x": 748,
+      "y": 336,
+      "w": 340,
+      "h": 127
+    },
+    "followedEveryStep": true
+  },
+  "shotDragged": "shots/e3-drag-1-both-dragged-once.png",
+  "orderBefore": [
+    "P1-JOBKILL: start ticker e3- | now | started",
+    "P1-GATE: a failure card for  | 6m | started",
+    "/goal P0-GOAL-PAUSE: run a s | 7m | started",
+    "/goal P0-GOAL-PAUSE: run a s | 7m | started",
+    "P1-IMAGE: an image 8192 px w | 10m | started",
+    "P1-PERM-GRANTS: echo three t | 11m | started",
+    "P1-QUESTION: ask me before y | 12m | ",
+    "P0-FS {\"dir\":\".\",\"marker\":\"E | 15m | "
+  ],
+  "windowBeforeKill": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 170
+      },
+      "dragged": null,
+      "text": "后台任务 | 2 运行中 | bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:12 | 运行中 | 输出 | 停止 | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:09 | 运行中 | 输出 | 停止",
+      "rows": [
+        {
+          "status": "running",
+          "text": "bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:12 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        },
+        {
+          "status": "running",
+          "text": "bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:09 | 运行中 | 输出 | 停止",
+          "buttons": ["输出", "停止"]
+        }
+      ]
+    },
+    "agents": null
+  },
+  "shotBeforeKill": "shots/e3-jobs-1-before-host-kill.png",
+  "hostsBefore": [704629],
+  "killed": 704629,
+  "killTrace": [
+    {
+      "dt": 20,
+      "hosts": 0,
+      "rows": [
+        "running | bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:13 | 运行中 | 输出 | 停止 | 输出,停止",
+        "running | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 0:10 | 运行中 | 输出 | 停止 | 输出,停止"
+      ]
+    },
+    {
+      "dt": 436,
+      "hosts": 1,
+      "rows": [
+        "lost | bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除 | 移除",
+        "lost | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除 | 移除"
+      ]
+    }
+  ],
+  "window10s": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 170
+      },
+      "dragged": null,
+      "text": "后台任务 | 0 运行中 · 2 已结束 | bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除 | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除",
+      "rows": [
+        {
+          "status": "lost",
+          "text": "bash-10 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除",
+          "buttons": ["移除"]
+        },
+        {
+          "status": "lost",
+          "text": "bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除",
+          "buttons": ["移除"]
+        }
+      ]
+    },
+    "agents": null
+  },
+  "shotLater": "shots/e3-jobs-3-lost-rows-kept-20s.png",
+  "remove": "clicked",
+  "windowAfterRemove": {
+    "layer": {
+      "x": 324,
+      "y": 68,
+      "w": 1076,
+      "h": 704
+    },
+    "jobs": {
+      "rect": {
+        "x": 1048,
+        "y": 76,
+        "w": 340,
+        "h": 118
+      },
+      "dragged": null,
+      "text": "后台任务 | 0 运行中 · 1 已结束 | bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除",
+      "rows": [
+        {
+          "status": "lost",
+          "text": "bash-11 | for i in $(seq 1 600); do echo tick $i; sleep 0.1; done | 引擎重启，任务已结束 | 移除",
+          "buttons": ["移除"]
+        }
+      ]
+    },
+    "agents": null
+  },
+  "shotRemoved": "shots/e3-jobs-4-after-remove.png",
+  "orderAfter": [
+    "P1-JOBKILL: start ticker e3- | now | started",
+    "P1-GATE: a failure card for  | 6m | started",
+    "/goal P0-GOAL-PAUSE: run a s | 7m | started",
+    "/goal P0-GOAL-PAUSE: run a s | 8m | started",
+    "P1-IMAGE: an image 8192 px w | 11m | started",
+    "P1-PERM-GRANTS: echo three t | 11m | started",
+    "P1-QUESTION: ask me before y | 12m | ",
+    "P0-FS {\"dir\":\".\",\"marker\":\"E | 15m | "
+  ],
+  "sidebarAfter": {
+    "rows": [
+      {
+        "section": "active",
+        "title": "P1-JOBKILL: start ticker e3-1 in the background",
+        "shownTitle": "P1-JOBKILL: start ticker e3-1 in the background",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": true,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "now",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P1-GATE: a failure card for the contrast check",
+        "shownTitle": "P1-GATE: a failure card for the contrast check",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "shownTitle": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "7m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "shownTitle": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "8m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P1-IMAGE: an image 8192 px wide",
+        "shownTitle": "P1-IMAGE: an image 8192 px wide",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "11m",
+        "h": 28
+      },
+      {
+        "section": "active",
+        "title": "P1-PERM-GRANTS: echo three times",
+        "shownTitle": "P1-PERM-GRANTS: echo three times",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "11m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P1-JOBKILL: start ticker e3-1 in the background",
+        "shownTitle": "P1-JOBKILL: start ticker e3-1 in the background",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": true,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "now",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P1-GATE: a failure card for the contrast check",
+        "shownTitle": "P1-GATE: a failure card for the contrast check",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "6m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "shownTitle": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "7m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "shownTitle": "/goal P0-GOAL-PAUSE: run a slow check, then finish",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "8m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P1-IMAGE: an image 8192 px wide",
+        "shownTitle": "P1-IMAGE: an image 8192 px wide",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "11m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P1-PERM-GRANTS: echo three times",
+        "shownTitle": "P1-PERM-GRANTS: echo three times",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": "started",
+        "markerBox": null,
+        "badges": [],
+        "age": "11m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P1-QUESTION: ask me before you start",
+        "shownTitle": "P1-QUESTION: ask me before you start",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "12m",
+        "h": 28
+      },
+      {
+        "section": "folder:workspace",
+        "title": "P0-FS {\"dir\":\".\",\"marker\":\"E2BMARK\",\"token\":\"e2b\",\"tag\":\"e2…",
+        "shownTitle": "P0-FS {\"dir\":\".\",\"marker\":\"E2BMARK\",\"token\":\"e2b\",\"tag\":\"e2…",
+        "suffix": null,
+        "titleTruncated": true,
+        "active": false,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "15m",
+        "h": 28
+      }
+    ],
+    "sections": [
+      {
+        "label": "正在活动",
+        "folderOpen": null,
+        "rows": 6,
+        "toggles": [],
+        "recentToggle": null
+      },
+      {
+        "label": "最近",
+        "folderOpen": null,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": "展开最近"
+      },
+      {
+        "label": "workspace",
+        "folderOpen": true,
+        "rows": 8,
+        "toggles": ["查看更多（8）"],
+        "recentToggle": null
+      }
+    ],
+    "newTitle": "在 workspace 中新建会话"
+  },
+  "shotSidebarAfter": "shots/e1-sidebar-after-host-kill.png",
+  "orphanTickers": []
+}

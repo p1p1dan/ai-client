@@ -1,0 +1,32 @@
+{
+  "steps": [
+    {
+      "name": "1-readme-open",
+      "terminal": false,
+      "editor": true,
+      "editorTabTexts": ["README.md"],
+      "terminalButton": "hidden",
+      "shot": "shots/e3-reveal-1-readme-open.png"
+    },
+    {
+      "name": "2-terminal-in-front",
+      "terminal": true,
+      "editor": false,
+      "editorTabTexts": [],
+      "terminalButton": "open",
+      "shot": "shots/e3-reveal-2-terminal-in-front.png"
+    },
+    {
+      "name": "3-readme-clicked-again",
+      "terminal": false,
+      "editor": true,
+      "editorTabTexts": ["README.md"],
+      "terminalButton": "hidden",
+      "shot": "shots/e3-reveal-3-readme-clicked-again.png"
+    }
+  ],
+  "fileRail": true,
+  "click1": true,
+  "click2": true,
+  "chatRail": true
+}

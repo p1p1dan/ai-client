@@ -1,0 +1,59 @@
+{
+  "sidebar": {
+    "rows": [
+      {
+        "section": "folder:workspace",
+        "title": "新建对话",
+        "shownTitle": "新建对话",
+        "suffix": null,
+        "titleTruncated": false,
+        "active": true,
+        "marker": null,
+        "markerBox": null,
+        "badges": [],
+        "age": "now",
+        "h": 28
+      }
+    ],
+    "sections": [
+      {
+        "label": "最近",
+        "folderOpen": null,
+        "rows": 0,
+        "toggles": [],
+        "recentToggle": "展开最近"
+      },
+      {
+        "label": "workspace",
+        "folderOpen": true,
+        "rows": 1,
+        "toggles": [],
+        "recentToggle": null
+      }
+    ],
+    "newTitle": "在 workspace 中新建会话"
+  },
+  "sessions": [
+    {
+      "id": "session-live-1790774076953-suascfa",
+      "title": "New chat",
+      "status": "idle",
+      "updatedAt": 1790774076953,
+      "hostBound": false,
+      "workspaceId": "ws:main:/tmp/aiclient-p17e/workspace",
+      "messages": 0
+    }
+  ],
+  "active": "session-live-1790774076953-suascfa",
+  "composer": {
+    "value": "",
+    "placeholder": "输入消息…",
+    "disabled": false,
+    "chips": []
+  },
+  "storage": null,
+  "liveAgentHostAnywhere": false,
+  "headerText": "新建对话\nworkspace · Main\n审阅\n终端\n后台任务\n子代理",
+  "bodyHead": "AI Client\n聊天\n新建\n添加仓库\n\n最近\n\n仓库列表\n\nworkspace\n新建对话\nnow\n未登录\n新建对话\nworkspace · Main\n审阅\n终端\n后台任务\n子代理\n开始对话\n\nAI 会在 workspace 里干活，直接说你想做什么。\n\nworkspace\n本机\n执行 · 每次询问\n自动",
+  "shot": "shots/e1-first-start.png"
+}

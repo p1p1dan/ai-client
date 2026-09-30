@@ -1,0 +1,426 @@
+{
+  "sid": "session-1790774781303-avq5t9w",
+  "rows": [
+    "lucide-file-text |  | 读取 marker.txt ./",
+    "lucide-file-text |  | 读取 edit-target.txt ./",
+    "lucide-pencil-line |  | 编辑 edit-target.txt ./",
+    "lucide-file-text |  | 读取 edit-target.txt ./",
+    "lucide-pencil-line |  | 编辑 dsh-written-e2b.txt ./",
+    "lucide-file-text |  | 读取 dsh-written-e2b.txt ./",
+    "lucide-search |  | 搜索 E2BMARK（workspace）",
+    "lucide-search |  | 搜索 *.txt（workspace）",
+    "lucide-square-terminal |  | 终端 cat './marker.txt' · 退出码 1",
+    "lucide-square-terminal |  | 终端 printf '%s\\n' 'E2BMARK SHELL-e2b' > './s…",
+    "lucide-square-terminal |  | 终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+    "lucide-file-text |  | 读取 shell-written-e2b.txt ./",
+    "lucide-search |  | 搜索 **/*（workspace）",
+    "lucide-search |  | 搜索 PERM-SECRET（workspace）",
+    "lucide-file-text |  | 读取 附件 · notes.txt"
+  ],
+  "calls": [
+    {
+      "id": "toolu_e71cf259-83ff-44bb-a333-20345ec3afbd",
+      "name": "read",
+      "cmd": "./marker.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_088c9c32-4c93-4d0c-a406-a538cf4399ec",
+      "name": "read",
+      "cmd": "./edit-target.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_342408f7-13ad-4b83-81c7-b4c74804f618",
+      "name": "edit",
+      "cmd": "./edit-target.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_6b527802-045f-42e1-8a7b-c140f1172b55",
+      "name": "read",
+      "cmd": "./edit-target.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_7e4d4062-ee5f-421d-89a9-c04f627a6748",
+      "name": "write",
+      "cmd": "./dsh-written-e2b.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_c329892d-db40-4068-876b-65e9295d3d25",
+      "name": "read",
+      "cmd": "./dsh-written-e2b.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_ba314e55-d7ca-4560-9752-ce5e99fab487",
+      "name": "grep",
+      "cmd": "E2BMARK",
+      "settled": true
+    },
+    {
+      "id": "toolu_a1c19b3f-dd26-4f1a-b405-d76c5364af55",
+      "name": "glob",
+      "cmd": "*.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_ad9eb380-c07c-4393-b59c-28ba24eb01cb",
+      "name": "bash",
+      "cmd": "cat './marker.txt'",
+      "settled": true
+    },
+    {
+      "id": "toolu_f8ab27cc-a6e0-4975-a942-3c261c203d21",
+      "name": "bash",
+      "cmd": "printf '%s\\n' 'E2BMARK SHELL-e2b' > './shell-written-e2b.txt'",
+      "settled": true
+    },
+    {
+      "id": "toolu_92a67207-7922-48c5-a1e8-53f5542e43a7",
+      "name": "bash",
+      "cmd": "for i in $(seq 1 4000); do echo \"spill-line $i e2b\"; done",
+      "settled": true
+    },
+    {
+      "id": "toolu_7b6af2d5-45f3-4b18-8ec1-a7de171154c6",
+      "name": "read",
+      "cmd": "./shell-written-e2b.txt",
+      "settled": true
+    },
+    {
+      "id": "toolu_a0fe50cf-9dfc-4c74-b384-2c245e310827",
+      "name": "glob",
+      "cmd": "**/*",
+      "settled": true
+    },
+    {
+      "id": "toolu_d6edf500-5dd4-4dba-b0dd-5758126b63e2",
+      "name": "grep",
+      "cmd": "PERM-SECRET",
+      "settled": true
+    },
+    {
+      "id": "toolu_a7d3141d-2f1e-43a1-99c9-c6d0ff175ca4",
+      "name": "read",
+      "cmd": "/tmp/aiclient-p17e/home/.pilab/jyw-ai-client-dev/dsh-home/attachments/v1/files/4",
+      "settled": true
+    }
+  ],
+  "openSpill": true,
+  "spillBody": {
+    "head": "终端\nfor i in $(seq 1 4000); do echo \"spill-l…\n· 已允许\n# Print a large output\nfor i in $(seq 1 4000); do echo \"spill-line $i e2b\"; done\n\n已省略前面的输出\n\nspill-line 791 e2b\nspill-line 792 e2b\nspill-line 793 e2b\nspill-line 794 e2b\nspill-line 795 e2b\nspill-line 796 e2b\nspill-line 797 e2b\nspill-line 798 e2b\nspill-line 799 e2b\nspill-line 800 e2b\nspill-line 801 e2b\nspill-line 802 e2b\nspill-line 803 e2b\nspill-line 804 e2b\nspill-line 805 e2b\nspill-line 806 e2b\nspill-line 807 e2b\nspill-line 808 e2b\nspill-line 809 e2b\nspill-line 810 e2b\nspill-line 811 e2b\nspill-line 812 e2b\nspill-line 813 e2b\nspill-line 814 e2b\nspill-line 815 e2b\nspill-line 816 e2b\nspill-line 817 e2b\nspill-line 818 e2b\nspill-line 819 e2b\nspill-",
+    "tail": "b\n\n[output truncated; full output: /tmp/dsh-subprocess-S4Q5DK/dsh-subprocess-704629-1-257978ab864f-stdout.log]\n\n(Omitted 14376 bytes. Full formatted result stored at: /tmp/dsh-spill-xz6ML9/session-5c932fe2b65e/bf66a4b147cb-bash.txt. Use read with offset/limit, or grep this path to search within it.)",
+    "length": 50065
+  },
+  "spillFirstLines": [
+    "# Print a large output ⏎ for i in $(seq 1 4000); do echo \"spill-line $i e2b\"; done",
+    "已省略前面的输出",
+    "spill-line 791 e2b ⏎ spill-line 792 e2b ⏎ spill-line 793 e2b"
+  ],
+  "shotSpill": "shots/e2b-large-output-head.png",
+  "globRows": [
+    "lucide-search |  | 搜索 E2BMARK（workspace）",
+    "lucide-search |  | 搜索 *.txt（workspace）",
+    "lucide-search |  | 搜索 **/*（workspace）",
+    "lucide-search |  | 搜索 PERM-SECRET（workspace）"
+  ],
+  "attachmentRows": ["lucide-file-text |  | 读取 附件 · notes.txt"],
+  "shotGlob": "shots/e3-glob-and-attachment-rows.png",
+  "contrastLight": {
+    "theme": "",
+    "rows": [
+      {
+        "text": "读取 marker.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        }
+      },
+      {
+        "text": "读取 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        }
+      },
+      {
+        "text": "编辑 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        }
+      },
+      {
+        "text": "读取 edit-target.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 6.29,
+          "fg": "oklch(0.5042 0.1648 27.84)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        }
+      },
+      {
+        "text": "编辑 dsh-written-e2b.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "读取 dsh-written-e2b.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "搜索 E2BMARK（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "搜索 *.txt（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "终端 cat './marker.txt' · 退出码 1",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "终端 printf '%s\\n' 'E2BMARK SHELL-e2b' > './s…",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "终端 for i in $(seq 1 4000); do echo \"spill-l… · 已允许",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "读取 shell-written-e2b.txt ./",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "搜索 **/*（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "搜索 PERM-SECRET（workspace）",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      },
+      {
+        "text": "读取 附件 · notes.txt",
+        "icon": {
+          "label": "icon",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": ""
+        },
+        "verb": {
+          "label": "verb",
+          "ratio": 3.06,
+          "fg": "oklab(0.6583 -0.000591029 0.00763034)",
+          "opacity": 1,
+          "bg": "rgb(255,253,244)",
+          "cls": "group-hover/row:text-foreground"
+        }
+      }
+    ],
+    "cardTitle": null,
+    "cardBody": null,
+    "cardText": null
+  },
+  "transcript": "spill-line 3959 e2b\nspill-line 3960 e2b\nspill-line 3961 e2b\nspill-line 3962 e2b\nspill-line 3963 e2b\nspill-line 3964 e2b\nspill-line 3965 e2b\nspill-line 3966 e2b\nspill-line 3967 e2b\nspill-line 3968 e2b\nspill-line 3969 e2b\nspill-line 3970 e2b\nspill-line 3971 e2b\nspill-line 3972 e2b\nspill-line 3973 e2b\nspill-line 3974 e2b\nspill-line 3975 e2b\nspill-line 3976 e2b\nspill-line 3977 e2b\nspill-line 3978 e2b\nspill-line 3979 e2b\nspill-line 3980 e2b\nspill-line 3981 e2b\nspill-line 3982 e2b\nspill-line 3983 e2b\nspill-line 3984 e2b\nspill-line 3985 e2b\nspill-line 3986 e2b\nspill-line 3987 e2b\nspill-line 3988 e2b\nspill-line 3989 e2b\nspill-line 3990 e2b\nspill-line 3991 e2b\nspill-line 3992 e2b\nspill-line 3993 e2b\nspill-line 3994 e2b\nspill-line 3995 e2b\nspill-line 3996 e2b\nspill-line 3997 e2b\nspill-line 3998 e2b\nspill-line 3999 e2b\nspill-line 4000 e2b\n[output truncated; full output: /tmp/dsh-subprocess-S4Q5DK/dsh-subprocess-704629-1-257978ab864f-stdout.log]\n(Omitted 14376 bytes. Full formatted result stored at: /tmp/dsh-spill-xz6ML9/session-5c932fe2b65e/bf66a4b147cb-bash.txt. Use read with offset/limit, or grep this path to search within it.)\n读取\nshell-written-e2b.txt ./\n最终输出\nP0-FS e2b finished.\n✻ 完成于 09:26 · 12 次工具调用\nP1-PERM-SEARCH: glob and grep the workspace.\n已工作 1 秒\n搜索\n**/*（workspace）\n搜索\nPERM-SECRET（workspace）\n最终输出\nP1-PERM-SEARCH finished.\n✻ 完成于 09:26 · 2 次工具调用\nnotes.txt\nP1-FILEREAD: read the attached notes.\n已工作 1 秒\n读取\n附件 · notes.txt\n最终输出\nP1-FILEREAD read: FILE-MARKER-NOTES.\n✻ 完成于 09:26 · 1 次工具调用"
+}

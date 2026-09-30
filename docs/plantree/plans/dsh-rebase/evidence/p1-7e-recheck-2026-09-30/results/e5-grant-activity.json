@@ -1,0 +1,69 @@
+{
+  "sid": "session-1790775068559-qirvmns",
+  "gear": "执行 · 每次询问",
+  "cards": [
+    {
+      "dt": 832,
+      "n": 1,
+      "card": "权限 | 高风险 | Bash — 在工作区运行命令 | echo perm-grant-a | 工作目录：/tmp/aiclient-p17e/workspace | 项目：/tmp/aiclient-p17e/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+      "answered": "本会话内允许"
+    },
+    {
+      "dt": 1739,
+      "n": 2,
+      "card": "权限 | 高风险 | Bash — 在工作区运行命令 | echo perm-grant-c && rm -f perm-grant-missing.txt | 工作目录：/tmp/aiclient-p17e/workspace | 项目：/tmp/aiclient-p17e/workspace | 若 120 秒内未响应将自动拒绝 | 直接允许 | 本会话内允许 | 直接拒绝 | 「本会话内允许」会记住以 echo, rm 开头的命令 · 对本次会话内的所有代理生效，含子代理",
+      "answered": "直接允许"
+    }
+  ],
+  "calls": [
+    {
+      "id": "toolu_f726bfe3-d8bd-4f7e-ba32-25bb633532bf",
+      "name": "bash",
+      "cmd": "echo perm-grant-a",
+      "settled": true
+    },
+    {
+      "id": "toolu_f30d85df-e70f-4f18-8aa3-7c0806a06b8b",
+      "name": "bash",
+      "cmd": "echo perm-grant-b",
+      "settled": true
+    },
+    {
+      "id": "toolu_6c302d0b-f09e-4385-9a80-e90be3bae443",
+      "name": "bash",
+      "cmd": "echo perm-grant-c && rm -f perm-grant-missing.txt",
+      "settled": true
+    }
+  ],
+  "activityRows": [
+    "已工作 2 秒 终端 echo perm-grant-a · 本会话内已允许 终端 echo perm-grant-b 已允许 bash echo perm-grant-b · 本会话已授权 终端 echo perm-grant-c && rm -f perm-grant-mi… · 已允许",
+    "终端 echo perm-grant-a · 本会话内已允许 终端 echo perm-grant-b 已允许 bash echo perm-grant-b · 本会话已授权 终端 echo perm-grant-c && rm -f perm-grant-mi… · 已允许",
+    "终端 echo perm-grant-a · 本会话内已允许 终端 echo perm-grant-b 已允许 bash echo perm-grant-b · 本会话已授权 终端 echo perm-grant-c && rm -f perm-grant-mi… · 已允许",
+    "已允许 bash echo perm-grant-b · 本会话已授权"
+  ],
+  "storeBlocks": [
+    {
+      "id": "perm-activity-toolu_f30d85df-e70f-4f18-8aa3-7c0806a06b8b",
+      "type": "permission_activity",
+      "permissionActivity": {
+        "phase": "decision",
+        "requestId": "toolu_f30d85df-e70f-4f18-8aa3-7c0806a06b8b",
+        "surface": "bash",
+        "value": "echo perm-grant-b",
+        "result": "allow",
+        "resolution": "session_grant"
+      }
+    }
+  ],
+  "transcript": "P1-PERM-GRANTS: echo three times.\n已工作 2 秒\n终端\necho perm-grant-a\n· 本会话内已允许\n终端\necho perm-grant-b\n已允许 bash echo perm-grant-b · 本会话已授权\n终端\necho perm-grant-c && rm -f perm-grant-mi…\n· 已允许\n最终输出\nP1-PERM-GRANTS finished.\n✻ 完成于 09:31 · 3 次工具调用",
+  "shotLight": "shots/e5-grant-activity-light.png",
+  "dark": {
+    "theme": "dark",
+    "htmlClass": "dark"
+  },
+  "shotDark": "shots/e5-grant-activity-dark.png",
+  "light": {
+    "theme": "light",
+    "htmlClass": ""
+  }
+}

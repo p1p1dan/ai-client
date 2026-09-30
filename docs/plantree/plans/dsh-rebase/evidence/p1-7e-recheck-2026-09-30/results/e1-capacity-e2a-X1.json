@@ -1,0 +1,274 @@
+{
+  "sid": "session-1790776023491-w5r3q7v",
+  "steps": [
+    {
+      "i": 1,
+      "sid": "session-1790776031820-txeevyw",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，空闲的「/goal P0-GOAL-PAUSE: run a slow check, then finish」已转入后台，内容都还在。点开它就能接着聊。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 656,
+            "w": 480,
+            "h": 108,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": true,
+      "folderIndex": 1,
+      "folderTop": [
+        "P0-STREAM: E1 filler 1（把 | now",
+        "P0-STREAM: E1-X 这一轮之后被挤出 | now",
+        "P1-PERM-HOLD: hold at th | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 1（把",
+        "P0-STREAM: E1-X 这一轮之后被挤出",
+        "P1-PERM-HOLD: hold at th",
+        "P1-JOBKILL: start ticker",
+        "P1-GATE: a failure card ",
+        "/goal P0-GOAL-PAUSE: run"
+      ]
+    },
+    {
+      "i": 2,
+      "sid": "session-1790776037964-1xld3wx",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，空闲的「/goal P0-GOAL-PAUSE: run a slow check, then finish」已转入后台，内容都还在。点开它就能接着聊。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 656,
+            "w": 480,
+            "h": 108,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": true,
+      "folderIndex": 2,
+      "folderTop": [
+        "P0-STREAM: E1 filler 2（把 | now",
+        "P0-STREAM: E1 filler 1（把 | now",
+        "P0-STREAM: E1-X 这一轮之后被挤出 | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 2（把",
+        "P0-STREAM: E1 filler 1（把",
+        "P0-STREAM: E1-X 这一轮之后被挤出",
+        "P1-PERM-HOLD: hold at th",
+        "P1-JOBKILL: start ticker",
+        "P1-GATE: a failure card "
+      ]
+    },
+    {
+      "i": 3,
+      "sid": "session-1790776044380-bozznxw",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，空闲的「P1-GATE: a failure card for the contrast check」已转入后台，内容都还在。点开它就能接着聊。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 676,
+            "w": 480,
+            "h": 88,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": true,
+      "folderIndex": 3,
+      "folderTop": [
+        "P0-STREAM: E1 filler 3（把 | now",
+        "P0-STREAM: E1 filler 2（把 | now",
+        "P0-STREAM: E1 filler 1（把 | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 3（把",
+        "P0-STREAM: E1 filler 2（把",
+        "P0-STREAM: E1 filler 1（把",
+        "P0-STREAM: E1-X 这一轮之后被挤出",
+        "P1-PERM-HOLD: hold at th",
+        "P1-JOBKILL: start ticker"
+      ]
+    },
+    {
+      "i": 4,
+      "sid": "session-1790776050471-7ciqaco",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，「P1-JOBKILL: start ticker e3-1 in the background」已停止运行。点开它就能继续。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 676,
+            "w": 480,
+            "h": 88,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": true,
+      "folderIndex": 4,
+      "folderTop": [
+        "P0-STREAM: E1 filler 4（把 | now",
+        "P0-STREAM: E1 filler 3（把 | now",
+        "P0-STREAM: E1 filler 2（把 | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 4（把",
+        "P0-STREAM: E1 filler 3（把",
+        "P0-STREAM: E1 filler 2（把",
+        "P0-STREAM: E1 filler 1（把",
+        "P0-STREAM: E1-X 这一轮之后被挤出",
+        "P1-PERM-HOLD: hold at th"
+      ]
+    },
+    {
+      "i": 5,
+      "sid": "session-1790776056802-4jm0khk",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，空闲的「P1-PERM-HOLD: hold at the gate」已转入后台，内容都还在。点开它就能接着聊。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 676,
+            "w": 480,
+            "h": 88,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": true,
+      "folderIndex": 5,
+      "folderTop": [
+        "P0-STREAM: E1 filler 5（把 | now",
+        "P0-STREAM: E1 filler 4（把 | now",
+        "P0-STREAM: E1 filler 3（把 | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 5（把",
+        "P0-STREAM: E1 filler 4（把",
+        "P0-STREAM: E1 filler 3（把",
+        "P0-STREAM: E1 filler 2（把",
+        "P0-STREAM: E1 filler 1（把",
+        "P0-STREAM: E1-X 这一轮之后被挤出"
+      ]
+    },
+    {
+      "i": 6,
+      "sid": "session-1790776062856-lq35bz8",
+      "settled": "idle",
+      "reclaimToasts": [
+        {
+          "title": "有一个对话已转入后台",
+          "text": "有一个对话已转入后台 为了给新对话腾出位置，空闲的「P0-STREAM: E1-X 这一轮之后被挤出容量」已转入后台，内容都还在。点开它就能接着聊。",
+          "visibility": "visible",
+          "opacity": "1",
+          "pointerEvents": "auto",
+          "rect": {
+            "x": 888,
+            "y": 676,
+            "w": 480,
+            "h": 88,
+            "bottom": 764
+          }
+        }
+      ],
+      "inActive": false,
+      "folderIndex": 6,
+      "folderTop": [
+        "P0-STREAM: E1 filler 6（把 | now",
+        "P0-STREAM: E1 filler 5（把 | now",
+        "P0-STREAM: E1 filler 4（把 | now"
+      ],
+      "activeSection": [
+        "P0-STREAM: E1 filler 6（把",
+        "P0-STREAM: E1 filler 5（把",
+        "P0-STREAM: E1 filler 4（把",
+        "P0-STREAM: E1 filler 3（把",
+        "P0-STREAM: E1 filler 2（把",
+        "P0-STREAM: E1 filler 1（把"
+      ]
+    }
+  ],
+  "turn": "idle",
+  "workLive": ["已工作 3 秒", "✻ 完成于 09:47"],
+  "shotLive": "shots/e2a-X1-1-work-line-live.png",
+  "before": {
+    "inActive": true,
+    "folderIndex": 0,
+    "folderTop": [
+      "P0-STREAM: E1-X 这一轮之后被挤出 | now",
+      "P1-PERM-HOLD: hold at th | now",
+      "P1-JOBKILL: start ticker | 4m"
+    ],
+    "activeSection": [
+      "P0-STREAM: E1-X 这一轮之后被挤出",
+      "P1-PERM-HOLD: hold at th",
+      "P1-JOBKILL: start ticker",
+      "P1-GATE: a failure card ",
+      "/goal P0-GOAL-PAUSE: run",
+      "/goal P0-GOAL-PAUSE: run"
+    ]
+  },
+  "shotLastFiller": "shots/e1-capacity-after-fillers.png",
+  "toastsSeen": [
+    "有一个对话已转入后台 | 为了给新对话腾出位置，空闲的「/goal P0-GOAL-PAUSE: run a slow check, then finish」已转入后台，内容都还在。点开它就能接着聊。",
+    "有一个对话已转入后台 | 为了给新对话腾出位置，空闲的「P1-GATE: a failure card for the contrast check」已转入后台，内容都还在。点开它就能接着聊。",
+    "有一个对话已转入后台 | 为了给新对话腾出位置，「P1-JOBKILL: start ticker e3-1 in the background」已停止运行。点开它就能继续。",
+    "有一个对话已转入后台 | 为了给新对话腾出位置，空闲的「P1-PERM-HOLD: hold at the gate」已转入后台，内容都还在。点开它就能接着聊。",
+    "有一个对话已转入后台 | 为了给新对话腾出位置，空闲的「P0-STREAM: E1-X 这一轮之后被挤出容量」已转入后台，内容都还在。点开它就能接着聊。"
+  ],
+  "maxReclaimToastsAtOnce": 1,
+  "reclaimToastsAfter6s": [],
+  "info": {
+    "id": "session-1790776023491-w5r3q7v",
+    "title": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+    "status": "disconnected",
+    "updatedAt": 1790776028310,
+    "hostBound": false,
+    "messages": 2
+  },
+  "open": {
+    "id": "session-1790776023491-w5r3q7v",
+    "active": "session-1790776023491-w5r3q7v",
+    "tried": 1
+  },
+  "workAfter": ["已工作 3 秒", "✻ 完成于 09:47"],
+  "infoAfter": {
+    "id": "session-1790776023491-w5r3q7v",
+    "title": "P0-STREAM: E1-X 这一轮之后被挤出容量",
+    "status": "disconnected",
+    "updatedAt": 1790776028310,
+    "hostBound": false,
+    "messages": 2
+  },
+  "shotAfter": "shots/e2a-X1-2-work-line-after-reclaim.png"
+}
