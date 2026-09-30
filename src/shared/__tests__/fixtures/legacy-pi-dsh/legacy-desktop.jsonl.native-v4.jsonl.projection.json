@@ -103,7 +103,10 @@
       "timestamp": 1772360880000,
       "blocks": [],
       "incomplete": true,
-      "stopReason": "error"
+      "stopReason": "error",
+      "failure": {
+        "error": "Legacy run failed"
+      }
     }
   ],
   "e4": {
