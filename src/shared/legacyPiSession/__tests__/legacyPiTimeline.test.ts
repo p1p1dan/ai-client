@@ -1,0 +1,583 @@
+import { describe, expect, it } from 'vitest';
+import { translate } from '../../i18n.ts';
+import { RUN_STOP_CUSTOM_TYPE } from '../../types/sessionHistory.ts';
+import { paginatePiSessionHistory, projectPiSessionHistory } from '../timeline.ts';
+
+/**
+ * dsh-rebase P1-12 step 2 — the history projection and its pagination, run on
+ * the shared library directly.
+ *
+ * Ported from `src/agent-host/__tests__/piSessionTimeline.test.ts`, which
+ * reaches this same code through the agent-host re-export
+ * (`piSessionTimeline.ts`) and goes when step 3 deletes that re-export. Case
+ * bodies and expectations are the original's; only the imports changed.
+ */
+
+function manager(branch: unknown[]) {
+  return { getBranch: () => branch };
+}
+
+describe('Pi session timeline projection', () => {
+  it('projects only the active branch with stable Pi-derived ids and tool results', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        {
+          type: 'message',
+          id: 'u1',
+          parentId: null,
+          timestamp: '2026-01-01T00:00:00.000Z',
+          message: { role: 'user', content: [{ type: 'text', text: 'hello' }] },
+        },
+        {
+          type: 'message',
+          id: 'a1',
+          parentId: 'u1',
+          timestamp: '2026-01-01T00:00:01.000Z',
+          message: {
+            role: 'assistant',
+            provider: 'test',
+            model: 'model',
+            content: [
+              { type: 'thinking', thinking: 'plan' },
+              { type: 'text', text: 'reading' },
+              { type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'a.ts' } },
+            ],
+            stopReason: 'toolUse',
+          },
+        },
+        {
+          type: 'message',
+          id: 'r1',
+          parentId: 'a1',
+          timestamp: '2026-01-01T00:00:02.000Z',
+          message: {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'read',
+            content: [{ type: 'text', text: 'contents' }],
+            isError: false,
+          },
+        },
+      ])
+    );
+
+    expect(history.map((message) => [message.id, message.entryId, message.role])).toEqual([
+      ['h:u1', 'u1', 'user'],
+      ['h:a1', 'a1', 'assistant'],
+    ]);
+    expect(history[1]).toMatchObject({ model: 'test/model' });
+    expect(history[1]?.incomplete).toBeUndefined();
+    expect(history[1]?.blocks.map((block) => block.type)).toEqual([
+      'thinking',
+      'text',
+      'tool_call',
+      'tool_result',
+    ]);
+    expect(history[1]?.blocks.at(-1)).toMatchObject({
+      type: 'tool_result',
+      toolCallId: 'call-1',
+      ok: true,
+      output: 'contents',
+    });
+  });
+
+  it('keeps compaction and visible custom branch entries as system notices', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        { type: 'compaction', id: 'compact-1', summary: 'Earlier context' },
+        {
+          type: 'custom_message',
+          id: 'custom-1',
+          customType: 'extension-note',
+          content: 'Visible extension note',
+          display: true,
+        },
+        {
+          type: 'custom_message',
+          id: 'custom-hidden',
+          content: 'hidden',
+          display: false,
+        },
+      ])
+    );
+
+    expect(history.map((message) => [message.id, message.role])).toEqual([
+      ['h:compact-1', 'system'],
+      ['h:custom-1', 'system'],
+    ]);
+    expect(history[0]?.blocks[0]).toMatchObject({
+      type: 'text',
+      text: 'Context summary\n\nEarlier context',
+    });
+  });
+
+  it('marks a true empty assistant leaf incomplete but keeps an empty tool bridge complete', () => {
+    const interrupted = projectPiSessionHistory(
+      manager([
+        {
+          type: 'message',
+          id: 'u1',
+          message: { role: 'user', content: [{ type: 'text', text: 'go' }] },
+        },
+        { type: 'message', id: 'a-empty', message: { role: 'assistant', content: [] } },
+      ])
+    );
+    expect(interrupted.at(-1)).toMatchObject({
+      id: 'h:a-empty',
+      incomplete: true,
+      stopReason: 'interrupted',
+    });
+
+    const bridge = projectPiSessionHistory(
+      manager([
+        {
+          type: 'message',
+          id: 'u1',
+          message: { role: 'user', content: [{ type: 'text', text: 'go' }] },
+        },
+        {
+          type: 'message',
+          id: 'a-tool',
+          message: {
+            role: 'assistant',
+            content: [{ type: 'toolCall', id: 'call', name: 'read', arguments: {} }],
+          },
+        },
+      ])
+    );
+    expect(bridge.at(-1)).toMatchObject({ id: 'h:a-tool' });
+    expect(bridge.at(-1)?.incomplete).toBeUndefined();
+  });
+
+  it('paginates backwards from the leaf with bounded limits and empty beyond total', () => {
+    const messages = Array.from({ length: 205 }, (_, index) => ({
+      id: `h:${index}` as const,
+      entryId: String(index),
+      role: 'user' as const,
+      blocks: [],
+    }));
+    expect(paginatePiSessionHistory(messages, 0, 80)).toMatchObject({
+      offset: 0,
+      limit: 80,
+      totalCount: 205,
+      hasMore: true,
+    });
+    expect(paginatePiSessionHistory(messages, 0, 80).messages[0]?.id).toBe('h:125');
+    expect(paginatePiSessionHistory(messages, 80, 80).messages[0]?.id).toBe('h:45');
+    expect(paginatePiSessionHistory(messages, 205, 80).messages).toEqual([]);
+    expect(paginatePiSessionHistory(messages, 999, 999).limit).toBe(500);
+    expect(paginatePiSessionHistory(messages, -1, 0).limit).toBe(1);
+  });
+});
+
+it('preserves SDK edit patch on history reload', () => {
+  const patch = '--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new';
+  const history = projectPiSessionHistory(
+    manager([
+      {
+        type: 'message',
+        id: 'a',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'toolCall',
+              id: 't',
+              name: 'edit',
+              arguments: { path: 'file', oldText: 'old', newText: 'new' },
+            },
+          ],
+          stopReason: 'toolUse',
+        },
+      },
+      {
+        type: 'message',
+        id: 'r',
+        message: {
+          role: 'toolResult',
+          toolCallId: 't',
+          toolName: 'edit',
+          content: [{ type: 'text', text: 'done' }],
+          details: { patch },
+          isError: false,
+        },
+      },
+    ])
+  );
+  expect(history[0].blocks.at(-1)).toMatchObject({
+    type: 'tool_result',
+    output: 'done',
+    patch,
+  });
+});
+
+/**
+ * T023 — the imported-history banner.
+ *
+ * It was a Chinese template literal built in this projector, defended by the
+ * (true) observation that a worker has no renderer locale. The fix is not to
+ * pick the other language: it is to send both halves of the sentence — the
+ * catalog key and its two values — and let the surface that knows the locale
+ * assemble it. `text` stays the English rendering so a reader that ignores
+ * `notice` still prints something whole.
+ *
+ * Nothing stored has to change for this: the session file holds a `custom`
+ * entry with `sourceKind` / `sourceSessionId` and never the sentence, so an
+ * import from last week re-renders in today's wording.
+ */
+describe('imported-history banner (T023)', () => {
+  const projected = () =>
+    projectPiSessionHistory(
+      manager([
+        {
+          type: 'custom',
+          id: 'p1',
+          customType: 'aiclient.legacy-import.provenance',
+          data: { sourceKind: 'claude-code', sourceSessionId: 'abc-123' },
+        },
+      ])
+    );
+
+  it('emits a translatable notice with the two values, not a finished sentence', () => {
+    const block = projected()[0]?.blocks[0] as {
+      type: string;
+      text: string;
+      notice?: { key: string; params?: Record<string, string> };
+    };
+    expect(block.notice?.params).toEqual({
+      sourceKind: 'claude-code',
+      sourceSessionId: 'abc-123',
+    });
+    expect(block.notice?.key).toContain('{{sourceKind}}');
+    expect(block.notice?.key).toContain('{{sourceSessionId}}');
+    // The whole point: nothing Chinese crosses the worker boundary any more.
+    expect(/[一-鿿]/.test(block.text)).toBe(false);
+    expect(/[一-鿿]/.test(block.notice?.key ?? '')).toBe(false);
+  });
+
+  it('renders both languages from that one notice', () => {
+    const block = projected()[0]?.blocks[0] as {
+      text: string;
+      notice: { key: string; params: Record<string, string> };
+    };
+    // English is already in `text`, byte for byte — a surface that never
+    // learned about `notice` is not broken by this change, just untranslated.
+    expect(translate('en', block.notice.key, block.notice.params)).toBe(block.text);
+    expect(block.text).toContain('imported from a claude-code session (abc-123)');
+
+    const chinese = translate('zh', block.notice.key, block.notice.params);
+    expect(chinese).toContain('这段历史从 claude-code 会话 abc-123 导入');
+    // A missing dictionary entry makes `translate` return the key, which would
+    // still read like a sentence — so assert it actually changed.
+    expect(chinese).not.toBe(block.notice.key);
+  });
+});
+
+describe('run-stop records in history replay', () => {
+  const at = (second: number) => `2026-01-01T00:00:${String(second).padStart(2, '0')}.000Z`;
+  const user = (id: string, parentId: string | null, text: string, second: number) => ({
+    type: 'message',
+    id,
+    parentId,
+    timestamp: at(second),
+    message: { role: 'user', content: [{ type: 'text', text }] },
+  });
+  const assistant = (
+    id: string,
+    parentId: string,
+    content: unknown[],
+    stopReason: string,
+    second: number
+  ) => ({
+    type: 'message',
+    id,
+    parentId,
+    timestamp: at(second),
+    message: { role: 'assistant', content, stopReason },
+  });
+  const runStop = (id: string, parentId: string, cause: string, second: number) => ({
+    type: 'custom',
+    id,
+    parentId,
+    timestamp: at(second),
+    customType: RUN_STOP_CUSTOM_TYPE,
+    data: { cause, runId: `run-${id}` },
+  });
+
+  it("puts the cause on the run's last assistant message and on nothing else", () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant(
+          'a1',
+          'u1',
+          [{ type: 'toolCall', id: 'call-1', name: 'read', arguments: { path: 'a.ts' } }],
+          'toolUse',
+          2
+        ),
+        {
+          type: 'message',
+          id: 'r1',
+          parentId: 'a1',
+          timestamp: at(3),
+          message: {
+            role: 'toolResult',
+            toolCallId: 'call-1',
+            toolName: 'read',
+            content: [{ type: 'text', text: 'contents' }],
+            isError: false,
+          },
+        },
+        assistant('a2', 'r1', [{ type: 'text', text: 'still reading' }], 'stop', 4),
+        runStop('s1', 'a2', 'interjected', 5),
+        user('u2', 's1', 'the interjection', 6),
+        assistant('a3', 'u2', [{ type: 'text', text: 'partial' }], 'aborted', 7),
+        runStop('s2', 'a3', 'user_stop', 8),
+        user('u3', 's2', 'third', 9),
+        assistant('a4', 'u3', [{ type: 'text', text: 'done' }], 'stop', 10),
+      ])
+    );
+
+    expect(
+      history.map((message) => [message.entryId, message.role, message.stopCause ?? null])
+    ).toEqual([
+      ['u1', 'user', null],
+      ['a1', 'assistant', null],
+      ['a2', 'assistant', 'interjected'],
+      ['u2', 'user', null],
+      ['a3', 'assistant', 'user_stop'],
+      ['u3', 'user', null],
+      ['a4', 'assistant', null],
+    ]);
+    // The record itself is not a message of any kind.
+    expect(history.some((message) => message.entryId === 's1' || message.entryId === 's2')).toBe(
+      false
+    );
+  });
+
+  it('does not reach back into the previous turn when the stopped run had no reply yet', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant('a1', 'u1', [{ type: 'text', text: 'answer' }], 'stop', 2),
+        user('u2', 'a1', 'second', 3),
+        runStop('s1', 'u2', 'user_stop', 4),
+      ])
+    );
+    expect(history.every((message) => message.stopCause === undefined)).toBe(true);
+  });
+
+  it('ignores a record whose cause this build does not know', () => {
+    const history = projectPiSessionHistory(
+      manager([
+        user('u1', null, 'first', 1),
+        assistant('a1', 'u1', [{ type: 'text', text: 'answer' }], 'stop', 2),
+        runStop('s1', 'a1', 'something_newer', 3),
+      ])
+    );
+    expect(history[1]?.stopCause).toBeUndefined();
+  });
+
+  /**
+   * N2 (devbox 2026-09-24): a turn ended by Ctrl+Enter showed 「已工作 20 秒」
+   * live and 「已工作 1 秒」 after a restart. Ctrl+Enter stops at the tool
+   * boundary, so nothing after `sleep 20`'s result is an assistant entry — the
+   * result's date and the run-stop record's date were the only record of when
+   * the run ended, and the projection dropped both when it folded them.
+   */
+  describe('settledAt — the latest entry folded into a message', () => {
+    const toolResult = (id: string, parentId: string, callId: string, second: number) => ({
+      type: 'message',
+      id,
+      parentId,
+      timestamp: at(second),
+      message: {
+        role: 'toolResult',
+        toolCallId: callId,
+        toolName: 'bash',
+        content: [{ type: 'text', text: 'ok' }],
+        isError: false,
+      },
+    });
+    const call = (id: string) => [{ type: 'toolCall', id, name: 'bash', arguments: {} }];
+    const epochOf = (second: number) => Date.parse(at(second));
+
+    it('[N2-SETTLED-1] an interjected run that ended on a tool result settles at its run stop', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'long', 1),
+          assistant('a1', 'u1', call('c1'), 'toolUse', 2),
+          toolResult('r1', 'a1', 'c1', 3),
+          assistant('a2', 'r1', call('c2'), 'toolUse', 4),
+          toolResult('r2', 'a2', 'c2', 24),
+          runStop('s1', 'r2', 'interjected', 25),
+          user('u2', 's1', 'the interjection', 26),
+          assistant('a3', 'u2', [{ type: 'text', text: 'echo' }], 'stop', 27),
+        ])
+      );
+      const byEntry = new Map(history.map((message) => [message.entryId, message]));
+      // Own date, folded result, run stop: the latest of the three.
+      expect(byEntry.get('a2')?.timestamp).toBe(epochOf(4));
+      expect(byEntry.get('a2')?.settledAt).toBe(epochOf(25));
+      expect(byEntry.get('a1')?.settledAt).toBe(epochOf(3));
+      // Nothing later was folded into these, so nothing is added.
+      expect(byEntry.get('a3')).not.toHaveProperty('settledAt');
+      expect(byEntry.get('u1')).not.toHaveProperty('settledAt');
+    });
+
+    it('[N2-SETTLED-2] a normal and a stopped turn still end on their last assistant entry', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          // Normal: the answer is written after every result, so it is the end.
+          user('u1', null, 'normal', 1),
+          assistant('a1', 'u1', call('c1'), 'toolUse', 2),
+          toolResult('r1', 'a1', 'c1', 22),
+          assistant('a2', 'r1', [{ type: 'text', text: 'done' }], 'stop', 23),
+          // Stop mid-call: pi answers the abort with a placeholder assistant
+          // entry dated at the stop, which the run-stop record lands on.
+          user('u2', 'a2', 'stopped', 30),
+          assistant('a3', 'u2', call('c2'), 'toolUse', 31),
+          toolResult('r2', 'a3', 'c2', 34),
+          assistant('a4', 'r2', [], 'aborted', 34),
+          runStop('s1', 'a4', 'user_stop', 34),
+        ])
+      );
+      const byEntry = new Map(history.map((message) => [message.entryId, message]));
+      const turnEnd = (entries: string[]) =>
+        Math.max(
+          ...entries.map((id) => {
+            const message = byEntry.get(id);
+            return Math.max(message?.timestamp ?? 0, message?.settledAt ?? 0);
+          })
+        );
+      expect(turnEnd(['a1', 'a2']) - epochOf(1)).toBe(22_000);
+      expect(byEntry.get('a2')).not.toHaveProperty('settledAt');
+      expect(turnEnd(['a3', 'a4']) - epochOf(30)).toBe(4_000);
+      expect(byEntry.get('a4')?.stopCause).toBe('user_stop');
+      expect(byEntry.get('a4')).not.toHaveProperty('settledAt');
+    });
+  });
+
+  /**
+   * N5 (devbox 2026-09-24): the replay half of the projector's structured
+   * outcome flags.
+   */
+  describe('calls that never did their work', () => {
+    it('[N5-HIST-1] carries a result’s own refusal flag', () => {
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'wait', 1),
+          assistant(
+            'a1',
+            'u1',
+            [{ type: 'toolCall', id: 'w1', name: 'TaskWait', arguments: {} }],
+            'toolUse',
+            2
+          ),
+          {
+            type: 'message',
+            id: 'r1',
+            parentId: 'a1',
+            timestamp: at(3),
+            message: {
+              role: 'toolResult',
+              toolCallId: 'w1',
+              toolName: 'TaskWait',
+              content: [{ type: 'text', text: 'Refused: nothing left.' }],
+              details: { idle: true, refused: true },
+              isError: false,
+            },
+          },
+        ])
+      );
+      const result = history[1]?.blocks.find((block) => block.type === 'tool_result');
+      expect(result).toMatchObject({ ok: true, refused: true });
+    });
+
+    it('[N5-HIST-2] answers the calls of an aborted or failed reply as never started', () => {
+      const calls = (ids: string[]) =>
+        ids.map((id) => ({ type: 'toolCall', id, name: 'TaskList', arguments: {} }));
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'formB', 1),
+          assistant('a1', 'u1', calls(['c1', 'c2']), 'error', 2),
+          user('u2', 'a1', 'stop mid-call', 3),
+          assistant('a2', 'u2', calls(['c3']), 'aborted', 4),
+          // A reply that ended normally but whose call has no result (the app
+          // died while it ran) may have half-run: it is NOT claimed unstarted.
+          user('u3', 'a2', 'crash', 5),
+          assistant('a3', 'u3', calls(['c4']), 'toolUse', 6),
+        ])
+      );
+      const results = (entryId: string) =>
+        history
+          .find((message) => message.entryId === entryId)
+          ?.blocks.filter((block) => block.type === 'tool_result');
+      expect(results('a1')).toEqual([
+        expect.objectContaining({ toolCallId: 'c1', ok: false, notStarted: true }),
+        expect.objectContaining({ toolCallId: 'c2', ok: false, notStarted: true }),
+      ]);
+      expect(results('a2')).toEqual([
+        expect.objectContaining({ toolCallId: 'c3', ok: false, notStarted: true }),
+      ]);
+      expect(results('a3')).toEqual([]);
+    });
+
+    it('[BASH-STOP-6] carries a stopped bash’s flag and partial output, and not TaskStop’s list', () => {
+      const text = 'a\n[exit=null; aborted]';
+      const history = projectPiSessionHistory(
+        manager([
+          user('u1', null, 'run it', 1),
+          assistant(
+            'a1',
+            'u1',
+            [
+              { type: 'toolCall', id: 'b1', name: 'bash', arguments: { command: 'sleep 30' } },
+              { type: 'toolCall', id: 's1', name: 'TaskStop', arguments: {} },
+            ],
+            'toolUse',
+            2
+          ),
+          {
+            type: 'message',
+            id: 'r1',
+            parentId: 'a1',
+            timestamp: at(3),
+            message: {
+              role: 'toolResult',
+              toolCallId: 'b1',
+              toolName: 'bash',
+              content: [{ type: 'text', text }],
+              details: { exitCode: null, termination: 'aborted', stopped: true },
+              isError: true,
+            },
+          },
+          {
+            type: 'message',
+            id: 'r2',
+            parentId: 'r1',
+            timestamp: at(4),
+            message: {
+              role: 'toolResult',
+              toolCallId: 's1',
+              toolName: 'TaskStop',
+              content: [{ type: 'text', text: 'Stopped 1.' }],
+              details: { stopped: [{ delegationId: 'd1', status: 'stopped' }], delivered: [] },
+              isError: false,
+            },
+          },
+        ])
+      );
+      const results = history[1]?.blocks.filter((block) => block.type === 'tool_result') ?? [];
+      expect(results[0]).toMatchObject({
+        toolCallId: 'b1',
+        ok: false,
+        stopped: true,
+        output: text,
+        error: text,
+      });
+      expect(results[1]).toMatchObject({ toolCallId: 's1', ok: true });
+      expect(results[1]).not.toHaveProperty('stopped');
+    });
+  });
+});
