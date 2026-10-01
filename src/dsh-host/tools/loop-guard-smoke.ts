@@ -20,6 +20,8 @@
  *             refusal, is NOT retried even in mode always: one request, no
  *             `llm/retry`, `turn/end error` (the bridge row's retry veto,
  *             decision 140; it guards every agent of the host).
+ *   E1 noup   P1-NOUP, a 503 whose body is a gateway's `no_available_providers`
+ *             answer, is NOT retried either (decision 146).
  *   G2        P8-VARIED: 40 distinct `job_output`; cut at the seventeenth.
  *   G3        P8-FANOUT: ten distinct `subagent` calls run, nothing is cut.
  *   G7/E3     P8-SUBREPEAT: the child's own degenerate reply is cut in the
@@ -388,6 +390,19 @@ async function hostA(port: number, gatewayRoot: string) {
     // Mode always would retry a failed veto without end: stop it either way.
     await call(host, 'close-session', { sessionId: gate });
 
+    // E1 no upstream (decision 146): a gateway's `no_available_providers` 503
+    // is left terminal the same way.
+    const noUp = await session('p8-noup-control');
+    facts.noUpstreamTurn = await runTurn(host, noUp, 'P1-NOUP control');
+    await sleep(1_500);
+    const noUpView = sessionView(host, noUp);
+    facts.noUpstreamControl = {
+      requests: gatewayRequests(gatewayRoot, /^P1-NOUP/).length,
+      retries: noUpView.retries,
+      turnEnd: noUpView.turnEnds.at(-1),
+    };
+    await call(host, 'close-session', { sessionId: noUp });
+
     // G2
     const g2 = await session('p8-g2');
     facts.g2Turn = await runTurn(
@@ -607,6 +622,13 @@ function verdictOf(report: Line): Record<string, boolean> {
       gateCtl.retries === 0 &&
       reasonOf(gateCtl.turnEnd as Line).kind === 'error' &&
       String(gateError.message).includes('stream_gate_precommit');
+    const noUpCtl = (a.noUpstreamControl ?? {}) as Line;
+    const noUpError = (reasonOf(noUpCtl.turnEnd as Line).error ?? {}) as Line;
+    v.e1NoUpstreamNotRetried =
+      noUpCtl.requests === 1 &&
+      noUpCtl.retries === 0 &&
+      reasonOf(noUpCtl.turnEnd as Line).kind === 'error' &&
+      /no available providers/i.test(String(noUpError.message));
     const g2 = a.g2 as Line;
     const g2Close = (g2.close ?? {}) as Line;
     v.g2CutAtSeventeenth =

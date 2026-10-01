@@ -42,6 +42,16 @@ export const GATEWAY_STREAM_GATE = 'GATEWAY_STREAM_GATE';
  */
 export const MODEL_SETTING_UNSUPPORTED = 'MODEL_SETTING_UNSUPPORTED';
 
+/**
+ * dsh-rebase decision 146 (GW-2): the company gateway answered that it has no
+ * upstream that can take this request — `no_available_providers` (it filtered
+ * every upstream out before trying one), or its own sentence that every
+ * provider is unavailable (it already failed over across all of them within
+ * this one request). Resending within seconds meets the same answer, so it is
+ * never retried automatically.
+ */
+export const GATEWAY_NO_UPSTREAM = 'GATEWAY_NO_UPSTREAM';
+
 export type DshMappedFailureCode =
   | typeof CREDENTIALS_UNAVAILABLE
   | 'PROVIDER_UNAUTHORIZED'
@@ -53,6 +63,7 @@ export type DshMappedFailureCode =
   | 'PROVIDER_ERROR'
   | typeof TOOL_CALL_REPETITION_CODE
   | typeof GATEWAY_STREAM_GATE
+  | typeof GATEWAY_NO_UPSTREAM
   | typeof MODEL_SETTING_UNSUPPORTED;
 
 /**
@@ -100,19 +111,40 @@ export function mapDshFailureCode(code: unknown): DshMappedFailureCode | undefin
 // Either marker alone is enough: a gateway may name only the gate or only its reason.
 const STREAM_GATE_PATTERN = /\bstream_gate_precommit\b|\bprebuffer_overflow\b/i;
 const MODEL_SETTING_PATTERN = /\bis not supported for this model\b/i;
+/**
+ * Decision 146: the gateway's own statement that no upstream is left for this
+ * request — its `no_available_providers` type/code, its English sentence for
+ * it ("No available providers": the Anthropic SDK keeps only a body's top-level
+ * `message`, so on an anthropic-messages route the type token can be gone), or
+ * its sentence that every provider is (temporarily) unavailable. A bare 503 /
+ * `service_unavailable_error` says none of these and stays an ordinary,
+ * retried server error.
+ *
+ * The sentence is the gateway's own text, matched, never shown: it is spelled
+ * in escapes, 「所有供应商(暂时)不可用」, so no user-facing Chinese lives in
+ * source (`noHardcodedChinese.test.ts`).
+ */
+const NO_UPSTREAM_PATTERN =
+  /\bno_available_providers\b|\bno available providers\b|\u6240\u6709\u4f9b\u5e94\u5546(?:\u6682\u65f6)?\u4e0d\u53ef\u7528/i;
+
+/** The codes only a provider failure's text tells apart (decisions 140, 146). */
+export type DshTextFailureCode =
+  | typeof GATEWAY_STREAM_GATE
+  | typeof GATEWAY_NO_UPSTREAM
+  | typeof MODEL_SETTING_UNSUPPORTED;
 
 /**
- * dsh-rebase P1-7e (decision 140): the two provider failures only their text
+ * dsh-rebase P1-7e (decision 140): the provider failures only their text
  * tells apart, whatever class DSH gave them (a 5xx is `SERVER`, a 400 is
- * `INVALID_REQUEST`, a body pi-ai could not read is `PI_AI_ERROR`). Neither
+ * `INVALID_REQUEST`, a body pi-ai could not read is `PI_AI_ERROR`). No
  * marker is anything DSH writes itself, so a match is the provider's own
- * account. The gate wins when a text carries both.
+ * account. The gate wins when a text carries more than one; decision 146
+ * adds the gateway's "no upstream left" answer after it.
  */
-export function classifyDshFailureText(
-  text: unknown
-): typeof GATEWAY_STREAM_GATE | typeof MODEL_SETTING_UNSUPPORTED | undefined {
+export function classifyDshFailureText(text: unknown): DshTextFailureCode | undefined {
   if (typeof text !== 'string' || text.length === 0) return undefined;
   if (STREAM_GATE_PATTERN.test(text)) return GATEWAY_STREAM_GATE;
+  if (NO_UPSTREAM_PATTERN.test(text)) return GATEWAY_NO_UPSTREAM;
   if (MODEL_SETTING_PATTERN.test(text)) return MODEL_SETTING_UNSUPPORTED;
   return undefined;
 }
@@ -132,8 +164,8 @@ export function dshFailureErrorCode(failure: unknown): DshMappedFailureCode | un
 
 /**
  * Whether retrying the same request cannot help, by the failure's text alone
- * (decision 140): the host's request-error hook refuses DSH's automatic retry
- * for these, whatever the route's retry policy says about their class.
+ * (decisions 140, 146): the host's request-error hook refuses DSH's automatic
+ * retry for these, whatever the route's retry policy says about their class.
  */
 export function isUnretryableDshFailure(failure: unknown): boolean {
   const message =

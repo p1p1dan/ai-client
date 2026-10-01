@@ -241,7 +241,7 @@ const FAILURE_VIEWS = {
     hint: 'Continue to try again. If it fails the same way, send the detail below or pick another model.',
     action: 'continue',
   },
-  // dsh-rebase P1-7e (decision 140): the bridge reads these two off the
+  // dsh-rebase P1-7e (decision 140): the bridge reads these off the
   // provider's own text (`classifyDshFailureText`), and the host never
   // retries them. A company gateway's stream gate refuses the reply before
   // the model's first byte; the same request is refused again, so the card
@@ -250,6 +250,19 @@ const FAILURE_VIEWS = {
     title: 'The company gateway cut off this reply',
     reason: 'The company gateway stopped this reply before the model started to answer.',
     hint: 'Retrying the same request usually fails again. Switch to another model or lower the thinking level, and forward the error detail to the gateway administrator.',
+    action: 'continue',
+    hintWithContinue: true,
+    continueLabel: 'Continue anyway',
+  },
+  // Decision 146 (GW-2): the company gateway has no upstream left for this
+  // model (`no_available_providers`, or its "every provider is unavailable"
+  // sentence). Not retried automatically; a later try may still work, so the
+  // card keeps a Continue, labelled like the gate's, with the hint beside it.
+  GATEWAY_NO_UPSTREAM: {
+    title: 'The company gateway has no model service available',
+    reason:
+      'The company gateway answered that none of the model services behind it can take this request right now, so it never reached a model.',
+    hint: 'This was not retried automatically, because retrying right away gets the same answer. Switch to another model or try again later; if it keeps happening, forward the error detail to the gateway administrator.',
     action: 'continue',
     hintWithContinue: true,
     continueLabel: 'Continue anyway',

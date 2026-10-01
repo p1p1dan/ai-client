@@ -1,5 +1,5 @@
 {
-  "revision": "05c59899d407a6c296995573431f60708d10a0420ae78d08fd60430f78cdff64",
+  "revision": "b8679f8db240dd489388cf3145eb2a4036c97aedab39ecde713a932811d4ed01",
   "routes": {
     "claude": {
       "api": "anthropic-messages",
@@ -156,7 +156,7 @@
           "id": "grok-4.6",
           "name": "Grok 4.6",
           "contextWindow": 500000,
-          "maxTokens": 500000,
+          "maxTokens": 125000,
           "input": ["text", "image"],
           "reasoningEfforts": {
             "low": "low",
@@ -326,6 +326,14 @@
       "providerId": "grok",
       "field": "headers.User-Agent",
       "reason": "reserved_header"
+    },
+    {
+      "kind": "field",
+      "providerId": "grok",
+      "modelId": "grok-4.6",
+      "field": "maxTokens",
+      "reason": "max_tokens_clamped",
+      "detail": "500000 -> 125000"
     },
     {
       "kind": "field",

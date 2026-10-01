@@ -1284,6 +1284,55 @@ describe('DshHistoryFold — what the live bridge reads off it (P1-4d1)', () => 
     ]);
   });
 
+  /**
+   * Decision 146 (GW-18): a turn stopped (by the user, or disposed at sign-out)
+   * after its request went out but before any reply. The bridge opened an empty
+   * message for that request live, and the live store turns it into the same
+   * note; the history's placeholder names it so a replay replaces it.
+   */
+  it('[GW18-LIVEID] the stop placeholder names the empty live message of the cut request', () => {
+    const build = () =>
+      log()
+        .turn(1)
+        .user('u1', 'go')
+        .add('request/header', { config: { reasoningEffort: 'high' } })
+        .add('assistant/attempt', { turn: 1, step: 1, stream: 'list' })
+        .add('step/end', { turn: 1, step: 1 })
+        .end(1, { kind: 'aborted', reason: { kind: 'disposed' } });
+    const named = projectDshHistory(build().events, { liveSessionId: 'aiclient-s1' });
+    expect(named.map((row) => [row.id, row.liveMessageId])).toEqual([
+      ['h:u1', 'dsh-user-1'],
+      ['h:u1:end', 'dsh-aiclient-s1-t1-s1'],
+    ]);
+    expect(named[1]).toMatchObject({ incomplete: true, stopReason: 'aborted', blocks: [] });
+    // A disposed turn is nobody's Stop: no cause is claimed for it.
+    expect(named[1]).not.toHaveProperty('stopCause');
+    // Without a live session there is nothing to name, as for every other row.
+    expect(projectDshHistory(build().events)[1]).not.toHaveProperty('liveMessageId');
+  });
+
+  it('[GW18-LIVEID-NONE] names nothing for a turn stopped before any request, or after a reply was saved', () => {
+    const before = log()
+      .turn(1)
+      .user('u1', 'go')
+      .end(1, { kind: 'aborted', reason: { kind: 'user' } });
+    expect(
+      projectDshHistory(before.events, { liveSessionId: 'aiclient-s1' })[1]
+    ).not.toHaveProperty('liveMessageId');
+    const after = log()
+      .turn(1)
+      .user('u1', 'go')
+      .add('assistant/attempt', { turn: 1, step: 1, stream: 'list' })
+      .assistant(1, 1, 'a1', [text('partial')])
+      .add('assistant/attempt', { turn: 1, step: 2, stream: 'list' })
+      .end(1, { kind: 'aborted', reason: { kind: 'user' } });
+    // The saved reply carries the stop; no placeholder is added at all.
+    expect(ids(projectDshHistory(after.events, { liveSessionId: 'aiclient-s1' }))).toEqual([
+      'h:u1',
+      'h:a1',
+    ]);
+  });
+
   it('[D1-USAGE-STEPS] counts the steps that reported usage, and keeps the goal budget current', () => {
     const fold = new DshHistoryFold();
     const { events } = log()

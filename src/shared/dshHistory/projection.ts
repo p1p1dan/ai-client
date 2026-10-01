@@ -352,6 +352,13 @@ interface TurnState {
   readonly steps: number[];
   /** Calls of this turn with no result yet. */
   readonly open: Set<string>;
+  /**
+   * Decision 146: the step of this turn's latest model request
+   * (`assistant/attempt`). Its live copy is the message the bridge opened for
+   * that request (`dsh-<session>-t<turn>-s<step>`), which a turn stopped
+   * before any reply leaves empty.
+   */
+  lastAttempt?: Row;
 }
 
 export interface DshHistoryFoldOptions {
@@ -450,7 +457,14 @@ export class DshHistoryFold {
         this.closeFirstBatch();
         this.onAssistantMessage(event);
         return;
-      case 'assistant/attempt':
+      case 'assistant/attempt': {
+        this.closeFirstBatch();
+        const attempt = recordOf(event.data);
+        if (this.turn && typeof attempt?.turn === 'number' && typeof attempt.step === 'number') {
+          this.turn.lastAttempt = attempt;
+        }
+        return;
+      }
       case 'step/end':
         this.closeFirstBatch();
         return;
@@ -585,6 +599,11 @@ export class DshHistoryFold {
             incomplete: true,
             stopReason: 'aborted',
             ...(cause ? { stopCause: cause } : {}),
+            // Decision 146 (GW-18): the live copy of this row is the empty
+            // message the bridge opened for the cut request (which the live
+            // store turned into this same note), so a replay replaces it
+            // rather than showing both.
+            ...(turn.lastAttempt ? this.liveStepId(turn.lastAttempt) : {}),
           })
         );
       }

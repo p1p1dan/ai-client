@@ -4,6 +4,7 @@ import {
   CREDENTIALS_UNAVAILABLE,
   classifyDshFailureText,
   dshFailureErrorCode,
+  GATEWAY_NO_UPSTREAM,
   GATEWAY_STREAM_GATE,
   isUnretryableDshFailure,
   MODEL_NOT_CONFIGURED,
@@ -164,5 +165,63 @@ describe('classifyDshFailureText / dshFailureErrorCode', () => {
     );
     expect(isUnretryableDshFailure({ code: 'SERVER' })).toBe(false);
     expect(isUnretryableDshFailure(null)).toBe(false);
+  });
+});
+
+/**
+ * dsh-rebase decision 146 (GW-2): a company gateway that answers it has no
+ * upstream left for the request is read off its text too, and is not retried.
+ * The bodies are shaped like the real-gateway pass's (P1-5 R2, R8), with the
+ * session marker and upstream ids made up.
+ */
+describe('a gateway with no upstream left (decision 146)', () => {
+  const NO_PROVIDERS =
+    '503: {"message":"No available providers (cch_session_id: s-1)","type":"no_available_providers","code":"no_available_providers","details":{"totalAttempts":1,"filteredProviders":[{"id":1,"reason":"disabled"}]}}';
+  const ALL_DOWN =
+    '503: {"message":"所有供应商暂时不可用，请稍后重试 (cch_session_id: s-2)","type":"service_unavailable_error","code":"service_unavailable_error"}';
+
+  it('[GW2-CLASS-1] names both answers, by the type token or by the sentence', () => {
+    for (const text of [
+      NO_PROVIDERS,
+      ALL_DOWN,
+      'no_available_providers',
+      'NO_AVAILABLE_PROVIDERS',
+      '所有供应商不可用',
+      // What the Anthropic SDK leaves of a body whose top level has a `message`:
+      // the sentence, without the type token (the fake gateway's P1-NOUP, live).
+      '503 No available providers (cch_session_id: s-3)',
+    ]) {
+      expect(classifyDshFailureText(text), text).toBe(GATEWAY_NO_UPSTREAM);
+    }
+  });
+
+  it('[GW2-CLASS-2] leaves an ordinary 5xx alone, a bare service_unavailable_error included', () => {
+    for (const text of [
+      '503 Service Unavailable',
+      '503: {"message":"upstream timed out","type":"service_unavailable_error","code":"service_unavailable_error"}',
+      '502 Bad Gateway',
+      'no providers available',
+      'available_providers',
+    ]) {
+      expect(classifyDshFailureText(text), text).toBeUndefined();
+    }
+  });
+
+  it('[GW2-CLASS-3] maps to its own code over SERVER, and is a failure a retry cannot help', () => {
+    expect(dshFailureErrorCode({ message: NO_PROVIDERS, code: 'SERVER' })).toBe(
+      GATEWAY_NO_UPSTREAM
+    );
+    expect(dshFailureErrorCode({ message: ALL_DOWN, code: 'SERVER' })).toBe(GATEWAY_NO_UPSTREAM);
+    expect(isUnretryableDshFailure({ message: NO_PROVIDERS, code: 'SERVER' })).toBe(true);
+    expect(isUnretryableDshFailure({ message: ALL_DOWN, code: 'SERVER' })).toBe(true);
+    expect(isUnretryableDshFailure({ message: '503 Service Unavailable', code: 'SERVER' })).toBe(
+      false
+    );
+  });
+
+  it('[GW2-CLASS-4] the stream gate still wins over it', () => {
+    expect(classifyDshFailureText(`stream_gate_precommit ${NO_PROVIDERS}`)).toBe(
+      GATEWAY_STREAM_GATE
+    );
   });
 });

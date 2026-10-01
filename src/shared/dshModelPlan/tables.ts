@@ -81,6 +81,18 @@ export const IMPLIED_EFFORT_LEVELS: ReadonlySet<DshEffortLevel> = new Set([
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const DEFAULT_MAX_TOKENS = 8_192;
 
+/**
+ * Decision 146 (GW-4): a row's `maxTokens` above this share of its declared
+ * `contextWindow` is taken for a catalog that copied the window into it
+ * (DSH's compaction then has no message budget), and planned as
+ * {@link MAX_TOKENS_WINDOW_SHARE_FALLBACK} of the window instead. Real output
+ * caps stay at or under half: pi-ai's catalog tops out there (o3 100k of 200k,
+ * GPT-5.4 128k of 272k) apart from rows that equal the window.
+ */
+export const MAX_TOKENS_WINDOW_SHARE_LIMIT = 0.5;
+/** DSH's own reference route reserves 256k of a 1M window (`dsh-llm-deepseek`). */
+export const MAX_TOKENS_WINDOW_SHARE_FALLBACK = 0.25;
+
 /** Retry budget of the native loop: 3 retries, 3 s rising to 30 s (`providerRetry.ts`). */
 export const NATIVE_RETRY_MAX = 3;
 export const NATIVE_RETRY_INITIAL_DELAY_MS = 3_000;

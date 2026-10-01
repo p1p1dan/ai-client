@@ -166,3 +166,21 @@ it('[E2B-CARD-SETTING-DOM] a refused model setting: points at the thinking setti
   expect(text).toContain('is not supported for this model');
   expect(card.querySelector('[data-testid="failure-continue"]')).toBeNull();
 });
+
+/** Decision 146 (GW-2): the gateway has no upstream left for this model. */
+const NO_UPSTREAM =
+  '503: {"message":"No available providers (cch_session_id: s-1)","type":"no_available_providers","code":"no_available_providers"}';
+
+it('[GW2-CARD-DOM] a gateway with no upstream left: its own card, the raw text, a Continue that warns', async () => {
+  fail(NO_UPSTREAM, 'GATEWAY_NO_UPSTREAM');
+  const card = await render();
+  const text = card.textContent ?? '';
+  expect(text).toContain('公司网关目前没有可用的模型服务');
+  expect(text).toContain('马上重试只会得到同样的答复，所以没有自动重试。');
+  // Kept as the gateway wrote it: its session marker is what the administrator looks up.
+  expect(text).toContain('no_available_providers');
+  expect(text).toContain('cch_session_id: s-1');
+  const buttons = [...card.querySelectorAll('button')].map((button) => button.textContent);
+  expect(buttons).toContain('仍然继续');
+  expect(buttons).not.toContain('继续');
+});

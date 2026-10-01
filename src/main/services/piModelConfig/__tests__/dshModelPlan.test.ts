@@ -193,6 +193,8 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     const logged = JSON.stringify(log.mock.calls);
     expect(logged).toContain('u-pi-messages/u1: unsupported_api (pi-messages)');
     expect(logged).toContain('compat.supportsToolReferences: compat_not_offered');
+    // Decision 146 (GW-4): the shipped catalog's Grok row reserves its whole window.
+    expect(logged).toContain('grok/grok-4.6 maxTokens: max_tokens_clamped (500000 -> 125000)');
     expect(logged).not.toContain(CANARY);
   });
 });

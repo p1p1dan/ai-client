@@ -301,8 +301,11 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
               <StatusIcon />
               <span>
                 {t('Code Review')}
+                {/* Decision 146 (GW-6): automatic mode stores no model id; it
+                    used to render as empty brackets. It says what the AI
+                    settings page calls it instead. */}
                 <span className="text-muted-foreground font-normal">
-                  ({codeReviewSettings.model})
+                  ({codeReviewSettings.model || t('Automatic')})
                 </span>
               </span>
             </DialogTitle>

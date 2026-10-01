@@ -20,6 +20,8 @@ import {
   EMPTY_PLAN_DEFAULT_MODEL,
   IMPLIED_EFFORT_LEVELS,
   KEY_REF_PREFIX,
+  MAX_TOKENS_WINDOW_SHARE_FALLBACK,
+  MAX_TOKENS_WINDOW_SHARE_LIMIT,
 } from './tables.ts';
 import type {
   DshEffortLevel,
@@ -162,12 +164,20 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     providerId: string,
     modelId: string | undefined,
     field: string,
-    reason: DshFieldDropReason
+    reason: DshFieldDropReason,
+    detail?: string
   ) => {
     const key = [providerId, modelId ?? '', field, reason].join('\0');
     if (fieldDropKeys.has(key)) return;
     fieldDropKeys.add(key);
-    drops.push({ kind: 'field', providerId, ...(modelId ? { modelId } : {}), field, reason });
+    drops.push({
+      kind: 'field',
+      providerId,
+      ...(modelId ? { modelId } : {}),
+      field,
+      reason,
+      ...(detail ? { detail } : {}),
+    });
   };
 
   /** R6: only the keys this protocol offers; the model stays either way. */
@@ -253,6 +263,33 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     return { declared: false, forced: false };
   };
 
+  /**
+   * Decision 146 (GW-4): the reply reservation the plan hands DSH for a row.
+   *
+   * DSH's automatic compaction budgets a conversation as the row's
+   * `contextWindow` minus its `maxTokens` minus a fixed headroom
+   * (`dsh-compaction-basic` `resolveCompactSpec`); a catalog that wrote the
+   * window into `maxTokens` too (Grok 4.7: 500000 / 500000, and many rows of
+   * pi-ai's own catalog) leaves it nothing, so compaction refuses to run and
+   * a long chat eventually overflows. A reservation over half the window is
+   * read as that mistake, not as a real output cap, and replaced by a quarter
+   * of the window — the share DSH reserves on its own reference route
+   * (DeepSeek: 256k of 1M). Only rows that declare both numbers are judged;
+   * the user's models.json is not touched.
+   */
+  const plannedMaxTokens = (
+    providerId: string,
+    id: string,
+    contextWindow: number | undefined,
+    maxTokens: number | undefined
+  ): number | undefined => {
+    if (maxTokens === undefined || contextWindow === undefined) return maxTokens;
+    if (maxTokens <= Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_LIMIT)) return maxTokens;
+    const clamped = Math.max(1, Math.floor(contextWindow * MAX_TOKENS_WINDOW_SHARE_FALLBACK));
+    dropField(providerId, id, 'maxTokens', 'max_tokens_clamped', `${maxTokens} -> ${clamped}`);
+    return clamped;
+  };
+
   /** R7 / R8 for one row. */
   const planModel = (
     model: AcceptedModel,
@@ -263,7 +300,12 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     const { raw, id } = model;
     const name = nonEmptyString(raw.name);
     const contextWindow = positiveInteger(raw.contextWindow);
-    const maxTokens = positiveInteger(raw.maxTokens);
+    const maxTokens = plannedMaxTokens(
+      providerId,
+      id,
+      contextWindow,
+      positiveInteger(raw.maxTokens)
+    );
     const input = Array.isArray(raw.input)
       ? [
           ...new Set(

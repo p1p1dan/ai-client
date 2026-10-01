@@ -3866,3 +3866,16 @@ Object.assign(zhTranslations, {
   // Toast close button (`ui/toast.tsx`).
   'Close notification': '关闭通知',
 });
+
+/**
+ * dsh-rebase decision 146: follow-ups to the P1-5 real-gateway pass — the card
+ * for a gateway that has no upstream left (GW-2; reached through
+ * `sessionFailure.ts`'s table, not a literal `t('…')`).
+ */
+Object.assign(zhTranslations, {
+  'The company gateway has no model service available': '公司网关目前没有可用的模型服务',
+  'The company gateway answered that none of the model services behind it can take this request right now, so it never reached a model.':
+    '公司网关答复：它后面的模型服务目前都无法处理这个请求，请求没有送到模型。',
+  'This was not retried automatically, because retrying right away gets the same answer. Switch to another model or try again later; if it keeps happening, forward the error detail to the gateway administrator.':
+    '马上重试只会得到同样的答复，所以没有自动重试。请换一个模型或稍后再试；如果一直这样，请把错误详情转给网关管理员。',
+});

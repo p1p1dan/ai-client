@@ -7,7 +7,10 @@
  * (`stream_gate_precommit` / `prebuffer_overflow`) can answer with a 5xx, and
  * the same request then fails the same way three more times, each after a
  * backoff, before the user sees why. A model that refuses a parameter
- * (`… is not supported for this model`) is the same kind of failure. Their
+ * (`… is not supported for this model`) is the same kind of failure, and so
+ * is a gateway answering that no upstream is left for the request
+ * (`no_available_providers`, decision 146: 30-odd seconds and four times the
+ * gateway traffic for one certain refusal). Their
  * text is the only thing that tells them apart (`classifyDshFailureText`),
  * and the route's policy has no knob for text, so this hook answers first:
  * prepended on `agent/request-error`, it leaves such a failure terminal and

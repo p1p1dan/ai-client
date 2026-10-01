@@ -79,7 +79,7 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
         dropped: plan.dropped.map((drop) =>
           drop.kind === 'model'
             ? `${drop.providerId}/${drop.modelId}: ${drop.reason}${drop.detail ? ` (${drop.detail})` : ''}`
-            : `${drop.providerId}${drop.modelId ? `/${drop.modelId}` : ''} ${drop.field}: ${drop.reason}`
+            : `${drop.providerId}${drop.modelId ? `/${drop.modelId}` : ''} ${drop.field}: ${drop.reason}${drop.detail ? ` (${drop.detail})` : ''}`
         ),
       });
     }

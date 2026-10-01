@@ -88,7 +88,12 @@ export type DshFieldDropReason =
   /** Decision 141: `off` cannot be offered to a row forced onto adaptive thinking. */
   | 'adaptive_thinking_forced'
   /** Decision 141: advisory only — a reasoning row with no declared adaptive-only compat. */
-  | 'adaptive_thinking_undeclared';
+  | 'adaptive_thinking_undeclared'
+  /**
+   * Decision 146: not left out but replaced — `maxTokens` over half the row's
+   * `contextWindow` is planned as a quarter of it (`detail`: `<declared> -> <planned>`).
+   */
+  | 'max_tokens_clamped';
 
 export type DshPlanDrop =
   | {
@@ -104,6 +109,7 @@ export type DshPlanDrop =
       modelId?: string;
       field: string;
       reason: DshFieldDropReason;
+      detail?: string;
     };
 
 export interface DshModelPlan {

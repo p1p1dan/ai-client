@@ -50,6 +50,7 @@ import {
 import { useGitStatus } from '@/hooks/useGit';
 import { useGitExternalRefresh } from '@/hooks/useGitHeadSignature';
 import { useGitHistoryInfinite } from '@/hooks/useGitHistory';
+import { useGitRepoAppearanceWatch } from '@/hooks/useGitRepoAppearance';
 import {
   useFileChanges,
   useFileDiff,
@@ -168,6 +169,17 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
     [activeSessionId, sessions, workspaces]
   );
   const workdir = 'workdir' in resolution ? resolution.workdir : null;
+
+  // Decision 146 (GW-8): a `git init` in the open folder used to stay
+  // invisible until the window regained focus. While this panel is on screen
+  // saying "not a Git repository", re-ask that cached answer on the panel's
+  // polling terms; a "yes" flips the workspace and the panel follows.
+  useGitRepoAppearanceWatch(
+    'reason' in resolution && resolution.reason === 'not-git'
+      ? (resolution.judgedPath ?? null)
+      : null,
+    surfaceActive
+  );
 
   const [state, dispatch] = useReducer(reduceGitSurfaceView, initialGitSurfaceViewState);
 

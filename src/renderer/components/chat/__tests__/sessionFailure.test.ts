@@ -211,6 +211,7 @@ describe('deriveSessionFailure — the reason a turn stopped', () => {
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
       'GATEWAY_STREAM_GATE',
+      'GATEWAY_NO_UPSTREAM',
       'MODEL_SETTING_UNSUPPORTED',
       'unknown',
     ]) {
@@ -345,6 +346,7 @@ describe('every failure sentence has a Chinese entry', () => {
       'NETWORK_ERROR',
       'PROVIDER_ERROR',
       'GATEWAY_STREAM_GATE',
+      'GATEWAY_NO_UPSTREAM',
       'MODEL_SETTING_UNSUPPORTED',
       'unknown',
     ]) {
@@ -407,5 +409,23 @@ describe('the gateway stream gate and a refused model setting', () => {
     expect(timeline).toContain('failure.hintWithContinue');
     expect(timeline).toContain('label={failure.continueLabel}');
     expect(code(source('FailureContinueButton.tsx'))).toContain('{t(label)}');
+  });
+
+  it('[GW2-CARD] a gateway with no upstream left: says why it was not retried, keeps a long-shot Continue (decision 146)', () => {
+    const view = deriveSessionFailure({
+      errorCode: 'GATEWAY_NO_UPSTREAM',
+      error: '503: {"message":"No available providers","type":"no_available_providers"}',
+    });
+    expect(zh(view.title)).toBe('公司网关目前没有可用的模型服务');
+    expect(zh(view.reason)).toContain('请求没有送到模型');
+    expect(zh(view.hint)).toBe(
+      '马上重试只会得到同样的答复，所以没有自动重试。请换一个模型或稍后再试；如果一直这样，请把错误详情转给网关管理员。'
+    );
+    expect(view.action).toBe('continue');
+    expect(canContinueSession(view, true)).toBe(true);
+    expect(view.hintWithContinue).toBe(true);
+    expect(view.continueLabel).toBe('Continue anyway');
+    // The gateway's own text, session marker included, is what its administrator needs.
+    expect(view.showsDetail).toBe(true);
   });
 });

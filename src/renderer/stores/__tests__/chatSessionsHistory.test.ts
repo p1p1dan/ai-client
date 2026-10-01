@@ -1527,3 +1527,110 @@ describe('a fork opens with the history it was created with (P1-7e problem 2)', 
     ).toHaveLength(2);
   });
 });
+
+/**
+ * dsh-rebase decision 146 (GW-18): a turn cut off before any of its reply
+ * arrived — here by sign-out (Main's `forced` stop, then `released`). The
+ * live store writes the history's own note in place of the empty assistant
+ * message, so a chat reopened from memory (no replay, T092) shows
+ * 「这一轮已停止」; a later replay replaces that note with the history's
+ * row by its live id, so the turn never shows two.
+ */
+describe('a turn stopped before any reply (decision 146, GW-18)', () => {
+  const STEP_1 = 'dsh-aiclient-s1-t1-s1';
+  const event = (type: string, payload: Record<string, unknown>, requestId = 'turn-1') =>
+    ({ type, seq: 0, sessionId: SESSION_ID, requestId, timestamp: 2000, payload }) as RuntimeEvent;
+
+  const liveTurn: RuntimeEvent[] = [
+    event('message.started', { messageId: 'dsh-user-3', role: 'user' }),
+    event('message.delta', { messageId: 'dsh-user-3', blockId: 'dsh-user-3-text', text: 'go' }),
+    event('message.completed', { messageId: 'dsh-user-3' }),
+    event('message.started', { messageId: STEP_1, role: 'assistant' }),
+    event('session.stopped', { stopCause: 'forced' }),
+    event('session.status', { status: 'disconnected', disconnectReason: 'released' }),
+  ];
+
+  const placeholder = (liveMessageId?: string): HistoryMessage => ({
+    id: 'h:u1:end',
+    entryId: 'u1:end',
+    role: 'assistant',
+    timestamp: 3000,
+    blocks: [],
+    incomplete: true,
+    stopReason: 'aborted',
+    ...(liveMessageId ? { liveMessageId } : {}),
+  });
+  const page = (liveMessageId?: string): HistoryMessage[] => [
+    {
+      id: 'h:u1',
+      entryId: 'u1',
+      role: 'user',
+      timestamp: 2000,
+      blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'go' }],
+      liveMessageId: 'dsh-user-3',
+    },
+    placeholder(liveMessageId),
+  ];
+
+  const stopped = () =>
+    applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), liveTurn).state;
+
+  it('[GW18-LIVE-NOTE] the empty reply becomes the stopped note the history would replay', () => {
+    const bucket = stopped().messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['dsh-user-3', STEP_1]);
+    expect(bucket[1]).toMatchObject({
+      role: 'system',
+      turnEnd: { kind: 'stopped' },
+      incomplete: true,
+      stopReason: 'aborted',
+      stopCause: 'user_stop',
+    });
+    expect(bucket[1]?.blocks.map((block) => block.text)).toEqual([
+      'This turn was stopped. No reply was saved.',
+    ]);
+    // The same shape a replay maps the history's placeholder to.
+    const replayed = applyAll(baseState({ sessions: [makeSession()] }), [
+      makeHistoryEvent({ mode: 'branch', messages: page() }),
+    ]).state.messages[SESSION_ID]?.[1];
+    expect(replayed).toMatchObject({ role: 'system', turnEnd: { kind: 'stopped' } });
+    expect(replayed?.blocks.map((block) => block.text)).toEqual(
+      bucket[1]?.blocks.map((block) => block.text)
+    );
+  });
+
+  it('[GW18-LIVE-ONCE] a second stop (the user, then sign-out) changes nothing more', () => {
+    const state = stopped();
+    const patch = applyRuntimeEvent(state, event('session.stopped', { stopCause: 'forced' }));
+    expect(patch.messages).toBeUndefined();
+  });
+
+  it('[GW18-REPLAY-ONE] a later replay keeps one note: the history row takes the live one’s place', () => {
+    const { state } = applyAll(stopped(), [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent({ messages: page(STEP_1), totalCount: 2 }, 'req-2'),
+    ]);
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['h:u1', 'h:u1:end']);
+    expect(bucket.filter((message) => message.turnEnd)).toHaveLength(1);
+  });
+
+  it('[GW18-REPLAY-UNLINKED] without the live id the replay cannot tell them apart (why the projection names it)', () => {
+    const { state } = applyAll(stopped(), [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent({ messages: page(), totalCount: 2 }, 'req-2'),
+    ]);
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.filter((message) => message.turnEnd)).toHaveLength(2);
+  });
+
+  it('[GW18-AFTER-REPLY] a stop after part of the reply arrived only marks it, as before', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
+      ...liveTurn.slice(0, 4),
+      event('message.delta', { messageId: STEP_1, blockId: `${STEP_1}-b0`, text: 'half' }),
+      event('session.stopped', {}),
+    ]);
+    const last = state.messages[SESSION_ID]?.at(-1);
+    expect(last).toMatchObject({ id: STEP_1, role: 'assistant', stopCause: 'user_stop' });
+    expect(last).not.toHaveProperty('turnEnd');
+  });
+});

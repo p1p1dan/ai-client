@@ -144,6 +144,8 @@
  *                       is a company gateway's stream-gate refusal
  *                       (`stream_gate_precommit` / `prebuffer_overflow`), which the
  *                       host must not retry (tools/loop-guard-smoke.ts, host A).
+ *                       Decision 146 adds P1-NOUP: HTTP 503 whose body is a gateway's
+ *                       `no_available_providers` answer, likewise never retried.
  *                       dsh-rebase P1-4e adds P1-FAIL (HTTP 500 for the whole turn) and
  *                       answers DSH's compaction instruction (`/compact`) with a short
  *                       fixed checkpoint, so the recorder (tools/bridge-record.ts) can
@@ -241,7 +243,8 @@
  * offered only while it is enabled, with P0-OFFICE as its turn). Every line also says what identified the client: `auth`,
  * the key it received as `sha256:<first 8 hex>` (never the key itself: P1-5b's canary scan
  * reads these logs too), `userAgent`, `clientHeader` (X-Pilab-Client), the model the body
- * named, the path, and the reasoning fields the body carried.
+ * named, the path, and the reasoning fields the body carried. Decision 146 adds
+ * `cacheControl`: how many `cache_control` breakpoints the body carried, and where.
  *
  * `--port 0` listens on an ephemeral port; the startup line prints the actual one.
  *
@@ -405,7 +408,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|GATE|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
+  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -1029,6 +1032,21 @@ const DSH_P0_2_SCRIPTS = {
           family: 'anthropic',
           message: 'P1-GATE: the fake gateway gated this reply',
         },
+      }),
+    };
+  },
+  // dsh-rebase decision 146 (GW-2): a company gateway with no upstream left
+  // for the model answers 503 with its own `no_available_providers` body,
+  // shaped like the real one (P1-5 R2). An Anthropic client keeps only the
+  // top-level `message` of such a body: "503 No available providers (…)".
+  'P1-NOUP'() {
+    return {
+      kind: 'raw-error',
+      status: 503,
+      body: JSON.stringify({
+        message: 'No available providers (P1-NOUP)',
+        type: 'no_available_providers',
+        code: 'no_available_providers',
       }),
     };
   },
@@ -2148,6 +2166,31 @@ function reasoningOf(parsed) {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
+/**
+ * dsh-rebase decision 146 (GW-16): how many `cache_control` breakpoints the
+ * request carried, and where. Anthropic accepts at most four per request; a
+ * company gateway refused one request with `cache_limit`. Counts only, never
+ * content.
+ */
+function cacheControlOf(parsed) {
+  const count = (value) => {
+    if (Array.isArray(value)) return value.reduce((sum, item) => sum + count(item), 0);
+    if (value === null || typeof value !== 'object') return 0;
+    let sum = value.cache_control !== undefined && value.cache_control !== null ? 1 : 0;
+    for (const [key, item] of Object.entries(value))
+      if (key !== 'cache_control') sum += count(item);
+    return sum;
+  };
+  const where = {
+    top: parsed?.cache_control !== undefined && parsed?.cache_control !== null ? 1 : 0,
+    system: count(parsed?.system),
+    tools: count(parsed?.tools),
+    messages: count(parsed?.messages),
+  };
+  const total = where.top + where.system + where.tools + where.messages;
+  return total > 0 ? { total, ...where } : undefined;
+}
+
 // ---- dsh-rebase P1-8: loop guard scenarios ---------------------------------------
 
 /** The loop guard's wrap-up instruction (src/dsh-host/loopGuard/constants.ts). */
@@ -2485,6 +2528,7 @@ function main() {
         model: typeof parsed?.model === 'string' ? parsed.model : null,
         path: req.url,
         reasoning: reasoningOf(parsed),
+        cacheControl: cacheControlOf(parsed),
         ...(args.plan === 'dsh-p0-2'
           ? {
               decision: decision.label,

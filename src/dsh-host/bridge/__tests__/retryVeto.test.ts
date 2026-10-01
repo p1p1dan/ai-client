@@ -42,6 +42,28 @@ describe('vetoUnretryableFailure', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  it('[GW2-VETO] leaves a gateway with no upstream left terminal (decision 146)', async () => {
+    const next = vi.fn(retry);
+    for (const message of [
+      '503: {"message":"No available providers","type":"no_available_providers","code":"no_available_providers"}',
+      '503: {"message":"所有供应商暂时不可用，请稍后重试","type":"service_unavailable_error"}',
+      // The same body through the Anthropic SDK: only its top-level message is left.
+      '503 No available providers (cch_session_id: s-1)',
+    ]) {
+      expect(await vetoUnretryableFailure(failure(message), next), message).toBeUndefined();
+    }
+    expect(next).not.toHaveBeenCalled();
+    // A bare 503 is still an ordinary server error, and is retried.
+    const plain = vi.fn(retry);
+    expect(
+      await vetoUnretryableFailure(
+        failure('503: {"message":"busy","type":"service_unavailable_error"}'),
+        plain
+      )
+    ).toEqual({ kind: 'retry' });
+    expect(plain).toHaveBeenCalledTimes(1);
+  });
+
   it('[E2B-VETO-3] passes every other failure on, whatever its class', async () => {
     for (const payload of [
       failure('500 upstream exploded'),

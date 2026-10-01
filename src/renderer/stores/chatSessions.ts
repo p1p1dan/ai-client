@@ -963,6 +963,52 @@ function withRunStopCause(
 }
 
 /**
+ * dsh-rebase decision 146 (GW-18): a Stop — the user's, or Main's `forced`
+ * one (sign-out, the watchdog, a close mid-turn) — that cut a turn off before
+ * any of its reply arrived. Its assistant message is still empty, and it used
+ * to stay that way: the timeline drew only 「已工作 1 秒」, and reopening the
+ * chat in the same run kept it (a chat whose timeline is in memory is not
+ * re-read, T092). The history replays such a turn as a note
+ * (`mapHistoryMessageToChatMessage`, decision 140); the live store now writes
+ * the very same row in its place, so the turn reads 「这一轮已停止，没有保存
+ * 任何回复。」 before and after a reopen. A later replay folds it into the
+ * history's row by its live id (the projection names it, decision 146).
+ *
+ * Only when nothing of the turn was saved — every assistant message since the
+ * newest user message is empty — because only then does the history add its
+ * note (`projection.ts`, `onTurnEnd`). Anything else is a plain stop mark
+ * ({@link withRunStopCause}).
+ */
+function withStoppedRun(
+  state: ChatSessionsState,
+  sessionId: string
+): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
+  const bucket = state.messages[sessionId];
+  if (!bucket) return {};
+  let lastEmpty = -1;
+  for (let index = bucket.length - 1; index >= 0; index -= 1) {
+    const message = bucket[index];
+    if (!message || message.role === 'user') break;
+    if (message.role !== 'assistant') continue;
+    if (message.blocks.length > 0) return withRunStopCause(state, sessionId, 'user_stop');
+    if (lastEmpty < 0) lastEmpty = index;
+  }
+  const empty = lastEmpty >= 0 ? bucket[lastEmpty] : undefined;
+  if (!empty) return {};
+  const next = bucket.slice();
+  next[lastEmpty] = {
+    ...empty,
+    role: 'system',
+    blocks: [{ id: `${empty.id}:interrupted`, type: 'text', text: TURN_END_TEXT.stopped }],
+    turnEnd: { kind: 'stopped' },
+    incomplete: true,
+    stopReason: 'aborted',
+    stopCause: 'user_stop',
+  };
+  return { messages: withBucket(state, sessionId, next) };
+}
+
+/**
  * Maps one HistoryBlock to a ChatBlock using the same field usage as the live
  * runtime branches (tool.started / tool.completed / thinking.delta).
  */
@@ -1539,7 +1585,8 @@ function applyRuntimeEventCore(
           sessionId
         ),
         ...withoutSessionPermissions(state, sessionId),
-        ...withRunStopCause(state, sessionId, 'user_stop'),
+        // Decision 146: a turn stopped before any reply ends on the history's note.
+        ...withStoppedRun(state, sessionId),
       };
     }
 

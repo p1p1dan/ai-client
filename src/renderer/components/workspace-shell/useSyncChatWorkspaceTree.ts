@@ -18,6 +18,7 @@ import {
   NEW_CHAT_TITLE,
   STARTUP_SEED_ID_PREFIX,
 } from '@/components/chat/sessionIndex/sessionTitle';
+import { gitRepoQueryKey } from '@/hooks/gitRepoQueryKey';
 import { useWorktreeListMultiple } from '@/hooks/useWorktree';
 import { uniqueId } from '@/lib/uniqueId';
 import {
@@ -353,11 +354,13 @@ function useGitRepoByPath(paths: readonly string[]): Record<string, boolean> {
 
   const queries = useQueries({
     queries: uniquePaths.map((path) => ({
-      queryKey: ['folder', 'isGitRepo', canonicalPathKey(path)],
+      queryKey: gitRepoQueryKey(path),
       queryFn: async (): Promise<boolean> => window.electronAPI.folder.checkType(path),
       // A filesystem probe: no retry storm, but re-checkable — `git init` in a
       // folder that was not a repo when the app started must be picked up on
-      // the next invalidation rather than cached for the session.
+      // the next invalidation rather than cached for the session. Decision
+      // 146: the Git panel re-asks this same key while it shows 「不是 Git
+      // 仓库」 (`useGitRepoAppearanceWatch`), so the answer lands here.
       retry: false,
       staleTime: 30_000,
     })),
@@ -438,9 +441,19 @@ export function useSyncChatWorkspaceTree({
   // failed" into "no worktrees". Both halves are surfaced here so the next round
   // reports a cause instead of a symptom. console.error rather than warn: the
   // renderer logger pins the default level at 'error', so a warn is discarded.
+  //
+  // Decision 146 (GW-8): once per distinct content, not once per render.
+  // `useWorktreeListMultiple` rebuilds `errorsMap` (and through it the tree's
+  // diagnostics) on every render, so these used to print the same failure
+  // hundreds of times while a folder stayed non-Git.
+  const loggedWorktreeErrorsRef = useRef('');
   useEffect(() => {
-    for (const [repoPath, error] of Object.entries(errorsMap)) {
-      if (error) console.error('[workspace-tree] worktree query failed', { repoPath, error });
+    const failures = Object.entries(errorsMap).filter(([, error]) => error);
+    const signature = JSON.stringify(failures);
+    if (signature === loggedWorktreeErrorsRef.current) return;
+    loggedWorktreeErrorsRef.current = signature;
+    for (const [repoPath, error] of failures) {
+      console.error('[workspace-tree] worktree query failed', { repoPath, error });
     }
   }, [errorsMap]);
 
@@ -479,7 +492,12 @@ export function useSyncChatWorkspaceTree({
   // reported: it prints both canonical keys, so "the repo path and git's own
   // path are not the same identity" (mapped drive, junction, or a registered
   // subdirectory) is readable straight from the console instead of inferred.
+  // Same once-per-content rule as the worktree failures above (decision 146).
+  const loggedDiagnosticsRef = useRef('');
   useEffect(() => {
+    const signature = JSON.stringify(tree.diagnostics);
+    if (signature === loggedDiagnosticsRef.current) return;
+    loggedDiagnosticsRef.current = signature;
     for (const d of tree.diagnostics) {
       console.error('[workspace-tree]', d.kind, d);
     }

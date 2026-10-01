@@ -357,6 +357,55 @@ describe('MP-05 protocols and defaults (R2, R7, decision 036)', () => {
     });
   });
 
+  /**
+   * Decision 146 (GW-4): DSH's automatic compaction budgets a chat as window
+   * minus `maxTokens` minus 65536 of headroom (`dsh-compaction-basic`
+   * `resolveCompactSpec`), so a row whose `maxTokens` equals its window can
+   * never be compacted. Such a reservation is planned as a quarter of the window.
+   */
+  it('[GW4-CLAMP-1] plans a maxTokens over half the window as a quarter of it, and says so', () => {
+    const p = plan({
+      grok: provider('openai-completions', [
+        { id: 'grok-4.7', contextWindow: 500000, maxTokens: 500000 },
+        { id: 'odd', contextWindow: 204800, maxTokens: 131072 },
+      ]),
+    });
+    expect(p.routes.grok?.models.map((m) => [m.id, m.contextWindow, m.maxTokens])).toEqual([
+      ['grok-4.7', 500000, 125000],
+      ['odd', 204800, 51200],
+    ]);
+    expect(p.dropped).toContainEqual({
+      kind: 'field',
+      providerId: 'grok',
+      modelId: 'grok-4.7',
+      field: 'maxTokens',
+      reason: 'max_tokens_clamped',
+      detail: '500000 -> 125000',
+    });
+    // What DSH's compaction then has left: a positive budget, and a threshold above the tail it keeps.
+    const window = 500000;
+    const reserved = p.routes.grok?.models[0]?.maxTokens ?? window;
+    const messageBudget = window - reserved;
+    const threshold = Math.min(window * 0.8, messageBudget - 65536);
+    expect(threshold).toBeGreaterThan(Math.floor(messageBudget * 0.16));
+  });
+
+  it('[GW4-CLAMP-2] leaves a real output cap alone, and a row that does not state its window', () => {
+    const p = plan({
+      m: provider('openai-responses', [
+        { id: 'half', contextWindow: 200000, maxTokens: 100000 },
+        { id: 'gpt', contextWindow: 272000, maxTokens: 128000 },
+        { id: 'unsized', maxTokens: 500000 },
+      ]),
+    });
+    expect(p.routes.m?.models.map((m) => [m.id, m.maxTokens])).toEqual([
+      ['half', 100000],
+      ['gpt', 128000],
+      ['unsized', 500000],
+    ]);
+    expect(p.dropped.filter((drop) => drop.reason === 'max_tokens_clamped')).toEqual([]);
+  });
+
   it('drops rows without an address or a key (R3, R4)', () => {
     const p = plan(
       {
