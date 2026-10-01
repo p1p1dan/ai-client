@@ -22,7 +22,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
   3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
-  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，版本升到 `1.1.0-dsh.3` 后推送并触发 `build.yml`；下一步第 2 步（迁移 A 类权限用例与 `SessionReplayReader` 金样本，不删文件）。
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；下一步第 3 步（删 `src/runtime`、native worker 与根 pi 依赖，`THIRD_PARTY_NOTICES.md` 的改动提交前先给用户看）。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
   - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
@@ -64,6 +64,11 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-10-01 P1-12 第 2 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 2 步 A / B」，待审批），只加测试、不删文件：
+  - `68f6fccd` 权限用例：原 runtime 的 126 例 A 类权限用例，108 例改为直接测纯权限库（shared 64 例，需要 bash 语法树的 44 例进 dsh-host），8 例由现有 bridge 测试与 perm-* 录制覆盖，10 例 N/A（`BASH_ENV`、委派定义声明的档位、runtime 自己的工具表裁剪 / trace / 预览截断、MCP）；迁移的期望值一条没改，纯库上全过，没有判定差异。逐条映射表见 [p1-12-permission-case-map.md](evidence/p1-12-permission-case-map.md)。拆图 / drain 两例与 skills 4 例没按派工示例判 N/A 而是照迁（DSH 下同样存在），编排者认可。
+  - `9061fc26` 解码链与只读回放：`sessionCodec`、`piSessionTimeline`、`piSessionTree` 三份测试（22 / 15 / 6 例）搬进 `shared/legacyPiSession/__tests__/`，用例与期望未改；`sessionReplayReader.test` 改为逐份读 legacy-pi 语料并与金样本 `history` 对拍（39 例），不再依赖 runtime。shared 与原实现没有结果差异。
+  - 编排者复跑：四套 tsc；`src/shared/permissions src/dsh-host/permissions` 538 例（1 例原有跳过）；`src/shared/legacyPiSession src/main/services/chat` 402 例；Static 769 例；提交后 `src/shared/__tests__` 396 例。代理自测 `src/runtime` 1235 例与三份原解码测试仍全绿。
+- 2026-10-01 P1-12 第 1 步整包 CI：`1.1.0-dsh.3` 的 `build.yml`（run 36895051539，提交 `13bc19f5`）全部 job 通过，gate、Windows / Linux / macOS 整包与打包验证都绿。Windows、Linux 的「Verify packaged app」都报「no native worker」，L1 通过，Windows 带空格路径冒烟 44 项通过；Windows 宿主产物 85.1 MiB、Linux 82.6 MiB。安装包变小（Actions artifact 压缩后大小，对比 `1.1.0-dsh.2` 的 run 36651305647）：Windows 安装包 209.7 → 197.8 MB，Windows 解包目录 303.9 → 288.1 MB，Linux 包 204.8 → 196.6 MB，macOS 包 459.2 → 435.9 MB。只作 Actions artifact，不建 Release；自动更新 `allowPrerelease = false`，现有 1.0.x 用户收不到。
 - 2026-10-01 P1-12 第 1 步 `ca6cd1a9`（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节 13 条，待审批）：产品与安装包不再依赖旧 native worker。首屏「对话引擎是否可用」改查 DSH 宿主产物（与宿主启动共用 `resolveDshHostLayout`，开发机缺随包 node 时会进「不可用」）；权限页随包层改由内存策略表生成（`bundledPolicyScope()`，宿主与 Main 共用），不再读 agent-host 产物的 `config.json`，该层不显示路径与打开按钮；删除 `PiWorkerProcess`、`PiUtilityService`、`PiImportProcess`、`NativeSessionIndexAdapter`、子 Agent 管理页及其 IPC、依赖旧 worker 的探针与打包脚本（98 个文件，删约 1.29 万行）；打包不再构建、拷贝 `resources/agent-host`，`verify-packaged-app` 新增「包里有 `resources/agent-host` 即失败」，`build.yml` 三个打包 job 去掉 agent-host / runtime 依赖安装与 worker 构建，Linux 验证去掉 `xvfb-run`；新增 `runtimeRetiredStatic` 静态测试。`src/runtime`、`src/agent-host` 源码与 gate 的 `typecheck:runtime` / `smoke:runtime` 留到第 3 步。编排器复跑：四套 tsc；Main / preload 1658 例、渲染层 5325 例、shared / dsh-host / scripts 2315 例、Static 769 例、集成 35/35、bridge-smoke 66 项、`--check` 28 个场景无差异、宿主产物 82.6 MiB、L1 44 项；提交后 `src/shared/__tests__` 396 例。整包 GUI 未跑：打包版首屏、权限页随包行、Windows 覆盖安装不残留 `agent-host` 目录，留到 P1-14 整包点验。
 - 2026-09-30 真实网关验证的后续修复 `c0d06299`（[决策 146](decisions/146-real-gateway-followups.md)，待审批，重点第 2、3、9、15、19 条）：网关明确无上游的 503 不再自动重试（新码 `GATEWAY_NO_UPSTREAM`）；`maxTokens` 超过窗口一半时夹到 1/4（Grok 4.7 / 4.6 由 500000 改为 125000，重录 Main 计划快照）；首字前被停的一轮直播即显示「已停止」，重开不重复（GW-18）；Git 面板「不是 Git 仓库」时每 5 s 重查；代码审查标题自动模式显示「(自动)」。GW-16 `cache_limit`：我们的请求最多 3 个 `cache_control`，推断是网关自己的校验，随 R9 一并问网关管理员。用户裁决：GW-1 是网关上游问题，不改客户端；worktree 先留着。编排器复跑：四套 tsc；渲染层 5319 例、Main 1752 例、shared / dsh-host / scripts 2340 例、Static 762 例、集成 35/35、`--check` 无差异。
 - 2026-09-30 P1-5 真实网关验证 R1～R10（Linux 开发机，用户亲自登录公司账号；证据 [p1-5-real-gateway-2026-09-30.md](evidence/p1-5-real-gateway-2026-09-30.md)，50 次请求，约 $1.44）：
@@ -277,7 +282,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-没有在跑的代理。下一步：等 `1.1.0-dsh.3` 的 `build.yml` 结果（Windows / Linux 包里没有 `resources/agent-host`、L1 通过、记录安装包体积变化），然后派 P1-12 第 2 步。
+没有在跑的代理。下一步：派 P1-12 第 3 步（删 `src/runtime`、native worker 与根 pi 依赖；改 lockfile 只能手改 `package.json` 后跑 `pnpm install --lockfile-only`；`THIRD_PARTY_NOTICES.md` 的改动提交前先给用户看），之后推送并触发 `build.yml`。
 
 待用户处理：
 1. 真实网关 R1～R10 已授权（决策 130），到时要用户在开发版里登录公司账号；真实数据离线迁移测试仍待授权。

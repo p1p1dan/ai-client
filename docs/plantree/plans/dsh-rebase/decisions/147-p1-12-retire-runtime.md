@@ -63,3 +63,57 @@
     - `piResourcesSettingsStatic` 断言两个页面文件已经不存在。
     - `packaging-config` 删掉「worker package dependency boundary」整块，afterPack 的正则改为 `copyDshHost` 紧跟 `copyNodeRuntime`；agent-host `npm ci` 的断言换成反向断言：打包 job 不装 agent-host、不装 runtime，也不构建 worker。
 13. **不动**：`src/dsh-host/tools/measure.ts` 里「missing: run pnpm build:agent-host」这句提示（方案 §1.7 要求保留）；`scripts/patch-pi-permission-system.mjs` 的注释（这个文件第 3 步删）。
+
+### 第 2 步 A：权限用例迁移（2026-10-01，基线 `13bc19f5`）
+
+逐条映射见 [evidence/p1-12-permission-case-map.md](../evidence/p1-12-permission-case-map.md)：原 126 例，迁入纯库 108 例，已有覆盖 8 例，N/A 10 例，**判定差异 0 例**。本步只新增测试，`src/runtime`、`src/agent-host` 和产品代码一行未改。以下各条都是**自主决定、待审批**。
+
+1. **怎么驱动纯库**（自主决定、待审批）：
+   - 新增共用夹具 `src/shared/permissions/__tests__/gateHarness.ts`。它按 runtime bootstrap 的四步建闸门：工作区取 realpath，`scopes` 按 `canonicalPath` 解析，`loadPermissionPolicy`，`new PermissionGate`。这四步与 DSH bridge 的 `buildGate` 相同。文件工具走 `authorizeTarget`。
+   - bash 走 `src/dsh-host/permissions/__tests__/bashHarness.ts`：先 `analyzeBash`（用 `loadBashParser`）加 `checkShellPaths`，再 `authorizeTarget`，最后重新分析并比对。这与 runtime `bash` 工具、DSH `requestBuilder` 的三步一致。
+   - 没有改用 DSH 的 `authorizeCall` 或 `permissionHost`。它们属于 D 类，已有自己的测试；这里只驱动纯库。
+2. **不执行命令和工具**（自主决定、待审批）：原用例里断言工具输出、读回写入内容的那半句删掉，并在注释里写明，共 7 处。只有一处后一条命令要用到前一条命令建的文件（`cat sub/*`），改由测试预先建好。
+3. **按是否需要语法树分放**（自主决定、待审批）：
+   - 需要语法树的 44 例进 `src/dsh-host/permissions/__tests__/`：`bashGate.test.ts` 39 例，`bashGateTools.test.ts` 5 例。
+   - 其余 64 例进 `src/shared/permissions/__tests__/`。其中包括手写 bash 请求的授权与前缀用例，以及 shellPolicy 里不需要语法树的 8 例（纯函数 6 例、plan / 白名单 1 例、非法策略 1 例）。
+   - 因此原文件里同一个 `describe` 会拆在两个地方，映射表逐条写明了去向。
+4. **拆图与 drain 判为可迁，不判 N/A**（自主决定、待审批）：
+   - 派工提示把「cordis 拆图与 drain」列为 N/A 的例子。但 `permissionQueue` 里这两例测的是纯库 API：拆图唤醒队列改用 `gate.dispose()`，drain 用 `createPermissionPrompt` 的 `drain`。
+   - DSH 关会话时，`dshSessionRuntime.dispose` 也是先 drain 再 dispose，所以按「DSH 下存在」处理，照迁。拆图那一例相应改名为「…when the gate is torn down」。
+5. **SA10 迁 5 例，3 例判 N/A**（自主决定、待审批）：
+   - 迁的 5 例：署名、显式 auto 不越过 deny、继承 bypass、bypass 不越过 deny、作用域释放。
+   - 判 N/A 的 3 例测「委派定义声明的档位」，属 C 类（分片 04 §3：DSH 的代理预设没有 `permission` 字段）。
+   - `scopeToolCall` 仍在纯库里，但 DSH 没有调用它：DSH 的署名走请求自带的 `delegation`。这 3 例如果要保留，照抄即可，成本很小。
+6. **skills 的 4 例照迁**（自主决定、待审批）：
+   - 派工提示把「技能的可信路径」列为 N/A 的例子，但分片 04 把 skills 4 例算在 A 类。DSH 的 `skill` 调用走的是同一套 `policyValue` / `trustedPath` 规则，迁过来几乎不花成本，所以照迁。
+   - 请求按 runtime `authorizeSkill` 的形状照抄。`/skill:name` 展开入口是 runtime 自己的（DSH 原生加载技能，决策 101），只迁它发给闸门的那次判定，用例相应改名。
+7. **MCP 的 3 例判 N/A**（自主决定、待审批）：MCP 已搁置（决策 090），dsh-base 没有 MCP 服务器工具（分片 04 §3 C 类）。按 `policyValue` 匹配的规则已由 skill 用例和审计值用例覆盖。
+8. **已有覆盖的不重写**（自主决定、待审批）：
+   - `workerEndToEnd` 的 3 例、`nativeWorkerRuntime` 的 4 例，由 `permissionBridge.test.ts` 的 [perm-card-allow]、[perm-card-deny]、[perm-stop]、[perm-seed-*]、[setter-*]、[policy-project] 和 `perm-*` 录制覆盖。
+   - tools 的「grep 跳过秘密文件」由 `permissionHost.test.ts` 的 search results 两例和 `perm-search` 录制覆盖。
+9. **依赖 runtime 机制的判 N/A**（自主决定、待审批）：
+   - 判 N/A 的有：`BASH_ENV`（runtime 自己的执行环境）、plan 下工具表裁剪（runtime 注册表）、trace 里的 `permission_decision` 与预览截断（runtime agent loop）。
+   - 「requires approval for writes…crops plan mutation」的最后一句原来断言工具表里没有 `write`，改为断言闸门在 plan 下对 `write` 判 `deny`，用例名里的 crops 相应改为 refuses。
+   - tools 的 D14 一例只迁两段文字和槽位名；拼接顺序是 runtime `composeSystemPrompt` 决定的，DSH 的顺序已由 `permissionHost.test.ts` 的提示词上下文用例覆盖。
+10. **按内容命名，文件头注明出处**（自主决定、待审批）：
+    - 新文件按测的内容命名：`cardOutcomes`、`sessionGrants`、`approvalQueue`、`delegateScope`、`gearsAndTools`、`shellPathSpellings`、`bashGate`、`bashGateTools`，不按来源命名。
+    - 每个文件头写「Moved from src/runtime/__tests__/…」。第 3 步删掉 runtime 后，靠它追溯；以后从 main 合并 1.0.x 的权限修复时，也靠它对照。
+11. **夹具的位置**（自主决定、待审批）：
+    - 两个夹具 `gateHarness.ts`、`bashHarness.ts` 放在各自的 `__tests__/` 下，与 `fakeDsh.ts` 同例；dsh-host 的夹具 import shared 的夹具。
+    - vitest 只收 `*.test.ts`，不会把夹具当用例。纯库的边界静态测试只扫 `src/shared/permissions/*.ts`，不扫 `__tests__/`，所以夹具可以用 `node:fs`。
+
+### 第 2 步 B：解码链用例搬迁与只读回放对拍（2026-10-01，基线 `13bc19f5`）
+
+由实现代理交回、编排者录入。迁移结果：三份解码链测试 22 / 15 / 6 例全搬，shared 与原实现没有结果差异；`sessionReplayReader.test.ts` 39 例。
+
+1. **新文件命名**（自主决定、待审批）：按 shared 模块命名为 `legacyPiCodec`、`legacyPiTimeline`、`legacyPiTree.test.ts`，与已有的 `legacyPiCorpus` 同前缀，不沿用 `sessionCodec`、`piSessionTimeline`、`piSessionTree`。第 3 步用 `rg -a` 扫旧标识符时不会撞上新文件，同目录也没有大小写冲突。
+2. **只改 import**（自主决定、待审批）：三份搬迁测试的用例主体与期望逐字未改，只换 import、加文件头；两边同时全绿，证明搬迁没有改变判定。
+3. **tree 不补错误类型断言**（自主决定、待审批）：方案 §1.3 说的「改成 `LegacyPiSessionError`」那条断言不在 `piSessionTree.test.ts`，而在第 3 步整份删的 `legacyPiSessionWrappers.test.ts`；shared 一侧 `legacyPiSessionSeams.test.ts` 已断言 `LegacyPiSessionError` / `WORKER_TREE_UNAVAILABLE`，不重复。
+4. **回放的对拍基准**（自主决定、待审批）：以 `fixtures/legacy-pi/golden/*.golden.json` 的 `history` 为准（`legacyPiCorpus.test.ts` 钉住的那份），只读不写；不用 `legacy-pi-dsh/*.projection.json`，那是转成 DSH 之后的投影，链路不同。
+5. **严格解码与金样本的对应**（自主决定、待审批）：金样本在 `tolerateUnfinished` 下解码，回放器严格解码；金样本 `strict` 为拒绝的文件，按「回放被拒，`cause` 等于该 code」判定。另有一例写死「语料中被拒的恰好是这 4 份及其 cause」，防止拒绝分支空转。
+6. **两处 cause 不同，按现状记录**（自主决定、待审批）：非法 UTF-8 取金样本的 `ERR_ENCODING_INVALID_ENCODED_DATA`；零字节文件由回放器自己的头检查拒绝、不带 cause（金样本记的 `session_invalid` 来自回放器不调用的 `firstRow`）。没有改生产代码。
+7. **v1 派生 id 换算**（自主决定、待审批）：v1 没有 id，转换时用「路径加行号」的 sha256 派生；测试把金样本里按生成器路径派生的 id 换成按临时副本路径派生的 id 再比较。
+8. **语料先复制再读**（自主决定、待审批）：每个用例把语料复制进自己的临时目录再读，并核对目录里只有这一个文件、mtime / 大小 / sha256 不变；即使将来回放器出现写盘回归，也不会污染夹具。
+9. **`legacy-pi-v3-drifted` 不参加「原件 = 副本」对拍**（自主决定、待审批）：副本做完后原件又被续写，与 `legacyPiCorpus.test.ts` 的处理一致。
+10. **旧断言的去向**：v4 可回放且不取写锁、v3 只在内存里转换、分页、未完成操作被拒、非会话文件与缺失文件、头里没有 cwd 时用索引的工作区，六组全部保留或改写，没有删掉仍有意义的断言；「非会话文件」语料里没有，测试里直接写一行纯 JSON。
+11. **留给后续的过期注释**：`SessionReplayReader.ts` 文件头仍写「与 `JsonlSessionStore.history()` 对拍」；`modelMissingWiring.test.ts` 第 217、235 行引用 `piSessionTimeline`；`legacyPiSessionSeams.test.ts` 文件头说「1.0.x 行为由 runtime 自己的会话测试钉住」。第 3 步删文件时一并改指新测试。
