@@ -36,9 +36,9 @@ import {
   type PermissionGear,
   type RuntimePermissionSettings,
 } from './runtimePermission.ts';
-// Explicit `.ts`: in dev the Pi worker loads this file as SOURCE under Node's
-// --experimental-strip-types (PiWorkerProcess.resolvePiWorkerEntryPath), and
-// Node's ESM resolver has no extension search. Type-only imports above are
+// Explicit `.ts`: the DSH bridge loads this file as SOURCE under Node's type
+// stripping in dev (as the native worker's source entry did), and Node's ESM
+// resolver has no extension search. Type-only imports above are
 // erased before that matters; a VALUE import without the suffix is what made
 // every dev-mode session die with ERR_MODULE_NOT_FOUND. Keep any future value
 // import from this file suffixed too.

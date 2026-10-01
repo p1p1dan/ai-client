@@ -119,8 +119,9 @@ export const PI_SUBAGENTS_FEATURE_ID = 'subagents';
 
 /**
  * The older boolean behind {@link PI_SUBAGENTS_FEATURE_ID}, still read so an
- * install that set it keeps its choice. Absent is "never chose", which is ON —
- * see `nativeSubagentSettings`, the single reader of that rule.
+ * install that set it keeps its choice. Absent is "never chose", which is ON.
+ * Since dsh-rebase P1-12 its only reader is the legacy-asset notice
+ * (`delegationSwitchExplicitlyOff`, decision 116 rule 9).
  */
 export const PI_ENABLE_SUBAGENTS_SETTING_KEY = 'enablePiSubagents';
 
@@ -333,54 +334,26 @@ export interface PiModelManagementSettings {
   lastFailure: PiModelSyncFailure | null;
 }
 
-/** R04 — the three durable installation locations shown in Settings → Resources. */
+/**
+ * Settings → Extensions → Skills: the two skill folders the DSH host reads
+ * (dsh-rebase P1-16e, decision 101). P1-12 step 1 dropped the delegation
+ * switch, the prompt-template folders and the user's own `~/.pi/agent`
+ * folders, which nothing reads any more (decisions 103-105, 116).
+ */
 export interface PiResourceSettings {
   managed: boolean;
-  /**
-   * Whether this app's own delegation is offered to the model.
-   *
-   * cutover-10: read from `nativeSubagentSettings`, the same function the
-   * worker's own wiring reads, so the page cannot say "off" for a session that
-   * registers `Task*` anyway. An install that never chose gets it ON.
-   */
-  enableSubagents: boolean;
   paths: {
+    /** `~/.agents/skills`. */
     sharedSkills: string;
-    /**
-     * H/19 — the user's OWN `~/.pi/agent` subdirectories. Since both modes now
-     * run out of the app's directory these are no longer loaded; they are the
-     * SOURCE the migration copies from, and the settings page shows them as
-     * such.
-     */
-    userSkills: string;
-    userPromptTemplates: string;
-    /** `<appAgentDir>/{skills,prompts}` — what every session actually loads. */
+    /** `<appAgentDir>/skills`, the host's `customSkillDirs`. */
     appSkills: string;
-    appPromptTemplates: string;
   };
-  /**
-   * The native feature switches, as `src/agent-host/bundledPlugins.mjs`
-   * declares them, each with what this install has it set to.
-   */
-  features: Array<{
-    id: string;
-    label: string;
-    cost: string;
-    enabled: boolean;
-  }>;
 }
 
 /**
- * A partial update: each present field is applied, absent fields are left as
- * they are. Independent switches share one settings surface, and a request that
- * had to carry all of them would make any toggle able to clobber the others
- * from a stale snapshot.
+ * The per-feature switch map 1.0.x wrote (`{ subagents: false }`); read only
+ * by the legacy-asset notice since dsh-rebase P1-12.
  */
-export interface UpdatePiResourceSettingsRequest {
-  enableSubagents?: boolean;
-  optInFeatures?: Record<string, boolean>;
-}
-
 export const PI_OPT_IN_FEATURE_SETTINGS_KEY = 'piOptInFeatures';
 
 export function parsePiModelRef(value: string): { provider: string; modelId: string } | null {

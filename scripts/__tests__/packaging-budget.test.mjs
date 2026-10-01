@@ -9,22 +9,9 @@ import {
   DSH_HOST_ARTIFACT_MAX_FILES,
   DSH_HOST_ARTIFACT_TARGET_BYTES,
   evaluateDshHostArtifact,
-  evaluateWorkerArtifactSize,
   formatBytes,
   topDirectories,
-  WORKER_ARTIFACT_MAX_BYTES,
 } from '../packaging-budget.mjs';
-
-describe('worker artifact safety ceiling', () => {
-  it('uses an inclusive ceiling', () => {
-    expect(evaluateWorkerArtifactSize(WORKER_ARTIFACT_MAX_BYTES).status).toBe('ok');
-    expect(evaluateWorkerArtifactSize(WORKER_ARTIFACT_MAX_BYTES + 1).status).toBe('over');
-  });
-
-  it('rejects the former Codex-sized payload', () => {
-    expect(evaluateWorkerArtifactSize(388 * 1024 * 1024).status).toBe('over');
-  });
-});
 
 describe('DSH host artifact budget (dsh-rebase decision 014, re-set by P1-10a)', () => {
   const MiB = 1024 * 1024;
@@ -74,6 +61,8 @@ describe('DSH host artifact budget (dsh-rebase decision 014, re-set by P1-10a)',
   });
 });
 
+// dsh-rebase P1-12 step 1 (decision 147): the native worker artifact and its
+// 256 MiB ceiling are gone; verify-packaged-app now refuses `resources/agent-host`.
 describe('size diagnostics', () => {
   let tmp;
   beforeEach(() => {

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -9,8 +9,8 @@ import { stripComments } from '../../../../renderer/components/chat/__tests__/st
  * name and the code review run on the shared DSH host, and nothing in Main
  * reaches the native utility worker any more.
  *
- * `PiUtilityService.ts` (and the worker it forks) stays in the tree until
- * P1-12 deletes the runtime; these guards keep it unreachable meanwhile. The
+ * `PiUtilityService.ts` was deleted in P1-12 step 1 (decision 147); these
+ * guards keep it from coming back under any name they know. The
  * behaviour tests (`src/main/services/ai/__tests__`, `DshCompletionService`,
  * the shared-host integration test) prove the new path works; this pins that
  * the old one cannot creep back as an import.
@@ -61,10 +61,9 @@ describe('one-shot completions run on the DSH host (P1-15)', () => {
     expect(code(path.join(AI, 'code-review.ts'))).toContain("purpose: 'code-review',");
   });
 
-  it('no shipped Main code reaches PiUtilityService any more; it waits for P1-12', () => {
-    const own = path.join(AGENT_HOST, 'PiUtilityService.ts');
+  it('no shipped Main code reaches PiUtilityService, which P1-12 deleted', () => {
+    expect(existsSync(path.join(AGENT_HOST, 'PiUtilityService.ts'))).toBe(false);
     const offenders = mainFiles(MAIN)
-      .filter((file) => file !== own)
       .filter((file) => /PiUtilityService|piUtilityService/.test(code(file)))
       .map((file) => path.relative(MAIN, file));
     expect(offenders).toEqual([]);

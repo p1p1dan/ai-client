@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../chat/__tests__/stripComments';
@@ -71,11 +71,15 @@ describe('Skills settings (Resources page, DSH build)', () => {
 
   /**
    * Decision 104 rule 3 and decision 090: the sub-agent page and the pi
-   * extension page are gone from Extensions. Their files stay until P1-12.
+   * extension page are gone from Extensions. P1-12 step 1 (decision 147)
+   * deleted the sub-agent page's files and the bridge it called.
    */
   it('mounts neither the sub-agent page nor the pi extension page', () => {
     expect(settingsContent).not.toContain('PiSubagentsSettings');
     expect(settingsContent).not.toContain('PiPluginsSettings');
+    for (const name of ['PiSubagentsSettings.tsx', 'subagentManagementModel.ts']) {
+      expect(existsSync(join(__dirname, '..', name)), name).toBe(false);
+    }
   });
 
   it('keeps the migration sections on their own page', () => {

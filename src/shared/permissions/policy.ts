@@ -44,6 +44,25 @@ export interface PermissionPolicySources {
   local: boolean;
 }
 
+/** The `path` of the bundled scope: an in-memory table, not a file on disk. */
+export const BUNDLED_POLICY_SCOPE_PATH = 'bundled';
+
+/**
+ * The bundled scope, built from the shipped policy table in memory.
+ *
+ * One builder for both readers (dsh-rebase P1-12 step 1, decision 147): the
+ * host's loader below and Main's settings page, which used to read the same
+ * table back from a `config.json` the native worker artifact carried.
+ */
+export function bundledPolicyScope(): PolicyScope {
+  return {
+    id: 'bundled',
+    path: BUNDLED_POLICY_SCOPE_PATH,
+    present: true,
+    config: parsePermissionConfig(AICLIENT_DEFAULT_PERMISSION_POLICY).config,
+  };
+}
+
 /**
  * decision 008 — the bundled policy is always the base scope.
  *
@@ -69,14 +88,7 @@ export async function loadPermissionPolicy(
   }
 ): Promise<RuntimePermissionPolicy> {
   const createError = options.createError ?? createPermissionError;
-  const scopes: PolicyScope[] = [
-    {
-      id: 'bundled',
-      path: 'bundled',
-      present: true,
-      config: parsePermissionConfig(AICLIENT_DEFAULT_PERMISSION_POLICY).config,
-    },
-  ];
+  const scopes: PolicyScope[] = [bundledPolicyScope()];
   const sources: string[] = [];
   const notes: string[] = [];
   const enabled = options.sources;

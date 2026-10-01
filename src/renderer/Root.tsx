@@ -267,7 +267,7 @@ function RootWithOnboardingGate() {
   if (decision.shell === 'runtime-unavailable') {
     return (
       <RuntimeDetectionFailedShell
-        error={t('The bundled Pi worker runtime could not be found.')}
+        error={t('The bundled chat engine could not be found.')}
         onRetry={() => {
           setRuntimeOverride(null);
           void runtime.refetch();

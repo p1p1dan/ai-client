@@ -1,34 +1,30 @@
 /**
- * Verify a packaged app: legal notices, the worker-only Pi runtime payload,
- * the bundled Node runtime and the DSH host artifact (dsh-rebase P1-2), then
- * smoke both engines (`--skip-smoke` skips the Electron worker smoke,
- * `--skip-dsh-smoke` the DSH one, which needs no Electron).
+ * Verify a packaged app: legal notices, the bundled Node runtime and the DSH
+ * host artifact (dsh-rebase P1-2), then the DSH host's L1 smoke on the
+ * packaged node (`--skip-dsh-smoke` skips it; it needs no Electron).
+ *
+ * dsh-rebase P1-12 step 1 (decision 147): the native worker artifact is no
+ * longer built or shipped, so its structure, size and Electron bootstrap smoke
+ * are gone, and a package that still carries `resources/agent-host` fails.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { verifyArtifact } from './agent-host-build-lib.mjs';
 import { verifyDshArtifact } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
-import { evaluateWorkerSmokeReport } from './packaged-worker-report.mjs';
-import {
-  evaluateDshHostArtifact,
-  evaluateWorkerArtifactSize,
-  formatBytes,
-  topDirectories,
-} from './packaging-budget.mjs';
+import { evaluateDshHostArtifact, formatBytes, topDirectories } from './packaging-budget.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const require = createRequire(import.meta.url);
+
+/** Resource directories the retired native worker used to occupy. */
+const RETIRED_RESOURCE_DIRS = ['agent-host'];
 
 function parseArgs(argv) {
   const args = {
     appDir: path.join(repoRoot, 'dist', 'win-unpacked'),
-    skipSmoke: false,
     skipDshSmoke: false,
     reportFile: null,
     dshReportFile: null,
@@ -39,8 +35,6 @@ function parseArgs(argv) {
       i += 1;
     } else if (argv[i] === '--report-file') {
       args.reportFile = path.resolve(argv[++i]);
-    } else if (argv[i] === '--skip-smoke') {
-      args.skipSmoke = true;
     } else if (argv[i] === '--skip-dsh-smoke') {
       args.skipDshSmoke = true;
     } else if (argv[i] === '--dsh-report-file') {
@@ -111,47 +105,12 @@ function checkLegalNotices(resourceDir, failures) {
   }
 }
 
-function runWorkerSmoke(workerPath, failures) {
-  let electronPath;
-  try {
-    electronPath = require('electron');
-  } catch (error) {
-    failures.push(`Electron binary is unavailable for worker smoke: ${String(error)}`);
-    return;
+/** dsh-rebase P1-12 step 1: nothing of the native worker may ship. */
+function checkNoRetiredResources(resourceDir, failures) {
+  for (const name of RETIRED_RESOURCE_DIRS) {
+    const dir = path.join(resourceDir, name);
+    if (fs.existsSync(dir)) failures.push(`retired native worker resources still packaged: ${dir}`);
   }
-  const helper = path.join(repoRoot, 'scripts', 'packaged-worker-smoke.cjs');
-  const result = spawnSync(electronPath, ['--no-sandbox', helper, workerPath], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    timeout: 30_000,
-    windowsHide: true,
-    env: { ...process.env, ELECTRON_DISABLE_SECURITY_WARNINGS: '1' },
-  });
-  if (result.status !== 0) {
-    failures.push(
-      `packaged native worker bootstrap/dispose smoke failed (status=${result.status} signal=${result.signal}): ` +
-        `${result.stderr || result.stdout}`.slice(-2000)
-    );
-    return;
-  }
-  let report;
-  try {
-    const line = result.stdout.trim().split(/\r?\n/).at(-1) ?? '';
-    report = JSON.parse(line);
-  } catch {
-    failures.push(`packaged worker smoke returned invalid JSON: ${result.stdout.slice(-1000)}`);
-    return;
-  }
-  // The verdict itself lives in `packaged-worker-report.mjs` so a unit test can
-  // feed it the reports a broken package would print (T009 review, T028).
-  const verdict = evaluateWorkerSmokeReport(report, { platform: process.platform });
-  if (verdict.length > 0) {
-    failures.push(
-      `packaged worker smoke returned an invalid result — ${verdict.join('; ')}: ${JSON.stringify(report)}`
-    );
-  }
-  console.log(`[verify-packaged-app] native smoke: ${JSON.stringify(report)}`);
-  return report;
 }
 
 /** The DSH host artifact under resources/dsh-host: structure, budget, TSD header. */
@@ -168,8 +127,14 @@ function checkDshHost(resourceDir, failures) {
       `[verify-packaged-app] DSH host artifact: ${formatBytes(verified.bytes)} (${verified.bytes}B), ` +
         `${verified.files} files, ${verified.natives.length} natives${verdict.overTarget ? ' (over the 110MiB target)' : ''}`
     );
-    if (verdict.status !== 'ok')
+    if (verdict.status !== 'ok') {
       failures.push(`DSH host artifact over budget: ${verdict.reasons.join(', ')}`);
+      for (const entry of topDirectories(path.join(dshDir, 'node_modules'), 10)) {
+        console.log(
+          `  ${formatBytes(entry.bytes).padStart(10)}  ${entry.name}${entry.isDirectory ? '/' : ''}`
+        );
+      }
+    }
   } catch (error) {
     failures.push(error instanceof Error ? error.message : String(error));
   }
@@ -230,51 +195,10 @@ function main() {
 
   checkLegalNotices(resourceDir, failures);
 
-  const hostDir = path.join(resourceDir, 'agent-host');
-  try {
-    verifyArtifact({ outDir: hostDir });
-  } catch (error) {
-    failures.push(error instanceof Error ? error.message : String(error));
-  }
-
-  const workerPath = path.join(hostDir, 'worker.js');
-  if (fs.existsSync(workerPath) && firstBytes(workerPath, 16).startsWith('%TSD')) {
-    failures.push('agent-host/worker.js has a TSD header');
-  }
-  if (fs.existsSync(hostDir)) {
-    const totalBytes = fs.readdirSync(hostDir, { withFileTypes: true }).reduce((total, entry) => {
-      const target = path.join(hostDir, entry.name);
-      const measure = (value) => {
-        const stat = fs.statSync(value);
-        if (stat.isFile()) return stat.size;
-        return fs
-          .readdirSync(value)
-          .reduce((sum, name) => sum + measure(path.join(value, name)), 0);
-      };
-      return total + measure(target);
-    }, 0);
-    const verdict = evaluateWorkerArtifactSize(totalBytes);
-    console.log(
-      `[verify-packaged-app] worker artifact: ${formatBytes(totalBytes)} (${totalBytes}B)`
-    );
-    if (verdict.status !== 'ok') {
-      failures.push(
-        `worker artifact exceeds ${formatBytes(verdict.ceiling)} safety ceiling: ${formatBytes(totalBytes)}`
-      );
-      for (const entry of topDirectories(hostDir, 10)) {
-        console.log(
-          `  ${formatBytes(entry.bytes).padStart(10)}  ${entry.name}${entry.isDirectory ? '/' : ''}`
-        );
-      }
-    }
-  }
-
+  checkNoRetiredResources(resourceDir, failures);
   checkDshHost(resourceDir, failures);
   checkNodeRuntime(resourceDir, failures);
   const reports = [];
-  if (!args.skipSmoke && failures.length === 0) {
-    reports.push(runWorkerSmoke(workerPath, failures));
-  }
   if (!args.skipDshSmoke && failures.length === 0) {
     reports.push(runDshSmoke(args.appDir, args.dshReportFile, failures));
   }
@@ -283,7 +207,6 @@ function main() {
       args.reportFile,
       `${JSON.stringify({ appDir: args.appDir, reports, failures }, null, 2)}\n`
     );
-  if (args.skipSmoke) console.log('[verify-packaged-app] worker smoke skipped (--skip-smoke)');
   if (args.skipDshSmoke) console.log('[verify-packaged-app] DSH smoke skipped (--skip-dsh-smoke)');
 
   if (failures.length > 0) {
@@ -291,7 +214,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + worker-only artifact + DSH host artifact + smokes that ran'
+    '[verify-packaged-app] PASS — legal notices + no native worker + DSH host artifact + DSH smoke if it ran'
   );
 }
 

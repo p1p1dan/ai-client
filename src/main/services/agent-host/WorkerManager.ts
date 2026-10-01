@@ -6,13 +6,6 @@ import { translate } from '@shared/i18n';
 import { forkSessionTitle } from '@shared/sessionTitles';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { type AgentWireName, DSH_AGENT } from '@shared/types/agentWire';
-import type {
-  WorkerImportConversationPayload,
-  WorkerInspectImportedSessionPayload,
-  WorkerInspectImportedSessionResult,
-  WorkerReconcileImportedSessionPayload,
-  WorkerReconcileImportedSessionResult,
-} from '@shared/types/legacyImport';
 import {
   type PermissionDecisionId,
   type RuntimeEvent,
@@ -109,12 +102,6 @@ import {
 } from '../../../agent-host/stderrRedaction';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { getCurrentLocale } from '../i18n';
-import {
-  type CreatedPiImport,
-  createPiImport,
-  inspectPiImport,
-  reconcilePiImport,
-} from '../legacyImport/PiImportProcess';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
 import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
 import {
@@ -127,9 +114,6 @@ import {
 } from './DshHostSupervisor';
 import { claimedDshSessionIds, DSH_SESSION_GC_GRACE_MS, readDshSessionStub } from './dshSessionGc';
 import { drainStderrLines, flushStderrPending, pushRecentStderr } from './hostStderr';
-import { type NativeSubagentSettings, nativeSubagentSettings } from './nativeSubagentSettings';
-import { type PromptCacheTtlSettings, promptCacheTtlSettings } from './promptCacheSettings';
-import { type ProviderTimeoutSettings, providerTimeoutSettings } from './providerTimeoutSettings';
 import type { WorkerSlot, WorkerSlotLifecycleEvent } from './WorkerSlot';
 import type { WorkerTransportExit } from './WorkerTransport';
 import {
@@ -354,38 +338,14 @@ export interface WorkerManagerOptions {
   readSessionDirectory?: (directory: string) => Promise<string[]>;
   removeSessionFile?: (file: string) => Promise<void>;
   /**
-   * P5-2-5 — whether this install offers native delegation, and which
-   * definitions it switched off.
-   *
-   * Injected for the same reason `sessionFileExists` is: production reads the
-   * shared settings file, which needs Electron's `app` paths, and a unit test
-   * that only wants to check slot bookkeeping must not have to stand one up.
-   */
-  readSubagentSettings?: () => NativeSubagentSettings;
-  /**
-   * The prompt-cache TTLs the settings page holds, or `{}` when the user has
-   * chosen neither. Injected for the same reason as the reader above: the
-   * real one unwraps the renderer's persist layer out of the shared settings
-   * file, which needs Electron's `app` paths.
-   */
-  readPromptCacheTtls?: () => PromptCacheTtlSettings;
-  /**
-   * T093 — the provider idle timeout the settings page holds, or `{}` when the
-   * user has not chosen one. Injected for the same reason as the reader above.
-   */
-  readProviderTimeout?: () => ProviderTimeoutSettings;
-  /**
    * P5-2-3 — show a workspace page in the preview window.
    *
-   * Injected for the same reason as the two above: production opens a real
+   * Injected for the same reason as the stat above: production opens a real
    * Electron window, and a unit test that wants to prove the event is answered
    * must not have to open one. Rejecting is a real outcome — the reason becomes
    * the tool error the model reads.
    */
   showPreview?: (request: PreviewShowRequest) => Promise<void>;
-  createImport?: typeof createPiImport;
-  inspectImport?: typeof inspectPiImport;
-  reconcileImport?: typeof reconcilePiImport;
   onEvent?: (event: RuntimeEvent) => void;
   log?: (...args: unknown[]) => void;
   now?: () => number;
@@ -604,9 +564,6 @@ function attemptDurationSuffix(retry: SessionRetryInfo): string {
 
 export class WorkerManager {
   private readonly createSlot: typeof createPiWorkerSlot;
-  private readonly readSubagentSettings: () => NativeSubagentSettings;
-  private readonly readPromptCacheTtls: () => PromptCacheTtlSettings;
-  private readonly readProviderTimeout: () => ProviderTimeoutSettings;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
@@ -618,13 +575,7 @@ export class WorkerManager {
   private readonly removeSessionFile: (file: string) => Promise<void>;
   /** The one staged-fork sweep of this run; see `sweepStagedForkFiles`. */
   private stagedForkSweep: Promise<void> | null = null;
-  private readonly createImport: typeof createPiImport;
-  private readonly inspectImport: typeof inspectPiImport;
-  private readonly reconcileImport: typeof reconcilePiImport;
   private readonly handlers = new Set<(event: RuntimeEvent) => void>();
-  private importSlotActive = false;
-  private activeImport: CreatedPiImport | null = null;
-  private activeImportSlot: WorkerSlot | null = null;
   private readonly log: (...args: unknown[]) => void;
   private readonly now: () => number;
   private readonly createToken: () => string;
@@ -673,21 +624,10 @@ export class WorkerManager {
       'Orphan collection delay'
     );
     this.createSlot = options.createSlot ?? createPiWorkerSlot;
-    // The DEFAULT is a constant, not a settings read. Reading the real file
-    // needs Electron's `app` paths, and a manager built without a host — every
-    // unit test in this file — would then fail on something unrelated to what
-    // it is testing. The production singleton below injects the real reader.
-    this.readSubagentSettings = options.readSubagentSettings ?? (() => ({ enabled: true }));
-    // Same rule again: an empty object means "the user chose neither", which
-    // leaves the worker on the shipped defaults (1h main / 5m delegate).
-    this.readPromptCacheTtls = options.readPromptCacheTtls ?? (() => ({}));
-    // Same rule once more: an empty object means "the user chose nothing",
-    // which leaves the worker on the shipped 120s default.
-    this.readProviderTimeout = options.readProviderTimeout ?? (() => ({}));
-    // Same rule, one step further: the DEFAULT refuses. A manager with no host
-    // has no window to open, and answering `ok: true` from one would tell the
-    // model a page is on screen when nothing is. The production singleton below
-    // injects the real window manager.
+    // The DEFAULT refuses. A manager with no host has no window to open, and
+    // answering `ok: true` from one would tell the model a page is on screen
+    // when nothing is. The production singleton below injects the real window
+    // manager.
     this.showPreview =
       options.showPreview ??
       (async () => {
@@ -701,9 +641,6 @@ export class WorkerManager {
     this.listIndexedSessions = options.listIndexedSessions ?? (async () => []);
     this.readSessionDirectory = options.readSessionDirectory ?? readSessionDirectoryNames;
     this.removeSessionFile = options.removeSessionFile ?? ((file) => unlink(file));
-    this.createImport = options.createImport ?? createPiImport;
-    this.inspectImport = options.inspectImport ?? inspectPiImport;
-    this.reconcileImport = options.reconcileImport ?? reconcilePiImport;
     this.log = options.log ?? (() => undefined);
     this.now = options.now ?? Date.now;
     this.createToken = options.createToken ?? randomUUID;
@@ -961,140 +898,6 @@ export class WorkerManager {
         (attempt) => now - attempt <= this.restartWindowMs
       ).length,
     }));
-  }
-
-  async createLegacyImport(payload: WorkerImportConversationPayload): Promise<CreatedPiImport> {
-    if (this.importSlotActive) {
-      throw new WorkerManagerError(
-        'worker_import_busy',
-        'Another legacy import WorkerSlot is active',
-        true
-      );
-    }
-    this.importSlotActive = true;
-    try {
-      const created = await this.createImport(payload, {
-        onSlotCreated: (slot) => {
-          this.activeImportSlot = slot;
-        },
-      });
-      if (
-        !this.importSlotActive ||
-        !this.activeImportSlot ||
-        this.activeImportSlot.state !== 'running'
-      ) {
-        created.forceKillNow();
-        throw new WorkerManagerError(
-          'worker_import_superseded',
-          'Legacy import lost WorkerManager lifecycle authority'
-        );
-      }
-      this.activeImport = created;
-      let released = false;
-      return {
-        result: created.result,
-        pid: created.pid,
-        discard: () => created.discard(),
-        dispose: async () => {
-          if (released) return;
-          try {
-            await created.dispose();
-            released = true;
-            if (this.activeImport === created) this.activeImport = null;
-            if (this.activeImportSlot?.state === 'disposed') this.activeImportSlot = null;
-            this.importSlotActive = false;
-          } catch (error) {
-            const killed = created.forceKillNow();
-            if (killed) {
-              released = true;
-              if (this.activeImport === created) this.activeImport = null;
-              this.activeImportSlot = null;
-              this.importSlotActive = false;
-            } else {
-              this.activeImport = created;
-              this.importSlotActive = true;
-            }
-            throw error;
-          }
-        },
-        forceKillNow: () => {
-          released = true;
-          const killed = created.forceKillNow();
-          if (this.activeImport === created) this.activeImport = null;
-          this.activeImportSlot = null;
-          this.importSlotActive = false;
-          return killed;
-        },
-      };
-    } catch (error) {
-      if (!this.activeImportSlot || this.activeImportSlot.state === 'disposed') {
-        this.activeImportSlot = null;
-        this.importSlotActive = false;
-      }
-      throw error;
-    }
-  }
-
-  async inspectLegacyImport(
-    payload: WorkerInspectImportedSessionPayload
-  ): Promise<WorkerInspectImportedSessionResult> {
-    if (this.importSlotActive) {
-      throw new WorkerManagerError(
-        'worker_import_busy',
-        'Legacy import inspection cannot run while an import WorkerSlot is active',
-        true
-      );
-    }
-    this.importSlotActive = true;
-    try {
-      const result = await this.inspectImport(payload, {
-        onSlotCreated: (slot) => {
-          this.activeImportSlot = slot;
-        },
-      });
-      this.activeImportSlot = null;
-      this.importSlotActive = false;
-      return result;
-    } catch (error) {
-      const slot = this.activeImportSlot;
-      const killed = !slot || slot.state === 'disposed' || slot.forceKillNow();
-      if (killed) {
-        this.activeImportSlot = null;
-        this.importSlotActive = false;
-      }
-      throw error;
-    }
-  }
-
-  async reconcileLegacyImport(
-    payload: WorkerReconcileImportedSessionPayload
-  ): Promise<WorkerReconcileImportedSessionResult> {
-    if (this.importSlotActive) {
-      throw new WorkerManagerError(
-        'worker_import_busy',
-        'Legacy import reconciliation cannot run while an import WorkerSlot is active',
-        true
-      );
-    }
-    this.importSlotActive = true;
-    try {
-      const result = await this.reconcileImport(payload, {
-        onSlotCreated: (slot) => {
-          this.activeImportSlot = slot;
-        },
-      });
-      this.activeImportSlot = null;
-      this.importSlotActive = false;
-      return result;
-    } catch (error) {
-      const slot = this.activeImportSlot;
-      const killed = !slot || slot.state === 'disposed' || slot.forceKillNow();
-      if (killed) {
-        this.activeImportSlot = null;
-        this.importSlotActive = false;
-      }
-      throw error;
-    }
   }
 
   createSession(input: {
@@ -2876,31 +2679,6 @@ export class WorkerManager {
       }
       if (reason === 'app-shutdown') this.cancelPlanRecheck();
       if (reason === 'app-shutdown') this.cancelOrphanCollection();
-      const activeImport = this.activeImport;
-      const activeImportSlot = this.activeImportSlot;
-      // main-host-02: every teardown below is independent of the others'
-      // failure, the way the worker's own `handleDispose` is. The import slot
-      // rejects whenever its ACK or exit budget runs out, and the wrapper in
-      // `createLegacyImport` rethrows even after a successful force kill — so
-      // this used to be the single most likely thing to abort shutdown. The
-      // pool then never received `worker.dispose` (no runtime teardown, no MCP
-      // child release), `state` never reached `stopped`, and the caller's
-      // `Promise.all` failed in milliseconds, which cleared the 7s deadline
-      // whose whole job was to force-kill exactly those survivors. Shutdown
-      // reports what it could not release; it does not stop on it.
-      try {
-        if (activeImport) await activeImport.dispose();
-        else if (activeImportSlot) await activeImportSlot.dispose(reason);
-        this.activeImport = null;
-        this.activeImportSlot = null;
-        this.importSlotActive = false;
-      } catch (error) {
-        // Ownership deliberately NOT cleared: `createLegacyImport`'s wrapper
-        // already released it if its force kill landed, and kept it if it did
-        // not. A slot that survived both has to stay reachable from
-        // `forceKillAllNow`.
-        this.log('[worker-manager] legacy import disposal failed', error);
-      }
       if (reason === 'app-shutdown' && this.host) await this.shutDownWithHost();
       else await this.disposeEntries([...this.entriesBySession.values()], reason);
       this.state = 'stopped';
@@ -2939,11 +2717,6 @@ export class WorkerManager {
     this.cancelOrphanCollection();
     const entries = [...this.entriesBySession.values()];
     const slots = [...this.ownedSlots];
-    this.activeImport?.forceKillNow();
-    this.activeImportSlot?.forceKillNow();
-    this.activeImport = null;
-    this.activeImportSlot = null;
-    this.importSlotActive = false;
     this.entriesByKey.clear();
     this.entriesBySession.clear();
     this.state = 'stopped';
@@ -2996,16 +2769,9 @@ export class WorkerManager {
       ...(options.userInitiated ? { userInitiated: true } : {}),
       ...(entry.tier ? { tier: entry.tier } : {}),
       ...(entry.permissions ? { permissions: entry.permissions } : {}),
-      // P5-2-5: read at spawn time, not cached on the entry, so a user who
-      // switches delegation off gets it off on the next worker rather than only
-      // after a restart.
-      subagents: this.readSubagentSettings(),
-      // Read at spawn time for the same reason as the line above: a TTL the
-      // user just changed reaches the next worker without an app restart.
-      ...this.readPromptCacheTtls(),
-      // T093, read at spawn time for the same reason: a timeout the user just
-      // changed reaches the next worker without an app restart.
-      ...this.readProviderTimeout(),
+      // P1-12 step 1 (decision 147): no `subagents`, prompt-cache TTLs or
+      // provider idle timeout. The bridge never read them; the main TTL and
+      // the timeout reach the host through the model plan (decision 040).
       ...selection,
       onSlotCreated: (slot) => {
         this.ownedSlots.add(slot);
@@ -4340,14 +4106,8 @@ export const workerManager = new WorkerManager({
   // dsh-rebase P1-3c: the one shared DSH host every chat channel runs on, the
   // same supervisor `createPiWorkerSlot` opens channels from.
   host: dshHostSupervisor,
-  // P5-2-5: the real settings read, injected here rather than defaulted inside
-  // the class. See the constructor note.
-  readSubagentSettings: () => nativeSubagentSettings(),
-  // The real settings-page read, injected for the same reason.
-  readPromptCacheTtls: () => promptCacheTtlSettings(),
-  // T093: the real settings-page read, injected for the same reason.
-  readProviderTimeout: () => providerTimeoutSettings(),
-  // P5-2-3: the real preview window, injected for the same reason.
+  // P5-2-3: the real preview window, injected here rather than defaulted
+  // inside the class. See the constructor note.
   showPreview: (request) => previewWindowManager.show(request),
   bindRuntimeIdentity: (sessionId, sessionFile) =>
     sessionIndexService.bindRuntimeIdentity(sessionId, sessionFile),

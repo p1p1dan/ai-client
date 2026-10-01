@@ -599,20 +599,24 @@ function ScopeRowView({ scope }: { scope: ScopeRow }) {
           )}
         </div>
         <p className="text-meta text-muted-foreground">{t(scope.summary)}</p>
-        <p className="break-all text-meta text-muted-foreground">
-          <Ident>{scope.path}</Ident>
-        </p>
+        {scope.onDisk && (
+          <p className="break-all text-meta text-muted-foreground">
+            <Ident>{scope.path}</Ident>
+          </p>
+        )}
         {scope.detail && <p className="text-meta text-warning">{scope.detail}</p>}
       </div>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="shrink-0"
-        onClick={() => void window.electronAPI.piPermissions.reveal(scope.path)}
-        aria-label={t('Reveal {{scope}} in file manager', { scope: t(scope.label) })}
-      >
-        <FolderOpen className="h-4 w-4" />
-      </Button>
+      {scope.onDisk && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          onClick={() => void window.electronAPI.piPermissions.reveal(scope.path)}
+          aria-label={t('Reveal {{scope}} in file manager', { scope: t(scope.label) })}
+        >
+          <FolderOpen className="h-4 w-4" />
+        </Button>
+      )}
     </div>
   );
 }

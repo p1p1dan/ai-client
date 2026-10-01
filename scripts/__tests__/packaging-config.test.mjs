@@ -6,7 +6,6 @@ import { fileURLToPath } from 'node:url';
 
 import yaml from 'js-yaml';
 import { describe, expect, it } from 'vitest';
-import { RETIRED_BUNDLED_PLUGIN_PACKAGES } from '../../src/agent-host/bundledPlugins.mjs';
 import { copyDshHost, resolveResourcesDir } from '../afterPack.mjs';
 import { npmCiArgs, PROBE_BUNDLE } from '../dsh-host-build-lib.mjs';
 
@@ -22,9 +21,6 @@ const builderYmlText = readFileSync(path.join(repoRoot, 'electron-builder.yml'),
 const builderYml = yaml.load(builderYmlText);
 const workflowText = readFileSync(path.join(repoRoot, '.github', 'workflows', 'build.yml'), 'utf8');
 const workflow = yaml.load(workflowText);
-const workerPackage = JSON.parse(
-  readFileSync(path.join(repoRoot, 'src', 'agent-host', 'package.json'), 'utf8')
-);
 const dshHostDir = path.join(repoRoot, 'src', 'dsh-host');
 const dshPackage = JSON.parse(readFileSync(path.join(dshHostDir, 'package.json'), 'utf8'));
 const dshLock = JSON.parse(readFileSync(path.join(dshHostDir, 'package-lock.json'), 'utf8'));
@@ -167,7 +163,8 @@ describe('electron-builder.yml (C4)', () => {
   });
 
   it('keeps the agent-host artifact out of extraResources', () => {
-    // It is copied by afterPack instead; extraResources drops node_modules.
+    // dsh-rebase P1-12 step 1: it is not shipped at all any more (afterPack
+    // stopped copying it too); this keeps it from coming back this way.
     const extra = builderYml.extraResources ?? [];
     for (const entry of extra) {
       const from = typeof entry === 'string' ? entry : entry.from;
@@ -257,39 +254,6 @@ describe('DSH host package dependency boundary', () => {
       'utf8'
     );
     expect(probePatch).toMatch(/id:\s*aiclient-probe\b/);
-  });
-});
-
-describe('worker package dependency boundary', () => {
-  /**
-   * The worker's dependency list is a security surface, not a convenience: each
-   * entry is code that runs in the Pi utility process alongside the permission
-   * gate. The assertion stays EXACT (not a superset check) so an unvetted
-   * package cannot arrive unnoticed.
-   */
-  it('ships only the Pi runtime and the permission package', () => {
-    expect(Object.keys(workerPackage.dependencies).sort()).toEqual([
-      '@earendil-works/pi-coding-agent',
-      '@gotgenes/pi-permission-system',
-    ]);
-    expect(Object.keys(workerPackage.devDependencies ?? {})).toEqual([]);
-  });
-
-  it('declares every worker dependency as an exact pin', () => {
-    // A range here would let `npm install` drift the package out from under the
-    // artifact verification, which asserts specific file paths inside it.
-    for (const pkg of Object.keys(workerPackage.dependencies)) {
-      expect(workerPackage.dependencies[pkg], pkg).toMatch(/^\d+\.\d+\.\d+/);
-    }
-  });
-
-  it('no longer declares the two retired pi feature extensions', () => {
-    // T025: ~1.7 MB of payload with no loader since P6-5. Asserted on the
-    // manifest as well as on the copy filter, because a stray `npm install`
-    // here is how they would come back.
-    for (const name of RETIRED_BUNDLED_PLUGIN_PACKAGES) {
-      expect(workerPackage.dependencies).not.toHaveProperty(name);
-    }
   });
 });
 
@@ -439,7 +403,7 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
   const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
 
   // dist:prereq stages HOST inputs (fetch-node-runtime defaults to
-  // process.platform and build-agent-host prunes target-specific Pi dependencies)
+  // process.platform and build-dsh-host installs the build machine's natives)
   // while afterPack takes TARGET files. Every packaging entry
   // point must refuse the mismatch before any of that work happens.
   const guarded = [
@@ -496,12 +460,24 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     }
   });
 
-  it('uses the worker manifest in the gate and omits dev dependencies for packaging', () => {
-    const installRun = (job) =>
-      jobs[job].steps.find((step) => step['working-directory'] === 'src/agent-host')?.run;
-    expect(installRun('gate')).toBe('npm ci --omit=optional');
-    expect(installRun('build-windows')).toBe('npm ci --omit=dev --omit=optional');
-    expect(installRun('build-linux')).toBe('npm ci --omit=dev --omit=optional');
+  /**
+   * dsh-rebase P1-12 step 1 (decision 147): no packaging job installs the
+   * native worker's or the self-owned runtime's packages, or builds the worker
+   * artifact, any more. The gate still installs both for the type checks and
+   * unit tests until step 3 deletes their sources.
+   */
+  it('builds and installs nothing of the native worker on any packaging job', () => {
+    for (const job of ['build-windows', 'build-linux', 'build-macos']) {
+      const steps = jobs[job].steps;
+      const dirs = steps.map((step) => step['working-directory']).filter(Boolean);
+      expect(dirs, job).not.toContain('src/agent-host');
+      expect(dirs, job).not.toContain('src/runtime');
+      const runs = steps.map((step) => step.run ?? '').join('\n');
+      expect(runs, job).not.toContain('build-agent-host');
+      expect(runs, job).not.toContain('--skip-smoke');
+    }
+    expect(pkg.scripts).not.toHaveProperty('build:agent-host');
+    expect(pkg.scripts['dist:prereq']).not.toContain('agent-host');
   });
 
   it('installs the DSH host with its optional platform packages (decision 013)', () => {
@@ -648,6 +624,13 @@ describe('afterPack copies the DSH host for its own target only (dsh-rebase P1-2
 
   it('runs the Windows TSD rewrite over resources/dsh-host too', () => {
     expect(afterPackText).toContain("path.join(context.appOutDir, 'resources', 'dsh-host')");
-    expect(afterPackText).toMatch(/copyAgentHost\(context\);\s+copyDshHost\(context\);/);
+    expect(afterPackText).toMatch(/copyDshHost\(context\);\s+copyNodeRuntime\(context\);/);
+  });
+
+  /** dsh-rebase P1-12 step 1 (decision 147): the native worker is not packaged. */
+  it('copies no agent-host artifact and rewrites no agent-host directory', () => {
+    expect(afterPackText).not.toContain('copyAgentHost');
+    expect(afterPackText).not.toContain('out-agent-host');
+    expect(afterPackText).not.toContain("'resources', 'agent-host'");
   });
 });

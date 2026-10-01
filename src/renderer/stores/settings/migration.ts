@@ -73,6 +73,9 @@ const REMOVED_SETTING_KEYS = [
   // TUI. An old `'tui'` (or `'gui'`) is dropped on load, so every chat opens
   // in the chat view, which is the only view left.
   'presentationMode',
+  // dsh-rebase P1-12 step 1 (decision 123 rule 14): the delegate's prompt
+  // cache TTL had no page and no reader once the native worker went.
+  'subagentPromptCacheTtl',
 ] as const;
 
 /**

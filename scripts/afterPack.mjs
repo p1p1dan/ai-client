@@ -18,7 +18,9 @@ import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs'
  *   2. PowerShell copies .tmp.bin → original path (result is unencrypted)
  */
 export default async function afterPack(context) {
-  copyAgentHost(context);
+  // dsh-rebase P1-12 step 1 (decision 147): no `resources/agent-host` any more.
+  // The native worker artifact is neither built nor copied; the DSH host is
+  // the only engine the package carries.
   copyDshHost(context);
   copyNodeRuntime(context);
 
@@ -26,9 +28,6 @@ export default async function afterPack(context) {
 
   const targets = [
     path.join(context.appOutDir, 'resources', 'app.asar.unpacked'),
-    // Pi worker artifact — loaded by an Electron utilityProcess and kept as
-    // plain files so the SDK and permission extension remain resolvable.
-    path.join(context.appOutDir, 'resources', 'agent-host'),
     // DSH host artifact: plain files run by the bundled node.exe (dsh-rebase P1-2).
     path.join(context.appOutDir, 'resources', 'dsh-host'),
   ];
@@ -38,39 +37,12 @@ export default async function afterPack(context) {
 }
 
 /**
- * Copy the worker-only Pi artifact into resources/agent-host.
- *
- * Done here instead of extraResources because electron-builder injects a
- * node_modules exclusion into that copy path. afterPack also keeps the copy
- * serial with Windows executable resource rewriting.
- */
-function copyAgentHost(context) {
-  const src = path.join(context.packager.info.projectDir, 'out-agent-host');
-  if (
-    !fs.existsSync(path.join(src, 'worker.js')) ||
-    !fs.existsSync(path.join(src, 'package.json')) ||
-    !fs.existsSync(path.join(src, 'node_modules', '@gotgenes', 'pi-permission-system'))
-  ) {
-    throw new Error(
-      `[afterPack] worker-only out-agent-host missing or incomplete at ${src} — run "pnpm build:agent-host" first`
-    );
-  }
-  for (const obsolete of ['index.js', 'piHost.js']) {
-    if (fs.existsSync(path.join(src, obsolete))) {
-      throw new Error(`[afterPack] obsolete transition artifact still exists: ${obsolete}`);
-    }
-  }
-  const dest = path.join(resolveResourcesDir(context), 'agent-host');
-  fs.rmSync(dest, { recursive: true, force: true });
-  fs.cpSync(src, dest, { recursive: true });
-  console.log(`[afterPack] Copied agent-host artifact -> ${dest}`);
-}
-
-/**
  * Copy the DSH host artifact into resources/dsh-host (dsh-rebase P1-2,
- * decision 011), the same way as the agent-host artifact and for the same
- * reason. The artifact is built for one platform (its natives are installed
- * for the build machine), so its manifest must name the target being packaged.
+ * decision 011). Done here instead of extraResources because electron-builder
+ * injects a node_modules exclusion into that copy path; afterPack also keeps
+ * the copy serial with Windows executable resource rewriting. The artifact
+ * is built for one platform (its natives are installed for the build
+ * machine), so its manifest must name the target being packaged.
  */
 export function copyDshHost(context) {
   const src = path.join(context.packager.info.projectDir, 'out-dsh-host');
@@ -122,7 +94,7 @@ export function copyDshHost(context) {
  * Reads context.electronPlatformName, never process.platform — only the former
  * is correct when cross-compiling.
  *
- * Serial afterPack copy for the same rcedit-race reason as copyAgentHost.
+ * Serial afterPack copy for the same rcedit-race reason as copyDshHost.
  */
 function copyNodeRuntime(context) {
   const platform = context.electronPlatformName;

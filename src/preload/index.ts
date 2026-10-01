@@ -13,7 +13,6 @@ import type {
   PiModelSyncResult,
   PiResourceSettings,
   SyncPiModelsRequest,
-  UpdatePiResourceSettingsRequest,
 } from '@shared/piModelConfig';
 import type {
   PermissionPolicyRequest,
@@ -101,12 +100,6 @@ import type { SessionEffortLevel } from '@shared/types/agentHost';
 import type { LegacyMigrationSummary } from '@shared/types/legacyMigration';
 import type { SessionIndexListEntry } from '@shared/types/sessionIndex';
 import type { SessionPermissionTier } from '@shared/types/sessionPermissionTier';
-import type {
-  SubagentCatalogView,
-  SubagentImportPreview,
-  SubagentImportResult,
-  SubagentSaveRequest,
-} from '@shared/types/subagentManagement';
 import type { InspectPayload, WebInspectorStatus } from '@shared/types/webInspector';
 import type { WorkerCapabilityInventory, WorkerSlashCommandInfo } from '@shared/types/workerRpc';
 import type {
@@ -1234,10 +1227,6 @@ const electronAPI = {
   piResources: {
     getSettings: (): Promise<PiResourceSettings> =>
       ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS),
-    updateSettings: (payload: UpdatePiResourceSettingsRequest): Promise<PiResourceSettings> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS, payload),
-    openPromptTemplates: (): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS),
     openSkills: (): Promise<void> => ipcRenderer.invoke(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS),
     /** dsh-rebase P1-16e — `<agentDir>/skills`, next to `openSkills`' `~/.agents/skills`. */
     openAppSkills: (): Promise<void> =>
@@ -1275,37 +1264,6 @@ const electronAPI = {
       ipcRenderer.on(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
       return () => ipcRenderer.off(IPC_CHANNELS.DSH_PLUGINS_CHANGED, handler);
     },
-  },
-
-  /**
-   * P5-2-5 — the native subagent catalog.
-   *
-   * Every mutation answers with the whole catalog rather than the row it
-   * touched: a rename can bring a shadowed builtin back, a delete can change
-   * what is stale, and a UI that patched one row would show neither.
-   */
-  piSubagents: {
-    list: (): Promise<SubagentCatalogView> => ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_LIST),
-    save: (request: SubagentSaveRequest): Promise<SubagentCatalogView> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_SAVE, request),
-    remove: (name: string): Promise<SubagentCatalogView> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_DELETE, { name }),
-    setEnabled: (name: string, enabled: boolean): Promise<SubagentCatalogView> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_SET_ENABLED, { name, enabled }),
-    clearStale: (): Promise<SubagentCatalogView> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_CLEAR_STALE),
-    /** No name opens the folder itself — "where do I put one". */
-    reveal: (name?: string): Promise<void> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_REVEAL, name ? { name } : {}),
-    /**
-     * subagent-data-01 — what the legacy `<agentDir>/agents` documents would
-     * become. Reads and changes nothing; `importApply` is the half that writes,
-     * and it takes only the names the user ticked.
-     */
-    importPreview: (): Promise<SubagentImportPreview> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_IMPORT_PREVIEW),
-    importApply: (names: readonly string[]): Promise<SubagentImportResult> =>
-      ipcRenderer.invoke(IPC_CHANNELS.PI_SUBAGENTS_IMPORT_APPLY, { names: [...names] }),
   },
 
   /**

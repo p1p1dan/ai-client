@@ -4,24 +4,18 @@ import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcRequest } from '@shared/type
 import { describe, expect, it, vi } from 'vitest';
 import { createPiWorkerSlot } from '../createPiWorkerSlot';
 import { dshHostSupervisor } from '../DshHostSupervisor';
-import { forkPiWorkerProcess } from '../PiWorkerProcess';
 import type { WorkerTransport, WorkerTransportExit } from '../WorkerTransport';
 
 /**
- * dsh-rebase P1-1: the default transport is the DSH host, in every build. The
- * native worker must not even be reachable from here — a call fails the test.
- * `electron` is stubbed so either `isPackaged` can be set; the choice must not
+ * dsh-rebase P1-1: the default transport is the DSH host, in every build (the
+ * native worker launcher itself was deleted in P1-12 step 1). `electron` is
+ * stubbed so either `isPackaged` can be set; the choice must not
  * depend on it. P1-3a: the default is a channel on the one shared host, opened
  * through its supervisor (stubbed: no host is ever started here).
  */
 const electronApp = vi.hoisted(() => ({ isPackaged: false }));
 vi.mock('electron', () => ({ app: electronApp }));
 vi.mock('../DshHostSupervisor', () => ({ dshHostSupervisor: { openChannel: vi.fn() } }));
-vi.mock('../PiWorkerProcess', () => ({
-  forkPiWorkerProcess: vi.fn(() => {
-    throw new Error('chat sessions must never start the native worker');
-  }),
-}));
 
 class LoopbackTransport implements WorkerTransport {
   readonly pid = 4321;
@@ -108,7 +102,6 @@ describe('createPiWorkerSlot', () => {
     expect(dshHostSupervisor.openChannel).toHaveBeenCalledTimes(1);
     // A crash restart is not the user's: it may not revive a failed host.
     expect(dshHostSupervisor.openChannel).toHaveBeenCalledWith({ userInitiated: false });
-    expect(forkPiWorkerProcess).not.toHaveBeenCalled();
     expect(transport.requests[0]).toMatchObject({
       type: 'worker.bootstrap',
       generation: 3,

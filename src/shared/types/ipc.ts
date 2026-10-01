@@ -239,10 +239,8 @@ export const IPC_CHANNELS = {
   USER_PROVIDERS_SET_ENABLED: 'userProviders:setEnabled',
   USER_PROVIDERS_FETCH_MODELS: 'userProviders:fetchModels',
 
-  // R04 — Pi skills and prompt-template installation locations.
+  // R04 — the skill folders (Settings → Extensions → Skills).
   PI_RESOURCES_GET_SETTINGS: 'piResources:getSettings',
-  PI_RESOURCES_UPDATE_SETTINGS: 'piResources:updateSettings',
-  PI_RESOURCES_OPEN_PROMPTS: 'piResources:openPromptTemplates',
   PI_RESOURCES_OPEN_SKILLS: 'piResources:openSkills',
   /** dsh-rebase P1-16e — `<agentDir>/skills`, DSH's `customSkillDirs` (decision 101). */
   PI_RESOURCES_OPEN_APP_SKILLS: 'piResources:openAppSkills',
@@ -258,17 +256,6 @@ export const IPC_CHANNELS = {
   DSH_PLUGINS_SET_ENABLED: 'dshPlugins:setEnabled',
   // P1-7e e5 (decision 143): Main -> renderer, the new state after a host start.
   DSH_PLUGINS_CHANGED: 'dshPlugins:changed',
-
-  // P5-2-5 — managing the native subagent definitions.
-  PI_SUBAGENTS_LIST: 'piSubagents:list',
-  PI_SUBAGENTS_SAVE: 'piSubagents:save',
-  PI_SUBAGENTS_DELETE: 'piSubagents:delete',
-  PI_SUBAGENTS_SET_ENABLED: 'piSubagents:setEnabled',
-  PI_SUBAGENTS_CLEAR_STALE: 'piSubagents:clearStale',
-  PI_SUBAGENTS_REVEAL: 'piSubagents:reveal',
-  /** subagent-data-01 — preview and import legacy `<agentDir>/agents` documents. */
-  PI_SUBAGENTS_IMPORT_PREVIEW: 'piSubagents:importPreview',
-  PI_SUBAGENTS_IMPORT_APPLY: 'piSubagents:importApply',
 
   // H/19 U2 — copying `~/.pi/agent` into this app's own agent directory.
   AGENT_MIGRATION_INSPECT: 'agentMigration:inspect',

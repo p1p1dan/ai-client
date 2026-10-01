@@ -41,6 +41,11 @@ export interface ScopeRow {
   detail?: string;
   /** True for the one scope the panel's controls write. */
   writable: boolean;
+  /**
+   * False for the bundled scope: the shipped table is compiled into the app
+   * (dsh-rebase P1-12 step 1), so there is no path to show or reveal.
+   */
+  onDisk: boolean;
 }
 
 const SCOPE_COPY: Record<PolicyScopeId, { label: string; summary: string }> = {
@@ -78,6 +83,7 @@ export function deriveScopeRows(scopes: readonly PolicyScope[], locale: Locale =
       summary: copy.summary,
       path: scope.path,
       writable: scope.id === WRITABLE_SCOPE,
+      onDisk: scope.id !== 'bundled',
     };
     if (scope.withheldReason) {
       const detail = scope.parseError

@@ -211,25 +211,22 @@ export interface SettingsState {
   chatAgentDefaults: ChatAgentDefaults;
 
   /**
-   * How long the provider keeps the MAIN conversation's prompt cache prefix,
-   * and how long a DELEGATE's.
-   *
-   * Two settings rather than one because the two loops have opposite cache
-   * economics — see `@shared/types/promptCacheTtl`. Held here (renderer-owned,
-   * persisted through the settings file) rather than per session: it is a
-   * spend/latency preference for the install, not a property of one
-   * conversation. Main reads both at worker spawn time.
+   * How long the provider keeps the MAIN conversation's prompt cache prefix
+   * (`@shared/types/promptCacheTtl`). Held here (renderer-owned, persisted
+   * through the settings file) rather than per session: it is a spend/latency
+   * preference for the install, not a property of one conversation. Main
+   * reads it into the DSH model plan (decision 040). The delegate's TTL went
+   * with the native worker in dsh-rebase P1-12 step 1 (decision 123 rule 14).
    */
   promptCacheTtl: PromptCacheTtl;
-  subagentPromptCacheTtl: PromptCacheTtl;
 
   /**
    * T093 / decision 029: how long a provider request may stay SILENT before it
    * is cut and retried — first byte and mid-stream alike, one number
    * (`@shared/types/providerTimeout`).
    *
-   * Renderer-owned and persisted like the two TTLs above, and read by main out
-   * of the same settings file at worker spawn
+   * Renderer-owned and persisted like the TTL above, and read by main out of
+   * the same settings file into the DSH model plan
    * (`agent-host/providerTimeoutSettings.ts`).
    *
    * `0` means "never cut a silent request" and is a REAL value, not an empty
@@ -351,7 +348,6 @@ export interface SettingsState {
 
   // Setters - Prompt cache
   setPromptCacheTtl: (ttl: PromptCacheTtl) => void;
-  setSubagentPromptCacheTtl: (ttl: PromptCacheTtl) => void;
   /** T093: milliseconds, `0` = off. Rejects anything out of range (see the field). */
   setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
 

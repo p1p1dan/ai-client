@@ -8,10 +8,7 @@ import {
   resolveChatBodyWrite,
   resolveChatProcessWrite,
 } from '@shared/types/chatTypography';
-import {
-  DEFAULT_PROMPT_CACHE_TTL,
-  DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
-} from '@shared/types/promptCacheTtl';
+import { DEFAULT_PROMPT_CACHE_TTL } from '@shared/types/promptCacheTtl';
 import {
   DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
   isProviderIdleTimeoutMs,
@@ -172,13 +169,12 @@ export function getInitialState() {
     // draft on the legacy binding and every model on `Automatic`.
     chatAgentDefaults: EMPTY_CHAT_AGENT_DEFAULTS,
 
-    // Prompt cache. Written here as the SAME defaults the worker applies when
-    // the keys are absent, so the settings page and the runtime cannot disagree
-    // about what an untouched install is doing.
+    // Prompt cache. Written here as the SAME default the model plan applies
+    // when the key is absent, so the settings page and the engine cannot
+    // disagree about what an untouched install is doing.
     promptCacheTtl: DEFAULT_PROMPT_CACHE_TTL,
-    subagentPromptCacheTtl: DEFAULT_SUBAGENT_PROMPT_CACHE_TTL,
 
-    // T093: same discipline as the two TTLs above — the value written here is
+    // T093: same discipline as the TTL above — the value written here is
     // the one the worker applies when the key is absent, so the settings page
     // cannot show a number the runtime is not using.
     providerIdleTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
@@ -318,7 +314,6 @@ export const useSettingsStore = create<SettingsState>()(
       // when the runtime graph is built, so an open conversation keeps the one
       // it started on until it is reopened.
       setPromptCacheTtl: (promptCacheTtl) => set({ promptCacheTtl }),
-      setSubagentPromptCacheTtl: (subagentPromptCacheTtl) => set({ subagentPromptCacheTtl }),
 
       // T093: guarded at the door rather than at every reader. `0` passes —
       // it is the "off" rung, and `isProviderIdleTimeoutMs` says so — while a

@@ -22,8 +22,8 @@
  *              replaced migration's (decision 121). A pi file of a 1.0.x import is
  *              never deleted by this build: unindexed, it shows nowhere here.
  *
- * Nothing here spawns a worker: the pi import worker (`PiImportProcess.ts`)
- * has no caller left and goes with the runtime in P1-12.
+ * Nothing here spawns a worker: the 1.0.x pi import worker was deleted in
+ * dsh-rebase P1-12 step 1 (decision 147).
  *
  * What leaves this module in an error is the stage and the code
  * (`seedSession`'s, or Main's `host` stage); the host's message can name a

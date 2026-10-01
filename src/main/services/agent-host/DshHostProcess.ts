@@ -8,8 +8,8 @@
  * owned by `DshHostSupervisor` (decision 019). One-shot completions run on
  * the same host since P1-15 (decision 125, `DshCompletionService.ts`);
  * conversation imports are seeded by the host since P1-9f (decision 056).
- * Nothing in the product starts the native worker (`PiWorkerProcess.ts`)
- * any more; P1-12 deletes it.
+ * Nothing in the product starts the native worker any more: P1-12 step 1
+ * deleted its launcher (decision 147).
  *
  * The pieces are separate functions so each can be pinned on its own: the
  * layout (which binary runs which entry), the home (decision 008), the

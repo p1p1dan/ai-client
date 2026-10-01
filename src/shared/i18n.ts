@@ -2991,7 +2991,7 @@ export const zhTranslations: Record<string, string> = {
     'Pi 会话文件不是有效会话，应用没有修改或替换原文件。',
   'The Pi session record belongs to a different workspace than this repository, so a silent rebind was refused.':
     'Pi 会话记录的工作区与当前仓库不一致，因此已拒绝静默重绑。',
-  'The bundled Pi worker runtime could not be found.': '没有找到随包的 Pi worker 运行时。',
+  'The bundled chat engine could not be found.': '没有找到随包的对话引擎。',
   'The chat is mid-turn; you can retry reading history once this turn ends.':
     '会话正在进行中，本轮结束后可重试读取历史。',
   'The chat is not interrupted; you can keep sending messages.': '会话未中断，可以继续发送消息。',

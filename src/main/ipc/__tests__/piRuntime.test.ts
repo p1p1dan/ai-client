@@ -19,12 +19,12 @@ beforeEach(async () => {
 });
 
 describe('pi:runtime:check', () => {
-  it('returns the Pi worker status', async () => {
-    detect.mockResolvedValue({ kind: 'ready', workerVersion: 'pi-worker' });
+  it('returns the DSH host status', async () => {
+    detect.mockResolvedValue({ kind: 'ready', workerVersion: 'dsh-host' });
     const handler = handlers.get(IPC_CHANNELS.PI_RUNTIME_CHECK);
     await expect(handler?.({}, true)).resolves.toEqual({
       kind: 'ready',
-      workerVersion: 'pi-worker',
+      workerVersion: 'dsh-host',
     });
     expect(detect).toHaveBeenCalledWith(true);
   });

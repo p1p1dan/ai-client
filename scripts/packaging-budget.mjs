@@ -2,22 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 /**
- * Worker-only safety ceiling. Missing runtime pieces are structural failures in
- * verifyArtifact(); this ceiling exists only to catch an accidentally restored
- * legacy CLI/platform payload. It is intentionally not derived from the old
- * Claude/Codex A0 + P budget.
- */
-export const WORKER_ARTIFACT_MAX_BYTES = 256 * 1024 * 1024;
-
-export function evaluateWorkerArtifactSize(bytes) {
-  return {
-    status: bytes <= WORKER_ARTIFACT_MAX_BYTES ? 'ok' : 'over',
-    bytes,
-    ceiling: WORKER_ARTIFACT_MAX_BYTES,
-  };
-}
-
-/**
  * DSH host artifact (dsh-rebase decision 014, re-set by P1-10a as it foresaw).
  * B-tier pruning measured 95-99 MiB and 10.2k files per platform with pnpm;
  * without it (decision 058) 80.4-84.6 MiB and 9.76k files. The ceilings fail

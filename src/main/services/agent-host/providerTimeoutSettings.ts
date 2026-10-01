@@ -3,14 +3,13 @@
  *
  * A renderer-owned setting, so it lives one level down in the persist wrapper
  * and has to come through `readSettingsState` — the same unwrap
- * `defaultTemporaryPath` and the prompt-cache TTLs need, and the same trap: read
+ * `defaultTemporaryPath` and the prompt-cache TTL need, and the same trap: read
  * off the settings FILE's top level it is `undefined` on every machine.
  *
  * A value the user never touched is reported as ABSENT rather than as the
- * default, for the reason `promptCacheSettings.ts` states: absent keeps the
- * bootstrap payload byte-identical to a pre-T093 build's, which is what
- * `sameBootstrap` compares. The default is applied once, in the worker, where
- * the runtime is actually built.
+ * default; the default is applied once, where the DSH model plan is built
+ * (decision 040). Since dsh-rebase P1-12 step 1 the plan is its only reader:
+ * chat bootstraps no longer carry it.
  *
  * `0` is a real value here — the user's "never time out" — so this must never
  * be written as a truthiness test anywhere downstream.

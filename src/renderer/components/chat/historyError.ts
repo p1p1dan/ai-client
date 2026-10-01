@@ -70,8 +70,8 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // Main's own index lookup (`src/main/ipc/chat.ts`), for a row whose session
   // file was never recorded.
   pi_session_not_found: 'jsonl_not_found',
-  // The only `WORKER_*` code left with a producer (`PiWorkerProcess.ts`,
-  // `DshHostProcess.ts`).
+  // The only `WORKER_*` code left with a producer (`createPiWorkerSlot.ts`,
+  // before it opens a DSH channel). 1.0.x worker text still maps the same way.
   WORKER_WORKSPACE_MISSING: 'workspace_missing',
   // dsh-rebase P1-1. The DSH bridge found neither its identity stub nor the
   // session log it names: the same dead-session card as a missing JSONL.

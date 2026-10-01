@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stripComments } from '../../../../renderer/components/chat/__tests__/stripComments';
@@ -94,11 +94,11 @@ describe('legacy import static boundaries', () => {
   });
 
   /**
-   * The pi import worker stays on disk until P1-12 deletes the runtime
-   * (roadmap P1-12; decision 124). Only its own leftovers may still name it:
-   * a new caller would bring pi imports back.
+   * P1-12 step 1 (decisions 124 rule 19 and 147) deleted the pi import worker
+   * and WorkerManager's three import methods. Nothing in Main may name them
+   * again: a caller would bring pi imports back.
    */
-  it('leaves the pi import worker to its P1-12 deletion list, with no new caller', () => {
+  it('has no pi import worker and no caller of one (P1-12)', () => {
     const main = path.join(repoRoot, 'src', 'main');
     const names = [
       'PiImportProcess',
@@ -114,11 +114,10 @@ describe('legacy import static boundaries', () => {
       })
       .map((file) => path.relative(repoRoot, file).split(path.sep).join('/'))
       .sort();
-    expect(naming).toEqual([
-      'src/main/services/agent-host/WorkerManager.ts',
-      'src/main/services/agent-host/__tests__/WorkerManager.test.ts',
-      'src/main/services/legacyImport/__tests__/PiImportProcess.test.ts',
-    ]);
+    expect(naming).toEqual([]);
+    expect(existsSync(path.join(main, 'services', 'legacyImport', 'PiImportProcess.ts'))).toBe(
+      false
+    );
   });
 
   it('exposes import channels without a Claude resume channel', () => {

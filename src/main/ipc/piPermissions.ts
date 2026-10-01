@@ -14,6 +14,7 @@
  * now runs out of this app's directory, so there is nothing left to refuse.
  */
 
+import { isAbsolute } from 'node:path';
 import type {
   PermissionPolicyRequest,
   PermissionPolicySnapshot,
@@ -52,9 +53,13 @@ export function registerPiPermissionHandlers(): void {
    * `showItemInFolder` on the file, which opens the parent and selects it when
    * the file exists and opens nothing when it does not — so the fallback is the
    * containing directory, which is where someone would create it.
+   *
+   * Only absolute paths: the bundled scope's `path` is the marker `bundled`
+   * (dsh-rebase P1-12 step 1), and a relative path would open whatever
+   * directory Main happens to run in.
    */
   ipcMain.handle(IPC_CHANNELS.PI_PERMISSIONS_REVEAL, async (_event, path: string) => {
-    if (typeof path !== 'string' || !path.trim()) return;
+    if (typeof path !== 'string' || !path.trim() || !isAbsolute(path)) return;
     shell.showItemInFolder(path);
   });
 }

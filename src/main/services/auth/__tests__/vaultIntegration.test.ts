@@ -21,8 +21,8 @@ vi.mock('electron', () => ({
   net: { fetch: fetchMock },
   app: {
     on: vi.fn(),
-    // F08: `resolveManagedPiWorkerEnv` stamps the client User-Agent with it.
     getVersion: vi.fn(() => '0.0.0-test'),
+    getAppPath: vi.fn(() => '/unused-app-path'),
     getPath: vi.fn((name: string) => (name === 'userData' ? state.userDataPath : tmpdir())),
     setPath: vi.fn((name: string, value: string) => {
       if (name === 'userData') state.userDataPath = value;
@@ -90,8 +90,14 @@ function successFetchResponse(token: string) {
   };
 }
 
-describe('vault payload ↔ Pi worker bootstrap boundary', () => {
-  it('keeps credentials in the vault/managed Pi config and out of worker argv/env', async () => {
+/**
+ * dsh-rebase P1-12 step 1 (decision 147): the native worker and its
+ * environment builder are gone, so the boundary is now the one child process
+ * the chat engine runs in — the shared DSH host. Keys reach it per request
+ * (P1-5, decision 034), never through its argv or environment.
+ */
+describe('vault payload ↔ DSH host launch boundary', () => {
+  it('keeps credentials in the vault and out of the DSH host argv/env', async () => {
     process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
     const token = 'claude-secret-token-abc';
     fetchMock.mockResolvedValue(successFetchResponse(token));
@@ -109,16 +115,24 @@ describe('vault payload ↔ Pi worker bootstrap boundary', () => {
     if (readResult.status !== 'ok') return;
     expect(readResult.doc.payload.pi?.apiKey).toBe(token);
 
-    const { resolveManagedPiWorkerEnv } = await import('../../piModelConfig');
-    const workerEnv = resolveManagedPiWorkerEnv();
-    expect(workerEnv.PI_CODING_AGENT_DIR).toBeTruthy();
-    expect(JSON.stringify(workerEnv)).not.toContain(token);
-    expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CLAUDE_AUTH_TOKEN');
-    expect(Object.keys(workerEnv)).not.toContain('AICLIENT_CODEX_API_KEY');
-    // F08 added one key to this environment. It carries a version string and
-    // nothing else — asserted here, in the test that owns the "no credential
-    // reaches the worker environment" boundary, rather than left implied.
-    expect(workerEnv.AICLIENT_PI_USER_AGENT).toBe('claude-cli-pilab/0.0.0-test');
+    const { buildDshHostLaunch, DSH_HOST_PERMISSION_AGENT_DIR_ENV } = await import(
+      '../../agent-host/DshHostProcess'
+    );
+    const { getAppStateRoot } = await import('../../appStatePaths');
+    const { getAppPiAgentDir } = await import('../../piModelConfig');
+    const launch = buildDshHostLaunch({
+      isPackaged: true,
+      appPath: '/unused-app-path',
+      resourcesPath: '/opt/app/resources',
+      appStateRoot: getAppStateRoot(),
+      exists: () => true,
+    });
+    expect(JSON.stringify(launch)).not.toContain(token);
+    expect(Object.keys(launch.env)).not.toContain('AICLIENT_CLAUDE_AUTH_TOKEN');
+    expect(Object.keys(launch.env)).not.toContain('AICLIENT_CODEX_API_KEY');
+    // The one app directory the host is pointed at, by the same resolver the
+    // settings page writes the permission policy through.
+    expect(launch.env[DSH_HOST_PERMISSION_AGENT_DIR_ENV]).toBe(getAppPiAgentDir());
   });
 });
 

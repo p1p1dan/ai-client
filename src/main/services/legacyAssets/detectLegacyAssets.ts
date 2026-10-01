@@ -101,10 +101,10 @@ export function usableWorkspace(value: unknown): string | null {
 /**
  * Whether the user explicitly turned 1.0.x delegation off (decision 105).
  *
- * Mirrors `nativeSubagentSettings` (`services/agent-host/nativeSubagentSettings.ts`):
- * the per-feature override wins over the older boolean, and only an explicit
- * `false` is a refusal — absent meant ON in 1.0.x, so it is not reported.
- * Copied rather than imported because that module goes with native in P1-12.
+ * Mirrors the 1.0.x `nativeSubagentSettings`, deleted with the native worker
+ * in dsh-rebase P1-12 step 1: the per-feature override wins over the older
+ * boolean, and only an explicit `false` is a refusal — absent meant ON in
+ * 1.0.x, so it is not reported.
  */
 export function delegationSwitchExplicitlyOff(settings: Record<string, unknown>): boolean {
   const overrides = settings[PI_OPT_IN_FEATURE_SETTINGS_KEY];

@@ -263,15 +263,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Standalone Pi worker package. Legacy execution dependencies are dev-only
-      # and omitted from packaging installs together with optional platform CLIs.
-      - name: Install agent-host dependencies
-        run: npm ci --omit=dev --omit=optional
-        working-directory: src/agent-host
-
-      - name: Install native runtime dependencies
-        run: npm ci --omit=dev --omit=optional --ignore-scripts
-        working-directory: src/runtime
+      # dsh-rebase P1-12 step 1 (decision 147): the native worker is no longer
+      # packaged, so neither src/agent-host nor src/runtime is installed here.
 
       # REQ-7 accounting. The cache-entry and disk figures are the inputs for
       # the first run's baseline; they are printed, never gated on.
@@ -282,9 +275,6 @@ jobs:
         shell: pwsh
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
-      - name: Build Pi worker artifact
-        run: node scripts/build-agent-host.mjs
-
       # DSH host artifact (dsh-rebase P1-2): a clean `npm ci` of src/dsh-host's
       # lockfile for this runner's platform (optional deps included), pruned and
       # verified into out-dsh-host/, which afterPack copies to resources/dsh-host.
@@ -292,8 +282,8 @@ jobs:
         run: node scripts/build-dsh-host.mjs
 
       # The legacy pi permission-plugin smoke (T08-a) was removed with the legacy
-      # engine (fe246bd6, P6-5): its script no longer exists and the native
-      # permission system is exercised by "Verify packaged Pi worker" below.
+      # engine (fe246bd6, P6-5); the permission row is exercised by the DSH L1
+      # smoke inside "Verify packaged app" below.
 
       # Key on the pin file's hash, not a hardcoded version: actions/cache never
       # overwrites an existing key, so a literal key survives a pin bump and
@@ -321,7 +311,7 @@ jobs:
         shell: pwsh
         run: Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
 
-      - name: Verify packaged Pi worker
+      - name: Verify packaged app
         run: node scripts/verify-packaged-app.mjs --app-dir dist/win-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
 
       # The installed layout is `Programs\PiLab Ai` (a space in the path);
@@ -440,21 +430,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Standalone Pi worker package; omit dev-only legacy execution dependencies
-      # and optional platform CLI payloads.
-      - name: Install agent-host dependencies
-        run: npm ci --omit=dev --omit=optional
-        working-directory: src/agent-host
-
-      - name: Install native runtime dependencies
-        run: npm ci --omit=dev --omit=optional --ignore-scripts
-        working-directory: src/runtime
-
+      # dsh-rebase P1-12 step 1: no src/agent-host or src/runtime install; see build-windows.
       - name: Report disk after install (REQ-7)
         run: df -h /
-
-      - name: Build Pi worker artifact
-        run: node scripts/build-agent-host.mjs
 
       # DSH host artifact (dsh-rebase P1-2); see build-windows.
       - name: Build DSH host artifact
@@ -480,10 +458,10 @@ jobs:
       - name: Report disk after packaging (REQ-7)
         run: df -h /
 
-      - name: Verify packaged Pi worker
-        # Electron initializes Ozone even though the helper only exercises a
-        # utilityProcess. Hosted Linux runners are headless, so provide Xvfb.
-        run: xvfb-run -a node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
+      - name: Verify packaged app
+        # No Xvfb since dsh-rebase P1-12 step 1: the Electron worker smoke it
+        # was for is gone, and the DSH smoke runs on the bundled node.
+        run: node scripts/verify-packaged-app.mjs --app-dir dist/linux-unpacked --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
 
       - name: Upload worker smoke evidence
         if: always()
@@ -577,17 +555,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install agent-host dependencies
-        run: npm ci --omit=dev --omit=optional
-        working-directory: src/agent-host
-
-      - name: Install native runtime dependencies
-        run: npm ci --omit=dev --omit=optional --ignore-scripts
-        working-directory: src/runtime
-
-      - name: Build Pi worker artifact
-        run: node scripts/build-agent-host.mjs
-
+      # dsh-rebase P1-12 step 1: no src/agent-host or src/runtime install; see build-windows.
       # DSH host artifact (dsh-rebase P1-2); see build-windows. On macOS the
       # build also restores spawn-helper's exec bit (decision 013).
       - name: Build DSH host artifact
@@ -638,7 +606,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           PYTHON_PATH: ${{ steps.dmg-python.outputs.python-path }}
 
-      - name: Verify packaged Pi worker
+      - name: Verify packaged app
         # Quoted: `productName` is "PiLab Ai", so the bundle path has a space in it.
         run: node scripts/verify-packaged-app.mjs --app-dir "${{ steps.target.outputs.app_dir }}" --report-file dist/worker-smoke-report.json --dsh-report-file dist/dsh-host-smoke-report.json
 

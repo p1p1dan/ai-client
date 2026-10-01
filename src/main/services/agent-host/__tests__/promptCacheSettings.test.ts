@@ -1,16 +1,11 @@
 /**
- * The Main-side read of the two prompt cache TTLs.
- *
- * Lives on the Main side for the same reason `nativeSubagentSettings.test.ts`
- * does: `src/runtime` is its own npm package and a test there importing this
- * file would drag `src/main` into the runtime type-check gate.
+ * The Main-side read of the main conversation's prompt cache TTL.
  *
  * The property under test is the one that is easy to get wrong in both
- * directions: an untouched install must report ABSENCE (so the bootstrap
- * payload stays identical to a pre-TTL build's and the worker applies the
- * shipped defaults), and a stored value that is not one of the two accepted
- * spellings must be treated as absence rather than passed through to a provider
- * that would silently resolve it to its own default.
+ * directions: an untouched install must report ABSENCE (so the model plan
+ * applies the shipped default), and a stored value that is not one of the two
+ * accepted spellings must be treated as absence rather than passed through to
+ * a provider that would silently resolve it to its own default.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -25,24 +20,24 @@ describe('prompt cache TTL settings', () => {
     expect(promptCacheTtlSettings(reader({}))).toEqual({});
   });
 
-  it('reads each value independently', () => {
-    expect(
-      promptCacheTtlSettings(reader({ promptCacheTtl: '1h', subagentPromptCacheTtl: '5m' }))
-    ).toEqual({ promptCacheTtl: '1h', subagentPromptCacheTtl: '5m' });
-    expect(
-      promptCacheTtlSettings(reader({ promptCacheTtl: '5m', subagentPromptCacheTtl: '1h' }))
-    ).toEqual({ promptCacheTtl: '5m', subagentPromptCacheTtl: '1h' });
-  });
-
-  it('keeps a valid value when its sibling is missing', () => {
-    expect(promptCacheTtlSettings(reader({ subagentPromptCacheTtl: '1h' }))).toEqual({
-      subagentPromptCacheTtl: '1h',
+  it('reads either spelling', () => {
+    expect(promptCacheTtlSettings(reader({ promptCacheTtl: '1h' }))).toEqual({
+      promptCacheTtl: '1h',
+    });
+    expect(promptCacheTtlSettings(reader({ promptCacheTtl: '5m' }))).toEqual({
+      promptCacheTtl: '5m',
     });
   });
 
-  it('drops a value that is not one of the two spellings', () => {
+  /** dsh-rebase P1-12 step 1: the delegate's TTL has no reader any more. */
+  it('ignores the retired delegate TTL', () => {
+    expect(promptCacheTtlSettings(reader({ subagentPromptCacheTtl: '1h' }))).toEqual({});
     expect(
-      promptCacheTtlSettings(reader({ promptCacheTtl: '1 hour', subagentPromptCacheTtl: 'long' }))
-    ).toEqual({});
+      promptCacheTtlSettings(reader({ promptCacheTtl: '5m', subagentPromptCacheTtl: '1h' }))
+    ).toEqual({ promptCacheTtl: '5m' });
+  });
+
+  it('drops a value that is not one of the two spellings', () => {
+    expect(promptCacheTtlSettings(reader({ promptCacheTtl: '1 hour' }))).toEqual({});
   });
 });

@@ -57,8 +57,8 @@ describe('chat engine is DSH only (P1-1)', () => {
    * the whole bootstrap payload for the life of the session. Keys reach the
    * host per request instead (P1-5, decision 034). Since P1-15 (decision 125)
    * one-shot completions run on the same host and carry none either; the
-   * native utility service that still assembles one is unreferenced until
-   * P1-12 deletes it (`oneShotCompletionsStatic.test.ts`).
+   * native utility service that assembled one was deleted in P1-12 step 1
+   * (`oneShotCompletionsStatic.test.ts`).
    * Comments are stripped: both files explain the ban by naming the field.
    */
   it('chat bootstraps and one-shot completions carry no model catalog', () => {

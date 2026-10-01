@@ -30,7 +30,6 @@ import { registerPiModelHandlers } from './piModels';
 import { registerPiPermissionHandlers } from './piPermissions';
 import { registerPiResourceHandlers } from './piResources';
 import { registerPiRuntimeHandlers } from './piRuntime';
-import { registerPiSubagentHandlers } from './piSubagents';
 import { registerRemoteHandlers } from './remote';
 import { registerSearchHandlers } from './search';
 import {
@@ -84,7 +83,6 @@ export function registerIpcHandlers(): void {
   registerPiModelHandlers();
   registerPiPermissionHandlers();
   registerPiResourceHandlers();
-  registerPiSubagentHandlers();
   registerLegacyAssetHandlers();
   registerDshPluginHandlers();
   registerAgentMigrationHandlers();

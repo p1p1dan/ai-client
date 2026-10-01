@@ -34,6 +34,8 @@ const removedKeys = [
   'terminalInput',
   // dsh-rebase P1-11 (decision 127): the GUI / TUI switch went with the pi TUI.
   'presentationMode',
+  // dsh-rebase P1-12 step 1: the delegate's prompt-cache TTL, with no reader left.
+  'subagentPromptCacheTtl',
 ];
 
 const legacyProfile = {

@@ -8,20 +8,14 @@ import {
   PI_MODEL_CONFIG_PATH,
   PI_MODEL_MANAGEMENT_URL_ENV,
   PI_MODEL_MANAGEMENT_URL_SETTING_KEY,
-  PI_PROJECT_TRUST_ENV,
-  PI_SUBAGENTS_FEATURE_ID,
-  PI_USER_AGENT_ENV,
   type PiModelSyncFailure,
   type PiModelSyncFailureKind,
   type PiModelSyncResult,
   type PiModelSyncState,
   type PiResourceSettings,
-  piUserAgent,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
-import { nativeFeatureRegistry } from '../../../agent-host/bundledPlugins.mjs';
-import { nativeSubagentSettings } from '../agent-host/nativeSubagentSettings';
 import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
 import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
 import { getAppStateRoot } from '../appStatePaths';
@@ -47,10 +41,6 @@ function getHomeDir(): string {
  */
 export function getAppPiAgentDir(): string {
   return join(getAppStateRoot(), PI_MANAGED_AGENT_DIR_NAME);
-}
-
-export function getAppPiPromptTemplatesDir(): string {
-  return join(getAppPiAgentDir(), 'prompts');
 }
 
 /**
@@ -348,74 +338,18 @@ export function clearManagedPiCredential(): void {
 }
 
 /**
- * Where "open my prompt templates" lands.
- *
- * H/19: the app directory in both modes, because that is the only directory a
- * session loads templates from now. Opening `~/.pi/agent/prompts` would show a
- * folder whose contents no longer reach any turn.
+ * Settings → Extensions → Skills: the two skill folders the DSH host reads
+ * (dsh-rebase P1-16e, decision 101). The delegation switch, the prompt
+ * template folders and the user's own `~/.pi/agent` folders left with
+ * decisions 103-105 and 116; P1-12 step 1 removed them from this reply.
  */
-export function getActivePiPromptTemplatesDir(): string {
-  return getAppPiPromptTemplatesDir();
-}
-
-/**
- * The settings page's view of the native feature switches.
- *
- * cutover-10: `enabled` comes from `nativeSubagentSettings`, which is the same
- * function `WorkerManager` asks before it builds a graph. The page used to
- * answer from a separate resolver whose "nobody chose" was OFF while the
- * runtime's was ON, so a fresh install saw a switch that said the opposite of
- * what every turn was doing.
- */
-function nativeFeatureEnabled(id: string): boolean {
-  // One switch, one reader. A second feature added here needs its own reader
-  // rather than a default parked in the registry — that split is what produced
-  // cutover-10.
-  return id === PI_SUBAGENTS_FEATURE_ID ? nativeSubagentSettings().enabled : false;
-}
-
 export function getPiResourceSettings(): PiResourceSettings {
-  const userAgentDir = getLocalPiAgentDir();
-  const appAgentDir = getAppPiAgentDir();
   return {
     managed: resolveManagedCredentialsEnabled(),
-    enableSubagents: nativeFeatureEnabled(PI_SUBAGENTS_FEATURE_ID),
     paths: {
       sharedSkills: join(getHomeDir(), '.agents', 'skills'),
-      userSkills: join(userAgentDir, 'skills'),
-      userPromptTemplates: join(userAgentDir, 'prompts'),
-      appSkills: join(appAgentDir, 'skills'),
-      appPromptTemplates: getAppPiPromptTemplatesDir(),
+      appSkills: join(getAppPiAgentDir(), 'skills'),
     },
-    features: nativeFeatureRegistry().map(({ legacySettingKey: _legacy, ...feature }) => ({
-      ...feature,
-      enabled: nativeFeatureEnabled(feature.id),
-    })),
-  };
-}
-
-export function resolveManagedPiWorkerEnv(): Record<string, string> {
-  const managed = resolveManagedCredentialsEnabled();
-  return {
-    // T08-c (D-Q9 decision 4). Sent in BOTH modes, never omitted: an absent key
-    // identifies a legacy process build, not either deliberate trust posture.
-    // decision 009 — this is the MANAGED-ROUTE MARKER, not the native worker's
-    // project trust any more. The native answer is the `NATIVE_PROJECT_TRUSTED`
-    // constant the worker entry reads, so a managed session loads a project's
-    // MCP servers, skills, permission policy and instruction files exactly as a
-    // local one does. Its last reader, the embedded pi TUI's credential strip,
-    // went with dsh-rebase P1-11 (decision 127); the value is still sent so an
-    // absent key keeps meaning "old Main build".
-    [PI_PROJECT_TRUST_ENV]: managed ? '0' : '1',
-    // F08. Sent in BOTH modes for the same reason as the trust flag, and read
-    // from `app` rather than from `package.json` because the packaged app's
-    // version is the one the gateway should see. The `models.json` this app
-    // writes references the variable by name; supplying it here is what makes
-    // that reference resolve to something other than an empty header.
-    [PI_USER_AGENT_ENV]: piUserAgent(app.getVersion()),
-    // H/19: unconditional. Both modes run out of this app's directory, so there
-    // is no longer a case where pi should be left on its own default.
-    PI_CODING_AGENT_DIR: getAppPiAgentDir(),
   };
 }
 

@@ -7,9 +7,12 @@
  * They are the ones `@gotgenes/pi-permission-system` reads that this app has any
  * business showing:
  *
- *  - **bundled** — `<worker dir>/node_modules/@gotgenes/pi-permission-system/config.json`,
- *    the policy we ship (D11). Derived from the Pi worker entry so it is the
- *    same artifact root in dev and packaged layouts.
+ *  - **bundled** — the policy we ship (D11), held in memory. Since dsh-rebase
+ *    P1-12 step 1 (decision 147) it is the same table, built by the same
+ *    `bundledPolicyScope()`, that the DSH host's permission row loads; it used
+ *    to be read back from a `config.json` inside the native worker artifact,
+ *    which is no longer shipped. It has no file, so its `path` is the marker
+ *    `bundled` and the panel offers nothing to reveal.
  *  - **global** — `<agentDir>/extensions/pi-permission-system/config.json`.
  *  - **project** — `<repo>/.pi/extensions/pi-permission-system/config.json`.
  *
@@ -29,12 +32,13 @@
  * to write anything. Refusing now would be worse than useless: the panel would
  * be read-only about a file nothing else can edit either.
  *
- * `bundled` is never writable: it is inside our own artifact, read-only by
+ * `bundled` is never writable: it is compiled into the app, read-only by
  * design, and the whole point of it being the lowest scope is that the user's
  * edits go somewhere that outranks it.
  */
 
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
+import { bundledPolicyScope } from '@shared/permissions/policy';
 import {
   applyPolicyPatch,
   effectivePolicy,
@@ -42,23 +46,12 @@ import {
   type PermissionPolicySnapshot,
   type PolicyPatch,
 } from '@shared/piPermissionPolicy';
-import { resolveCurrentPiWorkerEntryPath } from '../agent-host/PiWorkerProcess';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
 import { getAppPiAgentDir } from '../piModelConfig';
 import { readRawDocument, readScopes, type ScopeLocation, writeScopeDocument } from './policyStore';
 
 const EXTENSION_ID = 'pi-permission-system';
 const CONFIG_FILE = 'config.json';
-
-/** The directory holding the bundled plugin — the same one the Host injects. */
-export function getBundledPluginDir(): string {
-  return join(
-    dirname(resolveCurrentPiWorkerEntryPath()),
-    'node_modules',
-    '@gotgenes',
-    EXTENSION_ID
-  );
-}
 
 /** `<agentDir>/extensions/pi-permission-system/config.json`. */
 export function getGlobalPolicyPath(agentDir: string): string {
@@ -75,7 +68,9 @@ function currentRoute(): PermissionPolicyRoute {
 }
 
 /**
- * The scope files to read, in the order the plugin merges them.
+ * The scope files to read, in the order the plugin merges them. The bundled
+ * scope is not among them — it has no file — and is merged in below them by
+ * `readPermissionPolicy`.
  *
  * Exported so the tests can assert the ORDER as well as the paths: the order is
  * the policy, and a scope list that put `project` before `global` would show a
@@ -89,10 +84,7 @@ function currentRoute(): PermissionPolicyRoute {
  * or it would be describing a session nobody runs.
  */
 export function resolveScopeLocations(agentDir: string, repoPath?: string): ScopeLocation[] {
-  const locations: ScopeLocation[] = [
-    { id: 'bundled', path: join(getBundledPluginDir(), CONFIG_FILE) },
-    { id: 'global', path: getGlobalPolicyPath(agentDir) },
-  ];
+  const locations: ScopeLocation[] = [{ id: 'global', path: getGlobalPolicyPath(agentDir) }];
   if (repoPath) {
     locations.push({ id: 'project', path: getProjectPolicyPath(repoPath) });
   }
@@ -102,7 +94,8 @@ export function resolveScopeLocations(agentDir: string, repoPath?: string): Scop
 export function readPermissionPolicy(repoPath?: string): PermissionPolicySnapshot {
   const route = currentRoute();
   const agentDir = getAppPiAgentDir();
-  const scopes = readScopes(resolveScopeLocations(agentDir, repoPath));
+  // The bundled scope comes first: the merge is last-wins and it is the lowest.
+  const scopes = [bundledPolicyScope(), ...readScopes(resolveScopeLocations(agentDir, repoPath))];
   return {
     route,
     agentDir,

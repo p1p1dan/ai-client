@@ -2,7 +2,7 @@
  * Refuse a local cross-platform package build.
  *
  * `dist:prereq` prepares HOST-platform inputs — fetch-node-runtime defaults to
- * process.platform/arch, and build-agent-host prunes native Pi dependencies for
+ * process.platform/arch, and build-dsh-host installs the DSH host's natives for
  * this machine — while afterPack.mjs deliberately takes files for the TARGET
  * platform (context.electronPlatformName). Running `build:win` on
  * Linux therefore stages a Linux runtime and then asks for node.exe: it either

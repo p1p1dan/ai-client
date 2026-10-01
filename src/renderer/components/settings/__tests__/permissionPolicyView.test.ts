@@ -70,6 +70,16 @@ describe('deriveScopeRows', () => {
     expect(row).toMatchObject({ id: 'bundled', status: 'active', writable: false });
   });
 
+  /** dsh-rebase P1-12 step 1: the shipped table has no file to show or reveal. */
+  it('marks only the bundled scope as having no file on disk', () => {
+    const rows = deriveScopeRows([SHIPPED, scope('global', {}), scope('project', {})]);
+    expect(rows.map((row) => [row.id, row.onDisk])).toEqual([
+      ['bundled', false],
+      ['global', true],
+      ['project', true],
+    ]);
+  });
+
   it('marks the writable scope as writable and nothing else', () => {
     const rows = deriveScopeRows([SHIPPED, scope('global', {}), scope('project', {})]);
     expect(rows.filter((row) => row.writable).map((row) => row.id)).toEqual([WRITABLE_SCOPE]);

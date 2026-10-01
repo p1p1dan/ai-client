@@ -165,7 +165,10 @@ export type PolicyScopeId = (typeof POLICY_SCOPE_ORDER)[number];
 
 export interface PolicyScope {
   id: PolicyScopeId;
-  /** Absolute path, shown to the user so "where does this come from" is answerable. */
+  /**
+   * Absolute path, shown to the user so "where does this come from" is
+   * answerable — or `bundled` for the shipped table, which has no file.
+   */
   path: string;
   /** The file exists. A scope can exist and still contribute nothing. */
   present: boolean;

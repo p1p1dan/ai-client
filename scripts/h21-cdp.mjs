@@ -6,8 +6,9 @@
  * questions, and re-launching Electron between questions is the single most
  * expensive thing that can be done on this 2-core / 3.3 GB host.
  *
- * The CDP mechanics are lifted from `run-t37c-gui-probe.mjs`; read its notes
- * for why `awaitPromise` is never used, why injected code is always a
+ * The CDP mechanics are lifted from `run-t37c-gui-probe.mjs` (deleted with the
+ * native worker in dsh-rebase P1-12; it is in the git history); its notes
+ * explain why `awaitPromise` is never used, why injected code is always a
  * self-contained IIFE, and why `no_proxy` has to be lowercase.
  */
 

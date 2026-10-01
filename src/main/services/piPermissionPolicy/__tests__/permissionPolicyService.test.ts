@@ -18,14 +18,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 let root: string;
 let managed: boolean;
 
-const workerEntry = () => join(root, 'worker', 'worker.js');
 const appAgentDir = () => join(root, 'app-agent');
 /** The user's own directory — still resolvable, and still never written. */
 const localAgentDir = () => join(root, 'user-home', '.pi', 'agent');
 
-vi.mock('../../agent-host/PiWorkerProcess', () => ({
-  resolveCurrentPiWorkerEntryPath: () => workerEntry(),
-}));
 vi.mock('../../auth/credentialMode', () => ({
   resolveManagedCredentialsEnabled: () => managed,
 }));
@@ -54,25 +50,41 @@ afterEach(() => {
 });
 
 describe('scope locations', () => {
-  it('reads the bundled policy from beside the Pi worker entry', async () => {
-    const { resolveScopeLocations } = await service();
-    const [bundled] = resolveScopeLocations(appAgentDir());
-    expect(bundled?.path).toBe(
-      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json')
+  /**
+   * dsh-rebase P1-12 step 1 (decision 147): the bundled scope is the shipped
+   * table in memory, the one the DSH host's permission row loads — no file,
+   * and nothing under the retired native worker artifact.
+   */
+  it('builds the bundled scope from the shipped table, with no file behind it', async () => {
+    const { readPermissionPolicy, resolveScopeLocations } = await service();
+    const { bundledPolicyScope } = await import('@shared/permissions/policy');
+    const [bundled] = readPermissionPolicy().scopes;
+    expect(bundled).toEqual(bundledPolicyScope());
+    expect(bundled).toMatchObject({ id: 'bundled', path: 'bundled', present: true });
+    // D-Q9 「务实档」: reading is free, changing is confirmed.
+    expect(bundled?.config.permission).toMatchObject({ read: 'allow', write: 'ask' });
+    expect(resolveScopeLocations(appAgentDir(), '/repo').map((entry) => entry.id)).not.toContain(
+      'bundled'
     );
   });
 
   /** Scope order IS the policy: a later scope overrides an earlier one. */
   it('lists the scopes in the order the plugin merges them', async () => {
-    const { resolveScopeLocations } = await service();
+    const { readPermissionPolicy, resolveScopeLocations } = await service();
     const locations = resolveScopeLocations(appAgentDir(), '/repo');
-    expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global', 'project']);
+    expect(locations.map((entry) => entry.id)).toEqual(['global', 'project']);
+    expect(readPermissionPolicy('/repo').scopes.map((scope) => scope.id)).toEqual([
+      'bundled',
+      'global',
+      'project',
+    ]);
   });
 
   it('omits the project scope when no repository is open', async () => {
-    const { resolveScopeLocations } = await service();
+    const { readPermissionPolicy, resolveScopeLocations } = await service();
     const locations = resolveScopeLocations(appAgentDir());
-    expect(locations.map((entry) => entry.id)).toEqual(['bundled', 'global']);
+    expect(locations.map((entry) => entry.id)).toEqual(['global']);
+    expect(readPermissionPolicy().scopes.map((scope) => scope.id)).toEqual(['bundled', 'global']);
   });
 
   /**
@@ -104,15 +116,14 @@ describe('scope locations', () => {
 describe('readPermissionPolicy', () => {
   it('merges the scopes it can read and says which one decided what', async () => {
     const { readPermissionPolicy, getGlobalPolicyPath } = await service();
-    writeJson(
-      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
-      { permission: { write: 'ask', read: 'allow' } }
-    );
     writeJson(getGlobalPolicyPath(appAgentDir()), { permission: { write: 'deny' } });
 
     const snapshot = readPermissionPolicy();
     const write = snapshot.effective.surfaces.find((entry) => entry.surface === 'write');
     expect(write).toMatchObject({ action: 'deny', origin: 'global' });
+    // The shipped table still decides what the user did not touch.
+    const read = snapshot.effective.surfaces.find((entry) => entry.surface === 'read');
+    expect(read).toMatchObject({ origin: 'bundled' });
     expect(snapshot.editable).toBe(true);
     expect(snapshot.readOnlyReason).toBeUndefined();
   });
@@ -224,10 +235,6 @@ describe('resetPermissionPolicy', () => {
   it('removes the managed scope entirely, leaving the shipped default', async () => {
     const { resetPermissionPolicy, getGlobalPolicyPath } = await service();
     const path = getGlobalPolicyPath(appAgentDir());
-    writeJson(
-      join(root, 'worker', 'node_modules', '@gotgenes', 'pi-permission-system', 'config.json'),
-      { permission: { write: 'ask' } }
-    );
     writeJson(path, { permission: { write: 'allow' } });
 
     const snapshot = resetPermissionPolicy();

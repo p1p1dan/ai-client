@@ -1,12 +1,15 @@
-import type { ChildProcess } from 'node:child_process';
-import type { Readable } from 'node:stream';
 import type { WorkerRpcRequest } from '@shared/types/workerRpc';
-import type { UtilityProcess } from 'electron';
 
 /**
- * Why a shared-host channel ended (DshChannelTransport only; process transports
- * leave it unset): the host confirmed the channel closed, or the whole host
- * process exited and took every channel with it.
+ * The carrier a `WorkerSlot` talks RPC over. Since dsh-rebase P1-12 step 1
+ * (decision 147) the only implementation is a channel on the shared DSH host
+ * (`DshChannelTransport.ts`); the native worker's process carriers are gone.
+ */
+
+/**
+ * Why a shared-host channel ended: the host confirmed the channel closed, or
+ * the whole host process exited and took every channel with it. Optional so
+ * test transports can leave it unset.
  */
 export type WorkerTransportExitCause = 'channel-closed' | 'host-exit';
 
@@ -18,7 +21,7 @@ export interface WorkerTransportExit {
 
 export interface WorkerTransport {
   readonly pid: number | undefined;
-  /** The shared DSH host channel this transport is (DshChannelTransport only). */
+  /** The shared DSH host channel this transport is. */
   readonly channelId?: string;
   postMessage(message: WorkerRpcRequest): void;
   onMessage(listener: (message: unknown) => void): () => void;
@@ -26,125 +29,4 @@ export interface WorkerTransport {
   onExit(listener: (exit: WorkerTransportExit) => void): () => void;
   onStderr(listener: (chunk: string) => void): () => void;
   kill(): boolean;
-}
-
-function normalizeUtilityMessage(message: unknown): unknown {
-  if (
-    typeof message === 'object' &&
-    message !== null &&
-    !('protocolVersion' in message) &&
-    'data' in message
-  ) {
-    return (message as { data?: unknown }).data;
-  }
-  return message;
-}
-
-function subscribeReadable(
-  stream: NodeJS.ReadableStream | null,
-  listener: (chunk: string) => void
-): () => void {
-  if (!stream) return () => {};
-  const readable = stream as Readable;
-  const onData = (chunk: Buffer | string) => listener(chunk.toString());
-  const onError = () => {};
-  readable.on('data', onData);
-  readable.on('error', onError);
-  return () => {
-    readable.off('data', onData);
-    readable.off('error', onError);
-  };
-}
-
-/**
- * ARD D11 item 5 — a worker's ordinary stdout must be drained even though the
- * RPC never reads it. Nothing we write goes there (agent-host/worker.ts logs to
- * stderr), but a third-party library that calls `console.log` would otherwise
- * queue its output inside the worker with no reader, growing its memory for the
- * length of the session and losing the lines for good. Shared by both carriers
- * so the two cannot drift apart again (tsd-03 / main-host-04).
- */
-function drainStdout(stdout: NodeJS.ReadableStream | null): void {
-  stdout?.resume();
-}
-
-/**
- * Electron utilityProcess adapter for one WorkerSlot generation.
- *
- * Electron has shipped both direct payload and MessageEvent-like `{ data }`
- * delivery shapes. Normalize both here so the slot lifecycle never depends on
- * that implementation detail.
- */
-export function createUtilityProcessWorkerTransport(proc: UtilityProcess): WorkerTransport {
-  drainStdout(proc.stdout);
-  return {
-    get pid() {
-      return proc.pid;
-    },
-    postMessage(message) {
-      proc.postMessage(message);
-    },
-    onMessage(listener) {
-      const onMessage = (message: unknown) => listener(normalizeUtilityMessage(message));
-      proc.on('message', onMessage);
-      return () => proc.off('message', onMessage);
-    },
-    onError(listener) {
-      const onError = (type: 'FatalError', location: string, _report: string) => {
-        const detail = location ? `${type} at ${location}` : type;
-        listener(new Error(detail || 'Worker utility process error'));
-      };
-      proc.on('error', onError);
-      return () => proc.off('error', onError);
-    },
-    onExit(listener) {
-      const onExit = (code: number) => listener({ code, signal: null });
-      proc.on('exit', onExit);
-      return () => proc.off('exit', onExit);
-    },
-    onStderr(listener) {
-      return subscribeReadable(proc.stderr, listener);
-    },
-    kill() {
-      try {
-        return proc.kill();
-      } catch {
-        // The process may already have exited. The slot still waits for exit.
-        return false;
-      }
-    },
-  };
-}
-
-export function createNodeProcessWorkerTransport(proc: ChildProcess): WorkerTransport {
-  // RPC uses Node IPC; drain ordinary stdout so tool/extension logs cannot fill its pipe.
-  drainStdout(proc.stdout);
-  return {
-    get pid() {
-      return proc.pid;
-    },
-    postMessage(message) {
-      proc.send(message);
-    },
-    onMessage(listener) {
-      proc.on('message', listener);
-      return () => proc.off('message', listener);
-    },
-    onError(listener) {
-      proc.on('error', listener);
-      return () => proc.off('error', listener);
-    },
-    onExit(listener) {
-      const onExit = (code: number | null, signal: NodeJS.Signals | null) =>
-        listener({ code, signal });
-      proc.on('exit', onExit);
-      return () => proc.off('exit', onExit);
-    },
-    onStderr(listener) {
-      return subscribeReadable(proc.stderr, listener);
-    },
-    kill() {
-      return proc.kill();
-    },
-  };
 }

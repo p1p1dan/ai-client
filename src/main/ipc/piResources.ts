@@ -1,122 +1,21 @@
 import { mkdir } from 'node:fs/promises';
-import {
-  PI_ENABLE_SUBAGENTS_SETTING_KEY,
-  PI_OPT_IN_FEATURE_SETTINGS_KEY,
-  type PiResourceSettings,
-  type UpdatePiResourceSettingsRequest,
-} from '@shared/piModelConfig';
+import type { PiResourceSettings } from '@shared/piModelConfig';
 import { IPC_CHANNELS } from '@shared/types';
 import { ipcMain, shell } from 'electron';
-import { nativeFeatureRegistry } from '../../agent-host/bundledPlugins.mjs';
-import { workerManager } from '../services/agent-host/WorkerManager';
-import { getActivePiPromptTemplatesDir, getPiResourceSettings } from '../services/piModelConfig';
-import { readSharedSettings } from '../services/SharedSessionState';
-import { mergeSettingsPatch } from './settings';
+import { getPiResourceSettings } from '../services/piModelConfig';
 
 /**
- * A partial update, validated field by field.
- *
- * Absent is legal and means "leave it alone"; present-but-not-a-boolean is
- * rejected rather than coerced. An empty request is rejected too — it can only
- * be a caller that meant to change something and named the field wrong, and
- * answering it with a silent no-op would look like a saved setting.
+ * Settings → Extensions → Skills (dsh-rebase P1-16e): read the two skill
+ * folders and open either. Nothing here writes a setting: the delegation
+ * switch (decision 105) and the prompt-template folder (decision 103) went,
+ * with their `updateSettings` / `openPromptTemplates` channels, in P1-12
+ * step 1 (decision 147).
  */
-function readUpdateRequest(payload: unknown): UpdatePiResourceSettingsRequest {
-  if (!payload || typeof payload !== 'object') {
-    throw new Error('Invalid Pi resource settings request');
-  }
-  const raw = payload as Record<string, unknown>;
-  const request: UpdatePiResourceSettingsRequest = {};
-  for (const field of ['enableSubagents'] as const) {
-    const value = raw[field];
-    if (value === undefined) continue;
-    if (typeof value !== 'boolean') throw new Error('Invalid Pi resource settings request');
-    request[field] = value;
-  }
-  // The wire field and the stored key keep the `optInFeatures` name on purpose:
-  // it is the key installs already have written in their settings file, and
-  // renaming it would read every existing choice as "never chose" — which since
-  // cutover-10 means ON. Only the vocabulary around it changed.
-  if (raw.optInFeatures !== undefined) {
-    if (
-      !raw.optInFeatures ||
-      typeof raw.optInFeatures !== 'object' ||
-      Array.isArray(raw.optInFeatures)
-    ) {
-      throw new Error('Invalid Pi resource settings request');
-    }
-    const ids = new Set(nativeFeatureRegistry().map((feature) => feature.id));
-    request.optInFeatures = {};
-    for (const [id, enabled] of Object.entries(raw.optInFeatures)) {
-      if (!ids.has(id)) continue;
-      if (typeof enabled !== 'boolean') throw new Error('Invalid Pi resource settings request');
-      request.optInFeatures[id] = enabled;
-    }
-  }
-  if (Object.keys(request).length === 0) {
-    throw new Error('Invalid Pi resource settings request');
-  }
-  return request;
-}
-
 export function registerPiResourceHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.PI_RESOURCES_GET_SETTINGS,
     async (): Promise<PiResourceSettings> => getPiResourceSettings()
   );
-
-  ipcMain.handle(
-    IPC_CHANNELS.PI_RESOURCES_UPDATE_SETTINGS,
-    async (_event, payload: unknown): Promise<PiResourceSettings> => {
-      const request = readUpdateRequest(payload);
-      const previous = getPiResourceSettings();
-
-      const patch: Record<string, unknown> = {};
-      // A feature switch is read when a runtime is BUILT — the native graph
-      // decides then whether to register delegation — so a change to one only
-      // reaches a session after its worker is replaced.
-      let restartAllWorkers = false;
-
-      if (
-        request.enableSubagents !== undefined &&
-        request.enableSubagents !== previous.enableSubagents
-      ) {
-        patch[PI_ENABLE_SUBAGENTS_SETTING_KEY] = request.enableSubagents;
-        restartAllWorkers = true;
-      }
-      const featurePatch = { ...request.optInFeatures };
-      if (
-        request.enableSubagents !== undefined &&
-        request.enableSubagents !== previous.enableSubagents &&
-        featurePatch.subagents === undefined
-      ) {
-        featurePatch.subagents = request.enableSubagents;
-      }
-      for (const feature of previous.features) {
-        if (featurePatch[feature.id] === feature.enabled) delete featurePatch[feature.id];
-      }
-      if (Object.keys(featurePatch).length > 0) {
-        const stored = readSharedSettings()[PI_OPT_IN_FEATURE_SETTINGS_KEY];
-        const current = stored && typeof stored === 'object' ? stored : {};
-        patch[PI_OPT_IN_FEATURE_SETTINGS_KEY] = { ...current, ...featurePatch };
-        restartAllWorkers = true;
-      }
-      if (Object.keys(patch).length === 0) return previous;
-
-      const saved = mergeSettingsPatch(patch);
-      if (!saved) throw new Error('Failed to save Pi resource settings');
-
-      if (restartAllWorkers) await workerManager.invalidateAll();
-      return getPiResourceSettings();
-    }
-  );
-
-  ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_PROMPTS, async (): Promise<void> => {
-    const promptTemplatesDir = getActivePiPromptTemplatesDir();
-    await mkdir(promptTemplatesDir, { recursive: true });
-    const error = await shell.openPath(promptTemplatesDir);
-    if (error) throw new Error(`Failed to open prompt templates folder: ${error}`);
-  });
 
   ipcMain.handle(IPC_CHANNELS.PI_RESOURCES_OPEN_SKILLS, async (): Promise<void> => {
     const skillsDir = getPiResourceSettings().paths.sharedSkills;
