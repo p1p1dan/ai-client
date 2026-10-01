@@ -64,6 +64,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-09-30 真实网关验证的后续修复 `c0d06299`（[决策 146](decisions/146-real-gateway-followups.md)，待审批，重点第 2、3、9、15、19 条）：网关明确无上游的 503 不再自动重试（新码 `GATEWAY_NO_UPSTREAM`）；`maxTokens` 超过窗口一半时夹到 1/4（Grok 4.7 / 4.6 由 500000 改为 125000，重录 Main 计划快照）；首字前被停的一轮直播即显示「已停止」，重开不重复（GW-18）；Git 面板「不是 Git 仓库」时每 5 s 重查；代码审查标题自动模式显示「(自动)」。GW-16 `cache_limit`：我们的请求最多 3 个 `cache_control`，推断是网关自己的校验，随 R9 一并问网关管理员。用户裁决：GW-1 是网关上游问题，不改客户端；worktree 先留着。编排器复跑：四套 tsc；渲染层 5319 例、Main 1752 例、shared / dsh-host / scripts 2340 例、Static 762 例、集成 35/35、`--check` 无差异。
 - 2026-09-30 P1-5 真实网关验证 R1～R10（Linux 开发机，用户亲自登录公司账号；证据 [p1-5-real-gateway-2026-09-30.md](evidence/p1-5-real-gateway-2026-09-30.md)，50 次请求，约 $1.44）：
   - R1 目录 13 个模型、4 个 provider、三种协议，菜单与计划一致；R3 工具回合、R4 档位（日志里 `reasoningEffort` 全部与所选一致）、R5 跨协议换模型、R6 读图、R7 三种一次性补全与评审中途停止都通过。
   - R2：China 组 GLM 5.3、DeepSeek V4 Flash / Pro 网关 503 `no_available_providers`（GW-1，待网关确认）。R8 只验了登出（宿主 318 ms 关停、凭据库清空），「在飞的回合被登出打断」待用户重新登录后补验。R9 说明已交用户转达。R10 按形状扫描，凭据库以外零命中。
