@@ -522,7 +522,7 @@ const items = {
   logout: logoutItem,
 };
 
-export const p15 = { INSTALL_EVENTS, eventsFor, runTurn };
+export const p15 = { INSTALL_EVENTS, eventsFor, runTurn, hostProcs };
 
 const invokedDirectly =
   process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

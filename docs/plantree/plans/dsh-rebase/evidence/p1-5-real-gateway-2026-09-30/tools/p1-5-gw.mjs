@@ -14,7 +14,9 @@
  * text contains `@`.
  *
  * Request budget: every model request this driver makes is appended to
- * ../results/requests.jsonl (`count` prints the running total).
+ * requests.jsonl in the results directory (`count` prints the running total).
+ * The results directory defaults to ../results/; set P15_RESULTS_DIR to keep
+ * it outside the repo, and P15_REQUEST_BUDGET to cap a follow-up round.
  *
  *   node p1-5-gw.mjs peek | state | catalog | js '<expr>' | page '<body>' | count
  *   node p1-5-gw.mjs <item> [args]      see `items` at the bottom
@@ -33,10 +35,16 @@ const { Cdp, sleep } = await import(path.join(repoRoot, 'scripts/h21-cdp.mjs'));
 const PORT = 9222;
 const SCRATCH = '/tmp/aiclient-real-gw';
 const outDir = path.resolve(here, '..');
-const shotsDir = path.join(outDir, 'shots');
-const resultsDir = path.join(outDir, 'results');
+// Raw results stay out of the public repo: point P15_RESULTS_DIR at a local directory.
+const resultsDir = process.env.P15_RESULTS_DIR
+  ? path.resolve(process.env.P15_RESULTS_DIR)
+  : path.join(outDir, 'results');
+const shotsDir = process.env.P15_RESULTS_DIR
+  ? path.join(resultsDir, 'shots')
+  : path.join(outDir, 'shots');
 const requestsFile = path.join(resultsDir, 'requests.jsonl');
-const REQUEST_BUDGET = 60;
+// A follow-up round gets its own ledger and a smaller cap (P15_REQUEST_BUDGET).
+const REQUEST_BUDGET = Number(process.env.P15_REQUEST_BUDGET) || 60;
 
 // ---- privacy ------------------------------------------------------------------------
 
