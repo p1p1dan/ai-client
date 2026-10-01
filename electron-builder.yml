@@ -236,6 +236,13 @@ appImage:
 
 afterPack: scripts/afterPack.mjs
 
+# Writes the Markdown into `latest.yml` as `releaseNotes`. electron-updater
+# prefers that over the GitHub feed entry, which is the body rendered to HTML —
+# and builds before 1.0.5 print whatever arrives as plain text, so HTML showed
+# up in their update dialog as a wall of tags.
+releaseInfo:
+  releaseNotesFile: docs/release-notes/unreleased.md
+
 publish:
   provider: github
   owner: p1p1dan

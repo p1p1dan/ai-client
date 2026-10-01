@@ -38,8 +38,12 @@ export interface UserProviderStore {
     | { status: 'unsupported' }
     | { status: 'invalid'; reason: string };
   saveUserProviders(providers: readonly UserProvider[]): Promise<VaultSaveResult>;
+  /** Save over a group that reads `invalid`, keeping a copy of the old file first. */
+  replaceUnreadableUserProviders(providers: readonly UserProvider[]): Promise<VaultSaveResult>;
   encryptionAvailable(): boolean;
 }
+
+type UserProviderRead = ReturnType<UserProviderStore['readUserProviders']>;
 
 export interface UserProviderServiceOptions {
   store: UserProviderStore;
@@ -92,7 +96,16 @@ export class UserProviderService {
   }
 
   async upsert(draft: UserProviderDraft): Promise<UserProviderView> {
-    const providers = this.requireList();
+    const read = this.store.readUserProviders();
+    // Adding is the one mutation allowed past an `invalid` group: the settings
+    // page offers "adding one again will replace the record" as the way out,
+    // and without it nothing could ever be added on that machine again. The
+    // list starts empty because nothing in the old group is readable; the
+    // vault keeps a copy of the file before overwriting it. `locked` still
+    // refuses — it is temporary, and saving then would lose a group that
+    // opens fine once the keyring does.
+    const replacesUnreadable = !draft.id && read.status === 'invalid';
+    const providers = replacesUnreadable ? [] : this.requireList(read);
     const existing = draft.id ? providers.find((row) => row.id === draft.id) : undefined;
     if (draft.id && !existing) throw new Error('No such AI service');
 
@@ -135,7 +148,7 @@ export class UserProviderService {
     const merged = existing
       ? providers.map((row) => (row.id === next.id ? next : row))
       : [...providers, next];
-    await this.commit(merged);
+    await this.commit(merged, replacesUnreadable);
     return toView(next);
   }
 
@@ -217,20 +230,27 @@ export class UserProviderService {
    * A mutation must never start from an empty list it inferred from a failed
    * read — saving that would delete every service the user has. `absent` is
    * the one non-failure: there is genuinely nothing stored yet.
+   *
+   * The vault's reason rides along in the message: it is the only field note
+   * a user can paste back from the error, and each reason has a different fix.
    */
-  private requireList(): UserProvider[] {
-    const read = this.store.readUserProviders();
+  private requireList(read: UserProviderRead = this.store.readUserProviders()): UserProvider[] {
     if (read.status === 'ok') return read.providers;
     if (read.status === 'absent') return [];
-    throw new Error(
-      read.status === 'locked'
-        ? 'Unlock the system keyring before changing AI services'
-        : 'Stored AI services could not be read'
-    );
+    if (read.status === 'locked') {
+      throw new Error('Unlock the system keyring before changing AI services');
+    }
+    const reason = read.status === 'invalid' ? read.reason : read.status;
+    throw new Error(`Stored AI services could not be read (${reason})`);
   }
 
-  private async commit(providers: readonly UserProvider[]): Promise<void> {
-    const result = await this.store.saveUserProviders(providers);
+  private async commit(
+    providers: readonly UserProvider[],
+    replacesUnreadable = false
+  ): Promise<void> {
+    const result = replacesUnreadable
+      ? await this.store.replaceUnreadableUserProviders(providers)
+      : await this.store.saveUserProviders(providers);
     if (!result.ok) throw new Error(`Could not save AI services: ${result.reason}`);
     this.onChange(providers);
   }

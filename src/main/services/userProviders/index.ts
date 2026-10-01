@@ -33,6 +33,7 @@ function vaultStore(): UserProviderStore {
   return {
     readUserProviders: () => vault.readUserProviders(),
     saveUserProviders: (providers) => vault.saveUserProviders(providers),
+    replaceUnreadableUserProviders: (providers) => vault.replaceUnreadableUserProviders(providers),
     encryptionAvailable: () => vault.encryptionAvailable(),
   };
 }

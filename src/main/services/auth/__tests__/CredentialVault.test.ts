@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   statSync,
@@ -384,6 +385,166 @@ describe('CredentialVault — user-added service group (H/17 L1)', () => {
       reason: 'unsupported_version',
     });
     expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).toBe(original);
+  });
+});
+
+describe('CredentialVault — replacing an unreadable user group', () => {
+  function makeProvider(overrides?: Partial<UserProvider>): UserProvider {
+    return {
+      id: 'svc-1',
+      name: 'My DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+      apiKey: 'USER-KEY-4b1e7a',
+      enabled: true,
+      createdAt: '2026-09-10T00:00:00.000Z',
+      ...overrides,
+    };
+  }
+
+  /** safeStorage after its key changed: its own ciphertext opens, the old key's does not. */
+  function rotatedKeyCrypto(): VaultCrypto {
+    return {
+      available: () => true,
+      encrypt: (plainText) => `k2:${plainText}`,
+      decrypt: (cipherText) => {
+        if (!cipherText.startsWith('k2:')) throw new Error('decrypt failed');
+        return cipherText.slice(3);
+      },
+    };
+  }
+
+  function openVault(crypto: VaultCrypto): CredentialVault {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(crypto);
+    return vault;
+  }
+
+  function backups(): string[] {
+    return readdirSync(baseDir).filter((name) => /^vault\.json\.unreadable-.+\.bak$/.test(name));
+  }
+
+  it('keeps the old file and the managed group when the key no longer opens the user group', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const before = openVault(fakeAvailableCrypto());
+    await before.save(makePayload());
+    await before.saveUserProviders([makeProvider()]);
+    const original = readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+    const managedBefore = JSON.parse(original).payload;
+
+    const after = openVault(rotatedKeyCrypto());
+    expect(after.readUserProviders()).toEqual({ status: 'invalid', reason: 'decrypt_failed' });
+
+    const replacement = makeProvider({ id: 'svc-2', name: 'Fresh', apiKey: 'NEW-KEY' });
+    expect(await after.replaceUnreadableUserProviders([replacement])).toEqual({ ok: true });
+
+    expect(after.readUserProviders()).toEqual({ status: 'ok', providers: [replacement] });
+    // Only the user group moved; the company payload is byte-for-byte what it was.
+    expect(JSON.parse(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).payload).toEqual(
+      managedBefore
+    );
+    const kept = backups();
+    expect(kept).toHaveLength(1);
+    expect(readFileSync(join(baseDir, kept[0]), 'utf-8')).toBe(original);
+    warn.mockRestore();
+  });
+
+  it('recovers the field vault: a v10 company group beside a v11 user group Windows cannot open', async () => {
+    // Shape of the 2026-09-29 report: the company payload was re-saved on this
+    // machine after a fresh login, while `save()` carried a user group
+    // written under another platform's scheme across verbatim.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const windowsLike: VaultCrypto = {
+      available: () => true,
+      encrypt: (plainText) => Buffer.from(`v10${plainText}`, 'latin1').toString('base64'),
+      decrypt: (cipherText) => {
+        const bytes = Buffer.from(cipherText, 'base64').toString('latin1');
+        if (!bytes.startsWith('v10')) throw new Error('decrypt failed');
+        return bytes.slice(3);
+      },
+    };
+    const foreignGroup = Buffer.concat([
+      Buffer.from('v11', 'latin1'),
+      Buffer.alloc(32, 0xa5),
+    ]).toString('base64');
+    writeFileSync(
+      join(baseDir, VAULT_FILE),
+      JSON.stringify({
+        version: 2,
+        enc: 'safeStorage',
+        lastEmail: 'user@jcdz.cc',
+        invalidatedAt: null,
+        encReason: 'ok',
+        payload: windowsLike.encrypt(JSON.stringify(makePayload())),
+        userProviders: foreignGroup,
+        userProvidersEnc: 'safeStorage',
+      })
+    );
+
+    const vault = openVault(windowsLike);
+    expect(vault.read().status).toBe('ok');
+    expect(vault.readUserProviders()).toEqual({ status: 'invalid', reason: 'decrypt_failed' });
+    const logged = warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n');
+    expect(logged).toContain('tagged v11');
+
+    expect(await vault.replaceUnreadableUserProviders([makeProvider()])).toEqual({ ok: true });
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+    // The login survives the repair.
+    expect(vault.read()).toMatchObject({ status: 'ok', doc: { payload: makePayload() } });
+    expect(backups()).toHaveLength(1);
+    warn.mockRestore();
+  });
+
+  it('keeps a copy of a file something else rewrote, and never logs its bytes', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // What a transparent file-encryption agent leaves behind: its own header, then ciphertext.
+    const foreign = '%ENC-HEADER%\u0000\u0001sk-ant-leaked-7c1d';
+    writeFileSync(join(baseDir, VAULT_FILE), foreign, 'utf-8');
+
+    const vault = openVault(fakeAvailableCrypto());
+    expect(vault.readUserProviders()).toEqual({ status: 'invalid', reason: 'malformed_json' });
+
+    const logged = warn.mock.calls.map((call) => call.map(String).join(' ')).join('\n');
+    expect(logged).toContain('malformed_json');
+    expect(logged).toContain('does not start like JSON, binary');
+    expect(logged).not.toContain('sk-ant');
+
+    expect(await vault.replaceUnreadableUserProviders([makeProvider()])).toEqual({ ok: true });
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+    const kept = backups();
+    expect(kept).toHaveLength(1);
+    expect(readFileSync(join(baseDir, kept[0]), 'utf-8')).toBe(foreign);
+    warn.mockRestore();
+  });
+
+  it('logs an unreadable group once per verdict, not once per read', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    writeFileSync(join(baseDir, VAULT_FILE), '{"version":2,', 'utf-8');
+
+    const vault = openVault(fakeAvailableCrypto());
+    vault.readUserProviders();
+    vault.readUserProviders();
+    vault.readUserProviders();
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain('starts like JSON');
+    warn.mockRestore();
+  });
+
+  it('never backs up or replaces a vault written by a newer schema', async () => {
+    writeFileSync(
+      join(baseDir, VAULT_FILE),
+      JSON.stringify({ version: 3, enc: 'none', lastEmail: null, encReason: 'ok', payload: null })
+    );
+    const original = readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+    const vault = openVault(fakeAvailableCrypto());
+
+    expect(await vault.replaceUnreadableUserProviders([makeProvider()])).toEqual({
+      ok: false,
+      reason: 'unsupported_version',
+    });
+    expect(readFileSync(join(baseDir, VAULT_FILE), 'utf-8')).toBe(original);
+    expect(backups()).toHaveLength(0);
   });
 });
 

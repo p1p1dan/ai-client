@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useModalQueueSlot } from '@/hooks/useModalQueueSlot';
 import { useI18n } from '@/i18n';
 import { useUpdaterStatus } from '@/stores/updater';
+import { ReleaseNotes } from './ReleaseNotes';
 import { Button } from './ui/button';
 import {
   Dialog,
@@ -119,9 +120,10 @@ export function UpdateNotification() {
                 </p>
               )}
               {status.info?.releaseNotes && (
-                <div className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-meta text-muted-foreground">
-                  {status.info.releaseNotes}
-                </div>
+                <ReleaseNotes
+                  notes={status.info.releaseNotes}
+                  className="max-h-48 overflow-auto break-words text-meta text-muted-foreground"
+                />
               )}
             </DialogPanel>
           ) : null}
