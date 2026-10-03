@@ -117,3 +117,73 @@
 9. **`legacy-pi-v3-drifted` 不参加「原件 = 副本」对拍**（自主决定、待审批）：副本做完后原件又被续写，与 `legacyPiCorpus.test.ts` 的处理一致。
 10. **旧断言的去向**：v4 可回放且不取写锁、v3 只在内存里转换、分页、未完成操作被拒、非会话文件与缺失文件、头里没有 cwd 时用索引的工作区，六组全部保留或改写，没有删掉仍有意义的断言；「非会话文件」语料里没有，测试里直接写一行纯 JSON。
 11. **留给后续的过期注释**：`SessionReplayReader.ts` 文件头仍写「与 `JsonlSessionStore.history()` 对拍」；`modelMissingWiring.test.ts` 第 217、235 行引用 `piSessionTimeline`；`legacyPiSessionSeams.test.ts` 文件头说「1.0.x 行为由 runtime 自己的会话测试钉住」。第 3 步删文件时一并改指新测试。
+
+### 第 3 步：删除 runtime、native worker 与根 pi 依赖（2026-10-03，基线 `36d1e02c`）
+
+代码提交 4 个：`fe4b9b7e`（删 runtime 与 native worker，收窄协议）、`ce47554c`（根依赖与 lockfile、agent-host 子包清单）、`6b8e7d79`（策略表进 shared）、`f874bc19`（CI 与打包检查）。`THIRD_PARTY_NOTICES.md` 与两个必需字符串已起草，按用户裁决第 4 条留在工作区待过目，未提交。以下各条都是**自主决定、待审批**。
+
+1. **接手半成品**：上一个代理 10-01 停在「`src/runtime` 已在工作区删除、策略表三个文件原样搬进 `src/shared/permissions/`、引用没改」。核对三个搬家文件与基线逐字节相同后接着做。搬来的测试 import `../../shared/defaultPaths.ts`，在新位置会指到 `shared/shared/`，改为 `../../defaultPaths.ts`。
+2. **提交怎么拆**：
+   - 顺序是「删 runtime 与 worker → 根依赖与子包 → 策略表进 shared → CI」。策略表放在依赖之后，因为基线里 `permissionPatchScript`、`permissionPolicyIntegration` 两个测试还 import 旧路径，它们随子包在第 2 个提交删除。
+   - 为让每个中间提交的树自洽，`package.json`、`t31PiOnlyAbsence`、`defaultPaths`、`noHardcodedChinese`、`packaging-config` 五个文件先在前面的提交里放过渡版本，后面的提交再改成终版。全量验证只在最后的树上跑过；中间提交没有逐个跑测试。
+3. **协议收窄（`workerRpc.ts`）**：按方案 §1.6 删除。另外：
+   - 导入的三个 payload 守卫（inspect / reconcile / discard）也删了。方案只点名四个结果守卫，但 payload 守卫唯一的调用方是被删的服务端处理。
+   - bootstrap 守卫不再校验 TTL 与超时字段。字段已从类型里删掉，旧 Main 发来的带这些字段的 payload 不会被拒，只是没人读；`workerRpc.test` 有用例钉住。`sameBootstrap` 去掉两项 TTL 比较。
+   - `normalizeWorkerCapabilities` 只读 `skills`。带着 1.0.x 三项的清单保留技能数、其余丢弃；`WorkerMcpServerInfo` 一并删。`WorkerManager.test`、`chatPiWorkerRouting.test`、`sessionCapabilityModel.test` 的桩随之只剩 `skills`。
+   - `ChatSlotBootstrapPayload` 改为 `WorkerBootstrapPayload` 的别名。`chatEngineDshOnly` 原来断言 `Omit<…, 'modelCatalog'>`，改为断言协议类型里已经没有 `modelCatalog`。
+   - `createPiWorkerSlot` 删掉转发委派开关、两项 TTL、超时的代码（第 1 步第 4 条留下的死代码），对应用例改为断言这几个字段都不上线。
+4. **`PiWorkerRpcServer`**：
+   - `handleDispose` 只剩释放 runtime 一项，注释同步。
+   - 新增用例：7 个退役方法都回 `WORKER_METHOD_NOT_FOUND`，并且不会建 runtime（风险 R9）。
+   - bridge 里两个 `unsupported` 函数没有调用方了，一并删除。
+   - 错误文案 `Pi utility worker is disposed` 不改，它是线上字符串。
+5. **`runtimeToolVocabulary`**：方案写的是删掉「对照 runtime 注册表」一节。实际只删读注册表的部分（`registeredToolNames` 和两条对照用例）。逐工具的 `it.each` 改为遍历冻结下来的 `RUNTIME_TOOL_NAMES`（14 个 1.0.x 工具名），理由是迁移来的旧会话里仍有这些名字。
+6. **其他渲染层测试**：
+   - `permissionGate.test` 删掉「native runtime 是产出方」用例；store 与 `runtimeEvents.ts` 的注记改指 DSH 权限行与 bridge 的 `reportedGate()`。
+   - `modelMissingWiring` 删 MMW-14、MMW-15 两条读 runtime 源码的断言及常量，MMW-16 保留。
+   - `retiredSurfaceAbsence` 的允许名单去掉已删的 `nativeStreamReplay.test.ts`。
+7. **`legacyImport.test`**：worker RPC 守卫那一例改为直接测 `isLegacyImportPathSegment`（Main 的 manifest 与 IPC 仍在用），另加一例 `isImportedConversation`（宿主的 `seedSession` 在用）。
+8. **`skills.test`**：删掉「P5-1 slash expansion」一节（5 例），连同 `expand.ts`。
+9. **`dsh-host-build-lib`**：permissions 行的 inputs 直接去掉旧路径，没有换成新路径。新路径已经在 `src/shared/` 前缀之内，再列一行是重复。
+10. **边界静态测试**：
+    - `permissionsLibraryBoundaryStatic` 新增一例：库内只有这一个 `.mjs`、它没有 import、旧位置不存在。`allowedTarget` 只认 `src/shared`。
+    - 四个 `*BoundaryStatic` 删掉「旧位置是薄封装」一节，出处注记的正则保留；随之无用的 `read` 辅助函数一并删掉。`legacyPiSessionBoundaryStatic` 里 `SessionReplayReader` 那一例保留，`describe` 改名。
+    - `noHardcodedChinese` 去掉 `runtime` 根，`agent-host` 下限 3（剩 4 个文件）。`defaultPaths` 的 `POLICY_PATTERN` 换路径，`RUNTIME_SUBPACKAGE` 删除。
+11. **`runtime-baseline`**：
+    - 删 `run-native.mjs`、`verify-native.mjs`。
+    - `archive.mjs` 的不可比文案改为不再指向已删的脚本。
+    - archive 测试的「接线」用例只钉 `compare.mjs`，并断言 `run-native.mjs` 已删。
+    - README 的表格与采集说明标注「已删，要重跑须在 P1-12 之前的提交上开临时 worktree」。
+12. **根依赖与 lockfile**（R3）：
+    - 手改 `package.json`，跑 `pnpm install --lockfile-only --ignore-scripts`。前后核对共享 `node_modules` 的 `.modules.yaml`、`.pnpm/lock.yaml` 的修改时间不变。
+    - lockfile 只删不增，删除 107 个包：pi 七件套，以及只经 pi-ai 进来的 Anthropic、OpenAI、Google、AWS Bedrock 等 SDK。`jiti@2.7.0`、`yaml@2.9.0` 只是改标为 optional。
+    - 本机 `node_modules` 是软链、没有动，本机测试仍能解析这些包。CI 的 `--frozen-lockfile` 才能真正证明没有漏掉的引用；本地的替代证据是 `runtimeRetiredStatic` 的 import 扫描。
+13. **agent-host tsconfig**：去掉 `spikes` 排除（目录已不存在），注释改写。子包没了以后，`vitest`、`@types/node` 从根 `node_modules` 解析，`typecheck:agent-host` 通过。
+14. **app.asar 反向检查**（§4）：
+    - asar 头的解析放在新模块 `scripts/asar-inspect.mjs`，方便单测；不依赖 `@electron/asar`。
+    - 扫描范围是 `app.asar` 内任意深度的 `node_modules/<包>`，加上 `app.asar.unpacked/node_modules`。
+    - Main 的标记字符串选了 5 个只有 runtime 定义、在 Main / shared / preload / 渲染层源码（含注释）里都不出现的标识符：`NativeWorkerRuntime`、`RUNTIME_CONFIG_VERSION`、`CONTEXT_ROLLOVER_SUMMARY`、`DEFAULT_AGENT_LOOP_CONFIG`、`resolveWorkerShell`。
+    - `asar-inspect.test` 用假 app 目录直接跑 `verify-packaged-app`，证明两类失败都会报出、干净的包不报。
+15. **`runtimeRetiredStatic`**：补齐第 3 步的断言，并入 `piCliIsBundledToolOnly` 的「不当库 import」规则：扩到三个包，扫 `src` 与 `scripts`，深路径也算。import 扫描按相对路径解析，避免 `@emnapi/runtime` 这类误报。
+16. **注释回写**：第 2 步 B 第 11 条点名的三处已改指新测试。顺带改了 `questionCardModel`、权限闸门 store、`runtimeEvents`、`piModelConfig`、`stderrRedaction` 等处仍用现在时描述 native 产出方或已删文件的注释。
+17. **不动**：
+    - `.gitignore` 的 `out-agent-host/` 与 `biome.json` 的忽略：本地 132 MB 旧产物还在，交用户决定，同第 1 步第 10 条。
+    - 根 `package-lock.json`：npm 旧锁文件，pnpm 不读，内容早已和 `package.json` 脱节，只在发版时同步版本号。方案没列，删它属于发布流程的改动。
+    - 项目 `CLAUDE.md`、`README` 等文档：§1.12，由 P1-14 回写。
+    - `measure.ts`、`p0-6-probe.ts`：§1.7。
+    - 各处 `Moved from src/runtime/...` 出处注记：§1.1。
+18. **验证**（本机，`f874bc19` 的树）：
+    - 三套 tsc、`pnpm lint` 通过。lint 剩 8 条警告，都在 `docs/` 证据脚本与 `run-f3-dev-probe.mjs`，是基线就有的。
+    - `Static Scan Wiring`：75 个文件 756 例。
+    - `src/shared/__tests__`：29 个文件 402 例。
+    - `scripts`：12 个文件 208 例。
+    - bridge-smoke：66 项全过。
+    - `bridge-record --check`：28 个场景 0 差异。
+    - 真宿主集成：35 例。
+    - `build-dsh-host`：82.6 MiB；L1 冒烟 44 项全过。
+    - 全量单测分四批：
+      - `src/renderer`：321 个文件 5299 例；
+      - `src/main src/preload src/shared`：199 个文件 3286 例，跳过 1 个文件 35 例，即没开环境变量的集成测试；
+      - `src/dsh-host src/agent-host scripts`：52 个文件 1034 例，跳过 2 个文件 11 例，是 win32 专用用例；
+      - `src/__tests__`：1 个文件 2 例。
+    - 打包检查只能在 CI 上验证，等推送后手动触发 `build.yml`（裁决第 2 条）。
