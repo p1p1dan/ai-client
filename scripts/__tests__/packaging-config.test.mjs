@@ -520,13 +520,12 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
     expect(pkg.scripts['dist:prereq']).toContain('pnpm build:dsh-host');
   });
 
-  it('every job runs Node 24, matching src/agent-host engines', () => {
+  it('every job runs Node 24, matching src/dsh-host engines', () => {
     // Three contradictory Node truths (.nvmrc 22 / CI 20 / engines >=24) cost a
     // full red CI run once already: Node 20 has no --experimental-strip-types.
-    const engines = JSON.parse(
-      readFileSync(path.join(repoRoot, 'src/agent-host/package.json'), 'utf8')
-    ).engines.node;
-    expect(engines).toBe('>=24');
+    // The pin moved from src/agent-host/package.json, deleted with the native
+    // worker in dsh-rebase P1-12 step 3, to the DSH host's own manifest.
+    expect(dshPackage.engines.node).toBe('>=24');
 
     for (const [name, job] of Object.entries(jobs)) {
       const setup = job.steps?.filter((step) => step.uses?.startsWith('actions/setup-node')) ?? [];

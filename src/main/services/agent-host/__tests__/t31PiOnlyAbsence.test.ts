@@ -40,21 +40,31 @@ describe('T31 Pi-only absence gate', () => {
     }
   });
 
-  it('keeps only Pi worker runtime dependencies in the utility package', () => {
-    const manifest = JSON.parse(readFileSync(at('src/agent-host/package.json'), 'utf8')) as {
+  /**
+   * dsh-rebase P1-12 step 3 (decision 147): the utility package is gone with
+   * the native worker, and so are the two pi packages it pinned. The root
+   * manifest must not pick them back up either: electron-builder ships every
+   * root `dependencies` entry inside app.asar.
+   */
+  it('keeps no utility package and no pi runtime dependency anywhere', () => {
+    expect(existsSync(at('src/agent-host/package.json'))).toBe(false);
+    expect(existsSync(at('src/agent-host/package-lock.json'))).toBe(false);
+    const rootManifest = JSON.parse(readFileSync(at('package.json'), 'utf8')) as {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
     };
-    const all = { ...(manifest.dependencies ?? {}), ...(manifest.devDependencies ?? {}) };
-    expect(all['@earendil-works/pi-coding-agent']).toBeTruthy();
-    expect(all['@gotgenes/pi-permission-system']).toBeTruthy();
-    expect(all['@anthropic-ai/claude-agent-sdk']).toBeUndefined();
-    expect(all['@cometix/claude-code']).toBeUndefined();
-    expect(all['@openai/codex']).toBeUndefined();
-    const rootManifest = JSON.parse(readFileSync(at('package.json'), 'utf8')) as {
-      dependencies?: Record<string, string>;
-    };
-    expect(rootManifest.dependencies?.['@agentclientprotocol/sdk']).toBeUndefined();
+    const all = { ...(rootManifest.dependencies ?? {}), ...(rootManifest.devDependencies ?? {}) };
+    for (const retired of [
+      '@earendil-works/pi-coding-agent',
+      '@earendil-works/pi-agent-core',
+      '@gotgenes/pi-permission-system',
+      '@anthropic-ai/claude-agent-sdk',
+      '@cometix/claude-code',
+      '@openai/codex',
+      '@agentclientprotocol/sdk',
+    ]) {
+      expect(all[retired], retired).toBeUndefined();
+    }
   });
 
   it('exposes only Pi model and native runtime execution channels', () => {
