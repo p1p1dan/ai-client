@@ -33,9 +33,10 @@
  * out are `entryTransforms` and `entryProjectors`, which no caller of this
  * library passes: without a projector a `custom` entry contributes nothing,
  * exactly as it does in pi with none registered. Logic and ordering are pi's,
- * transliterated to TypeScript over this library's structural types;
- * `src/runtime/__tests__/legacyPiSessionWrappers.test.ts` holds it to the
- * package while the runtime still ships one.
+ * transliterated to TypeScript over this library's structural types. The
+ * runtime's wrapper test that held it to the package went with `src/runtime`
+ * in dsh-rebase P1-12 step 3; the v4 corpus goldens (`legacyPiCorpus`) pin the
+ * contexts it builds.
  */
 
 import type {

@@ -8,16 +8,12 @@ import {
   isWorkerForkResult,
   isWorkerHistoryPayload,
   isWorkerHistoryResult,
-  isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
   isWorkerInterjectResult,
   isWorkerJobKillPayload,
   isWorkerJobKillResult,
   isWorkerJobReadPayload,
   isWorkerPanelsPayload,
-  isWorkerReconcileImportedSessionPayload,
-  isWorkerReloadPayload,
-  isWorkerReloadResult,
   isWorkerRewindPayload,
   isWorkerRewindResult,
   isWorkerRpcEvent,
@@ -32,11 +28,6 @@ import {
   isWorkerSubagentInterruptResult,
   isWorkerTreePayload,
   isWorkerTreeResult,
-  isWorkerUtilityCancelPayload,
-  isWorkerUtilityDeltaEvent,
-  isWorkerUtilityStartPayload,
-  isWorkerUtilityStartResult,
-  isWorkerUtilityTerminalEvent,
   normalizeWorkerCapabilities,
   sanitizeWorkerJobRead,
   sanitizeWorkerPanels,
@@ -125,31 +116,18 @@ describe('worker RPC boundary guards', () => {
       ).toBe(false);
     }
 
-    // The two prompt cache TTLs: absent is the shipped default, and anything
-    // that is not one of the two accepted spellings is REJECTED rather than
-    // coerced — a worker that fell back silently would run a lifetime the
-    // settings page is not showing.
-    for (const promptCacheTtl of ['5m', '1h', undefined]) {
-      expect(
-        isWorkerBootstrapPayload({ logicalSessionId: 'logical-1', cwd: '/repo', promptCacheTtl })
-      ).toBe(true);
-    }
-    for (const ttl of ['1 hour', 'long', '60m', 5, {}]) {
-      expect(
-        isWorkerBootstrapPayload({
-          logicalSessionId: 'logical-1',
-          cwd: '/repo',
-          promptCacheTtl: ttl,
-        })
-      ).toBe(false);
-      expect(
-        isWorkerBootstrapPayload({
-          logicalSessionId: 'logical-1',
-          cwd: '/repo',
-          subagentPromptCacheTtl: ttl,
-        })
-      ).toBe(false);
-    }
+    // dsh-rebase P1-12 step 3 (decision 147): the prompt cache TTLs, provider
+    // idle timeout, delegation switch and model catalog left the bootstrap
+    // with the native runtime that read them. A payload from an older Main
+    // that still carries one is not refused; nothing reads the field.
+    expect(
+      isWorkerBootstrapPayload({
+        logicalSessionId: 'logical-1',
+        cwd: '/repo',
+        promptCacheTtl: 'long',
+        providerIdleTimeoutMs: -1,
+      })
+    ).toBe(true);
 
     expect(
       isWorkerBootstrapResult({
@@ -274,33 +252,6 @@ describe('worker RPC boundary guards', () => {
         tree: { snapshot },
       })
     ).toBe(true);
-    // A reload names the file it expects to be reloaded, so a worker can
-    // refuse one aimed at a session it does not own.
-    expect(
-      isWorkerReloadPayload({
-        logicalSessionId: 'logical-1',
-        sessionFile: '/sessions/pi-1.jsonl',
-      })
-    ).toBe(true);
-    expect(isWorkerReloadPayload({ logicalSessionId: 'logical-1' })).toBe(false);
-    expect(isWorkerReloadPayload({ logicalSessionId: 'logical-1', sessionFile: '  ' })).toBe(false);
-    expect(
-      isWorkerReloadResult({
-        logicalSessionId: 'logical-1',
-        sessionFile: '/sessions/pi-1.jsonl',
-        workspacePath: '/repo',
-        leaf: snapshot.leaf,
-        history,
-      })
-    ).toBe(true);
-    expect(
-      isWorkerReloadResult({
-        logicalSessionId: 'logical-1',
-        sessionFile: '/sessions/pi-1.jsonl',
-        workspacePath: '/repo',
-        history,
-      })
-    ).toBe(false);
     expect(isWorkerForkPayload({ logicalSessionId: 'logical-1', entryId: 'a' })).toBe(true);
     expect(
       isWorkerForkResult({
@@ -400,98 +351,6 @@ describe('worker RPC boundary guards', () => {
       })
     ).toBe(false);
     expect(isWorkerSendPayload({ ...retry, mode: 'resend' })).toBe(false);
-  });
-
-  it('validates sessionless utility requests and terminal events', () => {
-    expect(
-      isWorkerUtilityStartPayload({
-        operationId: 'utility-1',
-        cwd: '/repo',
-        prompt: 'Summarize this diff',
-        model: 'pilab/company-model',
-        effort: 'high',
-        timeoutMs: 60_000,
-      })
-    ).toBe(true);
-    expect(
-      isWorkerUtilityStartPayload({
-        operationId: 'utility-1',
-        cwd: '/repo',
-        prompt: '   ',
-        timeoutMs: 60_000,
-      })
-    ).toBe(false);
-    expect(
-      isWorkerUtilityStartPayload({
-        operationId: 'utility-1',
-        cwd: '/repo',
-        prompt: 'x',
-        timeoutMs: 600_001,
-      })
-    ).toBe(false);
-    expect(isWorkerUtilityStartResult({ accepted: true, operationId: 'utility-1' })).toBe(true);
-    expect(isWorkerUtilityCancelPayload({ operationId: 'utility-1', reason: 'timeout' })).toBe(
-      true
-    );
-    expect(isWorkerUtilityCancelPayload({ operationId: 'utility-1', reason: 'later' })).toBe(false);
-    expect(
-      isWorkerUtilityDeltaEvent({
-        ...base,
-        kind: 'event',
-        type: 'utility.delta',
-        payload: { operationId: 'utility-1', delta: 'hello' },
-      })
-    ).toBe(true);
-    expect(
-      isWorkerUtilityTerminalEvent({
-        ...base,
-        kind: 'event',
-        type: 'utility.terminal',
-        payload: {
-          operationId: 'utility-1',
-          state: 'completed',
-          text: 'hello',
-          model: 'pilab/company-model',
-        },
-      })
-    ).toBe(true);
-  });
-
-  it('rejects a targetPiSessionId that is not a safe path segment on the import inspect/reconcile RPCs', () => {
-    // import-catalog-07: both handlers join targetPiSessionId straight into a
-    // session file path in the worker process.
-    expect(
-      isWorkerInspectImportedSessionPayload({
-        logicalSessionId: 'logical-1',
-        workspacePath: '/repo',
-        targetPiSessionId: 'import-1',
-      })
-    ).toBe(true);
-    expect(
-      isWorkerReconcileImportedSessionPayload({
-        logicalSessionId: 'logical-1',
-        workspacePath: '/repo',
-        targetPiSessionId: 'import-1',
-      })
-    ).toBe(true);
-    for (const targetPiSessionId of ['', '.', '..', '../escape', 'a/b', 'a\\b']) {
-      expect(
-        isWorkerInspectImportedSessionPayload({
-          logicalSessionId: 'logical-1',
-          workspacePath: '/repo',
-          targetPiSessionId,
-        }),
-        targetPiSessionId
-      ).toBe(false);
-      expect(
-        isWorkerReconcileImportedSessionPayload({
-          logicalSessionId: 'logical-1',
-          workspacePath: '/repo',
-          targetPiSessionId,
-        }),
-        targetPiSessionId
-      ).toBe(false);
-    }
   });
 
   it('keeps transport request identity separate from product turn identity', () => {
@@ -709,55 +568,40 @@ describe('normalizeWorkerCapabilities', () => {
   it('returns null when nothing reported one', () => {
     expect(normalizeWorkerCapabilities(undefined)).toBeNull();
     expect(normalizeWorkerCapabilities(null)).toBeNull();
-    expect(normalizeWorkerCapabilities('mcp')).toBeNull();
+    expect(normalizeWorkerCapabilities('skills')).toBeNull();
     // An object with nothing readable in it is not a report either.
     expect(normalizeWorkerCapabilities({})).toBeNull();
-    expect(normalizeWorkerCapabilities({ skills: 'many', mcpServers: 'two' })).toBeNull();
+    expect(normalizeWorkerCapabilities({ skills: 'many' })).toBeNull();
+    expect(normalizeWorkerCapabilities({ skills: -1 })).toBeNull();
   });
 
-  it('keeps an empty server list apart from an absent one', () => {
-    // The distinction the panel renders as "none configured" vs "not reported".
-    expect(normalizeWorkerCapabilities({ mcpServers: [] })).toEqual({ mcpServers: [] });
+  it('keeps a reported zero apart from an absent count', () => {
+    // The distinction the panel renders as "none" vs "not reported".
     expect(normalizeWorkerCapabilities({ skills: 0 })).toEqual({ skills: 0 });
-    expect(normalizeWorkerCapabilities({ skills: 2 })?.mcpServers).toBeUndefined();
+    // A fractional count is truncated.
+    expect(normalizeWorkerCapabilities({ skills: 2.7 })).toEqual({ skills: 2 });
   });
 
-  it('drops one unreadable member without taking the others with it', () => {
-    expect(
-      normalizeWorkerCapabilities({
-        mcpServers: [{ name: 'good', ok: true, toolCount: 3 }, { ok: true }, null, 'nope'],
-        skills: 4,
-        promptTemplates: -1,
-        subagents: 2.7,
-      })
-    ).toEqual({
-      mcpServers: [{ name: 'good', ok: true, toolCount: 3 }],
+  /**
+   * dsh-rebase P1-12 step 3 (decision 116 rule 21): MCP servers, prompt
+   * templates and sub-agent definitions were members only the 1.0.x runtime
+   * reported. An inventory that still carries them keeps its skill count and
+   * loses the rest; one with nothing else in it is not a report.
+   */
+  it('ignores the members only the 1.0.x runtime reported', () => {
+    const legacy = {
+      mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
       skills: 4,
-      // A negative count is not a count; a fractional one is truncated.
+      promptTemplates: 1,
       subagents: 2,
-    });
-  });
-
-  it('reports a failed server rather than omitting it', () => {
-    // "Declared and did not come up" is the fact a user needs; dropping it
-    // would render the same as never having configured the server at all.
-    expect(
-      normalizeWorkerCapabilities({
-        mcpServers: [{ name: 'broken', ok: false, toolCount: 9, error: 'ECONNREFUSED' }],
-      })
-    ).toEqual({ mcpServers: [{ name: 'broken', ok: false, toolCount: 0, error: 'ECONNREFUSED' }] });
-    // An error on a healthy server is not carried: it would render a Failed
-    // badge next to working tools.
-    expect(
-      normalizeWorkerCapabilities({ mcpServers: [{ name: 'ok', ok: true, error: 'stale' }] })
-    ).toEqual({ mcpServers: [{ name: 'ok', ok: true, toolCount: 0 }] });
+    };
+    expect(normalizeWorkerCapabilities(legacy)).toEqual({ skills: 4 });
+    expect(normalizeWorkerCapabilities({ ...legacy, skills: undefined })).toBeNull();
   });
 
   it('never lets a malformed inventory fail the bootstrap payload itself', () => {
     expect(isWorkerBootstrapResult({ ...bootstrap, capabilities: 'nonsense' })).toBe(true);
-    expect(isWorkerBootstrapResult({ ...bootstrap, capabilities: { mcpServers: [{}] } })).toBe(
-      true
-    );
+    expect(isWorkerBootstrapResult({ ...bootstrap, capabilities: { skills: 'two' } })).toBe(true);
     expect(isWorkerBootstrapResult(bootstrap)).toBe(true);
   });
 });

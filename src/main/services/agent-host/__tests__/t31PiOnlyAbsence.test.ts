@@ -112,7 +112,6 @@ describe('T31 Pi-only absence gate', () => {
     for (const relative of [
       'src/main/services/legacyImport/ClaudeSessionScanner.ts',
       'src/main/services/legacyImport/ClaudeSourceAdapter.ts',
-      'src/agent-host/codexHistoryReader.ts',
       'src/agent-host/codexItemMapper.ts',
     ]) {
       const source = readFileSync(at(relative), 'utf8');

@@ -995,13 +995,14 @@ export interface SessionCreatedEvent extends RuntimeEventBase {
      * why the tier control reads this field.
      *
      * T025: that reasoning no longer holds. Nothing injects a pi permission
-     * extension since P6-5 — every decision is made by
-     * `src/runtime/plugins/permissions/`, whatever the user has installed — so
-     * the flag now only reports what the user's own pi config declares.
+     * extension since P6-5 — every decision is made by the gate in
+     * `src/shared/permissions/`, attached to the DSH permission row
+     * (`aiclient-permissions`), whatever the user has installed.
      *
-     * T026: the native runtime therefore sends `bundled` unconditionally, and
-     * `user_configured` has no producer left. What a user installs decides the
-     * built-in Pi TERMINAL instead, which the plugins page now says in words.
+     * T026: the producer therefore sends `bundled` unconditionally — since
+     * dsh-rebase P1-12 that is the DSH bridge, once the gate is attached — and
+     * `user_configured` has no producer left. What a user installed decided
+     * the built-in Pi TERMINAL instead, which dsh-rebase P1-11 removed.
      * The renderer half of this note is `stores/permissionGate.ts`.
      *
      * Optional: an older Host never sends it, and "not reported" is not the
@@ -1459,8 +1460,9 @@ export interface PermissionActivityEvent extends RuntimeEventBase {
      * so this answers "who was this checked for" and never narrows what the
      * check permits.
      *
-     * This is the pair the native runtime's gate actually sends (see
-     * `src/runtime/plugins/permissions/activity.ts`). The legacy backend sent
+     * This is the pair the gate actually sends (see
+     * `src/shared/permissions/activity.ts`, moved from the 1.0.x runtime and
+     * run by the DSH permission row since P1-6). The legacy backend sent
      * `forwarded` / `requesterAgentName` below instead; the renderer
      * (`permissionActivityRow.ts`) reads both pairs as the same fact
      * (MODEL-20, 2026-09-19).

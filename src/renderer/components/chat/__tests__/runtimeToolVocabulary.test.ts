@@ -3,10 +3,10 @@
  *
  * `piToolVocabulary.test.ts` is the same shape one layer up: it pinned pi's own
  * lowercase built-ins after a backend swap made every lookup miss. This file
- * pins the next drift of the same kind, which the 2026-09-14 audit caught. Our
- * runtime does not register pi's built-ins at all — it registers its own
- * (`src/runtime/plugins/tools`), and the two lists disagree on the one name
- * that matters most: the SDK calls its glob tool `find`, we call it `glob`.
+ * pins the next drift of the same kind, which the 2026-09-14 audit caught. The
+ * 1.0.x runtime did not register pi's built-ins at all — it registered its own
+ * (in the since-deleted `src/runtime`), and the two lists disagree on the one
+ * name that matters most: the SDK calls its glob tool `find`, 1.0.x `glob`.
  *
  * The miss is silent in exactly the way the earlier one was — no type error,
  * `TOOL_VERBS` falls back to "Ran", `formatToolArgDetail` falls into `default:`
@@ -19,9 +19,6 @@
  * main timeline.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { type Translate, translate, zhTranslations } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
@@ -417,7 +414,7 @@ describe('a call that never did its work', () => {
 });
 
 // ---------------------------------------------------------------------------
-// chat-tool-08 — reconcile the tables against the registry that feeds them
+// chat-tool-08 — every 1.0.x tool name still reads right
 // ---------------------------------------------------------------------------
 
 /**
@@ -427,77 +424,14 @@ describe('a call that never did its work', () => {
  * `grep` had verbs, so every case here passed, while their hit lists never
  * rendered once on the native backend.
  *
- * So the registry itself is the fixture. It is READ, not imported: `src/runtime`
- * is a separate npm package whose tool objects are built inside a cordis
- * `Service` method, so the names only exist once a whole runtime is
- * constructed — but they are plain literals in the source, and a literal can be
- * read without booting anything.
- *
- * Add a tool to the runtime and this file fails until it has a probe, a verb
- * triple, a Chinese entry, an argument and a covered-field list.
+ * Until dsh-rebase P1-12 step 3 this section read the self-owned runtime's
+ * tool registry as its fixture and reconciled `RUNTIME_TOOL_NAMES` against it.
+ * The registry went with `src/runtime` (decision 147), so the list is frozen
+ * at what 1.0.x registered: a migrated or read-only 1.0.x session still holds
+ * rows under exactly these names, and each must keep its verb, Chinese entry,
+ * argument and covered-field list.
  */
-
-const RUNTIME_DIR = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../../../../runtime'
-);
-
-/** Every file that registers a tool with the agent. */
-const REGISTRY_FILES = [
-  'plugins/tools/index.ts',
-  'plugins/tools/ask.ts',
-  'plugins/tools/browserPreview.ts',
-  'plugins/tools/new-context.ts',
-  'plugins/skills/index.ts',
-  'plugins/subagent/index.ts',
-];
-
-/**
- * The `name` of a tool definition: `name: 'glob',`.
- *
- * Convention: a tool object names itself with a single-quoted lowercase
- * literal and a trailing comma, at whatever indent the definition sits at.
- * Anything else is a reference this pattern cannot resolve on its own —
- * `name: SUBAGENT_WAIT_TOOL_NAME,` — and is captured by the bare constant
- * group below, then resolved through {@link EXPORTED_NAME}.
- *
- * Deliberately excluded: `label:` and any other key (`name: 'Bash',` is a
- * label, not a tool name); a value without the trailing comma; and the
- * `name`-like keys of structures that are not tool definitions at all — the
- * `parameters` schema's unquoted keys, and the `name: string` fields of
- * interfaces and the `name: tool.name` lines of other plugins in this package.
- */
-const TOOL_NAME_FIELD = /^\s*name: (?:'([^']+)'|([A-Z][A-Z0-9_]*)),$/gm;
-/**
- * A module-level tool-name constant: `export const SUBAGENT_WAIT_TOOL_NAME = 'TaskWait';`.
- *
- * Convention: the constant is exported, its name matches `[A-Z][A-Z0-9_]*`,
- * its value is a single-quoted literal, and the line ends in a semicolon.
- * That is how `plugins/subagent/index.ts` and `plugins/tools/new-context.ts`
- * spell the names their tool objects reference, and `glob`/`grep` do not need
- * this at all because they inline their literals.
- *
- * Deliberately excluded: non-exported constants (none of these files use
- * one), values that are not a single-quoted literal, and any constant whose
- * value is not a tool name — the exported `*_SERVICE` names in the same files
- * match the shape and are simply never looked up by `registeredToolNames()`,
- * which only resolves constants a `name:` field actually referenced.
- */
-const EXPORTED_NAME = /^export const ([A-Z][A-Z0-9_]*) = '([^']+)';$/gm;
-
-function registeredToolNames(): string[] {
-  const names = new Set<string>();
-  for (const relative of REGISTRY_FILES) {
-    const text = readFileSync(path.join(RUNTIME_DIR, relative), 'utf8');
-    const constants = new Map<string, string>();
-    for (const match of text.matchAll(EXPORTED_NAME)) constants.set(match[1], match[2]);
-    for (const match of text.matchAll(TOOL_NAME_FIELD)) {
-      const name = match[1] ?? constants.get(match[2] ?? '');
-      if (name) names.add(name);
-    }
-  }
-  return [...names].sort();
-}
+const LEGACY_TOOL_NAMES = [...Object.values(RUNTIME_TOOL_NAMES)].sort();
 
 interface ToolProbe {
   /** A call the model could plausibly make, with the tool's own argument names. */
@@ -542,24 +476,18 @@ const PROBES: Readonly<Record<string, ToolProbe>> = {
   TaskStop: { input: { delegationIds: ['a', 'b'] }, arg: '2 delegations' },
 };
 
-describe('the renderer speaks for every tool the runtime registers', () => {
-  const registered = registeredToolNames();
+describe('the renderer speaks for every tool 1.0.x registered', () => {
+  const registered = LEGACY_TOOL_NAMES;
 
-  it('read the registry, not an empty match', () => {
-    // The failure mode every source scan has: a regex that quietly stops
-    // matching makes every assertion below pass on nothing at all.
+  it('covers the whole frozen list, not an empty one', () => {
+    // The failure mode every enumeration has: an empty list makes every
+    // assertion below pass on nothing at all.
     expect(registered.length).toBeGreaterThanOrEqual(14);
     expect(registered).toContain('read');
     expect(registered).toContain('Task');
   });
 
-  it('RUNTIME_TOOL_NAMES is the registry, not a snapshot of it', () => {
-    // The renderer's constant is what every other case keys on, so it is the
-    // one place a newly registered tool has to land first.
-    expect([...Object.values(RUNTIME_TOOL_NAMES)].sort()).toEqual(registered);
-  });
-
-  it('every registered tool has a probe in this file', () => {
+  it('every 1.0.x tool has a probe in this file', () => {
     expect(Object.keys(PROBES).sort()).toEqual(registered);
   });
 

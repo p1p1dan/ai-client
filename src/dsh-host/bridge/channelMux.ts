@@ -157,12 +157,6 @@ function isGeneration(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
-function unsupported(what: string): Error {
-  return Object.assign(new Error(`${what} is not bridged to the DSH engine`), {
-    code: 'WORKER_DSH_UNSUPPORTED',
-  });
-}
-
 type AnySeeded = DshHostSeeded<DshSeedSessionResult | DshSeedImportResult>;
 
 function seedFailure(
@@ -321,18 +315,12 @@ export class DshChannelMux {
       server: new PiWorkerRpcServer({
         port: { postMessage: (rpc) => this.forward(channel, rpc) },
         generation,
-        // Same constant the native worker entry passes (decision 009).
+        // Same constant 1.0.x's native worker entry passed (decision 009).
         projectTrusted: true,
         createRuntime: (runtimeOptions) => {
           const runtime = this.options.createRuntime(runtimeOptions);
           channel.runtime = runtime;
           return runtime;
-        },
-        createImportWriter: () => {
-          throw unsupported('Conversation import');
-        },
-        createUtilityRuntime: () => {
-          throw unsupported('One-shot completion');
         },
         log: (...args) => this.options.log(`[${ch}]`, ...args),
         onDisposed: () => this.onDisposed(channel),

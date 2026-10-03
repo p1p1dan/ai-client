@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { MODEL_NOT_IN_CATALOG_CODE_TOKEN } from '../modelMissingError';
 import { stripComments } from './stripComments';
 
 /**
@@ -33,30 +32,9 @@ const NOTICE = path.join(
   'ModelMissingNotice.tsx'
 );
 
-/**
- * T062 / D19 — the two runtime files the detector's code token depends on.
- *
- * Read as text rather than imported: `src/runtime` is its own npm package with
- * its own `node_modules` (cordis + pi-ai), and importing into a renderer suite
- * would make this file unrunnable on a checkout that has not installed it.
- */
-const RUNTIME_ROOT = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '..',
-  '..',
-  '..',
-  '..',
-  'runtime',
-  'plugins'
-);
-const ADAPTER = path.join(RUNTIME_ROOT, 'model-adapter', 'index.ts');
-const LOOP = path.join(RUNTIME_ROOT, 'agent-loop', 'index.ts');
-
 const SOURCE = stripComments(readFileSync(TIMELINE, 'utf8'), 'MessageTimeline.tsx');
 const COMPOSER_SOURCE = stripComments(readFileSync(COMPOSER, 'utf8'), 'ChatComposer.tsx');
 const NOTICE_SOURCE = stripComments(readFileSync(NOTICE, 'utf8'), 'ModelMissingNotice.tsx');
-const ADAPTER_SOURCE = stripComments(readFileSync(ADAPTER, 'utf8'), 'model-adapter-index.ts');
-const LOOP_SOURCE = stripComments(readFileSync(LOOP, 'utf8'), 'agent-loop-index.ts');
 
 describe('MessageTimeline wires the model-missing recovery (H/21 P0)', () => {
   it('[MMW-01] imports the shared detector and view rather than re-spelling the needle', () => {
@@ -179,27 +157,18 @@ describe('ChatComposer mounts the recovery card on the send path (T062 round-2)'
 });
 
 /**
- * T062 / D19 — the signal the session path sends, pinned at both ends.
+ * T062 / D19 — the signal the session path sends.
  *
  * The 2026-09-17 point-check found this card unreachable from a real send: the
  * detector matched `WORKER_MODEL_NOT_FOUND` and `Pi model not found`, and the
- * session path had moved to a `RuntimeConfigError` carrying neither. The code
- * is now the contract; these two scans are what stop it drifting again, since
- * the producer and the consumer are in different npm packages and no compiler
- * checks the seam.
+ * session path had moved to a `RuntimeConfigError` carrying neither. Two scans
+ * here used to pin the self-owned runtime's throw site and loop; they went
+ * with `src/runtime` in dsh-rebase P1-12 step 3 (decision 147). A DSH session
+ * reports a missing model as `MODEL_NOT_CONFIGURED`, which `sessionFailure.ts`
+ * maps to `model_missing` and its own tests cover. The renderer-side half
+ * below still holds for both.
  */
 describe('the session path carries a code the renderer can match (T062 / D19)', () => {
-  it('[MMW-14] the model-adapter throw site still spells the code the detector expects', () => {
-    expect(ADAPTER_SOURCE).toContain(`'${MODEL_NOT_IN_CATALOG_CODE_TOKEN}'`);
-  });
-
-  it('[MMW-15] the loop pastes a thrown failure code onto the session.failed text', () => {
-    // Only the CODE is asserted to travel. The sentence beside it belongs to
-    // the runtime and is free to change.
-    expect(LOOP_SOURCE).toContain('payload: { error: thrownRunErrorText(error) }');
-    expect(LOOP_SOURCE).toMatch(/\$\{code\}: \$\{error\.message\}/);
-  });
-
   it('[MMW-16] the renderer never matches the runtime sentence itself', () => {
     // Matching `no model "…" in the catalog` would tie a Chinese recovery card
     // to an English diagnostic, which is the shape of the original defect.
@@ -214,7 +183,7 @@ describe('the session path carries a code the renderer can match (T062 / D19)', 
  *
  * Asserted by source scan for the reason stated at the top of this file:
  * `MessageTimeline.tsx` cannot be rendered here. What the notice resolves TO
- * is covered where it can be executed — `piSessionTimeline.test.ts` (the key
+ * is covered where it can be executed — `legacyPiTimeline.test.ts` (the key
  * and its params), `chatSessionsHistory.test.ts` (the field survives the
  * store) and `i18n`'s own catalog. This only claims the component asks.
  */
@@ -232,7 +201,7 @@ describe('MessageTimeline translates app-written history notices (T023)', () => 
   });
 
   it('[T023-03] spells the imported-history sentence nowhere in the renderer', () => {
-    // The producer (`agent-host/piSessionTimeline.ts`) owns the key. A second
+    // The producer (`shared/legacyPiSession/timeline.ts`) owns the key. A second
     // copy of the sentence here is how the two drift into different wording
     // and the dictionary lookup starts missing.
     expect(SOURCE).not.toContain('This history was imported');

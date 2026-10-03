@@ -81,7 +81,7 @@ vi.mock('@/i18n', () => ({ useI18n: () => ({ t: englishTranslate }) }));
  *
  * What the recording cannot carry, and how this suite stands in for it:
  *   - `seq` / `timestamp` are dropped by the recorder; they are re-applied from
- *     the array order, as `nativeStreamReplay.test.ts` does.
+ *     the array order, as the retired native replay suite did.
  *   - epoch milliseconds are recorded as `<ms>`; they become fixed numbers in
  *     recording order, so a clock still reads as a number.
  *   - token counts are recorded as 0, so the usage ring's arithmetic is the

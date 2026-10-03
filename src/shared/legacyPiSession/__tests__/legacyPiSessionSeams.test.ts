@@ -10,8 +10,10 @@ import type { Entry } from '../types.ts';
  * dsh-rebase P1-9a — what the shared decoder adds over the 1.0.x one it was
  * moved from: a decode that reads past an unfinished operation, a conversion
  * whose ids and time the caller supplies, and one error type of its own. The
- * 1.0.x behaviour itself stays pinned by the runtime's own session tests, which
- * run on this code through the runtime's thin wrappers.
+ * 1.0.x behaviour itself is pinned by the tests moved over with the code
+ * (`legacyPiCodec`, `legacyPiTimeline`, `legacyPiTree`) and by the v4 corpus
+ * goldens (`legacyPiCorpus`); the runtime's own session tests and its thin
+ * wrappers went with `src/runtime` in dsh-rebase P1-12 step 3.
  */
 
 const header = { kind: 'header', version: 4, id: 'session', cwd: '/repo', createdAt: 1 };

@@ -460,11 +460,7 @@ function createHarness(
         // below.
         ...(sessionId === 's1'
           ? {
-              capabilities: {
-                mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
-                skills: 2,
-                promptTemplates: 0,
-              },
+              capabilities: { skills: 2 },
             }
           : {}),
       },
@@ -1093,11 +1089,7 @@ describe('WorkerManager session capabilities', () => {
   it('answers from the cached bootstrap without touching the worker', async () => {
     const h = createHarness();
     await create(h.manager, 's1');
-    expect(h.manager.getSessionCapabilities('s1')).toEqual({
-      mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
-      skills: 2,
-      promptTemplates: 0,
-    });
+    expect(h.manager.getSessionCapabilities('s1')).toEqual({ skills: 2 });
     // No RPC: the inventory cannot change without a new bootstrap, so a UI
     // panel must never queue behind a running turn to read it.
     expect(h.records[0].request).not.toHaveBeenCalled();

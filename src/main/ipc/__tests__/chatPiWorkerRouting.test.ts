@@ -680,12 +680,8 @@ describe('Pi WorkerSlot chat routing', () => {
   // had no producer since P6-5.
   describe('session capabilities', () => {
     it('passes the worker-reported inventory straight through', async () => {
-      getSessionCapabilities.mockReturnValueOnce({
-        mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
-        skills: 1,
-      });
+      getSessionCapabilities.mockReturnValueOnce({ skills: 1 });
       await expect(invoke('chat:listSessionCapabilities', { sessionId: 's1' })).resolves.toEqual({
-        mcpServers: [{ name: 'files', ok: true, toolCount: 3 }],
         skills: 1,
       });
       expect(getSessionCapabilities).toHaveBeenCalledWith('s1');

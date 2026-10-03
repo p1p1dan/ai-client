@@ -62,14 +62,12 @@ const libraryFiles = readdirSync(LIBRARY)
   .map((name) => path.join(LIBRARY, name));
 
 const rel = (file: string) => path.relative(REPO, file).replaceAll('\\', '/');
-const read = (repoPath: string) => readFileSync(path.join(REPO, repoPath), 'utf8');
 
 describe('the shared skills library', () => {
   it('is found where the guard looks for it', () => {
     // A walker that silently found nothing would pass every check below.
     expect(libraryFiles.map((file) => path.basename(file)).sort()).toEqual([
       'catalog.ts',
-      'expand.ts',
       'frontmatter.ts',
       'loader.ts',
       'templates.ts',
@@ -141,32 +139,11 @@ describe('the shared skills library', () => {
   });
 });
 
-describe('the old skills locations are thin', () => {
-  // One copy of the loader, not two: a fix merged from main into the old file
-  // must conflict loudly rather than land in a copy nothing calls any more.
-  const thin: [string, RegExp][] = [
-    [
-      'src/runtime/plugins/skills/loader.ts',
-      /function (parseFrontmatter|readSkillFile|walkRoot|resolveEntryKind|loadSkills|isValidName)\b/,
-    ],
-    [
-      'src/runtime/plugins/skills/templates.ts',
-      /function (loadPromptTemplates|templateBody|firstLine)\b/,
-    ],
-    [
-      'src/runtime/plugins/skills/expand.ts',
-      /function (parseCommandArgs|substituteArgs|parseSlashInvocation|expandPrompt)\b/,
-    ],
-    [
-      'src/runtime/plugins/skills/index.ts',
-      /function (skillSource|projectSkillDirectories|skillRoots|templateRoots|loadSkillCatalog)\b/,
-    ],
-    ['src/runtime/settingSources.ts', /function resolveSettingSources\b/],
-  ];
-
-  it.each(thin)('%s delegates to src/shared', (file, moved) => {
-    const source = read(file);
-    expect(source).toMatch(/shared\/(skills\/|settingSources\.ts)/);
-    expect(stripComments(source)).not.toMatch(moved);
-  });
-});
+/**
+ * dsh-rebase P1-12 step 3 (decision 147) deleted the old locations under
+ * `src/runtime`, so the "old skills locations are thin" section went with
+ * them: a fix merged from main into one of those files now conflicts as
+ * modify/delete (risk R4), and the banners above say where it belongs.
+ * `expand.ts` went in the same step (decision 103 rule 3): slash expansion
+ * had no caller left once DSH loaded skills natively (decision 101).
+ */

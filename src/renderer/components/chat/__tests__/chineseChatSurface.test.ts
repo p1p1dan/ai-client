@@ -264,9 +264,10 @@ it('renders the permission card in Chinese — title, risk chip, body label and 
 /**
  * T023 — the runtime's own permission sentence, rendered.
  *
- * The block below carries only `permissionAction`, which is all the native
- * runtime sends since the four Chinese literals came out of
- * `src/runtime/worker/permissionPrompt.ts`. So this asserts the whole chain in
+ * The block below carries only `permissionAction`, which is all the gate
+ * sends since the four Chinese literals came out of 1.0.x's
+ * `src/runtime/worker/permissionPrompt.ts` (the card emitter is
+ * `src/shared/permissions/cardEmitter.ts` now). So this asserts the whole chain in
  * one go: id crosses the worker boundary, `PERMISSION_ACTION_LABELS` words it,
  * the dictionary translates it, and the card paints the result. Before T023
  * the Chinese here came from the worker and the English install had no way to

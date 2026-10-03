@@ -1,8 +1,9 @@
 /**
  * One DSH session behind our worker RPC (P0-3 bridge, hardened for P1-1).
  *
- * `DshSessionRuntime` implements the same `PiWorkerRuntime` contract as
- * `NativeWorkerRuntime`, so the unmodified `PiWorkerRpcServer` can drive it and
+ * `DshSessionRuntime` implements the `PiWorkerRuntime` contract 1.0.x's native
+ * worker runtime implemented (the only implementation since dsh-rebase P1-12),
+ * so the unmodified `PiWorkerRpcServer` can drive it and
  * Main / the renderer see ordinary worker RPC and RuntimeEvents. It runs inside
  * the shared DSH host, one per channel of the `aiclient-bridge` row of
  * @aiclient/dsh-app (P1-3a), and talks to DSH services in-process:
@@ -165,7 +166,6 @@ import {
   type WorkerJobReadResult,
   type WorkerPanelsPayload,
   type WorkerPanelsResult,
-  type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerSendPayload,
@@ -564,13 +564,6 @@ const RETRYABLE_TURN_ENDS: ReadonlySet<string> = new Set(['error', 'interrupted'
 /** Ours, not DSH's in-process counter, so a lost stub can be found again (decision 006). */
 export function dshSessionIdFor(logicalSessionId: string): string {
   return `${DSH_SESSION_ID_PREFIX}${logicalSessionId}`;
-}
-
-function unsupported(operation: string): never {
-  throw new PiWorkerSessionError(
-    'WORKER_DSH_UNSUPPORTED',
-    `${operation} is not bridged to the DSH engine yet`
-  );
 }
 
 /**
@@ -1858,10 +1851,6 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       { logicalSessionId: this.logicalSessionId, sessionFile, workspacePath: this.cwd },
       retired.map((chain) => chain.messages)
     );
-  }
-
-  async reload(): Promise<WorkerReloadResult> {
-    return unsupported('reload');
   }
 
   // ---- rewind and fork (P1-4b, decision 027) ------------------------------------

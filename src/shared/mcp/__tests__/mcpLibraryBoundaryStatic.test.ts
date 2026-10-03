@@ -64,7 +64,6 @@ const libraryFiles = readdirSync(LIBRARY)
   .map((name) => path.join(LIBRARY, name));
 
 const rel = (file: string) => path.relative(REPO, file).replaceAll('\\', '/');
-const read = (repoPath: string) => readFileSync(path.join(REPO, repoPath), 'utf8');
 
 describe('the shared MCP library', () => {
   it('is found where the guard looks for it', () => {
@@ -140,27 +139,10 @@ describe('the shared MCP library', () => {
   });
 });
 
-describe('the old MCP locations are thin', () => {
-  // One copy of the client, not two: a fix merged from main into the old file
-  // must conflict loudly rather than land in a copy nothing calls any more.
-  const thin: [string, RegExp][] = [
-    [
-      'src/runtime/plugins/mcp/client.ts',
-      /function (isResponse|isRequest|abortError)\b|receive\(chunk/,
-    ],
-    [
-      'src/runtime/plugins/mcp/config.ts',
-      /function (loadMcpConfig|mcpConfigFiles|mcpConfigSource|workerSlotBudget|isValidName)\b/,
-    ],
-    [
-      'src/runtime/plugins/mcp/index.ts',
-      /function (connectOne|connectBudget|contentOf|truncateUtf8|summarize|mcpToolName)\b/,
-    ],
-  ];
-
-  it.each(thin)('%s delegates to src/shared/mcp', (file, moved) => {
-    const source = read(file);
-    expect(source).toMatch(/shared\/mcp\//);
-    expect(stripComments(source)).not.toMatch(moved);
-  });
-});
+/**
+ * dsh-rebase P1-12 step 3 (decision 147) deleted the old locations under
+ * `src/runtime`, so the "old MCP locations are thin" section went with them: a
+ * fix merged from main into one of those files now conflicts as modify/delete
+ * (risk R4), and the banners above say where it belongs. The library itself
+ * stays (decision 090).
+ */

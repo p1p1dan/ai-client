@@ -4,8 +4,10 @@
  *
  * `ChatComposer.tsx` cannot be rendered in this suite, so its retry path is
  * pinned by source scan — the posture `composerStopStatic.test.ts` documents.
- * The behaviour those lines produce on a real worker is executed end to end in
- * `src/runtime/__tests__/retryLastTurnIntegration.test.ts`.
+ * The behaviour those lines produce on a real worker was executed end to end in
+ * 1.0.x's `src/runtime/__tests__/retryLastTurnIntegration.test.ts`, deleted with
+ * the runtime in dsh-rebase P1-12 step 3; the DSH bridge's side is
+ * `dsh-host/bridge/__tests__/retryVeto.test.ts` and the `fail-retry` recording.
  */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';

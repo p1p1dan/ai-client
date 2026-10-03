@@ -9,13 +9,15 @@ import { WorkerSlot, type WorkerSlotOptions } from './WorkerSlot';
 import type { WorkerTransport } from './WorkerTransport';
 
 /**
- * dsh-rebase P1-1: a chat slot's bootstrap never carries `modelCatalog`. Its
- * `auth` half holds plaintext provider keys, the DSH host never reads it, and
+ * dsh-rebase P1-1: a chat slot's bootstrap never carries a model catalog. Its
+ * `auth` half held plaintext provider keys, the DSH host never read it, and
  * the host's RPC server keeps the whole bootstrap payload in memory for the
  * life of the session. The key reaches the host per request instead (P1-5,
- * decision 034). Omitted from the type so a caller cannot hand one over.
+ * decision 034). P1-1 omitted the field here; P1-12 step 3 (decision 147)
+ * deleted it from `WorkerBootstrapPayload` itself, so the payload type is the
+ * protocol's own.
  */
-export type ChatSlotBootstrapPayload = Omit<WorkerBootstrapPayload, 'modelCatalog'>;
+export type ChatSlotBootstrapPayload = WorkerBootstrapPayload;
 
 export interface CreatePiWorkerSlotOptions
   extends Omit<
@@ -145,26 +147,11 @@ export async function createPiWorkerSlot(
         // payload is byte-identical to what it was before this fix.
         ...(options.tier ? { tier: options.tier } : {}),
         ...(options.permissions ? { permissions: options.permissions } : {}),
-        // P5-2-5: omitted when the user has made no choice, which the native
-        // runtime reads as "on with the builtin catalog". Only an explicit
-        // setting travels, so an untouched install's payload is unchanged.
-        ...(options.subagents ? { subagents: options.subagents } : {}),
-        // Omitted when the user is on the shipped defaults, for the same reason
-        // as `tier` above: an untouched install's payload stays byte-identical
-        // to a pre-TTL build's and `sameBootstrap` keeps comparing
-        // undefined === undefined.
-        ...(options.promptCacheTtl ? { promptCacheTtl: options.promptCacheTtl } : {}),
-        ...(options.subagentPromptCacheTtl
-          ? { subagentPromptCacheTtl: options.subagentPromptCacheTtl }
-          : {}),
-        // T093: `!== undefined` rather than truthiness, because `0` is the
-        // user's "never time out" and is exactly the value a truthy test would
-        // drop. Absent still means the shipped default, so an untouched
-        // install's payload is byte-identical to a pre-T093 build's.
-        ...(options.providerIdleTimeoutMs !== undefined
-          ? { providerIdleTimeoutMs: options.providerIdleTimeoutMs }
-          : {}),
-        // No `modelCatalog`: see `ChatSlotBootstrapPayload`.
+        // No delegation switch, prompt-cache TTLs, provider idle timeout or
+        // model catalog: the bootstrap lost them with the native runtime
+        // (dsh-rebase P1-12, decision 147). The main TTL and the timeout reach
+        // the host through the model plan (decision 040); keys travel per
+        // request (decision 034). See `ChatSlotBootstrapPayload`.
       },
       { timeoutMs: options.bootstrapTimeoutMs ?? BOOTSTRAP_REQUEST_TIMEOUT_MS }
     );

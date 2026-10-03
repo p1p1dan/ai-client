@@ -841,12 +841,6 @@ describe('the setters act on the gate (P1-6c)', () => {
           home,
           permissionAgentDir: null,
         }),
-      createImportWriter: () => {
-        throw new Error('not in this test');
-      },
-      createUtilityRuntime: () => {
-        throw new Error('not in this test');
-      },
     });
     const rpc = async (requestId: string, type: string, payload: Record<string, unknown>) => {
       server.receive({

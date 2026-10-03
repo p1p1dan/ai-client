@@ -5,8 +5,8 @@
 | 脚本 | 作用 |
 |---|---|
 | ~~`run.mjs`~~ | **已随 P6-5 删除**：旧后端采集器，而旧后端 2026-09-13 退役。它采的基线（`baseline-20260908`、P2-5 的同网关重采）原样留档，但**无法再跑第二遍**——ARD §5 当初要求「趁旧后端还在时把基线采完」，正是为了这一天 |
-| `run-native.mjs` | 自有 runtime（`createRuntime`）采集，产出同一种归档形状 |
-| `verify.mjs` / `verify-native.mjs` | 各自的离线复核，不访问网关 |
+| ~~`run-native.mjs`~~ / ~~`verify-native.mjs`~~ | **已随 dsh-rebase P1-12 删除**（自有 runtime 退役，决策 147）：已采的 native 归档原样留档，`compare.mjs` 仍可读、可比；要再采或复核，须在 P1-12 之前的提交上开临时 worktree 运行 |
+| `verify.mjs` | 旧后端归档的离线复核，不访问网关 |
 | `compare.mjs` | 出对比报告；两份归档不可比时直接报错，不出带脚注的差值。可比性规则在 `archive.mjs`，有单测 |
 | `archive.mjs` | 归档读取、分代取值、可比性判定与骨架校验（纯函数，`scripts/__tests__/runtime-baseline-archive.test.mjs`） |
 | `preflight.mjs` | 探某个网关到底供不供目标模型（`/v1/models` 不列也会再打一次最小请求） |
@@ -26,7 +26,7 @@ native 对 native：钉一份早先的 native 采集当基准，和新采的比�
 **分代 `configVersion`**：`run-native.mjs` 把 `RUNTIME_CONFIG_VERSION`（`src/runtime/bootstrap.ts`，
 同一个值也写进每条 trace）记进 manifest。两份归档分代不同 = 不可比，直接报错；
 T028 之前采的归档没有这个字段，报告里写「分代不可判」，不当作相同。升版规则见
-[`src/runtime/README.md`](../../src/runtime/README.md)。
+P1-12 之前提交里的 `src/runtime/README.md`。
 
 `run-native.mjs` 在 manifest 里用 `settingDeviations` 声明它无法对齐的基线设置（压缩阈值改为
 按模型窗口推导、工具集不同等）；`compare.mjs` 在这个字段缺失时拒绝出报告，避免把「没对齐」
@@ -39,7 +39,7 @@ T028 之前采的归档没有这个字段，报告里写「分代不可判」，
 已采到的归档（`baseline-20260908` 与 P2-5 的同网关重采）原样保留，`verify.mjs` 仍可离线复核；
 **但不能再采新的一份**。这正是 ARD §5 当初要求「趁旧后端还在时把基线采完」的原因。
 
-下面的采集流程只适用于 `run-native.mjs`。
+下面的采集流程只适用于 `run-native.mjs`，留作读旧归档时的说明：该脚本与 `verify-native.mjs` 已随 P1-12 删除，下面涉及它们的命令只能在 P1-12 之前的提交上运行。
 
 六场景按顺序串行执行；失败立即结束并留下 `validBaseline: false` 的证据。输出目录必须是
 新目录，不能覆盖原有 run。`--case B01` 可单独诊断，该结果永远不会成为六场景完整基线。

@@ -5,30 +5,12 @@ import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapResult,
   type WorkerRpcRequest,
-  type WorkerUtilityStartPayload,
 } from '../../shared/types/workerRpc.ts';
 import {
-  type PiImportWriter,
-  type PiUtilityRuntime,
-  type PiUtilityRuntimeOptions,
   PiWorkerRpcServer,
   type PiWorkerRuntime,
   type PiWorkerRuntimeOptions,
 } from '../piWorkerRpcServer.ts';
-
-/**
- * P6-5 made the three engine factories required: the server is plumbing now,
- * with no second backend to fall back to. A test that only cares about one of
- * them fills the others with a factory that fails if it is ever reached —
- * louder than a stub that quietly succeeds.
- */
-const unavailable = (what: string) => () => {
-  throw new Error(`this test supplies no ${what} factory`);
-};
-const engineFactories = {
-  createImportWriter: unavailable('import') as unknown as () => PiImportWriter,
-  createUtilityRuntime: unavailable('utility') as unknown as () => PiUtilityRuntime,
-};
 
 function request(
   requestId: string,
@@ -56,7 +38,6 @@ function bootstrapResult(): WorkerBootstrapResult {
     sessionFile: '/managed/pi-agent/sessions/one.jsonl',
     leaf: { activeEntryId: null, fileTailEntryId: null },
     projectTrusted: false,
-    ...engineFactories,
     permissionGate: 'bundled',
   };
 }
@@ -100,7 +81,6 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
     readJob: notCalled('readJob') as PiWorkerRuntime['readJob'],
     interruptSubagent: notCalled('interruptSubagent') as PiWorkerRuntime['interruptSubagent'],
     rewind: notCalled('rewind') as PiWorkerRuntime['rewind'],
-    reload: notCalled('reload') as PiWorkerRuntime['reload'],
     fork: notCalled('fork') as PiWorkerRuntime['fork'],
     discardFork: notCalled('discardFork') as PiWorkerRuntime['discardFork'],
     acceptFork: notCalled('acceptFork') as PiWorkerRuntime['acceptFork'],
@@ -125,7 +105,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime,
     });
     const payload = { logicalSessionId: 'logical-1', cwd: '/repo' };
@@ -143,7 +122,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime,
     });
     server.receive(
@@ -187,7 +165,6 @@ describe('PiWorkerRpcServer', () => {
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted: true,
-        ...engineFactories,
         createRuntime,
         // A caller from an older build may still pass it; it must not survive
         // into the runtime options either way.
@@ -202,7 +179,8 @@ describe('PiWorkerRpcServer', () => {
     });
 
     it('leaves no reader of the opt-in variable in the worker entry or this server', () => {
-      for (const file of ['../worker.ts', '../piWorkerRpcServer.ts']) {
+      // The native worker entry was the other reader; it left with P1-12 step 3.
+      for (const file of ['../piWorkerRpcServer.ts']) {
         const source = readFileSync(join(__dirname, file), 'utf8');
         expect(source).not.toContain('PI_OPT_IN_EXTENSIONS_ENV');
         expect(source).not.toContain('AICLIENT_PI_OPT_IN_EXTENSIONS');
@@ -221,7 +199,6 @@ describe('PiWorkerRpcServer', () => {
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted,
-        ...engineFactories,
         createRuntime,
       });
       server.receive(request('rpc-1', 'worker.bootstrap', payload));
@@ -268,7 +245,6 @@ describe('PiWorkerRpcServer', () => {
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted: true,
-        ...engineFactories,
         createRuntime,
       });
       server.receive(
@@ -317,7 +293,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ startSend, stop }),
     });
     server.receive(
@@ -358,7 +333,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: true,
-      ...engineFactories,
       createRuntime: (options) =>
         runtime({
           bootstrap: async () => {
@@ -383,63 +357,42 @@ describe('PiWorkerRpcServer', () => {
     });
   });
 
-  it('routes one-shot utility start and cancellation without constructing a session runtime', async () => {
+  /**
+   * dsh-rebase P1-12 step 3 (decision 147, risk R9): the import writer, the
+   * one-shot utility engine and `worker.reload` left with the native worker.
+   * Main calls none of them any more; a caller from an older build gets the
+   * generic unknown-method answer and no runtime is ever constructed for it.
+   */
+  it('answers the retired native-only methods as unknown, without building a runtime', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const utility: PiUtilityRuntime = {
-      start: vi.fn(async (input: WorkerUtilityStartPayload) => ({
-        accepted: true as const,
-        operationId: input.operationId,
-      })),
-      cancel: vi.fn(async () => ({ cancelled: true })),
-      dispose: vi.fn(async () => undefined),
-    };
     const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
     const server = new PiWorkerRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime,
-      createUtilityRuntime: () => utility,
     });
-
-    server.receive(
-      request('utility-start', 'utility.start', {
-        operationId: 'utility-1',
-        cwd: '/repo',
-        prompt: 'summarize',
-        timeoutMs: 60_000,
-      })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(1));
-    expect(messages[0]).toMatchObject({
-      requestId: 'utility-start',
-      ok: true,
-      result: { accepted: true, operationId: 'utility-1' },
-    });
+    const retired = [
+      'worker.import',
+      'worker.import.inspect',
+      'worker.import.reconcile',
+      'worker.import.discard',
+      'utility.start',
+      'utility.cancel',
+      'worker.reload',
+    ];
+    for (const [index, type] of retired.entries()) {
+      server.receive(request(`retired-${index}`, type, { logicalSessionId: 'logical-1' }));
+    }
+    await vi.waitFor(() => expect(messages).toHaveLength(retired.length));
+    for (const [index, type] of retired.entries()) {
+      expect(messages[index], type).toMatchObject({
+        requestId: `retired-${index}`,
+        ok: false,
+        error: { code: 'WORKER_METHOD_NOT_FOUND' },
+      });
+    }
     expect(createRuntime).not.toHaveBeenCalled();
-
-    server.receive(
-      request('utility-cancel', 'utility.cancel', {
-        operationId: 'utility-1',
-        reason: 'user',
-      })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(2));
-    expect(utility.cancel).toHaveBeenCalledTimes(1);
-
-    server.receive(
-      request('session-conflict', 'worker.bootstrap', {
-        logicalSessionId: 'logical-1',
-        cwd: '/repo',
-      })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(3));
-    expect(messages[2]).toMatchObject({
-      requestId: 'session-conflict',
-      ok: false,
-      error: { code: 'WORKER_UTILITY_SLOT_CONFLICT' },
-    });
   });
 
   it('returns correlated errors for stale, malformed, unknown, and pre-bootstrap send', async () => {
@@ -448,7 +401,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime(),
     });
     server.receive(request('stale', 'worker.bootstrap', {}, 2));
@@ -478,7 +430,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ setPermissions }),
     });
     server.receive(
@@ -520,7 +471,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ setPermissionGear }),
     });
     server.receive(
@@ -551,7 +501,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ setPermissionTier }),
     });
     server.receive(
@@ -575,7 +524,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime(),
     });
     server.receive(
@@ -596,40 +544,6 @@ describe('PiWorkerRpcServer', () => {
     });
   });
 
-  it('hands the delivered model catalog to the one-shot engine', async () => {
-    const messages: Array<Record<string, unknown>> = [];
-    const createUtilityRuntime = vi.fn((_options: PiUtilityRuntimeOptions) => ({
-      start: async (input: WorkerUtilityStartPayload) => ({
-        accepted: true as const,
-        operationId: input.operationId,
-      }),
-      cancel: async () => ({ cancelled: true }),
-      dispose: async () => undefined,
-    }));
-    const server = new PiWorkerRpcServer({
-      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
-      generation: 3,
-      projectTrusted: false,
-      ...engineFactories,
-      createRuntime: () => runtime(),
-      createUtilityRuntime,
-    });
-    const modelCatalog = { models: { providers: {} }, auth: { wire: { key: 'k' } } };
-    server.receive(
-      request('utility-start', 'utility.start', {
-        operationId: 'utility-1',
-        cwd: '/repo',
-        prompt: 'summarize',
-        timeoutMs: 60_000,
-        modelCatalog,
-      })
-    );
-    await vi.waitFor(() => expect(messages).toHaveLength(1));
-    // Without this the one-shot engine has nothing but the agent directory to
-    // go on, which is the last path still reading models.json + auth.json.
-    expect(createUtilityRuntime.mock.calls[0]?.[0]).toMatchObject({ modelCatalog });
-  });
-
   it('never answers a permission tier with success before a runtime exists', async () => {
     // T025 replaced this test's old subject. It used to hand the dispatcher a
     // runtime with no `setPermissionTier` and assert `WORKER_UNSUPPORTED`; the
@@ -643,7 +557,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ setPermissionTier }),
     });
     server.receive(
@@ -665,7 +578,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ compact }),
     });
     server.receive(request('early', 'worker.compact', { logicalSessionId: 'logical-1' }));
@@ -693,7 +605,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () =>
         runtime({
           dispose: async () => {
@@ -725,7 +636,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: (options) =>
         runtime({
           dispose: async () => {
@@ -764,7 +674,6 @@ describe('PiWorkerRpcServer', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime({ dispose }),
       onDisposed,
     });
@@ -796,7 +705,6 @@ describe('PiWorkerRpcServer — worker.commands', () => {
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime(overrides),
     });
     return { messages, server };
@@ -860,7 +768,6 @@ describe('PiWorkerRpcServer — worker.command and worker.panels (P1-7a)', () =>
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime(overrides),
     });
     return { messages, server };
@@ -935,7 +842,6 @@ describe('PiWorkerRpcServer — worker.job.kill, worker.job.read, worker.subagen
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
-      ...engineFactories,
       createRuntime: () => runtime(overrides),
     });
     return { messages, server };

@@ -1,4 +1,3 @@
-import type { PiLeafCheckpoint, SessionHistoryPage } from './sessionHistory';
 import type { SessionIndexEntry } from './sessionIndex';
 
 export const LEGACY_IMPORT_SCHEMA_VERSION = 1 as const;
@@ -195,57 +194,6 @@ export interface LegacyImportBatchResult {
   results: LegacyImportItemResult[];
 }
 
-export interface WorkerImportConversationPayload {
-  logicalSessionId: string;
-  targetPiSessionId: string;
-  conversation: ImportedConversation;
-}
-
-export interface WorkerInspectImportedSessionPayload {
-  logicalSessionId: string;
-  workspacePath: string;
-  targetPiSessionId: string;
-}
-
-export interface WorkerInspectImportedSessionResult {
-  sessionFiles: string[];
-}
-
-export interface WorkerReconcileImportedSessionPayload {
-  logicalSessionId: string;
-  workspacePath: string;
-  targetPiSessionId: string;
-}
-
-export interface WorkerReconcileImportedSessionResult {
-  removedFiles: number;
-  remainingFiles: number;
-}
-
-export interface WorkerDiscardImportedSessionPayload {
-  logicalSessionId: string;
-  sessionFile: string;
-}
-
-export interface WorkerDiscardImportedSessionResult {
-  discarded: boolean;
-}
-
-export interface WorkerImportConversationResult {
-  logicalSessionId: string;
-  piSessionId: string;
-  workspacePath: string;
-  stagedSessionFile: string;
-  finalSessionFile: string;
-  leaf: PiLeafCheckpoint;
-  history: {
-    logicalSessionId: string;
-    sessionFile: string;
-    workspacePath: string;
-    page: SessionHistoryPage;
-  };
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -344,23 +292,6 @@ export function isImportedConversation(value: unknown): value is ImportedConvers
     ) &&
     optionalFiniteNumber(value.startedAt) &&
     optionalFiniteNumber(value.endedAt)
-  );
-}
-
-export function isWorkerImportConversationPayload(
-  value: unknown
-): value is WorkerImportConversationPayload {
-  return (
-    isRecord(value) &&
-    nonEmptyString(value.logicalSessionId) &&
-    // import-catalog-07: the worker is an isolated process that trusts its RPC
-    // payload, and NativeLegacyImportWriter.fileFor joins this id straight
-    // into a session file path. A bare non-empty check lets a `../` id escape
-    // the sessions directory; isLegacyImportPathSegment is the same guard
-    // already used to load a manifest record (LegacyImportManifest.ts) and to
-    // validate the projectId/sourceSessionId pair on the batch request.
-    isLegacyImportPathSegment(value.targetPiSessionId) &&
-    isImportedConversation(value.conversation)
   );
 }
 

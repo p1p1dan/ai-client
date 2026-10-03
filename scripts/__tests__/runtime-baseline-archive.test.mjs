@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -97,7 +97,7 @@ describe('runtime baseline archive rules', () => {
     expect(
       comparabilityReport(archive(), archive({ backend: 'legacy', settingDeviations: {} })).failures
     ).toContain(
-      'The current archive reports backend legacy; the only collector left is run-native.mjs'
+      'The current archive reports backend legacy; only native collections are comparable (run-native.mjs, retired in dsh-rebase P1-12)'
     );
   });
 
@@ -134,16 +134,12 @@ describe('runtime baseline archive rules', () => {
     expect(archiveSkeletonFailures(archive({ files: {} }))).toEqual(['manifest.files is empty']);
   });
 
-  it('is actually wired into the collector and the comparison', () => {
-    // Guards the guard. A perfect rule set that nobody calls, or a collector
-    // that never writes the generation, would leave every case above green
-    // while the real scripts went on as before.
-    const collector = readFileSync(
-      path.join(repoRoot, 'scripts/runtime-baseline/run-native.mjs'),
-      'utf8'
-    );
-    expect(collector).toContain('configVersion: RUNTIME_CONFIG_VERSION');
-    expect(collector).toContain('archiveSkeletonFailures');
+  it('is actually wired into the comparison', () => {
+    // Guards the guard. A perfect rule set that nobody calls would leave every
+    // case above green while the real script went on as before. The collector
+    // (`run-native.mjs`) went with the self-owned runtime in dsh-rebase P1-12
+    // step 3; archives it wrote stay readable and comparable.
+    expect(existsSync(path.join(repoRoot, 'scripts/runtime-baseline/run-native.mjs'))).toBe(false);
     const compare = readFileSync(
       path.join(repoRoot, 'scripts/runtime-baseline/compare.mjs'),
       'utf8'

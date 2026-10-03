@@ -50,29 +50,31 @@ import { describe, expect, it } from 'vitest';
  * hold Chinese only in comments, so nothing needed an allowance — but an
  * extension list that silently excludes real source files is a hole that only
  * looks closed.
+ *
+ * dsh-rebase P1-12 step 3 (decision 147) deleted `src/runtime` and the native
+ * worker half of `src/agent-host`, so the `runtime` root is gone. What is left
+ * of `agent-host` stays in scope until step 4 removes the directory.
  */
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ROOTS = ['renderer', 'shared', 'runtime', 'agent-host'];
+const ROOTS = ['renderer', 'shared', 'agent-host'];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.mjs', '.mts']);
 
 /**
  * Per-root floors, because one number for the whole tree cannot tell "the
- * renderer grew" from "the runtime root stopped being walked". `src/runtime`
- * in particular carries its own `node_modules` (it is a separate npm
- * subpackage), so a walker bug there would drop 82 files and still clear a
- * global threshold on the renderer's 416 alone.
+ * renderer grew" from "the agent-host root stopped being walked": a walker bug
+ * there would drop its files and still clear a global threshold on the
+ * renderer's 400-odd alone.
  */
 const MIN_FILES_PER_ROOT: Record<string, number> = {
   renderer: 300,
   shared: 50,
-  runtime: 60,
-  // T036 deleted the retired dialog bridge module, the one walked file this
-  // root lost (its test and the orphaned pi SDK stub live under `__tests__`,
-  // which this walker skips), so the floor moves down by exactly one. These
-  // are `toBeGreaterThan` tripwires for "did the walker stop walking", kept
-  // one below the real count so the next deletion is a conscious edit.
-  'agent-host': 14,
+  // P1-12 step 3 left six walked files here (the RPC server and its errors,
+  // stderr redaction, the Codex item mapper, and the policy table with its
+  // declaration until they move into the permissions library). These are
+  // `toBeGreaterThan` tripwires for "did the walker stop walking", kept one
+  // below the real count so the next deletion is a conscious edit.
+  'agent-host': 5,
 };
 
 /**
@@ -136,7 +138,7 @@ function withoutComments(source: string): string[] {
 describe('UI copy stays in the dictionary', () => {
   const files = ROOTS.flatMap((root) => sourceFiles(path.join(SRC, root)));
 
-  it('no renderer, shared, runtime or agent-host source hardcodes Chinese text', () => {
+  it('no renderer, shared or agent-host source hardcodes Chinese text', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const relative = path.relative(SRC, file).split(path.sep).join('/');

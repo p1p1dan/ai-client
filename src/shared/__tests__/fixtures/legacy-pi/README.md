@@ -4,7 +4,7 @@ dsh-rebase P1-9g。给 P1-9 迁移（解码、转换、离线工具）当回归�
 
 ## 来源
 
-- 生成脚本：`scripts/gen-legacy-pi-fixtures.ts`（`node --experimental-strip-types scripts/gen-legacy-pi-fixtures.ts`，需要 `src/runtime` 自己的 npm 依赖和根 `node_modules` 里的 pi-coding-agent）。
+- 生成脚本：`scripts/gen-legacy-pi-fixtures.ts`（`node --experimental-strip-types scripts/gen-legacy-pi-fixtures.ts`，需要 `src/runtime` 自己的 npm 依赖和根 `node_modules` 里的 pi-coding-agent）。**这个脚本、`src/runtime` 与根依赖里的 pi-coding-agent 已在 P1-12 第 3 步删除（决策 147）**：要重新生成，须在 P1-12 之前的提交上开临时 worktree 运行，再把产物拷回来（风险 R6）。
 - **全部是合成数据**，不含任何真实用户数据：对话是脚本里写死的，模型是 pi-ai 的 faux provider，工作区是脚本在 `/tmp/aiclient-legacy-pi-corpus/` 下临时建的（`notes.txt`、`src/app.ts`、`src/AGENTS.md`），`$HOME` 在任何模块加载前就指到这个临时目录。
 - 写入器都是真的：`createRuntime` + `JsonlSessionStore`、`prepareSessionConfig`（1.0.x 的旧格式副本）、`NativeLegacyImportWriter`（CC / Codex 导入）、pi-coding-agent 0.84.4 的 `SessionManager`（v3 写入器，也就是内嵌 TUI 往同一文件追加行的那个）。只有 v1、v2、PI-Desktop 是手写的，因为这三种格式已经没有写入器了。
 - 路径（`cwd`、`importedFrom`、工具输出里的路径）都是固定的 `/tmp/aiclient-legacy-pi-corpus/…`，不指向任何真实机器。

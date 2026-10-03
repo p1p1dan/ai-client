@@ -1,11 +1,11 @@
 /**
  * How long a provider is asked to keep this app's prompt cache entries alive.
  *
- * Two knobs rather than one, matching Claude Code's `promptCacheTtl` /
- * `subagentPromptCacheTtl`: the main conversation is long-lived and re-reads the
- * same prefix for as long as the user keeps the tab open, so it pays for the
- * hour. A delegate is a short burst that writes a prefix nobody re-reads, so an
- * hour-long entry there is a write premium with no read to amortise it.
+ * 1.0.x had two knobs, matching Claude Code's `promptCacheTtl` /
+ * `subagentPromptCacheTtl`. The delegate one went with the self-owned runtime
+ * (dsh-rebase decision 123 rule 14, P1-12): DSH delegates follow their
+ * parent's route. The main conversation is long-lived and re-reads the same
+ * prefix for as long as the user keeps the tab open, so it pays for the hour.
  *
  * The vocabulary here is the WIRE one (`"5m"` / `"1h"`) — what Anthropic's
  * `cache_control.ttl` says and what the setting shows the user. pi-ai's own
@@ -28,14 +28,8 @@ export type CacheRetentionName = 'short' | 'long';
 /** Renderer settings-store key for the main conversation's TTL. */
 export const PROMPT_CACHE_TTL_SETTING_KEY = 'promptCacheTtl';
 
-/** Renderer settings-store key for the delegate TTL. */
-export const SUBAGENT_PROMPT_CACHE_TTL_SETTING_KEY = 'subagentPromptCacheTtl';
-
 /** The main conversation keeps its prefix for an hour unless told otherwise. */
 export const DEFAULT_PROMPT_CACHE_TTL: PromptCacheTtl = '1h';
-
-/** A delegate keeps its prefix for five minutes unless told otherwise. */
-export const DEFAULT_SUBAGENT_PROMPT_CACHE_TTL: PromptCacheTtl = '5m';
 
 export function isPromptCacheTtl(value: unknown): value is PromptCacheTtl {
   return value === '5m' || value === '1h';

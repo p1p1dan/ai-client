@@ -44,7 +44,8 @@ export function readArchive(dir) {
 /**
  * The behaviour generation an archive was collected on, or `null`.
  *
- * `manifest.configVersion` is `RUNTIME_CONFIG_VERSION` (`src/runtime/bootstrap.ts`),
+ * `manifest.configVersion` is 1.0.x's `RUNTIME_CONFIG_VERSION` (`src/runtime/bootstrap.ts`
+ * before dsh-rebase P1-12 deleted it),
  * the same value stamped into every run trace. Archives collected before T028
  * do not carry it, which is reported as unknown rather than treated as equal —
  * the whole reason the field exists is that the constant was frozen from P3 to
@@ -115,7 +116,7 @@ export function comparabilityReport(reference, current) {
   }
   if (current.manifest.backend !== 'native') {
     failures.push(
-      `The current archive reports backend ${String(current.manifest.backend)}; the only collector left is run-native.mjs`
+      `The current archive reports backend ${String(current.manifest.backend)}; only native collections are comparable (run-native.mjs, retired in dsh-rebase P1-12)`
     );
   }
 

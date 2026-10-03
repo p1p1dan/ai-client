@@ -76,7 +76,12 @@ describe('chat engine is DSH only (P1-1)', () => {
       expect(manager, banned).not.toContain(banned);
     }
     const slot = code('createPiWorkerSlot.ts');
-    expect(slot).toContain("Omit<WorkerBootstrapPayload, 'modelCatalog'>");
+    // P1-12 step 3 (decision 147): the field left the protocol type itself,
+    // so the slot's payload no longer needs to omit it.
+    expect(slot).toContain('type ChatSlotBootstrapPayload = WorkerBootstrapPayload;');
+    const protocol = code('../../../shared/types/workerRpc.ts');
+    expect(protocol).not.toContain('modelCatalog');
+    expect(protocol).not.toContain('WorkerModelCatalog');
     expect(slot).not.toContain('options.modelCatalog');
     expect(slot).not.toMatch(/\bmodelCatalog\s*:/);
     const completions = code('DshCompletionService.ts');

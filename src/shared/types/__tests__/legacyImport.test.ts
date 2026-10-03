@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isImportedConversation,
   isLegacyImportBatchRequest,
-  isWorkerImportConversationPayload,
+  isLegacyImportPathSegment,
   LEGACY_IMPORT_MAX_BATCH,
 } from '../legacyImport';
 
@@ -56,26 +57,19 @@ describe('legacy import boundary guards', () => {
     }
   });
 
-  // import-catalog-07: targetPiSessionId is joined straight into a session
-  // file path by the worker (NativeLegacyImportWriter.fileFor); a bare
-  // non-empty check let a path-traversal id through the RPC boundary.
-  it('rejects a targetPiSessionId that is not a safe path segment', () => {
-    expect(
-      isWorkerImportConversationPayload({
-        logicalSessionId: 'logical-1',
-        targetPiSessionId: 'import-1',
-        conversation: validConversation,
-      })
-    ).toBe(true);
-    for (const targetPiSessionId of ['', '   ', '.', '..', '../escape', 'a/b', 'a\\b', 'a\0b']) {
-      expect(
-        isWorkerImportConversationPayload({
-          logicalSessionId: 'logical-1',
-          targetPiSessionId,
-          conversation: validConversation,
-        }),
-        targetPiSessionId
-      ).toBe(false);
+  // import-catalog-07: a manifest's targetPiSessionId and a batch's project /
+  // session ids are joined straight into file paths. The worker RPC guard that
+  // also applied this check left with the native worker (dsh-rebase P1-12
+  // step 3); the segment rule itself still guards Main's manifest and IPC.
+  it('accepts only a safe single path segment', () => {
+    expect(isLegacyImportPathSegment('import-1')).toBe(true);
+    for (const segment of ['', '   ', '.', '..', '../escape', 'a/b', 'a\\b', 'a\0b']) {
+      expect(isLegacyImportPathSegment(segment), segment).toBe(false);
     }
+  });
+
+  it('still recognises the imported conversation the host seeds a session from', () => {
+    expect(isImportedConversation(validConversation)).toBe(true);
+    expect(isImportedConversation({ ...validConversation, entries: [] })).toBe(false);
   });
 });

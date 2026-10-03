@@ -163,28 +163,14 @@ describe('the shared legacy pi session library', () => {
   });
 });
 
-describe('the old locations are thin', () => {
-  // One copy of the decoder, not two: a fix merged from main into the old file
-  // must conflict loudly rather than land in a copy nothing calls any more.
-  const thin: [string, RegExp][] = [
-    ['src/runtime/plugins/session/codec.ts', /function (tornRow|cliEntry|chainTarget|message)\(/],
-    [
-      'src/runtime/plugins/session/legacy.ts',
-      /function (desktopMessage|desktopUsage|lines|record)\(/,
-    ],
-    [
-      'src/agent-host/piSessionTimeline.ts',
-      /function (textFromContent|markIncompleteAssistantLeaves)\(/,
-    ],
-    ['src/agent-host/piSessionTree.ts', /function (entryPreview|normalizeEntry)\(/],
-  ];
-
-  it.each(thin)('%s delegates to src/shared/legacyPiSession', (file, moved) => {
-    const source = read(file);
-    expect(source).toMatch(/shared\/legacyPiSession\//);
-    expect(source).not.toMatch(moved);
-  });
-
+/**
+ * dsh-rebase P1-12 step 3 (decision 147) deleted the old locations, the
+ * runtime's session plugin and the agent-host wrappers, so the "old locations
+ * are thin" section went with them: a fix merged from main into one of those
+ * files now conflicts as modify/delete (risk R4), and the banners above say
+ * where it belongs.
+ */
+describe("Main's read-only replay", () => {
   it("Main's read-only replay no longer loads the runtime to decode a file", () => {
     const reader = stripComments(read('src/main/services/chat/SessionReplayReader.ts'));
     expect(reader).toMatch(/from '\.\.\/\.\.\/\.\.\/shared\/legacyPiSession\/codec'/);

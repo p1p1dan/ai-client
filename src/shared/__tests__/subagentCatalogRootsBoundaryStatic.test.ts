@@ -66,7 +66,6 @@ function resolveRelative(from: string, specifier: string): string | undefined {
 const inShared = (file: string) => file.startsWith(`${SHARED}${path.sep}`);
 
 const rel = (file: string) => path.relative(REPO, file).replaceAll('\\', '/');
-const read = (repoPath: string) => readFileSync(path.join(REPO, repoPath), 'utf8');
 
 describe('the shared subagent catalog module', () => {
   it('is found where the guard looks for it', () => {
@@ -131,16 +130,10 @@ describe('the shared subagent catalog module', () => {
   });
 });
 
-describe('the old subagent catalog location is thin', () => {
-  // One copy of the roots/merge/pin logic, not two: a fix merged from main
-  // into the old file must conflict loudly rather than land in a copy nothing
-  // calls any more.
-  const moved =
-    /function (subagentRoots|builtinDefinitions|loadRoot|loadSubagentCatalog|applySubagentActivation|resolveSubagentPin|subagentPinDiagnostics)\b/;
-
-  it('src/runtime/plugins/subagent/catalog.ts delegates to src/shared/subagentCatalogRoots.ts', () => {
-    const source = read('src/runtime/plugins/subagent/catalog.ts');
-    expect(source).toMatch(/shared\/subagentCatalogRoots\.ts/);
-    expect(stripComments(source)).not.toMatch(moved);
-  });
-});
+/**
+ * dsh-rebase P1-12 step 3 (decision 147) deleted the old location under
+ * `src/runtime`, so the "old subagent catalog location is thin" section went
+ * with it: a fix merged from main into that file now conflicts as
+ * modify/delete (risk R4), and the banner above says where it belongs. The
+ * rules themselves stay (decision 090).
+ */

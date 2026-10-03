@@ -20,7 +20,8 @@ import type { AgentMessage, Entry } from '../types.ts';
  *
  * Every file under `fixtures/legacy-pi/` is what 1.0.x (or a writer it shared
  * files with) left on disk; `scripts/gen-legacy-pi-fixtures.ts` made them with
- * the real writers and synthetic conversations. The golden next to each one is
+ * the real writers and synthetic conversations (that script went with
+ * `src/runtime` in dsh-rebase P1-12 step 3; see the corpus README). The golden next to each one is
  * this library's reading of it: whether the strict (1.0.x) decode refuses, the
  * whole document under `tolerateUnfinished`, the active branch, the model
  * context pi would build from it, the restored permissions, and the history

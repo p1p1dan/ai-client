@@ -3,8 +3,8 @@
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    // src/shared modules that the Pi worker loads as SOURCE (dev runs the
-    // worker under --experimental-strip-types) must spell out `.ts` on value
+    // src/shared modules that the DSH bridge loads as SOURCE (dev runs the
+    // host under --experimental-strip-types) must spell out `.ts` on value
     // imports, because Node's ESM resolver does no extension search. Bundling
     // is unaffected: esbuild/vite resolve the suffix directly.
     "allowImportingTsExtensions": true,
@@ -24,12 +24,5 @@
     }
   },
   "include": ["src/**/*", "electron.vite.config.ts"],
-  "exclude": [
-    "src/agent-host/**",
-    "src/runtime/**",
-    "src/dsh-host/**",
-    "node_modules",
-    "out",
-    "dist"
-  ]
+  "exclude": ["src/agent-host/**", "src/dsh-host/**", "node_modules", "out", "dist"]
 }

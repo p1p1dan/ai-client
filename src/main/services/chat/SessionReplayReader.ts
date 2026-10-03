@@ -34,7 +34,9 @@
  * store uses them, so the two paths cannot drift:
  * `decodeSession` → `branchEntries` → ISO timestamps → `projectPiSessionHistory`
  * → `paginatePiSessionHistory`. `sessionReplayReader.test.ts` pins that equality
- * against `JsonlSessionStore.history()` on the same file.
+ * against the `history` the legacy-pi corpus's golden files recorded from the
+ * 1.0.x store (`fixtures/legacy-pi/golden/`); the store itself went with
+ * `src/runtime` in dsh-rebase P1-12 step 3.
  *
  * No subagent summaries: the resume path rides them on its history read, but
  * `subagentHistorySummaries` sits behind `plugins/subagent/run.ts`, which pulls

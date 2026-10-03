@@ -15,14 +15,15 @@
  * degradation).
  *
  * T025 / T026: that arrangement is gone. Nothing has injected a pi permission
- * extension since P6-5; every decision is made by
- * `src/runtime/plugins/permissions/` whatever the user has installed, and the
- * native runtime reports `bundled` unconditionally. A pi permission extension
- * a user installs now reaches the built-in Pi TERMINAL only — which the plugins
- * page used to state in words (`PiPluginsSettings`, unmounted in dsh-rebase
- * P1-16e) rather than through this gate. So
- * `user_configured` has no producer left, and the degraded branch this store
- * feeds is unreachable by construction rather than merely unlikely.
+ * extension since P6-5. Every decision is made by the gate in
+ * `src/shared/permissions/`, attached to the DSH permission row
+ * (`aiclient-permissions`), whatever the user has installed; the DSH bridge
+ * reports `bundled` once that gate is attached and refuses the bootstrap
+ * otherwise (`reportedGate()` in `dsh-host/bridge/dshSessionRuntime.ts`). A pi
+ * permission extension a user installed reached the built-in Pi TERMINAL only,
+ * and that terminal went in dsh-rebase P1-11. So `user_configured` has no
+ * producer left, and the degraded branch this store feeds is unreachable by
+ * construction rather than merely unlikely.
  *
  * Kept, not deleted, because the wire field is optional and cross-version: a
  * Host that does send `user_configured` must still be reported honestly rather

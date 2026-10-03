@@ -1,11 +1,13 @@
 /**
- * P5-1 gate, the pure half — skills, prompt templates and slash expansion.
+ * P5-1 gate, the pure half — skills and prompt templates.
  *
  * Moved from `src/runtime/__tests__/skills.test.ts` (dsh-rebase P1-16 prep)
  * with the library it pins; the case bodies are unchanged, only the imports
  * point at `src/shared/skills` and the host-IO fakes are typed against the
- * library's own port. The runtime keeps the wired half (the prompt block and a
- * real runtime) next to the plugin it exercises.
+ * library's own port. The wired half went with the runtime in P1-12 step 3,
+ * and so did slash expansion (`expand.ts`, decision 103 rule 3): DSH loads
+ * and runs skills natively (decision 101), and what is left here feeds the
+ * legacy-asset notice.
  *
  * The loader runs against an in-memory tree through {@link SkillSource}, the
  * same way `projectInstructions.test.ts` does. Every discovery rule ported
@@ -17,13 +19,6 @@
 import { basename, join, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { type SkillCatalogFiles, skillRoots, skillSource, templateRoots } from '../catalog.ts';
-import {
-  expandPrompt,
-  formatSkillInvocation,
-  parseCommandArgs,
-  parseSlashInvocation,
-  substituteArgs,
-} from '../expand.ts';
 import {
   loadSkills,
   MAX_DESCRIPTION_BYTES,
@@ -537,94 +532,5 @@ describe('P5-1 prompt templates', () => {
       { path: '/agent/prompts', scope: 'user' },
     ]);
     expect(templates[0].description).toBe(`${'x'.repeat(60)}...`);
-  });
-});
-
-describe('P5-1 slash expansion', () => {
-  it('recognises only a leading slash command', () => {
-    expect(parseSlashInvocation('/review the diff')).toEqual({
-      kind: 'template',
-      name: 'review',
-      args: 'the diff',
-    });
-    expect(parseSlashInvocation('/skill:pdf-tools extract')).toEqual({
-      kind: 'skill',
-      name: 'pdf-tools',
-      args: 'extract',
-    });
-    expect(parseSlashInvocation('look in /tmp for it')).toBeUndefined();
-    expect(parseSlashInvocation('/usr/bin/env')).toBeUndefined();
-  });
-
-  it('keeps trailing lines as the argument text, on the same line or below it', () => {
-    expect(parseSlashInvocation('/review line one\nline two')?.args).toBe('line one\nline two');
-    expect(parseSlashInvocation('/review\nline one\nline two')?.args).toBe('line one\nline two');
-    expect(parseSlashInvocation('/review')?.args).toBe('');
-  });
-
-  it('substitutes positional, slice and all-argument placeholders like pi does', () => {
-    const args = parseCommandArgs('one "two three" four');
-    expect(args).toEqual(['one', 'two three', 'four']);
-    expect(substituteArgs('[$1][$2][$9]', args)).toBe('[one][two three][]');
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: `${@:N}` is pi's slice placeholder, not a JS template
-    const slices = '[${@:2}][${@:1:2}]';
-    expect(substituteArgs(slices, args)).toBe('[two three four][one two three]');
-    expect(substituteArgs('[$ARGUMENTS][$@]', args)).toBe(
-      '[one two three four][one two three four]'
-    );
-  });
-
-  // skills-mcp-18 — a string replacement value lets String.replace read `$&`,
-  // `$'`, `` $` `` and `$1` inside the argument text as replacement patterns
-  // instead of literal characters. A user pasting a `$1` or `$&` as an
-  // argument must see it come back unchanged.
-  it('treats special replacement patterns in $ARGUMENTS and $@ as literal text', () => {
-    const args = parseCommandArgs('$& $1 literal');
-    expect(substituteArgs('before [$ARGUMENTS] after', args)).toBe('before [$& $1 literal] after');
-    expect(substituteArgs('before [$@] after', args)).toBe('before [$& $1 literal] after');
-  });
-
-  it('expands a template and a skill, and passes unknown commands through untouched', async () => {
-    const skill = {
-      name: 'pdf',
-      description: 'd',
-      filePath: '/agent/skills/pdf/SKILL.md',
-      scope: 'user' as const,
-      disableModelInvocation: false,
-    };
-    const catalog = {
-      skills: [skill],
-      templates: [
-        {
-          name: 'review',
-          description: 'd',
-          filePath: '/agent/prompts/review.md',
-          scope: 'user' as const,
-        },
-      ],
-      readBody: async (path: string) =>
-        path.endsWith('review.md') ? 'Review $1.' : 'Skill instructions.',
-    };
-    await expect(expandPrompt('/review HEAD', catalog)).resolves.toEqual({
-      expanded: true,
-      text: 'Review HEAD.',
-      invocation: { kind: 'template', name: 'review', args: 'HEAD' },
-    });
-    const skillResult = await expandPrompt('/skill:pdf extract page 2', catalog);
-    expect(skillResult).toMatchObject({ expanded: true });
-    if (skillResult.expanded) {
-      expect(skillResult.text).toBe(
-        formatSkillInvocation(skill, 'Skill instructions.', 'extract page 2')
-      );
-      expect(skillResult.text).toContain('User: extract page 2');
-      expect(skillResult.text).toContain('location="/agent/skills/pdf/SKILL.md"');
-    }
-    // `/new`, `/settings` and `/compact` never reach the worker; anything else
-    // the catalog does not know goes to the model exactly as typed.
-    await expect(expandPrompt('/unknown thing', catalog)).resolves.toEqual({
-      expanded: false,
-      reason: 'unknown_command',
-    });
-    await expect(expandPrompt('plain prompt', catalog)).resolves.toEqual({ expanded: false });
   });
 });

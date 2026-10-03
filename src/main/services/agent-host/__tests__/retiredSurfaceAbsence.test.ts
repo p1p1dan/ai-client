@@ -28,15 +28,11 @@ const RETIRED = /extension[_-]?ui/i;
 /**
  * Files allowed to name it, and why.
  *
- * This gate, because it has to spell out what it forbids; and the replay test,
- * because the only way to prove an old recording's retired event is IGNORED is
- * to feed the renderer one by name.
+ * This gate, because it has to spell out what it forbids. The native replay
+ * test that fed an old recording's retired event to the renderer by name went
+ * with its recordings in dsh-rebase P1-12 step 3 (decision 147).
  */
-const ALLOWED = new Set(
-  [__filename, path.join(repoRoot, 'src/renderer/stores/__tests__/nativeStreamReplay.test.ts')].map(
-    (file) => path.resolve(file)
-  )
-);
+const ALLOWED = new Set([__filename].map((file) => path.resolve(file)));
 
 function codeFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {

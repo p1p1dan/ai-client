@@ -1441,7 +1441,7 @@ export class WorkerManager {
    *    used to take the first ready worker in the pool, on the strength of a
    *    comment claiming the command set does not vary by working directory
    *    because project scope is withheld. Decision 009 made project scope
-   *    trusted and loaded (`NATIVE_PROJECT_TRUSTED`), so it does vary: every
+   *    trusted and loaded (decision 009), so it does vary: every
    *    row carries an absolute `path`, and half of them come from the
    *    answering worker's `<cwd>/.pi/skills` and `<cwd>/.pi/prompts`. A named
    *    session is therefore only ever answered by a worker with the same

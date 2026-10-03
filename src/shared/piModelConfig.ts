@@ -16,55 +16,9 @@ export const PI_MODEL_SOURCE_FILE_NAME = 'managed-models-source.json';
 export const PI_MODEL_MANAGEMENT_URL_SETTING_KEY = 'piModelManagementUrl';
 export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 
-/**
- * T08-c (D-Q9 decision 4) — the managed route's "a cloned repo may not
- * configure this machine" marker. `'0'` on the managed route, `'1'` on the
- * local one, sent in BOTH modes so an ABSENT key can only mean an old Main
- * build.
- *
- * Two corrections worth carrying, because the name promises more than the
- * variable delivers:
- *
- *  - **The name is ours, not pi's.** The `pi` CLI has no such variable
- *    (verified against the bundled `dist/`: it resolves project trust from
- *    `--approve` / `--no-approve`, its own `trust.json`, the global
- *    `defaultProjectTrust` setting, or an interactive prompt). The embedded
- *    pi TUI, which used it to strip inherited credential variables out of a
- *    managed terminal, was removed in dsh-rebase P1-11 (decision 127); nothing
- *    in the app reads the value any more, and it is still sent so an absent
- *    key keeps meaning "old Main build".
- *  - **decision 009 took the native route off it.** It used to be the native
- *    worker's `projectTrusted` as well, and that is what made a managed
- *    session ignore the repository's MCP servers, skills, permission policy and
- *    instruction files. The native answer is now {@link NATIVE_PROJECT_TRUSTED}
- *    — a constant, because the managed route trusts a project for everything
- *    except its model settings, which the runtime never reads from a workspace.
- */
-export const PI_PROJECT_TRUST_ENV = 'AICLIENT_PI_TRUST_PROJECT_CONFIG';
-
-/**
- * decision 009 — whether a NATIVE worker may read the repository's own
- * configuration layers.
- *
- * Those layers are project MCP (`.pi/mcp.json`, `.pi/mcp.local.json`), project
- * skills and prompt templates, the project permission policy
- * (`.pi/agent/pi-permissions.jsonc` and `.local.jsonc`), and the project
- * instruction files (CLAUDE.md / AGENTS.md / CLAUDE.local.md).
- *
- * A constant rather than a second environment variable, because the answer no
- * longer varies by anything Main knows. The managed route trusts the project
- * too (user ruling, 2026-09-15), and the one project-scoped thing it still
- * refuses — model settings — is not something the native runtime has any code
- * path to read: its catalog arrives from Main's hand-over or from the agent
- * directory, never from the workspace. A variable that is always `'1'` would
- * read as a switch and invite the same question to be answered twice.
- *
- * Two things can still withdraw it, and neither is a credential mode: an
- * `unbound` scratch session ANDs it away in `piWorkerRpcServer`, and an
- * explicit `settingSources` list can close the project and local tiers
- * (decision 008).
- */
-export const NATIVE_PROJECT_TRUSTED = true;
+// dsh-rebase P1-12 step 3 (decision 147): `PI_PROJECT_TRUST_ENV` and
+// `NATIVE_PROJECT_TRUSTED` left with the native worker, their only readers.
+// The DSH bridge passes project trust as a constant of its own (decision 009).
 
 /**
  * F08 — the environment variable every generated provider's `User-Agent`
@@ -112,8 +66,9 @@ export const PI_USER_AGENT_HEADER = 'User-Agent';
  * Feature id of delegation, and the only native feature switch there is today.
  *
  * A feature id rather than a package name: T026 retired the package this used
- * to enable, and what the switch turns on now is `src/runtime/plugins/subagent`
- * — this app's own delegation, which every session has unless this says no.
+ * to enable, and what the switch turned on in 1.0.x was the self-owned
+ * runtime's delegation. Since dsh-rebase P1-12 it is only read by the
+ * legacy-asset notice (decision 116 rule 9).
  */
 export const PI_SUBAGENTS_FEATURE_ID = 'subagents';
 

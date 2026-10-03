@@ -31,14 +31,16 @@ describe('deriveSessionCapabilities', () => {
 
   it('projects nothing but the skill count, whatever else an inventory carries', () => {
     // The 1.0.x engine also reported MCP servers, templates and sub-agent
-    // definitions. The panel no longer has rows for them, so they must not
-    // leak into the view either.
-    const view = deriveSessionCapabilities({
+    // definitions. The panel no longer has rows for them, and since P1-12 the
+    // inventory type no longer has the members, so they must not leak into the
+    // view either. Built outside the call: the type would refuse them inline.
+    const legacy = {
       skills: 1,
       promptTemplates: 3,
       subagents: 4,
       mcpServers: [{ name: 'alpha', ok: true, toolCount: 2 }],
-    });
+    };
+    const view = deriveSessionCapabilities(legacy);
     expect(view).toEqual({ reported: true, skills: 1 });
   });
 });

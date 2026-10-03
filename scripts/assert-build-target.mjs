@@ -35,7 +35,7 @@ if (!matches) {
   console.error(
     `[assert-build-target] refusing to build ${target} on ${hostKey}.\n` +
       `  Local packaging is host-platform only: dist:prereq stages this machine's\n` +
-      `  Node runtime and Pi worker dependencies, while afterPack takes\n` +
+      `  Node runtime and DSH host dependencies, while afterPack takes\n` +
       `  the target platform's files — the two would not agree.\n` +
       `  Build ${target} on CI instead (Actions -> Build -> Run workflow), or run\n` +
       `  this command on a ${target} machine.`

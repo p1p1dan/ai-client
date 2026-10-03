@@ -2,8 +2,9 @@
  * The Main-side read of the provider idle timeout (T093 / decision 029).
  *
  * Lives on the Main side for the reason `promptCacheSettings.test.ts` states:
- * `src/runtime` is its own npm package, and a test there importing this file
- * would drag `src/main` into the runtime type-check gate.
+ * `src/runtime` was its own npm package (until dsh-rebase P1-12), and a test
+ * there importing this file would have dragged `src/main` into the runtime
+ * type-check gate.
  *
  * The trap this setting has and the TTLs do not: `0` is a real choice — the
  * user's "never time out" — so every guard on the way to the worker has to be

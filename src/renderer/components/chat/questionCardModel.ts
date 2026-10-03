@@ -962,9 +962,10 @@ export interface PermissionCardView {
 /**
  * T023 — the wording for each `PermissionRequestAction`, English-as-key.
  *
- * The producer is the worker (`src/runtime/worker/permissionPrompt.ts`), which
- * has no locale, so it sends an id and this table is where the sentence is
- * chosen. Same treatment `contentLabel` gets a few functions down: English in
+ * The producer is the permission gate's card emitter
+ * (`src/shared/permissions/cardEmitter.ts`, run by the DSH permission row;
+ * 1.0.x's worker sent the same ids), which has no locale, so it sends an id
+ * and this table is where the sentence is chosen. Same treatment `contentLabel` gets a few functions down: English in
  * the code IS the dictionary key, `zhTranslations` carries the Chinese, and
  * "is this translated" stays a question about where the Chinese lives.
  */

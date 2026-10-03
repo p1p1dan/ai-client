@@ -2,8 +2,8 @@
   // Type-check gate for the DSH host, its bridge and the probe drivers under
   // tools/ (dsh-rebase plan). CI runs it as `pnpm typecheck:dsh-host`.
   //
-  // Separate config for the same reason as `src/runtime/tsconfig.json`: this
-  // directory is its own npm package with its own `node_modules`
+  // Separate config (as the retired `src/runtime` had, before dsh-rebase
+  // P1-12): this directory is its own npm package with its own `node_modules`
   // (@deepseek-ai/* pinned in `package.json`), so the root gate excludes
   // `src/dsh-host/**`. Run from the repo root after `npm ci` in here:
   //   pnpm exec tsc --noEmit -p src/dsh-host/tsconfig.json

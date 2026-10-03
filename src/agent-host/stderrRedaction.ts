@@ -126,10 +126,11 @@ function redactSensitiveAssignments(line: string, placeholder: string): string {
  * for T011 — knew `authorization: bearer …` and three `name = value` shapes
  * and nothing else, so a bare `sk-proj-…` in a gateway's error prose died on
  * the way to the stderr panel and survived into `runs.jsonl` and the session
- * file. `providerErrors.ts` now calls this function; the runtime already
- * depends on this package (`piSessionTimeline`, `permissionPolicy.mjs`), so
- * the shared rule lives in the depended-on layer and nothing new crosses the
- * boundary in the other direction.
+ * file. `providerErrors.ts` then called this function; the runtime already
+ * depended on this package, so the shared rule lived in the depended-on layer
+ * and nothing new crossed the boundary in the other direction. That runtime
+ * went in dsh-rebase P1-12 step 3; Main and the DSH host's credential row are
+ * the callers now.
  *
  * Credentials only — the user-directory rules stay with `redactStderrLine`,
  * because collapsing `/home/dan` to `~` is about a username, not a secret, and

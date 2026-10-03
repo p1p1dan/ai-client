@@ -1296,12 +1296,6 @@ describe('DshSessionRuntime behind PiWorkerRpcServer', () => {
       generation: 1,
       projectTrusted: true,
       createRuntime: (options) => new DshSessionRuntime(dsh.ctx, options, { ...deps, home }),
-      createImportWriter: () => {
-        throw new Error('not in this test');
-      },
-      createUtilityRuntime: () => {
-        throw new Error('not in this test');
-      },
     });
     server.receive({
       protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
@@ -1442,12 +1436,6 @@ describe('DshSessionRuntime — questions (P1-4d3, decisions 098 and 114)', () =
       generation: 1,
       projectTrusted: true,
       createRuntime: (options) => new DshSessionRuntime(dsh.ctx, options, { ...deps, home }),
-      createImportWriter: () => {
-        throw new Error('not in this test');
-      },
-      createUtilityRuntime: () => {
-        throw new Error('not in this test');
-      },
     });
     const request = (requestId: string, type: string, payload: Record<string, unknown>) =>
       server.receive({

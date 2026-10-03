@@ -1,15 +1,4 @@
 import type {
-  WorkerDiscardImportedSessionPayload,
-  WorkerDiscardImportedSessionResult,
-  WorkerImportConversationPayload,
-  WorkerImportConversationResult,
-  WorkerInspectImportedSessionPayload,
-  WorkerInspectImportedSessionResult,
-  WorkerReconcileImportedSessionPayload,
-  WorkerReconcileImportedSessionResult,
-} from '../shared/types/legacyImport.ts';
-import { isWorkerImportConversationPayload } from '../shared/types/legacyImport.ts';
-import type {
   PermissionDecisionId,
   RuntimeEvent,
   RuntimeEventDraft,
@@ -26,10 +15,8 @@ import {
   isWorkerCommandsPayload,
   isWorkerCompactPayload,
   isWorkerDiscardForkPayload,
-  isWorkerDiscardImportedSessionPayload,
   isWorkerForkPayload,
   isWorkerHistoryPayload,
-  isWorkerInspectImportedSessionPayload,
   isWorkerInterjectPayload,
   isWorkerJobKillPayload,
   isWorkerJobReadPayload,
@@ -37,8 +24,6 @@ import {
   isWorkerPermissionRespondPayload,
   isWorkerPreviewRespondPayload,
   isWorkerQuestionRespondPayload,
-  isWorkerReconcileImportedSessionPayload,
-  isWorkerReloadPayload,
   isWorkerRewindPayload,
   isWorkerRpcRequest,
   isWorkerSendPayload,
@@ -48,8 +33,6 @@ import {
   isWorkerStopPayload,
   isWorkerSubagentInterruptPayload,
   isWorkerTreePayload,
-  isWorkerUtilityCancelPayload,
-  isWorkerUtilityStartPayload,
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerAcceptForkPayload,
   type WorkerAcceptForkResult,
@@ -74,14 +57,11 @@ import {
   type WorkerJobKillResult,
   type WorkerJobReadPayload,
   type WorkerJobReadResult,
-  type WorkerModelCatalog,
   type WorkerPanelsPayload,
   type WorkerPanelsResult,
   type WorkerPermissionRespondResult,
   type WorkerPreviewRespondResult,
   type WorkerQuestionRespondResult,
-  type WorkerReloadPayload,
-  type WorkerReloadResult,
   type WorkerRewindPayload,
   type WorkerRewindResult,
   type WorkerRpcErrorPayload,
@@ -98,12 +78,6 @@ import {
   type WorkerSubagentInterruptResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
-  type WorkerUtilityCancelPayload,
-  type WorkerUtilityCancelResult,
-  type WorkerUtilityDeltaPayload,
-  type WorkerUtilityStartPayload,
-  type WorkerUtilityStartResult,
-  type WorkerUtilityTerminalPayload,
 } from '../shared/types/workerRpc.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
@@ -116,11 +90,11 @@ export interface PiWorkerMessagePort {
  *
  * T025 made every method required. Twelve of them used to be optional so a
  * second backend could omit what it did not implement, and each RPC handler
- * carried a `WORKER_*_UNAVAILABLE` arm for that case. P6-5 retired the second
- * backend; `NativeWorkerRuntime` implements all of them, so those arms were
- * unreachable code whose comments still described a backend that no longer
- * exists. Required here means the next runtime that forgets `fork` fails to
- * compile instead of failing at the moment a user clicks "fork from here".
+ * carried a `WORKER_*_UNAVAILABLE` arm for that case. Required here means the
+ * next runtime that forgets `fork` fails to compile instead of failing at the
+ * moment a user clicks "fork from here". Since dsh-rebase P1-12 the only
+ * implementation is the DSH bridge's `DshSessionRuntime`; `reload` left the
+ * interface with the native runtime (decision 127).
  */
 export interface PiWorkerRuntime {
   bootstrap(): Promise<WorkerBootstrapResult>;
@@ -143,7 +117,6 @@ export interface PiWorkerRuntime {
   /** dsh-rebase P1-7b — interrupt one continuable subagent's current run. */
   interruptSubagent(input: WorkerSubagentInterruptPayload): Promise<WorkerSubagentInterruptResult>;
   rewind(input: WorkerRewindPayload): Promise<WorkerRewindResult>;
-  reload(input: WorkerReloadPayload): Promise<WorkerReloadResult>;
   fork(input: WorkerForkPayload): Promise<WorkerForkResult>;
   discardFork(input: WorkerDiscardForkPayload): Promise<WorkerDiscardForkResult>;
   /** session-index-04 — the fork became a real session; stop claiming it. */
@@ -151,11 +124,10 @@ export interface PiWorkerRuntime {
   stop(input: WorkerStopPayload): Promise<WorkerStopResult>;
   /**
    * Ctrl+Enter — hand the message to the live run (dsh-rebase decision 093:
-   * the DSH bridge steers it into the running turn; the retiring native
-   * runtime still only arms a stop at its next turn boundary). `interjected:
-   * false` is the answer for "no run was live", not a failure. The DSH bridge
-   * answers a promise when the message carries attachments, which it admits
-   * through the engine first (P1-4c2); the native runtime stays synchronous.
+   * the DSH bridge steers it into the running turn). `interjected: false` is
+   * the answer for "no run was live", not a failure. The bridge answers a
+   * promise when the message carries attachments, which it admits through the
+   * engine first (P1-4c2), and answers synchronously otherwise.
    */
   interject(input: WorkerInterjectPayload): WorkerInterjectResult | Promise<WorkerInterjectResult>;
   /** Answer one `permission.requested`. */
@@ -196,86 +168,23 @@ export interface PiWorkerRuntimeOptions extends WorkerBootstrapPayload {
   log?: (...args: unknown[]) => void;
 }
 
-export interface PiUtilityRuntime {
-  start(input: WorkerUtilityStartPayload): Promise<WorkerUtilityStartResult>;
-  cancel(input: WorkerUtilityCancelPayload): Promise<WorkerUtilityCancelResult>;
-  dispose(): Promise<void>;
-}
-
-export interface PiUtilityRuntimeOptions {
-  projectTrusted: boolean;
-  emitDelta: (payload: WorkerUtilityDeltaPayload) => void;
-  emitTerminal: (payload: WorkerUtilityTerminalPayload) => void;
-  log?: (...args: unknown[]) => void;
-  /**
-   * P5-5 — the catalog the first `utility.start` handed over, when Main could
-   * assemble one. Read at construction because the engine builds its model
-   * graph once and keeps it for the slot's remaining operations.
-   */
-  modelCatalog?: WorkerModelCatalog;
-}
-
 export interface PiWorkerRpcServerOptions {
   port: PiWorkerMessagePort;
   generation: number;
   projectTrusted: boolean;
   /**
-   * The engine this worker runs. Required since P6-5: the legacy fallback was
-   * the other backend, and it is gone. Supplied by the worker entry so this
-   * file and the runtime never import each other.
+   * The engine this worker runs, supplied by the DSH bridge's channel mux so
+   * this file and the engine never import each other.
+   *
+   * dsh-rebase P1-12 step 3 (decision 147): the import writer and one-shot
+   * utility factories went with the native worker. Imports produce DSH sessions
+   * in Main (decision 124) and one-shot completions run on the host's own
+   * control channel (decision 125), so `worker.import*`, `utility.*` and
+   * `worker.reload` are now unknown methods here.
    */
   createRuntime: (options: PiWorkerRuntimeOptions) => PiWorkerRuntime;
-  /**
-   * P5-4 — the writer a conversation import goes through.
-   *
-   * Supplied by the worker entry for the same structural reason as
-   * `createRuntime` above: this file must not import the runtime, and the
-   * runtime must not import this file, so the choice is made once at the entry
-   * point and travels as a factory.
-   *
-   * It was optional until P6-5, defaulting to pi's writer. An import is a pure
-   * write job — no model, no tools, no turn — and leaving it on that writer
-   * loaded `pi-coding-agent` for a job that had nothing to do with it. With the
-   * legacy engine retired there is nothing to default to, so it is required.
-   */
-  createImportWriter: () => PiImportWriter;
-  /**
-   * P6-2 — the engine behind a one-shot completion, same seam as the two above.
-   *
-   * Takes the emitters rather than reaching for them: the runtime that streams
-   * the answer lives on the other side of the backend boundary and cannot know
-   * how this server frames an event.
-   */
-  createUtilityRuntime: (options: PiUtilityRuntimeOptions) => PiUtilityRuntime;
   log?: (...args: unknown[]) => void;
   onDisposed?: () => void;
-}
-
-/**
- * What an import job needs from a backend, and nothing more.
- *
- * Both implementations already had exactly these four methods; naming the shape
- * is what lets this dispatcher stay one implementation while the write side
- * differs. Both implementations satisfied it structurally; since P6-5 the only
- * one left is the native writer.
- */
-export interface PiImportWriter {
-  create(input: WorkerImportConversationPayload): Promise<WorkerImportConversationResult>;
-  inspectInterrupted(
-    workspacePath: string,
-    targetPiSessionId: string
-  ): Promise<WorkerInspectImportedSessionResult>;
-  reconcileInterrupted(
-    workspacePath: string,
-    targetPiSessionId: string
-  ): Promise<WorkerReconcileImportedSessionResult>;
-  discard(sessionFile: string): Promise<WorkerDiscardImportedSessionResult>;
-  /**
-   * Release whatever the writer had to start up. Optional: the pi writer holds
-   * only the SDK module, while the native one brings up a host IO service that
-   * owns a subprocess on the encrypted-Windows fallback path.
-   */
-  dispose?(): Promise<void>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -323,12 +232,7 @@ function sameBootstrap(a: WorkerBootstrapPayload, b: WorkerBootstrapPayload): bo
     a.forceTakeover === b.forceTakeover &&
     a.tier === b.tier &&
     a.permissions?.mode === b.permissions?.mode &&
-    a.permissions?.gear === b.permissions?.gear &&
-    // The TTLs are read at spawn time, so a user who changed the setting
-    // between two bootstraps of the same slot must get a runtime built with the
-    // new value rather than the cached answer from the old one.
-    a.promptCacheTtl === b.promptCacheTtl &&
-    a.subagentPromptCacheTtl === b.subagentPromptCacheTtl
+    a.permissions?.gear === b.permissions?.gear
   );
 }
 
@@ -369,8 +273,6 @@ export class PiWorkerRpcServer {
   private chain = Promise.resolve();
   private bootstrapPayload: WorkerBootstrapPayload | null = null;
   private runtime: PiWorkerRuntime | null = null;
-  private utilityRuntime: PiUtilityRuntime | null = null;
-  private importWriter: PiImportWriter | null = null;
   private disposed = false;
   private eventSequence = 0;
 
@@ -427,26 +329,8 @@ export class PiWorkerRpcServer {
         case 'worker.bootstrap':
           await this.handleBootstrap(request);
           break;
-        case 'worker.import':
-          await this.handleImport(request);
-          break;
-        case 'worker.import.discard':
-          await this.handleDiscardImport(request);
-          break;
-        case 'worker.import.inspect':
-          await this.handleInspectImport(request);
-          break;
-        case 'worker.import.reconcile':
-          await this.handleReconcileImport(request);
-          break;
         case 'worker.send':
           await this.handleSend(request);
-          break;
-        case 'utility.start':
-          await this.handleUtilityStart(request);
-          break;
-        case 'utility.cancel':
-          await this.handleUtilityCancel(request);
           break;
         case 'worker.history':
           await this.handleHistory(request);
@@ -477,9 +361,6 @@ export class PiWorkerRpcServer {
           break;
         case 'worker.rewind':
           await this.handleRewind(request);
-          break;
-        case 'worker.reload':
-          await this.handleReload(request);
           break;
         case 'worker.fork':
           await this.handleFork(request);
@@ -529,94 +410,6 @@ export class PiWorkerRpcServer {
     }
   }
 
-  private async handleImport(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerImportConversationPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.import requires a valid versioned ImportedConversation',
-        retryable: false,
-      });
-      return;
-    }
-    if (this.utilityRuntime) {
-      throw new PiWorkerSessionError(
-        'WORKER_UTILITY_SLOT_CONFLICT',
-        'A one-shot utility worker cannot import a durable Pi session'
-      );
-    }
-    if (this.runtime || this.bootstrapPayload) {
-      throw new PiWorkerSessionError(
-        'WORKER_IMPORT_SLOT_CONFLICT',
-        'A bootstrapped AgentSession worker cannot also perform an import job'
-      );
-    }
-    const result: WorkerImportConversationResult = await this.requireImportWriter().create(
-      request.payload as WorkerImportConversationPayload
-    );
-    this.respondSuccess(request, result);
-  }
-
-  /** The import writer, created on first use — most workers never import. */
-  private requireImportWriter(): PiImportWriter {
-    if (!this.importWriter) this.importWriter = this.options.createImportWriter();
-    return this.importWriter;
-  }
-
-  private async handleInspectImport(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerInspectImportedSessionPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.import.inspect requires workspacePath and targetPiSessionId',
-        retryable: false,
-      });
-      return;
-    }
-    const payload = request.payload as WorkerInspectImportedSessionPayload;
-    const result: WorkerInspectImportedSessionResult =
-      await this.requireImportWriter().inspectInterrupted(
-        payload.workspacePath,
-        payload.targetPiSessionId
-      );
-    this.respondSuccess(request, result);
-  }
-
-  private async handleReconcileImport(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerReconcileImportedSessionPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.import.reconcile requires workspacePath and targetPiSessionId',
-        retryable: false,
-      });
-      return;
-    }
-    const payload = request.payload as WorkerReconcileImportedSessionPayload;
-    const result: WorkerReconcileImportedSessionResult =
-      await this.requireImportWriter().reconcileInterrupted(
-        payload.workspacePath,
-        payload.targetPiSessionId
-      );
-    this.respondSuccess(request, result);
-  }
-
-  private async handleDiscardImport(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerDiscardImportedSessionPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.import.discard requires logicalSessionId and sessionFile',
-        retryable: false,
-      });
-      return;
-    }
-    const payload = request.payload as WorkerDiscardImportedSessionPayload;
-    if (!this.importWriter) {
-      this.respondSuccess(request, {
-        discarded: false,
-      } satisfies WorkerDiscardImportedSessionResult);
-      return;
-    }
-    this.respondSuccess(request, await this.importWriter.discard(payload.sessionFile));
-  }
-
   private async handleBootstrap(request: WorkerRpcRequest): Promise<void> {
     if (!isWorkerBootstrapPayload(request.payload)) {
       this.respondError(request, {
@@ -625,12 +418,6 @@ export class PiWorkerRpcServer {
         retryable: false,
       });
       return;
-    }
-    if (this.utilityRuntime) {
-      throw new PiWorkerSessionError(
-        'WORKER_UTILITY_SLOT_CONFLICT',
-        'A one-shot utility worker cannot bootstrap a durable Pi AgentSession'
-      );
     }
     if (this.bootstrapPayload && !sameBootstrap(this.bootstrapPayload, request.payload)) {
       this.respondError(request, {
@@ -674,50 +461,6 @@ export class PiWorkerRpcServer {
     // out of band so the serialized RPC chain remains available to worker.stop.
     const result = await this.runtime.startSend(request.payload);
     this.respondSuccess(request, result);
-  }
-
-  private async handleUtilityStart(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerUtilityStartPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'utility.start requires an operation id, cwd, prompt, and valid timeout',
-        retryable: false,
-      });
-      return;
-    }
-    if (this.runtime || this.bootstrapPayload || this.importWriter) {
-      throw new PiWorkerSessionError(
-        'WORKER_UTILITY_SLOT_CONFLICT',
-        'A session or import worker cannot run a one-shot utility operation'
-      );
-    }
-    if (!this.utilityRuntime) {
-      const utilityOptions: PiUtilityRuntimeOptions = {
-        projectTrusted: this.options.projectTrusted,
-        emitDelta: (payload) => this.emitUtilityEvent('utility.delta', payload),
-        emitTerminal: (payload) => this.emitUtilityEvent('utility.terminal', payload),
-        ...(this.log ? { log: this.log } : {}),
-        ...(request.payload.modelCatalog ? { modelCatalog: request.payload.modelCatalog } : {}),
-      };
-      this.utilityRuntime = this.options.createUtilityRuntime(utilityOptions);
-    }
-    this.respondSuccess(request, await this.utilityRuntime.start(request.payload));
-  }
-
-  private async handleUtilityCancel(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerUtilityCancelPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'utility.cancel requires an operation id and valid reason',
-        retryable: false,
-      });
-      return;
-    }
-    if (!this.utilityRuntime) {
-      this.respondSuccess(request, { cancelled: false } satisfies WorkerUtilityCancelResult);
-      return;
-    }
-    this.respondSuccess(request, await this.utilityRuntime.cancel(request.payload));
   }
 
   private async handleHistory(request: WorkerRpcRequest): Promise<void> {
@@ -887,21 +630,6 @@ export class PiWorkerRpcServer {
       throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.rewind(request.payload));
-  }
-
-  private async handleReload(request: WorkerRpcRequest): Promise<void> {
-    if (!isWorkerReloadPayload(request.payload)) {
-      this.respondError(request, {
-        code: 'WORKER_INVALID_PAYLOAD',
-        message: 'worker.reload requires logicalSessionId and sessionFile',
-        retryable: false,
-      });
-      return;
-    }
-    if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
-    }
-    this.respondSuccess(request, await this.runtime.reload(request.payload));
   }
 
   private async handleFork(request: WorkerRpcRequest): Promise<void> {
@@ -1161,46 +889,25 @@ export class PiWorkerRpcServer {
    * the events those drains exist to deliver, so Main never learned that the
    * dialogs it was showing had been answered for it.
    *
-   * Each release is independent of the others' failure. `onDisposed` is this
-   * process's only way to exit, and one rejecting dispose used to skip the
-   * other two releases, the three null-outs and the exit hook together —
-   * turning a cleanup error into a worker that stays alive forever. The error
+   * A rejecting dispose must not skip the null-out or the exit hook.
+   * `onDisposed` is the channel's only way to close, and skipping it used to
+   * turn a cleanup error into a worker that stays alive forever. The error
    * still reaches Main, as the response to this request.
    */
   private async handleDispose(request: WorkerRpcRequest): Promise<void> {
     let failure: unknown;
     if (!this.disposed) {
-      for (const release of [
-        () => this.runtime?.dispose(),
-        () => this.utilityRuntime?.dispose(),
-        () => this.importWriter?.dispose?.(),
-      ]) {
-        try {
-          await release();
-        } catch (error) {
-          failure ??= error;
-        }
+      try {
+        await this.runtime?.dispose();
+      } catch (error) {
+        failure = error;
       }
       this.disposed = true;
       this.runtime = null;
-      this.utilityRuntime = null;
-      this.importWriter = null;
     }
     if (failure) this.respondError(request, errorPayload(failure));
     else this.respondSuccess(request, { disposed: true } satisfies WorkerDisposeResult);
     this.options.onDisposed?.();
-  }
-
-  private emitUtilityEvent(type: 'utility.delta' | 'utility.terminal', payload: unknown): void {
-    if (this.disposed) return;
-    const event: WorkerRpcEvent = {
-      protocolVersion: WORKER_RPC_PROTOCOL_VERSION,
-      kind: 'event',
-      generation: this.options.generation,
-      type,
-      payload,
-    };
-    this.options.port.postMessage(event);
   }
 
   /**

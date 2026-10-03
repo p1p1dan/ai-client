@@ -103,13 +103,12 @@ describe('forgetSession', () => {
  * it exists. The module used to explain that a worker "deliberately does not
  * inject ours" when the agent directory already declared
  * `@gotgenes/pi-permission-system`, leaving the user's own policy in force.
- * Nothing has injected a pi permission extension since P6-5, and the native
- * runtime reports `bundled` unconditionally, so a reader who took that note at
- * face value would go looking for a handover that cannot happen.
+ * Nothing has injected a pi permission extension since P6-5, and the producer
+ * reports `bundled` unconditionally, so a reader who took that note at face
+ * value would go looking for a handover that cannot happen.
  *
  * T025 rewrote the shared-type half and T026 the renderer half; these checks
- * are what stop the two from drifting apart again, and what pins the producer
- * claim they both rest on.
+ * are what stop the two from drifting apart again.
  */
 describe('permission gate notes and their producer', () => {
   const read = (...parts: string[]) =>
@@ -120,12 +119,10 @@ describe('permission gate notes and their producer', () => {
   const note = (source: string) => source.slice(0, source.indexOf('\nimport '));
   const store = note(read('renderer', 'stores', 'permissionGate.ts'));
   const wire = read('shared', 'types', 'runtimeEvents.ts');
-  const native = read('runtime', 'worker', 'nativeWorkerRuntime.ts');
-
-  it('the native runtime is the producer, and it only ever says bundled', () => {
-    expect(native).toContain("permissionGate: 'bundled'");
-    expect(native).not.toContain('user_configured');
-  });
+  // The native runtime this suite once read as the producer went with
+  // `src/runtime` in dsh-rebase P1-12 step 3. The DSH bridge reports the gate
+  // only once it is attached; `dsh-host/__tests__/hostStatic.test.ts` and
+  // `permissionBridge.test.ts` pin that producer.
 
   it('each note points at the other, so neither can be updated alone', () => {
     expect(store).toContain('@shared/types/runtimeEvents');

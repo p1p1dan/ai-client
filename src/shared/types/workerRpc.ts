@@ -1,29 +1,11 @@
 // Explicit `.ts` for the same reason as `./sessionHistory.ts` below: this is a
-// VALUE import and the Pi worker loads this file as source under Node's
+// VALUE import and the DSH bridge loads this file as source under Node's
 // strip-types mode, where the ESM resolver does no extension search.
 import {
   isSessionEffortLevel,
   type SessionAttachment,
   type SessionEffortLevel,
 } from './agentHost.ts';
-// Value import (not type-only): isLegacyImportPathSegment below is a runtime
-// check, so this file needs the explicit `.ts` suffix (see the note further
-// down about the Pi worker loading this file as source).
-import {
-  isLegacyImportPathSegment,
-  type WorkerDiscardImportedSessionPayload,
-  type WorkerDiscardImportedSessionResult,
-  type WorkerImportConversationPayload,
-  type WorkerImportConversationResult,
-  type WorkerInspectImportedSessionPayload,
-  type WorkerInspectImportedSessionResult,
-  type WorkerReconcileImportedSessionPayload,
-  type WorkerReconcileImportedSessionResult,
-} from './legacyImport.ts';
-// Value imports (`isPromptCacheTtl`, `isProviderIdleTimeoutMs`), so the
-// explicit `.ts` applies to both for the reason stated above.
-import { isPromptCacheTtl, type PromptCacheTtl } from './promptCacheTtl.ts';
-import { isProviderIdleTimeoutMs } from './providerTimeout.ts';
 import type {
   PermissionDecisionId,
   RuntimeEvent,
@@ -60,7 +42,6 @@ import type { SessionPermissionTier } from './sessionPermissionTier';
  * never be accepted by a replacement process attached to the same slot.
  */
 export const WORKER_RPC_PROTOCOL_VERSION = 1 as const;
-export const PI_WORKER_GENERATION_ENV = 'AICLIENT_PI_WORKER_GENERATION';
 
 export interface WorkerRpcRequest<TType extends string = string, TPayload = unknown> {
   protocolVersion: typeof WORKER_RPC_PROTOCOL_VERSION;
@@ -160,76 +141,6 @@ export interface WorkerBootstrapPayload {
    */
   tier?: SessionPermissionTier;
   permissions?: RuntimePermissionSettings;
-  /**
-   * P5-2-5 — whether this worker offers delegation, and which definitions the
-   * user switched off.
-   *
-   * Absent means "the host did not say", which the native runtime reads as ON
-   * with the full builtin catalog: that is the P5-2 contract's default for an
-   * install with no prior choice. Only an explicit `enabled: false` removes the
-   * `Task*` tools, because the legacy plugin's opt-in default is about ITS
-   * prompt cost and is not a statement about native delegation.
-   *
-   * `disabled` is per-install app state, keyed by definition name. It is
-   * deliberately not written into the Markdown: a definition document is a
-   * shareable artifact and the switch is this machine's.
-   */
-  subagents?: { enabled: boolean; disabled?: readonly string[] };
-  /**
-   * How long the provider should keep this session's prompt cache entries.
-   *
-   * Two separate values because the two loops have opposite cache economics:
-   * the main conversation re-reads one growing prefix for as long as the tab is
-   * open, a delegate writes a prefix that nothing reads again. Absent means the
-   * runtime's own defaults (`1h` main, `5m` delegate), so an install that never
-   * touched the setting sends a payload identical to a pre-TTL build's and
-   * `sameBootstrap` keeps comparing undefined === undefined.
-   */
-  promptCacheTtl?: PromptCacheTtl;
-  subagentPromptCacheTtl?: PromptCacheTtl;
-  /**
-   * T093 / decision 029 — how long a provider request may stay silent, in ms.
-   *
-   * One number that becomes three things in the worker: undici's
-   * `headersTimeout`, its `bodyTimeout`, and the SDK's per-request `timeout`.
-   * `0` is the user's "off". Absent means the runtime's own default (120 s), so
-   * an install that never touched the setting sends a payload identical to a
-   * pre-T093 build's and `sameBootstrap` keeps comparing undefined === undefined
-   * — the same rule the two TTLs above follow.
-   */
-  providerIdleTimeoutMs?: number;
-  /**
-   * P5-5 — the model catalog, handed over rather than read off disk.
-   *
-   * Until this node the native runtime read `models.json` + `auth.json` from
-   * the agent directory. Those two files exist for the LEGACY backend: pi can
-   * only be configured through files, so the app has to decrypt the user's keys
-   * and write them out at 0600 for it. The native backend has no such
-   * constraint, and keeping it on the files meant a coexistence-period measure
-   * (H/17's fifth decision, due for removal in P6-2) was silently load-bearing
-   * for the backend that is supposed to outlive it.
-   *
-   * The shape is `models.json`'s, not a new one, so both paths go through the
-   * same parser and cannot drift. Absent means "read the directory", which is
-   * what the smoke and probe lanes do — they point at a fixture directory and
-   * have no Main to assemble anything.
-   *
-   * dsh-rebase P1-1: Main no longer sends this to chat sessions. They run on
-   * the DSH host, which never reads it (`ChatSlotBootstrapPayload` in
-   * createPiWorkerSlot.ts); the field stays for the native worker's contract.
-   */
-  modelCatalog?: WorkerModelCatalog;
-}
-
-/**
- * The two documents the catalog is made of, in the exact shape they take on
- * disk. `auth` is separate for the same reason the file is: `models.json` is a
- * configuration a user may reasonably look at, and it must never come to hold
- * a key.
- */
-export interface WorkerModelCatalog {
-  models: Record<string, unknown>;
-  auth?: Record<string, unknown>;
 }
 
 export interface WorkerHistoryResult {
@@ -245,26 +156,6 @@ export interface WorkerHistoryResult {
    * Absent on the legacy backend, which records no delegations of its own.
    */
   subagents?: SubagentHistorySummary[];
-}
-
-/**
- * T026 — one MCP server this session's OWN bridge declared.
- *
- * Reported from `runtimeMcp.connections`, which is the same list the tools were
- * registered from, so a server named here is a server whose tools the model can
- * actually call. A failed one is kept rather than dropped: "declared and did
- * not come up" is the fact a user needs, and omitting it would render the same
- * as never having configured it.
- */
-export interface WorkerMcpServerInfo {
-  /** The name the server is declared under; also the `mcp__<name>__` prefix. */
-  name: string;
-  /** False when the server never started or never introduced itself. */
-  ok: boolean;
-  /** Tools it published. `0` for a server that failed. */
-  toolCount: number;
-  /** Present only when `ok` is false. */
-  error?: string;
 }
 
 /**
@@ -289,18 +180,13 @@ export interface WorkerMcpServerInfo {
  *
  * The DSH engine reports `skills` alone (dsh-rebase decisions 099 rule 12 and
  * 113): it has no MCP bridge yet (decision 090), no prompt templates (decision
- * 103) and loads no custom sub-agent definitions (decisions 062 / 070), so the
- * other three have no producer and stay absent.
+ * 103) and loads no custom sub-agent definitions (decisions 062 / 070). The
+ * `mcpServers`, `promptTemplates` and `subagents` members only the 1.0.x
+ * runtime produced left with it (P1-12 step 3, decision 116 rule 21).
  */
 export interface WorkerCapabilityInventory {
-  /** Absent when this graph has no MCP bridge; `[]` when it found no servers. */
-  mcpServers?: WorkerMcpServerInfo[];
   /** Discovered skills. Absent when discovery never ran. */
   skills?: number;
-  /** Discovered prompt templates. Absent when discovery never ran. */
-  promptTemplates?: number;
-  /** Sub-agent definitions. Absent when delegation is switched off. */
-  subagents?: number;
 }
 
 /**
@@ -574,23 +460,6 @@ export interface WorkerBootstrapResult {
 }
 
 export type WorkerBootstrapRequest = WorkerRpcRequest<'worker.bootstrap', WorkerBootstrapPayload>;
-export type WorkerImportConversationRequest = WorkerRpcRequest<
-  'worker.import',
-  WorkerImportConversationPayload
->;
-export type WorkerInspectImportedSessionRequest = WorkerRpcRequest<
-  'worker.import.inspect',
-  WorkerInspectImportedSessionPayload
->;
-export type WorkerReconcileImportedSessionRequest = WorkerRpcRequest<
-  'worker.import.reconcile',
-  WorkerReconcileImportedSessionPayload
->;
-export type WorkerDiscardImportedSessionRequest = WorkerRpcRequest<
-  'worker.import.discard',
-  WorkerDiscardImportedSessionPayload
->;
-
 export interface WorkerSendPayload {
   logicalSessionId: string;
   /** Product turn identity. Distinct from the transport RPC requestId. */
@@ -668,37 +537,6 @@ export interface WorkerRewindResult {
   leaf: PiLeafCheckpoint;
   history: WorkerHistoryResult;
   tree: WorkerTreeResult;
-}
-
-/**
- * Re-open this worker's own session file from disk.
- *
- * Exists because a live worker never re-reads its JSONL: pi's SessionManager
- * caches the whole file at open, so `worker.history` projects whatever was on
- * disk when the worker started. When the Pi TUI has appended to the same file
- * in the meantime, the worker is both showing stale history and still pointing
- * its leaf at the pre-TUI entry — the next turn would branch off there and
- * strand the terminal's messages on an abandoned path.
- *
- * `sessionFile` is the caller's assertion about which file it expects to be
- * reloaded; the worker refuses when that is not the file it owns.
- *
- * dsh-rebase P1-11 (decision 127): Main no longer sends this — its only caller,
- * the pi TUI handover, is gone. The method stays in the protocol until the
- * native runtime that implements it is deleted (P1-12).
- */
-export interface WorkerReloadPayload {
-  logicalSessionId: string;
-  sessionFile: string;
-}
-
-export interface WorkerReloadResult {
-  logicalSessionId: string;
-  sessionFile: string;
-  workspacePath: string;
-  /** Leaf after the reload — pi resets it to the file's last entry. */
-  leaf: PiLeafCheckpoint;
-  history: WorkerHistoryResult;
 }
 
 export interface WorkerForkPayload {
@@ -893,70 +731,6 @@ export interface WorkerSetPermissionTierResult {
 
 export type WorkerSendRequest = WorkerRpcRequest<'worker.send', WorkerSendPayload>;
 
-/**
- * Stateless, one-shot completion request. It never creates a Pi SessionManager,
- * session JSONL, or logical chat-session identity.
- */
-export interface WorkerUtilityStartPayload {
-  operationId: string;
-  cwd: string;
-  prompt: string;
-  model?: string;
-  effort?: SessionEffortLevel;
-  timeoutMs: number;
-  /**
-   * P5-5 — the same handed-over catalog a session worker bootstraps with.
-   *
-   * Without it this path was the last one still reading `models.json` and
-   * `auth.json` out of the agent directory: those two files exist for the
-   * legacy backend, and leaving the "AI features" on them made a coexistence
-   * measure load-bearing for the backend meant to outlive it. Absent still
-   * means "read the directory", which is what a smoke lane with no Main does.
-   */
-  modelCatalog?: WorkerModelCatalog;
-}
-
-export interface WorkerUtilityStartResult {
-  accepted: true;
-  operationId: string;
-}
-
-export interface WorkerUtilityCancelPayload {
-  operationId: string;
-  reason: 'user' | 'timeout' | 'dispose';
-}
-
-export interface WorkerUtilityCancelResult {
-  cancelled: boolean;
-}
-
-export interface WorkerUtilityDeltaPayload {
-  operationId: string;
-  delta: string;
-}
-
-export interface WorkerUtilityTerminalPayload {
-  operationId: string;
-  state: 'completed' | 'cancelled' | 'failed';
-  text: string;
-  model?: string;
-  error?: string;
-}
-
-export type WorkerUtilityStartRequest = WorkerRpcRequest<
-  'utility.start',
-  WorkerUtilityStartPayload
->;
-export type WorkerUtilityCancelRequest = WorkerRpcRequest<
-  'utility.cancel',
-  WorkerUtilityCancelPayload
->;
-export type WorkerUtilityDeltaEvent = WorkerRpcEvent<'utility.delta', WorkerUtilityDeltaPayload>;
-export type WorkerUtilityTerminalEvent = WorkerRpcEvent<
-  'utility.terminal',
-  WorkerUtilityTerminalPayload
->;
-
 export type WorkerHistoryRequest = WorkerRpcRequest<'worker.history', WorkerHistoryPayload>;
 export type WorkerTreeRequest = WorkerRpcRequest<'worker.tree', WorkerTreePayload>;
 export type WorkerCommandsRequest = WorkerRpcRequest<'worker.commands', WorkerCommandsPayload>;
@@ -970,7 +744,6 @@ export type WorkerSubagentInterruptRequest = WorkerRpcRequest<
   WorkerSubagentInterruptPayload
 >;
 export type WorkerRewindRequest = WorkerRpcRequest<'worker.rewind', WorkerRewindPayload>;
-export type WorkerReloadRequest = WorkerRpcRequest<'worker.reload', WorkerReloadPayload>;
 export type WorkerForkRequest = WorkerRpcRequest<'worker.fork', WorkerForkPayload>;
 export type WorkerDiscardForkRequest = WorkerRpcRequest<
   'worker.fork.discard',
@@ -1041,25 +814,6 @@ export function isWorkerBootstrapPayload(value: unknown): value is WorkerBootstr
   if (
     value.tier !== undefined &&
     (typeof value.tier !== 'string' || !VALID_TIERS.has(value.tier))
-  ) {
-    return false;
-  }
-  // Rejected rather than coerced: a worker that silently fell back would run a
-  // TTL the settings page is not showing, which is the failure this guard exists
-  // to make impossible for every other field too.
-  if (value.promptCacheTtl !== undefined && !isPromptCacheTtl(value.promptCacheTtl)) return false;
-  if (
-    value.subagentPromptCacheTtl !== undefined &&
-    !isPromptCacheTtl(value.subagentPromptCacheTtl)
-  ) {
-    return false;
-  }
-  // Same rule as the TTLs above: rejected rather than coerced. A worker that
-  // fell back silently would be more (or less) patient than the settings page
-  // claims, and "why did it give up after 30 seconds" has no other answer.
-  if (
-    value.providerIdleTimeoutMs !== undefined &&
-    !isProviderIdleTimeoutMs(value.providerIdleTimeoutMs)
   ) {
     return false;
   }
@@ -1142,23 +896,6 @@ export function isWorkerBootstrapResult(value: unknown): value is WorkerBootstra
   return true;
 }
 
-function normalizeMcpServer(value: unknown): WorkerMcpServerInfo | null {
-  if (!isRecord(value)) return null;
-  const name = typeof value.name === 'string' ? value.name.trim() : '';
-  if (!name) return null;
-  const ok = value.ok === true;
-  // A failed server publishes nothing, whatever it claimed. Trusting the number
-  // would put "9 tools" next to a Failed badge and leave a reader to decide
-  // which half of one row to believe.
-  const declared =
-    typeof value.toolCount === 'number' && Number.isFinite(value.toolCount)
-      ? Math.max(0, Math.trunc(value.toolCount))
-      : 0;
-  const error =
-    typeof value.error === 'string' && value.error.trim().length > 0 ? value.error : undefined;
-  return { name, ok, toolCount: ok ? declared : 0, ...(!ok && error ? { error } : {}) };
-}
-
 function normalizeCount(value: unknown): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return undefined;
   return Math.trunc(value);
@@ -1168,26 +905,16 @@ function normalizeCount(value: unknown): number | undefined {
  * T026 — read a bootstrap result's capability inventory, or `null`.
  *
  * `null` means "nothing reported one", which every consumer renders as "not
- * reported" rather than as an empty setup. Members that cannot be parsed are
- * dropped INDIVIDUALLY: a garbled server row must not take the skill count with
- * it, and neither may abort the session — which is why this lives here and not
- * in {@link isWorkerBootstrapResult}.
+ * reported" rather than as an empty setup. A count that cannot be parsed is
+ * dropped rather than allowed to abort the session — which is why this lives
+ * here and not in {@link isWorkerBootstrapResult}. Members the 1.0.x runtime
+ * also reported (MCP servers, templates, sub-agent definitions) are ignored.
  */
 export function normalizeWorkerCapabilities(value: unknown): WorkerCapabilityInventory | null {
   if (!isRecord(value)) return null;
-  const servers = Array.isArray(value.mcpServers)
-    ? value.mcpServers
-        .map(normalizeMcpServer)
-        .filter((item): item is WorkerMcpServerInfo => item !== null)
-    : undefined;
   const skills = normalizeCount(value.skills);
-  const promptTemplates = normalizeCount(value.promptTemplates);
-  const subagents = normalizeCount(value.subagents);
   const inventory: WorkerCapabilityInventory = {
-    ...(servers ? { mcpServers: servers } : {}),
     ...(skills !== undefined ? { skills } : {}),
-    ...(promptTemplates !== undefined ? { promptTemplates } : {}),
-    ...(subagents !== undefined ? { subagents } : {}),
   };
   // An object with nothing readable in it is not a report.
   return Object.keys(inventory).length > 0 ? inventory : null;
@@ -1239,75 +966,6 @@ export function isWorkerSendResult(value: unknown): value is WorkerSendResult {
     value.accepted === true &&
     typeof value.requestId === 'string' &&
     value.requestId.trim().length > 0
-  );
-}
-
-export function isWorkerUtilityStartPayload(value: unknown): value is WorkerUtilityStartPayload {
-  if (!isRecord(value)) return false;
-  if (
-    !nonEmptyString(value.operationId) ||
-    !nonEmptyString(value.cwd) ||
-    !nonEmptyString(value.prompt) ||
-    !Number.isSafeInteger(value.timeoutMs) ||
-    Number(value.timeoutMs) < 1 ||
-    Number(value.timeoutMs) > 10 * 60_000
-  ) {
-    return false;
-  }
-  if (value.model !== undefined && !nonEmptyString(value.model)) return false;
-  return value.effort === undefined || isWorkerEffort(value.effort);
-}
-
-export function isWorkerUtilityStartResult(value: unknown): value is WorkerUtilityStartResult {
-  return isRecord(value) && value.accepted === true && nonEmptyString(value.operationId);
-}
-
-export function isWorkerUtilityCancelPayload(value: unknown): value is WorkerUtilityCancelPayload {
-  return (
-    isRecord(value) &&
-    nonEmptyString(value.operationId) &&
-    (value.reason === 'user' || value.reason === 'timeout' || value.reason === 'dispose')
-  );
-}
-
-export function isWorkerUtilityCancelResult(value: unknown): value is WorkerUtilityCancelResult {
-  return isRecord(value) && typeof value.cancelled === 'boolean';
-}
-
-export function isWorkerUtilityDeltaPayload(value: unknown): value is WorkerUtilityDeltaPayload {
-  return isRecord(value) && nonEmptyString(value.operationId) && typeof value.delta === 'string';
-}
-
-export function isWorkerUtilityTerminalPayload(
-  value: unknown
-): value is WorkerUtilityTerminalPayload {
-  if (
-    !isRecord(value) ||
-    !nonEmptyString(value.operationId) ||
-    (value.state !== 'completed' && value.state !== 'cancelled' && value.state !== 'failed') ||
-    typeof value.text !== 'string'
-  ) {
-    return false;
-  }
-  return (
-    (value.model === undefined || nonEmptyString(value.model)) &&
-    (value.error === undefined || typeof value.error === 'string')
-  );
-}
-
-export function isWorkerUtilityDeltaEvent(value: unknown): value is WorkerUtilityDeltaEvent {
-  return (
-    isWorkerRpcEvent(value) &&
-    value.type === 'utility.delta' &&
-    isWorkerUtilityDeltaPayload(value.payload)
-  );
-}
-
-export function isWorkerUtilityTerminalEvent(value: unknown): value is WorkerUtilityTerminalEvent {
-  return (
-    isWorkerRpcEvent(value) &&
-    value.type === 'utility.terminal' &&
-    isWorkerUtilityTerminalPayload(value.payload)
   );
 }
 
@@ -1584,25 +1242,6 @@ export function isWorkerRewindResult(value: unknown): value is WorkerRewindResul
   );
 }
 
-export function isWorkerReloadPayload(value: unknown): value is WorkerReloadPayload {
-  return (
-    isLogicalSessionPayload(value) &&
-    typeof value.sessionFile === 'string' &&
-    value.sessionFile.trim().length > 0
-  );
-}
-
-export function isWorkerReloadResult(value: unknown): value is WorkerReloadResult {
-  return (
-    isRecord(value) &&
-    typeof value.logicalSessionId === 'string' &&
-    typeof value.sessionFile === 'string' &&
-    typeof value.workspacePath === 'string' &&
-    isPiLeafCheckpoint(value.leaf) &&
-    isWorkerHistoryResult(value.history)
-  );
-}
-
 export function isWorkerForkPayload(value: unknown): value is WorkerForkPayload {
   return (
     isLogicalSessionPayload(value) &&
@@ -1625,77 +1264,6 @@ export function isWorkerForkResult(value: unknown): value is WorkerForkResult {
     isPiLeafCheckpoint(value.leaf) &&
     isWorkerHistoryResult(value.history)
   );
-}
-
-export function isWorkerImportResult(value: unknown): value is WorkerImportConversationResult {
-  return (
-    isRecord(value) &&
-    nonEmptyString(value.logicalSessionId) &&
-    nonEmptyString(value.piSessionId) &&
-    nonEmptyString(value.workspacePath) &&
-    nonEmptyString(value.stagedSessionFile) &&
-    nonEmptyString(value.finalSessionFile) &&
-    isPiLeafCheckpoint(value.leaf) &&
-    isWorkerHistoryResult(value.history)
-  );
-}
-
-export function isWorkerInspectImportedSessionPayload(
-  value: unknown
-): value is WorkerInspectImportedSessionPayload {
-  return (
-    isLogicalSessionPayload(value) &&
-    nonEmptyString(value.workspacePath) &&
-    // import-catalog-07: see the matching note on isWorkerImportConversationPayload.
-    isLegacyImportPathSegment(value.targetPiSessionId)
-  );
-}
-
-export function isWorkerInspectImportedSessionResult(
-  value: unknown
-): value is WorkerInspectImportedSessionResult {
-  return (
-    isRecord(value) && Array.isArray(value.sessionFiles) && value.sessionFiles.every(nonEmptyString)
-  );
-}
-
-export function isWorkerReconcileImportedSessionPayload(
-  value: unknown
-): value is WorkerReconcileImportedSessionPayload {
-  return (
-    isLogicalSessionPayload(value) &&
-    nonEmptyString(value.workspacePath) &&
-    // import-catalog-07: see the matching note on isWorkerImportConversationPayload.
-    isLegacyImportPathSegment(value.targetPiSessionId)
-  );
-}
-
-export function isWorkerReconcileImportedSessionResult(
-  value: unknown
-): value is WorkerReconcileImportedSessionResult {
-  return (
-    isRecord(value) &&
-    Number.isSafeInteger(value.removedFiles) &&
-    Number(value.removedFiles) >= 0 &&
-    Number.isSafeInteger(value.remainingFiles) &&
-    Number(value.remainingFiles) >= 0
-  );
-}
-
-export function isWorkerDiscardImportedSessionPayload(
-  value: unknown
-): value is WorkerDiscardImportedSessionPayload {
-  return (
-    isLogicalSessionPayload(value) &&
-    typeof value.sessionFile === 'string' &&
-    value.sessionFile.trim().length > 0
-  );
-}
-
-export function isWorkerDiscardImportedSessionResult(
-  value: unknown
-): value is WorkerDiscardImportedSessionResult {
-  return isRecord(value) && typeof value.discarded === 'boolean';
 }
 
 export function isWorkerDiscardForkPayload(value: unknown): value is WorkerDiscardForkPayload {
@@ -1840,10 +1408,6 @@ export function isWorkerSetPermissionTierResult(
 
 export function isWorkerDisposeResult(value: unknown): value is WorkerDisposeResult {
   return isRecord(value) && value.disposed === true;
-}
-
-function nonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

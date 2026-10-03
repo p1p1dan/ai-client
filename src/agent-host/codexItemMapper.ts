@@ -12,8 +12,8 @@ import type { HistoryBlock } from '../shared/types/sessionHistory.ts';
  * ## Why a pure function and not a method on the normalizer
  *
  * S2 §3 (slice 5b) says the history replay path and the live path must share
- * ONE item mapper. A live-only projection would be re-implemented by
- * `codexHistoryReader`, and the two copies would drift exactly where it is most
+ * ONE item mapper. A live-only projection would be re-implemented by the
+ * history reader, and the two copies would drift exactly where it is most
  * expensive: a resumed session rendering the same turn differently from the way
  * the user watched it happen. Everything stateful (message envelopes, block
  * ordering, streaming deltas) lives in `codexNormalizer.ts`; everything that is
