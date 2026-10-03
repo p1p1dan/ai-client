@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-// Relative, not `@shared/…`: the agent-host tsconfig has no path aliases — the
-// Host is compiled on its own and must resolve without the renderer's mapping.
-import { APP_STATE_DIR } from '../../shared/defaultPaths.ts';
+// Relative, not `@shared/…`: moved from src/agent-host/__tests__ (dsh-rebase
+// P1-12 step 3) together with the table, and kept free of the alias like the
+// rest of the pure permissions library.
+import { APP_STATE_DIR } from '../../defaultPaths.ts';
 import {
   AICLIENT_DEFAULT_PERMISSION_POLICY as POLICY,
   serializeDefaultPermissionPolicy,

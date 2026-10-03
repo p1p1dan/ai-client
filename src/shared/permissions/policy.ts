@@ -2,7 +2,6 @@
 
 import { homedir } from 'node:os';
 import { basename, join, relative, resolve } from 'node:path';
-import { AICLIENT_DEFAULT_PERMISSION_POLICY } from '../../agent-host/permissionPolicy.mjs';
 import {
   isJsonObject,
   mergePermissionScopes,
@@ -13,6 +12,7 @@ import {
   parsePermissionConfig,
 } from '../piPermissionPolicy.ts';
 import { createPermissionError, errorCode, type PermissionErrorFactory } from './errors.ts';
+import { AICLIENT_DEFAULT_PERMISSION_POLICY } from './permissionPolicy.mjs';
 
 export interface RuntimePermissionPolicy {
   config: PiPermissionConfig;
@@ -70,7 +70,7 @@ export function bundledPolicyScope(): PolicyScope {
  * loaded, whatever `settingSources` says" is: the scope below is built before
  * the switch is consulted at all. "Highest priority" is NOT, because
  * `mergePermissionScopes` is last-wins and the shipped policy documents the
- * opposite order in as many words — `agent-host/permissionPolicy.mjs` says
+ * opposite order in as many words — `permissionPolicy.mjs` says
  * "bundled defaults < user / managed agentDir config < project .pi config" and "the user always
  * wins", which is D-Q9 from 2026-08-29. Moving `bundled` to the end would let
  * the shipped table delete every rule a user wrote, which is a different

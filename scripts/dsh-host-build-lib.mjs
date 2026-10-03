@@ -117,14 +117,10 @@ export const BRIDGE_ENTRIES = [
     entry: 'permissions/plugin.ts',
     out: 'bundle/lib/permissions.js',
     row: 'aiclient-permissions',
-    // The pure library (src/shared/permissions), the bundled policy table it
-    // reads, and the loop guard's import-free constants (decision 081 rule 2).
-    inputs: [
-      'src/dsh-host/permissions/',
-      'src/shared/',
-      'src/agent-host/permissionPolicy.mjs',
-      'src/dsh-host/loopGuard/constants.ts',
-    ],
+    // The pure library (src/shared/permissions, which since dsh-rebase P1-12
+    // step 3 also holds the bundled policy table it reads) and the loop
+    // guard's import-free constants (decision 081 rule 2).
+    inputs: ['src/dsh-host/permissions/', 'src/shared/', 'src/dsh-host/loopGuard/constants.ts'],
     // Loaded on the first bash call; its wasm and the bash grammar's resolve beside it.
     externals: ['web-tree-sitter'],
   },

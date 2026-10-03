@@ -2,8 +2,8 @@
 
 import { homedir } from 'node:os';
 import { posix, win32 } from 'node:path';
-import { AICLIENT_DEFAULT_PERMISSION_POLICY } from '../../agent-host/permissionPolicy.mjs';
 import type { PermissionAction } from './gate.ts';
+import { AICLIENT_DEFAULT_PERMISSION_POLICY } from './permissionPolicy.mjs';
 import { normalizeWindowsPathForm } from './windowsPaths.ts';
 
 /**

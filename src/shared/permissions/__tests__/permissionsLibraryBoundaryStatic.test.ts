@@ -10,9 +10,10 @@ import { describe, expect, it } from 'vitest';
  * into either of them: no `src/runtime`, no `src/dsh-host`, no `cordis`, no
  * `web-tree-sitter` (the parser is injected), and no Node API beyond path and
  * os algebra — the filesystem, canonical resolution and the clock are injected
- * by the host. The one file outside `src/shared` it may load is the bundled
- * policy table, `src/agent-host/permissionPolicy.mjs`, which is plain data and
- * the single source both hosts must judge against.
+ * by the host. The bundled policy table, `permissionPolicy.mjs`, is the
+ * single source both hosts must judge against; dsh-rebase P1-12 step 3 moved
+ * it in from `src/agent-host/` (decision 041), and it is the library's only
+ * `.mjs`: plain data that imports nothing.
  *
  * Checked on VALUE imports transitively, because that is what a host actually
  * loads or bundles; type-only imports are erased, so for those only the
@@ -23,7 +24,7 @@ const LIBRARY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const SHARED = path.dirname(LIBRARY);
 const SRC = path.dirname(SHARED);
 const REPO = path.dirname(SRC);
-const BUNDLED_POLICY = path.join(SRC, 'agent-host', 'permissionPolicy.mjs');
+const BUNDLED_POLICY = path.join(LIBRARY, 'permissionPolicy.mjs');
 const NODE_BUILTINS = new Set(['node:os', 'node:path']);
 /** Named so a failure says what was reached, not only that something was. */
 const FORBIDDEN = /(^|[\\/])(runtime|dsh-host)([\\/]|$)|^cordis$|tree-sitter|^@deepseek-ai\//;
@@ -61,7 +62,7 @@ function resolveRelative(from: string, specifier: string): string | undefined {
 }
 
 function allowedTarget(file: string): boolean {
-  return file === BUNDLED_POLICY || file.startsWith(`${SHARED}${path.sep}`);
+  return file.startsWith(`${SHARED}${path.sep}`);
 }
 
 const libraryFiles = readdirSync(LIBRARY)
@@ -85,7 +86,20 @@ describe('the shared permission library', () => {
     );
   });
 
-  it('imports only Node path/os, src/shared and the bundled policy table', () => {
+  /**
+   * P1-12 step 3: the table moved in from `src/agent-host/`. It is the one
+   * `.mjs` here, and it has to stay import-free plain data: both hosts and the
+   * settings page read it, and a policy that grew an import would drag that
+   * dependency into every one of them.
+   */
+  it('holds the bundled policy table as its only .mjs, free of imports', () => {
+    const modules = readdirSync(LIBRARY).filter((name) => name.endsWith('.mjs'));
+    expect(modules).toEqual(['permissionPolicy.mjs']);
+    expect(importsOf(BUNDLED_POLICY)).toEqual([]);
+    expect(existsSync(path.join(SRC, 'agent-host', 'permissionPolicy.mjs'))).toBe(false);
+  });
+
+  it('imports only Node path/os and src/shared', () => {
     const offenders: string[] = [];
     for (const file of libraryFiles) {
       for (const { specifier } of importsOf(file)) {

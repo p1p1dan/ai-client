@@ -3,11 +3,11 @@
  *
  * ## Where this ends up, and why there
  *
- * The build writes it to `<bundled plugin>/config.json` inside the artifact.
- * AiClient's pinned-package patch exposes that file to PermissionManager as an
- * explicit `bundled` scope below global/project/agent policy. Upstream 27.0.1's
- * legacy runtime-config loader alone does NOT enforce its `permission` block;
- * `scripts/patch-pi-permission-system.mjs` closes that integration gap.
+ * Nowhere on disk. The DSH permission row and the settings page read it in
+ * memory, through `bundledPolicyScope()` in `policy.ts`, as the `bundled` scope
+ * below global/project policy (dsh-rebase P1-12, decisions 041 and 147). Until
+ * then this file lived in `src/agent-host/` and the worker build wrote it into
+ * the pinned pi-permission-system plugin's `config.json`.
  *
  *   随包默认 (this file)  <  用户 / 受管 agentDir 配置  <  项目 `.pi/` 配置
  *
@@ -15,21 +15,19 @@
  *
  *  - **We never write the user's `~/.pi`.** That directory belongs to their own
  *    `pi` CLI; editing it to make our app behave would change a tool we do not
- *    own. This is the same red line stated in `permissionPlugin.ts`.
+ *    own. 1.0.x's permission plugin loader stated the same red line.
  *  - **One source, not two.** Writing a copy into the managed agentDir as well
  *    would create a second place for the policy to live and a sync problem to
  *    get wrong later — the T-CM1 double-cache shape.
  *  - **The user always wins.** Anything they put in their own agentDir config
  *    overrides this wholesale, per surface.
  *
- * The plugin's runtime-knob loader still labels that file LEGACY and may emit a
- * move-it warning, but policy enforcement no longer depends on that loader.
- *
  * ## Why `.mjs` and not `.json`
  *
  * A policy is a series of judgement calls and each one needs its reason next to
- * it. JSON cannot carry that. The build script and the tests both import this
- * module, so there is still exactly one source of truth.
+ * it. JSON cannot carry that. The permissions library and the tests both import
+ * this module, so there is still exactly one source of truth. It stays plain
+ * data that imports nothing (`permissionsLibraryBoundaryStatic.test.ts`).
  *
  * ## The ordering rule that makes or breaks every map below
  *
@@ -104,8 +102,9 @@ export const AICLIENT_DEFAULT_PERMISSION_POLICY = {
   // line named a link registered by an inline pi extension that P6-5 retired
   // along with the legacy engine, so the shipped policy was advertising a
   // chain nothing could join. The tiers it used to implement are now decided
-  // in `src/runtime/plugins/permissions/`, which does not consult a chain at
-  // all; deny rules were never chain-dependent and are unaffected.
+  // by the gate in `src/shared/permissions/` (moved from the self-owned
+  // runtime, decision 041), which does not consult a chain at all; deny rules
+  // were never chain-dependent and are unaffected.
 
   permission: {
     // Universal fallback for any surface with no rule of its own — including

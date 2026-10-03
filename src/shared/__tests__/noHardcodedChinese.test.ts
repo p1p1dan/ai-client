@@ -52,8 +52,9 @@ import { describe, expect, it } from 'vitest';
  * looks closed.
  *
  * dsh-rebase P1-12 step 3 (decision 147) deleted `src/runtime` and the native
- * worker half of `src/agent-host`, so the `runtime` root is gone. What is left
- * of `agent-host` stays in scope until step 4 removes the directory.
+ * worker half of `src/agent-host`, so the `runtime` root is gone and the
+ * policy table is walked as `shared/permissions/permissionPolicy.mjs`. What
+ * is left of `agent-host` stays in scope until step 4 removes the directory.
  */
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -69,12 +70,11 @@ const EXTENSIONS = new Set(['.ts', '.tsx', '.mjs', '.mts']);
 const MIN_FILES_PER_ROOT: Record<string, number> = {
   renderer: 300,
   shared: 50,
-  // P1-12 step 3 left six walked files here (the RPC server and its errors,
-  // stderr redaction, the Codex item mapper, and the policy table with its
-  // declaration until they move into the permissions library). These are
-  // `toBeGreaterThan` tripwires for "did the walker stop walking", kept one
-  // below the real count so the next deletion is a conscious edit.
-  'agent-host': 5,
+  // P1-12 step 3 left four walked files here (the RPC server and its errors,
+  // stderr redaction, the Codex item mapper). These are `toBeGreaterThan`
+  // tripwires for "did the walker stop walking", kept one below the real
+  // count so the next deletion is a conscious edit.
+  'agent-host': 3,
 };
 
 /**
@@ -165,9 +165,10 @@ describe('UI copy stays in the dictionary', () => {
   });
 
   it('reaches the extensions the shipped roots are actually written in', () => {
-    // T023: `.mjs` was outside the scan while `agent-host/permissionPolicy.mjs`
-    // shipped in the artifact. Naming the files pins that the extension list
-    // and the walker agree, rather than trusting the set literal alone.
+    // T023: `.mjs` was outside the scan while the shipped policy table (now
+    // `shared/permissions/permissionPolicy.mjs`) was one. Naming the files
+    // pins that the extension list and the walker agree, rather than trusting
+    // the set literal alone.
     const scanned = new Set(files.map((file) => path.extname(file)));
     expect([...scanned].sort()).toEqual(['.mjs', '.mts', '.ts', '.tsx']);
   });

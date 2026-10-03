@@ -828,7 +828,7 @@ describe('bridge bundles (decision 011)', () => {
         inputs: {
           'src/dsh-host/permissions/plugin.ts': {},
           'src/shared/permissions/gate.ts': {},
-          'src/agent-host/permissionPolicy.mjs': {},
+          'src/shared/permissions/permissionPolicy.mjs': {},
           'src/dsh-host/bridge/plugin.ts': {},
         },
         outputs: {

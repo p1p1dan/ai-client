@@ -161,22 +161,22 @@ describe('APP_STATE_DIR is the single source of truth for the app state dir', ()
 
   /**
    * A POLICY PATTERN, not a path this code resolves — D11's `path` deny that
-   * stops an agent reading the credential store we injected for it. It cannot
-   * import the constant: the module is `.mjs` so the build script can import it
-   * (a `.mjs` cannot import a `.ts`), and that is the whole reason it exists in
-   * that form.
+   * stops an agent reading the credential store we injected for it. It does
+   * not import the constant: the table is import-free plain data
+   * (`permissionsLibraryBoundaryStatic.test.ts`), which every host and the
+   * settings page read as is. It moved here from `src/agent-host/` in
+   * dsh-rebase P1-12 step 3.
    *
    * Listed rather than skipped, on the same rule as DISPLAY_TEXT above — but
    * the forcing function for this one is stronger and lives elsewhere:
-   * `agent-host/__tests__/permissionPolicy.test.ts` asserts the pattern is
+   * `permissions/__tests__/permissionPolicy.test.ts` asserts the pattern is
    * built from `APP_STATE_DIR`, so a rename that misses this file goes red
    * there rather than silently unprotecting the vault.
+   *
+   * The self-owned runtime's instruction loader had the same exemption for
+   * `~/.pilab/AGENTS.md`; it went with `src/runtime` in the same step.
    */
-  const POLICY_PATTERN = [path.join('src', 'agent-host', 'permissionPolicy.mjs')];
-
-  // The self-owned runtime's instruction loader had the same exemption for
-  // `~/.pilab/AGENTS.md` (T059); it went with `src/runtime` in dsh-rebase
-  // P1-12 step 3 (decision 147).
+  const POLICY_PATTERN = [path.join('src', 'shared', 'permissions', 'permissionPolicy.mjs')];
 
   it('appears in no source file but its own definition', () => {
     expect(scanFor(APP_STATE_DIR, [DEFINITION, ...DISPLAY_TEXT, ...POLICY_PATTERN])).toEqual([]);
