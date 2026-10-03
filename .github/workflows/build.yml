@@ -32,6 +32,10 @@ jobs:
     # took 51 s on the 2-core dev box; the node download, one ~30 MB archive
     # cached after the first run, is an estimate), times 3 is +4.5, and the
     # rule above rounds up to the next 10. Re-derive from the first green run.
+    # dsh-rebase P1-12 step 3 (decision 147) took out the agent-host and
+    # runtime installs, `typecheck:runtime` and the two runtime smokes (about
+    # 20 s on run 36651305647) and the runtime's 70 test files from `test`:
+    # an estimated 5 min gate still rounds to 20, so the value stays.
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -43,8 +47,9 @@ jobs:
           version: 10.26.2
 
       # 24 across every job (user decision, 2026-08-21), matching
-      # src/agent-host/package.json engines (>=24) — the version that actually
-      # runs the Host. It started here out of necessity: the behaviour-lock tests
+      # src/dsh-host/package.json engines (>=24) — the version the bundled node
+      # that runs the DSH host is pinned to (src/agent-host/package.json said
+      # the same until dsh-rebase P1-12 step 3). It started here out of necessity: the behaviour-lock tests
       # spawn the real entry with `node --experimental-strip-types`, a flag that
       # only exists from Node 22.6, so on Node 20 the child died with exit 9
       # before emitting anything and every test in protocolErrors.test.ts failed
@@ -68,18 +73,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # The Pi utility worker does not ship legacy CLI platform payloads.
-      - name: Install agent-host dependencies
-        run: npm ci --omit=optional
-        working-directory: src/agent-host
-
-      # The self-owned runtime (ARD D1-D10) is its own npm package with its own
-      # pins (cordis + pi-agent-core + pi-ai). Required before `test` as well as
-      # before `typecheck:runtime`: root vitest collects
-      # `src/runtime/__tests__/**`, which import those packages.
-      - name: Install runtime dependencies
-        run: npm ci --omit=optional --ignore-scripts
-        working-directory: src/runtime
+      # dsh-rebase P1-12 step 3 (decision 147): no agent-host or runtime
+      # install. The native worker's package and the self-owned runtime are
+      # deleted; what is left of src/agent-host needs only the root packages.
 
       # The DSH host (dsh-rebase P1) is its own npm package, pinned by its
       # committed lockfile. Never --omit=optional here or in the packaging build:
@@ -102,22 +98,19 @@ jobs:
 
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/8 — typecheck
+      - name: Gate 1/6 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/8 — typecheck:agent-host
+      - name: Gate 2/6 — typecheck:agent-host
         run: pnpm typecheck:agent-host
 
-      - name: Gate 3/8 — typecheck:runtime
-        run: pnpm typecheck:runtime
-
-      - name: Gate 4/8 — typecheck:dsh-host
+      - name: Gate 3/6 — typecheck:dsh-host
         run: pnpm typecheck:dsh-host
 
-      - name: Gate 5/8 — lint
+      - name: Gate 4/6 — lint
         run: pnpm lint
 
-      - name: Gate 6/8 — test
+      - name: Gate 5/6 — test
         run: pnpm test
 
       # dsh-rebase P1-4e (decisions 100 and 133): drive the product bridge
@@ -139,17 +132,10 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      # ARD risk R1's offline half: proves the Cordis graph comes up and that
-      # `Agent` drives a turn to completion against pi-ai's own faux provider.
-      # No credentials, no network — the live lane is run by hand on an install
-      # that has logged in.
-      - name: Gate 7/8 — runtime smoke (offline)
-        run: pnpm smoke:runtime
-
-      - name: Runtime tools smoke (offline)
-        run: pnpm smoke:runtime-tools
-
-      - name: Gate 8/8 — release metadata
+      # The self-owned runtime's two offline smokes (ARD risk R1) went with
+      # src/runtime in dsh-rebase P1-12 step 3; the DSH bridge recording above
+      # is the gate's end-to-end check now.
+      - name: Gate 6/6 — release metadata
         run: pnpm verify:release
 
   build-app:

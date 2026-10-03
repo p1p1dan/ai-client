@@ -279,6 +279,35 @@ describe('build.yml gate wiring (C5)', () => {
     }
   });
 
+  /**
+   * dsh-rebase P1-12 step 3 (decision 147): the self-owned runtime and the
+   * native worker's package are deleted, so the gate neither installs them nor
+   * runs their type check or smokes, and the numbering counts six gates.
+   */
+  it('runs no gate of the retired runtime or native worker', () => {
+    const steps = jobs.gate.steps;
+    const runs = steps.map((s) => s.run ?? '').join('\n');
+    for (const retired of ['typecheck:runtime', 'smoke:runtime', 'smoke:runtime-tools']) {
+      expect(runs, retired).not.toContain(retired);
+    }
+    const dirs = steps.map((s) => s['working-directory']).filter(Boolean);
+    expect(dirs).not.toContain('src/agent-host');
+    expect(dirs).not.toContain('src/runtime');
+    const numbered = steps.map((s) => s.name).filter((name) => /^Gate \d+\/\d+/.test(name ?? ''));
+    expect(numbered.map((name) => name.match(/^Gate (\d+\/\d+)/)[1])).toEqual([
+      '1/6',
+      '2/6',
+      '3/6',
+      '4/6',
+      '5/6',
+      '6/6',
+    ]);
+    const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
+    for (const retired of ['smoke:runtime', 'smoke:runtime-tools', 'typecheck:runtime']) {
+      expect(pkg.scripts, retired).not.toHaveProperty(retired);
+    }
+  });
+
   it('blocks both packaging entry points on the gate', () => {
     // Two edges, and BOTH are load-bearing: build-remote-runtime-linux has no
     // path through build-app, so without its own edge a red gate still ships
@@ -463,8 +492,8 @@ describe('local packaging is host-platform only (#9, user decision 2026-08-21)',
   /**
    * dsh-rebase P1-12 step 1 (decision 147): no packaging job installs the
    * native worker's or the self-owned runtime's packages, or builds the worker
-   * artifact, any more. The gate still installs both for the type checks and
-   * unit tests until step 3 deletes their sources.
+   * artifact, any more. Step 3 deleted their sources, and the gate's installs
+   * went with them (`runs no gate of the retired runtime or native worker`).
    */
   it('builds and installs nothing of the native worker on any packaging job', () => {
     for (const job of ['build-windows', 'build-linux', 'build-macos']) {

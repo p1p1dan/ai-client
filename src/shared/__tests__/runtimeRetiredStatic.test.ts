@@ -13,9 +13,11 @@ import { stripComments } from '../../renderer/components/chat/__tests__/stripCom
  * readiness check and the permission page's bundled scope no longer read
  * its artifact, and packaging neither builds nor copies `resources/agent-host`.
  *
- * Step 3 adds the rest: `src/runtime` and `agent-host/worker.ts` gone, no
- * import of `runtime/` under `src` or `scripts`, no pi packages in the root
- * dependencies, no `src/runtime` in build.yml.
+ * Step 3, pinned below: `src/runtime`, `agent-host/worker.ts` and the worker's
+ * npm package are gone; nothing under `src` or `scripts` imports `runtime/` or
+ * the retired pi packages; the root manifest neither depends on them nor runs
+ * the runtime's scripts; build.yml installs and gates none of it; and
+ * verify-packaged-app reads app.asar to prove none of it shipped.
  *
  * Code only where it is code: comments are blanked first, so the prose that
  * explains a removal (like this one) cannot fail the scan.
@@ -128,5 +130,159 @@ describe('P1-12 step 1 · packaging neither builds nor ships the native worker',
     expect(verify).toContain('checkNoRetiredResources(resourceDir, failures);');
     expect(verify).not.toContain('runWorkerSmoke');
     expect(verify).not.toContain('--skip-smoke');
+  });
+});
+
+/** Every code file under `src` and `scripts`, tests included, `node_modules` excluded. */
+function codeFiles(dir: string, found: string[] = []): string[] {
+  for (const name of readdirSync(dir)) {
+    if (name === 'node_modules') continue;
+    const entry = path.join(dir, name);
+    if (statSync(entry).isDirectory()) codeFiles(entry, found);
+    else if (/\.(ts|tsx|mts|cts|mjs|cjs|js)$/.test(name)) found.push(entry);
+  }
+  return found;
+}
+
+/** Module specifiers of import / export-from / dynamic import / require in code. */
+function specifiersIn(source: string): string[] {
+  const found: string[] = [];
+  for (const pattern of [
+    /\bfrom\s*(['"])([^'"\n]+)\1/g,
+    /(?:^|[\s;])import\s*(['"])([^'"\n]+)\1/g,
+    /\b(?:import|require)\s*\(\s*(['"])([^'"\n]+)\1\s*\)/g,
+  ]) {
+    for (const match of source.matchAll(pattern)) found.push(match[2]);
+  }
+  return found;
+}
+
+/** The same, for a file on disk with its comments blanked. */
+function specifiers(file: string): string[] {
+  return specifiersIn(code(file));
+}
+
+const RUNTIME_DIR = path.join(SRC, 'runtime');
+const RETIRED_PACKAGES = [
+  '@earendil-works/pi-coding-agent',
+  '@earendil-works/pi-agent-core',
+  '@gotgenes/pi-permission-system',
+];
+
+describe('P1-12 step 3 · the runtime and the native worker are deleted', () => {
+  const files = ['src', 'scripts'].flatMap((root) => codeFiles(path.join(REPO, root)));
+
+  it('walks src and scripts (a walker that found nothing would pass everything)', () => {
+    expect(files.length).toBeGreaterThan(1000);
+  });
+
+  it('leaves no runtime directory, worker entry or worker package behind', () => {
+    for (const deleted of [
+      'src/runtime',
+      'src/agent-host/worker.ts',
+      'src/agent-host/package.json',
+      'src/agent-host/package-lock.json',
+      'src/agent-host/bundledPlugins.mjs',
+      'src/agent-host/permissionPolicy.mjs',
+      'scripts/patch-pi-permission-system.mjs',
+      'scripts/gen-legacy-pi-fixtures.ts',
+      'scripts/runtime-baseline/run-native.mjs',
+    ]) {
+      expect(existsSync(path.join(REPO, deleted)), deleted).toBe(false);
+    }
+  });
+
+  it('imports nothing from runtime/ anywhere under src or scripts', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      for (const specifier of specifiers(file)) {
+        if (!specifier.startsWith('.')) continue;
+        const target = path.resolve(path.dirname(file), specifier);
+        if (target === RUNTIME_DIR || target.startsWith(`${RUNTIME_DIR}${path.sep}`)) {
+          offenders.push(`${repoRelative(file)} -> ${specifier}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * Merged from `agent-host/__tests__/piCliIsBundledToolOnly.test.ts` (P6-2,
+   * P1-11), deleted with the worker package: the app imports none of the pi
+   * packages as a library, deep imports included, and now no longer has them
+   * to import.
+   */
+  it('imports none of the retired pi packages, deep imports included', () => {
+    const offenders: string[] = [];
+    for (const file of files) {
+      for (const specifier of specifiers(file)) {
+        if (
+          RETIRED_PACKAGES.some((name) => specifier === name || specifier.startsWith(`${name}/`))
+        ) {
+          offenders.push(`${repoRelative(file)} -> ${specifier}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+    // The matcher itself, so an empty answer above means something.
+    expect(
+      specifiersIn(
+        [
+          `import { S } from '${RETIRED_PACKAGES[0]}/dist/core/session-manager.js';`,
+          `const core = await import('${RETIRED_PACKAGES[1]}');`,
+          `const plugin = require('${RETIRED_PACKAGES[2]}');`,
+          "import '../runtime/index.ts';",
+        ].join('\n')
+      ).sort()
+    ).toEqual(
+      [
+        `${RETIRED_PACKAGES[0]}/dist/core/session-manager.js`,
+        RETIRED_PACKAGES[1],
+        RETIRED_PACKAGES[2],
+        '../runtime/index.ts',
+      ].sort()
+    );
+  });
+
+  it('drops the pi packages and the runtime scripts from the root manifest', () => {
+    const pkg = JSON.parse(text('package.json')) as {
+      scripts: Record<string, string>;
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    for (const name of RETIRED_PACKAGES) expect(deps, name).not.toHaveProperty(name);
+    for (const script of ['typecheck:runtime', 'smoke:runtime', 'smoke:runtime-tools']) {
+      expect(pkg.scripts, script).not.toHaveProperty(script);
+    }
+    expect(Object.values(pkg.scripts).join('\n')).not.toContain('src/runtime');
+    const lock = text('pnpm-lock.yaml');
+    for (const name of RETIRED_PACKAGES) expect(lock, name).not.toContain(`'${name}@`);
+    expect(text('tsconfig.json')).not.toContain('"src/runtime');
+  });
+
+  it('build.yml installs, checks and smokes nothing of the runtime', () => {
+    const workflow = text('.github/workflows/build.yml');
+    const steps = workflow
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .join('\n');
+    expect(steps).not.toContain('src/runtime');
+    expect(steps).not.toContain('working-directory: src/agent-host');
+    for (const retired of ['typecheck:runtime', 'smoke:runtime', 'build-agent-host']) {
+      expect(steps, retired).not.toContain(retired);
+    }
+  });
+
+  it('verify-packaged-app reads app.asar for retired packages and runtime code', () => {
+    const verify = code(path.join(REPO, 'scripts/verify-packaged-app.mjs'));
+    expect(verify).toContain('checkAppAsar(resourceDir, failures);');
+    expect(verify).toContain("from './asar-inspect.mjs'");
+    for (const name of [...RETIRED_PACKAGES, "'cordis'", 'NativeWorkerRuntime']) {
+      expect(verify, name).toContain(name.startsWith("'") ? name : `'${name}'`);
+    }
+    // Its own header parser, not the transitive `@electron/asar`.
+    expect(verify).not.toContain('@electron/asar');
+    expect(code(path.join(REPO, 'scripts/asar-inspect.mjs'))).not.toContain('@electron/asar');
   });
 });

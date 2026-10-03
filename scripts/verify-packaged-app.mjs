@@ -6,6 +6,12 @@
  * dsh-rebase P1-12 step 1 (decision 147): the native worker artifact is no
  * longer built or shipped, so its structure, size and Electron bootstrap smoke
  * are gone, and a package that still carries `resources/agent-host` fails.
+ *
+ * Step 3: the self-owned runtime and the root pi dependencies are deleted too.
+ * electron-builder ships every root `dependencies` entry inside app.asar, so
+ * the archive is read (its own header, `asar-inspect.mjs`) and fails when it
+ * still carries one of the retired packages, or when Main's bundle still
+ * holds one of the runtime's marker identifiers.
  */
 
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -13,6 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { findAsarPackages, readAsarFile, readAsarHeader } from './asar-inspect.mjs';
 import { verifyDshArtifact } from './dsh-host-build-lib.mjs';
 import { NODE_RUNTIME_VERSION, nodeRuntimePinFor } from './node-runtime-pin.mjs';
 import { evaluateDshHostArtifact, formatBytes, topDirectories } from './packaging-budget.mjs';
@@ -21,6 +28,30 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 
 /** Resource directories the retired native worker used to occupy. */
 const RETIRED_RESOURCE_DIRS = ['agent-host'];
+
+/**
+ * Packages the retired runtime and native worker brought into app.asar. The
+ * DSH host's own `@deepseek-ai/cordis` lives in resources/dsh-host and is not
+ * affected; the unscoped `cordis` was the self-owned runtime's.
+ */
+const RETIRED_ASAR_PACKAGES = [
+  '@earendil-works/pi-coding-agent',
+  '@earendil-works/pi-agent-core',
+  '@gotgenes/pi-permission-system',
+  'cordis',
+];
+
+/** Identifiers only the self-owned runtime defined; none may reach Main's bundle. */
+const RETIRED_MAIN_MARKERS = [
+  'NativeWorkerRuntime',
+  'RUNTIME_CONFIG_VERSION',
+  'CONTEXT_ROLLOVER_SUMMARY',
+  'DEFAULT_AGENT_LOOP_CONFIG',
+  'resolveWorkerShell',
+];
+
+/** The Main bundle inside app.asar. */
+const MAIN_BUNDLE = 'out/main/index.js';
 
 function parseArgs(argv) {
   const args = {
@@ -113,6 +144,38 @@ function checkNoRetiredResources(resourceDir, failures) {
   }
 }
 
+/** dsh-rebase P1-12 step 3: app.asar carries no retired package and Main no runtime code. */
+function checkAppAsar(resourceDir, failures) {
+  const asarPath = path.join(resourceDir, 'app.asar');
+  if (!fs.existsSync(asarPath)) return;
+  try {
+    const { header } = readAsarHeader(asarPath);
+    for (const found of findAsarPackages(header, RETIRED_ASAR_PACKAGES)) {
+      failures.push(`retired package still packaged in app.asar: ${found}`);
+    }
+    // An unpacked copy ships just the same.
+    const unpacked = `${asarPath}.unpacked`;
+    for (const name of RETIRED_ASAR_PACKAGES) {
+      const dir = path.join(unpacked, 'node_modules', ...name.split('/'));
+      if (fs.existsSync(dir)) failures.push(`retired package still packaged: ${dir}`);
+    }
+    const main = readAsarFile(asarPath, MAIN_BUNDLE);
+    if (!main) {
+      failures.push(`app.asar has no ${MAIN_BUNDLE}`);
+      return;
+    }
+    const text = main.toString('utf8');
+    for (const marker of RETIRED_MAIN_MARKERS) {
+      if (text.includes(marker))
+        failures.push(`${MAIN_BUNDLE} still carries runtime code: ${marker}`);
+    }
+  } catch (error) {
+    failures.push(
+      `cannot read app.asar: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+}
+
 /** The DSH host artifact under resources/dsh-host: structure, budget, TSD header. */
 function checkDshHost(resourceDir, failures) {
   const dshDir = path.join(resourceDir, 'dsh-host');
@@ -196,6 +259,7 @@ function main() {
   checkLegalNotices(resourceDir, failures);
 
   checkNoRetiredResources(resourceDir, failures);
+  checkAppAsar(resourceDir, failures);
   checkDshHost(resourceDir, failures);
   checkNodeRuntime(resourceDir, failures);
   const reports = [];
@@ -214,7 +278,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    '[verify-packaged-app] PASS — legal notices + no native worker + DSH host artifact + DSH smoke if it ran'
+    '[verify-packaged-app] PASS — legal notices + no native worker or runtime + DSH host artifact + DSH smoke if it ran'
   );
 }
 
