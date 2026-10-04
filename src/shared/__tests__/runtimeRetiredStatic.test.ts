@@ -171,6 +171,9 @@ const RETIRED_PACKAGES = [
 
 describe('P1-12 step 3 · the runtime and the native worker are deleted', () => {
   const files = ['src', 'scripts'].flatMap((root) => codeFiles(path.join(REPO, root)));
+  // Parsed once at collection time: two whole-tree scans inside test bodies
+  // exceeded the 5 s default timeout on a loaded CI runner.
+  const specifiersByFile = new Map(files.map((file) => [file, specifiers(file)] as const));
 
   it('walks src and scripts (a walker that found nothing would pass everything)', () => {
     expect(files.length).toBeGreaterThan(1000);
@@ -194,8 +197,8 @@ describe('P1-12 step 3 · the runtime and the native worker are deleted', () => 
 
   it('imports nothing from runtime/ anywhere under src or scripts', () => {
     const offenders: string[] = [];
-    for (const file of files) {
-      for (const specifier of specifiers(file)) {
+    for (const [file, found] of specifiersByFile) {
+      for (const specifier of found) {
         if (!specifier.startsWith('.')) continue;
         const target = path.resolve(path.dirname(file), specifier);
         if (target === RUNTIME_DIR || target.startsWith(`${RUNTIME_DIR}${path.sep}`)) {
@@ -214,8 +217,8 @@ describe('P1-12 step 3 · the runtime and the native worker are deleted', () => 
    */
   it('imports none of the retired pi packages, deep imports included', () => {
     const offenders: string[] = [];
-    for (const file of files) {
-      for (const specifier of specifiers(file)) {
+    for (const [file, found] of specifiersByFile) {
+      for (const specifier of found) {
         if (
           RETIRED_PACKAGES.some((name) => specifier === name || specifier.startsWith(`${name}/`))
         ) {
