@@ -120,7 +120,7 @@
 
 ### 第 3 步：删除 runtime、native worker 与根 pi 依赖（2026-10-03，基线 `36d1e02c`）
 
-代码提交 4 个：`fe4b9b7e`（删 runtime 与 native worker，收窄协议）、`ce47554c`（根依赖与 lockfile、agent-host 子包清单）、`6b8e7d79`（策略表进 shared）、`f874bc19`（CI 与打包检查）。`THIRD_PARTY_NOTICES.md` 与两个必需字符串已起草，按用户裁决第 4 条留在工作区待过目，未提交。以下各条都是**自主决定、待审批**。
+代码提交 4 个：`fe4b9b7e`（删 runtime 与 native worker，收窄协议）、`ce47554c`（根依赖与 lockfile、agent-host 子包清单）、`6b8e7d79`（策略表进 shared）、`f874bc19`（CI 与打包检查）。`THIRD_PARTY_NOTICES.md` 与两个必需字符串按用户裁决第 4 条先给用户过目，2026-10-03 用户同意后提交为 `30245837`。以下各条都是**自主决定、待审批**。
 
 1. **接手半成品**：上一个代理 10-01 停在「`src/runtime` 已在工作区删除、策略表三个文件原样搬进 `src/shared/permissions/`、引用没改」。核对三个搬家文件与基线逐字节相同后接着做。搬来的测试 import `../../shared/defaultPaths.ts`，在新位置会指到 `shared/shared/`，改为 `../../defaultPaths.ts`。
 2. **提交怎么拆**：

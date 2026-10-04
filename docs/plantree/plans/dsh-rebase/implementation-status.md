@@ -22,7 +22,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
   3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
-  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；下一步第 3 步（删 `src/runtime`、native worker 与根 pi 依赖，`THIRD_PARTY_NOTICES.md` 的改动提交前先给用户看）。
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI 待结果）；CI 通过后做第 4 步。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
   - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
@@ -64,6 +64,13 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-10-03 P1-12 第 3 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 3 步」，待审批），基线 `36d1e02c`：
+  - `fe4b9b7e` 删除 `src/runtime`（172 个文件）与 native worker（`worker.ts`、`piSessionTimeline / Tree / Preflight`、`permissionPlugin`、`codexHistoryReader`、`bundledPlugins` 等），worker 协议收窄（utility、`worker.import*`、`worker.reload`、bootstrap 的子代理与 TTL / 超时字段），bridge 去掉对应桩；渲染层删 native 回放测试与 5 份录制；`runtimeRetiredStatic` 补齐。
+  - `ce47554c` 根依赖删 `@earendil-works/pi-agent-core`、`pi-coding-agent`，删 `src/agent-host` 的 `package.json` 与 lockfile；`pnpm-lock.yaml` 由 `--lockfile-only` 生成，985 → 878 个包，只删不增；共享 `node_modules` 未动。
+  - `6b8e7d79` 随包策略表挪进 `src/shared/permissions/`（决策 041）；接手时修正了上个代理搬家留下的测试 import 路径错误。
+  - `f874bc19` build.yml gate 去掉 runtime / agent-host 的安装、类型检查与冒烟，编号改为 x/6；`verify-packaged-app` 新增 app.asar 反向检查（自解析 asar 头，新模块 `scripts/asar-inspect.mjs`）与 `out/main/index.js` 无 runtime 标记。
+  - `30245837` `THIRD_PARTY_NOTICES.md`：不再写随包 Pi SDK 与 CLI，保留 vendored 解码代码的 pi-agent-core 0.84.4 MIT 声明，权限库路径改为 `src/shared/permissions/`；两个校验脚本的必需字符串同步。用户 10-03 过目同意。
+  - 代理自测（最终代码 `f874bc19`）：三套 tsc、lint；全量单测分四批 9621 例全过（跳过 46 例：未开环境变量的集成 35、win32 专用 11）；Static 756 例、`src/shared/__tests__` 402 例、scripts 208 例；bridge-smoke 66 项（R10 确认）；`--check` 28 个场景 0 差异；集成 35/35；宿主产物 82.6 MiB、L1 44 项。编排者复跑三套 tsc 与 Static / Scan / Wiring。打包产物检查与 `dsh-bridge-gate` 的 `--frozen-lockfile` 交 CI。
 - 2026-10-01 P1-12 第 2 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 2 步 A / B」，待审批），只加测试、不删文件：
   - `68f6fccd` 权限用例：原 runtime 的 126 例 A 类权限用例，108 例改为直接测纯权限库（shared 64 例，需要 bash 语法树的 44 例进 dsh-host），8 例由现有 bridge 测试与 perm-* 录制覆盖，10 例 N/A（`BASH_ENV`、委派定义声明的档位、runtime 自己的工具表裁剪 / trace / 预览截断、MCP）；迁移的期望值一条没改，纯库上全过，没有判定差异。逐条映射表见 [p1-12-permission-case-map.md](evidence/p1-12-permission-case-map.md)。拆图 / drain 两例与 skills 4 例没按派工示例判 N/A 而是照迁（DSH 下同样存在），编排者认可。
   - `9061fc26` 解码链与只读回放：`sessionCodec`、`piSessionTimeline`、`piSessionTree` 三份测试（22 / 15 / 6 例）搬进 `shared/legacyPiSession/__tests__/`，用例与期望未改；`sessionReplayReader.test` 改为逐份读 legacy-pi 语料并与金样本 `history` 对拍（39 例），不再依赖 runtime。shared 与原实现没有结果差异。
@@ -282,7 +289,9 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-没有在跑的代理。下一步：派 P1-12 第 3 步（删 `src/runtime`、native worker 与根 pi 依赖；改 lockfile 只能手改 `package.json` 后跑 `pnpm install --lockfile-only`；`THIRD_PARTY_NOTICES.md` 的改动提交前先给用户看），之后推送并触发 `build.yml`。
+没有在跑的代理。P1-12 第 3 步已落地（10-01 中断的半成品已于 10-03 由新代理认领做完），`1.1.0-dsh.4` 已推送并手动触发 `build.yml`，等结果。下一步：CI 全绿后记录产物大小变化，再派第 4 步（删 `src/agent-host`、内部改名，范围见决策 147 第一节第 1 条）。CI 若失败，先查原因再修。
+
+本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
 待用户处理：
 1. 真实网关 R1～R10 已授权（决策 130），到时要用户在开发版里登录公司账号；真实数据离线迁移测试仍待授权。
