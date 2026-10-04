@@ -26,7 +26,7 @@ for (const required of [
   'Copyright (c) 2026 justhil',
   'Copyright (c) 2026 Num Scope',
   'Copyright (c) 2025 Mario Zechner',
-  '@earendil-works/pi-coding-agent',
+  '@earendil-works/pi-agent-core',
 ]) {
   if (!notices.includes(required)) failures.push(`third-party notices missing: ${required}`);
 }

@@ -70,13 +70,14 @@ SOFTWARE.
 
 ## Pi coding agent
 
-Package: `@earendil-works/pi-coding-agent` 0.84.3
+Package: `@earendil-works/pi-agent-core` 0.84.4
 
 Source: https://github.com/earendil-works/pi
 
 The Pi coding agent and its Pi packages are distributed under the MIT License.
-The npm package manifest identifies Mario Zechner as the author. AiClient
-bundles the Pi SDK and CLI as its conversation runtime.
+The npm package manifest identifies Mario Zechner as the author. AiClient no
+longer bundles the Pi SDK or CLI; it keeps the vendored code below to read and
+migrate Pi session files written by earlier versions.
 
 `src/shared/legacyPiSession/context.ts` contains a vendored subset of
 `buildSessionContext` from `@earendil-works/pi-agent-core` 0.84.4
@@ -111,13 +112,11 @@ SOFTWARE.
 ## Other bundled dependencies
 
 AiClient also distributes third-party npm dependencies declared by the root
-`package.json`, `src/agent-host/package-lock.json` and
-`src/dsh-host/package-lock.json`. Their package metadata and source
-repositories remain the authority for their respective copyright holders and
-license terms. The packaged Pi worker and the packaged DeepSeek Harness host
-preserve license files provided by their dependency packages; this consolidated
-notice supplements packages whose published archive does not include a
-standalone license file.
+`package.json` and `src/dsh-host/package-lock.json`. Their package metadata and
+source repositories remain the authority for their respective copyright holders
+and license terms. The packaged DeepSeek Harness host preserves license files
+provided by its dependency packages; this consolidated notice supplements
+packages whose published archive does not include a standalone license file.
 
 ## DeepSeek Harness host
 
@@ -228,9 +227,9 @@ licenses. The following are not, or need a note:
 
 Source: https://github.com/gotgenes/pi-packages/tree/main/packages/pi-permission-system
 
-The native runtime adapts the Bash AST inspection approach, policy scope order,
-and wildcard matching semantics. Files: `src/runtime/plugins/permissions/`.
-The old permission extension itself is not imported by the native runtime.
+AiClient's permission library adapts the Bash AST inspection approach, policy
+scope order, and wildcard matching semantics. Files: `src/shared/permissions/`.
+The permission extension itself is neither imported nor distributed.
 
 MIT License
 

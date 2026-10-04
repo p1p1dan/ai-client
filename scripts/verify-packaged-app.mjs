@@ -126,7 +126,7 @@ function checkLegalNotices(resourceDir, failures) {
   for (const required of [
     'Copyright (c) 2026 justhil',
     'Copyright (c) 2026 Num Scope',
-    '@earendil-works/pi-coding-agent',
+    '@earendil-works/pi-agent-core',
     // DSH host (dsh-rebase P1-2): the MIT notice of the @deepseek-ai packages.
     'Copyright (c) 2026 DeepSeek',
   ]) {
