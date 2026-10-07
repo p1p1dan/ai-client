@@ -64,6 +64,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-10-07 E8 插件与凭据隔离实验 `f08f0646`、`35af10ab`（[决策 150](decisions/150-e8-plugin-credential-isolation.md)，缓解方案待用户拍板；证据 [e8-plugin-credential-isolation-2026-10-07.md](evidence/e8-plugin-credential-isolation-2026-10-07.md)）：打包态宿主 + 假网关 + 一次性假 key，14 项判定全过。结论：同进程第三方插件与宿主凭据同权——能直接 `ctx.credentials.resolve` 拿到计划引用名对应的 key（引用名可从 loader 组合里读到）；凭据行能经 Cordis 认出调用方，但可经 `Symbol.for('cordis.original')` 或猴子补丁绕过；`process.on('message')` 能看到 Main 发来的全部凭据应答明文，读到 nonce 后伪造的凭据请求也被 Main 正常应答。决策 034 第 4 条只覆盖了工具子进程，需补。只在 Linux 跑过。
 - 2026-10-07 P1-5d 协议收口 `031c10f9`（[决策 148](decisions/148-p1-5d-protocol-narrowing-choices.md)，待审批，请重点看末尾两处）：新建服务只能选 DSH 支持的三种协议并附说明；预设过滤掉 google、mistral；已有服务用了其他协议的，列表标「当前引擎不支持」，编辑时原值钉在选择框里、保存不丢。受支持协议常量 `SUPPORTED_USER_PROVIDER_APIS` 直接引用 `DSH_PROTOCOLS`，与模型菜单的过滤同源；存储类型 `USER_PROVIDER_APIS` 未删减。代理自测：两套 tsc、lint；Static 759 例、`src/shared/__tests__` 443 例、设置页 226 例、`dshModelPlan` 55 例、`piModelConfig` 102 例。编排者复跑两套 tsc、Static / Scan / Wiring 与设置页共 947 例。
 - 2026-10-07 P1-12 第 4 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 4 步」9 条，待审批），基线 `d915a2a5`：
   - `3d679576` 搬家并删除 `src/agent-host`：bridge 的 RPC 服务端与错误类型进 `src/dsh-host/bridge/`，`stderrRedaction` 与 `credentialSamples` 进 `src/shared/`，`codexItemMapper` 与 codex 夹具进 `src/main/services/legacyImport/`；删 `typecheck:agent-host`，只剩两套 tsc；build.yml gate 改为 x/5；`BRIDGE_ENTRIES`、`build-dsh-host` 脏检查、扫描测试的根、根 tsconfig 同步；`runtimeRetiredStatic` 新增 3 例。`e890aa7c` 补一处注释出处。
@@ -297,7 +298,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作，清单与顺序见 [topics/pre-p1-14-remaining-2026-10-07.md](topics/pre-p1-14-remaining-2026-10-07.md)：P1-5d → P1-5e → E8 → P1-3e → P1-8c 工作流 → 界面小修 → 文档收口（用户裁决见[决策 149](decisions/149-user-rulings-2026-10-07.md)）。✅ P1-5d `031c10f9`。用户 10-07 问到「管理员 key」后，P1-5e 是否推到合入后待用户回复，先派 E8。下一次推送前先升版本到 `1.1.0-dsh.5`。
+P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作，清单与顺序见 [topics/pre-p1-14-remaining-2026-10-07.md](topics/pre-p1-14-remaining-2026-10-07.md)：P1-5d → P1-5e → E8 → P1-3e → P1-8c 工作流 → 界面小修 → 文档收口（用户裁决见[决策 149](decisions/149-user-rulings-2026-10-07.md)）。✅ P1-5d `031c10f9`。用户 10-07 问到「管理员 key」后，P1-5e 是否推到合入后待用户回复，✅ E8 `35af10ab`，缓解方案（决策 150 第 2 节 A～E）待用户拍板。10-07 派 P1-3e。下一次推送前先升版本到 `1.1.0-dsh.5`。
 
 本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
