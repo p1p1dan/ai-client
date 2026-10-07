@@ -1504,7 +1504,10 @@ function applyRuntimeEventCore(
       // Decision 145: a release takes nothing the user is looking at. A failure
       // on screen keeps its card and its sidebar badge; otherwise one plugin
       // switch or login would wipe both from every failed chat at once.
-      const keepsFailure = reason === 'released' && previousStatus === 'failed';
+      // Decision 149 §10 / 156: a capacity reclaim likewise only unbinds — the
+      // failed chat keeps its card and its 「失败」 badge (problem 44).
+      const keepsFailure =
+        (reason === 'released' || reason === 'capacity_reclaimed') && previousStatus === 'failed';
       const status = keepsFailure
         ? state.sessions
         : closesFailure

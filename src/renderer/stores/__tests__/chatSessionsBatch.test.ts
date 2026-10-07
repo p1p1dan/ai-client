@@ -493,6 +493,27 @@ describe('applyRuntimeEvents — fold semantics', () => {
     expect(session?.status).toBe('failed');
   });
 
+  // Decision 149 §10 / 156 (problem 44's second half): a capacity reclaim
+  // only unbinds a failed chat, as a release does.
+  it('E156-44: a capacity reclaim leaves a failure on screen as it was', () => {
+    const base = baseState({
+      sessions: [makeSession({ status: 'failed' })],
+      hostBoundSessionIds: [SESSION_ID, 'other'],
+    });
+    const patch = applyRuntimeEvents(base, [
+      {
+        type: 'session.status',
+        seq: 1,
+        sessionId: SESSION_ID,
+        timestamp: 1,
+        payload: { status: 'disconnected', disconnectReason: 'capacity_reclaimed' },
+      },
+    ]);
+    expect(patch.hostBoundSessionIds).toEqual(['other']);
+    const session = (patch.sessions ?? base.sessions).find((item) => item.id === SESSION_ID);
+    expect(session?.status).toBe('failed');
+  });
+
   it('D12: an ordinary status change leaves the host binding alone', () => {
     const base = baseState({
       sessions: [makeSession({ status: 'running' })],

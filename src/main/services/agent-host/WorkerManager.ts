@@ -3313,7 +3313,12 @@ export class WorkerManager {
    */
   private async evictForCapacity(victim: ManagedSlot): Promise<void> {
     const sessionId = victim.logicalSessionId;
+    // Decision 156: an entry parked in `error` was already announced
+    // `released` when Main stopped reopening it; nothing on the engine is
+    // reclaimed from it, so there is nothing to say a second time (D12).
+    const alreadyReleased = victim.state === 'error';
     await this.retireAndDispose(victim, 'slot-replace');
+    if (alreadyReleased) return;
     this.dispatch({
       type: 'session.status',
       sessionId,
@@ -3696,6 +3701,24 @@ export class WorkerManager {
     entry.state = 'error';
     entry.error = `${code}: ${reason}`;
     console.error(`[worker-manager] ${entry.logicalSessionId}: ${entry.error}`);
+    this.announceParked(entry);
+  }
+
+  /**
+   * dsh-rebase decision 156 (decision 145's finding 6): Main gave up reopening
+   * this session by itself — the entry stays, in `error`, until a user's open
+   * retires it — so it is `released` (decision 145 §4): the renderer drops the
+   * binding and the chat leaves "Active now", keeping a failed turn's card and
+   * badge. Without this, a session whose recovery failed after a host crash
+   * stayed listed as running in the background for the rest of the run.
+   */
+  private announceParked(entry: ManagedSlot): void {
+    this.dispatch({
+      type: 'session.status',
+      sessionId: entry.logicalSessionId,
+      requestId: nextRequestId('release'),
+      payload: { status: 'disconnected', disconnectReason: 'released' },
+    });
   }
 
   /** The last host exit the supervisor recorded, as a comparable mark. */
@@ -3854,6 +3877,7 @@ export class WorkerManager {
     if (!entry.sessionFile) {
       entry.state = 'error';
       entry.error = 'Crashed worker has no durable session identity and cannot be restarted safely';
+      this.announceParked(entry);
       this.updateManagerState();
       return;
     }

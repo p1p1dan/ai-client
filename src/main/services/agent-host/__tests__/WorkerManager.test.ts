@@ -2072,6 +2072,37 @@ describe('WorkerManager unwritten Pi session files', () => {
     await expect(create(h.manager, 's2')).resolves.toMatch(/^create-/);
     expect(h.manager.getSlotSnapshots().map((slot) => slot.logicalSessionId)).toEqual(['s2']);
   });
+
+  /**
+   * dsh-rebase decision 156 (decision 145's finding 6): Main stopped reopening
+   * the session, so it says `released` once — the renderer drops the binding
+   * and the chat leaves "Active now" — and the eviction that later retires the
+   * dead entry adds no `capacity_reclaimed` for a session already let go.
+   */
+  it('[E156-6] a session parked in error is released once, and its eviction says nothing more', async () => {
+    const h = createHarness({ capacity: 1, maxRestartAttempts: 1 });
+    await create(h.manager, 's1');
+    h.createSlot.mockImplementationOnce(rejectSpawn());
+    h.records[0].crash('boom');
+    await vi.waitFor(() =>
+      expect(h.manager.getSlotSnapshots()[0]).toMatchObject({ state: 'error' })
+    );
+    const releases = () =>
+      h.events.filter(
+        (event) =>
+          event.sessionId === 's1' &&
+          event.type === 'session.status' &&
+          (event.payload as { disconnectReason?: string }).disconnectReason !== undefined
+      );
+    expect(releases().map((event) => event.payload)).toEqual([
+      { status: 'disconnected', disconnectReason: 'released' },
+    ]);
+    // Main keeps the entry, as before: a user's open retires it.
+    expect(h.manager.getStatus().state).toBe('degraded');
+
+    await create(h.manager, 's2');
+    expect(releases()).toHaveLength(1);
+  });
 });
 
 describe('WorkerManager isolation and crash recovery', () => {
@@ -4175,6 +4206,18 @@ describe('WorkerManager on one shared DSH host (P1-3c)', () => {
       expect(slot.error).toMatch(/^dsh_host_unavailable: DSH_HOST_UNAVAILABLE/);
       expect(slot.restartAttempts).toBe(0);
     }
+    // Decision 156: nothing reopens them now, so both leave "Active now".
+    for (const sessionId of ['s1', 's2']) {
+      expect(
+        h.events.filter(
+          (event) =>
+            event.sessionId === sessionId &&
+            event.type === 'session.status' &&
+            (event.payload as { disconnectReason?: string }).disconnectReason === 'released'
+        ),
+        sessionId
+      ).toHaveLength(1);
+    }
     expect(h.manager.getStatus().state).toBe('degraded');
     expect(h.host?.starts).toBe(DSH_HOST_RESTART_BUDGET.restarts);
 
@@ -4207,6 +4250,16 @@ describe('WorkerManager on one shared DSH host (P1-3c)', () => {
     );
     expect(snapshot(h, 's1')).toMatchObject({ state: 'error', restartAttempts: 0 });
     expect(snapshot(h, 's1')?.error).toMatch(/^dsh_session_suspect: /);
+    // Decision 156: the one left in error is released; the reopened one is not.
+    const released = (sessionId: string) =>
+      h.events.filter(
+        (event) =>
+          event.sessionId === sessionId &&
+          event.type === 'session.status' &&
+          (event.payload as { disconnectReason?: string }).disconnectReason === 'released'
+      );
+    expect(released('s1')).toHaveLength(1);
+    expect(released('s2')).toHaveLength(0);
 
     // The user's retry clears it: a fresh entry, a clean record.
     await h.manager.resumeSession({
