@@ -1,0 +1,7 @@
+# @aiclient-test/dsh-credential-probe — test-only plugin bundle of experiment
+# E8 (dsh-rebase P1-5 / P1-10). Inserts exactly the one row its manifest entry
+# declares (`credential-probe`), so the host's layer audit accepts it
+# (decision 108). Never on the product allowlist.
+- insert:
+    - id: credential-probe
+      name: '@aiclient-test/dsh-credential-probe'

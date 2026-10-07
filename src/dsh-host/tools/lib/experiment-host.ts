@@ -10,13 +10,15 @@ import { type ChildProcess, spawn } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { DshModelPlan } from '../../../shared/dshModelPlan/types.ts';
-import { BYPASS_PERMISSIONS, HostClient, type Message } from './hostClient.ts';
+import { BYPASS_PERMISSIONS, HostClient, type Message, type ServedPlan } from './hostClient.ts';
 import { captureStderr, exitOf, stopWithin } from './kit.ts';
 
 export interface ExperimentHost {
   label: string;
   child: ChildProcess;
   client: HostClient;
+  /** Main's side of the plan and the keys: every credential request this host sent. */
+  served: ServedPlan;
   stderr: () => string;
   exited: Promise<{ code: number | null; signal: string | null }>;
 }
@@ -87,15 +89,14 @@ export function startExperimentHost(options: {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
   const client = new HostClient(child, { requestPrefix: options.label });
-  const host = {
+  return {
     label: options.label,
     child,
     client,
     stderr: captureStderr(child),
     exited: exitOf(child),
+    served: client.configure(options.plan, options.key),
   };
-  client.configure(options.plan, options.key);
-  return host;
 }
 
 /** `ready` or `fatal`, whichever the host sends first; undefined if neither came in time. */

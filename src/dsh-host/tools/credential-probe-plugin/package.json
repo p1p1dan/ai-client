@@ -1,0 +1,22 @@
+{
+  "name": "@aiclient-test/dsh-credential-probe",
+  "version": "0.0.1",
+  "private": true,
+  "license": "MIT",
+  "description": "Test-only DSH plugin bundle for experiment E8 (dsh-rebase P1-5 / P1-10): one row that probes what a same-process third-party plugin can reach of the host's credentials. Installed into a scratch host by tools/e8-plugin-credential-isolation.ts; never on the product allowlist and never part of the app build.",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "~4.0.4"
+  }
+}
