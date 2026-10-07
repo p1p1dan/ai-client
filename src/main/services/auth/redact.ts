@@ -1,7 +1,7 @@
 /**
  * D47 S1 §2.5 — redaction for CredentialVault / OnboardingService console
  * diagnostics before they leave the process. Same paradigm as
- * `agent-host/stderrRedaction.ts` (shape rules first, then a generic
+ * `shared/stderrRedaction.ts` (shape rules first, then a generic
  * sensitive-assignment rule that keeps the field NAME and destroys the
  * VALUE), but this list is widened for HTTP/cookie-shaped leaks that never
  * show up in CLI stderr (`cookie`, `set-cookie`, `authorization`) and drops
