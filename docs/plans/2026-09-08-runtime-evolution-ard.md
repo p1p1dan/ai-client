@@ -547,3 +547,21 @@ PI-Desktop 的 Rust host-core 代码仅作 TS 重写参考，不直接使用。
 - DSH `packages/core/agent-loop`：Cordis 插件式 agent loop（TS，未本地持有，从调研档引述）。
 - 本项目 `src/agent-host/`：现有 pi-coding-agent 集成层（TS，8656 行）。
 - Cordis：`cordis@4.0.0-rc.9`，MIT，69KB，[GitHub](https://github.com/cordiverse/cordis)。
+
+## 10. DSH 偏离（提纲，P1-14 完整回写）
+
+> 2026-10-07 补的提纲，不是正式回写。分支 `feat/dsh-p0-probe` 已把 agent 引擎整体换成 DeepSeek Harness（DSH）宿主，与本文 §2～§7 的多处决策不再一致；完整回写是 [DSH 二开 roadmap](../plantree/plans/dsh-rebase/roadmap.md) P1-14 的一项。在回写完成前，分支上的事实以 [DSH 二开计划](../plantree/plans/dsh-rebase/README.md)的决策为准；总原则是「默认跟随 DSH 的做法」（[决策 090](../plantree/plans/dsh-rebase/decisions/090-user-rulings-2026-09-28.md)）。
+
+- **引擎换成 DSH 宿主**（D3、D4、D10、D17）：B 路线，不做双引擎，合入 main 即切换（dsh-rebase 决策 001、004）。DSH 钉 `0.1.7-rc.2`（决策 003）。一个应用只起一个共享宿主，所有会话共用（决策 002、019），偏离 D4「一槽一隔离进程」；宿主级故障、预算与 Stop 阶梯见决策 020、021、155。
+- **自有 runtime 已删**（P1-12，[决策 147](../plantree/plans/dsh-rebase/decisions/147-p1-12-retire-runtime.md)）：`src/runtime`、native worker、`src/agent-host` 都已删除；pi 会话的解码链留在 `src/shared/legacyPiSession`，供迁移与只读回放（决策 030）。
+- **插件内核**（D1）：仍是 Cordis，但用的是 DSH 的组合；我方逻辑改为宿主行（bridge、凭据、权限、防空转、加密读）。第三方插件走白名单与构建期审计，用户机上不跑 pnpm（决策 058～060、082）；插件审查有必拒三条与静态守卫（决策 150、153）。
+- **协议与模型目录**（D2、D12、D15）：只保留 DSH 支持的三种协议（决策 036、148）；Main 生成不含 key 的模型计划，经 `configure` 下发给宿主（决策 033、035、077、085）。
+- **事件接口**（D5）：渲染层仍吃 RuntimeEvent，由 bridge 从 DSH 事件翻译；历史按消息投影（决策 026～032、106）。
+- **会话存储**（D6）：改为 DSH 的会话日志与 profile；旧 pi 会话第一次继续时复制迁移，原文件不动；CC / Codex 导入直接产出 DSH 格式（决策 050～056、121～124）。
+- **凭据**（D7）：key 不进宿主环境，宿主每次请求时向 Main 拉取（决策 034）；管理员 key 存进保险库（决策 152）；同进程插件与宿主凭据同权，靠审查兜底（决策 150）。
+- **后端开关**（D8）：取消，没有双引擎（决策 004）。
+- **子代理**（D10、D17）：只用 DSH 自带的子代理，自定义子代理与委派工具取消（决策 090）。
+- **执行载体与加密机**（D11、D13、D16）：宿主跑在随包 node 上（决策 012）；加密机上读到密文时经 PowerShell 5.1 回读，6 类扩展名可编辑（决策 091、135、136）；现场验收改为 P1-13 加密机上机与 P1-14 Windows 测试版。
+- **权限**（D14）：权限逻辑抽成纯库 `src/shared/permissions`，宿主行在 `tools/pre-execute` 审批（决策 041、042、078）；DSH 沙箱默认关（决策 044、045）。
+- **新增的宿主能力**：防空转与每个 agent 500 轮上限（决策 065～067）；一次性补全经宿主 `ctx.llm.stream`（决策 039、125）；goal 原样用 DSH 的四件套（决策 001 第 6 条），todo、后台 jobs 也用 DSH 自带的插件（P1-7a、P1-7b）。
+- **未定**：宿主出站代理（[决策 157](../plantree/plans/dsh-rebase/decisions/157-outbound-proxy.md)，待用户拍板，现状是模型请求直连）。

@@ -395,3 +395,37 @@ T071 严重级 medium（可能误伤用户已有项目数据），在本批次�
 | 前缀稳定性模块（P2-7）保留或删除 | ARD D9 明写为可选加强项；见 Q002 |
 | ~~父循环流中失败恢复~~ | 2026-09-19 由[决策 029](decisions/029-provider-timeout-and-retry-policy.md)推翻，随 T093 落地 |
 | 「本次会话允许」按委派归属收敛 | 已决不做：保持会话级，见[决策 003](decisions/003-allow-session-stays-session-scoped.md) |
+
+## 注记：DSH 分支对本计划的吸收与作废（2026-10-07）
+
+> 只加注记，不改上面的历史条目。依据：DSH 二开的 [P1-7 方案 §4.6](../dsh-rebase/topics/p1-7-renderer.md)（要求落地后在本 roadmap 回写）、[P1-12 方案](../dsh-rebase/topics/p1-12-retire-runtime.md)与 [dsh-rebase 决策 147](../dsh-rebase/decisions/147-p1-12-retire-runtime.md)。下列判断只对分支 `feat/dsh-p0-probe` 成立；main 上的 1.0.x 维护照旧按本 roadmap，分支合入 main（[DSH roadmap](../dsh-rebase/roadmap.md) P1-14）之后才在 main 上生效。
+
+**由 DSH P1-7 吸收并落地**：
+
+| 项 | 原本是什么 | DSH 分支里的落地 |
+|---|---|---|
+| 用户待办 D3 | 运行中的 bash 行实时显示输出 | P1-7b `ada0a024`：前台命令本来就是 DSH job，bridge 从输出环取尾部发 `tool.output` |
+| 用户待办 D4 | 后台命令与后台任务条 | P1-7b `ada0a024`：直接用 DSH 的 `run_in_background`、超时转后台与 `job_*`；会话栏「后台任务」浮动子窗口 |
+| 用户待办 D7 | 子代理面板与可续跑 | P1-7b `ada0a024`：DSH 子会话、行内泳道、「子代理」浮动子窗口 |
+| 用户待办 D8 | todo 卡与计划审阅 | P1-7a `8492837c`：待办卡；计划审阅依附 DSH 的 plan 模式，P1 不做 |
+| ➡️ T138 | goal 模式 | P1-7a `8492837c`：DSH 的 goal 四件套原样用，目标条、轮次头、`/goal` |
+| ⬜ T085 | 子 agent 独立展示位 | 由 P1-7b 的「子代理」浮动子窗口覆盖（dsh-rebase 决策 109）；是否满足 T085 的原意，待用户确认 |
+
+**随 P1-12 删除自有 runtime 而作废**（对象代码在分支上已不存在）：
+
+- 🔧 T053 的 runtime 半边（`src/runtime/plugins/tools`、`src/runtime/events/projector.ts`）。`runtimeEvents.ts` 与渲染层查表的那一半，要在 DSH bridge 的映射下重新核对，待确认。
+- ⬜ T126：pi 会话树里的 custom 条目。分支上的会话树走 DSH 的 lineage；旧 pi 会话做会话树等操作前先迁移（dsh-rebase 决策 122）。
+- ⬜ T133：自有 agent loop 与 `NativeSessionIndexAdapter` 的 catch 都已删除；DSH 下的失败码见 `src/shared/dshFailureCodes.ts`。
+- ⬜ T136：`provider_retry` 是自有 runtime 的 trace。
+- ⬜ T142：`subagent/records.ts` 已删除；DSH 的子代理泳道见 P1-7b。
+- Deferred 里的「前缀稳定性模块（P2-7）保留或删除」：模块随 `src/runtime` 一起删除。
+
+**分支上已有相关改动，是否完全覆盖待 P1-14 复核**：
+
+- ⬜ T111（中断 / 报错后流式正文消失）：DSH 下 Stop 保留已输出的部分，失败回合有注记（dsh-rebase 决策 140、146、156）。
+- ⬜ T129（排队消息发出间隔偏长）：Ctrl+Enter 已改成 DSH 的 steer，不再经过渲染层队列（dsh-rebase 决策 093）；普通排队是否仍有间隔问题未查。
+- ⬜ T134（失败与掐断后的显示细节）：侧栏失败徽标已改「失败」（决策 144），`/compact` 成功有提示（决策 140），首字前被停的回合直接显示「已停止」（决策 146）；「未执行的编辑行点开为空」没有对应记录。
+- ⬜ T147（「继续」后实时时间线残留失败回复）：DSH 下的重试见 dsh-rebase 决策 095、111。
+- ⬜ T148（重启额度用尽后「继续」永久禁用）：宿主预算用尽时会话宣告 `released`，下一次发送走恢复（dsh-rebase 决策 156 第 6 节）。
+
+**与引擎无关，分支上照旧适用**：⏸ T087（网关问题，DSH 分支的 GW-1 同类，用户裁决不改客户端）、⬜ T127、T131、T132、T137。

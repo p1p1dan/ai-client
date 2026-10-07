@@ -4,17 +4,17 @@
 
 **本分支 `feat/dsh-p0-probe`：DSH 二开（B 路线）P1「分支内整体替换为 DSH」**。聊天引擎已换成 DeepSeek Harness 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；不做双引擎，测试完毕合入 main 即切换（决策 004）。main 只做 1.0.x 缺陷修复，本分支不推送、不发版，推送前需用户确认。
 
-- **新会话先读** `docs/plantree/plans/dsh-rebase/handoff-2026-09-28.md`（交接：授权、状态、泳道、工作规则、验证命令）。
+- **新会话先读** `docs/plantree/plans/dsh-rebase/implementation-status.md` 的 Current Phase 与 Next Target（当前状态与下一步：P1-14），再看 `topics/pre-p1-14-remaining-2026-10-07.md`（P1-14 之前的盘点）与 `decision-review-4.md`（待审批决策）。`handoff-2026-09-28.md` 已过期，只有其中的工作规则仍可参考。
 - **进度与计划**：`docs/plantree/plans/dsh-rebase/`，看 `implementation-status.md`（进度看板）、`roadmap.md`（任务 P1-0～P1-16）、`topics/`（各任务方案）、`decisions/`（005 起是自主决定、待用户审批）。
 - **代码入口**：
-  - `src/dsh-host/`：宿主、bridge，以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
-  - `src/main/services/agent-host/`：`DshHostSupervisor`、`WorkerManager`、`DshCredentialBroker`。
-  - `src/shared/` 下的纯库：`dshModelPlan/`（模型计划）、`dshHistory/`（历史投影）、`legacyPiSession/`（pi 解码与迁移转换）、`permissions/`（权限）、`skills/`、`mcp/`、`subagentCatalogRoots.ts`（后三者从 runtime 搬来）、`dshPluginAllowlist.ts`（插件白名单审计）。
-  - `src/runtime/` 是待退役的自有引擎，P1-12 删除。
+  - `src/dsh-host/`：宿主 `host.ts`、bridge（`bridge/`，含 RPC 服务端 `bridgeRpcServer.ts` 与错误类型 `bridgeErrors.ts`），以及几个宿主行：`credentials/`、`permissions/`、`loopGuard/`、`encryptedRead/`；工具脚本在 `tools/`，加密机上机包在 `tools/p0-4/`、`tools/p1-13b/`。
+  - `src/main/services/agent-host/`（目录名沿用，未改）：`DshHostSupervisor`、`WorkerManager`、`DshCredentialBroker`、`createDshChatSlot`。
+  - `src/shared/` 下的纯库：`dshModelPlan/`（模型计划）、`dshHistory/`（历史投影）、`legacyPiSession/`（pi 解码与迁移转换）、`permissions/`（权限）、`skills/`、`mcp/`、`subagentCatalogRoots.ts`（后三者从 runtime 搬来）、`dshPluginAllowlist.ts`（插件白名单审计）、`stderrRedaction.ts`（stderr 脱敏，从 `src/agent-host` 搬来）。
+  - 自有 runtime（`src/runtime/`）与 `src/agent-host/` 已在 P1-12 删除；Codex 导入的映射搬到了 `src/main/services/legacyImport/`。
 - **推送**：仓库是公开的。加密机的原始现场报告不入库，只放脱敏摘要；2026-09-28 已改写历史删掉曾经入库的那份，见 `docs/plantree/plans/dsh-rebase/evidence/history-rewrite-2026-09-28.md`。
 - **2026-09-28 用户裁决**（决策 090）：默认跟随 DSH 的做法，不再为与 1.0.x 一致而移植；只做 Linux 与 Windows，macOS 暂不做。下一步从 `implementation-status.md` 的 Next Target 接着做。
-- **本地验证**：四套 tsc（根、`src/agent-host`、`src/runtime`、`src/dsh-host`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
-- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写）。
+- **本地验证**：两套 tsc（根 `pnpm typecheck`、宿主 `pnpm typecheck:dsh-host`，后者要先在 `src/dsh-host` 里 `npm ci`）；`src/dsh-host/tools/bridge-smoke.ts` 与 `bridge-record.ts --check`；真宿主集成测试 `AICLIENT_DSH_INTEGRATION=1`；模型只用本地假网关 `src/dsh-host/tools/fake-gateway.mjs`。
+- **ARD**：`docs/plans/2026-09-08-runtime-evolution-ard.md`（DSH 相关的偏离在 P1-14 回写，提纲已在 ARD 末尾）。
 
 ## 工程规范（Agent 项目）
 
