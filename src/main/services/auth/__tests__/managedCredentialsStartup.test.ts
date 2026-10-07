@@ -394,4 +394,75 @@ describe('managedCredentialsStartup (D60)', () => {
       expect(startup).not.toHaveProperty('resetVaultAuthJsonResyncStateForTests');
     });
   });
+
+  /**
+   * dsh-rebase P1-5e (decisions 149, 152), through the real wiring: the sync
+   * stores an administrator key in the vault, the agent directory never holds
+   * it, the in-memory catalog the credential broker reads still has it, and
+   * logout takes it away with the login key.
+   */
+  describe('administrator keys in the vault (P1-5e)', () => {
+    it('phase ③ keeps the administrator key out of the agent dir, and logout clears it', async () => {
+      process.env.AICLIENT_MANAGED_CREDENTIALS = '1';
+      const adminKey = 'KEY-CANARY-P1-5E-ADMIN';
+      modelFetchMock.mockImplementationOnce(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            version: 1,
+            providers: {
+              inherits: {
+                api: 'openai-responses',
+                credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+                models: [{ id: 'gpt-5.6-sol' }],
+              },
+              vendor: {
+                api: 'openai-completions',
+                credentials: { baseUrl: 'managed', apiKey: 'managed' },
+                baseUrl: 'https://vendor.example.com/v1',
+                apiKey: adminKey,
+                models: [{ id: 'vendor-1' }],
+              },
+            },
+          }),
+      }));
+      const authIndex = await import('../index');
+      const { activateManagedCredentials, regenerateFromVault } = await import(
+        '../managedCredentialsStartup'
+      );
+      const vault = authIndex.getCredentialVault();
+      vault.promoteCrypto(fakeCrypto(true));
+      await vault.save({
+        identity: { email: 'a@jcdz.cc', userId: 1 },
+        cchBaseUrl: 'https://cch.example.com',
+        claude: { baseUrl: 'https://cch.example.com/v1', authToken: 'login-key-p15e' },
+        codex: { baseUrl: 'https://cch.example.com/v1', apiKey: 'login-key-p15e' },
+        pi: { baseUrl: 'https://cch.example.com/v1', apiKey: 'login-key-p15e' },
+        receivedAt: new Date().toISOString(),
+      });
+      activateManagedCredentials();
+      await regenerateFromVault();
+
+      const { getAppPiAgentDir, resolveNativeModelCatalog } = await import('../../piModelConfig');
+      const agentDir = getAppPiAgentDir();
+      expect(existsSync(join(agentDir, 'managed-models-source.json'))).toBe(true);
+      for (const name of readdirSync(agentDir)) {
+        expect(readFileSync(join(agentDir, name), 'utf-8'), name).not.toContain(adminKey);
+      }
+      expect(vault.readManagedProviderKeys()).toEqual({
+        status: 'ok',
+        keys: { vendor: adminKey },
+      });
+      expect(resolveNativeModelCatalog()?.auth).toEqual({
+        inherits: { type: 'api_key', key: 'login-key-p15e' },
+        vendor: { type: 'api_key', key: adminKey },
+      });
+
+      await vault.clear({ keepLastEmail: true });
+
+      expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: {} });
+      expect(resolveNativeModelCatalog()).toBeUndefined();
+    });
+  });
 });

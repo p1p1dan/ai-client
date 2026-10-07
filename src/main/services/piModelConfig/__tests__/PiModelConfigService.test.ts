@@ -16,9 +16,33 @@ import {
   type PiModelApi,
   piModelOption,
 } from '@shared/piModelConfig';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { toPiModelsJson, validatePiManagedModelsConfig } from '../configValidation';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  resolveProviderApiKey,
+  toPiModelsJson,
+  validatePiManagedModelsConfig,
+} from '../configValidation';
+import type { ManagedKeyStore } from '../managedKeys';
 import { type PiModelConfigFetch, PiModelConfigService } from '../PiModelConfigService';
+
+/**
+ * P1-5e — the credential vault's administrator-key group, in memory. Shared by
+ * every service instance in a test, as the one vault is shared in production
+ * (where `index.ts` builds a fresh service per call).
+ */
+function memoryKeyStore(): ManagedKeyStore & { keys: Record<string, string>; writes: number } {
+  const store = {
+    keys: {} as Record<string, string>,
+    writes: 0,
+    read: () => ({ ...store.keys }),
+    replace: async (next: Readonly<Record<string, string>>) => {
+      store.keys = { ...next };
+      store.writes += 1;
+      return true;
+    },
+  };
+  return store;
+}
 
 const REMOTE_CONFIG = {
   version: 1,
@@ -46,9 +70,11 @@ const REMOTE_CONFIG = {
 
 describe('PiModelConfigService', () => {
   let dir: string;
+  let keyStore: ReturnType<typeof memoryKeyStore>;
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'pi-model-config-'));
+    keyStore = memoryKeyStore();
   });
 
   afterEach(() => {
@@ -70,6 +96,7 @@ describe('PiModelConfigService', () => {
       fetchFn,
       now: () => now,
       readBundledCatalog: () => null,
+      managedKeyStore: keyStore,
     });
   }
 
@@ -760,6 +787,207 @@ describe('PiModelConfigService', () => {
     });
     expect(piModelOption('p', { id: 'plain' })).toEqual({ id: 'p/plain', label: 'plain' });
   });
+
+  /**
+   * dsh-rebase P1-5e (decisions 149, 152): an administrator key the catalog
+   * carries is kept in the credential vault, never in the wire cache.
+   */
+  describe('administrator keys in the vault (P1-5e)', () => {
+    const ADMIN_KEY = 'sk-test-p15e-admin-0001';
+    const ENDPOINT = 'https://onboard.example/api/v1/models-config';
+    const LOGIN = { apiKey: 'login-key', inheritedBaseUrl: 'https://login.example/v1' };
+    /** One inherited provider and one with the administrator's address and key. */
+    const MIXED = {
+      version: 1,
+      providers: {
+        inherits: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'onboarding' },
+          models: [{ id: 'a' }],
+        },
+        vendor: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'managed', apiKey: 'managed' },
+          baseUrl: 'https://vendor.example/v1',
+          apiKey: ADMIN_KEY,
+          models: [{ id: 'v' }],
+        },
+      },
+    };
+    const answer =
+      (body: unknown): PiModelConfigFetch =>
+      async () => ({ ok: true, status: 200, text: async () => JSON.stringify(body) });
+    const offline: PiModelConfigFetch = async () => {
+      throw new Error('offline');
+    };
+    const sourceFile = () => join(dir, 'managed-models-source.json');
+    const bothKeys = {
+      inherits: { type: 'api_key', key: 'login-key' },
+      vendor: { type: 'api_key', key: ADMIN_KEY },
+    };
+
+    function expectNoKeyOnDisk(): void {
+      for (const name of readdirSync(dir)) {
+        expect(readFileSync(join(dir, name), 'utf8'), name).not.toContain(ADMIN_KEY);
+      }
+    }
+
+    it('writes the cache without the key, and the key to the vault', async () => {
+      const result = await service(answer(MIXED)).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+
+      expect(result.source).toBe('remote');
+      expectNoKeyOnDisk();
+      const cached = JSON.parse(readFileSync(sourceFile(), 'utf8'));
+      // Still says where the key comes from: a re-write after a rotation needs it.
+      expect(cached.providers.vendor.credentials).toEqual({
+        baseUrl: 'managed',
+        apiKey: 'managed',
+      });
+      expect(cached.providers.vendor).not.toHaveProperty('apiKey');
+      expect(keyStore.keys).toEqual({ vendor: ADMIN_KEY });
+      if (process.platform !== 'win32') {
+        expect(statSync(sourceFile()).mode & 0o777).toBe(0o600);
+      }
+    });
+
+    it('attaches the vault key on read; the login key goes only to inherited providers', async () => {
+      await service(answer(MIXED)).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual(bothKeys);
+      const { models } = service(offline).buildNativeModelCatalog({
+        inheritedApiKey: LOGIN.apiKey,
+        inheritedBaseUrl: LOGIN.inheritedBaseUrl,
+      });
+      const providers = models.providers as Record<string, { baseUrl: string }>;
+      expect(providers.vendor.baseUrl).toBe('https://vendor.example/v1');
+      expect(providers.inherits.baseUrl).toBe('https://login.example/v1');
+    });
+
+    it('moves the keys of a plaintext cache an older build wrote on the first read', async () => {
+      writeFileSync(sourceFile(), JSON.stringify(MIXED, null, 2), { mode: 0o600 });
+
+      // The read that finds it still serves the key, from the file...
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual(bothKeys);
+      // ...and moves it into the vault, then rewrites the file without it.
+      await vi.waitFor(() => expect(readFileSync(sourceFile(), 'utf8')).not.toContain(ADMIN_KEY));
+      expect(keyStore.keys).toEqual({ vendor: ADMIN_KEY });
+      const cached = JSON.parse(readFileSync(sourceFile(), 'utf8'));
+      expect(cached.providers.vendor.credentials.apiKey).toBe('managed');
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual(bothKeys);
+    });
+
+    it('moves the keys of a plaintext cache on the next sync, even one that fails', async () => {
+      writeFileSync(sourceFile(), JSON.stringify(MIXED), { mode: 0o600 });
+
+      const result = await service(offline).sync({ endpointUrl: ENDPOINT, ...LOGIN, force: true });
+
+      expect(result.source).toBe('stale-cache');
+      expect(result.modelCount).toBe(2);
+      expectNoKeyOnDisk();
+      expect(keyStore.keys).toEqual({ vendor: ADMIN_KEY });
+    });
+
+    it('leaves a plaintext cache as it is while the vault refuses the keys', async () => {
+      keyStore.replace = async () => false;
+      writeFileSync(sourceFile(), JSON.stringify(MIXED), { mode: 0o600 });
+      const before = readFileSync(sourceFile(), 'utf8');
+
+      await service(offline).sync({ endpointUrl: ENDPOINT, ...LOGIN, force: true });
+
+      // Not lost and not rewritten: the next read (vault unlocked by then) tries again.
+      expect(readFileSync(sourceFile(), 'utf8')).toBe(before);
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual(bothKeys);
+    });
+
+    it('never writes the key to disk when the vault refuses it', async () => {
+      keyStore.replace = async () => false;
+
+      await service(answer(MIXED)).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+
+      expectNoKeyOnDisk();
+      // Left out, not handed the login key.
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual({
+        inherits: { type: 'api_key', key: 'login-key' },
+      });
+    });
+
+    it('leaves out a provider whose key the vault lost, keeps the rest, and re-fetches', async () => {
+      await service(answer(MIXED), 1000).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+      // Logout, or an older build that rewrote the vault without the group.
+      keyStore.keys = {};
+
+      const logs: unknown[][] = [];
+      const built = new PiModelConfigService({
+        agentDir: dir,
+        fetchFn: offline,
+        readBundledCatalog: () => null,
+        managedKeyStore: keyStore,
+        log: (...args) => logs.push(args),
+      }).buildNativeModelCatalog({
+        inheritedApiKey: LOGIN.apiKey,
+        inheritedBaseUrl: LOGIN.inheritedBaseUrl,
+      });
+      expect(Object.keys(built.models.providers as object)).toEqual(['inherits']);
+      expect(built.auth).toEqual({ inherits: { type: 'api_key', key: 'login-key' } });
+      expect(JSON.stringify(logs)).toContain('no administrator key in the vault');
+      expect(JSON.stringify(logs)).toContain('vendor');
+      // The cache still names it, for the fetch that brings the key back.
+      expect(JSON.parse(readFileSync(sourceFile(), 'utf8')).providers).toHaveProperty('vendor');
+
+      // Inside the ten-minute window, but a cache missing a key is not fresh.
+      let fetches = 0;
+      const counting: PiModelConfigFetch = async (url, init) => {
+        fetches += 1;
+        return answer(MIXED)(url, init);
+      };
+      await service(counting, 2000).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+      expect(fetches).toBe(1);
+      expect(keyStore.keys).toEqual({ vendor: ADMIN_KEY });
+      expect(memoryAuth(LOGIN.apiKey, LOGIN.inheritedBaseUrl)).toEqual(bothKeys);
+    });
+
+    it('serves a stale cache without the lost provider rather than failing it whole', async () => {
+      await service(answer(MIXED), 1000).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+      keyStore.keys = {};
+
+      const result = await service(offline, 2000).sync({
+        endpointUrl: ENDPOINT,
+        ...LOGIN,
+        force: true,
+      });
+
+      expect(result).toMatchObject({ ok: true, source: 'stale-cache', providerCount: 1 });
+      const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+      expect(Object.keys(models.providers)).toEqual(['inherits']);
+      expect(JSON.parse(readFileSync(sourceFile(), 'utf8')).providers).toHaveProperty('vendor');
+    });
+
+    it('a catalog that stops issuing keys empties the vault group', async () => {
+      await service(answer(MIXED), 1000).sync({ endpointUrl: ENDPOINT, ...LOGIN });
+      const { vendor: _vendor, ...inheritedOnly } = MIXED.providers;
+
+      await service(answer({ version: 1, providers: inheritedOnly }), 2000).sync({
+        endpointUrl: ENDPOINT,
+        ...LOGIN,
+        force: true,
+      });
+
+      expect(keyStore.keys).toEqual({});
+    });
+
+    it('never gives the login key to a managed provider that has none', () => {
+      expect(
+        resolveProviderApiKey(
+          {
+            api: 'openai-responses',
+            credentials: { baseUrl: 'onboarding', apiKey: 'managed' },
+            models: [],
+          },
+          'login-key'
+        )
+      ).toBe('');
+    });
+  });
 });
 
 describe('validatePiManagedModelsConfig', () => {
@@ -841,6 +1069,29 @@ describe('validatePiManagedModelsConfig', () => {
     // Same bytes from an unauthenticated source stay refused: the degraded
     // direction has to be the safe one.
     expect(() => validatePiManagedModelsConfig(withKey)).toThrow(/credentials/);
+  });
+
+  it('accepts a managed provider without its key only from our own detached cache (P1-5e)', () => {
+    const detached = {
+      version: 1,
+      providers: {
+        dan: {
+          api: 'openai-responses',
+          credentials: { baseUrl: 'onboarding', apiKey: 'managed' },
+          models: [{ id: 'a' }],
+        },
+      },
+    };
+    expect(
+      validatePiManagedModelsConfig(detached, {
+        credentialsAllowed: true,
+        managedKeysDetached: true,
+      }).providers.dan
+    ).not.toHaveProperty('apiKey');
+    // Off the wire, "managed but no key" is still a credential violation.
+    expect(() => validatePiManagedModelsConfig(detached, { credentialsAllowed: true })).toThrow(
+      /apiKey is required when it is managed/
+    );
   });
 
   it('refuses a stated source that contradicts what is present', () => {

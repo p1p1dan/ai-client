@@ -25,6 +25,14 @@ const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'ma
  */
 export interface PiConfigValidationOptions {
   credentialsAllowed?: boolean;
+  /**
+   * dsh-rebase P1-5e (decisions 149, 152) — the document is this client's own
+   * cache (`managed-models-source.json`), whose administrator keys live in the
+   * credential vault rather than in the file. A provider whose key is managed
+   * may then come without one: the reader attaches it from the vault, or leaves
+   * the provider out. Never set for anything read off the wire.
+   */
+  managedKeysDetached?: boolean;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -223,7 +231,10 @@ function validateProvider(
   if (credentials.apiKey === 'managed') {
     // A config that says "managed" without carrying the key is only reachable
     // from an unauthenticated source; treat it as the credential violation it is.
-    if (!rawApiKey) throw new Error(`${field}.apiKey is required when it is managed`);
+    // The one exception is our own cache, whose keys were moved to the vault.
+    if (!rawApiKey && !options.managedKeysDetached) {
+      throw new Error(`${field}.apiKey is required when it is managed`);
+    }
   } else if (rawApiKey) {
     throw new Error(`${field}.apiKey must be absent when it is inherited`);
   }
@@ -291,7 +302,10 @@ export function validatePiManagedModelsConfig(
   value: unknown,
   options: PiConfigValidationOptions = {}
 ): PiManagedModelsConfig {
-  const resolved = { credentialsAllowed: options.credentialsAllowed ?? false };
+  const resolved = {
+    credentialsAllowed: options.credentialsAllowed ?? false,
+    managedKeysDetached: options.managedKeysDetached ?? false,
+  };
   if (!isRecord(value)) throw new Error('model config must be an object');
   if (value.version !== 1) throw new Error('model config version must be 1');
   if (!isRecord(value.providers)) throw new Error('model config providers must be an object');
@@ -380,12 +394,19 @@ export function toPiModelsJson(
   return { providers };
 }
 
-/** The key pi should present for each provider (plan D01, wire topic §一). */
+/**
+ * The key pi should present for each provider (plan D01, wire topic §一).
+ *
+ * A managed provider gets the administrator's key or nothing — never the login
+ * key. Since P1-5e a managed provider can exist in memory without its key (the
+ * vault lost it), and falling back would hand this client's own credential to
+ * an address the administrator chose for a different one. An empty key is
+ * answered `unavailable` by the credential broker, before any request leaves.
+ */
 export function resolveProviderApiKey(
   provider: PiManagedProviderDefinition,
   inheritedApiKey: string
 ): string {
-  return provider.credentials?.apiKey === 'managed' && provider.apiKey
-    ? provider.apiKey
-    : inheritedApiKey;
+  if (provider.credentials?.apiKey === 'managed') return provider.apiKey ?? '';
+  return inheritedApiKey;
 }

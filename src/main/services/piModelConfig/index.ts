@@ -25,6 +25,7 @@ import { getOnboardingServiceUrl } from '../onboarding/serviceUrl';
 import { readSharedSettings, writeSharedSettings } from '../SharedSessionState';
 import { readUserProviderGroupForRuntime, readUserProvidersForRuntime } from '../userProviders';
 import { resolveDshModelPlanWith } from './dshModelPlan';
+import type { ManagedKeyStore } from './managedKeys';
 import { type NativeModelCatalog, resolveNativeModelCatalogWith } from './nativeCatalog';
 import { PiModelConfigService } from './PiModelConfigService';
 
@@ -88,6 +89,21 @@ export function setPiModelManagementUrl(endpointUrl: string): string {
   return normalized;
 }
 
+/**
+ * dsh-rebase P1-5e (decisions 149, 152) — the administrator keys of the
+ * managed catalog live in the credential vault, in their own group, with the
+ * same protection as the login key: encrypted where the platform can, 0600
+ * otherwise. Unreadable (locked keyring, damaged file) reads as `null`, and the
+ * providers needing those keys are left out until it reads again.
+ */
+const vaultManagedKeyStore: ManagedKeyStore = {
+  read: () => {
+    const result = getCredentialVault().readManagedProviderKeys();
+    return result.status === 'ok' ? result.keys : null;
+  },
+  replace: async (keys) => (await getCredentialVault().saveManagedProviderKeys(keys)).ok,
+};
+
 function serviceFor(agentDir: string): PiModelConfigService {
   return new PiModelConfigService({
     agentDir,
@@ -101,6 +117,7 @@ function serviceFor(agentDir: string): PiModelConfigService {
     // to the catalog, so it has to be answerable wherever the catalog is built
     // — not only in the one reader that used to be handed a `'local'` override.
     managedCredentialsEnabled: resolveManagedCredentialsEnabled,
+    managedKeyStore: vaultManagedKeyStore,
   });
 }
 

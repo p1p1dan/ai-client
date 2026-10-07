@@ -32,6 +32,12 @@ import {
   toPiModelsJson,
   validatePiManagedModelsConfig,
 } from './configValidation';
+import {
+  attachManagedKeys,
+  detachManagedKeys,
+  type ManagedKeyStore,
+  NO_MANAGED_KEY_STORE,
+} from './managedKeys';
 
 const MAX_CONFIG_BYTES = 2 * 1024 * 1024;
 const DEFAULT_TIMEOUT_MS = 5000;
@@ -81,6 +87,13 @@ export interface PiModelConfigServiceOptions {
    * is — see {@link PiModelConfigService.managedHalf}.
    */
   managedCredentialsEnabled?: () => boolean;
+  /**
+   * dsh-rebase P1-5e — where the administrator keys of the managed catalog are
+   * kept: the credential vault in production. Without one the service keeps
+   * no administrator key at all (fail closed), and still never writes one to
+   * disk.
+   */
+  managedKeyStore?: ManagedKeyStore;
 }
 
 /**
@@ -125,23 +138,98 @@ function safeError(error: unknown): string {
 }
 
 /**
- * The last catalog this client fetched, in WIRE form.
+ * The last catalog this client fetched, in WIRE form, keys attached.
  *
  * Kept beside `models.json` rather than parsed back out of it, because
  * `models.json` is pi's format: it carries a resolved base URL and no
  * credential sources at all, so it cannot answer "was this provider's key the
  * administrator's or the login one" — which is exactly what a re-write after a
- * key rotation has to know. Read with credentials allowed: this file is our own
- * copy of an authenticated response, written 0600 in the managed agent dir.
+ * key rotation has to know.
+ *
+ * dsh-rebase P1-5e (decisions 149, 152): the file no longer holds the
+ * administrator keys, only `credentials.apiKey: 'managed'`; the keys are in the
+ * credential vault and are attached here. A file an older build wrote may still
+ * carry them in the clear — those win (that file is newer than anything this
+ * build stored) and the file is flagged `legacy`, so the caller moves them.
  */
-function readCachedConfig(path: string): PiManagedModelsConfig | null {
+interface ManagedCache {
+  /** The usable catalog: keys attached, managed providers without one left out. */
+  config: PiManagedModelsConfig;
+  /** Managed providers left out for want of a key. */
+  missing: string[];
+  /** The file still carries keys in the clear (written before P1-5e). */
+  legacy: boolean;
+}
+
+function readManagedCache(path: string, store: ManagedKeyStore): ManagedCache | null {
+  const parsed = readCacheFile(path);
+  if (!parsed) return null;
+  const { document, keys: inFile } = parsed;
+  let stored: Readonly<Record<string, string>> | null = {};
+  try {
+    stored = store.read();
+  } catch {
+    stored = null;
+  }
+  const { config, missing } = attachManagedKeys(document, { ...(stored ?? {}), ...inFile });
+  return { config, missing, legacy: Object.keys(inFile).length > 0 };
+}
+
+function readCacheFile(
+  path: string
+): { raw: string; document: PiManagedModelsConfig; keys: Record<string, string> } | null {
   if (!existsSync(path)) return null;
   try {
-    return validatePiManagedModelsConfig(readJson(path), { credentialsAllowed: true });
+    const raw = readFileSync(path, 'utf8');
+    // Credentials allowed: this file is our own copy of an authenticated
+    // response, 0600 in the managed agent dir — and one written before P1-5e
+    // still carries the administrator keys.
+    const config = validatePiManagedModelsConfig(JSON.parse(raw) as unknown, {
+      credentialsAllowed: true,
+      managedKeysDetached: true,
+    });
+    return { raw, ...detachManagedKeys(config) };
   } catch {
     return null;
   }
 }
+
+function readTextOrNull(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Every write of the cache's key/document pair, per cache file, one at a time.
+ *
+ * Module-level because `index.ts` builds a fresh service per call: a sync and a
+ * migration started from two instances must still not interleave, or the vault
+ * could end up holding the keys of one catalog beside the document of another.
+ */
+const cacheWrites = new Map<string, Promise<unknown>>();
+
+function exclusive<T>(path: string, task: () => Promise<T>): Promise<T> {
+  const previous = cacheWrites.get(path) ?? Promise.resolve();
+  const next = previous.then(task, task);
+  const tail = next.then(
+    () => undefined,
+    () => undefined
+  );
+  cacheWrites.set(path, tail);
+  void tail.then(() => {
+    if (cacheWrites.get(path) === tail) cacheWrites.delete(path);
+  });
+  return next;
+}
+
+/** Cache files whose plaintext keys a read has already set out to move. */
+const migrationsInFlight = new Set<string>();
+
+/** The last "left out for want of a key" note, so a catalog read per menu render logs once. */
+let lastMissingNote: string | null = null;
 
 /** One selectable row, with the display fields `piModelOption` needs. */
 type CatalogModelEntry = {
@@ -246,8 +334,10 @@ export class PiModelConfigService {
   private readonly readBundledCatalog: BundledCatalogReader;
   private readonly userProviders: () => readonly UserProvider[];
   private readonly managedCredentialsEnabled: () => boolean;
+  private readonly managedKeyStore: ManagedKeyStore;
 
   constructor(options: PiModelConfigServiceOptions) {
+    this.managedKeyStore = options.managedKeyStore ?? NO_MANAGED_KEY_STORE;
     this.userProviders = options.userProviders ?? (() => []);
     this.managedCredentialsEnabled = options.managedCredentialsEnabled ?? (() => true);
     this.agentDir = options.agentDir;
@@ -279,7 +369,7 @@ export class PiModelConfigService {
     return join(this.agentDir, PI_MODEL_SYNC_STATE_FILE_NAME);
   }
 
-  /** Wire-form copy of the last fetched catalog; see `readCachedConfig`. */
+  /** Wire-form copy of the last fetched catalog, without administrator keys; see `ManagedCache`. */
   get sourcePath(): string {
     return join(this.agentDir, PI_MODEL_SOURCE_FILE_NAME);
   }
@@ -298,11 +388,14 @@ export class PiModelConfigService {
     // `network` is the value in force until a response object exists, which is
     // exactly what "we never reached the endpoint" means.
     let failureKind: PiModelSyncFailureKind = 'network';
-    const cached = readCachedConfig(this.sourcePath);
+    const cache = this.readManagedCache();
     const previous = this.readState();
     if (
       !input.force &&
-      cached &&
+      cache &&
+      // P1-5e: a cache that lost an administrator key (vault cleared, or an
+      // older build rewrote it) is not fresh — the fetch is what restores it.
+      cache.missing.length === 0 &&
       previous.source === 'remote' &&
       previous.endpointUrl === input.endpointUrl &&
       previous.syncedAt !== null &&
@@ -310,7 +403,8 @@ export class PiModelConfigService {
     ) {
       // Still fresh, but the login credentials may have changed since (the
       // inherited base URL lands in models.json); rewriting is cheap.
-      this.writeAll(cached, input.apiKey, input.inheritedBaseUrl);
+      await this.migrateLegacyCache();
+      this.writeRuntimeConfig(cache.config, input.apiKey, input.inheritedBaseUrl);
       return { ...previous, ok: true };
     }
     try {
@@ -336,7 +430,7 @@ export class PiModelConfigService {
       const config = validatePiManagedModelsConfig(JSON.parse(body) as unknown, {
         credentialsAllowed: true,
       });
-      this.writeAll(config, input.apiKey, input.inheritedBaseUrl);
+      await this.writeAll(config, input.apiKey, input.inheritedBaseUrl);
       const counts = modelCounts(config);
       const state: PiModelSyncState = {
         source: 'remote',
@@ -353,13 +447,16 @@ export class PiModelConfigService {
       this.log('[pi-models] remote sync failed', { error: remoteError });
     }
 
-    if (cached) {
-      this.writeAll(cached, input.apiKey, input.inheritedBaseUrl);
+    if (cache) {
+      // The cache file itself is left as it is (bar moving plaintext keys out):
+      // a provider left out for want of a key stays in it, for the next fetch.
+      await this.migrateLegacyCache();
+      this.writeRuntimeConfig(cache.config, input.apiKey, input.inheritedBaseUrl);
       const state: PiModelSyncState = {
         source: 'stale-cache',
         endpointUrl: input.endpointUrl,
         agentDir: this.agentDir,
-        ...modelCounts(cached),
+        ...modelCounts(cache.config),
         lastAttemptAt: attemptedAt,
         syncedAt: previous.syncedAt,
         error: remoteError,
@@ -597,14 +694,95 @@ export class PiModelConfigService {
    * Writes both files from one catalog: the wire-form copy and `models.json`.
    * The keys stay in memory ({@link buildNativeModelCatalog}); since P1-11 no
    * `auth.json` is written (decisions 038, 127).
+   *
+   * P1-5e: the administrator keys go to the vault first, then the copy without
+   * them. A refused vault write still leaves no key on disk; those providers
+   * are then left out on the next read, until a sync stores their keys.
    */
-  private writeAll(
+  private async writeAll(
     config: PiManagedModelsConfig,
     inheritedApiKey: string,
     inheritedBaseUrl: string
-  ): void {
-    atomicWriteJson(this.sourcePath, config, 0o600);
+  ): Promise<void> {
+    const { document, keys } = detachManagedKeys(config);
+    await exclusive(this.sourcePath, async () => {
+      await this.storeManagedKeys(keys);
+      atomicWriteJson(this.sourcePath, document, 0o600);
+    });
     this.writeRuntimeConfig(config, inheritedApiKey, inheritedBaseUrl);
+  }
+
+  /** The cache as it can be used now; see {@link ManagedCache}. */
+  private readManagedCache(): ManagedCache | null {
+    const cache = readManagedCache(this.sourcePath, this.managedKeyStore);
+    if (cache) this.noteMissingKeys(cache.missing);
+    return cache;
+  }
+
+  private noteMissingKeys(missing: readonly string[]): void {
+    const note = missing.length > 0 ? `${this.sourcePath}: ${missing.join(', ')}` : null;
+    if (note === lastMissingNote) return;
+    lastMissingNote = note;
+    if (missing.length > 0) {
+      this.log('[pi-models] managed providers left out: no administrator key in the vault', {
+        providers: missing.join(', '),
+      });
+    }
+  }
+
+  /** Replace the stored administrator keys; never throws, never logs a value. */
+  private async storeManagedKeys(keys: Readonly<Record<string, string>>): Promise<boolean> {
+    let stored = false;
+    try {
+      stored = await this.managedKeyStore.replace(keys);
+    } catch (error) {
+      this.log('[pi-models] the credential vault refused the administrator keys', {
+        error: safeError(error),
+      });
+      return false;
+    }
+    if (!stored && Object.keys(keys).length > 0) {
+      this.log('[pi-models] the credential vault did not store the administrator keys', {
+        providers: Object.keys(keys).sort().join(', '),
+      });
+    }
+    return stored;
+  }
+
+  /**
+   * Move administrator keys an older build left in the cache file into the
+   * vault, then rewrite the file without them (P1-5e, decision 152).
+   *
+   * The file is rewritten only once the vault holds the keys, and only if it
+   * still has the bytes the keys were read from — a sync that wrote it in the
+   * meantime has the newer answer. A refused vault write (not unlocked yet)
+   * leaves the file untouched, and the next read tries again.
+   */
+  private migrateLegacyCache(): Promise<void> {
+    return exclusive(this.sourcePath, async () => {
+      const legacy = readCacheFile(this.sourcePath);
+      if (!legacy || Object.keys(legacy.keys).length === 0) return;
+      if (!(await this.storeManagedKeys(legacy.keys))) return;
+      if (readTextOrNull(this.sourcePath) !== legacy.raw) return;
+      atomicWriteJson(this.sourcePath, legacy.document, 0o600);
+      this.log('[pi-models] moved administrator keys from the model cache into the vault', {
+        providers: Object.keys(legacy.keys).sort().join(', '),
+      });
+    });
+  }
+
+  /** {@link migrateLegacyCache}, started from a synchronous read; at most one per file. */
+  private scheduleLegacyMigration(cache: ManagedCache): void {
+    if (!cache.legacy || migrationsInFlight.has(this.sourcePath)) return;
+    const path = this.sourcePath;
+    migrationsInFlight.add(path);
+    this.migrateLegacyCache()
+      .catch((error) => {
+        this.log('[pi-models] moving administrator keys into the vault failed', {
+          error: safeError(error),
+        });
+      })
+      .finally(() => migrationsInFlight.delete(path));
   }
 
   /**
@@ -659,8 +837,11 @@ export class PiModelConfigService {
    * baseline", and not one this fix makes.
    */
   private managedHalf(): PiManagedModelsConfig {
-    const cached = readCachedConfig(this.sourcePath);
-    if (cached) return cached;
+    const cache = this.readManagedCache();
+    if (cache) {
+      this.scheduleLegacyMigration(cache);
+      return cache.config;
+    }
     if (!this.managedCredentialsEnabled()) return EMPTY_CONFIG;
     return this.readBundledCatalog() ?? EMPTY_CONFIG;
   }

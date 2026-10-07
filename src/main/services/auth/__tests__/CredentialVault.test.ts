@@ -927,3 +927,167 @@ describe('CredentialVault — onChange (T082)', () => {
     }
   });
 });
+
+/**
+ * dsh-rebase P1-5e (decisions 149, 152): the administrator keys of the managed
+ * catalog, moved out of `managed-models-source.json` into their own group.
+ */
+describe('CredentialVault — administrator keys of the managed catalog (P1-5e)', () => {
+  const ADMIN_KEY = 'sk-test-p15e-vault-0001';
+
+  /** A crypto that really changes the bytes, so "not in the file" means something. */
+  function scramblingCrypto(): VaultCrypto {
+    return {
+      available: () => true,
+      encrypt: (plainText) => `enc:${Buffer.from(plainText, 'utf-8').toString('base64')}`,
+      decrypt: (cipherText) => {
+        if (!cipherText.startsWith('enc:')) throw new Error('not ours');
+        return Buffer.from(cipherText.slice(4), 'base64').toString('utf-8');
+      },
+    };
+  }
+
+  function openVault(crypto: VaultCrypto = scramblingCrypto()): CredentialVault {
+    const vault = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    vault.promoteCrypto(crypto);
+    return vault;
+  }
+
+  function makeProvider(): UserProvider {
+    return {
+      id: 'svc-1',
+      name: 'My DeepSeek',
+      baseUrl: 'https://api.deepseek.com/v1',
+      api: 'openai-completions',
+      apiKey: 'USER-KEY-4b1e7a',
+      enabled: true,
+      createdAt: '2026-09-10T00:00:00.000Z',
+    };
+  }
+
+  const rawFile = () => readFileSync(join(baseDir, VAULT_FILE), 'utf-8');
+
+  it('encrypts the group like the login key when the platform can', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+
+    expect(await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY })).toEqual({ ok: true });
+
+    expect(rawFile()).not.toContain(ADMIN_KEY);
+    expect(JSON.parse(rawFile()).managedProviderKeysEnc).toBe('safeStorage');
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: { vendor: ADMIN_KEY } });
+    // The login payload is untouched.
+    expect(vault.read().status).toBe('ok');
+  });
+
+  it('stores it as-is in the 0600 file when there is no keyring (enc none, decision 149)', async () => {
+    const vault = openVault(fakeUnavailableCrypto());
+    await vault.save(makePayload());
+
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    const parsed = JSON.parse(rawFile());
+    expect(parsed.managedProviderKeysEnc).toBe('none');
+    expect(parsed.managedProviderKeys).toEqual({ vendor: ADMIN_KEY });
+    if (process.platform !== 'win32') {
+      expect(statSync(join(baseDir, VAULT_FILE)).mode & 0o777).toBe(0o600);
+    }
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: { vendor: ADMIN_KEY } });
+  });
+
+  it('reads as no keys when there is no group or no vault at all', async () => {
+    const vault = openVault();
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: {} });
+    await vault.save(makePayload());
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: {} });
+  });
+
+  it('reads locked while the keyring is, never as missing', async () => {
+    await openVault().saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    const locked = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+    expect(locked.readManagedProviderKeys()).toEqual({ status: 'locked' });
+  });
+
+  it('logout drops the group and keeps the user services', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    await vault.saveUserProviders([makeProvider()]);
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    await vault.clear({ keepLastEmail: true });
+
+    expect(rawFile()).not.toContain('managedProviderKeys');
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: {} });
+    expect(vault.readUserProviders()).toEqual({ status: 'ok', providers: [makeProvider()] });
+  });
+
+  it('a login (any save) drops the group: it came with the credential being replaced', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    await vault.save(makePayload({ identity: { email: 'other@jcdz.cc', userId: 2 } }));
+
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: {} });
+  });
+
+  it('survives a user-service save and a rejected login key', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    await vault.saveUserProviders([makeProvider()]);
+    await vault.markInvalidated('2026-10-07T00:00:00.000Z');
+
+    expect(vault.read().status).toBe('rejected');
+    expect(vault.readManagedProviderKeys()).toEqual({ status: 'ok', keys: { vendor: ADMIN_KEY } });
+  });
+
+  it('an empty set removes the group, and never creates a vault file', async () => {
+    const vault = openVault();
+    expect(await vault.saveManagedProviderKeys({})).toEqual({ ok: true });
+    expect(existsSync(join(baseDir, VAULT_FILE))).toBe(false);
+
+    await vault.save(makePayload());
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+    await vault.saveManagedProviderKeys({});
+
+    expect(JSON.parse(rawFile())).not.toHaveProperty('managedProviderKeys');
+    expect(JSON.parse(rawFile())).not.toHaveProperty('managedProviderKeysEnc');
+    expect(vault.read().status).toBe('ok');
+  });
+
+  it('refuses before crypto promotion and over a vault file it cannot parse', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const early = new CredentialVault({ baseDir, crypto: fakeUnavailableCrypto() });
+      expect(await early.saveManagedProviderKeys({ vendor: ADMIN_KEY })).toEqual({
+        ok: false,
+        reason: 'crypto_not_ready',
+      });
+      expect(existsSync(join(baseDir, VAULT_FILE))).toBe(false);
+
+      const damaged = '{"version":2,"enc":"safeStorage","userProviders":"opaque';
+      writeFileSync(join(baseDir, VAULT_FILE), damaged, 'utf-8');
+      expect(await openVault().saveManagedProviderKeys({ vendor: ADMIN_KEY })).toEqual({
+        ok: false,
+        reason: 'unreadable',
+      });
+      expect(rawFile()).toBe(damaged);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('notifies listeners, so the credential broker drops what it holds', async () => {
+    const vault = openVault();
+    await vault.save(makePayload());
+    const listener = vi.fn();
+    vault.onChange(listener);
+
+    await vault.saveManagedProviderKeys({ vendor: ADMIN_KEY });
+
+    expect(listener).toHaveBeenCalledWith('saveManagedProviderKeys');
+  });
+});

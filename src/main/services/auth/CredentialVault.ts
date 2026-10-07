@@ -161,14 +161,18 @@ export type VaultReadResult =
 
 export type VaultSaveResult =
   | { ok: true }
-  | { ok: false; reason: 'crypto_not_ready' | 'unsupported_version' | 'backup_failed' };
+  | {
+      ok: false;
+      /** `unreadable` — P1-5e: the vault file exists but is not a vault we can parse. */
+      reason: 'crypto_not_ready' | 'unsupported_version' | 'backup_failed' | 'unreadable';
+    };
 
 /**
  * T082 — which mutation just committed. Carried so a subscriber that logs or
  * branches on the kind of change can, without having to diff the vault itself
  * (the payload is still encrypted at this layer for a `safeStorage` vault).
  */
-export type VaultChangeType = 'save' | 'saveUserProviders' | 'clear';
+export type VaultChangeType = 'save' | 'saveUserProviders' | 'saveManagedProviderKeys' | 'clear';
 
 export type VaultChangeListener = (type: VaultChangeType) => void;
 
@@ -190,6 +194,18 @@ export type UserProvidersReadResult =
   | { status: 'unsupported' }
   | { status: 'invalid'; reason: 'malformed_json' | 'schema_invalid' | 'decrypt_failed' };
 
+/**
+ * Read outcome for the administrator keys of the managed catalog (P1-5e).
+ *
+ * No `absent`: a vault with no such group, or no file at all, simply holds no
+ * keys, and the catalog reader treats a missing key the same way either way.
+ */
+export type ManagedProviderKeysReadResult =
+  | { status: 'ok'; keys: Record<string, string> }
+  | { status: 'locked' }
+  | { status: 'unsupported' }
+  | { status: 'invalid'; reason: 'malformed_json' | 'schema_invalid' | 'decrypt_failed' };
+
 interface RawEnvelope {
   version: number;
   enc: 'safeStorage' | 'none';
@@ -206,6 +222,20 @@ interface RawEnvelope {
    * locked, and a way to corrupt the group nobody was even editing.
    */
   userProvidersEnc?: 'safeStorage' | 'none';
+  /**
+   * dsh-rebase P1-5e (decisions 149, 152) — the administrator keys a managed
+   * catalog carried, by provider id, moved here out of
+   * `managed-models-source.json`. A cache of the last fetch, not an account
+   * record: it belongs to the signed-in session, so `save()` (a login or an
+   * adoption) and `clear()` (logout) both drop it, and the next sync fetches it
+   * again. Encoded on its own flag for the same reason as `userProviders`.
+   *
+   * No schema bump: an older build ignores the field and drops it on its next
+   * write, which costs one re-fetch — bumping would instead make that build
+   * read the whole vault as unsupported and ask the user to sign in again.
+   */
+  managedProviderKeys?: string | Record<string, unknown> | null;
+  managedProviderKeysEnc?: 'safeStorage' | 'none';
 }
 
 function validateEnvelopeShape(
@@ -234,6 +264,15 @@ function validateEnvelopeShape(
       : typeof obj.userProviders === 'string' || Array.isArray(obj.userProviders)
         ? (obj.userProviders as string | UserProvider[])
         : null;
+  const managedProviderKeys =
+    obj.managedProviderKeys === undefined
+      ? undefined
+      : typeof obj.managedProviderKeys === 'string' ||
+          (obj.managedProviderKeys !== null &&
+            typeof obj.managedProviderKeys === 'object' &&
+            !Array.isArray(obj.managedProviderKeys))
+        ? (obj.managedProviderKeys as string | Record<string, unknown>)
+        : null;
   return {
     ok: true,
     envelope: {
@@ -247,8 +286,22 @@ function validateEnvelopeShape(
       ...(obj.userProvidersEnc === 'safeStorage' || obj.userProvidersEnc === 'none'
         ? { userProvidersEnc: obj.userProvidersEnc }
         : {}),
+      ...(managedProviderKeys === undefined ? {} : { managedProviderKeys }),
+      ...(obj.managedProviderKeysEnc === 'safeStorage' || obj.managedProviderKeysEnc === 'none'
+        ? { managedProviderKeysEnc: obj.managedProviderKeysEnc }
+        : {}),
     },
   };
+}
+
+/** Provider id -> key, keeping only non-empty string keys. */
+function keyMap(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const keys: Record<string, string> = {};
+  for (const [providerId, key] of Object.entries(value)) {
+    if (typeof key === 'string' && key !== '') keys[providerId] = key;
+  }
+  return keys;
 }
 
 /** Shape gate for one decoded user service — a row missing an id or a key is not usable. */
@@ -715,6 +768,107 @@ export class CredentialVault {
     return { ok: true };
   }
 
+  /**
+   * The administrator keys of the managed catalog (P1-5e), by provider id.
+   *
+   * Like the user group, `invalidatedAt` is ignored: a refused login key says
+   * nothing about a key the administrator issued. A login or a logout removes
+   * the group outright (see `managedProviderKeys` on the envelope).
+   */
+  readManagedProviderKeys(): ManagedProviderKeysReadResult {
+    if (!existsSync(this.vaultPath)) return { status: 'ok', keys: {} };
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(this.vaultPath, 'utf-8'));
+    } catch {
+      return { status: 'invalid', reason: 'malformed_json' };
+    }
+    const validation = validateEnvelopeShape(parsed);
+    if (!validation.ok) return { status: 'invalid', reason: 'schema_invalid' };
+    const envelope = validation.envelope;
+    if (envelope.version > SCHEMA_VERSION) return { status: 'unsupported' };
+    const group = envelope.managedProviderKeys;
+    if (group === undefined || group === null) return { status: 'ok', keys: {} };
+
+    let value: unknown = group;
+    if (envelope.managedProviderKeysEnc === 'safeStorage') {
+      if (!this.isCryptoAvailable()) return { status: 'locked' };
+      if (typeof group !== 'string') return { status: 'invalid', reason: 'schema_invalid' };
+      try {
+        value = JSON.parse(this.crypto.decrypt(group));
+      } catch {
+        return { status: 'invalid', reason: 'decrypt_failed' };
+      }
+    }
+    const keys = keyMap(value);
+    return keys ? { status: 'ok', keys } : { status: 'invalid', reason: 'schema_invalid' };
+  }
+
+  /**
+   * Replace the administrator keys (P1-5e). An empty set removes the group.
+   *
+   * Encrypted whenever the platform can, exactly like the user group (user
+   * ruling, decision 149 rule 2): on Linux without a keyring the group is
+   * stored as-is in this 0600 file, no weaker than the login key beside it.
+   * Refuses rather than overwrites a vault file it cannot parse — that file may
+   * hold a user group `replaceUnreadableUserProviders` exists to keep.
+   */
+  saveManagedProviderKeys(keys: Readonly<Record<string, string>>): Promise<VaultSaveResult> {
+    return this.runSerialized(() => this.saveManagedProviderKeysInternal(keys));
+  }
+
+  private saveManagedProviderKeysInternal(keys: Readonly<Record<string, string>>): VaultSaveResult {
+    if (!this.promoted) {
+      console.warn(
+        '[CredentialVault] saveManagedProviderKeys refused: crypto not promoted yet (crypto_not_ready)'
+      );
+      return { ok: false, reason: 'crypto_not_ready' };
+    }
+    const existing = this.readRawEnvelope();
+    if (!existing && existsSync(this.vaultPath)) {
+      console.warn('[CredentialVault] saveManagedProviderKeys refused: vault file is unreadable');
+      return { ok: false, reason: 'unreadable' };
+    }
+    if (existing && existing.version > SCHEMA_VERSION) {
+      console.warn(
+        '[CredentialVault] saveManagedProviderKeys refused: on-disk vault is a newer, unsupported schema'
+      );
+      return { ok: false, reason: 'unsupported_version' };
+    }
+
+    const entries = keyMap(keys) ?? {};
+    if (Object.keys(entries).length === 0) {
+      // Nothing to keep. Never create a vault file just to say so.
+      if (!existing || existing.managedProviderKeys === undefined) return { ok: true };
+      const {
+        managedProviderKeys: _keys,
+        managedProviderKeysEnc: _enc,
+        ...withoutGroup
+      } = existing;
+      this.writeEnvelope(withoutGroup);
+      this.notifyChange('saveManagedProviderKeys');
+      return { ok: true };
+    }
+
+    const available = this.isCryptoAvailable();
+    const base: RawEnvelope = existing ?? {
+      version: SCHEMA_VERSION,
+      enc: 'none',
+      lastEmail: null,
+      invalidatedAt: null,
+      encReason: available ? 'ok' : 'unavailable',
+      payload: null,
+    };
+    this.writeEnvelope({
+      ...base,
+      version: SCHEMA_VERSION,
+      managedProviderKeys: available ? this.crypto.encrypt(JSON.stringify(entries)) : entries,
+      managedProviderKeysEnc: available ? 'safeStorage' : 'none',
+    });
+    this.notifyChange('saveManagedProviderKeys');
+    return { ok: true };
+  }
+
   /** The validated on-disk envelope, or `null` when there is nothing usable to carry over. */
   private readRawEnvelope(): RawEnvelope | null {
     if (!existsSync(this.vaultPath)) return null;
@@ -749,6 +903,11 @@ export class CredentialVault {
     // from the server response alone. The user-added group is carried over
     // verbatim — re-encoding it is neither needed (it tracks its own `enc`)
     // nor possible while the keyring is locked.
+    //
+    // P1-5e: the administrator keys are deliberately NOT carried over. They
+    // came with a catalog fetched under the credential this call replaces —
+    // possibly another account's — and the sync that follows every login
+    // fetches them again.
     const existing = this.readRawEnvelope();
     const userGroup: Partial<RawEnvelope> =
       existing?.userProviders === undefined
@@ -874,6 +1033,9 @@ export class CredentialVault {
     // destroy them, and re-entering every API key would be the real surprise.
     // Carried over verbatim: this path must work with the keyring locked, so
     // it must never need to decrypt that group.
+    //
+    // The administrator keys (P1-5e) are company credentials and go with the
+    // payload: not carried over.
     const userGroup: Partial<RawEnvelope> =
       existing?.userProviders === undefined
         ? {}
