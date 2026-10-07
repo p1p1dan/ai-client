@@ -19,9 +19,9 @@ import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import type { DshToolPresenter } from '../../shared/dshToolPresentation.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 import { mapOpenError } from './dshSessionRuntime.ts';
 import type { DshSessionObservation, DshSessionQuery } from './historyCache.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
 import { readStub, SESSION_INVALID } from './stub.ts';
 
 export interface ReadPageRequest {
@@ -38,7 +38,7 @@ export async function readSessionPage(
 ): Promise<SessionHistoryPage> {
   const stub = readStub(request.stubFile);
   if (stub.logicalSessionId !== request.logicalSessionId) {
-    throw new PiWorkerSessionError(
+    throw new BridgeSessionError(
       SESSION_INVALID,
       `DSH session identity ${request.stubFile} belongs to ${stub.logicalSessionId}, not ${request.logicalSessionId}`
     );

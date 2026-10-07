@@ -17,6 +17,7 @@ import type { PermissionFileSystem } from '../../../shared/permissions/shellPath
 import type { RuntimeEventDraft } from '../../../shared/types/runtimeEvents.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
 import type { DshPreToolDecision, DshToolCall } from '../../permissions/dshTypes.ts';
+import { BridgeRpcServer, type BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
@@ -25,7 +26,6 @@ import {
   stubPathFor,
   WORKER_PERMISSIONS_UNAVAILABLE,
 } from '../dshSessionRuntime.ts';
-import { PiWorkerRpcServer, type PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { dshSandboxModeFor } from '../sandboxMode.ts';
 import { grantsSidecarFor } from '../stub.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
@@ -126,7 +126,7 @@ function fakeDsh(options: { permissions?: boolean; fs?: PermissionFileSystem } =
 
 function runtime(
   ctx: DshBridgeContext,
-  extra: Partial<PiWorkerRuntimeOptions> = {},
+  extra: Partial<BridgeSessionRuntimeOptions> = {},
   deps: Partial<DshBridgeDeps> = {}
 ) {
   const events: Event[] = [];
@@ -824,10 +824,10 @@ describe('the setters act on the gate (P1-6c)', () => {
     }
   });
 
-  it("[setter-rpc] Main's three RPCs reach the gate through PiWorkerRpcServer", async () => {
+  it("[setter-rpc] Main's three RPCs reach the gate through BridgeRpcServer", async () => {
     const dsh = fakeDsh();
     const sent: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => sent.push(message as Record<string, unknown>) },
       generation: 1,
       projectTrusted: true,

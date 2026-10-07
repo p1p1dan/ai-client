@@ -34,8 +34,8 @@ function codeFiles(dir: string, out: string[] = []): string[] {
 }
 
 describe('chat engine is DSH only (P1-1)', () => {
-  it('createPiWorkerSlot has no native fork, no dev switch and no packaging gate', () => {
-    const source = read(path.join(AGENT_HOST, 'createPiWorkerSlot.ts'));
+  it('createDshChatSlot has no native fork, no dev switch and no packaging gate', () => {
+    const source = read(path.join(AGENT_HOST, 'createDshChatSlot.ts'));
     // P1-3a: a chat session is a channel on the app's one shared DSH host.
     expect(source).toContain("from './DshHostSupervisor'");
     expect(source).toContain('dshHostSupervisor.openChannel(');
@@ -75,7 +75,7 @@ describe('chat engine is DSH only (P1-1)', () => {
     ]) {
       expect(manager, banned).not.toContain(banned);
     }
-    const slot = code('createPiWorkerSlot.ts');
+    const slot = code('createDshChatSlot.ts');
     // P1-12 step 3 (decision 147): the field left the protocol type itself,
     // so the slot's payload no longer needs to omit it.
     expect(slot).toContain('type ChatSlotBootstrapPayload = WorkerBootstrapPayload;');

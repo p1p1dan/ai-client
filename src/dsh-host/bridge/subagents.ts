@@ -38,7 +38,7 @@ import type {
 } from '../../shared/types/runtimeEvents.ts';
 import type { WorkerSubagentInterruptResult } from '../../shared/types/workerRpc.ts';
 import { WORKER_JOBS_UNAVAILABLE } from '../../shared/types/workerRpc.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
 // ---- the slice of dsh-subagent read here ----------------------------------------------
 
@@ -525,12 +525,12 @@ export class DshSubagentsTracker {
   interrupt(childId: string): WorkerSubagentInterruptResult {
     const subagents = this.host.subagents();
     if (!subagents) {
-      throw new PiWorkerSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no subagent service');
+      throw new BridgeSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no subagent service');
     }
     try {
       subagents.interrupt(childId, { kind: 'user', parentSessionId: this.host.owner() });
     } catch (error) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SUBAGENT_UNAUTHORIZED',
         `Subagent ${childId} is not a child of this session: ${
           error instanceof Error ? error.message : String(error)

@@ -27,7 +27,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { SeedOrigin } from '../../shared/legacyPiSession/convert/types.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
 /** One DSH session a chat has been (decision 027). */
 export interface SessionLineageEntry {
@@ -171,10 +171,7 @@ export function readStub(file: string): SessionStub {
     raw = readFileSync(file, 'utf8');
   } catch (error) {
     if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') {
-      throw new PiWorkerSessionError(
-        DSH_SESSION_MISSING,
-        `DSH session identity is missing: ${file}`
-      );
+      throw new BridgeSessionError(DSH_SESSION_MISSING, `DSH session identity is missing: ${file}`);
     }
     throw error;
   }
@@ -185,7 +182,7 @@ export function readStub(file: string): SessionStub {
     parsed = undefined;
   }
   if (!isSessionStub(parsed)) {
-    throw new PiWorkerSessionError(SESSION_INVALID, `Not a DSH session identity: ${file}`);
+    throw new BridgeSessionError(SESSION_INVALID, `Not a DSH session identity: ${file}`);
   }
   return parsed;
 }

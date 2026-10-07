@@ -40,7 +40,7 @@ import {
   type WorkerJobKillResult,
   type WorkerJobReadResult,
 } from '../../shared/types/workerRpc.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
 // ---- the slice of dsh-jobs read here -------------------------------------------
 
@@ -476,13 +476,13 @@ export class DshJobsTracker {
     try {
       result = this.readTail(jobId, budget, from);
     } catch (error) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_JOB_UNKNOWN,
         `No job ${jobId} of this session: ${error instanceof Error ? error.message : String(error)}`
       );
     }
     if (!result) {
-      throw new PiWorkerSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no job registry');
+      throw new BridgeSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no job registry');
     }
     return result;
   }
@@ -491,12 +491,12 @@ export class DshJobsTracker {
   kill(jobId: string, reason = JOB_KILL_REASON): WorkerJobKillResult {
     const registry = this.host.registry();
     if (!registry?.kill) {
-      throw new PiWorkerSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no job registry');
+      throw new BridgeSessionError(WORKER_JOBS_UNAVAILABLE, 'This host has no job registry');
     }
     try {
       return { outcome: registry.kill(jobId, this.host.owner(), reason) };
     } catch (error) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_JOB_UNKNOWN,
         `No job ${jobId} of this session: ${error instanceof Error ? error.message : String(error)}`
       );

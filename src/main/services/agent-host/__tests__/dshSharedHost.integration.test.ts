@@ -22,7 +22,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 /**
  * dsh-rebase P1-3a / P1-3c — the shared DSH host for real (P1-3 plan §6, the
  * P0-6 scenarios): the real DshHostSupervisor, WorkerManager and
- * createPiWorkerSlot over a real host process and the local fake gateway.
+ * createDshChatSlot over a real host process and the local fake gateway.
  * Opt-in and slow:
  *
  *   AICLIENT_DSH_INTEGRATION=1 pnpm exec vitest run \
@@ -143,7 +143,7 @@ const { DshHostSupervisor, DSH_HOST_TIMINGS, dshHostSupervisor } = await import(
 const { LegacyMigrationService } = await import('../../chat/LegacyMigrationService');
 const { SessionIndexService } = await import('../../chat/SessionIndexService');
 const { WorkerManager } = await import('../WorkerManager');
-const { createPiWorkerSlot } = await import('../createPiWorkerSlot');
+const { createDshChatSlot } = await import('../createDshChatSlot');
 const { DshCredentialBroker } = await import('../DshCredentialBroker');
 // P1-15: Main's one-shot completions and the three features on top of them.
 const { DshCompletionService } = await import('../DshCompletionService');
@@ -432,12 +432,12 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
   function newManager(supervisor: Supervisor, own: boolean): Manager {
     return new WorkerManager({
       host: supervisor,
-      // The app's singleton is what createPiWorkerSlot opens channels on by
+      // The app's singleton is what createDshChatSlot opens channels on by
       // default; a second supervisor needs its channels opened on it.
       ...(own
         ? {
             createSlot: (options) =>
-              createPiWorkerSlot({
+              createDshChatSlot({
                 ...options,
                 createTransport: () =>
                   supervisor.openChannel({ userInitiated: options.userInitiated === true }),

@@ -356,7 +356,7 @@ describe('T018 framing and protocol on the wire', () => {
 
   // skills-mcp-01 — the phase budget has to stay under the one Main is holding
   // a timer against (`BOOTSTRAP_REQUEST_TIMEOUT_MS`, 60s in
-  // `src/main/services/agent-host/createPiWorkerSlot.ts`), or a slow server
+  // `src/main/services/agent-host/createDshChatSlot.ts`), or a slow server
   // fails the session instead of just itself.
   it('keeps the whole connect phase under the bootstrap RPC limit', () => {
     expect(MCP_CONNECT_ALL_TIMEOUT_MS).toBeLessThan(60_000);

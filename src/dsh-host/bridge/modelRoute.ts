@@ -13,7 +13,7 @@
 import { MODEL_NOT_CONFIGURED } from '../../shared/dshFailureCodes.ts';
 import { type DshRouteMode, resolveRoute } from '../../shared/dshModelPlan/route.ts';
 import type { DshEffortLevel, DshModelPlan } from '../../shared/dshModelPlan/types.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
 /** The plan as the host provides it (`aiclientModelPlan`): no nonce, nothing secret. */
 export type DshBridgeModelPlan = Pick<DshModelPlan, 'revision' | 'defaultModel' | 'index'>;
@@ -84,7 +84,7 @@ export class DshModelRouter {
   ): DshRoutedModel {
     const plan = this.plan();
     if (!plan) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         MODEL_NOT_CONFIGURED,
         'This engine was started without a model plan; no model can be reached'
       );
@@ -96,7 +96,7 @@ export class DshModelRouter {
       mode
     );
     if (!resolved.ok) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         MODEL_NOT_CONFIGURED,
         resolved.code === 'MODEL_CATALOG_EMPTY'
           ? 'No model is available: sign in, or add a model service'

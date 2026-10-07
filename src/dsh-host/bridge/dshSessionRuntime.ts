@@ -1,9 +1,9 @@
 /**
  * One DSH session behind our worker RPC (P0-3 bridge, hardened for P1-1).
  *
- * `DshSessionRuntime` implements the `PiWorkerRuntime` contract 1.0.x's native
+ * `DshSessionRuntime` implements the `BridgeSessionRuntime` contract 1.0.x's native
  * worker runtime implemented (the only implementation since dsh-rebase P1-12),
- * so the unmodified `PiWorkerRpcServer` can drive it and
+ * so the unmodified `BridgeRpcServer` can drive it and
  * Main / the renderer see ordinary worker RPC and RuntimeEvents. It runs inside
  * the shared DSH host, one per channel of the `aiclient-bridge` row of
  * @aiclient/dsh-app (P1-3a), and talks to DSH services in-process:
@@ -173,6 +173,8 @@ import {
 } from '../../shared/types/workerRpc.ts';
 import type { AttachedGate, DshPermissionHost } from '../permissions/permissionHost.ts';
 import { admitUserContent, type DshAttachmentStore, type DshUserContent } from './attachments.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
+import type { BridgeSessionRuntime, BridgeSessionRuntimeOptions } from './bridgeRpcServer.ts';
 import {
   compactOutcome,
   DSH_COMMAND_ERROR_TYPE,
@@ -220,8 +222,6 @@ import {
   goalActivationOf,
   outOfBandCommandName,
 } from './panels.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
-import type { PiWorkerRuntime, PiWorkerRuntimeOptions } from './piWorkerRpcServer.ts';
 import {
   createDshQuestionPrompt,
   DSH_QUESTION_ID_PREFIX,
@@ -580,13 +580,13 @@ export function hasNamedError(error: unknown, name: string, depth = 0): boolean 
 /** decision 010: DSH's refusals in our vocabulary. The kernel lock has no forced takeover. */
 export function mapOpenError(error: unknown, dshSessionId: string): unknown {
   if (hasNamedError(error, 'SessionPersistenceNotFoundError')) {
-    return new PiWorkerSessionError(
+    return new BridgeSessionError(
       DSH_SESSION_MISSING,
       `DSH session ${dshSessionId} is not on disk`
     );
   }
   if (hasNamedError(error, 'SessionAlreadyOwnedError')) {
-    return new PiWorkerSessionError(
+    return new BridgeSessionError(
       SESSION_LOCKED,
       `DSH session ${dshSessionId} is held by another process`,
       true
@@ -634,9 +634,9 @@ const POLICY_FILES: PermissionPolicyFiles = {
 
 // ---- the runtime -------------------------------------------------------------
 
-export class DshSessionRuntime implements PiWorkerRuntime {
+export class DshSessionRuntime implements BridgeSessionRuntime {
   private readonly ctx: DshBridgeContext;
-  private readonly options: PiWorkerRuntimeOptions;
+  private readonly options: BridgeSessionRuntimeOptions;
   private readonly deps: DshBridgeDeps;
   private readonly logicalSessionId: string;
   private readonly cwd: string;
@@ -707,7 +707,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private readonly children: DshSubagentsTracker;
   private disposed = false;
 
-  constructor(ctx: DshBridgeContext, options: PiWorkerRuntimeOptions, deps: DshBridgeDeps) {
+  constructor(ctx: DshBridgeContext, options: BridgeSessionRuntimeOptions, deps: DshBridgeDeps) {
     this.ctx = ctx;
     this.options = options;
     this.deps = deps;
@@ -878,7 +878,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private async bootstrapOnce(): Promise<WorkerBootstrapResult> {
     if (!this.home) throw new Error('DSH_HOME is not set for the DSH bridge');
     if (!this.ctx.aiclientPermissions) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_PERMISSIONS_UNAVAILABLE,
         'The aiclient-permissions row is not composed in this host; no tool call could be judged'
       );
@@ -1046,7 +1046,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    */
   private reportedGate(): WorkerBootstrapResult['permissionGate'] {
     if (!this.gateInstalled()) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_PERMISSIONS_UNAVAILABLE,
         'The session opened without its permission gate attached'
       );
@@ -1073,10 +1073,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const host = this.ctx.aiclientPermissions;
     const gate = this.gate;
     if (!host || !gate) {
-      throw new PiWorkerSessionError(
-        WORKER_PERMISSIONS_UNAVAILABLE,
-        'No permission gate to attach'
-      );
+      throw new BridgeSessionError(WORKER_PERMISSIONS_UNAVAILABLE, 'No permission gate to attach');
     }
     try {
       this.attachment = host.attachGate(this.gateChannel, {
@@ -1086,7 +1083,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       });
     } catch (error) {
       // Another channel of this host has the session open: its lock, in our words.
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         SESSION_LOCKED,
         `DSH session ${dshSessionId} is open in another channel of this host: ${
           error instanceof Error ? error.message : String(error)
@@ -1143,7 +1140,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private async createSession(selection: { provider: string; model: string }): Promise<string> {
     this.dshSessionId = dshSessionIdFor(this.logicalSessionId);
     if (!SAFE_SESSION_ID.test(this.dshSessionId)) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_INVALID_PAYLOAD',
         `Logical session id cannot name a DSH session: ${this.logicalSessionId}`
       );
@@ -1167,7 +1164,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       await this.openDshSession(this.dshSessionId, selection);
       const cwd = this.handle?.agent.session.header?.cwd;
       if (cwd !== undefined && !samePath(cwd, this.cwd)) {
-        throw new PiWorkerSessionError(
+        throw new BridgeSessionError(
           SESSION_CWD_MISMATCH,
           `DSH session ${this.dshSessionId} belongs to ${cwd}, not ${this.cwd}`
         );
@@ -1196,7 +1193,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     // DSH keeps the cwd in the session header and every tool reads it from
     // there, so a different workspace cannot be honoured — only refused.
     if (!samePath(stub.cwd, this.cwd)) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         SESSION_CWD_MISMATCH,
         `DSH session ${stub.dshSessionId} belongs to ${stub.cwd}, not ${this.cwd}`
       );
@@ -1298,7 +1295,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
    */
   private assertNoOwnTurn(): void {
     if ((this.turn && !this.turn.synthetic) || this.commandSends.size > 0) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_BUSY',
         'Session already has an active turn',
         true
@@ -1434,7 +1431,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   async compact(input: WorkerCompactPayload): Promise<WorkerCompactResult> {
     this.assertLogicalSession(input.logicalSessionId);
     if (input.instructions !== undefined && input.instructions.trim().length > 0) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
         '/compact takes no instructions on the DSH engine; nothing was compacted'
       );
@@ -1444,10 +1441,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const agent = this.requireAgent();
     const commands = this.ctx.get?.('commands');
     if (!commands || commands.find(agent, 'compact') === undefined) {
-      throw new PiWorkerSessionError(
-        WORKER_COMPACT_UNAVAILABLE,
-        'This host has no /compact command'
-      );
+      throw new BridgeSessionError(WORKER_COMPACT_UNAVAILABLE, 'This host has no /compact command');
     }
     const budgetMs = this.deps.compactTimeoutMs ?? WORKER_COMPACT_BUDGET_MS;
     // Decision 140: the summary row already on the timeline, so the one this
@@ -1464,14 +1458,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       clearTimeout(timer);
     }
     if (controller.signal.aborted) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_COMPACT_TIMEOUT,
         `summarizing the conversation took longer than ${budgetMs}ms; it was cancelled`,
         true
       );
     }
     const outcome = compactOutcome(execution);
-    if (!('compacted' in outcome)) throw new PiWorkerSessionError(outcome.code, outcome.message);
+    if (!('compacted' in outcome)) throw new BridgeSessionError(outcome.code, outcome.message);
     // Decision 140: the row the history will show for it, handed back with the
     // answer (no live event: decision 113 rule 8 stands). A cache that cannot
     // read it back costs the row only; the compaction itself succeeded.
@@ -1508,7 +1502,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const name = outOfBandCommandName(input.line);
     const commands = name ? this.ctx.get?.('commands') : undefined;
     if (!name || !commands || commands.find(agent, name) === undefined) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_COMMAND_UNKNOWN,
         `${input.line.split(/\s/u, 1)[0] ?? ''} is not a command this session runs out of band`
       );
@@ -1525,7 +1519,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
       clearTimeout(timer);
     }
     if (controller.signal.aborted) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_COMMAND_TIMEOUT,
         `/${name} took longer than ${budgetMs}ms; it was cancelled`,
         true
@@ -1533,7 +1527,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     }
     if (!execution) {
       // Gone from the registry between the lookup and the run: nothing was logged.
-      throw new PiWorkerSessionError(WORKER_COMMAND_UNKNOWN, `/${name} is no longer available`);
+      throw new BridgeSessionError(WORKER_COMMAND_UNKNOWN, `/${name} is no longer available`);
     }
     return commandResultOf(execution);
   }
@@ -1579,7 +1573,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   /** A bootstrapped, live session: what the windows' controls act on. */
   private requireOpen(): void {
     if (!this.result || this.disposed || !this.handle) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'No open DSH session');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'No open DSH session');
     }
   }
 
@@ -1601,13 +1595,13 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const current = await this.historyCache.ready();
     const lastEnd = current ? this.historyCache.lastTurnEnd() : undefined;
     if (!this.idle() || this.commandSends.size > 0) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_RETRY_UNAVAILABLE,
         'A turn is running; there is nothing to retry'
       );
     }
     if (lastEnd === undefined || !RETRYABLE_TURN_ENDS.has(lastEnd)) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_RETRY_UNAVAILABLE,
         lastEnd === undefined
           ? 'No ended turn is on record; there is nothing to retry'
@@ -1765,7 +1759,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     } else if (permissions.mode === gate.mode) {
       gate.setGear(permissions.gear);
     } else {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_BUSY',
         'The mode cannot change while the agent runs; the permission level can',
         true
@@ -1792,7 +1786,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   private requireGate(): PermissionGate {
     const gate = this.gate;
     if (!gate || !this.gateInstalled()) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_PERMISSIONS_UNAVAILABLE,
         'This session has no permission gate attached'
       );
@@ -1875,7 +1869,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     await this.bootstrap();
     this.assertIdle('rewind the session');
     if (this.hasLiveJobs()) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         WORKER_REWIND_JOBS_RUNNING,
         'A background job of this session is still running; rewinding now would end it',
         true
@@ -1887,7 +1881,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const previousId = this.dshSessionId;
     const stub = readStub(this.stubFile);
     if (stub.dshSessionId !== previousId) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         SESSION_INVALID,
         `DSH session identity ${this.stubFile} names ${stub.dshSessionId}, not ${previousId}`
       );
@@ -1995,7 +1989,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const target = input.targetLogicalSessionId;
     const childId = target ? dshSessionIdFor(target) : '';
     if (!target || !SAFE_SESSION_ID.test(childId)) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_INVALID_PAYLOAD',
         'A DSH fork needs a usable logical id minted by Main (targetLogicalSessionId)'
       );
@@ -2009,7 +2003,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
         (message) => message.role === 'assistant'
       )
     ) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         SESSION_FORK_UNMATERIALIZED,
         'fork requires an assistant on the selected path'
       );
@@ -2164,7 +2158,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     const events = sourceId ? await readSessionEvents(this.query, sourceId) : [];
     const plan = sourceId ? planDshCut(events, entryId, operation) : undefined;
     if (!sourceId || !plan) {
-      throw new PiWorkerSessionError(SESSION_ENTRY_NOT_FOUND, `entry not found: ${entryId}`);
+      throw new BridgeSessionError(SESSION_ENTRY_NOT_FOUND, `entry not found: ${entryId}`);
     }
     return { sourceId, events, plan };
   }
@@ -2182,7 +2176,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     for (let attempt = 0; ; attempt += 1) {
       const id = idOf(attempt);
       if (!SAFE_SESSION_ID.test(id)) {
-        throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', `Cannot name a DSH session ${id}`);
+        throw new BridgeSessionError('WORKER_INVALID_PAYLOAD', `Cannot name a DSH session ${id}`);
       }
       try {
         const handle = await this.ctx.agents.create({
@@ -2205,7 +2199,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
     try {
       return agent.runMaintenance(() => task());
     } catch (error) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_BUSY',
         `The DSH agent is not idle: ${error instanceof Error ? error.message : String(error)}`,
         true
@@ -2242,7 +2236,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   private assertLogicalSession(id: string): void {
     if (id === this.logicalSessionId) return;
-    throw new PiWorkerSessionError(
+    throw new BridgeSessionError(
       'WORKER_SESSION_MISMATCH',
       `This worker owns ${this.logicalSessionId}, not ${id}`
     );
@@ -2258,7 +2252,7 @@ export class DshSessionRuntime implements PiWorkerRuntime {
 
   private assertIdle(action: string): void {
     if (this.idle() && this.commandSends.size === 0) return;
-    throw new PiWorkerSessionError(
+    throw new BridgeSessionError(
       'WORKER_SESSION_BUSY',
       `Cannot ${action} while a turn is active`,
       true
@@ -2266,14 +2260,14 @@ export class DshSessionRuntime implements PiWorkerRuntime {
   }
 
   private requireHandle(): DshAgentHandle {
-    if (!this.handle) throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'No DSH agent');
+    if (!this.handle) throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'No DSH agent');
     return this.handle;
   }
 
   // ---- translation -------------------------------------------------------------
 
   private requireAgent(): DshAgent {
-    if (!this.handle) throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'No DSH agent');
+    if (!this.handle) throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'No DSH agent');
     return this.handle.agent;
   }
 

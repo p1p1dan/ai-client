@@ -19,7 +19,7 @@
 
 import type { SessionAttachment } from '../../shared/types/agentHost.ts';
 import { WORKER_ATTACHMENT_REJECTED } from '../../shared/types/workerRpc.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
 /** `FileAttachmentRef` of dsh-attachment: the verbatim stored file. */
 export interface DshFileAttachmentRef {
@@ -103,12 +103,12 @@ async function refusedImage(
 }
 
 /** `<DSH code> "<file name>": <DSH sentence>`, as `WORKER_ATTACHMENT_REJECTED` documents it. */
-function rejection(error: unknown, culprit: SessionAttachment | undefined): PiWorkerSessionError {
+function rejection(error: unknown, culprit: SessionAttachment | undefined): BridgeSessionError {
   const { code, message } = error as { code?: unknown; message?: unknown };
   const blamed = culprit
     ? ` ${JSON.stringify(culprit.name ?? (culprit.kind === 'image' ? 'image' : 'attachment'))}`
     : '';
-  return new PiWorkerSessionError(
+  return new BridgeSessionError(
     WORKER_ATTACHMENT_REJECTED,
     `${String(code)}${blamed}: ${String(message)}`
   );

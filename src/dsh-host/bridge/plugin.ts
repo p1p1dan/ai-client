@@ -3,7 +3,7 @@
  *
  * The one bridge of the shared DSH host (dsh-rebase decision 019): every chat
  * session is a channel on the Node IPC link Main's DshHostSupervisor opened,
- * served by `channelMux.ts` with an unmodified `PiWorkerRpcServer` and a
+ * served by `channelMux.ts` with an unmodified `BridgeRpcServer` and a
  * `DshSessionRuntime` per channel. The host launcher buffers IPC from its first
  * line; this row claims that buffer as soon as the services it needs exist,
  * and the launcher refuses to report ready over IPC until it has.

@@ -68,7 +68,7 @@ describe('shared DSH host signalling (SG-01)', () => {
   });
 
   it('a chat slot reaches the DSH host only through a supervisor channel (P1-3a)', () => {
-    const slot = code('createPiWorkerSlot.ts');
+    const slot = code('createDshChatSlot.ts');
     expect(slot).toContain('dshHostSupervisor.openChannel(');
     expect(slot).not.toMatch(/\bspawn\(|\bfork\(|process\.kill|\.kill\(/);
   });

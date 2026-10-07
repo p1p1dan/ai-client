@@ -248,7 +248,7 @@ function createHarness(
     if (input.createFailureAfter !== undefined && createCount > input.createFailureAfter) {
       throw new Error(`restart spawn ${createCount} failed`);
     }
-    // What `createPiWorkerSlot` does first: open a channel, which brings the
+    // What `createDshChatSlot` does first: open a channel, which brings the
     // shared host up, and only a user's spawn past a failed one (decision 020).
     if (host) await host.ensureHost({ userInitiated: options.userInitiated === true });
     const sessionId = String(options.logicalSessionId);
@@ -2409,7 +2409,7 @@ describe('WorkerManager manager-level state', () => {
  *
  * The worker orders its teardown so that the engine can still emit while it
  * denies parked permission gates and cancels parked questions: see the comment
- * on `handleDispose` (dsh-host/bridge/piWorkerRpcServer.ts) and `dispose()`
+ * on `handleDispose` (dsh-host/bridge/bridgeRpcServer.ts) and `dispose()`
  * in the bridge's dshSessionRuntime.ts. Main used to close its event gate
  * before asking for that teardown, so every one of those resolutions was
  * dropped and the cards stayed on screen with nothing left to answer them.
@@ -3647,7 +3647,7 @@ describe('WorkerManager retry of the last turn (T135 / decision 045)', () => {
 /**
  * dsh-rebase P1-1 — the four paths that start a chat engine (new, resume,
  * fork target, crash restart) all go through `createSlot`, which
- * `createPiWorkerSlot.test.ts` pins to the DSH host. Here: each path carries
+ * `createDshChatSlot.test.ts` pins to the DSH host. Here: each path carries
  * the DSH identity (a `.dsh.json` stub, returned on create and handed back on
  * every reopen) and binds the session to `dsh` in its events and index writes.
  */

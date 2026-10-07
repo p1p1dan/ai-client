@@ -7,6 +7,7 @@ import {
   WORKER_COMMAND_UNKNOWN,
   WORKER_COMPACT_INSTRUCTIONS_UNSUPPORTED,
 } from '../../../shared/types/workerRpc.ts';
+import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import type { DshCommandResult, DshSkillSummary } from '../commands.ts';
 import {
   type DshBridgeContext,
@@ -14,7 +15,6 @@ import {
   DshSessionRuntime,
   dshSessionIdFor,
 } from '../dshSessionRuntime.ts';
-import type { PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 
@@ -201,7 +201,7 @@ function runtime(
   ctx: DshBridgeContext,
   emitted: Emitted[],
   extra: Partial<DshBridgeDeps> = {},
-  options: Partial<PiWorkerRuntimeOptions> = {}
+  options: Partial<BridgeSessionRuntimeOptions> = {}
 ): DshSessionRuntime {
   return new DshSessionRuntime(
     ctx,

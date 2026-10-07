@@ -1,5 +1,7 @@
 // Moved from src/agent-host/piWorkerRpcServer.ts (dsh-rebase P1-12 step 4,
-// decision 147): the bridge is its only user.
+// decision 147): the bridge is its only user. Renamed with it: PiWorkerRpcServer
+// -> BridgeRpcServer, PiWorkerRuntime(Options) -> BridgeSessionRuntime(Options),
+// PiWorkerMessagePort -> BridgeMessagePort. The wire (methods, codes) is unchanged.
 import type {
   PermissionDecisionId,
   RuntimeEvent,
@@ -81,9 +83,9 @@ import {
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '../../shared/types/workerRpc.ts';
-import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import { BridgeSessionError } from './bridgeErrors.ts';
 
-export interface PiWorkerMessagePort {
+export interface BridgeMessagePort {
   postMessage(message: unknown): void;
 }
 
@@ -98,7 +100,7 @@ export interface PiWorkerMessagePort {
  * implementation is the DSH bridge's `DshSessionRuntime`; `reload` left the
  * interface with the native runtime (decision 127).
  */
-export interface PiWorkerRuntime {
+export interface BridgeSessionRuntime {
   bootstrap(): Promise<WorkerBootstrapResult>;
   startSend(input: WorkerSendPayload): Promise<WorkerSendResult>;
   history(input: WorkerHistoryPayload): Promise<WorkerHistoryResult>;
@@ -164,14 +166,14 @@ export interface PiWorkerRuntime {
  * declared it. A parameter no implementation reads is not a contract, it is a
  * claim that something is being configured.
  */
-export interface PiWorkerRuntimeOptions extends WorkerBootstrapPayload {
+export interface BridgeSessionRuntimeOptions extends WorkerBootstrapPayload {
   projectTrusted: boolean;
   emit: (event: RuntimeEventDraft) => void;
   log?: (...args: unknown[]) => void;
 }
 
-export interface PiWorkerRpcServerOptions {
-  port: PiWorkerMessagePort;
+export interface BridgeRpcServerOptions {
+  port: BridgeMessagePort;
   generation: number;
   projectTrusted: boolean;
   /**
@@ -184,7 +186,7 @@ export interface PiWorkerRpcServerOptions {
    * control channel (decision 125), so `worker.import*`, `utility.*` and
    * `worker.reload` are now unknown methods here.
    */
-  createRuntime: (options: PiWorkerRuntimeOptions) => PiWorkerRuntime;
+  createRuntime: (options: BridgeSessionRuntimeOptions) => BridgeSessionRuntime;
   log?: (...args: unknown[]) => void;
   onDisposed?: () => void;
 }
@@ -242,7 +244,7 @@ function errorPayload(error: unknown): WorkerRpcErrorPayload {
   // P6-5 removed a branch for the legacy engine's PermissionGateUnavailableError.
   // Nothing is lost: it carried a string `code` and no `retryable`, which is
   // exactly what the generic Error branch below reports.
-  if (error instanceof PiWorkerSessionError) {
+  if (error instanceof BridgeSessionError) {
     return { code: error.code, message: error.message, retryable: error.retryable };
   }
   if (error instanceof Error) {
@@ -269,16 +271,16 @@ function errorPayload(error: unknown): WorkerRpcErrorPayload {
  * is idempotent and a different bootstrap is rejected without constructing a
  * second AgentSession.
  */
-export class PiWorkerRpcServer {
-  private readonly options: PiWorkerRpcServerOptions;
+export class BridgeRpcServer {
+  private readonly options: BridgeRpcServerOptions;
   private readonly log: (...args: unknown[]) => void;
   private chain = Promise.resolve();
   private bootstrapPayload: WorkerBootstrapPayload | null = null;
-  private runtime: PiWorkerRuntime | null = null;
+  private runtime: BridgeSessionRuntime | null = null;
   private disposed = false;
   private eventSequence = 0;
 
-  constructor(options: PiWorkerRpcServerOptions) {
+  constructor(options: BridgeRpcServerOptions) {
     if (!Number.isSafeInteger(options.generation) || options.generation <= 0) {
       throw new Error(
         `Pi worker generation must be a positive safe integer: ${options.generation}`
@@ -457,7 +459,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     // startSend only awaits admission/setup. The long-running prompt continues
     // out of band so the serialized RPC chain remains available to worker.stop.
@@ -475,7 +477,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.history(request.payload));
   }
@@ -490,7 +492,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.tree(request.payload));
   }
@@ -529,7 +531,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.compact(request.payload));
   }
@@ -544,7 +546,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.command(request.payload));
   }
@@ -584,7 +586,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.killJob(request.payload));
   }
@@ -599,7 +601,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.readJob(request.payload));
   }
@@ -614,7 +616,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.interruptSubagent(request.payload));
   }
@@ -629,7 +631,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.rewind(request.payload));
   }
@@ -644,7 +646,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.fork(request.payload));
   }
@@ -659,7 +661,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.discardFork(request.payload));
   }
@@ -674,7 +676,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.respondSuccess(request, await this.runtime.acceptFork(request.payload));
   }
@@ -724,13 +726,13 @@ export class PiWorkerRpcServer {
       return;
     }
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Permission response targets another session'
       );
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerPermissionRespondResult = {
       handled: this.runtime.respondPermission({
@@ -760,13 +762,13 @@ export class PiWorkerRpcServer {
       return;
     }
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Question response targets another session'
       );
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerQuestionRespondResult = {
       handled: this.runtime.respondQuestion({
@@ -797,13 +799,13 @@ export class PiWorkerRpcServer {
       return;
     }
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Preview response targets another session'
       );
     }
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     const result: WorkerPreviewRespondResult = {
       handled: this.runtime.respondPreview({
@@ -817,14 +819,14 @@ export class PiWorkerRpcServer {
 
   private handleSetPermissions(request: WorkerRpcRequest): void {
     if (!isWorkerSetPermissionsPayload(request.payload))
-      throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', 'Invalid mode or permission gear');
+      throw new BridgeSessionError('WORKER_INVALID_PAYLOAD', 'Invalid mode or permission gear');
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Permission settings target another session'
       );
     if (!this.runtime)
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     this.runtime.setPermissions(request.payload.permissions);
     this.respondSuccess(request, { applied: true });
   }
@@ -840,14 +842,14 @@ export class PiWorkerRpcServer {
    */
   private handleSetPermissionGear(request: WorkerRpcRequest): void {
     if (!isWorkerSetPermissionGearPayload(request.payload))
-      throw new PiWorkerSessionError('WORKER_INVALID_PAYLOAD', 'Invalid permission gear');
+      throw new BridgeSessionError('WORKER_INVALID_PAYLOAD', 'Invalid permission gear');
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId)
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Permission gear change targets another session'
       );
     if (!this.runtime)
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     this.runtime.setPermissionGear(request.payload.gear);
     this.respondSuccess(request, { applied: true });
   }
@@ -862,7 +864,7 @@ export class PiWorkerRpcServer {
       return;
     }
     if (request.payload.logicalSessionId !== this.bootstrapPayload?.logicalSessionId) {
-      throw new PiWorkerSessionError(
+      throw new BridgeSessionError(
         'WORKER_SESSION_MISMATCH',
         'Permission tier change targets another session'
       );
@@ -873,7 +875,7 @@ export class PiWorkerRpcServer {
     // never took. Same answer `worker.setPermissions` gives for the same
     // situation.
     if (!this.runtime) {
-      throw new PiWorkerSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
+      throw new BridgeSessionError('WORKER_NOT_BOOTSTRAPPED', 'Worker is not bootstrapped');
     }
     this.runtime.setPermissionTier(request.payload.tier);
     const result: WorkerSetPermissionTierResult = { applied: true };

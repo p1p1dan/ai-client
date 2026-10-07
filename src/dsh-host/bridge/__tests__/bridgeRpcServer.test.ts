@@ -7,10 +7,10 @@ import {
   type WorkerRpcRequest,
 } from '../../../shared/types/workerRpc.ts';
 import {
-  PiWorkerRpcServer,
-  type PiWorkerRuntime,
-  type PiWorkerRuntimeOptions,
-} from '../piWorkerRpcServer.ts';
+  BridgeRpcServer,
+  type BridgeSessionRuntime,
+  type BridgeSessionRuntimeOptions,
+} from '../bridgeRpcServer.ts';
 
 function request(
   requestId: string,
@@ -43,7 +43,7 @@ function bootstrapResult(): WorkerBootstrapResult {
 }
 
 /**
- * A complete `PiWorkerRuntime`.
+ * A complete `BridgeSessionRuntime`.
  *
  * T025 made every method on the interface required, so this fixture has to
  * implement all of them — which is the point: the twelve that used to be
@@ -56,7 +56,7 @@ const notCalled = (method: string) => () => {
   throw new Error(`this test does not expect ${method} to be called`);
 };
 
-function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
+function runtime(overrides: Partial<BridgeSessionRuntime> = {}): BridgeSessionRuntime {
   return {
     bootstrap: async () => bootstrapResult(),
     startSend: async (input) => ({ accepted: true, requestId: input.requestId }),
@@ -72,36 +72,36 @@ function runtime(overrides: Partial<PiWorkerRuntime> = {}): PiWorkerRuntime {
         hasMore: false,
       },
     }),
-    tree: notCalled('tree') as PiWorkerRuntime['tree'],
-    commands: notCalled('commands') as PiWorkerRuntime['commands'],
-    compact: notCalled('compact') as PiWorkerRuntime['compact'],
-    command: notCalled('command') as PiWorkerRuntime['command'],
-    panels: notCalled('panels') as PiWorkerRuntime['panels'],
-    killJob: notCalled('killJob') as PiWorkerRuntime['killJob'],
-    readJob: notCalled('readJob') as PiWorkerRuntime['readJob'],
-    interruptSubagent: notCalled('interruptSubagent') as PiWorkerRuntime['interruptSubagent'],
-    rewind: notCalled('rewind') as PiWorkerRuntime['rewind'],
-    fork: notCalled('fork') as PiWorkerRuntime['fork'],
-    discardFork: notCalled('discardFork') as PiWorkerRuntime['discardFork'],
-    acceptFork: notCalled('acceptFork') as PiWorkerRuntime['acceptFork'],
+    tree: notCalled('tree') as BridgeSessionRuntime['tree'],
+    commands: notCalled('commands') as BridgeSessionRuntime['commands'],
+    compact: notCalled('compact') as BridgeSessionRuntime['compact'],
+    command: notCalled('command') as BridgeSessionRuntime['command'],
+    panels: notCalled('panels') as BridgeSessionRuntime['panels'],
+    killJob: notCalled('killJob') as BridgeSessionRuntime['killJob'],
+    readJob: notCalled('readJob') as BridgeSessionRuntime['readJob'],
+    interruptSubagent: notCalled('interruptSubagent') as BridgeSessionRuntime['interruptSubagent'],
+    rewind: notCalled('rewind') as BridgeSessionRuntime['rewind'],
+    fork: notCalled('fork') as BridgeSessionRuntime['fork'],
+    discardFork: notCalled('discardFork') as BridgeSessionRuntime['discardFork'],
+    acceptFork: notCalled('acceptFork') as BridgeSessionRuntime['acceptFork'],
     stop: async () => ({ stopped: true }),
     interject: () => ({ interjected: false }),
-    respondPermission: notCalled('respondPermission') as PiWorkerRuntime['respondPermission'],
-    respondQuestion: notCalled('respondQuestion') as PiWorkerRuntime['respondQuestion'],
-    respondPreview: notCalled('respondPreview') as PiWorkerRuntime['respondPreview'],
-    setPermissions: notCalled('setPermissions') as PiWorkerRuntime['setPermissions'],
-    setPermissionGear: notCalled('setPermissionGear') as PiWorkerRuntime['setPermissionGear'],
-    setPermissionTier: notCalled('setPermissionTier') as PiWorkerRuntime['setPermissionTier'],
+    respondPermission: notCalled('respondPermission') as BridgeSessionRuntime['respondPermission'],
+    respondQuestion: notCalled('respondQuestion') as BridgeSessionRuntime['respondQuestion'],
+    respondPreview: notCalled('respondPreview') as BridgeSessionRuntime['respondPreview'],
+    setPermissions: notCalled('setPermissions') as BridgeSessionRuntime['setPermissions'],
+    setPermissionGear: notCalled('setPermissionGear') as BridgeSessionRuntime['setPermissionGear'],
+    setPermissionTier: notCalled('setPermissionTier') as BridgeSessionRuntime['setPermissionTier'],
     dispose: async () => undefined,
     ...overrides,
   };
 }
 
-describe('PiWorkerRpcServer', () => {
+describe('BridgeRpcServer', () => {
   it('echoes correlation and constructs only one runtime for duplicate bootstrap', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-    const server = new PiWorkerRpcServer({
+    const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -117,8 +117,8 @@ describe('PiWorkerRpcServer', () => {
 
   it('rejects a duplicate bootstrap that targets a different exact session file', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-    const server = new PiWorkerRpcServer({
+    const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -160,8 +160,8 @@ describe('PiWorkerRpcServer', () => {
   describe('no opt-in extension transport', () => {
     it('hands the runtime factory nothing named after opt-in extensions', async () => {
       const messages: Array<Record<string, unknown>> = [];
-      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-      const server = new PiWorkerRpcServer({
+      const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+      const server = new BridgeRpcServer({
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted: true,
@@ -180,7 +180,7 @@ describe('PiWorkerRpcServer', () => {
 
     it('leaves no reader of the opt-in variable in the worker entry or this server', () => {
       // The native worker entry was the other reader; it left with P1-12 step 3.
-      for (const file of ['../piWorkerRpcServer.ts']) {
+      for (const file of ['../bridgeRpcServer.ts']) {
         const source = readFileSync(join(__dirname, file), 'utf8');
         expect(source).not.toContain('PI_OPT_IN_EXTENSIONS_ENV');
         expect(source).not.toContain('AICLIENT_PI_OPT_IN_EXTENSIONS');
@@ -194,8 +194,8 @@ describe('PiWorkerRpcServer', () => {
   describe('unbound sessions and project trust', () => {
     function bootstrapWith(projectTrusted: boolean, payload: Record<string, unknown>) {
       const messages: Array<Record<string, unknown>> = [];
-      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-      const server = new PiWorkerRpcServer({
+      const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+      const server = new BridgeRpcServer({
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted,
@@ -240,8 +240,8 @@ describe('PiWorkerRpcServer', () => {
       // Without this, the second call would be served by the runtime built for
       // the first one — i.e. a scratch session answered by a trusted runtime.
       const messages: Array<Record<string, unknown>> = [];
-      const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-      const server = new PiWorkerRpcServer({
+      const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+      const server = new BridgeRpcServer({
         port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
         generation: 3,
         projectTrusted: true,
@@ -289,7 +289,7 @@ describe('PiWorkerRpcServer', () => {
       return { accepted: true as const, requestId: input.requestId };
     });
     const stop = vi.fn(async () => ({ stopped: true }));
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -329,7 +329,7 @@ describe('PiWorkerRpcServer', () => {
 
   it('wraps runtime events with generation and sequence', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: true,
@@ -365,8 +365,8 @@ describe('PiWorkerRpcServer', () => {
    */
   it('answers the retired native-only methods as unknown, without building a runtime', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const createRuntime = vi.fn((_options: PiWorkerRuntimeOptions) => runtime());
-    const server = new PiWorkerRpcServer({
+    const createRuntime = vi.fn((_options: BridgeSessionRuntimeOptions) => runtime());
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -397,7 +397,7 @@ describe('PiWorkerRpcServer', () => {
 
   it('returns correlated errors for stale, malformed, unknown, and pre-bootstrap send', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -426,7 +426,7 @@ describe('PiWorkerRpcServer', () => {
   it('validates and forwards both D14 axes, rejecting invalid values', async () => {
     const messages: Array<Record<string, unknown>> = [];
     const setPermissions = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -467,7 +467,7 @@ describe('PiWorkerRpcServer', () => {
     // keeps cannot be talked around by sending the wrong payload.
     const messages: Array<Record<string, unknown>> = [];
     const setPermissionGear = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -497,7 +497,7 @@ describe('PiWorkerRpcServer', () => {
   it('forwards setPermissionTier to the runtime and responds success', async () => {
     const messages: Array<Record<string, unknown>> = [];
     const setPermissionTier = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -520,7 +520,7 @@ describe('PiWorkerRpcServer', () => {
 
   it('rejects setPermissionTier with an invalid payload', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -553,7 +553,7 @@ describe('PiWorkerRpcServer', () => {
     // `applied: true` must never be answered by a server that applied nothing.
     const messages: Array<Record<string, unknown>> = [];
     const setPermissionTier = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -574,7 +574,7 @@ describe('PiWorkerRpcServer', () => {
   it('separates a compact before bootstrap from one the runtime serves', async () => {
     const messages: Array<Record<string, unknown>> = [];
     const compact = vi.fn(async () => ({ compacted: true }) as never);
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -601,7 +601,7 @@ describe('PiWorkerRpcServer', () => {
   it('finishes the tear-down and still exits when the engine fails to dispose', async () => {
     const messages: Array<Record<string, unknown>> = [];
     const onDisposed = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -632,7 +632,7 @@ describe('PiWorkerRpcServer', () => {
 
   it('lets the events a tear-down emits out before the port closes', async () => {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -670,7 +670,7 @@ describe('PiWorkerRpcServer', () => {
         })
     );
     const onDisposed = vi.fn();
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -698,10 +698,10 @@ describe('PiWorkerRpcServer', () => {
  * are "a session exists" and "one does not yet" — the second is the ordinary
  * case on the start screen, not a fault.
  */
-describe('PiWorkerRpcServer — worker.commands', () => {
-  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+describe('BridgeRpcServer — worker.commands', () => {
+  function serverWith(overrides: Partial<BridgeSessionRuntime> = {}) {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -761,10 +761,10 @@ describe('PiWorkerRpcServer — worker.commands', () => {
  * `worker.commands` answers an empty menu; `worker.command` acts on a session
  * and needs one.
  */
-describe('PiWorkerRpcServer — worker.command and worker.panels (P1-7a)', () => {
-  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+describe('BridgeRpcServer — worker.command and worker.panels (P1-7a)', () => {
+  function serverWith(overrides: Partial<BridgeSessionRuntime> = {}) {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,
@@ -835,10 +835,10 @@ describe('PiWorkerRpcServer — worker.command and worker.panels (P1-7a)', () =>
  * RPCs. Each acts on a live session, so each needs a bootstrapped runtime,
  * as `worker.command` does, and each checks its payload first.
  */
-describe('PiWorkerRpcServer — worker.job.kill, worker.job.read, worker.subagent.interrupt (P1-7b)', () => {
-  function serverWith(overrides: Partial<PiWorkerRuntime> = {}) {
+describe('BridgeRpcServer — worker.job.kill, worker.job.read, worker.subagent.interrupt (P1-7b)', () => {
+  function serverWith(overrides: Partial<BridgeSessionRuntime> = {}) {
     const messages: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
       generation: 3,
       projectTrusted: false,

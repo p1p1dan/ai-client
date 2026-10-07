@@ -1,6 +1,6 @@
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
-import { createPiWorkerSlot } from '../createPiWorkerSlot';
+import { createDshChatSlot } from '../createDshChatSlot';
 import { DSH_HOST_RESTART_BUDGET, DSH_HOST_TIMINGS } from '../DshHostSupervisor';
 import { STOP_WATCHDOG_MS, WorkerManager } from '../WorkerManager';
 import {
@@ -25,7 +25,7 @@ vi.mock('../../appStatePaths', () => ({ getAppStateRoot: () => '/fake/state' }))
 /**
  * dsh-rebase P1-3a / P1-3c — sessions on the shared host, with everything real
  * but the host process: WorkerManager (given the supervisor as its host),
- * createPiWorkerSlot, WorkerSlot, DshChannelTransport and DshHostSupervisor.
+ * createDshChatSlot, WorkerSlot, DshChannelTransport and DshHostSupervisor.
  * Each spawned host is a scripted fake, so nothing is spawned or signalled.
  *
  *  - Stop ladder A (decision 021): the watchdog's forced stop reopens the
@@ -191,7 +191,7 @@ async function sessionsOnOneHost(
   const manager = new WorkerManager({
     host: h.supervisor,
     createSlot: (options) =>
-      createPiWorkerSlot({
+      createDshChatSlot({
         ...options,
         createTransport: () =>
           h.supervisor.openChannel({ userInitiated: options.userInitiated === true }),

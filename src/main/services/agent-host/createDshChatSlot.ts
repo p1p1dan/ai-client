@@ -19,7 +19,7 @@ import type { WorkerTransport } from './WorkerTransport';
  */
 export type ChatSlotBootstrapPayload = WorkerBootstrapPayload;
 
-export interface CreatePiWorkerSlotOptions
+export interface CreateDshChatSlotOptions
   extends Omit<
       WorkerSlotOptions,
       | 'transport'
@@ -54,7 +54,7 @@ export interface CreatePiWorkerSlotOptions
   onStderr?: WorkerSlotOptions['onStderr'];
 }
 
-export interface CreatedPiWorkerSlot {
+export interface CreatedDshChatSlot {
   slot: WorkerSlot;
   bootstrap: WorkerBootstrapResult;
 }
@@ -96,14 +96,15 @@ async function openDshChannel(cwd: string, userInitiated: boolean): Promise<Work
  *
  * dsh-rebase P1-1 (decisions 004, 009): every chat session runs on DSH, in
  * packaged and unpackaged builds alike, with no switch and no native fallback.
- * The name stays until P1-12 renames the whole seam at once (decision 010).
+ * Named `createPiWorkerSlot` until dsh-rebase P1-12 step 4 renamed the seam
+ * (decisions 010 and 147); the `worker.*` method names on the wire stay.
  *
  * A bootstrap failure tears the slot down before the error escapes, so callers
  * never receive a running channel without an authoritative session.
  */
-export async function createPiWorkerSlot(
-  options: CreatePiWorkerSlotOptions
-): Promise<CreatedPiWorkerSlot> {
+export async function createDshChatSlot(
+  options: CreateDshChatSlotOptions
+): Promise<CreatedDshChatSlot> {
   const generation = options.generation ?? 1;
   const transport = options.createTransport
     ? await options.createTransport({ generation, cwd: options.cwd })

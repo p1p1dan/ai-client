@@ -19,6 +19,7 @@ import {
   WORKER_RETRY_UNAVAILABLE,
   WORKER_RPC_PROTOCOL_VERSION,
 } from '../../../shared/types/workerRpc.ts';
+import { BridgeRpcServer, type BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import {
   type DshBridgeContext,
   type DshBridgeDeps,
@@ -29,7 +30,6 @@ import {
   type SessionStub,
   stubPathFor,
 } from '../dshSessionRuntime.ts';
-import { PiWorkerRpcServer, type PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 
@@ -202,7 +202,7 @@ const deps: DshBridgeDeps = {
 
 function runtime(
   ctx: DshBridgeContext,
-  extra: Partial<PiWorkerRuntimeOptions> = {},
+  extra: Partial<BridgeSessionRuntimeOptions> = {},
   depsOverride: Partial<DshBridgeDeps> = {}
 ): DshSessionRuntime {
   return new DshSessionRuntime(
@@ -1077,7 +1077,7 @@ describe('DshSessionRuntime — model and effort per turn (P1-5a, decisions 033,
   type Ref = DshModelSelectionRef;
 
   /** A bridge on the test plan, whose agent's setup ran: `ref()` is what the agent routes by. */
-  async function routed(extra: Partial<PiWorkerRuntimeOptions> = {}, plan = true) {
+  async function routed(extra: Partial<BridgeSessionRuntimeOptions> = {}, plan = true) {
     const dsh = fakeDsh();
     const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
     const log = vi.fn();
@@ -1283,12 +1283,12 @@ describe('DshSessionRuntime — live usage from dsh-token-meter (P1-4d1, decisio
   });
 });
 
-describe('DshSessionRuntime behind PiWorkerRpcServer', () => {
+describe('DshSessionRuntime behind BridgeRpcServer', () => {
   it('carries the bridge codes to Main in the RPC error payload', async () => {
     const stubFile = writeStub();
     const dsh = fakeDsh({ resumeError: named('SessionAlreadyOwnedError') });
     const sent: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => sent.push(message as Record<string, unknown>) },
       generation: 1,
       projectTrusted: true,
@@ -1428,7 +1428,7 @@ describe('DshSessionRuntime — questions (P1-4d3, decisions 098 and 114)', () =
   it('takes worker.question.respond through the RPC server, Skip included', async () => {
     const dsh = fakeDsh();
     const sent: Array<Record<string, unknown>> = [];
-    const server = new PiWorkerRpcServer({
+    const server = new BridgeRpcServer({
       port: { postMessage: (message) => sent.push(message as Record<string, unknown>) },
       generation: 1,
       projectTrusted: true,

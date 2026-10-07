@@ -473,7 +473,7 @@ describe('one-shot completions stream through ctx.llm alone (P1-15)', () => {
       'writeFile',
       'utility.start',
       'utility.delta',
-      'PiWorkerRpcServer',
+      'BridgeRpcServer',
     ]) {
       expect(completions, banned).not.toContain(banned);
     }

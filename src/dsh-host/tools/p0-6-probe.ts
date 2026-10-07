@@ -3,7 +3,7 @@
  *
  * One DSH host serves every session through the product `aiclient-bridge`
  * row: one channel per session over one IPC link, each with its own
- * PiWorkerRpcServer + DshSessionRuntime (P1-3a, src/shared/types/
+ * BridgeRpcServer + DshSessionRuntime (P1-3a, src/shared/types/
  * dshHostProtocol.ts). This driver plays Main: it spawns the host, opens a
  * channel per slot, sends turns, kills the host, restarts it and resumes the
  * sessions.

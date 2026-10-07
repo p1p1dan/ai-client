@@ -100,7 +100,7 @@ import {
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { getCurrentLocale } from '../i18n';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
-import { type CreatedPiWorkerSlot, createPiWorkerSlot } from './createPiWorkerSlot';
+import { type CreatedDshChatSlot, createDshChatSlot } from './createDshChatSlot';
 import {
   DSH_HOST_RESTART_BUDGET,
   type DshHostRestartReason,
@@ -192,7 +192,7 @@ interface ManagedSlot {
    */
   identityCommitted: boolean;
   slot: WorkerSlot | null;
-  bootstrap: CreatedPiWorkerSlot['bootstrap'] | null;
+  bootstrap: CreatedDshChatSlot['bootstrap'] | null;
   state: WorkerManagerEntryState;
   activeRequestId: string | null;
   ownerWebContentsId: number | null;
@@ -207,7 +207,7 @@ interface ManagedSlot {
    * keeps emitting after it receives `worker.dispose` — its `handleDispose`
    * flips `disposed` only AFTER the runtime teardown, precisely so the engine
    * can deny the permission gates and cancel the questions parked in front of
-   * the user (see dsh-host/bridge/piWorkerRpcServer.ts; the native
+   * the user (see dsh-host/bridge/bridgeRpcServer.ts; the native
    * runtime did the same until dsh-rebase P1-12). Closing Main's gate first dropped
    * every one of those resolutions, so the cards stayed on screen with nothing
    * alive left to answer them.
@@ -300,7 +300,7 @@ export type WorkerManagerHost = Pick<
   Partial<Pick<DshHostSupervisor, 'collectSessions'>>;
 
 export interface WorkerManagerOptions {
-  createSlot?: typeof createPiWorkerSlot;
+  createSlot?: typeof createDshChatSlot;
   bindRuntimeIdentity?: (sessionId: string, sessionFile: string) => Promise<void>;
   commitResumed?: (input: {
     sessionId: string;
@@ -560,7 +560,7 @@ function attemptDurationSuffix(retry: SessionRetryInfo): string {
 }
 
 export class WorkerManager {
-  private readonly createSlot: typeof createPiWorkerSlot;
+  private readonly createSlot: typeof createDshChatSlot;
   private readonly showPreview: (request: PreviewShowRequest) => Promise<void>;
   private readonly bindRuntimeIdentity: (sessionId: string, sessionFile: string) => Promise<void>;
   private readonly commitResumed: NonNullable<WorkerManagerOptions['commitResumed']>;
@@ -620,7 +620,7 @@ export class WorkerManager {
       options.orphanCollectionDelayMs ?? DEFAULT_ORPHAN_COLLECTION_DELAY_MS,
       'Orphan collection delay'
     );
-    this.createSlot = options.createSlot ?? createPiWorkerSlot;
+    this.createSlot = options.createSlot ?? createDshChatSlot;
     // The DEFAULT refuses. A manager with no host has no window to open, and
     // answering `ok: true` from one would tell the model a page is on screen
     // when nothing is. The production singleton below injects the real window
@@ -2750,7 +2750,7 @@ export class WorkerManager {
      * (decision 020 rule 6). A crash restart never sets it.
      */
     options: { fresh?: boolean; forceTakeover?: boolean; userInitiated?: boolean } = {}
-  ): Promise<CreatedPiWorkerSlot> {
+  ): Promise<CreatedDshChatSlot> {
     let expectedSlot: WorkerSlot | null = null;
     // dsh-rebase P1-1: no model catalog here. Its `auth` half holds plaintext
     // provider keys and the DSH host never reads it; keys reach the host per
@@ -2827,7 +2827,7 @@ export class WorkerManager {
     entry.stderrDropped = drained.dropped;
     const lines = drained.lines.map(sanitizeStderrLine);
     entry.recentStderr = pushRecentStderr(entry.recentStderr, lines);
-    const prefix = `[pi-worker:${entry.logicalSessionId}:g${generation}:stderr]`;
+    const prefix = `[dsh-chat:${entry.logicalSessionId}:g${generation}:stderr]`;
     for (const line of lines) {
       this.log(prefix, line);
       this.forwardStderr(entry, line);
@@ -2891,7 +2891,7 @@ export class WorkerManager {
     // console.error, not this.log: electron-log keeps error level even when
     // file logging is off, which is the configuration nearly everyone runs.
     console.error(
-      `[pi-worker:${entry.logicalSessionId}:g${entry.generation}] ${reason}; last ${lines.length} stderr line(s):\n${lines.join('\n')}`
+      `[dsh-chat:${entry.logicalSessionId}:g${entry.generation}] ${reason}; last ${lines.length} stderr line(s):\n${lines.join('\n')}`
     );
   }
 
@@ -3468,7 +3468,7 @@ export class WorkerManager {
     if (event.type === 'session.status' && event.payload.retry) {
       const retry = event.payload.retry;
       console.warn(
-        `[pi-worker:${entry.logicalSessionId}] provider retry ${retry.attempt}/${retry.maxRetries} in ${retry.delayMs}ms${attemptDurationSuffix(retry)} (status=${retry.errorStatus ?? 'none'} code=${retry.error}${retry.delegationId ? ` delegate=${retry.delegationId}` : ''})`
+        `[dsh-chat:${entry.logicalSessionId}] provider retry ${retry.attempt}/${retry.maxRetries} in ${retry.delayMs}ms${attemptDurationSuffix(retry)} (status=${retry.errorStatus ?? 'none'} code=${retry.error}${retry.delegationId ? ` delegate=${retry.delegationId}` : ''})`
       );
       return;
     }
@@ -3481,7 +3481,7 @@ export class WorkerManager {
       const text = sanitizeStderrLine(event.payload?.error ?? 'no reason reported');
       const code = event.payload?.errorCode;
       const reason = code && !text.startsWith(`${code}:`) ? `${code}: ${text}` : text;
-      console.warn(`[pi-worker:${entry.logicalSessionId}] turn failed: ${reason}`);
+      console.warn(`[dsh-chat:${entry.logicalSessionId}] turn failed: ${reason}`);
     }
   }
 
@@ -4101,7 +4101,7 @@ export class WorkerManager {
 
 export const workerManager = new WorkerManager({
   // dsh-rebase P1-3c: the one shared DSH host every chat channel runs on, the
-  // same supervisor `createPiWorkerSlot` opens channels from.
+  // same supervisor `createDshChatSlot` opens channels from.
   host: dshHostSupervisor,
   // P5-2-3: the real preview window, injected here rather than defaulted
   // inside the class. See the constructor note.

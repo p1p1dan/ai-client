@@ -3,7 +3,7 @@
  *
  * One host serves every chat session over the one Node IPC channel Main's
  * DshHostSupervisor opened. Each channel is a virtual slot with its own,
- * unmodified `PiWorkerRpcServer` and session runtime — the pair the P1-1
+ * unmodified `BridgeRpcServer` and session runtime — the pair the P1-1
  * one-session bridge ran. Protocol: `src/shared/types/dshHostProtocol.ts`.
  *
  *   {ch, rpc}           to the channel's server. Only a channel-opening
@@ -86,13 +86,13 @@ import {
   type WorkerRpcRequest,
 } from '../../shared/types/workerRpc.ts';
 import {
-  PiWorkerRpcServer,
-  type PiWorkerRuntime,
-  type PiWorkerRuntimeOptions,
-} from './piWorkerRpcServer.ts';
+  BridgeRpcServer,
+  type BridgeSessionRuntime,
+  type BridgeSessionRuntimeOptions,
+} from './bridgeRpcServer.ts';
 
 /** A session runtime the multiplexer can report on. */
-export interface ChannelRuntime extends PiWorkerRuntime {
+export interface ChannelRuntime extends BridgeSessionRuntime {
   /** Not idle: a turn, a goal round or other agent work is under way. */
   readonly busy?: boolean;
 }
@@ -101,7 +101,7 @@ export interface DshChannelMuxOptions {
   /** Puts one message on the host's IPC channel (a no-op once it is gone). */
   send(message: DshHostToMainMessage): void;
   /** The runtime behind a channel's `worker.bootstrap`. */
-  createRuntime(options: PiWorkerRuntimeOptions): ChannelRuntime;
+  createRuntime(options: BridgeSessionRuntimeOptions): ChannelRuntime;
   /** Event-loop delay since the previous call, and resident memory, for a pong. */
   sample(): { eldMaxMs: number; rssMb: number };
   /** Decision 024's orphan collection; without it a `gc` is answered `ok: false`. */
@@ -143,7 +143,7 @@ const CLOSED_IDS_KEPT = 4096;
 interface Channel {
   readonly ch: DshChannelId;
   readonly generation: number;
-  readonly server: PiWorkerRpcServer;
+  readonly server: BridgeRpcServer;
   runtime: ChannelRuntime | null;
   closing: boolean;
   closed: boolean;
@@ -312,7 +312,7 @@ export class DshChannelMux {
       runtime: null,
       closing: false,
       closed: false,
-      server: new PiWorkerRpcServer({
+      server: new BridgeRpcServer({
         port: { postMessage: (rpc) => this.forward(channel, rpc) },
         generation,
         // Same constant 1.0.x's native worker entry passed (decision 009).

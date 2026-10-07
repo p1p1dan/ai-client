@@ -11,13 +11,13 @@ import {
   isDshHostSeeded,
 } from '../../../shared/types/dshHostProtocol.ts';
 import { WORKER_RPC_PROTOCOL_VERSION } from '../../../shared/types/workerRpc.ts';
+import type { BridgeSessionRuntimeOptions } from '../bridgeRpcServer.ts';
 import {
   type ChannelRuntime,
   DSH_READ_FAILED,
   DshChannelMux,
   type DshChannelMuxOptions,
 } from '../channelMux.ts';
-import type { PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 
 /**
  * dsh-rebase P1-3a — the shared host's bridge multiplexer (BR cases of the
@@ -28,7 +28,7 @@ import type { PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 interface FakeRuntime {
   busy: boolean;
   disposed: number;
-  options: PiWorkerRuntimeOptions;
+  options: BridgeSessionRuntimeOptions;
 }
 
 function harness(options: { hangingDispose?: boolean } = {}) {

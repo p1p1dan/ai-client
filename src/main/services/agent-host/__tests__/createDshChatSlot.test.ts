@@ -2,7 +2,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WORKER_RPC_PROTOCOL_VERSION, type WorkerRpcRequest } from '@shared/types/workerRpc';
 import { describe, expect, it, vi } from 'vitest';
-import { createPiWorkerSlot } from '../createPiWorkerSlot';
+import { createDshChatSlot } from '../createDshChatSlot';
 import { dshHostSupervisor } from '../DshHostSupervisor';
 import type { WorkerTransport, WorkerTransportExit } from '../WorkerTransport';
 
@@ -83,7 +83,7 @@ const BOOTSTRAP_ACK = {
 /** A workspace that exists on every test machine. */
 const WORKSPACE = tmpdir();
 
-describe('createPiWorkerSlot', () => {
+describe('createDshChatSlot', () => {
   it.each([
     false,
     true,
@@ -92,7 +92,7 @@ describe('createPiWorkerSlot', () => {
     const transport = new LoopbackTransport();
     vi.mocked(dshHostSupervisor.openChannel).mockReset();
     vi.mocked(dshHostSupervisor.openChannel).mockResolvedValue(transport as never);
-    const creating = createPiWorkerSlot({
+    const creating = createDshChatSlot({
       slotKey: `workspace:${WORKSPACE}`,
       logicalSessionId: 'logical-1',
       cwd: WORKSPACE,
@@ -117,7 +117,7 @@ describe('createPiWorkerSlot', () => {
     const transport = new LoopbackTransport();
     vi.mocked(dshHostSupervisor.openChannel).mockReset();
     vi.mocked(dshHostSupervisor.openChannel).mockResolvedValue(transport as never);
-    void createPiWorkerSlot({
+    void createDshChatSlot({
       slotKey: `workspace:${WORKSPACE}`,
       logicalSessionId: 'logical-1',
       cwd: WORKSPACE,
@@ -130,7 +130,7 @@ describe('createPiWorkerSlot', () => {
   it('[P1-3a] refuses a vanished workspace before the host is asked for anything', async () => {
     vi.mocked(dshHostSupervisor.openChannel).mockReset();
     await expect(
-      createPiWorkerSlot({
+      createDshChatSlot({
         slotKey: 'workspace:/gone',
         logicalSessionId: 'logical-1',
         cwd: join(WORKSPACE, 'aiclient-no-such-workspace-p1-3a'),
@@ -146,7 +146,7 @@ describe('createPiWorkerSlot', () => {
     );
     const onSlotCreated = vi.fn();
     await expect(
-      createPiWorkerSlot({
+      createDshChatSlot({
         slotKey: `workspace:${WORKSPACE}`,
         logicalSessionId: 'logical-1',
         cwd: WORKSPACE,
@@ -158,7 +158,7 @@ describe('createPiWorkerSlot', () => {
 
   it('accepts a transport factory that resolves asynchronously', async () => {
     const transport = new LoopbackTransport();
-    const creating = createPiWorkerSlot({
+    const creating = createDshChatSlot({
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
@@ -172,7 +172,7 @@ describe('createPiWorkerSlot', () => {
   it('exposes process ownership before bootstrap acknowledgement', async () => {
     const transport = new LoopbackTransport();
     const onSlotCreated = vi.fn();
-    const creating = createPiWorkerSlot({
+    const creating = createDshChatSlot({
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
@@ -198,7 +198,7 @@ describe('createPiWorkerSlot', () => {
 
   it('returns a slot only after one valid bootstrap acknowledgement', async () => {
     const transport = new LoopbackTransport();
-    const creating = createPiWorkerSlot({
+    const creating = createDshChatSlot({
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
@@ -257,8 +257,8 @@ describe('createPiWorkerSlot', () => {
         auth: { gw: { type: 'api_key', key: 'sk-canary' } },
       },
       createTransport: () => transport,
-    } as Parameters<typeof createPiWorkerSlot>[0];
-    void createPiWorkerSlot(smuggled);
+    } as Parameters<typeof createDshChatSlot>[0];
+    void createDshChatSlot(smuggled);
     await vi.waitFor(() => expect(transport.requests).toHaveLength(1));
     expect(transport.requests[0].type).toBe('worker.bootstrap');
     expect(transport.requests[0].payload).not.toHaveProperty('modelCatalog');
@@ -273,7 +273,7 @@ describe('createPiWorkerSlot', () => {
    */
   it('sends no delegation switch, prompt cache TTL or provider idle timeout', async () => {
     const transport = new LoopbackTransport();
-    void createPiWorkerSlot({
+    void createDshChatSlot({
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
@@ -302,7 +302,7 @@ describe('createPiWorkerSlot', () => {
     vi.useFakeTimers();
     try {
       const transport = new LoopbackTransport();
-      const creating = createPiWorkerSlot({
+      const creating = createDshChatSlot({
         slotKey: 'workspace:/repo',
         logicalSessionId: 'logical-1',
         cwd: '/repo',
@@ -327,7 +327,7 @@ describe('createPiWorkerSlot', () => {
 
   it('disposes the process when bootstrap acknowledgement is invalid', async () => {
     const transport = new LoopbackTransport();
-    const creating = createPiWorkerSlot({
+    const creating = createDshChatSlot({
       slotKey: 'workspace:/repo',
       logicalSessionId: 'logical-1',
       cwd: '/repo',
