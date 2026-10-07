@@ -61,7 +61,7 @@ P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版�
   - 焦点：对话框打开时初始焦点避开滚动区；改名按 Esc 取消后焦点回到那一行。
   - 会话状态：恢复失败停在 error 的会话宣告 `released`，离开「正在活动」；容量回收时失败对话保留失败徽标与失败卡。
   - 时间线与标题：失败回合回放后只留一条失败注记，再发一轮后上一轮不再显示「完成于」；代码审查标题显示模型显示名（决策 146 第 13、22 条，145 第 17 条）。
-  - 新增 29 例测试；没动 bridge、历史投影与金样本；没有 GUI 点验，复点验清单 11 项见决策 156 末尾。全量单测由编排者在 `0b3eb7d6` 上另跑，结果待补记。
+  - 新增 29 例测试；没动 bridge、历史投影与金样本；没有 GUI 点验，复点验清单 11 项见决策 156 末尾。收口全量单测见 Last Verified（`0b3eb7d6`，9719 例全过）。
 - 2026-10-07 阶梯 B 先关其他在忙的会话 `4ebcfe5a`（[决策 155](decisions/155-ladder-b-dispose-others-first.md)，按决策 149 第 6 条实现，取舍待审批，第 2、3、5 条请重点看）：`restartHost` 在重启宿主前对卡死会话以外的在忙会话并发发 `worker.dispose`，总上限 3 s，超时或失败不挡重启；被主动关掉的通道按 `restarted` 记账，不扣会话预算。S5 实测：b2 已流出的正文（400 块中的 115 块）保留在历史里，不再只剩「引擎意外停止」注记；卡死会话的 10 s 收尾与旧宿主被杀时间不变。「重启引擎」卡片同样先关在忙的会话（第 3 条，比裁决字面宽）。验证：两套 tsc、lint、Static 759 例、`agent-host` 479 例、`src/dsh-host` 764 例、集成 35/35、`--check` 0 差异；编排者复跑 tsc 与 `agent-host` 479 例。
 - 2026-10-07 P1-8c 防护回归接进 CI（只写工作流，未推送）`9748ddef`、`42dddf81`、`02482b26`（[决策 154](decisions/154-p1-8c-ci-wiring-choices.md)，待审批）：`dsh-bridge-gate.yml` 加 loop-guard-smoke（31 项全为硬门槛）与 contention-regression LC-0～2（脚本本来就只按硬门槛决定退出码，软门槛写进 job summary），失败上传报告；`42dddf81` 单独加插件审查守卫一步（决策 153 第 7 节待审批，便于撤回）；job 超时 30 → 40 分钟。本机实测：loop-guard-smoke 55.8 s 全过；contention-regression 69.5 s，**LC-2 受害者 delta 间隔硬门槛临界失败一次**（249.6 ms，门槛 221.4 ms），单跑 LC-2 复跑通过，判为 2 核开发机噪声；首跑 CI 要回看是否抖动。验证：两套 tsc、lint、scripts 228 例、`src/dsh-host` 764 例，YAML 解析通过。
 - 2026-10-07 E8-A 插件审查守卫 `350aa1b1`、`b9f2a236`（[决策 153](decisions/153-e8-a-plugin-review-guard-choices.md)，待审批）：审查单 §6.2 加「必拒三条」（碰凭据服务、碰 IPC、猴子补丁）；静态守卫 `scripts/dsh-plugin-review-guard.mjs` 扫白名单与产品 bundle 挂载的非我方插件及其依赖闭包（由白名单、`cordis.patch.yml`、锁文件现算，不手抄包名），豁免只有我方五行的冻结列表。两个试点插件 `dsh-office-tools@1.0.4`、`dsh-tool-ask-user@0.1.7-rc.2` 零命中；E8 探针插件三条全中。守卫在 build.yml gate 的 `pnpm test` 里跑，`dsh-bridge-gate.yml` 不跑。验证：两套 tsc、lint、Static 759 例、shared 443 例、`src/dsh-host` 764 例、scripts 228 例；编排者复跑守卫 20 例。
@@ -321,7 +321,7 @@ P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版�
 
 ## Last Verified
 
-- 2026-10-07：各项都只跑了定向验证，结果写在 Last Landed 各条里。最近一次全量单测是 P1-12 第 4 步之后，编排者按目录分批跑，9624 例全过（跳过 46 例）。之后 P1-5d 到界面小修的改动，编排者在 `0b3eb7d6` 上另跑全量单测，结果待补记。
+- 2026-10-07：各项都只跑了定向验证，结果写在 Last Landed 各条里。最近一次全量单测是 P1-12 第 4 步之后，编排者按目录分批跑，9624 例全过（跳过 46 例）。P1-5d 到界面小修这批改动的收口全量单测：编排者在 `0b3eb7d6`（之后只有文档提交）上按目录分批跑，渲染层 322 个文件 5336 例、Main / preload / shared 203 个文件 3389 例（跳过 35）、dsh-host 与 scripts 54 个文件 992 例（跳过 11）、`src/__tests__` 2 例，共 9719 例全过；Static / Scan / Wiring 75 个文件 764 例全过；两套 tsc 通过。
 - 最近一次整包 CI：`1.1.0-dsh.4` 的 run 37170324111（`f847f66d`，2026-10-04），全部 job 通过。P1-12 第 4 步及之后的改动没有经过整包 CI。
 - 最近一次 `dsh-bridge-gate.yml`：随 2026-10-03 的推送，`--frozen-lockfile` 通过。P1-8c 新加的三步还没在 CI 上跑过。
 
