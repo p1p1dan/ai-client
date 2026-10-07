@@ -187,3 +187,93 @@
       - `src/dsh-host src/agent-host scripts`：52 个文件 1034 例，跳过 2 个文件 11 例，是 win32 专用用例；
       - `src/__tests__`：1 个文件 2 例。
     - 打包检查只能在 CI 上验证，等推送后手动触发 `build.yml`（裁决第 2 条）。
+
+### 第 4 步：搬家与改名（2026-10-07，基线 `d915a2a5`）
+
+代码提交 3 个：`3d679576`（搬家、删 `src/agent-host`、同步引用）、`d26f4e6b`（内部改名）、`e890aa7c`（补改第一个提交漏掉的一处注释出处）。两类改动分开提交，可以按步 revert；第三个只改一行注释。以下各条都是**自主决定，待用户审批**。
+
+1. **新位置**（都用 `git mv`，保留历史）：
+
+   | 原路径（`src/agent-host/` 下） | 新路径 |
+   |---|---|
+   | `piWorkerRpcServer.ts`、`piWorkerErrors.ts` | `src/dsh-host/bridge/`（第二个提交再改文件名，见第 2 条） |
+   | `__tests__/piWorkerRpcServer.test.ts` | `src/dsh-host/bridge/__tests__/` |
+   | `stderrRedaction.ts` | `src/shared/stderrRedaction.ts` |
+   | `__tests__/stderrRedaction.test.ts`、`__tests__/fixtures/credentialSamples.ts` | `src/shared/__tests__/`、`src/shared/__tests__/fixtures/` |
+   | `codexItemMapper.ts` | `src/main/services/legacyImport/codexItemMapper.ts` |
+   | `__tests__/codexItemMapper.test.ts`、`__tests__/fixtures/codex/`（18 个文件） | `src/main/services/legacyImport/__tests__/`、`…/__tests__/fixtures/codex/` |
+   | `tsconfig.json` | 删除；根脚本 `typecheck:agent-host` 一并删除 |
+
+   - 目录里没有 `node_modules` 软链（第 3 步已删），删完文件后只剩空目录，用 `rmdir` 逐级删除。
+   - stderr 脱敏放在 shared 顶层，与 `dshPluginAllowlist.ts` 等单文件库同级。Main 的 8 处 import 改用 `@shared/stderrRedaction`；宿主凭据行与它的测试用相对路径 `../../shared/stderrRedaction.ts`（宿主 tsconfig 不声明 `@shared` 别名）。
+   - `codexItemMapper.ts` 搬进 Main 后按 Main 的写法 import `@shared/types/...`，`CodexRollout.ts` 改为 `./codexItemMapper`。四个 legacyImport 测试和真宿主集成测试里的 codex 夹具路径同步。
+   - 四个搬来的源文件开头加一行 `Moved from src/agent-host/…`，与 shared 各库的出处注记同例：以后从 main 合并 1.0.x 修复时（风险 R4），靠它找到对应文件。
+   - `piWorkerErrors.ts` 用显式字段、RPC 服务端只有 `private` 字段修饰，没有枚举和参数属性，搬进开了 `erasableSyntaxOnly` 的宿主 tsconfig 后不需要改写。
+
+2. **旧名 → 新名**（第二个提交 `d26f4e6b`）：
+
+   | 旧名 | 新名 |
+   |---|---|
+   | 文件 `bridge/piWorkerRpcServer.ts`（及测试） | `bridge/bridgeRpcServer.ts`（`__tests__/bridgeRpcServer.test.ts`） |
+   | 文件 `bridge/piWorkerErrors.ts` | `bridge/bridgeErrors.ts` |
+   | `PiWorkerRpcServer` / `PiWorkerRpcServerOptions` | `BridgeRpcServer` / `BridgeRpcServerOptions` |
+   | `PiWorkerRuntime` / `PiWorkerRuntimeOptions` | `BridgeSessionRuntime` / `BridgeSessionRuntimeOptions` |
+   | `PiWorkerMessagePort` | `BridgeMessagePort` |
+   | `PiWorkerSessionError`（含 `this.name`） | `BridgeSessionError` |
+   | Main 文件 `services/agent-host/createPiWorkerSlot.ts`（及测试） | `createDshChatSlot.ts`（`__tests__/createDshChatSlot.test.ts`） |
+   | `createPiWorkerSlot` / `CreatePiWorkerSlotOptions` / `CreatedPiWorkerSlot` | `createDshChatSlot` / `CreateDshChatSlotOptions` / `CreatedDshChatSlot` |
+   | `WorkerManager` 日志前缀 `[pi-worker:…]`（4 处） | `[dsh-chat:…]` |
+
+   - 命名的依据：服务端与运行时接口是「宿主 bridge 的 RPC」，前缀用 `Bridge`；`BridgeSessionRuntime` 的唯一实现就是 `DshSessionRuntime`。Main 一侧的槽位工厂与同目录的 `DshChannelTransport`、`DshHostSupervisor` 同用 `Dsh` 前缀，`Chat` 对上已有的 `ChatSlotBootstrapPayload`。
+   - 日志前缀与新工厂名对齐。仓库代码和证据目录里的工具脚本都不解析这个前缀；`docs/` 下的历史证据（runtime-hardening 批次 D、E，P1-1 GUI、P1-5 真网关）里留着旧前缀，不改。以后在 main.log 里查旧版本的日志仍要用 `[pi-worker:`。
+   - `this.name` 也跟着改成 `'BridgeSessionError'`。核对过它不上线：`errorPayload` 只发 `code`、`message`、`retryable`；bridge 别处把错误转成文本时都取 `error.message`；金样本里没有这个字符串，`--check` 0 差异。
+   - 静态测试同步：`hostStatic` 的禁用词表（一次性补全不能用 RPC 服务端）换成新名；`chatEngineDshOnly`、`dshHostSupervisorStatic` 读的文件名换成 `createDshChatSlot.ts`。
+
+3. **刻意没改的线上字符串与名字**（用户裁决第 1 条与方案 §6）：
+   - RPC 方法名 `worker.*`、错误码 `WORKER_*` 与 `pi_session_*`、协议类型 `WorkerRpc*` / `WorkerBootstrapPayload` 等：Main 与宿主之间的线上协议，`--check` 必须 0 差异。
+   - 错误文案：`Pi worker generation must be a positive safe integer`（服务端构造）、`Worker is not bootstrapped`、`Pi worker returned an invalid bootstrap acknowledgement`（`createDshChatSlot`）、`WorkerManager` 里约 20 条 `Pi worker …` 文案。它们会作为错误文本到达渲染层或日志，渲染层有按错误文本分流的地方（如 `historyError`），拿不准就不改。
+   - 环境变量 `AICLIENT_PI_WORKER_CAPACITY`（用户设置）、`AICLIENT_PI_WORKER_GENERATION`（只剩 P0 探针 `measure.ts`、`p0-6-probe.ts` 给旧 worker 传，以及 `hostStatic`、`DshHostProcess.test` 的反向断言与桩）。
+   - IPC 名、设置键、`PiRuntimeStatus`、会话索引的 `agent: 'pi'`、Main 目录名 `src/main/services/agent-host/`。
+   - `WorkerManager`、`WorkerSlot`、`WorkerTransport`：名字里没有 pi，不在本次范围。
+   - Main 的测试文件 `ipc/__tests__/chatPiWorkerRouting.test.ts` 与其中的 `describe('Pi WorkerSlot chat routing')`：它测的是 `pi:`/`chat:` IPC 一层，与 `PiRuntimeChecker` 等 pi 命名的 IPC 一起留给以后（§6「不在 P1-12 范围」）。
+   - 两处描述已删代码的历史注释保留旧名：`modelMissingError.ts`（1.0.x 的 `piWorkerSession` 抛 `PiWorkerSessionError('WORKER_MODEL_NOT_FOUND')`，令牌按方案 §1.5 留着）、`legacyPiTree.test.ts`（第 3 步删掉的薄封装）。
+
+4. **引用同步**：
+   - `build.yml` 删「Gate 2/6 — typecheck:agent-host」，其余改为 1/5～5/5；超时注释加一句，值不变（20 分钟）。
+   - `BRIDGE_ENTRIES`：bridge 行 inputs 去掉 `src/agent-host/`；凭据行改成 `src/shared/stderrRedaction.ts`。`dsh-host-build-lib.test` 对应的夹具路径同步。
+   - `build-dsh-host` 的脏检查只剩 `src/dsh-host` 与 `src/shared`。
+   - 根 `tsconfig.json` 的 exclude 去掉 `src/agent-host/**`；宿主 tsconfig 只改注释（它的 include 本来就不含 agent-host，靠 import 跟进）。
+   - `noHardcodedChinese` 去掉 `agent-host` 根与它的下限 3；`esmShimStringTrap` 去掉 `agent-host` 根；`packaging-config` 的门禁列表与编号改为 5 道，并把 `typecheck:agent-host` 加进「已退役」的反向断言；`t31PiOnlyAbsence` 的迁移读取器名单改指新路径；`agentWireStatic` 改两处注释。
+   - 注释：`WorkerManager` 与其测试里「见 `agent-host/piWorkerRpcServer.ts` 和 `runtime/worker/nativeWorkerRuntime.ts`」改指 bridge（后者第 3 步已删，顺带改掉）；`questionCardModel.ts` 里早已不存在的 `src/agent-host/codexDecisions.ts` 改写；`redact.ts` 的出处（第三个提交）。
+
+5. **扫描覆盖的变化**：
+   - `noHardcodedChinese` 不再扫 RPC 服务端和 Codex 映射：前者没有任何中文；后者的中文都在注释里，日志 note 由它自己的测试（T023 那一例）钉住不含中文，该例注释同步说明了这一点。stderr 脱敏随 shared 根照扫。
+   - `esmShimStringTrap` 照扫 stderr 脱敏（shared）与 Codex 映射（main）；RPC 服务端只进 esbuild 打的宿主产物，不经过 electron-vite 的 shim，所以不扫。
+
+6. **`runtimeRetiredStatic` 第 4 步守卫**（新 `describe`，3 例）：`src/agent-host` 不存在；`src`、`scripts` 下没有任何相对 import / `vi.mock` 指向它（按相对路径解析，Main 自己的 `services/agent-host` 不算，并自测这一点）；根清单、两个 tsconfig、build.yml 的非注释行、两个宿主构建脚本的代码里都不再提 `src/agent-host` / `typecheck:agent-host`。
+   - 为此把第 3 步的整树解析提到模块级，两步共用一次解析（沿用 `f847f66d` 的「每个文件只解析一次」）。
+   - `specifiersIn` 加了 `vi.mock` / `vi.doMock` / `vi.importActual` 等写法，第 3 步的两条 import 扫描也随之覆盖到模块 mock。现有代码里没有命中。
+
+7. **文档**：
+   - `README.md`、`README.zh.md` 的开发检查把 `pnpm typecheck:agent-host` 换成 `pnpm typecheck:dsh-host`，并注明要先在 `src/dsh-host` 里 `npm ci`。
+   - `AGENTS.md`：质量检查补 `typecheck:dsh-host`；模块表那一行原来指向 `src/agent-host/`、写的是 PiHost 过渡态，只换路径会留下半句错话，所以整行改写成 DSH 宿主的现状，注明原目录已删；「Vitest 覆盖」一句的 agent-host 换成 dsh-host。方案 §1.12 把这一行列给 P1-14，P1-14 回写时可以再统一措辞。
+   - 不动：项目 `CLAUDE.md`、`Windows-P4-6-*`、§1.12 列的其他过期文档、`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的忽略（用户决定）、codex 夹具 README 里抓取时的探针路径与 auth 夹具 README 里的 blessing 记录（都是当时的历史记录）。
+
+8. **碰到的情况**：
+   - biome 的 import 排序：相对路径换成 `@shared/…` 或 `./…` 后排序位置变了，对改过的文件跑了 `biome check --write`，只动了 import 顺序和换行。
+   - 风险 R10（最近的 `package.json` 变了）：bridge 源码改从 `src/dsh-host/package.json` 解析，与根目录一样是 `"type": "module"`。bridge-smoke（源码 shim 经 strip-types 加载）与真宿主集成测试都通过，确认没有影响。
+   - 没有改依赖，lockfile 未变；没有跑 `pnpm install`。
+
+9. **验证**（本机，`e890aa7c` 的树；tsc、lint 与各 vitest 在改名提交后的同一份代码上跑，第三个提交只改一行注释）：
+   - `pnpm typecheck && pnpm typecheck:dsh-host`：通过，0 个错误。只剩两套 tsc。
+   - `pnpm lint`：0 错误；8 条警告、1 条 info，都是基线就有的（`docs/` 证据脚本与 `run-f3-dev-probe.mjs`）。
+   - `Static Scan Wiring`：75 个文件 759 例（第 3 步 756 例，加新增 3 例）。
+   - `src/shared/__tests__`：30 个文件 437 例（加搬来的 `stderrRedaction.test` 32 例与守卫 3 例）。
+   - `scripts`：12 个文件 208 例。
+   - `src/dsh-host`：38 个文件通过、2 个跳过；760 例通过、11 例跳过（win32 专用）。
+   - `src/main/services`：97 个文件通过、1 个跳过；1485 例通过、35 例跳过（没开环境变量的集成测试）。
+   - 另跑改过但上面没覆盖的：`src/main/__tests__`、`src/shared/mcp`、渲染层 `historyError`、`questionCardModel`、`pendingPermissionDock`、`toolVocabulary`，10 个文件 321 例。
+   - bridge-smoke：verdict 66 项全过。
+   - `bridge-record --check`：28 个场景 0 差异，退出码 0，金样本未动。
+   - 真宿主集成：35 例。
+   - `build-dsh-host`：82.6 MiB（86616314 B），9771 个文件，`gitCommit` 不带 `+dirty`；bridge 行 77 个输入，凭据行 3 个；L1 冒烟 44 项全过。
