@@ -34,6 +34,7 @@ import {
   isWorkerCommandResult,
   isWorkerCommandsResult,
   isWorkerDiscardForkResult,
+  isWorkerDisposeResult,
   isWorkerForkResult,
   isWorkerHistoryResult,
   isWorkerInterjectResult,
@@ -64,6 +65,8 @@ import {
   type WorkerCompactResult,
   type WorkerDiscardForkPayload,
   type WorkerDiscardForkResult,
+  type WorkerDisposeRequest,
+  type WorkerDisposeResult,
   type WorkerForkPayload,
   type WorkerForkResult,
   type WorkerHistoryPayload,
@@ -400,6 +403,13 @@ const DEFAULT_RESTART_WINDOW_MS = 60_000;
 const HOST_FAULT_SUSPECT_STREAK = 2;
 
 /**
+ * Decision 155: how long, in all, a host restart Main starts waits for the
+ * busy sessions it closes first (`closeBusyChannelsBeforeRestart`). The same
+ * 3 s a session's own dispose ACK gets (`WorkerSlot`).
+ */
+export const HOST_RESTART_DRAIN_MS = 3_000;
+
+/**
  * dsh-rebase P1-3d (decision 024) — the orphan collection runs this long after
  * the host is first up with nothing being recovered, so the first session's
  * own history and first turn go before it.
@@ -602,6 +612,8 @@ export class WorkerManager {
   private hostRecoveryScheduled = false;
   /** Set while Main itself restarts the host: the exits it causes read `engine_restarted`. */
   private plannedHostRestart: DshHostRestartReason | null = null;
+  /** Decision 155: slots told to close ahead of a host restart; their channel's close is that restart's. */
+  private readonly drainedSlots = new WeakSet<WorkerSlot>();
   private readonly readDshStub: (file: string) => Promise<unknown>;
   private readonly orphanCollectionDelayMs: number;
   private orphanCollectionTimer: NodeJS.Timeout | null = null;
@@ -1243,9 +1255,10 @@ export class WorkerManager {
       // cannot be forced, and the holder this app can reach is its own shared
       // host keeping an agent that never let go. Restarting the host is the
       // takeover — the session_locked card's "Restart engine". The other
-      // sessions are interrupted gracefully and reopened in one batch after
-      // this resume. A holder outside the app keeps the lock regardless, and
-      // the reopen below reports it again.
+      // sessions are interrupted gracefully (the busy ones closed first,
+      // decision 155) and reopened in one batch after this resume. A holder
+      // outside the app keeps the lock regardless, and the reopen below
+      // reports it again.
       if (input.forceTakeover && this.host) await this.restartHost('user');
       const timestamp = this.now();
       entry = {
@@ -3509,7 +3522,7 @@ export class WorkerManager {
     ) {
       return;
     }
-    const hostFault = this.hostFaultOf(event.exit);
+    const hostFault = this.hostFaultOf(slot, event.exit);
     // decision 020 rule 5: a session the host died under while it was being
     // recovered was at the scene as much as one mid-turn.
     const recovering = entry.state === 'restarting';
@@ -3578,11 +3591,16 @@ export class WorkerManager {
    * (Stop ladder B, the user's "Restart engine"), `crashed` for anything else
    * (a crash, a hang, lost IPC). A transport failure while the host is not
    * ready is the host's too: a send that races the host's exit fails before
-   * the exit is reported.
+   * the exit is reported. A channel Main closed ahead of its own restart
+   * (decision 155) went for that restart.
    */
-  private hostFaultOf(exit: WorkerTransportExit | undefined): 'crashed' | 'restarted' | null {
+  private hostFaultOf(
+    slot: WorkerSlot,
+    exit: WorkerTransportExit | undefined
+  ): 'crashed' | 'restarted' | null {
     const host = this.host;
     if (!host) return null;
+    if (exit?.cause === 'channel-closed' && this.drainedSlots.has(slot)) return 'restarted';
     const hostExit = exit?.cause === 'host-exit';
     const status = host.status();
     if (!hostExit && status.state === 'ready') return null;
@@ -3703,10 +3721,16 @@ export class WorkerManager {
    * "Restart engine"): graceful stop, SIGKILL after 3.5 s, one new host. Every
    * other session's channel ends with the old host; `plannedHostRestart` makes
    * those exits read `engine_restarted`, and one batch reopens them afterwards.
+   *
+   * Decision 155: the sessions with work under way are closed first
+   * (`closeBusyChannelsBeforeRestart`), so what they streamed is saved even
+   * when the agent that forced the restart keeps the host from stopping.
+   * `stuck` — the session the restart is for; never one of them.
    */
-  private async restartHost(reason: DshHostRestartReason): Promise<void> {
+  private async restartHost(reason: DshHostRestartReason, stuck?: ManagedSlot): Promise<void> {
     const host = this.host;
     if (!host) return;
+    await this.closeBusyChannelsBeforeRestart(stuck);
     this.plannedHostRestart = reason;
     try {
       await host.restart(reason, reason === 'user' ? { userInitiated: true } : {});
@@ -3715,6 +3739,73 @@ export class WorkerManager {
     } finally {
       this.plannedHostRestart = null;
     }
+  }
+
+  /**
+   * Decision 155 (decision 149 rule 6): before Main restarts the host, every
+   * other session with work under way — a turn Main sent, a Stop, a turn the
+   * engine started (a goal round, a job's wake-up), or a channel the last pong
+   * called busy — is sent `worker.dispose`, all at once, and the restart waits
+   * {@link HOST_RESTART_DRAIN_MS} for them in all. DSH cancels each turn and
+   * saves what it streamed as interrupted before it answers. A graceful stop
+   * would do the same, but an agent stuck in the host keeps that stop from
+   * finishing, and the SIGKILL after it saves nothing.
+   *
+   * A session that answers closes its channel ahead of the host: that exit
+   * reads `engine_restarted` (`hostFaultOf`), and it waits for the same
+   * recovery batch as the rest. One that does not answer in time, or fails,
+   * goes with the host as before. Idle sessions, and one mid-rewind or fork,
+   * are left to the restart: nothing they streamed is at stake.
+   */
+  private async closeBusyChannelsBeforeRestart(stuck: ManagedSlot | undefined): Promise<void> {
+    const busy = this.busyChannels();
+    const targets = [...this.entriesBySession.values()].filter((entry) => {
+      const slot = entry.slot;
+      if (entry === stuck || entry.state !== 'ready' || entry.mutationInFlight !== null) {
+        return false;
+      }
+      if (!slot || slot.state !== 'running') return false;
+      return (
+        entry.activeRequestId !== null ||
+        entry.stopWatchdog !== undefined ||
+        entry.workerTurn !== undefined ||
+        (slot.channelId !== undefined && busy.has(slot.channelId))
+      );
+    });
+    if (targets.length === 0) return;
+    const started = this.now();
+    let closed = 0;
+    const closing = Promise.allSettled(
+      targets.map(async (entry) => {
+        const slot = entry.slot as WorkerSlot;
+        this.drainedSlots.add(slot);
+        try {
+          const result = await slot.request<WorkerDisposeResult, WorkerDisposeRequest['payload']>(
+            'worker.dispose',
+            { reason: 'slot-replace' },
+            { timeoutMs: HOST_RESTART_DRAIN_MS }
+          );
+          if (isWorkerDisposeResult(result)) closed += 1;
+        } catch (error) {
+          console.warn(
+            `[worker-manager] ${entry.logicalSessionId}: not closed before the DSH host restart, so it goes with the host: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      })
+    );
+    let timer: NodeJS.Timeout | undefined;
+    const deadline = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, HOST_RESTART_DRAIN_MS);
+      timer.unref?.();
+    });
+    try {
+      await Promise.race([closing, deadline]);
+    } finally {
+      clearTimeout(timer);
+    }
+    console.warn(
+      `[worker-manager] closed ${closed} of ${targets.length} busy session(s) in ${this.now() - started} ms before restarting the DSH host`
+    );
   }
 
   /**
@@ -3933,10 +4024,11 @@ export class WorkerManager {
    * decision 021 ladder B — the channel neither answered `worker.dispose` nor
    * confirmed its close, and the host did not exit: an agent stuck inside the
    * host still holds this session's lock, and only a host restart releases it.
-   * Graceful first (every other session's streamed text is saved as
-   * interrupted), SIGKILL after 3.5 s, then one new host. The others read
-   * `engine_restarted` and are reopened in one batch after this session, which
-   * goes first. The restart spends the host budget, and wedging the host counts
+   * The other sessions with work under way are closed first, so their streamed
+   * text is saved as interrupted (decision 155): the stuck agent keeps the
+   * graceful stop from finishing. Then graceful, SIGKILL after 3.5 s, then one
+   * new host. The others read `engine_restarted` and are reopened in one batch
+   * after this session, which goes first. The restart spends the host budget, and wedging the host counts
    * as this session's presence at a fault (decision 020 rule 5).
    */
   private async escalateStuckChannel(entry: ManagedSlot, oldSlot: WorkerSlot): Promise<void> {
@@ -3944,7 +4036,7 @@ export class WorkerManager {
       `[worker-manager] ${entry.logicalSessionId}: its channel did not close; restarting the DSH host (Stop ladder B)`
     );
     entry.hostFaultStreak = (entry.hostFaultStreak ?? 0) + 1;
-    await this.restartHost('stuck-session');
+    await this.restartHost('stuck-session', entry);
     // Its channel went with the old host; this only retires the slot object.
     if (oldSlot.forceKillNow()) this.ownedSlots.delete(oldSlot);
   }

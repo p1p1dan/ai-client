@@ -952,6 +952,9 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     // row holds b1's tool call and ignores its abort, so DSH hears the Stop but
     // cannot end the turn, and cannot dispose the agent either (both wait for
     // the loop to go idle): ladder A times out on the host's own account.
+    // The same wait keeps the host's graceful stop from finishing, so it is
+    // SIGKILLed; decision 155 closes b2 (streaming) on its own channel first,
+    // and its streamed text survives.
     it('Stop ladder B: a tool call that ignores its abort gets the host restarted once, and every session comes back', async () => {
       const stuckToken = `${STUCK_NEEDLE}${Date.now() % 100_000}`;
       const from = events.length;
@@ -984,6 +987,13 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
 
       const hostBefore = supervisor.status();
       const [oldHost] = liveHosts();
+      // Decision 155: Main's own account of closing the busy sessions first.
+      const warnings: Array<{ at: number; line: string }> = [];
+      const printWarning = console.warn.bind(console);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
+        warnings.push({ at: Date.now(), line: args.map(String).join(' ') });
+        printWarning(...args);
+      });
       const stopAt = events.length;
       const started = Date.now();
       const stopping = manager.stop('b1').catch((error: unknown) => error);
@@ -1005,17 +1015,32 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         'status:idle',
       ]);
 
-      // 3 s for the dispose ACK, 3 s for the close, then one restart: the
-      // graceful stop (3.5 s) cannot finish either, so the host is SIGKILLed.
+      // 3 s for the dispose ACK, 3 s for the close; then b2, the one other
+      // session with a turn under way, is closed on its own channel (decision
+      // 155), and one restart follows: the graceful stop (3.5 s) cannot finish
+      // either, so the host is SIGKILLed.
       expect(
         await until(() => supervisor.status().lastExit?.reason === 'stuck-session', 30_000)
       ).toBe(true);
       const escalatedMs = Date.now() - started;
       const exit = supervisor.status().lastExit;
       const tookMs = await recovered(['b1', 'b2', 'b3'], stopAt, 60_000);
+      warnSpy.mockRestore();
+      const drained = warnings.find((warning) =>
+        /closed \d+ of \d+ busy session\(s\) in \d+ ms before restarting the DSH host/.test(
+          warning.line
+        )
+      );
+      const drainedAtMs = drained ? drained.at - started : -1;
+      const b2Closed = forSession('b2', stopAt).find(
+        (e) => e.type === 'session.status' && e.payload?.disconnectReason === 'engine_restarted'
+      );
+      const b2ClosedMs = b2Closed ? b2Closed.timestamp - started : -1;
       console.log(
         `[p1-3] Stop ladder B (stuck tool): abort ignored at ${abortIgnoredMs} ms, settled for ` +
-          `the UI at ${settledMs} ms, old host gone at ${escalatedMs} ms ` +
+          `the UI at ${settledMs} ms, b2's channel closed at ${b2ClosedMs} ms, busy sessions ` +
+          `closed at ${drainedAtMs} ms (${drained?.line.replace(/^.*\] /, '') ?? 'no report'}), ` +
+          `old host gone at ${escalatedMs} ms ` +
           `(code ${String(exit?.code)}, signal ${String(exit?.signal)}), every session idle ` +
           `${tookMs} ms later`
       );
@@ -1074,11 +1099,48 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
             block.type === 'tool_result' && block.toolCallId === heldCallId && block.ok === false
         )
       ).toBe(true);
-      // Observed (decision 151): whether b2's streamed text outlived the SIGKILL.
-      const keptStream = blocksAfter('b2').some((block) =>
-        String(block.text ?? '').includes('STREAMED-P13CPACED')
+      // Decision 155: b2 alone was closed ahead of the restart (b3 was idle),
+      // before the old host went down; its channel closed then, not with the
+      // host (which took the graceful stop's 3.5 s more).
+      expect(drained?.line).toMatch(/closed 1 of 1 busy session\(s\)/);
+      expect(drainedAtMs).toBeGreaterThan(settledMs);
+      expect(drainedAtMs).toBeLessThan(escalatedMs);
+      expect(b2ClosedMs).toBeGreaterThan(settledMs);
+      expect(b2ClosedMs).toBeLessThan(drainedAtMs + 1_000);
+      // So what b2 streamed outlived the SIGKILL: its history keeps the text,
+      // cut off, and DSH closed that turn itself (no "engine stopped
+      // unexpectedly" note, which b1's history does carry).
+      const b2Messages = (forSession('b2', stopAt)
+        .filter((e) => e.type === 'session.history')
+        .at(-1)?.payload?.messages ?? []) as Array<{
+        role?: string;
+        incomplete?: boolean;
+        stopReason?: string;
+        blocks?: Array<Record<string, unknown>>;
+      }>;
+      const streamedRow = b2Messages.find(
+        (message) =>
+          message.role === 'assistant' &&
+          (message.blocks ?? []).some((block) =>
+            String(block.text ?? '').includes('STREAMED-P13CPACED')
+          )
       );
-      console.log(`[p1-3]   b2's streamed text in its history after the restart: ${keptStream}`);
+      const keptChunks = (streamedRow?.blocks ?? [])
+        .map((block) => String(block.text ?? ''))
+        .join('')
+        .split('流式正文片段').length;
+      console.log(
+        `[p1-3]   b2's history after the restart keeps its streamed text: ${streamedRow !== undefined} ` +
+          `(${keptChunks} chunks of 400, incomplete ${String(streamedRow?.incomplete)}, ` +
+          `stopReason ${String(streamedRow?.stopReason)})`
+      );
+      expect(streamedRow).toMatchObject({ incomplete: true, stopReason: 'aborted' });
+      expect(keptChunks).toBeGreaterThan(1);
+      const engineStoppedNote = (block: Record<string, unknown>) =>
+        (block.notice as { key?: string } | undefined)?.key ===
+        'This turn was interrupted when the engine stopped unexpectedly.';
+      expect(blocksAfter('b2').some(engineStoppedNote)).toBe(false);
+      expect(blocksAfter('b1').some(engineStoppedNote)).toBe(true);
 
       const results = await Promise.all(
         ['b1', 'b2', 'b3'].map((id, index) =>

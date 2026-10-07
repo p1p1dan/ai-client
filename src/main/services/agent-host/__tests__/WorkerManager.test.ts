@@ -16,6 +16,7 @@ const slotKey = (p: string) => sessionWorkerKey(p);
 
 import { DSH_HOST_RESTART_BUDGET, DshHostSupervisorError } from '../DshHostSupervisor';
 import {
+  HOST_RESTART_DRAIN_MS,
   resolveDefaultWorkerCapacity,
   resolveWorkerCapacity,
   STOP_WATCHDOG_MS,
@@ -35,6 +36,12 @@ interface FakeSlotRecord {
   /** Its channel on the shared host, as the host's pong names it (P1-3d). */
   channelId: string;
   request: ReturnType<typeof vi.fn>;
+  /**
+   * Decision 155: the channel's answer to a `worker.dispose` request (not the
+   * slot's own `dispose`). By default the bridge's: the ACK, then the channel
+   * closes (`cause: 'channel-closed'`).
+   */
+  drain: ReturnType<typeof vi.fn>;
   dispose: ReturnType<typeof vi.fn>;
   forceKillNow: ReturnType<typeof vi.fn>;
   emit(event: Record<string, unknown>): void;
@@ -44,6 +51,8 @@ interface FakeSlotRecord {
     message?: string,
     exit?: { code: number | null; signal: string | null; cause?: string }
   ): void;
+  /** The host confirms this channel closed (`closed`), as after a `worker.dispose`. */
+  closeChannel(): void;
 }
 
 /**
@@ -364,6 +373,7 @@ function createHarness(
         };
       }
       if (type === 'worker.compact') return { compacted: true };
+      if (type === 'worker.dispose') return record.drain(payload);
       if (type === 'worker.fork.discard') return { discarded: true };
       if (type === 'worker.fork.accept') return { accepted: true };
       if (type === 'worker.stop') return { stopped: true };
@@ -386,6 +396,10 @@ function createHarness(
       slot: slotState,
       channelId,
       request,
+      drain: vi.fn(async () => {
+        queueMicrotask(() => record.closeChannel());
+        return { disposed: true };
+      }),
       dispose: vi.fn(async () => {
         slotState.state = 'disposed';
       }),
@@ -414,6 +428,13 @@ function createHarness(
           error: Object.assign(new Error(message), { code: 'WORKER_EXITED' }),
           ...(exit ? { exit } : {}),
         } as WorkerSlotLifecycleEvent);
+      },
+      closeChannel() {
+        record.crash('Worker exited (code=0 signal=null)', {
+          code: 0,
+          signal: null,
+          cause: 'channel-closed',
+        });
       },
     };
     records.push(record);
@@ -4342,6 +4363,217 @@ describe('WorkerManager on one shared DSH host (P1-3c)', () => {
     expect(snapshot(h, 'stuck')).toMatchObject({ state: 'error' });
     expect(snapshot(h, 'stuck')?.error).toMatch(/^dsh_session_suspect: /);
     expect(snapshot(h, 'other')).toMatchObject({ state: 'ready', generation: 3 });
+  });
+
+  /**
+   * Decision 155 (decision 149 rule 6): the stuck agent keeps the host's
+   * graceful stop from finishing, so before ladder B restarts the host every
+   * other session with work under way is closed on its own channel, where
+   * DSH saves what it streamed.
+   */
+  describe('ladder B closes the busy sessions first (decision 155)', () => {
+    const recordOf = (h: ReturnType<typeof createHarness>, sessionId: string) => {
+      const record = h.records.filter((candidate) => candidate.sessionId === sessionId).at(-1);
+      if (!record) throw new Error(`no slot for ${sessionId}`);
+      return record;
+    };
+    const wedge = (h: ReturnType<typeof createHarness>, sessionId: string) => {
+      const record = recordOf(h, sessionId);
+      record.dispose.mockImplementation(async () => {
+        record.slot.state = 'dispose-failed';
+        throw new WorkerSlotError('WORKER_EXIT_TIMEOUT', `${sessionId} did not exit within 3000ms`);
+      });
+    };
+    /** What each named session's slot was when the host was asked to restart. */
+    const slotsAtRestart = (h: ReturnType<typeof createHarness>, ids: string[]) => {
+      const seen: Array<Record<string, string>> = [];
+      const host = h.host;
+      const restart = host?.restart.getMockImplementation();
+      if (!host || !restart) throw new Error('harness has no host restart');
+      host.restart.mockImplementation(async (...args: [string, { userInitiated?: boolean }?]) => {
+        seen.push(Object.fromEntries(ids.map((id) => [id, recordOf(h, id).slot.state])));
+        return restart(...args);
+      });
+      return seen;
+    };
+    const restarted = [
+      'status:disconnected/engine_restarted',
+      'failed(dsh_engine_restarted)',
+      'session.resumed',
+      'status:idle',
+    ];
+
+    it('[WMH-06c] every other busy session is asked at once; the idle one and the stuck one are not', async () => {
+      vi.useFakeTimers();
+      const h = createHarness({ host: true, capacity: 6 });
+      await create(h.manager, 'stuck', 7);
+      await create(h.manager, 'quiet');
+      await create(h.manager, 'a');
+      await create(h.manager, 'b');
+      // No turn Main knows of, but the host's last pong calls it busy (a job).
+      await create(h.manager, 'job');
+      await running(h, 'stuck', 7);
+      const aTurn = await running(h, 'a');
+      await running(h, 'b');
+      h.host?.busy.add(recordOf(h, 'job').channelId);
+      // Each answer is held until the test lets it go: all three are asked
+      // before any of them answers.
+      const answers: Array<() => void> = [];
+      for (const id of ['a', 'b', 'job']) {
+        const record = recordOf(h, id);
+        record.drain.mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              answers.push(() => {
+                queueMicrotask(() => record.closeChannel());
+                resolve({ disposed: true });
+              });
+            })
+        );
+      }
+      wedge(h, 'stuck');
+      const seen = slotsAtRestart(h, ['a', 'b', 'job', 'quiet']);
+      h.events.length = 0;
+      h.createSlot.mockClear();
+
+      await h.manager.stop('stuck');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+      expect(answers).toHaveLength(3);
+      expect(h.host?.restart).not.toHaveBeenCalled();
+      for (const id of ['a', 'b', 'job']) {
+        expect(recordOf(h, id).request).toHaveBeenCalledWith(
+          'worker.dispose',
+          { reason: 'slot-replace' },
+          { timeoutMs: HOST_RESTART_DRAIN_MS }
+        );
+      }
+      expect(recordOf(h, 'stuck').drain).not.toHaveBeenCalled();
+      expect(recordOf(h, 'quiet').drain).not.toHaveBeenCalled();
+
+      for (const answer of answers) answer();
+      await allReady(h);
+      // Their channels closed ahead of the restart; the idle one went with the host.
+      expect(seen).toEqual([{ a: 'crashed', b: 'crashed', job: 'crashed', quiet: 'running' }]);
+      expect(h.host?.restart).toHaveBeenCalledTimes(1);
+      expect(h.host?.restart).toHaveBeenCalledWith('stuck-session', {});
+      // Told as before: an engine restart cut the turn, and the session came back.
+      expect(trace(h.events, 'a')).toEqual(restarted);
+      expect(trace(h.events, 'b')).toEqual(restarted);
+      expect(
+        h.events.find((event) => event.type === 'session.failed' && event.sessionId === 'a')
+          ?.requestId
+      ).toBe(aTurn);
+      expect(trace(h.events, 'job')).toEqual(
+        restarted.filter((line) => !line.startsWith('failed'))
+      );
+      expect(trace(h.events, 'quiet')).toEqual([
+        'status:disconnected/engine_restarted',
+        'session.resumed',
+        'status:idle',
+      ]);
+      // One batch after the stuck session, the ones that were mid-turn first;
+      // closing them early costs no session anything.
+      expect(h.createSlot.mock.calls.map(([options]) => options.logicalSessionId)).toEqual([
+        'stuck',
+        'a',
+        'b',
+        'job',
+        'quiet',
+      ]);
+      expect(
+        h.manager
+          .getSlotSnapshots()
+          .map((slot) => [slot.logicalSessionId, slot.generation, slot.restartAttempts])
+      ).toEqual([
+        ['stuck', 2, 1],
+        ['quiet', 2, 0],
+        ['a', 2, 0],
+        ['b', 2, 0],
+        ['job', 2, 0],
+      ]);
+      expect(h.host?.starts).toBe(1);
+    });
+
+    it('[WMH-06d] the restart waits 3 s in all, not per session; one that hangs or fails holds nothing up', async () => {
+      vi.useFakeTimers();
+      const h = createHarness({ host: true, capacity: 6 });
+      await create(h.manager, 'stuck', 7);
+      for (const id of ['hang1', 'hang2', 'fails', 'ok']) await create(h.manager, id);
+      await running(h, 'stuck', 7);
+      for (const id of ['hang1', 'hang2', 'fails', 'ok']) await running(h, id);
+      recordOf(h, 'hang1').drain.mockImplementation(() => new Promise(() => undefined));
+      recordOf(h, 'hang2').drain.mockImplementation(() => new Promise(() => undefined));
+      recordOf(h, 'fails').drain.mockRejectedValue(
+        new WorkerSlotError('WORKER_RPC_REMOTE_ERROR', 'WORKER_DISPOSED: worker is disposed')
+      );
+      wedge(h, 'stuck');
+      const seen = slotsAtRestart(h, ['hang1', 'hang2', 'fails', 'ok']);
+      h.events.length = 0;
+
+      await h.manager.stop('stuck');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+      for (const id of ['hang1', 'hang2', 'fails', 'ok']) {
+        expect(recordOf(h, id).drain, id).toHaveBeenCalledTimes(1);
+      }
+      // The one that answered is closed; the restart still waits for the rest.
+      expect(recordOf(h, 'ok').slot.state).toBe('crashed');
+      await vi.advanceTimersByTimeAsync(HOST_RESTART_DRAIN_MS - 1);
+      expect(h.host?.restart).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(h.host?.restart).toHaveBeenCalledTimes(1);
+      expect(seen).toEqual([
+        { hang1: 'running', hang2: 'running', fails: 'running', ok: 'crashed' },
+      ]);
+
+      await allReady(h);
+      // Those it did not close went with the host, and read the same.
+      for (const id of ['hang1', 'hang2', 'fails', 'ok']) {
+        expect(trace(h.events, id), id).toEqual(restarted);
+      }
+      expect(h.host?.starts).toBe(1);
+    });
+
+    it('[WMH-06e] with nothing else under way the restart does not wait', async () => {
+      vi.useFakeTimers();
+      const h = createHarness({ host: true });
+      await create(h.manager, 'stuck', 7);
+      await create(h.manager, 'quiet');
+      await running(h, 'stuck', 7);
+      wedge(h, 'stuck');
+
+      await h.manager.stop('stuck');
+      await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS);
+      expect(h.host?.restart).toHaveBeenCalledTimes(1);
+      expect(recordOf(h, 'quiet').drain).not.toHaveBeenCalled();
+      await allReady(h);
+    });
+
+    it('[WMH-lock-02] "Restart engine" on a locked session closes a busy session first as well', async () => {
+      const h = createHarness({ host: true });
+      await create(h.manager, 'busy', 8);
+      const turn = await running(h, 'busy', 8);
+      const seen = slotsAtRestart(h, ['busy']);
+      h.events.length = 0;
+
+      await h.manager.resumeSession({
+        sessionId: 'locked',
+        sessionFile: norm('/sessions/locked.jsonl'),
+        workspacePath: '/repo',
+        ownerWebContentsId: 7,
+        forceTakeover: true,
+      });
+
+      expect(seen).toEqual([{ busy: 'crashed' }]);
+      expect(h.host?.restart).toHaveBeenCalledWith('user', { userInitiated: true });
+      await vi.waitFor(() =>
+        expect(snapshot(h, 'busy')).toMatchObject({ state: 'ready', generation: 2 })
+      );
+      expect(trace(h.events, 'busy')).toEqual(restarted);
+      expect(
+        h.events.find((event) => event.type === 'session.failed' && event.sessionId === 'busy')
+          ?.requestId
+      ).toBe(turn);
+    });
   });
 
   it('[WMH-07] app quit stops the host once instead of disposing each channel', async () => {

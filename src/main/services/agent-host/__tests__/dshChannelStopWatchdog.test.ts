@@ -42,6 +42,8 @@ interface Script {
   stuck?: ReadonlySet<string>;
   /** `{type:'shutdown'}` ends the host (stopped, then exit 0); otherwise only SIGKILL does. */
   exitsOnShutdown?: boolean;
+  /** Sessions whose `worker.dispose` is never answered, though their close would be. */
+  disposeHangs?: ReadonlySet<string>;
 }
 
 const stubFor = (sessionId: string) => `/dsh-home/aiclient-sessions/aiclient-${sessionId}.dsh.json`;
@@ -136,7 +138,7 @@ function scriptHost(child: FakeChild, script: Script): string[] {
         respond(ch, rpc, { stopped: true });
         return;
       case 'worker.dispose':
-        if (stuck(ch)) return;
+        if (stuck(ch) || script.disposeHangs?.has(sessionOf.get(ch) ?? '')) return;
         respond(ch, rpc, { disposed: true });
         child.post({ host: 'closed', ch });
         return;
@@ -341,6 +343,84 @@ describe('Stop on the shared host (P1-3a, P1-3c; decision 021)', () => {
       'session.history',
       'status:idle',
     ]);
+  });
+
+  it('[WMH-06c] ladder B: the other busy sessions get worker.dispose before the shutdown, all at once, 3 s at most (decision 155)', async () => {
+    const { h, manager, events } = await sessionsOnOneHost(
+      [
+        ['s1', 7],
+        ['s2', undefined],
+        ['s3', undefined],
+        ['s4', undefined],
+      ],
+      // s2's channel closes when told; s3's never answers.
+      (hostIndex) =>
+        hostIndex === 0 ? { stuck: new Set(['s1']), disposeHangs: new Set(['s3']) } : {}
+    );
+    const child = h.child();
+    await manager.send({ sessionId: 's1', attemptId: 'a1', text: 'go', ownerWebContentsId: 7 });
+    await manager.send({ sessionId: 's2', attemptId: 'b1', text: 'go' });
+    await manager.send({ sessionId: 's3', attemptId: 'c1', text: 'go' });
+    await flushMicrotasks();
+    await manager.stop('s1');
+    const stopAt = events.length;
+    const sentIndex = (match: (message: Record<string, unknown>) => boolean) =>
+      child.sent.findIndex((message) => match(message as Record<string, unknown>));
+    const disposeOf = (ch: string) => (message: Record<string, unknown>) =>
+      message.ch === ch &&
+      (message.rpc as { type?: string } | undefined)?.type === 'worker.dispose';
+    const isShutdown = (message: Record<string, unknown>) => message.type === 'shutdown';
+
+    // Ladder A runs out (3 s ACK, 3 s close); the two busy channels are asked together.
+    await vi.advanceTimersByTimeAsync(STOP_WATCHDOG_MS + 3_000 + 3_000 + 100);
+    expect(sentIndex(disposeOf('c1-2'))).toBeGreaterThan(-1);
+    expect(sentIndex(disposeOf('c1-3'))).toBeGreaterThan(-1);
+    expect(sentIndex(disposeOf('c1-4'))).toBe(-1);
+    expect(sentIndex(isShutdown)).toBe(-1);
+    // s2 answered and its channel closed; s3 holds the shutdown back, 3 s at most.
+    expect(forSession(events.slice(stopAt), 's2').slice(0, 2)).toEqual([
+      'status:disconnected/engine_restarted',
+      'session.failed',
+    ]);
+    await vi.advanceTimersByTimeAsync(2_800);
+    expect(sentIndex(isShutdown)).toBe(-1);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(sentIndex(isShutdown)).toBeGreaterThan(sentIndex(disposeOf('c1-3')));
+
+    await vi.advanceTimersByTimeAsync(DSH_HOST_TIMINGS.gracefulStopMs);
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    await everyoneReady(manager);
+    for (const id of ['s2', 's3']) {
+      expect(forSession(events.slice(stopAt), id), id).toEqual([
+        'status:disconnected/engine_restarted',
+        'session.failed',
+        'session.resumed',
+        'session.history',
+        'status:idle',
+      ]);
+    }
+    expect(forSession(events.slice(stopAt), 's4')).toEqual([
+      'status:disconnected/engine_restarted',
+      'session.resumed',
+      'session.history',
+      'status:idle',
+    ]);
+    expect(
+      manager
+        .getSlotSnapshots()
+        .map((slot) => [slot.logicalSessionId, slot.generation, slot.restartAttempts])
+    ).toEqual([
+      ['s1', 2, 1],
+      ['s2', 2, 0],
+      ['s3', 2, 0],
+      ['s4', 2, 0],
+    ]);
+    expect(h.supervisor.status()).toMatchObject({
+      state: 'ready',
+      generation: 2,
+      recentFaults: 1,
+      lastExit: { reason: 'stuck-session', signal: 'SIGKILL', generation: 1 },
+    });
   });
 
   it('ladder B needs no signal for a host that stops when asked', async () => {
