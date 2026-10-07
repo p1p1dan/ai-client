@@ -8,10 +8,11 @@
   // `src/dsh-host/**`. Run from the repo root after `npm ci` in here:
   //   pnpm exec tsc --noEmit -p src/dsh-host/tsconfig.json
   //
-  // P0-3: `bridge/` imports the worker RPC server and shared types from
-  // `src/agent-host` and `src/shared`, so resolution mirrors
-  // `src/agent-host/tsconfig.json` (bundler resolution, `.ts` extensions).
-  // Node strips types at runtime (erasable syntax only), so no emit.
+  // P0-3: `bridge/` and `credentials/` import shared types and libraries from
+  // `src/shared` as source (bundler resolution, `.ts` extensions). Since
+  // dsh-rebase P1-12 step 4 the bridge's RPC server lives in `bridge/` itself
+  // and `src/agent-host` is gone. Node strips types at runtime (erasable
+  // syntax only), so no emit.
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",

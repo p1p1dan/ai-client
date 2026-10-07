@@ -28,13 +28,7 @@ describe('Codex rollout to an importable conversation', () => {
     const sources = join(root, 'sources');
     await mkdir(sources);
     const sourceFile = join(sources, 'rollout.jsonl');
-    await copyFile(
-      resolve(
-        __dirname,
-        '../../../../agent-host/__tests__/fixtures/codex/codex-rollout-redacted.jsonl'
-      ),
-      sourceFile
-    );
+    await copyFile(resolve(__dirname, 'fixtures/codex/codex-rollout-redacted.jsonl'), sourceFile);
     const original = await readFile(sourceFile);
     const scanner = new CodexSessionScanner(() => sources);
     const [summary] = await scanner.scan();

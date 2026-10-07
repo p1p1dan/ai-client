@@ -4,6 +4,7 @@ import os from 'node:os';
 import { dirname } from 'node:path';
 import { translate } from '@shared/i18n';
 import { forkSessionTitle } from '@shared/sessionTitles';
+import { STDERR_FORWARD_MAX_LINES_PER_TURN, sanitizeStderrLine } from '@shared/stderrRedaction';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
 import { type AgentWireName, DSH_AGENT } from '@shared/types/agentWire';
 import {
@@ -96,10 +97,6 @@ import {
   type WorkerTreePayload,
   type WorkerTreeResult,
 } from '@shared/types/workerRpc';
-import {
-  STDERR_FORWARD_MAX_LINES_PER_TURN,
-  sanitizeStderrLine,
-} from '../../../agent-host/stderrRedaction';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { getCurrentLocale } from '../i18n';
 import { type PreviewShowRequest, previewWindowManager } from '../preview/PreviewWindowManager';
@@ -210,8 +207,8 @@ interface ManagedSlot {
    * keeps emitting after it receives `worker.dispose` — its `handleDispose`
    * flips `disposed` only AFTER the runtime teardown, precisely so the engine
    * can deny the permission gates and cancel the questions parked in front of
-   * the user (see agent-host/piWorkerRpcServer.ts and
-   * runtime/worker/nativeWorkerRuntime.ts). Closing Main's gate first dropped
+   * the user (see dsh-host/bridge/piWorkerRpcServer.ts; the native
+   * runtime did the same until dsh-rebase P1-12). Closing Main's gate first dropped
    * every one of those resolutions, so the cards stayed on screen with nothing
    * alive left to answer them.
    *

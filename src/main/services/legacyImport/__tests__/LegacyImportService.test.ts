@@ -823,10 +823,7 @@ describe('B4 multi-source import', () => {
     const codexRoot = path.join(root, 'codex');
     await mkdir(codexRoot);
     await copyFile(
-      path.resolve(
-        __dirname,
-        '../../../../agent-host/__tests__/fixtures/codex/codex-rollout-redacted.jsonl'
-      ),
+      path.resolve(__dirname, 'fixtures/codex/codex-rollout-redacted.jsonl'),
       path.join(codexRoot, 'rollout.jsonl')
     );
     const codex = codexSourceImporter(new CodexSessionScanner(() => codexRoot));

@@ -1,3 +1,4 @@
+import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '@shared/stderrRedaction';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
 import {
   WORKER_COMPACT_BUDGET_MS,
@@ -6,7 +7,6 @@ import {
   type WorkerRpcEvent,
 } from '@shared/types/workerRpc';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { STDERR_FORWARD_MAX_LINES_PER_TURN } from '../../../../agent-host/stderrRedaction';
 import { normalizeWorkerPath, sessionWorkerKey } from '../workerSessionKey';
 
 // Normalize a POSIX-style path to the current platform's canonical form so
@@ -2409,8 +2409,8 @@ describe('WorkerManager manager-level state', () => {
  *
  * The worker orders its teardown so that the engine can still emit while it
  * denies parked permission gates and cancels parked questions: see the comment
- * on `handleDispose` (agent-host/piWorkerRpcServer.ts) and `dispose()` in
- * runtime/worker/nativeWorkerRuntime.ts. Main used to close its event gate
+ * on `handleDispose` (dsh-host/bridge/piWorkerRpcServer.ts) and `dispose()`
+ * in the bridge's dshSessionRuntime.ts. Main used to close its event gate
  * before asking for that teardown, so every one of those resolutions was
  * dropped and the cards stayed on screen with nothing left to answer them.
  */

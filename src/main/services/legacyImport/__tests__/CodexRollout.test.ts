@@ -4,10 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parseCodexRollout } from '../CodexRollout';
 
 const fixture = readFileSync(
-  resolve(
-    __dirname,
-    '../../../../agent-host/__tests__/fixtures/codex/codex-rollout-redacted.jsonl'
-  ),
+  resolve(__dirname, 'fixtures/codex/codex-rollout-redacted.jsonl'),
   'utf8'
 );
 

@@ -496,11 +496,11 @@ export const PERMISSION_DENIED_STOPPED = 'Denied, turn stopped';
 export const PERMISSION_WAITING = 'Waiting';
 
 /**
- * Button copy per decision id — renderer-local on purpose. The module that
- * knows the wire dialects (`src/agent-host/codexDecisions.ts`) belongs to a
- * separate program this bundle cannot import (`tsconfig.web.json` include /
- * aliases), so the wire values live on that side of the boundary and the words
- * a user reads live on this one.
+ * Button copy per decision id — renderer-local on purpose. The ids are the
+ * wire values (`PermissionDecisionId`, which the DSH bridge answers with); the
+ * words a user reads live on this side of the boundary. (The module that once
+ * mapped Codex's wire dialects is long gone, and the directory that held it
+ * went in dsh-rebase P1-12.)
  */
 export const PERMISSION_DECISION_LABELS: Readonly<Record<PermissionDecisionId, string>> = {
   allow: PERMISSION_ALLOW,

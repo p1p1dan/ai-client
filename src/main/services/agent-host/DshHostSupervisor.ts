@@ -72,6 +72,7 @@ import { type ChildProcess, spawn as nodeSpawn, type SpawnOptions } from 'node:c
 import { randomBytes } from 'node:crypto';
 import { buildDshModelPlan, type DshModelPlan } from '@shared/dshModelPlan';
 import { type DshPluginReport, isDshPluginReport } from '@shared/dshPlugins';
+import { sanitizeStderrLine } from '@shared/stderrRedaction';
 import {
   type DshChannelId,
   type DshCompletionPurpose,
@@ -109,7 +110,6 @@ import {
 } from '@shared/types/dshHostProtocol';
 import type { SessionHistoryPage } from '@shared/types/sessionHistory';
 import { powerMonitor as electronPowerMonitor } from 'electron';
-import { sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { type DshChannelLink, DshChannelTransport } from './DshChannelTransport';
 import {
   currentDshHostLaunch,

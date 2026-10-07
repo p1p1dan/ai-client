@@ -32,6 +32,7 @@
 
 import { readFile, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
+import { sanitizeStderrLine } from '@shared/stderrRedaction';
 import type {
   DshHostSeeded,
   DshSeedImportResult,
@@ -40,7 +41,6 @@ import type {
 import type { ImportedConversation } from '@shared/types/legacyImport';
 import { LEGACY_MIGRATION_MAIN_CODES } from '@shared/types/legacyMigration';
 import { app } from 'electron';
-import { sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { resolveDshHome } from '../agent-host/DshHostProcess';
 import { type DshHostSeedImportInput, dshHostSupervisor } from '../agent-host/DshHostSupervisor';
 import {

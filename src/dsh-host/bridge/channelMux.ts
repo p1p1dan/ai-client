@@ -48,11 +48,6 @@
  */
 
 import {
-  PiWorkerRpcServer,
-  type PiWorkerRuntime,
-  type PiWorkerRuntimeOptions,
-} from '../../agent-host/piWorkerRpcServer.ts';
-import {
   DSH_CHANNEL_UNKNOWN_CODE,
   DSH_COMPLETION_REQUEST_INVALID,
   DSH_COMPLETION_UNAVAILABLE,
@@ -90,6 +85,11 @@ import {
   type WorkerRpcMessage,
   type WorkerRpcRequest,
 } from '../../shared/types/workerRpc.ts';
+import {
+  PiWorkerRpcServer,
+  type PiWorkerRuntime,
+  type PiWorkerRuntimeOptions,
+} from './piWorkerRpcServer.ts';
 
 /** A session runtime the multiplexer can report on. */
 export interface ChannelRuntime extends PiWorkerRuntime {

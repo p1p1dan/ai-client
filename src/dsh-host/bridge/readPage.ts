@@ -15,13 +15,13 @@
  * no agent of the session is open here.
  */
 
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { DshHistoryFold } from '../../shared/dshHistory/projection.ts';
 import type { DshToolPresenter } from '../../shared/dshToolPresentation.ts';
 import type { SessionHistoryPage } from '../../shared/types/sessionHistory.ts';
 import { mapOpenError } from './dshSessionRuntime.ts';
 import type { DshSessionObservation, DshSessionQuery } from './historyCache.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 import { readStub, SESSION_INVALID } from './stub.ts';
 
 export interface ReadPageRequest {

@@ -800,7 +800,7 @@ describe('bridge bundles (decision 011)', () => {
       {
         inputs: {
           'src/dsh-host/credentials/plugin.ts': {},
-          'src/agent-host/stderrRedaction.ts': {},
+          'src/shared/stderrRedaction.ts': {},
           'src/shared/types/workerRpc.ts': {},
         },
         outputs: {

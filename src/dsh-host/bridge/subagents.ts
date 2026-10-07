@@ -32,13 +32,13 @@
  * No value imports from DSH: the runtime hands the services in.
  */
 
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type {
   SubagentActivityPayload,
   SubagentRunStatus,
 } from '../../shared/types/runtimeEvents.ts';
 import type { WorkerSubagentInterruptResult } from '../../shared/types/workerRpc.ts';
 import { WORKER_JOBS_UNAVAILABLE } from '../../shared/types/workerRpc.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 // ---- the slice of dsh-subagent read here ----------------------------------------------
 

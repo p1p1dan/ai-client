@@ -34,7 +34,6 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "typecheck:agent-host": "tsc --noEmit -p src/agent-host/tsconfig.json",
     "typecheck:dsh-host": "tsc --noEmit -p src/dsh-host/tsconfig.json",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",

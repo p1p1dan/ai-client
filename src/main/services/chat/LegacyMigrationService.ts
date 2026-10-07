@@ -34,6 +34,7 @@
 
 import { stat } from 'node:fs/promises';
 import { translate } from '@shared/i18n';
+import { sanitizeStderrLine } from '@shared/stderrRedaction';
 import { DSH_AGENT, PI_AGENT } from '@shared/types/agentWire';
 import type { DshHostSeeded, DshSeedSessionResult } from '@shared/types/dshHostProtocol';
 import {
@@ -45,7 +46,6 @@ import {
   type LegacyMigrationSummary,
 } from '@shared/types/legacyMigration';
 import type { SessionIndexEntry } from '@shared/types/sessionIndex';
-import { sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { type DshHostSeedInput, dshHostSupervisor } from '../agent-host/DshHostSupervisor';
 import { getCurrentLocale } from '../i18n';
 import { type SessionMigrationCommit, sessionIndexService } from './SessionIndexService';

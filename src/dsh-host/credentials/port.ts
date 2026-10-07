@@ -36,7 +36,7 @@ const SHAPE_PLACEHOLDER = '[redacted]';
 export interface CredentialPortOptions {
   /** Looked up per call: a host without IPC has none, and every lookup then finds nothing. */
   relay(): CredentialRelayView | undefined;
-  /** The repo's key-shape rules (`redactCredentials` in src/agent-host/stderrRedaction.ts). */
+  /** The repo's key-shape rules (`redactCredentials` in src/shared/stderrRedaction.ts). */
   redactShapes(text: string, placeholder: string): string;
 }
 

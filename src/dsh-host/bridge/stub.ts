@@ -26,8 +26,8 @@ import {
   writeSync,
 } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type { SeedOrigin } from '../../shared/legacyPiSession/convert/types.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 /** One DSH session a chat has been (decision 027). */
 export interface SessionLineageEntry {

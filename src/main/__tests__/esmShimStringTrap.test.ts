@@ -24,7 +24,11 @@ import { describe, expect, it } from 'vitest';
  * so this test just keeps the trap from being re-armed.
  */
 
-const SCAN_ROOTS = ['main', 'shared', 'preload', 'agent-host'];
+// The roots electron-vite bundles. `agent-host` left with the directory in
+// dsh-rebase P1-12 step 4 (decision 147): its stderr redaction and Codex item
+// mapper now sit under `shared` and `main`, and the RPC server moved into the
+// DSH bridge, which esbuild bundles without this shim.
+const SCAN_ROOTS = ['main', 'shared', 'preload'];
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx']);
 
 /** Whitespace, the bare word `import`, then a quote — the shape the plugin misreads. */

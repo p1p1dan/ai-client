@@ -10,10 +10,10 @@
  * is refused with `MODEL_NOT_CONFIGURED`, before anything is sent.
  */
 
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import { MODEL_NOT_CONFIGURED } from '../../shared/dshFailureCodes.ts';
 import { type DshRouteMode, resolveRoute } from '../../shared/dshModelPlan/route.ts';
 import type { DshEffortLevel, DshModelPlan } from '../../shared/dshModelPlan/types.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 /** The plan as the host provides it (`aiclientModelPlan`): no nonce, nothing secret. */
 export type DshBridgeModelPlan = Pick<DshModelPlan, 'revision' | 'defaultModel' | 'index'>;

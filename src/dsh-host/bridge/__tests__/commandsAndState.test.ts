@@ -2,7 +2,6 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
 import {
   WORKER_COMMAND_TIMEOUT,
   WORKER_COMMAND_UNKNOWN,
@@ -15,6 +14,7 @@ import {
   DshSessionRuntime,
   dshSessionIdFor,
 } from '../dshSessionRuntime.ts';
+import type { PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 

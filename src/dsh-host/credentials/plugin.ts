@@ -21,7 +21,7 @@ import {
   type CredentialRecord,
   type CredentialRef,
 } from '@deepseek-ai/dsh-credentials';
-import { redactCredentials } from '../../agent-host/stderrRedaction.ts';
+import { redactCredentials } from '../../shared/stderrRedaction.ts';
 import { CREDENTIAL_RELAY_SERVICE, CredentialPort, type CredentialRelayView } from './port.ts';
 
 type StreamListener = (options: unknown, next: () => AsyncIterable<unknown>) => unknown;

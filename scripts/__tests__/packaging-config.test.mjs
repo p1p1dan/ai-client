@@ -269,7 +269,6 @@ describe('build.yml gate wiring (C5)', () => {
     const runs = jobs.gate.steps.filter((s) => s.run).map((s) => s.run);
     for (const cmd of [
       'pnpm typecheck',
-      'pnpm typecheck:agent-host',
       'pnpm typecheck:dsh-host',
       'pnpm lint',
       'pnpm test',
@@ -282,12 +281,18 @@ describe('build.yml gate wiring (C5)', () => {
   /**
    * dsh-rebase P1-12 step 3 (decision 147): the self-owned runtime and the
    * native worker's package are deleted, so the gate neither installs them nor
-   * runs their type check or smokes, and the numbering counts six gates.
+   * runs their type check or smokes. Step 4 deleted the rest of
+   * `src/agent-host` and its type check, so the numbering counts five gates.
    */
   it('runs no gate of the retired runtime or native worker', () => {
     const steps = jobs.gate.steps;
     const runs = steps.map((s) => s.run ?? '').join('\n');
-    for (const retired of ['typecheck:runtime', 'smoke:runtime', 'smoke:runtime-tools']) {
+    for (const retired of [
+      'typecheck:runtime',
+      'typecheck:agent-host',
+      'smoke:runtime',
+      'smoke:runtime-tools',
+    ]) {
       expect(runs, retired).not.toContain(retired);
     }
     const dirs = steps.map((s) => s['working-directory']).filter(Boolean);
@@ -295,15 +300,19 @@ describe('build.yml gate wiring (C5)', () => {
     expect(dirs).not.toContain('src/runtime');
     const numbered = steps.map((s) => s.name).filter((name) => /^Gate \d+\/\d+/.test(name ?? ''));
     expect(numbered.map((name) => name.match(/^Gate (\d+\/\d+)/)[1])).toEqual([
-      '1/6',
-      '2/6',
-      '3/6',
-      '4/6',
-      '5/6',
-      '6/6',
+      '1/5',
+      '2/5',
+      '3/5',
+      '4/5',
+      '5/5',
     ]);
     const pkg = JSON.parse(readFileSync(path.join(repoRoot, 'package.json'), 'utf8'));
-    for (const retired of ['smoke:runtime', 'smoke:runtime-tools', 'typecheck:runtime']) {
+    for (const retired of [
+      'smoke:runtime',
+      'smoke:runtime-tools',
+      'typecheck:runtime',
+      'typecheck:agent-host',
+    ]) {
       expect(pkg.scripts, retired).not.toHaveProperty(retired);
     }
   });

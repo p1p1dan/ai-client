@@ -53,28 +53,26 @@ import { describe, expect, it } from 'vitest';
  *
  * dsh-rebase P1-12 step 3 (decision 147) deleted `src/runtime` and the native
  * worker half of `src/agent-host`, so the `runtime` root is gone and the
- * policy table is walked as `shared/permissions/permissionPolicy.mjs`. What
- * is left of `agent-host` stays in scope until step 4 removes the directory.
+ * policy table is walked as `shared/permissions/permissionPolicy.mjs`. Step 4
+ * deleted `src/agent-host` itself and with it this root: stderr redaction is
+ * walked as `shared/stderrRedaction.ts`; the RPC server moved into the DSH
+ * bridge and the Codex item mapper into Main's legacy import, neither of which
+ * this guard walks (the mapper's log notes keep their own English-only test).
  */
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const ROOTS = ['renderer', 'shared', 'agent-host'];
+const ROOTS = ['renderer', 'shared'];
 const EXTENSIONS = new Set(['.ts', '.tsx', '.mjs', '.mts']);
 
 /**
  * Per-root floors, because one number for the whole tree cannot tell "the
- * renderer grew" from "the agent-host root stopped being walked": a walker bug
+ * renderer grew" from "the shared root stopped being walked": a walker bug
  * there would drop its files and still clear a global threshold on the
  * renderer's 400-odd alone.
  */
 const MIN_FILES_PER_ROOT: Record<string, number> = {
   renderer: 300,
   shared: 50,
-  // P1-12 step 3 left four walked files here (the RPC server and its errors,
-  // stderr redaction, the Codex item mapper). These are `toBeGreaterThan`
-  // tripwires for "did the walker stop walking", kept one below the real
-  // count so the next deletion is a conscious edit.
-  'agent-host': 3,
 };
 
 /**
@@ -138,7 +136,7 @@ function withoutComments(source: string): string[] {
 describe('UI copy stays in the dictionary', () => {
   const files = ROOTS.flatMap((root) => sourceFiles(path.join(SRC, root)));
 
-  it('no renderer, shared or agent-host source hardcodes Chinese text', () => {
+  it('no renderer or shared source hardcodes Chinese text', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const relative = path.relative(SRC, file).split(path.sep).join('/');

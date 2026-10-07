@@ -123,7 +123,7 @@ Pi SDK 不直接进入 Electron Main。Claude/Codex 相关代码只在只读迁�
 
 ```bash
 pnpm typecheck
-pnpm typecheck:agent-host
+pnpm typecheck:dsh-host   # 先在 src/dsh-host 里 npm ci
 pnpm lint
 pnpm test
 ```

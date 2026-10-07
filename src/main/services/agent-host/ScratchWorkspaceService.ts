@@ -49,8 +49,8 @@ import { mkdir, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { getEffectiveTemporaryBasePath } from '@shared/defaultPaths';
+import { redactStderrLine, sanitizeStderrLine } from '@shared/stderrRedaction';
 import { canonicalPathKey } from '@shared/utils/path';
-import { redactStderrLine, sanitizeStderrLine } from '../../../agent-host/stderrRedaction';
 import { readStringSetting, TEMPORARY_PATH_SETTING_KEY } from '../../ipc/settings';
 import { isInsideDirectory, resolveWorkspacePath } from './workspaceContainment';
 

@@ -36,6 +36,8 @@ jobs:
     # runtime installs, `typecheck:runtime` and the two runtime smokes (about
     # 20 s on run 36651305647) and the runtime's 70 test files from `test`:
     # an estimated 5 min gate still rounds to 20, so the value stays.
+    # Step 4 deleted src/agent-host and its `typecheck:agent-host` gate; the
+    # value stays.
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -48,7 +50,7 @@ jobs:
 
       # 24 across every job (user decision, 2026-08-21), matching
       # src/dsh-host/package.json engines (>=24) — the version the bundled node
-      # that runs the DSH host is pinned to (src/agent-host/package.json said
+      # that runs the DSH host is pinned to (the native worker's package said
       # the same until dsh-rebase P1-12 step 3). It started here out of necessity: the behaviour-lock tests
       # spawn the real entry with `node --experimental-strip-types`, a flag that
       # only exists from Node 22.6, so on Node 20 the child died with exit 9
@@ -75,7 +77,8 @@ jobs:
 
       # dsh-rebase P1-12 step 3 (decision 147): no agent-host or runtime
       # install. The native worker's package and the self-owned runtime are
-      # deleted; what is left of src/agent-host needs only the root packages.
+      # deleted; step 4 moved the rest of src/agent-host out (the bridge's RPC
+      # server into src/dsh-host/bridge, the rest into src/shared and Main).
 
       # The DSH host (dsh-rebase P1) is its own npm package, pinned by its
       # committed lockfile. Never --omit=optional here or in the packaging build:
@@ -98,19 +101,16 @@ jobs:
 
       # Heavy gates run serially, never chained into one command: the combined
       # form has OOM'd (exit 137) before — see baseline/test-and-release-gates.md.
-      - name: Gate 1/6 — typecheck
+      - name: Gate 1/5 — typecheck
         run: pnpm typecheck
 
-      - name: Gate 2/6 — typecheck:agent-host
-        run: pnpm typecheck:agent-host
-
-      - name: Gate 3/6 — typecheck:dsh-host
+      - name: Gate 2/5 — typecheck:dsh-host
         run: pnpm typecheck:dsh-host
 
-      - name: Gate 4/6 — lint
+      - name: Gate 3/5 — lint
         run: pnpm lint
 
-      - name: Gate 5/6 — test
+      - name: Gate 4/5 — test
         run: pnpm test
 
       # dsh-rebase P1-4e (decisions 100 and 133): drive the product bridge
@@ -135,7 +135,7 @@ jobs:
       # The self-owned runtime's two offline smokes (ARD risk R1) went with
       # src/runtime in dsh-rebase P1-12 step 3; the DSH bridge recording above
       # is the gate's end-to-end check now.
-      - name: Gate 6/6 — release metadata
+      - name: Gate 5/5 — release metadata
         run: pnpm verify:release
 
   build-app:

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { redactCredentials } from '../../../agent-host/stderrRedaction.ts';
+import { redactCredentials } from '../../../shared/stderrRedaction.ts';
 import {
   CREDENTIAL_SOURCE,
   CREDENTIALS_READ_ONLY,

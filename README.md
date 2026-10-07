@@ -128,7 +128,7 @@ Run heavy checks serially:
 
 ```bash
 pnpm typecheck
-pnpm typecheck:agent-host
+pnpm typecheck:dsh-host   # needs `npm ci` in src/dsh-host first
 pnpm lint
 pnpm test
 ```

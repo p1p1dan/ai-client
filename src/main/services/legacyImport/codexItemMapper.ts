@@ -1,10 +1,12 @@
+// Moved from src/agent-host/codexItemMapper.ts (dsh-rebase P1-12 step 4,
+// decision 147); its one product caller is `CodexRollout.ts` beside it.
 import {
   PERMISSION_DIFF_MAX_BYTES,
   PERMISSION_DIFF_MAX_FILES,
   type PermissionDetail,
   type PermissionFileChange,
-} from '../shared/types/runtimeEvents.ts';
-import type { HistoryBlock } from '../shared/types/sessionHistory.ts';
+} from '@shared/types/runtimeEvents';
+import type { HistoryBlock } from '@shared/types/sessionHistory';
 
 /**
  * Codex `ThreadItem` -> AiClient block projection. PURE, zero IO, zero state.

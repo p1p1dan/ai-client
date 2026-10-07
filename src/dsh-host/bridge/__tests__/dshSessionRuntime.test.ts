@@ -10,10 +10,6 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  PiWorkerRpcServer,
-  type PiWorkerRuntimeOptions,
-} from '../../../agent-host/piWorkerRpcServer.ts';
 import { INTERRUPTED_TURN_NOTICE_KEY } from '../../../shared/dshHistory/projection.ts';
 import { DSH_RETRY_CONTINUATION_TEXT, type DshLogEvent } from '../../../shared/dshHistory/types.ts';
 import {
@@ -33,6 +29,7 @@ import {
   type SessionStub,
   stubPathFor,
 } from '../dshSessionRuntime.ts';
+import { PiWorkerRpcServer, type PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { testPermissionHost } from './permissionTestHost.ts';
 import { TEST_PLAN } from './testPlan.ts';
 

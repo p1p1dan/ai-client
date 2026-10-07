@@ -2448,7 +2448,9 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         join(
           REPO,
           'src',
-          'agent-host',
+          'main',
+          'services',
+          'legacyImport',
           '__tests__',
           'fixtures',
           'codex',

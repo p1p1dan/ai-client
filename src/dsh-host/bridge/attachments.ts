@@ -17,9 +17,9 @@
  * with `WORKER_ATTACHMENT_REJECTED`, its DSH code and the file to blame.
  */
 
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import type { SessionAttachment } from '../../shared/types/agentHost.ts';
 import { WORKER_ATTACHMENT_REJECTED } from '../../shared/types/workerRpc.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 /** `FileAttachmentRef` of dsh-attachment: the verbatim stored file. */
 export interface DshFileAttachmentRef {

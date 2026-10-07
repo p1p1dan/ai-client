@@ -1,3 +1,5 @@
+// Moved from src/agent-host/piWorkerErrors.ts (dsh-rebase P1-12 step 4,
+// decision 147).
 export class PiWorkerSessionError extends Error {
   // Explicit fields rather than constructor parameter properties: dev runs the
   // worker under Node's strip-only type removal, which rejects them outright.

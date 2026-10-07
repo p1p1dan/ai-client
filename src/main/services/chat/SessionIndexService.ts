@@ -8,6 +8,7 @@ import { randomUUID } from 'node:crypto';
 import type { FileHandle } from 'node:fs/promises';
 import { copyFile, mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { redactStderrLine } from '@shared/stderrRedaction';
 import { type AgentWireName, DSH_AGENT, isAgentWireName, PI_AGENT } from '@shared/types/agentWire';
 import {
   LEGACY_MIGRATION_MAIN_CODES,
@@ -23,7 +24,6 @@ import type {
   SessionMigratedFrom,
 } from '@shared/types/sessionIndex';
 import { app } from 'electron';
-import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 
 const SESSION_INDEX_FILENAME = 'session-index.json';
 

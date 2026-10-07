@@ -5,7 +5,7 @@ import {
   WORKER_RPC_PROTOCOL_VERSION,
   type WorkerBootstrapResult,
   type WorkerRpcRequest,
-} from '../../shared/types/workerRpc.ts';
+} from '../../../shared/types/workerRpc.ts';
 import {
   PiWorkerRpcServer,
   type PiWorkerRuntime,

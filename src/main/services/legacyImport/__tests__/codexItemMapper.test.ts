@@ -7,7 +7,7 @@ import {
   CODEX_TOOL_OUTPUT_MAX_CHARS,
   mapCodexItem,
   toPermissionFileChanges,
-} from '../codexItemMapper.ts';
+} from '../codexItemMapper';
 
 /**
  * The item mapper's job is to make "codex added a new item type" LOUD.
@@ -77,8 +77,9 @@ describe('the mapping table covers the contract exactly', () => {
     // Five of them carried the repo's `[实测]` provenance marker, which is a
     // COMMENT idiom that had leaked into code. These strings go to a log tail,
     // not to a user, so they are not dictionary keys — they just have to match
-    // the log around them, and they are now the only agent-host strings the
-    // Chinese guard scans. `[measured]` is the same marker, spelled out.
+    // the log around them. `[measured]` is the same marker, spelled out. Since
+    // dsh-rebase P1-12 step 4 moved this file into Main, the repo-wide Chinese
+    // guard no longer walks it, so this test is the only one holding the line.
     for (const [type, rule] of Object.entries(CODEX_ITEM_RULES)) {
       expect(/[一-鿿]/.test(rule.note), `${type} note must not be Chinese`).toBe(false);
     }

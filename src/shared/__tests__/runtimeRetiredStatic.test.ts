@@ -19,6 +19,11 @@ import { stripComments } from '../../renderer/components/chat/__tests__/stripCom
  * the runtime's scripts; build.yml installs and gates none of it; and
  * verify-packaged-app reads app.asar to prove none of it shipped.
  *
+ * Step 4, pinned last: `src/agent-host` itself is gone (its RPC server moved
+ * into the DSH bridge, stderr redaction into `src/shared`, the Codex item
+ * mapper into Main's legacy import), nothing imports or mocks a path inside
+ * it, and no manifest, tsconfig, gate or build script still names it.
+ *
  * Code only where it is code: comments are blanked first, so the prose that
  * explains a removal (like this one) cannot fail the scan.
  */
@@ -144,13 +149,18 @@ function codeFiles(dir: string, found: string[] = []): string[] {
   return found;
 }
 
-/** Module specifiers of import / export-from / dynamic import / require in code. */
+/**
+ * Module specifiers of import / export-from / dynamic import / require in
+ * code, and (P1-12 step 4) of Vitest's module mocks, which name a module path
+ * without importing it.
+ */
 function specifiersIn(source: string): string[] {
   const found: string[] = [];
   for (const pattern of [
     /\bfrom\s*(['"])([^'"\n]+)\1/g,
     /(?:^|[\s;])import\s*(['"])([^'"\n]+)\1/g,
     /\b(?:import|require)\s*\(\s*(['"])([^'"\n]+)\1\s*\)/g,
+    /\bvi\.(?:mock|doMock|unmock|doUnmock|importActual|importMock)\s*(?:<[^>]*>)?\(\s*(['"])([^'"\n]+)\1/g,
   ]) {
     for (const match of source.matchAll(pattern)) found.push(match[2]);
   }
@@ -163,18 +173,35 @@ function specifiers(file: string): string[] {
 }
 
 const RUNTIME_DIR = path.join(SRC, 'runtime');
+const AGENT_HOST_DIR = path.join(SRC, 'agent-host');
 const RETIRED_PACKAGES = [
   '@earendil-works/pi-coding-agent',
   '@earendil-works/pi-agent-core',
   '@gotgenes/pi-permission-system',
 ];
 
-describe('P1-12 step 3 · the runtime and the native worker are deleted', () => {
-  const files = ['src', 'scripts'].flatMap((root) => codeFiles(path.join(REPO, root)));
-  // Parsed once at collection time: two whole-tree scans inside test bodies
-  // exceeded the 5 s default timeout on a loaded CI runner.
-  const specifiersByFile = new Map(files.map((file) => [file, specifiers(file)] as const));
+const files = ['src', 'scripts'].flatMap((root) => codeFiles(path.join(REPO, root)));
+// Parsed once at collection time and shared by steps 3 and 4: two whole-tree
+// scans inside test bodies exceeded the 5 s default timeout on a loaded CI
+// runner.
+const specifiersByFile = new Map(files.map((file) => [file, specifiers(file)] as const));
 
+/** `file -> specifier` for every relative specifier that resolves into `dir`. */
+function importsInto(dir: string): string[] {
+  const offenders: string[] = [];
+  for (const [file, found] of specifiersByFile) {
+    for (const specifier of found) {
+      if (!specifier.startsWith('.')) continue;
+      const target = path.resolve(path.dirname(file), specifier);
+      if (target === dir || target.startsWith(`${dir}${path.sep}`)) {
+        offenders.push(`${repoRelative(file)} -> ${specifier}`);
+      }
+    }
+  }
+  return offenders;
+}
+
+describe('P1-12 step 3 · the runtime and the native worker are deleted', () => {
   it('walks src and scripts (a walker that found nothing would pass everything)', () => {
     expect(files.length).toBeGreaterThan(1000);
   });
@@ -196,17 +223,7 @@ describe('P1-12 step 3 · the runtime and the native worker are deleted', () => 
   });
 
   it('imports nothing from runtime/ anywhere under src or scripts', () => {
-    const offenders: string[] = [];
-    for (const [file, found] of specifiersByFile) {
-      for (const specifier of found) {
-        if (!specifier.startsWith('.')) continue;
-        const target = path.resolve(path.dirname(file), specifier);
-        if (target === RUNTIME_DIR || target.startsWith(`${RUNTIME_DIR}${path.sep}`)) {
-          offenders.push(`${repoRelative(file)} -> ${specifier}`);
-        }
-      }
-    }
-    expect(offenders).toEqual([]);
+    expect(importsInto(RUNTIME_DIR)).toEqual([]);
   });
 
   /**
@@ -287,5 +304,42 @@ describe('P1-12 step 3 · the runtime and the native worker are deleted', () => 
     // Its own header parser, not the transitive `@electron/asar`.
     expect(verify).not.toContain('@electron/asar');
     expect(code(path.join(REPO, 'scripts/asar-inspect.mjs'))).not.toContain('@electron/asar');
+  });
+});
+
+describe('P1-12 step 4 · src/agent-host is deleted', () => {
+  it('leaves no src/agent-host directory behind', () => {
+    expect(existsSync(AGENT_HOST_DIR)).toBe(false);
+  });
+
+  it('imports or mocks nothing inside src/agent-host anywhere under src or scripts', () => {
+    expect(importsInto(AGENT_HOST_DIR)).toEqual([]);
+    // The resolver itself: Main's own `services/agent-host` must not count,
+    // and a path that does climb into `src/agent-host` must, mocks included.
+    const main = path.join(SRC, 'main/services/chat/x.ts');
+    const into = (specifier: string) =>
+      path.resolve(path.dirname(main), specifier).startsWith(`${AGENT_HOST_DIR}${path.sep}`);
+    expect(into('../agent-host/WorkerManager')).toBe(false);
+    expect(into('../../../agent-host/stderrRedaction')).toBe(true);
+    expect(specifiersIn("vi.mock('../../../agent-host/stderrRedaction', () => ({}));")).toEqual([
+      '../../../agent-host/stderrRedaction',
+    ]);
+  });
+
+  it('no manifest, tsconfig, gate or DSH build script names src/agent-host', () => {
+    const pkg = JSON.parse(text('package.json')) as { scripts: Record<string, string> };
+    expect(pkg.scripts).not.toHaveProperty('typecheck:agent-host');
+    expect(Object.values(pkg.scripts).join('\n')).not.toContain('src/agent-host');
+    expect(text('tsconfig.json')).not.toContain('src/agent-host');
+    expect(text('src/dsh-host/tsconfig.json')).not.toContain('"src/agent-host');
+    const steps = text('.github/workflows/build.yml')
+      .split('\n')
+      .filter((line) => !/^\s*#/.test(line))
+      .join('\n');
+    expect(steps).not.toContain('typecheck:agent-host');
+    expect(steps).not.toContain('src/agent-host');
+    for (const script of ['scripts/dsh-host-build-lib.mjs', 'scripts/build-dsh-host.mjs']) {
+      expect(code(path.join(REPO, script)), script).not.toContain('src/agent-host');
+    }
   });
 });

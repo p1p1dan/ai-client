@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { PiWorkerRuntimeOptions } from '../../../agent-host/piWorkerRpcServer.ts';
 import {
   DSH_COMPLETION_REQUEST_INVALID,
   DSH_COMPLETION_UNAVAILABLE,
@@ -18,6 +17,7 @@ import {
   DshChannelMux,
   type DshChannelMuxOptions,
 } from '../channelMux.ts';
+import type { PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 
 /**
  * dsh-rebase P1-3a — the shared host's bridge multiplexer (BR cases of the

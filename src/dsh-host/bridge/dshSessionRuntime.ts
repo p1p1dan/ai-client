@@ -93,11 +93,6 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
-import type {
-  PiWorkerRuntime,
-  PiWorkerRuntimeOptions,
-} from '../../agent-host/piWorkerRpcServer.ts';
 import { paginateHistory } from '../../shared/dshHistory/page.ts';
 import { projectDshHistory } from '../../shared/dshHistory/projection.ts';
 import { dshLeafCheckpoint, dshTreeNodeId } from '../../shared/dshHistory/tree.ts';
@@ -225,6 +220,8 @@ import {
   goalActivationOf,
   outOfBandCommandName,
 } from './panels.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
+import type { PiWorkerRuntime, PiWorkerRuntimeOptions } from './piWorkerRpcServer.ts';
 import {
   createDshQuestionPrompt,
   DSH_QUESTION_ID_PREFIX,

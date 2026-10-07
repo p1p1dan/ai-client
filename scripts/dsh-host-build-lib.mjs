@@ -110,7 +110,9 @@ export const BRIDGE_ENTRIES = [
     entry: 'bridge/plugin.ts',
     out: 'bundle/lib/bridge.js',
     row: 'aiclient-bridge',
-    inputs: ['src/dsh-host/bridge/', 'src/agent-host/', 'src/shared/'],
+    // The RPC server Main's channels speak to lives in bridge/ since dsh-rebase
+    // P1-12 step 4 (decision 147), when src/agent-host was deleted.
+    inputs: ['src/dsh-host/bridge/', 'src/shared/'],
     externals: BRIDGE_EXTERNALS,
   },
   {
@@ -137,7 +139,7 @@ export const BRIDGE_ENTRIES = [
     out: 'bundle/lib/credentials.js',
     row: 'aiclient-credentials',
     // The repo's one key-shape rule set masks keys in provider failure text.
-    inputs: ['src/dsh-host/credentials/', 'src/agent-host/stderrRedaction.ts'],
+    inputs: ['src/dsh-host/credentials/', 'src/shared/stderrRedaction.ts'],
     // Its service class extends the abstract `ctx.credentials` seam.
     externals: ['@deepseek-ai/dsh-credentials'],
   },

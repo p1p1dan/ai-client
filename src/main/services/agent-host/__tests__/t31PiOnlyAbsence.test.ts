@@ -122,7 +122,8 @@ describe('T31 Pi-only absence gate', () => {
     for (const relative of [
       'src/main/services/legacyImport/ClaudeSessionScanner.ts',
       'src/main/services/legacyImport/ClaudeSourceAdapter.ts',
-      'src/agent-host/codexItemMapper.ts',
+      // Moved here from src/agent-host in dsh-rebase P1-12 step 4.
+      'src/main/services/legacyImport/codexItemMapper.ts',
     ]) {
       const source = readFileSync(at(relative), 'utf8');
       for (const forbidden of [

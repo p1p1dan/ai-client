@@ -12,10 +12,6 @@ import { opendir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  PiWorkerRpcServer,
-  type PiWorkerRuntimeOptions,
-} from '../../../agent-host/piWorkerRpcServer.ts';
 import { encodeGrants, type PermissionGrant } from '../../../shared/permissions/grants.ts';
 import type { PermissionFileSystem } from '../../../shared/permissions/shellPaths.ts';
 import type { RuntimeEventDraft } from '../../../shared/types/runtimeEvents.ts';
@@ -29,6 +25,7 @@ import {
   stubPathFor,
   WORKER_PERMISSIONS_UNAVAILABLE,
 } from '../dshSessionRuntime.ts';
+import { PiWorkerRpcServer, type PiWorkerRuntimeOptions } from '../piWorkerRpcServer.ts';
 import { dshSandboxModeFor } from '../sandboxMode.ts';
 import { grantsSidecarFor } from '../stub.ts';
 import { testPermissionHost } from './permissionTestHost.ts';

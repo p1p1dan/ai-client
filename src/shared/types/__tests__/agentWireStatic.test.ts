@@ -74,10 +74,12 @@ type DefinedAxis = keyof typeof AXIS_MODULE;
 const AXES = Object.keys(AXIS_MODULE) as DefinedAxis[];
 
 /**
- * Every .ts/.tsx this repo owns — renderer, main, preload and agent-host, tests
- * excluded.
+ * Every .ts/.tsx this repo owns under `src` — renderer, main, preload, shared
+ * and the DSH host — tests excluded.
  *
- * `src/agent-host/node_modules` is excluded because it is not ours: it is
+ * `node_modules` is excluded because it is not ours (this was written for
+ * `src/agent-host/node_modules`, deleted in dsh-rebase P1-12; the DSH host's
+ * `src/dsh-host/node_modules` is the same case): it is
  * gitignored vendored dependency code, so scanning it makes the result depend
  * on whether someone has installed, and 1701 of the 2329 matching paths are
  * dependency sources whose `'claude-code'` occurrences say nothing about this
@@ -767,7 +769,7 @@ describe('the three agent tables stay disconnected', () => {
       moduleReferences(AGENT_WIRE_MODULE, read(AGENT_WIRE_MODULE)).map((ref) =>
         formatRef(AGENT_WIRE_MODULE, ref)
       ),
-      'agentWire.ts is read by shared types, main, agent-host and the renderer ' +
+      'agentWire.ts is read by shared types, main, the DSH bridge and the renderer ' +
         'store alike; a dependency of its own is also the first edge between ' +
         'two of the three axes.'
     ).toEqual([]);

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
+import { redactStderrLine } from '@shared/stderrRedaction';
 import type {
   LegacyImportBatchResult,
   LegacyImportItemResult,
@@ -14,7 +15,6 @@ import type {
 } from '@shared/types';
 import { legacyImportDedupeKey } from '@shared/types';
 import { DSH_AGENT } from '@shared/types/agentWire';
-import { redactStderrLine } from '../../../agent-host/stderrRedaction';
 import { scratchWorkspaceService } from '../agent-host/ScratchWorkspaceService';
 import { sessionIndexService } from '../chat/SessionIndexService';
 import { ClaudeSessionScanner, resolveLegacyClaudeSessionRoot } from './ClaudeSessionScanner';

@@ -161,18 +161,11 @@ function gitCommit() {
     const sha = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
     }).trim();
+    // The trees the artifact's own code comes from (src/agent-host left this
+    // list when dsh-rebase P1-12 step 4 deleted it).
     const dirty = execFileSync(
       'git',
-      [
-        '-C',
-        repoRoot,
-        'status',
-        '--porcelain',
-        '--',
-        DSH_HOST_SOURCE_REL,
-        'src/agent-host',
-        'src/shared',
-      ],
+      ['-C', repoRoot, 'status', '--porcelain', '--', DSH_HOST_SOURCE_REL, 'src/shared'],
       {
         encoding: 'utf8',
       }

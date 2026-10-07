@@ -6,7 +6,7 @@ import {
   LEGACY_IMPORT_MAX_SOURCE_BYTES,
   LEGACY_IMPORT_MAX_TEXT_CHARS,
 } from '@shared/types';
-import { readCodexTextContent } from '../../../agent-host/codexItemMapper.ts';
+import { readCodexTextContent } from './codexItemMapper';
 import { boundedSanitizedValue, sanitizedToolOutput } from './legacyImportSanitization';
 
 export interface CodexRollout {

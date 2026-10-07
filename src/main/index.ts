@@ -5,11 +5,11 @@ import { electronApp, optimizer } from '@electron-toolkit/utils';
 import { PACKAGED_USER_DATA_DIR_NAME } from '@shared/appStateLayout';
 import { APP_STATE_DIR } from '@shared/defaultPaths';
 import { type Locale, normalizeLocale } from '@shared/i18n';
+import { redactStderrLine } from '@shared/stderrRedaction';
 import { IPC_CHANNELS, type ProxySettings } from '@shared/types';
 import { customProtocolUriToPath, type SupportedFileUrlPlatform } from '@shared/utils/fileUrl';
 import { resolveIsDarkTheme } from '@shared/windowTheme';
 import { app, BrowserWindow, ipcMain, Menu, nativeTheme, net, protocol } from 'electron';
-import { redactStderrLine } from '../agent-host/stderrRedaction';
 
 // Register custom protocol privileges
 protocol.registerSchemesAsPrivileged([

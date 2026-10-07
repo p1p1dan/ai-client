@@ -1,13 +1,15 @@
+// Moved from src/agent-host/piWorkerRpcServer.ts (dsh-rebase P1-12 step 4,
+// decision 147): the bridge is its only user.
 import type {
   PermissionDecisionId,
   RuntimeEvent,
   RuntimeEventDraft,
-} from '../shared/types/runtimeEvents.ts';
+} from '../../shared/types/runtimeEvents.ts';
 import type {
   PermissionGear,
   RuntimePermissionSettings,
-} from '../shared/types/runtimePermission.ts';
-import type { SessionPermissionTier } from '../shared/types/sessionPermissionTier.ts';
+} from '../../shared/types/runtimePermission.ts';
+import type { SessionPermissionTier } from '../../shared/types/sessionPermissionTier.ts';
 import {
   isWorkerAcceptForkPayload,
   isWorkerBootstrapPayload,
@@ -78,7 +80,7 @@ import {
   type WorkerSubagentInterruptResult,
   type WorkerTreePayload,
   type WorkerTreeResult,
-} from '../shared/types/workerRpc.ts';
+} from '../../shared/types/workerRpc.ts';
 import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 export interface PiWorkerMessagePort {

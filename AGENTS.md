@@ -32,7 +32,7 @@ jyw-ai-client/
 | UI 组件 | `src/renderer/components/ui/` | @coss/ui 组件，52 个文件 |
 | Git 操作 | `src/main/services/git/` | simple-git 封装 |
 | 终端 | `src/main/services/terminal/` + `src/renderer/hooks/useXterm.ts` | node-pty + xterm.js |
-| Pi runtime/worker | `src/main/services/agent-host/` + `src/agent-host/` | 过渡态仍含 singleton PiHost 与 Claude/Codex；目标是 Main WorkerManager + 每槽一个隔离进程（载体按平台分：Windows 安装版随包 Node，其余 utilityProcess，见 ARD D11） |
+| 对话引擎（DSH 宿主） | `src/main/services/agent-host/` + `src/dsh-host/` | Main 侧 WorkerManager 每个会话一个槽位，都是同一个共享 DSH 宿主进程上的通道；宿主跑在随包 Node 上，bridge 在 `src/dsh-host/bridge/`。原 `src/agent-host/` 已在 dsh-rebase P1-12 第 4 步删除 |
 | 类型定义 | `src/shared/types/*.ts` | 15 个类型文件，ipc.ts 最重要 |
 | 设计规范 | `docs/design-system.md` | **UI 开发必读** |
 
@@ -123,13 +123,14 @@ pnpm build:linux      # 构建 Linux
 
 # 质量检查
 pnpm typecheck        # tsc --noEmit
+pnpm typecheck:dsh-host  # src/dsh-host（先在该目录 npm ci）
 pnpm lint             # biome check
 pnpm lint:fix         # biome check --write
 ```
 
 ## NOTES
 
-- **有自动化测试** — Vitest 覆盖 main/renderer/agent-host contracts 与纯逻辑；当前低资源主机必须小批串行运行
+- **有自动化测试** — Vitest 覆盖 main/renderer/dsh-host contracts 与纯逻辑；当前低资源主机必须小批串行运行
 - **原生模块** — `node-pty`, `@parcel/watcher` 需 `postinstall` 编译
 - **Settings Store 巨大** — `settings.ts` 37KB，修改前仔细阅读结构
 - **Claude IDE Bridge** — `src/main/services/claude/ClaudeIdeBridge.ts` 是 MCP 集成核心

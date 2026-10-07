@@ -6,10 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { CodexSessionScanner, readCodexSessionSource } from '../CodexSessionScanner';
 import { CodexSourceAdapter } from '../CodexSourceAdapter';
 
-const fixture = resolve(
-  __dirname,
-  '../../../../agent-host/__tests__/fixtures/codex/codex-rollout-redacted.jsonl'
-);
+const fixture = resolve(__dirname, 'fixtures/codex/codex-rollout-redacted.jsonl');
 const roots: string[] = [];
 afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });

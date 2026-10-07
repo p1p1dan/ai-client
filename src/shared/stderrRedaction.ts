@@ -1,3 +1,5 @@
+// Moved from src/agent-host/stderrRedaction.ts (dsh-rebase P1-12 step 4,
+// decision 147): Main and the DSH credentials row both read it.
 /**
  * T-35: redaction for CLI stderr lines BEFORE they cross IPC to the renderer
  * (`session.stderr` events). The Main-process bridge is a content-agnostic

@@ -31,7 +31,6 @@
  * No value imports from DSH: the runtime hands the registry in.
  */
 
-import { PiWorkerSessionError } from '../../agent-host/piWorkerErrors.ts';
 import { type DshJobSummary, TOOL_OUTPUT_TAIL_BYTES } from '../../shared/types/runtimeEvents.ts';
 import {
   WORKER_JOB_READ_DEFAULT_BYTES,
@@ -41,6 +40,7 @@ import {
   type WorkerJobKillResult,
   type WorkerJobReadResult,
 } from '../../shared/types/workerRpc.ts';
+import { PiWorkerSessionError } from './piWorkerErrors.ts';
 
 // ---- the slice of dsh-jobs read here -------------------------------------------
 
