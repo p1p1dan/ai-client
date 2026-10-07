@@ -29,3 +29,7 @@
 ## 实施补记（2026-09-27，P1-3a 实验）
 
 第 4 条的前置条件在 Linux 上成立：Node 24 给 IPC fd 设了 `O_CLOEXEC`，并在用户代码运行前删掉 `NODE_CHANNEL_FD`。bash 在沙箱内、升级出沙箱、systemd scope、回退路径这四种情况下，都只有 fd 0/1/2。Windows、macOS 留给 P1-14 的 CI 补测。证据见 [p1-3a-shared-host-2026-09-27.md](../evidence/p1-3a-shared-host-2026-09-27.md)。
+
+## 补记（2026-10-07，E8，[决策 150](150-e8-plugin-credential-isolation.md)）
+
+第 4 条只覆盖了工具子进程。E8 实测（[证据](../evidence/e8-plugin-credential-isolation-2026-10-07.md)）补上同进程的一面：宿主里的第三方插件不需要继承句柄，挂 `process.on('message')` 就能看到 Main 发来的凭据应答明文；读到 `configure` 的 nonce 后伪造的凭据请求，Main 也会正常应答。nonce 与引用名两道检查挡不住同进程插件。缓解按[决策 149](149-user-rulings-2026-10-07.md) 第 4 条选 A：审查单必拒三条加静态守卫（[决策 153](153-e8-a-plugin-review-guard-choices.md)），运行期行为不变。Windows 上是否同样成立，留给 P1-14。
