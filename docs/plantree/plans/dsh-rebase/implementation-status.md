@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-10-01。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-10-07。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -22,7 +22,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
   3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
-  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI 待结果）；CI 通过后做第 4 步。
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI run 37170324111 全部 job 通过）；第 4 步 10-07 开工。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
   - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
@@ -64,6 +64,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Last Landed
 
+- 2026-10-04 P1-12 第 3 步整包 CI：`1.1.0-dsh.4` 第一次触发（run 37170010400，`d961c08d`）gate 失败，原因是 `runtimeRetiredStatic` 在 CI 满负载下全仓扫描超时，`f847f66d` 改为每个文件只解析一次后重触发；run 37170324111（`f847f66d`）全部 job 通过：gate、Windows / Linux / macOS 整包与打包验证、远程 runtime。Windows、Linux 的「Verify packaged app」都报「no native worker or runtime」（含 app.asar 反向检查），Windows 带空格路径 L1 冒烟 44 项通过；`dsh-bridge-gate` 的 `--frozen-lockfile` 通过。安装包继续变小（Actions artifact 压缩后大小，对比第 1 步的 run 36895051539）：Windows 安装包 197.8 → 191.7 MB，Windows 解包目录 288.1 → 279.2 MB，Linux 包 196.6 → 189.8 MB，macOS 包 435.9 → 417.1 MB。只作 Actions artifact，不建 Release。
 - 2026-10-03 P1-12 第 3 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 3 步」，待审批），基线 `36d1e02c`：
   - `fe4b9b7e` 删除 `src/runtime`（172 个文件）与 native worker（`worker.ts`、`piSessionTimeline / Tree / Preflight`、`permissionPlugin`、`codexHistoryReader`、`bundledPlugins` 等），worker 协议收窄（utility、`worker.import*`、`worker.reload`、bootstrap 的子代理与 TTL / 超时字段），bridge 去掉对应桩；渲染层删 native 回放测试与 5 份录制；`runtimeRetiredStatic` 补齐。
   - `ce47554c` 根依赖删 `@earendil-works/pi-agent-core`、`pi-coding-agent`，删 `src/agent-host` 的 `package.json` 与 lockfile；`pnpm-lock.yaml` 由 `--lockfile-only` 生成，985 → 878 个包，只删不增；共享 `node_modules` 未动。
@@ -289,7 +290,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-没有在跑的代理。P1-12 第 3 步已落地（10-01 中断的半成品已于 10-03 由新代理认领做完），`1.1.0-dsh.4` 已推送并手动触发 `build.yml`，等结果。下一步：CI 全绿后记录产物大小变化，再派第 4 步（删 `src/agent-host`、内部改名，范围见决策 147 第一节第 1 条）。CI 若失败，先查原因再修。
+P1-12 第 3 步整包 CI 已全绿（run 37170324111）。2026-10-07 派第 4 步（删 `src/agent-host`、内部改名，范围见决策 147 第一节第 1 条与方案 §2 第 4 步），基线 `f847f66d`。
 
 本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
