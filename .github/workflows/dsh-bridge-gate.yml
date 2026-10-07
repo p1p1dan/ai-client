@@ -86,6 +86,14 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
         working-directory: src/dsh-host
 
+      # E8-A (decision 153): the three must-reject criteria, approved for the
+      # review checklist but not yet for CI (decision 153 §7). Added here on
+      # its own commit so it is easy to drop. Needs the scan source the step
+      # above just installed; runs on the machine Node, not the bundled one.
+      - name: Plugin review guard (E8-A)
+        timeout-minutes: 3
+        run: pnpm exec vitest run scripts/__tests__/dsh-plugin-review-guard.test.mjs
+
       - name: Cache bundled Node runtime
         uses: actions/cache@v5
         with:
