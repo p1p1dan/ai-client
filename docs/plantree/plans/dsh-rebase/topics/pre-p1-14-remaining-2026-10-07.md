@@ -2,6 +2,12 @@ Role: topic
 
 # P1-14 之前的剩余工作盘点（2026-10-07）
 
+> **状态（2026-10-07 文档收口后）：(a) 类全部完成。**
+> - P1-5d `031c10f9`；P1-5e `4bd31a2c`；E8 实验 `f08f0646`、结论 `35af10ab`；E8-A 守卫 `350aa1b1`；P1-3e `4f461ece`（证据 `16cd195e`）；P1-8c 工作流 `9748ddef`、`42dddf81`；阶梯 B 修复 `4ebcfe5a`；界面小修 `5d495e01`、`c568b989`、`e81ea90c`、`d01e8db4`；文档收口（roadmap、看板、审批汇总、决策 157、过期文档与回写）。
+> - (b) 类并入 [roadmap](../roadmap.md) 的 P1-14 行与[看板 Next Target](../implementation-status.md#next-target)；(c) 类并入 [decision-review-4.md](../decision-review-4.md)。
+> - 第 7 项「文档收口」里有两样没做，转入 P1-14：P1-13 第二轮上机手册；可选的 P1-6 用例数证据。
+> - 下文是盘点时的原文，没有改。
+
 上位：[roadmap](../roadmap.md)。背景：P1-12 于 2026-10-07 收口；用户决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作。盘点基于 HEAD `dfef48a8`，由只读代理逐行核对 roadmap 的 🟡 行，编排者抽查了 P1-5d、P1-5e 两条。
 
 性质：(a) 本机可做；(b) 只差 GUI 点验、Windows、CI 或真机（需推送或需用户）；(c) 只差用户审批或裁决。

@@ -51,3 +51,19 @@ Role: evidence。对应 [roadmap P1-2](../roadmap.md)，按[方案](../topics/p1
 - bridge 源码现在在 `src/dsh-host/bridge/`，`bundle/lib/*.js` 只是垫片。新增 bridge 模块要登记到 `BRIDGE_ENTRIES`，否则构建会拒绝。运行时允许外置的 npm 包，目前只有 `@deepseek-ai/dsh-llm`。
 - 打包态布局与 Main 的 `DSH_HOST_LAYOUT`（P1-1）一致，Main 不用改。
 - P1-6 落地后，打包冒烟要显式设 bypass 档或应答卡片（P1-6 方案 §6）。
+
+## CI 安装包大小（2026-10-07 补记）
+
+上文「只能在 CI 上验的」里的安装包大小，后来在三次整包 `build.yml` 上拿到了。数据取自[看板](../implementation-status.md) Last Landed 的 10-01、10-04 两条，口径是 GitHub Actions artifact 压缩后的大小，只作 artifact，不建 Release。
+
+| 产物 | `1.1.0-dsh.2`（run 36651305647，`a3a25495`） | `1.1.0-dsh.3`（run 36895051539，`13bc19f5`，P1-12 第 1 步） | `1.1.0-dsh.4`（run 37170324111，`f847f66d`，P1-12 第 3 步） |
+|---|---|---|---|
+| Windows 安装包 | 209.7 MB | 197.8 MB | 191.7 MB |
+| Windows 解包目录 | 303.9 MB | 288.1 MB | 279.2 MB |
+| Linux 包 | 204.8 MB | 196.6 MB | 189.8 MB |
+| macOS 包 | 459.2 MB | 435.9 MB | 417.1 MB |
+
+- 宿主产物本身（`resources/dsh-host`）：`dsh.3` 那次 Windows 85.1 MiB、Linux 82.6 MiB。
+- 三次的全部 job 都通过；Windows、Linux 的打包验证与 L1 冒烟都绿，Windows 带空格路径的 L1 冒烟 44 项通过。
+- 后两次变小，来自 P1-12 删掉旧 native worker、`src/runtime` 与根依赖里的 pi 包。
+- 仍未确认：相对 1.0.x 安装包的增量，本证据没有同口径的 1.0.x 数字；P1-12 第 4 步之后的改动还没经过整包构建，随 P1-14 的下一次推送复跑。

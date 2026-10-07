@@ -9,61 +9,59 @@ Role: implementation-status。更新日期：2026-10-07。只放当前阶段、�
 
 ## Current Phase
 
-P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决策 005～089 已于 2026-09-28 由用户裁决，见[决策 090](decisions/090-user-rulings-2026-09-28.md)）。
-- **已落地**：P1-0、P1-1、P1-2 本机部分、P1-3a～d、P1-4a、P1-4b、P1-4c1、P1-4c2、P1-4d2、P1-4d3、P1-5a / 5b 与宿主侧接线、P1-4d1、P1-6a～d、P1-7a、P1-7b、P1-7c、P1-8、P1-9a～g、P1-10a（含收尾）、P1-10b、P1-10c、P1-10d、P1-11、P1-15、P1-16a、P1-16e，以及 P1-12 / P1-16 的前置搬迁。
-- **现在分支上能做到**：用界面选的模型聊天，key 每次请求时从 Main 拉取；每次工具调用都经我方审批，「本会话允许」在宿主重启后仍有效，换档立即作用到闸门。
-- **P1-13 加密机**：第一轮已回（[决策 084](decisions/084-p1-13-round1-reading.md)），`.txt` 全链路明文，不触发否决，但不能签收。P1-13b 上机包已就绪。
-- **推送**：仓库是公开的。2026-09-28 按用户要求改写了分支历史，删掉加密机的原始现场报告，只留脱敏摘要，然后推送。
+P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版、合入 main 发版）之前**。2026-10-07 做完了 P1-14 之前本机能做的全部 (a) 类工作（[盘点](topics/pre-p1-14-remaining-2026-10-07.md)），用户决定暂不推送。
 
-## Next Target（2026-09-29 晚更新：第三批已裁决，五项授权动作全部批准）
+- **roadmap 状态**（2026-10-07）：
+  - ✅ P1-0、P1-1、P1-2、P1-4、P1-6、P1-9、P1-10、P1-11、P1-12、P1-15、P1-16；
+  - 🟡 P1-3（剩 L2 GUI 杀宿主与 Windows 杀宿主）、P1-5（剩 R8 完整回合与 R9）、P1-7（剩复点验与 Windows 实测）、P1-8（CI 工作流待首跑）、P1-13（剩第二轮上机）；
+  - ⬜ P1-14。
+- **现在分支上能做到**：
+  - 聊天引擎只有 DSH 宿主（`src/dsh-host/`），所有会话共用一个宿主进程；自有 runtime 与 `src/agent-host` 已删（P1-12），只剩两套 tsc（根、`src/dsh-host`）；
+  - 用界面选的模型聊天，key 每次请求时从 Main 拉取；管理员 key 存在保险库里，模型缓存文件不再含 key 原文；
+  - 每次工具调用都经我方审批，「本会话允许」在宿主重启后仍有效；
+  - 旧 pi 会话第一次继续时迁移成 DSH 格式，CC / Codex 导入直接产出 DSH 格式；
+  - 白名单插件可以在设置里开关（试点 `dsh-office-tools` 默认关），插件审查有必拒三条和静态守卫；
+  - 右列普通 shell 终端取代了内嵌 pi TUI。
+- **推送**：仓库是公开的。最后一次推送是 2026-10-03 的 `1.1.0-dsh.4`（远端头 `f847f66d`），之后的提交都只在本地。2026-09-28 按用户要求改写过分支历史，删掉加密机的原始现场报告，只留脱敏摘要。
 
-- **已裁决**：第三批决策 111～129 由用户裁决（[决策 130](decisions/130-user-rulings-2026-09-29-batch3.md)）：没点名的按建议批准；120 第 27 条与 123 分叉标题已由[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md) 做完（`740a45b1`，第 7、15、17 条待审批）。
-- **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
-  1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
-  2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
-  3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
-  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI run 37170324111 全部 job 通过）；✅ 第 4 步 `3d679576`～`4db4376a`（10-07，`src/agent-host` 删除、内部改名）。**P1-12 已于 10-07 收口**；用户决定不单独推送，第 4 步的整包 CI 随 P1-14 的下一次推送。
-- **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
-  - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
-  - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
-    - `l1PilotWriteAskedReadRan`：工作区内的 read / grep / glob / pwsh 全都弹了审批。推断：闸门的 `cwd` 没有规范化，runner 的临时目录是 8.3 短名（`RUNNER~1`），目标路径经 `fs/promises` 的 `realpath` 展开成长名，于是判成「工作区外」；
-    - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
-    - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
-  - P1-13c 的 Windows 端在真 Windows 桌面机上跑 L1 基线，也是 `l1RipgrepFromArtifact`、`nativesPtyRan` 两项失败（那时还没有 `l1PilotWriteAskedReadRan`），说明这两项不是 CI 环境特有。
-  - ✅ 已修（决策 134，`6db5a949`、`4ba4992e`）：只打包宿主的 Windows 冒烟第二轮 44 项全过；版本升到 `1.1.0-dsh.2` 后整包 `build.yml`（run 36651305647，提交 `a3a25495`）全部 job 通过：gate（含全量单测与录制检查）、Windows / Linux / macOS 整包与打包冒烟、远程 runtime；产物只作 Actions artifact，不建 Release。
-- 录制门禁 `dsh-bridge-gate.yml` 第一次在 CI 上跑就通过，整个 job 约 2 分钟，28 个场景 0 差异。
-- ✅ P1-13c 已合入 `f84f7bbd`（Windows 端 `801cac53`）。用户裁决（[决策 135](decisions/135-user-ruling-encrypted-edit.md)）：091 其余批准，§2「edit 不做明文编辑」推翻。
-- **在等**：P1-13d（加密文件要能 edit），交 Windows 加密机上的会话做，从推送后的 `feat/dsh-p0-probe` 最新头开 `feat/dsh-p1-13d`，提示词见 [topics/p1-13d-encrypted-edit.md](topics/p1-13d-encrypted-edit.md)，实现取舍记决策 136（预留）。
-- 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
+## Next Target
 
-以下为 2026-09-28 晚的原始 Next Target，保留作历史：
+2026-10-07 更新。2026-09-29 与 2026-09-28 的旧 Next Target 已过期，原文移到文末「历史」一节。
 
-### 2026-09-28 晚在 Linux 开发机续做
+**下一步是 P1-14**：推送、CI 首跑回看、GUI 复点验、Windows 测试版实测、回写 ARD、合入 main 发版。推送与发版都要先经用户同意。
 
-交接文档：[handoff-2026-09-28.md](handoff-2026-09-28.md)。
-
-用户在 2026-09-28 裁决了决策 005～089 与 Q003、Q007～Q010（[决策 090](decisions/090-user-rulings-2026-09-28.md)）。**总原则：默认跟随 DSH 的做法，不再为了与 1.0.x 一致而移植。** 只做 Linux 与 Windows，macOS 暂不做。
-
-2026-09-28 晚用户决定：P1-13c 交 Windows 机上的会话做，其余在本机按泳道推进。续做前四套 tsc 复核通过；最后一次全套验证（P1-6b）晚于最后一次代码改动，不重跑。
-
-**决策编号预留**：091 给 P1-13c（Windows 端），092 给 P1-6c 与 P1-6b 剩余的实现取舍，093 起给 P1-4 / P1-16 重划范围。
-
-1. **P1-13c（Windows 端执行）**：Windows 上读到密文时，改用 Windows PowerShell 5.1 回读（可以覆盖 yml、php、ps1、cmd、sql、scss）；rb、docx、pptx 读不出时返回明确的错误。写入维持 DSH 的做法。派工说明见 [p1-13c-windows-read-fallback.md](topics/p1-13c-windows-read-fallback.md)；Windows 端在分支 `feat/dsh-p1-13c` 上交付，编排者验证后合入本分支。补充观察（决策 092 第 20 条）：权限策略文件由 bridge 用普通 node fs 读，不经 DSH fs 服务，加密机上若返回密文会报 `permission_policy_invalid`。
-2. **第一波已完成**：P1-6c 与 P1-6b 收尾落地；P1-4 / P1-16 重划范围（决策 093～105）；P1-7 / P1-11 新原型。
-3. **等用户**：
-   - 决策 093 + 094（插话改 steer、Stop 保留收件箱）、097（文本附件改文件块）、102（不读用户层指令）、103（不支持提示词模板）需要拍板；其余 092、095、096、098～101、104、105 按「没点名即同意」；
-   - P1-7 / P1-11 新原型（子窗口形态、终端位置等 12 个问题，见原型 README）。
-4. **第二波已完成**：P1-4d1、P1-16a、P1-10b（见 Last Landed）。
-5. **第二批决策已裁决**（[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)）。**下一步**（本机一次只派一个代理，见下方「本机限制」）：
-   1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
-   2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → ~~P1-4d3（联网装 `dsh-tool-ask-user`）~~ 已落地 `4e003c1b` → P1-4e（进 CI 的 `build.yml`、`dsh-bridge-gate.yml` 改动先问用户，决策 100）；
-   3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；~~P1-16e 旧资产提示~~ 已落地 `6d2fc8a0`；~~P1-10c 插件页~~ 已落地 `0bd912f3`；
-   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（原型场景 G 已由用户确认，[决策 126](decisions/126-user-rulings-p1-11-terminal-prototype-2026-09-29.md)；P1-15 之后开工）；之后 ~~P1-9c~~ 已落地 `01c57b52` → ~~P1-9d~~ 已落地 `7f6bef13` → ~~P1-9e~~ 已落地 `7c505ed9` → ~~P1-9f~~ 已落地 `f8532981` → ~~P1-15~~ 已落地 `75a54553` → ~~P1-11~~ 已落地（`4d530938` 去掉 pi TUI、`b14d2773` 右列终端）→ ~~P1-6d~~ 已落地 `7a11cbc4`（Windows CI 工作流 `376611a7` 未推送）。
-
-**本机限制（2026-09-28 用户明令）**：不跑 `pnpm build`（整包 electron-vite 构建两次把系统弄崩）等庞大操作；验证只做四套 tsc、挑选的 vitest、宿主冒烟与 `bridge-record`，一次一个。**未验证项**：P1-10b 给 `DshHostProcess.ts` 加了静态导入，vite 拆块没有在本机检查，交 CI 或用户构建时看。
+1. **先等用户**：
+   - 同意推送（用户 10-07 决定暂不推送）。推送前先单独一个 `chore` 提交，把版本升到 `1.1.0-dsh.5`（决策 132、149 第 1 条）。
+   - 审批 [decision-review-4.md](decision-review-4.md)：131～156 中 23 份待审批决策，外加[决策 157](decisions/157-outbound-proxy.md)（出站代理，待拍板，推荐维持直连）。「没点名即同意」的惯例这次是否沿用，要用户确认。
+2. **推送后看 CI**：
+   - 手动触发整包 `build.yml`：P1-12 第 4 步（`3d679576`～`4db4376a`）及之后的全部改动，第一次经过整包构建、三平台打包验证与 L1 冒烟；vite 拆块也在这里看。
+   - `dsh-bridge-gate.yml`（推 `feat/dsh-*` 时自动跑）新加的三步第一次跑：防空转冒烟（31 项硬门槛）、争用回归 LC-0～2（硬门槛决定结局，软门槛写进 job summary）、插件审查守卫。job 超时 40 分钟是估算，首跑后按实测重算（决策 154）。
+   - LC-2 抖动：本机跑过一次「受害者 delta 间隔」硬门槛临界失败（249.6 ms，门槛 221.4 ms），单跑复跑通过。CI 首跑若也临界失败，先按 runner 噪声查，不急着改门槛（决策 154 §7）。
+3. **GUI 复点验**（开发机；一次只做一件重活，不与全量测试同时跑）：
+   - [决策 156](decisions/156-pre-merge-ui-fixes-choices.md) 末尾「建议在 P1-14 复点验的项目」11 项；
+   - P1-7e e6（`5e29f08d`，[决策 145](decisions/145-p1-7e-e6-choices.md)）改过的项目；
+   - P1-8：小上限提示条与「继续」、退化回复的失败卡；
+   - P1-3e：空闲、流式、`sleep 30` 三个会话同时在场时杀宿主，再加一轮 SIGSTOP（[证据 §5](evidence/p1-3-shared-host-2026-10-07.md)）；阶梯 B 的界面在应用里触发不了（决策 151 第 6 条）；
+   - P1-12 第 1 步留下的整包点验：打包版首屏、权限页随包那一行。
+4. **Windows 测试版实测**（要先推送并出测试包）：
+   - 点验清单 J 节 W1～W12，以及 PowerShell 审批卡的原因句与别名说明（[p1-7d-gui-pointcheck.md](topics/p1-7d-gui-pointcheck.md)）；
+   - Windows 杀宿主，管理员、标准用户各一轮：Job 里的工具进程是否全部结束、命名信号量是否释放、ConPTY 下的 pwsh 有没有孤儿；
+   - 覆盖安装后不残留 `agent-host` 目录；
+   - E8 结论（决策 150 存疑 1）与决策 034 第 4 条（IPC 句柄不被工具继承）在 Windows 上是否同样成立。
+5. **P1-13 第二轮上机**（用户在加密机上执行）：GUI、真实模型、插件子进程（开启试点插件后跑 `word_*` / `excel_*`）、迁移；P1-13d 的复核修复回加密机复测。上机手册待写。
+6. **其他需要用户的**：
+   - P1-5 R8：重新登录后跑通一次完整回合（GW-16、GW-17）；R9 等网关管理员答复；
+   - P1-9 真实数据离线迁移测试：要用户指定机器与 profile 副本，由用户本人运行，或授权代理运行且只看报告。
+7. **P1-14 自己的文档**：ARD 完整回写（提纲已在 ARD 末尾的「DSH 偏离」一节）；发版说明补「内嵌 pi 终端移除」（决策 127）等。
 
 ## Last Landed
 
+- 2026-10-07 合入前界面小修 13 项：`5d495e01`（文案与原语）、`c568b989`（焦点）、`e81ea90c`（会话状态）、`d01e8db4`（时间线与标题），决策记录 `0b3eb7d6`（[决策 156](decisions/156-pre-merge-ui-fixes-choices.md)，待审批，第 5、6、12 节请重点看；按决策 149 第 3、10～12 条做）：
+  - 文案与原语：残留的「Agent Host」文案、上下文面板「查看更多（N）」、10 px 中文改 14 px、读屏原语的标签走词条；回退标题在显示层改为「会话 xxxxxx」，侧栏归档按钮走词条。
+  - 焦点：对话框打开时初始焦点避开滚动区；改名按 Esc 取消后焦点回到那一行。
+  - 会话状态：恢复失败停在 error 的会话宣告 `released`，离开「正在活动」；容量回收时失败对话保留失败徽标与失败卡。
+  - 时间线与标题：失败回合回放后只留一条失败注记，再发一轮后上一轮不再显示「完成于」；代码审查标题显示模型显示名（决策 146 第 13、22 条，145 第 17 条）。
+  - 新增 29 例测试；没动 bridge、历史投影与金样本；没有 GUI 点验，复点验清单 11 项见决策 156 末尾。全量单测由编排者在 `0b3eb7d6` 上另跑，结果待补记。
 - 2026-10-07 阶梯 B 先关其他在忙的会话 `4ebcfe5a`（[决策 155](decisions/155-ladder-b-dispose-others-first.md)，按决策 149 第 6 条实现，取舍待审批，第 2、3、5 条请重点看）：`restartHost` 在重启宿主前对卡死会话以外的在忙会话并发发 `worker.dispose`，总上限 3 s，超时或失败不挡重启；被主动关掉的通道按 `restarted` 记账，不扣会话预算。S5 实测：b2 已流出的正文（400 块中的 115 块）保留在历史里，不再只剩「引擎意外停止」注记；卡死会话的 10 s 收尾与旧宿主被杀时间不变。「重启引擎」卡片同样先关在忙的会话（第 3 条，比裁决字面宽）。验证：两套 tsc、lint、Static 759 例、`agent-host` 479 例、`src/dsh-host` 764 例、集成 35/35、`--check` 0 差异；编排者复跑 tsc 与 `agent-host` 479 例。
 - 2026-10-07 P1-8c 防护回归接进 CI（只写工作流，未推送）`9748ddef`、`42dddf81`、`02482b26`（[决策 154](decisions/154-p1-8c-ci-wiring-choices.md)，待审批）：`dsh-bridge-gate.yml` 加 loop-guard-smoke（31 项全为硬门槛）与 contention-regression LC-0～2（脚本本来就只按硬门槛决定退出码，软门槛写进 job summary），失败上传报告；`42dddf81` 单独加插件审查守卫一步（决策 153 第 7 节待审批，便于撤回）；job 超时 30 → 40 分钟。本机实测：loop-guard-smoke 55.8 s 全过；contention-regression 69.5 s，**LC-2 受害者 delta 间隔硬门槛临界失败一次**（249.6 ms，门槛 221.4 ms），单跑 LC-2 复跑通过，判为 2 核开发机噪声；首跑 CI 要回看是否抖动。验证：两套 tsc、lint、scripts 228 例、`src/dsh-host` 764 例，YAML 解析通过。
 - 2026-10-07 E8-A 插件审查守卫 `350aa1b1`、`b9f2a236`（[决策 153](decisions/153-e8-a-plugin-review-guard-choices.md)，待审批）：审查单 §6.2 加「必拒三条」（碰凭据服务、碰 IPC、猴子补丁）；静态守卫 `scripts/dsh-plugin-review-guard.mjs` 扫白名单与产品 bundle 挂载的非我方插件及其依赖闭包（由白名单、`cordis.patch.yml`、锁文件现算，不手抄包名），豁免只有我方五行的冻结列表。两个试点插件 `dsh-office-tools@1.0.4`、`dsh-tool-ask-user@0.1.7-rc.2` 零命中；E8 探针插件三条全中。守卫在 build.yml gate 的 `pnpm test` 里跑，`dsh-bridge-gate.yml` 不跑。验证：两套 tsc、lint、Static 759 例、shared 443 例、`src/dsh-host` 764 例、scripts 228 例；编排者复跑守卫 20 例。
@@ -303,26 +301,92 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
+1. **等用户**：同意推送；审批 [decision-review-4.md](decision-review-4.md)，拍板[决策 157](decisions/157-outbound-proxy.md)。
+2. **推送准备**（用户同意后）：先单独一个 `chore` 提交把版本升到 `1.1.0-dsh.5`，再推送，并手动触发 `build.yml`。
+3. **CI 首跑回看**：整包 `build.yml`；`dsh-bridge-gate.yml` 的防空转冒烟、争用回归（看 LC-2 是否抖动）、插件审查守卫；超时按实测重算。
+4. **GUI 复点验**：按 Next Target 第 3 项的清单，一次一批。
+5. **Windows 测试版实测与 P1-13 第二轮上机**：等测试包；第二轮上机手册要先写。
+
+本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
+
+## Blocked By
+
+- **推送**：用户 10-07 决定暂不推送。整包 CI、`dsh-bridge-gate.yml` 新三步的首跑、Windows 测试版，都等用户同意推送（推送前先升版本，决策 132、149 第 1 条）。
+- **审批**：131～156 中 23 份决策待审批，157 待拍板（[decision-review-4.md](decision-review-4.md)）。
+- **GUI 复点验**：本机 2 核 / 3.3 GB，起 Electron 不能与全量测试同时跑；本机不跑整包构建。
+- **Windows**：W1～W12、Windows 杀宿主、覆盖安装，都要测试包和 Windows 机器。
+- **P1-5**：R8 完整回合要用户在开发版里重新登录公司账号；R9 等网关管理员答复（GW-5、GW-16、GW-17）。
+- **P1-9**：真实数据离线迁移测试要用户指定机器与 profile 副本，由用户本人运行，或授权代理运行且只看报告。
+- **P1-13**：第二轮上机要用户在加密机上执行，上机手册待写。
+
+## Last Verified
+
+- 2026-10-07：各项都只跑了定向验证，结果写在 Last Landed 各条里。最近一次全量单测是 P1-12 第 4 步之后，编排者按目录分批跑，9624 例全过（跳过 46 例）。之后 P1-5d 到界面小修的改动，编排者在 `0b3eb7d6` 上另跑全量单测，结果待补记。
+- 最近一次整包 CI：`1.1.0-dsh.4` 的 run 37170324111（`f847f66d`，2026-10-04），全部 job 通过。P1-12 第 4 步及之后的改动没有经过整包 CI。
+- 最近一次 `dsh-bridge-gate.yml`：随 2026-10-03 的推送，`--frozen-lockfile` 通过。P1-8c 新加的三步还没在 CI 上跑过。
+
+更早的记录（原文）：
+- 2026-09-27 P1-1 GUI 点验（Linux 开发机，`100ebcf1`，临时 HOME、本地假网关，11 次请求都带假 key）：新建会话走 DSH ✅，恢复与崩溃重启 ✅，旧会话只读 ⚠️（草稿丢失），拒绝路径 ✅ / ⚠️（带图时草稿丢失），`session_locked` 未能取证。
+- 2026-09-26 P1-1（Linux 开发机，内容同 `100ebcf1`）：四套 tsc 全部退出 0；相关单测 65 个文件、1043 例，加上渲染层 165 个文件、3201 例，全部通过；bridge-smoke 18 项判定全部为真。全量 Vitest 与 GUI 未跑，GUI 点验进行中。
+- 2026-09-26 P1-0（Linux 开发机，`30a0c257`）：四套 tsc 全部退出 0；`src/main/services/agent-host/` 与 worker RPC 类型相关单测 19 个文件、314 例全过；`bridge-smoke.ts` 6 项判定全部为真。全量 Vitest 与 GUI 未跑。
+
+## 历史：旧 Next Target 与 Active TODO（已过期，保留原文）
+
+以下是 2026-09-29 晚、2026-09-28 晚的 Next Target，以及 2026-10-07 文档收口之前的 Active TODO 原文，只作历史；当前状态以上文为准。原文里已明显过期的说法就地加了注；原来的 Blocked By（「P1-7a 等原型」「P1-11 等 Q003」「P1-13b 等上机」等）都已解决，已删去，见 git 历史。
+
+### 2026-09-29 晚的 Next Target（第三批已裁决，五项授权动作全部批准）
+
+- **已裁决**：第三批决策 111～129 由用户裁决（[决策 130](decisions/130-user-rulings-2026-09-29-batch3.md)）：没点名的按建议批准；120 第 27 条与 123 分叉标题已由[决策 131](decisions/131-plugin-row-titles-and-fork-title-choices.md) 做完（`740a45b1`，第 7、15、17 条待审批）。
+- **已授权，按顺序做**（决策 130 补充裁决，一次只做一件重活）：
+  1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
+  2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
+  3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI run 37170324111 全部 job 通过）；✅ 第 4 步 `3d679576`～`4db4376a`（10-07，`src/agent-host` 删除、内部改名）。**P1-12 已于 10-07 收口**；用户决定不单独推送，第 4 步的整包 CI 随 P1-14 的下一次推送。
+- **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
+  - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
+  - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
+    - `l1PilotWriteAskedReadRan`：工作区内的 read / grep / glob / pwsh 全都弹了审批。推断：闸门的 `cwd` 没有规范化，runner 的临时目录是 8.3 短名（`RUNNER~1`），目标路径经 `fs/promises` 的 `realpath` 展开成长名，于是判成「工作区外」；
+    - `l1RipgrepFromArtifact`：宿主的 spawn 钩子在 Windows 上只记到一个 node.exe，pwsh 与 rg 都没记到，推断 DSH 在 Windows 上经 node 子进程派生工具；
+    - `nativesPtyRan`：node-pty 的探针 `exitCode -1`、无输出，原因待查。
+  - P1-13c 的 Windows 端在真 Windows 桌面机上跑 L1 基线，也是 `l1RipgrepFromArtifact`、`nativesPtyRan` 两项失败（那时还没有 `l1PilotWriteAskedReadRan`），说明这两项不是 CI 环境特有。
+  - ✅ 已修（决策 134，`6db5a949`、`4ba4992e`）：只打包宿主的 Windows 冒烟第二轮 44 项全过；版本升到 `1.1.0-dsh.2` 后整包 `build.yml`（run 36651305647，提交 `a3a25495`）全部 job 通过：gate（含全量单测与录制检查）、Windows / Linux / macOS 整包与打包冒烟、远程 runtime；产物只作 Actions artifact，不建 Release。
+- 录制门禁 `dsh-bridge-gate.yml` 第一次在 CI 上跑就通过，整个 job 约 2 分钟，28 个场景 0 差异。
+- ✅ P1-13c 已合入 `f84f7bbd`（Windows 端 `801cac53`）。用户裁决（[决策 135](decisions/135-user-ruling-encrypted-edit.md)）：091 其余批准，§2「edit 不做明文编辑」推翻。
+- **在等**：P1-13d（加密文件要能 edit），交 Windows 加密机上的会话做，从推送后的 `feat/dsh-p0-probe` 最新头开 `feat/dsh-p1-13d`，提示词见 [topics/p1-13d-encrypted-edit.md](topics/p1-13d-encrypted-edit.md)，实现取舍记决策 136（预留）。（**已过期**：P1-13d 已于 2026-09-30 合入 `30893b28`、`70956bf7`，见 roadmap P1-13 行）
+- 2026-09-29 收口复跑：四套 tsc 通过；全量单测按目录分批（渲染层 295 个文件、4824 例；Main、preload、共享库 193 个文件、3146 例；dsh-host 与 agent-host 与 scripts；runtime 70 个文件、1235 例；`src/__tests__`）全部通过，期间修掉一处漏网的构建库测试期望（`dsh-host-build-lib.test.mjs` 的 `ROW_INJECT` 缺 `llm`）；真宿主集成 35/35；bridge-smoke 65 项；`--check` 28 个场景无差异；宿主产物 82.6 MiB，L1 共 44 项。
+
+以下为 2026-09-28 晚的原始 Next Target，保留作历史：
+
+### 2026-09-28 晚在 Linux 开发机续做
+
+交接文档：[handoff-2026-09-28.md](handoff-2026-09-28.md)。
+
+用户在 2026-09-28 裁决了决策 005～089 与 Q003、Q007～Q010（[决策 090](decisions/090-user-rulings-2026-09-28.md)）。**总原则：默认跟随 DSH 的做法，不再为了与 1.0.x 一致而移植。** 只做 Linux 与 Windows，macOS 暂不做。
+
+2026-09-28 晚用户决定：P1-13c 交 Windows 机上的会话做，其余在本机按泳道推进。续做前四套 tsc 复核通过；最后一次全套验证（P1-6b）晚于最后一次代码改动，不重跑。
+
+**决策编号预留**：091 给 P1-13c（Windows 端），092 给 P1-6c 与 P1-6b 剩余的实现取舍，093 起给 P1-4 / P1-16 重划范围。
+
+1. **P1-13c（Windows 端执行）**：Windows 上读到密文时，改用 Windows PowerShell 5.1 回读（可以覆盖 yml、php、ps1、cmd、sql、scss）；rb、docx、pptx 读不出时返回明确的错误。写入维持 DSH 的做法。派工说明见 [p1-13c-windows-read-fallback.md](topics/p1-13c-windows-read-fallback.md)；Windows 端在分支 `feat/dsh-p1-13c` 上交付，编排者验证后合入本分支。补充观察（决策 092 第 20 条）：权限策略文件由 bridge 用普通 node fs 读，不经 DSH fs 服务，加密机上若返回密文会报 `permission_policy_invalid`。
+2. **第一波已完成**：P1-6c 与 P1-6b 收尾落地；P1-4 / P1-16 重划范围（决策 093～105）；P1-7 / P1-11 新原型。
+3. **等用户**：
+   - 决策 093 + 094（插话改 steer、Stop 保留收件箱）、097（文本附件改文件块）、102（不读用户层指令）、103（不支持提示词模板）需要拍板；其余 092、095、096、098～101、104、105 按「没点名即同意」；
+   - P1-7 / P1-11 新原型（子窗口形态、终端位置等 12 个问题，见原型 README）。
+4. **第二波已完成**：P1-4d1、P1-16a、P1-10b（见 Last Landed）。
+5. **第二批决策已裁决**（[决策 109](decisions/109-user-rulings-p1-7-prototype-2026-09-28.md)、[110](decisions/110-user-rulings-2026-09-28-batch2.md)）。**下一步**（本机一次只派一个代理，见下方「本机限制」）：
+   1. ~~P1-10b 跟进：打包态不读 home 层补丁；插件启用改为逐个覆盖（决策 110）~~ 已落地 `9454b838`；
+   2. 泳道 ①：~~P1-4c1（steer、Stop 保留收件箱、失败后继续）~~ 已落地 `f9a89e51` → ~~P1-4c2~~ 已落地 `20285c58` → ~~P1-4d2~~ 已落地 `f8c7b2b5` → ~~P1-4d3（联网装 `dsh-tool-ask-user`）~~ 已落地 `4e003c1b` → P1-4e（进 CI 的 `build.yml`、`dsh-bridge-gate.yml` 改动先问用户，决策 100）；
+   3. ~~P1-10d 试点插件（联网装 `dsh-office-tools`）~~ 已落地 `a5a925f9`；~~P1-16e 旧资产提示~~ 已落地 `6d2fc8a0`；~~P1-10c 插件页~~ 已落地 `0bd912f3`；
+   4. ~~P1-7a~~ 已落地 `8492837c` → ~~P1-7b~~ 已落地 `ada0a024` → ~~P1-7c~~ 已落地 `a0aa76a7` → P1-7d（GUI 点验与真宿主实验；本机起 Electron 点验、推送与测试版都要先问用户）与 P1-11（原型场景 G 已由用户确认，[决策 126](decisions/126-user-rulings-p1-11-terminal-prototype-2026-09-29.md)；P1-15 之后开工）；之后 ~~P1-9c~~ 已落地 `01c57b52` → ~~P1-9d~~ 已落地 `7f6bef13` → ~~P1-9e~~ 已落地 `7c505ed9` → ~~P1-9f~~ 已落地 `f8532981` → ~~P1-15~~ 已落地 `75a54553` → ~~P1-11~~ 已落地（`4d530938` 去掉 pi TUI、`b14d2773` 右列终端）→ ~~P1-6d~~ 已落地 `7a11cbc4`（Windows CI 工作流 `376611a7` 未推送）。
+
+**本机限制（2026-09-28 用户明令）**：不跑 `pnpm build`（整包 electron-vite 构建两次把系统弄崩）等庞大操作；验证只做四套 tsc、挑选的 vitest、宿主冒烟与 `bridge-record`，一次一个。**未验证项**：P1-10b 给 `DshHostProcess.ts` 加了静态导入，vite 拆块没有在本机检查，交 CI 或用户构建时看。
+
+### 2026-10-07 文档收口之前的 Active TODO
+
 P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作，清单与顺序见 [topics/pre-p1-14-remaining-2026-10-07.md](topics/pre-p1-14-remaining-2026-10-07.md)：P1-5d → P1-5e → E8 → P1-3e → P1-8c 工作流 → 界面小修 → 文档收口（用户裁决见[决策 149](decisions/149-user-rulings-2026-10-07.md)）。✅ P1-5d `031c10f9`。用户 10-07 问到「管理员 key」后，P1-5e 是否推到合入后待用户回复，✅ E8 `35af10ab`，缓解方案（决策 150 第 2 节 A～E）待用户拍板。用户裁决 E8 选 A、P1-5e 现在做（决策 149 第 4、5 条），顺序改为 P1-3e → P1-5e → E8-A → P1-8c → 界面小修 → 文档收口。✅ P1-3e `16cd195e`，实测发现两条待用户定。✅ P1-5e `4bd31a2c`。✅ E8-A `350aa1b1`。用户裁决决策 151 / 152 的四条（决策 149 第 6～9 条）。✅ P1-8c `9748ddef`（工作流随下一次推送生效）。用户裁决界面三条与决策 153（决策 149 第 10～13 条）。✅ 阶梯 B 甲方案 `4ebcfe5a`。10-07 派界面小修。下一次推送前先升版本到 `1.1.0-dsh.5`。
 
 本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
 待用户处理：
-1. 真实网关 R1～R10 已授权（决策 130），到时要用户在开发版里登录公司账号；真实数据离线迁移测试仍待授权。
-2. P1-13c 做完后，上加密机验证读回退。
-
-## Blocked By
-
-- P1-2 在 Windows / macOS 上实跑必须推送分支，推送前要用户确认；本机只能验 Linux。
-- P1-5 的真实网关验证 R1～R10（含 UA 实测）要用户授权：只用公司登录下发的网关，约 50 次小请求。
-- P1-9 的真实数据离线迁移测试要用户指定机器与 profile 副本，由用户本人运行，或授权代理运行且只看报告。
-- P1-7a 等用户确认布局原型（[Q008](open-questions.md)）。
-- P1-11 等用户答复 [Q003](open-questions.md) 的两个问题：去不去掉 pi TUI、要不要换成普通终端入口。
-- P1-13b 加密矩阵：上机包做好后，要用户在加密机上运行，并人工确认输入文件已加密。Q009（node.exe 新建文件不加密）等 P1-13b 结果出来后再裁决。Q010（能否用普通权限账户补测）要用户答复。
-- P1-13 第二轮上机要等 GUI、真实模型、迁移落地；P1-11 内嵌终端去留要用户拍板；P1-14 推送与发版要用户确认。
-
-## Last Verified
-
-- 2026-09-27 P1-1 GUI 点验（Linux 开发机，`100ebcf1`，临时 HOME、本地假网关，11 次请求都带假 key）：新建会话走 DSH ✅，恢复与崩溃重启 ✅，旧会话只读 ⚠️（草稿丢失），拒绝路径 ✅ / ⚠️（带图时草稿丢失），`session_locked` 未能取证。
-- 2026-09-26 P1-1（Linux 开发机，内容同 `100ebcf1`）：四套 tsc 全部退出 0；相关单测 65 个文件、1043 例，加上渲染层 165 个文件、3201 例，全部通过；bridge-smoke 18 项判定全部为真。全量 Vitest 与 GUI 未跑，GUI 点验进行中。
-- 2026-09-26 P1-0（Linux 开发机，`30a0c257`）：四套 tsc 全部退出 0；`src/main/services/agent-host/` 与 worker RPC 类型相关单测 19 个文件、314 例全过；`bridge-smoke.ts` 6 项判定全部为真。全量 Vitest 与 GUI 未跑。
+1. 真实网关 R1～R10 已授权（决策 130），到时要用户在开发版里登录公司账号；真实数据离线迁移测试仍待授权。（**已过期**：R1～R10 已于 2026-09-30 做完，剩 R8 完整回合与 R9）
+2. P1-13c 做完后，上加密机验证读回退。（**已过期**：P1-13c 已在加密机上实测通过，见决策 091 与 P1-13c 证据）
