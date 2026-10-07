@@ -1287,7 +1287,7 @@ describe('composerPlaceholder', () => {
           hasWorkspace: true,
           attachmentCount: 2,
         })
-      ).toBe('Sending 2 attachments to Agent Host…');
+      ).toBe('Sending 2 attachments…');
 
       expect(
         composerPlaceholder({
@@ -1362,7 +1362,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         pendingQuestion: true,
       })
-    ).toBe('Sending to Agent Host…');
+    ).toBe('Sending…');
   });
 
   it('leaves the existing 8 cases unchanged when pendingQuestion is omitted', () => {
@@ -1429,7 +1429,7 @@ describe('composerPlaceholder', () => {
   // Stop-hang fix (2026-08-10) — this REPLACES "T-19: sending still outranks
   // a non-empty queue". The placeholder describes what typing HERE will do,
   // and while a turn is in flight with a non-empty queue, typing enqueues.
-  // "Sending to Agent Host…" told the user their follow-up was on its way to
+  // "Sending…" told the user their follow-up was on its way to
   // the Host when it was actually sitting in the queue — the copy that made a
   // wedged send look like a working one during the Stop investigation.
   it('a non-empty queue outranks the sending copy — typing enqueues, it does not send', () => {
@@ -1482,7 +1482,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         queuedCount: 1,
       })
-    ).toBe('Sending to Agent Host…');
+    ).toBe('Sending…');
   });
 
   // Priority is a total order, not a pile of pairwise rules: pendingQuestion
@@ -1557,7 +1557,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         isCreatingSession: true,
       })
-    ).toBe('Creating session with Agent Host (first message only)…');
+    ).toBe('Setting up the chat (first message only)…');
   });
 
   it('keeps the ordinary sending copy when isCreatingSession is false or omitted', () => {
@@ -1572,7 +1572,7 @@ describe('composerPlaceholder', () => {
         attachmentCount: 0,
         isCreatingSession: false,
       })
-    ).toBe('Sending to Agent Host…');
+    ).toBe('Sending…');
 
     expect(
       composerPlaceholder({
@@ -1584,7 +1584,7 @@ describe('composerPlaceholder', () => {
         hasWorkspace: true,
         attachmentCount: 1,
       })
-    ).toBe('Sending 1 attachment to Agent Host…');
+    ).toBe('Sending 1 attachment…');
   });
 
   it('never shows the create-session copy while not sending', () => {
@@ -1606,7 +1606,7 @@ describe('composerPlaceholder', () => {
    * dsh-rebase P1-9e (decision 050): a chat from the previous version is moved
    * to the current engine by its first send. The box says so before (the
    * first send takes a moment longer), and while the move runs — which
-   * otherwise read "Sending to Agent Host…" for as long as it took.
+   * otherwise read "Sending…" for as long as it took.
    */
   describe('legacy chat moved on its first send (P1-9e)', () => {
     const idle = {
@@ -1640,7 +1640,7 @@ describe('composerPlaceholder', () => {
       ).toBe('Active session has no workspace…');
       expect(
         composerPlaceholder({ ...idle, mode: 'session', sending: true, movesOnSend: true })
-      ).toBe('Sending to Agent Host…');
+      ).toBe('Sending…');
     });
 
     it('says the move is running while it runs, ahead of the send waiting on it', () => {
@@ -1700,5 +1700,44 @@ describe('the running placeholder names the turn (P1-7e e6, problem 40, decision
     expect(
       zhTranslations['Agent Host is running — Enter queues, Ctrl+Enter adds to this turn…']
     ).toBeUndefined();
+  });
+});
+
+describe('the sending placeholders name no engine process (decision 156)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const sending = (extra: { isCreatingSession?: boolean; attachmentCount?: number }, t = zh) =>
+    composerPlaceholder(
+      {
+        mode: 'session',
+        canSend: false,
+        busy: true,
+        sending: true,
+        hasSession: true,
+        hasWorkspace: true,
+        attachmentCount: extra.attachmentCount ?? 0,
+        isCreatingSession: extra.isCreatingSession,
+      },
+      t
+    );
+
+  it('reads plainly in Chinese', () => {
+    expect(sending({})).toBe('正在发送…');
+    expect(sending({ isCreatingSession: true })).toBe('正在建立对话（仅首条消息）…');
+    expect(sending({ attachmentCount: 1 })).toBe('正在发送 1 个附件…');
+    expect(sending({ attachmentCount: 3 })).toBe('正在发送 3 个附件…');
+  });
+
+  it('carries no `Agent Host` in either language, and the old keys are gone', () => {
+    for (const extra of [{}, { isCreatingSession: true }, { attachmentCount: 2 }]) {
+      expect(sending(extra)).not.toContain('Agent Host');
+      expect(sending(extra, (key, params) => translate('en', key, params))).not.toContain(
+        'Agent Host'
+      );
+    }
+    for (const key of Object.keys(zhTranslations)) {
+      expect(key, key).not.toContain('Agent Host');
+      expect(zhTranslations[key], key).not.toContain('Agent Host');
+    }
   });
 });

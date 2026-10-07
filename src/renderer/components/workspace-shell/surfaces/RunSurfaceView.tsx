@@ -234,9 +234,11 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
               <div className="truncate text-meta" title={view.tools.activeTool}>
                 {view.tools.activeTool}
               </div>
+              {/* Decision 156: the status a tool publishes can be CJK, and the
+                  design system keeps CJK off 10px — the meta size, like the line above. */}
               {view.tools.activeToolStatus && (
                 <div
-                  className="truncate text-2xs text-muted-foreground"
+                  className="truncate text-meta text-muted-foreground"
                   title={view.tools.activeToolStatus}
                 >
                   {view.tools.activeToolStatus}
@@ -414,7 +416,7 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
                 think that is what it means. It is not: every turn re-sends the
                 whole prompt, so this is that prompt counted once per turn.
                 Stated where the number is, not in a doc nobody opens. */}
-            <p className="px-1 py-1 text-2xs text-muted-foreground">
+            <p className="px-1 py-1 text-meta text-muted-foreground">
               {t(
                 'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.'
               )}

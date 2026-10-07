@@ -23,6 +23,7 @@ import {
 import { deriveRetryBanner, retryErrorLabel } from '../retryBanner';
 import {
   displaySessionTitle,
+  fallbackSessionTitle,
   isPlaceholderTitle,
   isStartupSeedSession,
   LEGACY_SEED_TITLE,
@@ -201,6 +202,21 @@ describe('chat titles and the start-up chat (decision 138 rule 21)', () => {
     // Both stay placeholders, so the first message still names the chat.
     expect(isPlaceholderTitle(NEW_CHAT_TITLE)).toBe(true);
     expect(isPlaceholderTitle(LEGACY_SEED_TITLE)).toBe(true);
+  });
+
+  // Decision 149 §11 / 156: the last-resort fallback title too.
+  it('E156-9: shows `Session xxxxxx` as 「会话 xxxxxx」 and stores it as it was', () => {
+    const stored = fallbackSessionTitle('a1b2c3-srd2ne');
+    expect(stored).toBe('Session srd2ne');
+    expect(displaySessionTitle(stored, zh)).toBe('会话 srd2ne');
+    expect(displaySessionTitle('Session ab-c1', zh)).toBe('会话 ab-c1');
+    // English reads as before, and so does anything that only looks similar.
+    expect(displaySessionTitle(stored)).toBe('Session srd2ne');
+    expect(displaySessionTitle('Session abcdefg', zh)).toBe('Session abcdefg');
+    expect(displaySessionTitle('Session planning', zh)).toBe('Session planning');
+    // The recognizer reads the stored value, not the shown one.
+    expect(isPlaceholderTitle(stored)).toBe(true);
+    expect(isPlaceholderTitle('会话 srd2ne')).toBe(false);
   });
 
   it('knows the start-up chat by its id while it is untouched', () => {

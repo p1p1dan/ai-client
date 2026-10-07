@@ -1508,8 +1508,9 @@ function SessionRow({
               variant="ghost"
               size="icon-xs"
               className="h-5 w-5"
-              aria-label="Archive session"
-              title="Archive"
+              // Decision 149 §12 / 156: in the UI language, like the menu's 「归档」.
+              aria-label={t('Archive session')}
+              title={t('Archive')}
               onClick={(event) => {
                 event.stopPropagation();
                 requestArchive();

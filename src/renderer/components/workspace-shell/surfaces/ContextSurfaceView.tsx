@@ -277,7 +277,7 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
             <span className="text-ui font-semibold tabular-nums leading-none">
               {formatCharCount(conversation.totalChars)}
             </span>
-            <span className="text-2xs text-muted-foreground">{t('chars')}</span>
+            <span className="text-meta text-muted-foreground">{t('chars')}</span>
           </div>
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -318,7 +318,7 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           compete for the same glance. */}
       {conversation.roles.length > 0 && (
         <div className="flex flex-col gap-1">
-          <span className="text-2xs text-muted-foreground">{t('By sender')}</span>
+          <span className="text-meta text-muted-foreground">{t('By sender')}</span>
           <div className="flex h-2 overflow-hidden rounded-xs bg-muted">
             {conversation.roles.map((role) => (
               <span
@@ -330,7 +330,7 @@ function CompositionChart({ conversation }: { conversation: ConversationComposit
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1">
             {conversation.roles.map((role) => (
-              <span key={role.role} className="flex items-center gap-1.5 text-2xs">
+              <span key={role.role} className="flex items-center gap-1.5 text-meta">
                 <span
                   aria-hidden
                   className="h-2 w-2 shrink-0 rounded-xs"
@@ -552,7 +552,7 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
               chars: formatCharCount(conversation.totalChars),
             })}
           </p>
-          <p className="px-1 pb-1 text-2xs text-muted-foreground">
+          <p className="px-1 pb-1 text-meta text-muted-foreground">
             {t(
               'Characters in the messages this window has loaded — not tokens, and not the context window. Token usage is on the Run panel.'
             )}
@@ -587,12 +587,14 @@ export function ContextSurfaceView(_props: SurfaceViewProps) {
                 />
               ))}
               {segmentPage.hiddenCount > 0 && (
+                // Decision 156: the sidebar's words and full-width brackets,
+                // 「查看更多（N）」 (decision 145 §13), not 「显示更多 (N)」.
                 <button
                   type="button"
                   onClick={() => setShowAllSegments(true)}
-                  className="flex h-7 w-full items-center rounded-md px-1 pl-5 text-meta text-muted-foreground hover:bg-hover"
+                  className="flex h-7 w-full items-center rounded-md px-1 pl-5 text-meta text-muted-foreground tabular-nums hover:bg-hover"
                 >
-                  {t('Show more')} (<span className="tabular-nums">{segmentPage.hiddenCount}</span>)
+                  {t('View more ({{count}})', { count: segmentPage.hiddenCount })}
                 </button>
               )}
             </div>

@@ -44,9 +44,17 @@ export function isStartupSeedSession(session: { id: string; title: string }): bo
  * identifiers, not copy. The sidebar, the session bar and the dialogs that
  * name a chat show them in the UI language; anything else — a derived or a
  * user-given title — is printed as it is.
+ *
+ * Decision 149 §11 / 156: the last-resort `Session xxxxxx` too — 「会话
+ * srd2ne」 in Chinese, unchanged in English. Only the shown text changes: the
+ * stored value, and `isPlaceholderTitle` reading it, stay as they were.
  */
 export function displaySessionTitle(title: string, t: Translate = englishTranslate): string {
-  return title === NEW_CHAT_TITLE || title === LEGACY_SEED_TITLE ? t('New chat') : title;
+  if (title === NEW_CHAT_TITLE || title === LEGACY_SEED_TITLE) return t('New chat');
+  if (SESSION_FALLBACK_TITLE_PATTERN.test(title)) {
+    return t('Session {{id}}', { id: title.slice(SESSION_FALLBACK_TITLE_PREFIX.length) });
+  }
+  return title;
 }
 
 /**
@@ -61,8 +69,11 @@ export function displaySessionTitle(title: string, t: Translate = englishTransla
  * failed to recognize as a placeholder.
  */
 export function fallbackSessionTitle(sessionId: string): string {
-  return `Session ${sessionId.slice(-6)}`;
+  return `${SESSION_FALLBACK_TITLE_PREFIX}${sessionId.slice(-6)}`;
 }
+
+/** The stored fallback's English head; `displaySessionTitle` shows the rest after it. */
+const SESSION_FALLBACK_TITLE_PREFIX = 'Session ';
 
 /**
  * Matches `fallbackSessionTitle(id)` output structurally rather than by an

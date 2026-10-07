@@ -63,9 +63,14 @@ describe('T13 session context menu wiring', () => {
     expect(source).toContain('onArchive();');
     expect(source).toContain('onClick={confirmArchive}');
 
-    const actionButtons = between('aria-label="Archive session"', '<DeleteTempButton');
+    // Decision 149 §12 / 156: the hover button's name and tooltip go through
+    // the catalog; the anchor follows them.
+    const actionButtons = between("aria-label={t('Archive session')}", '<DeleteTempButton');
+    expect(actionButtons).toContain("title={t('Archive')}");
     expect(actionButtons).toContain('requestArchive()');
     expect(actionButtons).not.toContain('onArchive()');
+    expect(sessionRowSource).not.toContain('aria-label="Archive session"');
+    expect(sessionRowSource).not.toContain('title="Archive"');
   });
 
   it('uses the semantic Base UI context-menu trigger and preserves row keyboard focus', () => {

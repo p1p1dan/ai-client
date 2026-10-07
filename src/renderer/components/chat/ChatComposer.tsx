@@ -121,6 +121,7 @@ import {
   resolveIdleStatusText,
   sessionStatusLineWrapperClass,
   shouldShowStatusLine,
+  TURN_RUNNING_PLACEHOLDER,
 } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { resolveResumeModel, toWireModel } from './models';
@@ -1042,10 +1043,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
             ? t(ENGINE_UNAVAILABLE_HINT)
             : lastError
               ? `Error: ${lastError}`
-              : sendingHere
-                ? 'Starting Agent Host / sending…'
+              : // Decision 156: in the UI language, and without the engine
+                // process's development name (`Agent Host`).
+                sendingHere
+                ? t('Sending…')
                 : busy
-                  ? 'Agent Host running — use Stop to abort'
+                  ? t(TURN_RUNNING_PLACEHOLDER)
                   : effectiveCwd
                     ? `Ready · cwd: ${effectiveCwd}`
                     : 'Ready · temporary chat — a private folder is created on the first message.';

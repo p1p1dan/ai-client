@@ -477,7 +477,8 @@ export function composerSendingLine(
 ): string {
   const elapsed = Math.max(0, Math.floor(input.elapsedSeconds));
   if (input.phase === 'handshake') {
-    return t('Starting Agent Host… · {{seconds}}s', { seconds: elapsed });
+    // Decision 156: the engine by its user-facing name, not `Agent Host`.
+    return t('Connecting to the chat engine… · {{seconds}}s', { seconds: elapsed });
   }
   // Round-10 inspection ④: no "Network" here — this surface has no
   // errorStatus to discriminate transport failures from upstream 5xx (the

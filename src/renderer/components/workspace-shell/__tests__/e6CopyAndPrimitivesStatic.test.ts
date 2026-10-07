@@ -36,10 +36,27 @@ describe('no translated text at 10px (problem 42, decision 145)', () => {
     'workspace-shell/SessionReviewPanel.tsx',
     'workspace-shell/SessionBar.tsx',
     'chat/BackgroundJobsWindow.tsx',
+    // Decision 156: the Run and Context panels (decision 145's findings).
+    'workspace-shell/surfaces/RunSurfaceView.tsx',
+    'workspace-shell/surfaces/ContextSurfaceView.tsx',
   ])('%s', (file) => {
     const source = code(file);
     expect(source).not.toMatch(TEN_PX_TRANSLATED);
     expect(source).not.toMatch(SMALL_BADGE_TRANSLATED);
+  });
+
+  /**
+   * Decision 156: two of the Run and Context panels' 10px lines held CJK
+   * without starting with `{t(` — the role legend (a swatch first) and the
+   * status a running tool publishes — so the shape scan above cannot see them.
+   * These panels keep 10px for one Latin figure only: the token total under
+   * the Run panel's ring.
+   */
+  it('the Run and Context panels keep 10px for the ring figure alone', () => {
+    expect(code('workspace-shell/surfaces/ContextSurfaceView.tsx')).not.toContain('text-2xs');
+    const run = code('workspace-shell/surfaces/RunSurfaceView.tsx');
+    const tenPx = [...run.matchAll(/text-2xs[^>]*>\s*([^<]*)/g)].map((match) => match[1]?.trim());
+    expect(tenPx).toEqual(['{formatTokenTotal(occupancy.usedTokens)}']);
   });
 
   it('the scan sees the shape it bans', () => {
@@ -69,7 +86,7 @@ describe('mixed-script button labels keep their capitals (decision 145)', () => 
   });
 });
 
-describe('interface primitives label themselves in the UI language (decision 145)', () => {
+describe('interface primitives label themselves in the UI language (decisions 145, 156)', () => {
   it.each([
     ['ui/dialog.tsx', ["aria-label={t('Close')}"]],
     ['ui/sheet.tsx', ["aria-label={t('Close')}"]],
@@ -82,10 +99,15 @@ describe('interface primitives label themselves in the UI language (decision 145
         "aria-label={t('Close')}",
       ],
     ],
+    // Decision 156: the spinner's default name, and the editor path bar's landmark.
+    ['ui/spinner.tsx', ["aria-label={t('Loading')}"]],
+    ['ui/breadcrumb.tsx', ["aria-label={t('Breadcrumb')}"]],
   ])('%s', (file, labels) => {
     const source = code(file);
     for (const label of labels) expect(source).toContain(label);
     // No label left as a bare English literal.
-    expect(source).not.toMatch(/aria-label="(Close|Close notification|Minimize|Maximize|Restore)"/);
+    expect(source).not.toMatch(
+      /aria-label="(Close|Close notification|Minimize|Maximize|Restore|Loading|breadcrumb)"/
+    );
   });
 });

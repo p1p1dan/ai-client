@@ -55,7 +55,7 @@ export const BUNDLED_CATALOG_NOTICE =
   'Model catalog unreachable — showing the list this build shipped with';
 
 /** Shown while the Host is not up yet; no request has been made. */
-export const HOST_NOT_READY_CATALOG_NOTICE = 'Waiting for Agent Host to become ready';
+export const HOST_NOT_READY_CATALOG_NOTICE = 'Waiting for the chat engine to become ready';
 
 /** Shown for the fourth fallback rung: the gateway answered, and nothing qualified. */
 export const EMPTY_CATALOG_NOTICE = 'No models offered for this agent — Automatic will be used';

@@ -912,7 +912,6 @@ export const zhTranslations: Record<string, string> = {
   // a throwaway directory, so they belong to no repository.
   'Temporary chats': '临时对话',
   Result: '结果',
-  'Show more': '显示更多',
   'Show less': '收起',
   // dsh-rebase decision 137: the sidebar section of conversations started on
   // the engine in this run, and the row that ends a folder capped at 8.
@@ -2281,7 +2280,7 @@ export const zhTranslations: Record<string, string> = {
   // The chip's assembled copy: templates, so the tier label and the scope
   // sentence are each translated before they are put together.
   'This chat has nowhere to run right now.': '当前对话暂时没有可运行的目标。',
-  'The Agent Host is not ready.': 'Agent Host 尚未就绪。',
+  'The chat engine is not ready.': '对话引擎尚未就绪。',
   'A turn is running — the tier is fixed for the turn already in flight.':
     '正在进行一个回合——已在飞行中的这一回合，档位已经定型。',
   'A permission change is already on its way.': '已有一次权限变更在路上。',
@@ -2785,11 +2784,11 @@ export const zhTranslations: Record<string, string> = {
   cancelled: '已取消',
 
   // 输入框占位与排队提示。
-  'Creating session with Agent Host (first message only)…':
-    '正在与 Agent Host 建立会话（仅首条消息）…',
-  'Sending to Agent Host…': '正在发送到 Agent Host…',
-  'Sending {{count}} attachment to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
-  'Sending {{count}} attachments to Agent Host…': '正在向 Agent Host 发送 {{count}} 个附件…',
+  // Decision 156: no internal process name (`Agent Host`) on screen; plain
+  // 「正在发送…」 is the shared 'Sending…' entry above.
+  'Setting up the chat (first message only)…': '正在建立对话（仅首条消息）…',
+  'Sending {{count}} attachment…': '正在发送 {{count}} 个附件…',
+  'Sending {{count}} attachments…': '正在发送 {{count}} 个附件…',
   'Add more optional details…': '可以再补充一些信息…',
   'Queued {{count}} — type another follow-up…': '已排队 {{count}} 条 —— 可以接着输入…',
   'Active session has no workspace…': '当前会话没有工作区…',
@@ -2803,7 +2802,7 @@ export const zhTranslations: Record<string, string> = {
   'Remove queued message': '移除排队消息',
 
   // 回合进行中的状态行。等待动词按秒轮换，整张表都要有词条。
-  'Starting Agent Host… · {{seconds}}s': '正在启动 Agent Host… · {{seconds}}s',
+  'Connecting to the chat engine… · {{seconds}}s': '正在连接对话引擎… · {{seconds}}s',
   'Still waiting · {{seconds}}s': '仍在等待 · {{seconds}}s',
   'past the usual range; no reply and no error yet. Stop to abort.':
     '已超出常见时长；既没有回复也没有报错。按停止可中止。',
@@ -3822,7 +3821,7 @@ Object.assign(zhTranslations, {
   'Model catalog unreachable — no models available': '模型目录不可达 —— 没有可用的模型',
   'Model catalog is out of date — showing the last known list':
     '模型目录已过期 —— 正在显示上次获取的列表',
-  'Waiting for Agent Host to become ready': '正在等待对话引擎就绪',
+  'Waiting for the chat engine to become ready': '正在等待对话引擎就绪',
   'No models offered for this agent — Automatic will be used': '没有可用的模型 —— 将自动选择',
   'No models are enabled by the administrator — Automatic will be used':
     '管理员没有启用任何模型 —— 将自动选择',
@@ -3891,4 +3890,17 @@ Object.assign(zhTranslations, {
     '此服务使用的协议是 {{api}}，当前对话引擎无法用它来聊天。可以改选上方的三种协议之一，或删除这个服务。',
   '{{label}} (not supported by the current engine)': '{{label}}（当前引擎不支持）',
   'Not supported by the current engine': '当前引擎不支持',
+});
+
+/**
+ * dsh-rebase decision 156: the pre-merge interface fixes (decisions 145, 146
+ * and 149's leftovers) — primitives a screen reader names, and the fallback
+ * title `Session xxxxxx`, shown in the UI language while stored as it was.
+ */
+Object.assign(zhTranslations, {
+  // `ui/spinner.tsx`'s default name, and `ui/breadcrumb.tsx`'s landmark.
+  Loading: '加载中',
+  Breadcrumb: '路径导航',
+  // The last-resort title (`fallbackSessionTitle`), read through `displaySessionTitle`.
+  'Session {{id}}': '会话 {{id}}',
 });

@@ -1200,15 +1200,17 @@ export function composerPlaceholder(
     return t(MIGRATING_SESSION_PLACEHOLDER);
   }
   if (input.sending && !hasReleasableQueue) {
+    // Decision 156: the engine process's development name (`Agent Host`) no
+    // longer reaches the screen, as problem 40 did for the running placeholder.
     if (input.isCreatingSession) {
-      return t('Creating session with Agent Host (first message only)…');
+      return t('Setting up the chat (first message only)…');
     }
     if (input.attachmentCount > 0) {
       return input.attachmentCount === 1
-        ? t('Sending {{count}} attachment to Agent Host…', { count: input.attachmentCount })
-        : t('Sending {{count}} attachments to Agent Host…', { count: input.attachmentCount });
+        ? t('Sending {{count}} attachment…', { count: input.attachmentCount })
+        : t('Sending {{count}} attachments…', { count: input.attachmentCount });
     }
-    return t('Sending to Agent Host…');
+    return t('Sending…');
   }
   if (input.pendingQuestion) {
     return t(PENDING_QUESTION_PLACEHOLDER);

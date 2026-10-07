@@ -245,8 +245,8 @@ describe('the send latch is per-session, and its readers are exhaustively pinned
    * `sendingSessionId` / `sendingHere` / `setSendingSessionId` (all excluded by
    * the word boundaries), not a JSX prop name (`sending=`) and not an object
    * key with an explicit value (`sending:`). Single-quoted string literals are
-   * blanked first so the user-visible copy `'Starting Agent Host / sending…'`
-   * cannot inflate the count.
+   * blanked first so user-visible copy that says "sending" cannot inflate the
+   * count.
    */
   function bareGlobalReads(): string[] {
     const withoutStrings = composerBody().replace(/'(?:[^'\\\n]|\\.)*'/g, "''");

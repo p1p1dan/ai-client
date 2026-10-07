@@ -498,7 +498,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       attachmentCount: 1,
       attachmentBytes: 155_648,
     });
-    expect(line).toBe('Starting Agent Host… · 3s');
+    expect(line).toBe('Connecting to the chat engine… · 3s');
     expect(line).not.toContain('Sent');
   });
 
@@ -511,7 +511,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
         attachmentCount: 0,
         attachmentBytes: 0,
       })
-    ).toBe('Starting Agent Host… · 61s');
+    ).toBe('Connecting to the chat engine… · 61s');
     // Past the SECOND threshold too: the handshake test runs before either
     // tier, so a stalled handshake is still a handshake (§7.7).
     expect(
@@ -522,7 +522,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
         attachmentCount: 0,
         attachmentBytes: 0,
       })
-    ).toBe(`Starting Agent Host… · ${STALLED_HINT_SECONDS + 1}s`);
+    ).toBe(`Connecting to the chat engine… · ${STALLED_HINT_SECONDS + 1}s`);
   });
 
   // a1 (2026-07-30 net-visibility batch): the CLI-side network retry counter
@@ -646,7 +646,7 @@ describe('composerSendingLine (T-18 B2 / F4 §7)', () => {
       attachmentBytes: 0,
       retry: { attempt: 1, maxRetries: 10 },
     });
-    expect(line).toBe('Starting Agent Host… · 3s');
+    expect(line).toBe('Connecting to the chat engine… · 3s');
     expect(line).not.toContain('· Retry');
   });
 

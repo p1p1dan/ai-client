@@ -20,7 +20,14 @@ import { ESCAPE_OWNING_POPUP_SELECTOR } from '../shellLayoutModel';
  * and the diff-stats poller (a timer plus IPC).
  */
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+// Interpolates like the real `t`: since decision 156 a title shaped like the
+// fallback (`Session A`) is shown through `t('Session {{id}}', …)`.
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string | number>) =>
+      params ? key.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => String(params[name])) : key,
+  }),
+}));
 vi.mock('@/components/chat/sessionIndex/useSessionIndex', () => ({
   useSessionIndex: () => ({ refresh: async () => {}, loading: false, error: null }),
   useSessionIndexMutations: () => ({

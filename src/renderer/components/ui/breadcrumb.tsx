@@ -3,10 +3,14 @@ import { useRender } from '@base-ui/react/use-render';
 import { ChevronRight, MoreHorizontal } from 'lucide-react';
 import type * as React from 'react';
 
+import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 
 function Breadcrumb({ ...props }: React.ComponentProps<'nav'>) {
-  return <nav aria-label="breadcrumb" data-slot="breadcrumb" {...props} />;
+  const { t } = useI18n();
+  // Decision 156: the landmark's name is read aloud (the editor's path bar),
+  // so it is in the UI language.
+  return <nav aria-label={t('Breadcrumb')} data-slot="breadcrumb" {...props} />;
 }
 
 function BreadcrumbList({ className, ...props }: React.ComponentProps<'ol'>) {
