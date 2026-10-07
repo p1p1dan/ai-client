@@ -151,7 +151,11 @@ import { TurnEndNotice } from './TurnEndNotice';
 import { deriveToolGroupRows, type ToolGroupEntry } from './toolCard';
 import { buildTurnCopyTextFromItems } from './turnCopy';
 import { turnEndedByUser } from './turnEndCause';
-import { turnEndNotesAfterWork, turnEndsWithoutReply } from './turnEndNoticeModel';
+import {
+  turnEndNotesAfterWork,
+  turnEndsOnFailedRequest,
+  turnEndsWithoutReply,
+} from './turnEndNoticeModel';
 import {
   deriveSendStatusBinding,
   hasLiveTurnEvidence,
@@ -2499,7 +2503,12 @@ const ChatTurn = memo(function ChatTurn({
     // this turn owns (its status row reads 'failed', F4's `ownsSessionFailure`)
     // says the same thing (P1-7e e6, problem 43, decision 145), so the line
     // reads the same before and after a reopen.
-    endedWithoutReply: turnEndsWithoutReply(turn.body) || status?.kind === 'failed',
+    // Decision 156: and once a later turn has taken the card's place, the
+    // request it failed on still says so (decision 145 rule 17).
+    endedWithoutReply:
+      turnEndsWithoutReply(turn.body) ||
+      status?.kind === 'failed' ||
+      turnEndsOnFailedRequest(turn.body),
     toolCalls: countTurnToolCalls(items),
     thinkingMs: turnThinkingMs,
   });

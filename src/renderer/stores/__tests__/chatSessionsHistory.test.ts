@@ -1634,3 +1634,137 @@ describe('a turn stopped before any reply (decision 146, GW-18)', () => {
     expect(last).not.toHaveProperty('turnEnd');
   });
 });
+
+/**
+ * dsh-rebase decision 156 (decision 146 rule 22): a turn whose request failed
+ * before any of its reply arrived. Live, the bridge's empty assistant message
+ * stays as it was on screen (the failure card says what happened) and is only
+ * stamped `stopReason: 'error'`. The history's failure placeholder carries no
+ * live id (the projection names a stopped request's copy, not a failed one's),
+ * so the renderer names it from the turn's rows and a replay keeps one note.
+ */
+describe('a turn whose request failed before any reply (decision 156)', () => {
+  const STEP_1 = 'dsh-aiclient-s1-t1-s1';
+  const event = (type: string, payload: Record<string, unknown>, requestId = 'turn-1') =>
+    ({ type, seq: 0, sessionId: SESSION_ID, requestId, timestamp: 2000, payload }) as RuntimeEvent;
+
+  const liveTurn: RuntimeEvent[] = [
+    event('message.started', { messageId: 'dsh-user-3', role: 'user' }),
+    event('message.delta', { messageId: 'dsh-user-3', blockId: 'dsh-user-3-text', text: 'go' }),
+    event('message.completed', { messageId: 'dsh-user-3' }),
+    event('message.started', { messageId: STEP_1, role: 'assistant' }),
+    event('message.completed', { messageId: STEP_1 }),
+    event('session.failed', { error: '500 upstream', errorCode: 'PROVIDER_ERROR' }),
+    event('session.status', { status: 'idle' }),
+  ];
+
+  const page: HistoryMessage[] = [
+    {
+      id: 'h:u1',
+      entryId: 'u1',
+      role: 'user',
+      timestamp: 2000,
+      blocks: [{ type: 'text', id: 'h:u1:text:0', text: 'go' }],
+      liveMessageId: 'dsh-user-3',
+    },
+    {
+      id: 'h:u1:end',
+      entryId: 'u1:end',
+      role: 'assistant',
+      timestamp: 3000,
+      blocks: [],
+      incomplete: true,
+      stopReason: 'error',
+      failure: { errorCode: 'PROVIDER_ERROR', error: '500 upstream' },
+    },
+  ];
+
+  const failed = () =>
+    applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), liveTurn).state;
+
+  it('[E156-12-LIVE] the empty reply stays empty on screen and is marked as the failed request', () => {
+    const state = failed();
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['dsh-user-3', STEP_1]);
+    expect(bucket[1]).toMatchObject({ role: 'assistant', blocks: [], stopReason: 'error' });
+    expect(bucket[1]).not.toHaveProperty('turnEnd');
+    expect(state.sessions.find((session) => session.id === SESSION_ID)?.status).toBe('failed');
+  });
+
+  it('[E156-12-REPLAY-ONE] a later replay keeps one note: the history row takes the empty copy’s place', () => {
+    const { state } = applyAll(failed(), [
+      makeResumedEvent('req-2'),
+      makeHistoryEvent({ messages: page, totalCount: 2 }, 'req-2'),
+    ]);
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['h:u1', 'h:u1:end']);
+    expect(bucket[1]).toMatchObject({ role: 'system', turnEnd: { kind: 'failed' } });
+  });
+
+  it('[E156-12-INTERJECTED] the copy after a Ctrl+Enter message in the same turn is found too', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
+      ...liveTurn.slice(0, 3),
+      event('message.started', { messageId: 'dsh-aiclient-s1-t1-s0', role: 'assistant' }),
+      event('message.delta', {
+        messageId: 'dsh-aiclient-s1-t1-s0',
+        blockId: 'b0',
+        text: 'Reading first.',
+      }),
+      event('message.started', { messageId: 'dsh-user-4', role: 'user' }),
+      event('message.delta', { messageId: 'dsh-user-4', blockId: 'dsh-user-4-text', text: 'also' }),
+      ...liveTurn.slice(3),
+      makeResumedEvent('req-2'),
+      makeHistoryEvent(
+        {
+          messages: [
+            page[0] as HistoryMessage,
+            {
+              id: 'h:a0',
+              entryId: 'a0',
+              role: 'assistant',
+              timestamp: 2500,
+              blocks: [{ type: 'text', id: 'h:a0:text:0', text: 'Reading first.' }],
+              liveMessageId: 'dsh-aiclient-s1-t1-s0',
+            },
+            {
+              id: 'h:u2',
+              entryId: 'u2',
+              role: 'user',
+              timestamp: 2600,
+              blocks: [{ type: 'text', id: 'h:u2:text:0', text: 'also' }],
+              liveMessageId: 'dsh-user-4',
+            },
+            page[1] as HistoryMessage,
+          ],
+          totalCount: 4,
+        },
+        'req-2'
+      ),
+    ]);
+    const bucket = state.messages[SESSION_ID] ?? [];
+    expect(bucket.map((message) => message.id)).toEqual(['h:u1', 'h:a0', 'h:u2', 'h:u1:end']);
+  });
+
+  it('[E156-12-NO-OWN-MESSAGE] a failure with no message of its own marks nothing of the turn before', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
+      ...liveTurn.slice(0, 4),
+      event('message.delta', { messageId: STEP_1, blockId: `${STEP_1}-b0`, text: 'Done.' }),
+      event('message.completed', { messageId: STEP_1 }),
+      event('session.completed', {}),
+      // The next send is refused before any request: no echo, no reply.
+      event('session.failed', { error: 'model missing' }, 'turn-2'),
+    ]);
+    const last = state.messages[SESSION_ID]?.at(-1);
+    expect(last).toMatchObject({ id: STEP_1, role: 'assistant' });
+    expect(last).not.toHaveProperty('stopReason');
+  });
+
+  it('[E156-12-AFTER-REPLY] a failure after part of the reply arrived marks nothing', () => {
+    const { state } = applyAll(baseState({ sessions: [makeSession({ status: 'running' })] }), [
+      ...liveTurn.slice(0, 4),
+      event('message.delta', { messageId: STEP_1, blockId: `${STEP_1}-b0`, text: 'half' }),
+      event('session.failed', { error: '500 upstream' }),
+    ]);
+    expect(state.messages[SESSION_ID]?.at(-1)).not.toHaveProperty('stopReason');
+  });
+});

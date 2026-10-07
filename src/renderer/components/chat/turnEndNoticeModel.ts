@@ -79,6 +79,24 @@ export function turnEndsWithoutReply(body: readonly { turnEnd?: ChatTurnEnd }[])
 }
 
 /**
+ * Decision 156 (decision 145 rule 17): live, whether the turn's last request
+ * failed before any of its reply arrived — its newest assistant message is the
+ * empty one `session.failed` stamped `stopReason: 'error'`. Such a turn did not
+ * finish either; the failure card says so while it is the last turn, and this
+ * keeps 「完成于」 off it after a later turn takes the card's place.
+ */
+export function turnEndsOnFailedRequest(
+  body: readonly { role: string; blocks: readonly unknown[]; stopReason?: string }[]
+): boolean {
+  for (let index = body.length - 1; index >= 0; index -= 1) {
+    const message = body[index];
+    if (message?.role !== 'assistant') continue;
+    return message.stopReason === 'error' && message.blocks.length === 0;
+  }
+  return false;
+}
+
+/**
  * The ids of a turn's end notes that follow something the turn saved — an
  * assistant message with any block — so their wording leaves out 「没有保存任何
  * 回复」. DSH writes a failed turn's placeholder after every step it did

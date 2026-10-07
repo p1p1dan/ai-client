@@ -273,3 +273,74 @@ it('[E6-43-MOUNT] live, a turn the session failed on says no 「完成于」 eit
     useMessageMetadataStore.setState({ bySession: {} });
   }
 });
+
+it('[E156-13-MOUNT] live, a turn that failed says no 「完成于」 after the next turn either', async () => {
+  // Decision 156 (decision 145 rule 17). The failed turn is no longer the last
+  // one, so it no longer owns the session's failure; what keeps 「完成于」 off
+  // it is the stamp `session.failed` left on its empty request.
+  const turns = (stamped: boolean): ChatMessage[] => [
+    {
+      id: 'u1',
+      sessionId: 's',
+      role: 'user',
+      timestamp: T0,
+      blocks: [{ id: 'u1:text:0', type: 'text', text: 'P1-FAIL: go' }],
+    },
+    {
+      id: 'a1',
+      sessionId: 's',
+      role: 'assistant',
+      timestamp: T0 + 2_000,
+      blocks: [],
+      ...(stamped ? { stopReason: 'error' } : {}),
+    },
+    {
+      id: 'u2',
+      sessionId: 's',
+      role: 'user',
+      timestamp: T0 + 120_000,
+      blocks: [{ id: 'u2:text:0', type: 'text', text: 'try again' }],
+    },
+    {
+      id: 'a2',
+      sessionId: 's',
+      role: 'assistant',
+      timestamp: T0 + 122_000,
+      blocks: [{ id: 'a2:text:0', type: 'text', text: 'Done this time.' }],
+    },
+  ];
+  const failedAt = zh('Completed at {{time}}', { time: formatAbsoluteTime(T0 + 2_000) });
+  const doneAt = zh('Completed at {{time}}', { time: formatAbsoluteTime(T0 + 122_000) });
+  // Two minutes apart, so the two clauses cannot read the same.
+  expect(doneAt).not.toBe(failedAt);
+  useMessageMetadataStore.setState({
+    bySession: {
+      s: {
+        byMessage: { a1: { startedAt: T0 + 500 }, a2: { startedAt: T0 + 120_500 } },
+        bySessionLastAssistant: {},
+      },
+    },
+  });
+  try {
+    // Control: without the stamp the failed turn claims it completed.
+    seed(turns(false));
+    const unstamped = await mountTimeline('idle');
+    try {
+      expect(unstamped.container.textContent ?? '').toContain(failedAt);
+    } finally {
+      await unstamped.unmount();
+    }
+
+    seed(turns(true));
+    const view = await mountTimeline('idle');
+    try {
+      const text = view.container.textContent ?? '';
+      expect(text).not.toContain(failedAt);
+      expect(text).toContain(doneAt);
+    } finally {
+      await view.unmount();
+    }
+  } finally {
+    useMessageMetadataStore.setState({ bySession: {} });
+  }
+});

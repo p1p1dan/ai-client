@@ -17,6 +17,7 @@ import type { Components } from 'react-markdown';
 import Markdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
+import { usePiModelCatalog } from '@/components/chat/usePiModelCatalog';
 import {
   AlertDialog,
   AlertDialogClose,
@@ -43,6 +44,28 @@ import { useCodeReview } from '@/hooks/useCodeReview';
 import { useI18n } from '@/i18n';
 import { stopCodeReview, useCodeReviewStore } from '@/stores/codeReview';
 import { useSettingsStore } from '@/stores/settings';
+
+/**
+ * Decision 156 (decision 146 GW-6's second half): a chosen model is named the
+ * way the model menu and the AI settings page name it — its catalog label —
+ * and by its id only when the catalog does not list it.
+ */
+export function reviewModelLabel(
+  modelId: string,
+  models: readonly { id: string; label: string }[] | undefined
+): string {
+  return models?.find((model) => model.id === modelId)?.label || modelId;
+}
+
+/**
+ * Reads the catalog only while the dialog's title is on screen: the modal sits
+ * mounted beside the changes list whether or not a review is open, and the
+ * catalog hook asks Main for the list when the renderer has none yet.
+ */
+function ReviewModelName({ modelId }: { modelId: string }) {
+  const { catalog } = usePiModelCatalog('ready');
+  return <>{reviewModelLabel(modelId, catalog?.models)}</>;
+}
 
 const markdownComponents: Components = {
   pre: ({ children }) => <>{children}</>,
@@ -305,7 +328,13 @@ export function CodeReviewModal({ open, onOpenChange, repoPath }: CodeReviewModa
                     used to render as empty brackets. It says what the AI
                     settings page calls it instead. */}
                 <span className="text-muted-foreground font-normal">
-                  ({codeReviewSettings.model || t('Automatic')})
+                  (
+                  {codeReviewSettings.model ? (
+                    <ReviewModelName modelId={codeReviewSettings.model} />
+                  ) : (
+                    t('Automatic')
+                  )}
+                  )
                 </span>
               </span>
             </DialogTitle>

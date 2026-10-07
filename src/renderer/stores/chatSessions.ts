@@ -1009,6 +1009,110 @@ function withStoppedRun(
 }
 
 /**
+ * Decision 156 (decision 146 rule 22, decision 145 rule 17): the request the
+ * turn failed on, when nothing of its reply arrived — the bridge opened an
+ * assistant message for it and it stayed empty. It is stamped with the
+ * history's word for such a request, `stopReason: 'error'`, and nothing else
+ * changes on screen (the failure card says what happened). The stamp is what
+ * lets the turn say no 「完成于」 once a later turn takes the card's place
+ * (`turnEndsOnFailedRequest`), and what lets a replay fold this empty copy
+ * into the history's failure note (`nameFailedRequestCopies`).
+ *
+ * Only the turn's newest assistant message, and only when it is empty: a
+ * failure with no message of its own (refused before any request) must not
+ * mark the previous turn's reply.
+ */
+function withFailedRequest(
+  state: ChatSessionsState,
+  sessionId: string
+): Pick<ChatSessionsState, 'messages'> | Record<string, never> {
+  const bucket = state.messages[sessionId];
+  if (!bucket) return {};
+  for (let index = bucket.length - 1; index >= 0; index -= 1) {
+    const message = bucket[index];
+    if (!message || message.role === 'user') return {};
+    if (message.role !== 'assistant') continue;
+    if (message.blocks.length > 0 || message.stopReason) return {};
+    const next = bucket.slice();
+    next[index] = { ...message, stopReason: 'error' };
+    return { messages: withBucket(state, sessionId, next) };
+  }
+  return {};
+}
+
+/** History row id of a turn's end placeholder: `<turn head row id>:end` (`projection.ts`). */
+const TURN_END_ROW_SUFFIX = ':end';
+
+/**
+ * Decision 156 (decision 146 rule 22): the history names the live copy of a
+ * STOPPED request on its placeholder (`liveMessageId`, decision 146), not that
+ * of a failed one, so a replay kept the empty live message beside the failure
+ * note. The renderer names it instead, from the turn's own rows: the
+ * placeholder `<head>:end` closes the turn its head row opened; the live copy
+ * is the empty message stamped by {@link withFailedRequest} after the live
+ * echo of the last prompt in that turn (a Ctrl+Enter message joins the turn,
+ * so it is that one's echo, not the head's). The exact-identity fold then
+ * replaces it with the note, as for a stop.
+ *
+ * Nothing is named without that stamp, so a window that did not watch the
+ * turn fail, or a failure that saved part of its reply, keeps the old merge.
+ */
+function nameFailedRequestCopies(
+  bucket: readonly ChatMessage[],
+  historyMessages: ChatMessage[]
+): ChatMessage[] {
+  const stamped = new Set(
+    bucket
+      .filter(
+        (message) =>
+          message.role === 'assistant' &&
+          message.stopReason === 'error' &&
+          message.blocks.length === 0
+      )
+      .map((message) => message.id)
+  );
+  if (stamped.size === 0) return historyMessages;
+  const position = new Map(bucket.map((message, index) => [message.id, index]));
+  let named: ChatMessage[] | null = null;
+  historyMessages.forEach((row, at) => {
+    if (row.turnEnd?.kind !== 'failed' || row.liveMessageId) return;
+    if (!row.id.endsWith(TURN_END_ROW_SUFFIX)) return;
+    const headId = row.id.slice(0, -TURN_END_ROW_SUFFIX.length);
+    let head = -1;
+    for (let index = at - 1; index >= 0; index -= 1) {
+      if (historyMessages[index]?.id === headId) {
+        head = index;
+        break;
+      }
+    }
+    if (head < 0) return;
+    let prompt: ChatMessage | undefined;
+    for (let index = head; index < at; index += 1) {
+      const candidate = historyMessages[index];
+      if (candidate?.role === 'user' && candidate.liveMessageId) prompt = candidate;
+    }
+    // The live echo, or — when an earlier replay already folded the echo — the
+    // prompt's own history row from that replay.
+    const from =
+      prompt === undefined
+        ? undefined
+        : (position.get(prompt.liveMessageId as string) ?? position.get(prompt.id));
+    if (from === undefined) return;
+    let copy: string | undefined;
+    for (let index = from + 1; index < bucket.length; index += 1) {
+      const message = bucket[index];
+      if (!message || message.role === 'user') break;
+      if (stamped.has(message.id)) copy = message.id;
+    }
+    if (copy === undefined) return;
+    stamped.delete(copy);
+    named ??= historyMessages.slice();
+    named[at] = { ...row, liveMessageId: copy };
+  });
+  return named ?? historyMessages;
+}
+
+/**
  * Maps one HistoryBlock to a ChatBlock using the same field usage as the live
  * runtime branches (tool.started / tool.completed / thinking.delta).
  */
@@ -1411,12 +1515,17 @@ function applyRuntimeEventCore(
       } else if (payload.mode === 'branch') {
         mergedBucket = historyMessages;
       } else {
-        mergedBucket = mergeReplayedHistory(bucket, historyMessages, {
-          historyReadFailed: payload.error != null,
-          snapshot: takeResumeSnapshot(sessionId, event.requestId),
-          // P1-4d1: Main replays `refresh` only after a restart; the old engine is gone.
-          sourceGone: payload.mode === 'refresh',
-        });
+        // Decision 156: a failed request's empty live copy folds into the note.
+        mergedBucket = mergeReplayedHistory(
+          bucket,
+          nameFailedRequestCopies(bucket, historyMessages),
+          {
+            historyReadFailed: payload.error != null,
+            snapshot: takeResumeSnapshot(sessionId, event.requestId),
+            // P1-4d1: Main replays `refresh` only after a restart; the old engine is gone.
+            sourceGone: payload.mode === 'refresh',
+          }
+        );
       }
       const messages = withBucket(state, sessionId, mergedBucket);
 
@@ -1571,6 +1680,8 @@ function applyRuntimeEventCore(
         lastError: event.payload?.error ?? 'Session failed',
         unreadSessionIds: markSessionUnread(state, sessionId),
         ...withoutSessionPermissions(state, sessionId),
+        // Decision 156: the request that failed before any reply is marked so.
+        ...withFailedRequest(state, sessionId),
       };
     }
 

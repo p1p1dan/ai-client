@@ -15,7 +15,11 @@ import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const probe = vi.hoisted(() => ({ model: undefined as string | undefined }));
+const probe = vi.hoisted(() => ({
+  model: undefined as string | undefined,
+  catalog: null as { models: { id: string; label: string }[] } | null,
+  catalogReads: 0,
+}));
 
 const zh = (key: string, params?: Record<string, string | number>) => translate('zh', key, params);
 vi.mock('@/utils/logging', () => ({ updateRendererLogging: () => {} }));
@@ -55,6 +59,13 @@ vi.mock('@/stores/codeReview', () => {
   };
 });
 vi.mock('@/components/ui/mermaid-renderer', () => ({ MermaidRenderer: () => null }));
+// Decision 156: the title reads a chosen model's label from the catalog cache.
+vi.mock('@/components/chat/usePiModelCatalog', () => ({
+  usePiModelCatalog: () => {
+    probe.catalogReads += 1;
+    return { catalog: probe.catalog };
+  },
+}));
 vi.mock('@/components/ui/code-block', () => ({ CodeBlock: () => null }));
 
 import { CodeReviewModal } from '../CodeReviewModal';
@@ -78,6 +89,8 @@ async function title(): Promise<string> {
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   probe.model = undefined;
+  probe.catalog = null;
+  probe.catalogReads = 0;
 });
 
 afterEach(async () => {
@@ -99,8 +112,27 @@ describe('the code review dialog title (decision 146, GW-6)', () => {
     expect(await title()).toBe('代码审查(自动)');
   });
 
-  it('[GW6-CHOSEN] still names a chosen model by its id', async () => {
+  it('[GW6-CHOSEN] names a chosen model the catalog does not list by its id', async () => {
     probe.model = 'claude/claude-sonnet-5-5';
     expect(await title()).toBe('代码审查(claude/claude-sonnet-5-5)');
+  });
+
+  // Decision 156 (decision 146 GW-6's second half): by its label, as the
+  // model menu and the AI settings page name it.
+  it('[E156-11] names a chosen model by its catalog label', async () => {
+    probe.model = 'claude/claude-sonnet-5-5';
+    probe.catalog = {
+      models: [
+        { id: 'claude/claude-opus-5', label: 'Claude Opus 5' },
+        { id: 'claude/claude-sonnet-5-5', label: 'Claude Sonnet 5.5' },
+      ],
+    };
+    expect(await title()).toBe('代码审查(Claude Sonnet 5.5)');
+  });
+
+  it('[E156-11-AUTO] reads no catalog in automatic mode', async () => {
+    probe.catalog = { models: [{ id: 'x', label: 'X' }] };
+    expect(await title()).toBe('代码审查(自动)');
+    expect(probe.catalogReads).toBe(0);
   });
 });

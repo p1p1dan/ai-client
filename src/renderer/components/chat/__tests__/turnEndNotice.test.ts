@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deriveTurnEndNotice,
   turnEndNotesAfterWork,
+  turnEndsOnFailedRequest,
   turnEndsWithoutReply,
 } from '../turnEndNoticeModel';
 
@@ -109,5 +110,30 @@ describe('turnEndsWithoutReply', () => {
     expect(turnEndsWithoutReply([{}, { turnEnd: { kind: 'failed' } }])).toBe(true);
     expect(turnEndsWithoutReply([{ turnEnd: { kind: 'failed' } }, {}])).toBe(false);
     expect(turnEndsWithoutReply([])).toBe(false);
+  });
+});
+
+describe('turnEndsOnFailedRequest (decision 156)', () => {
+  const assistant = (extra: { stopReason?: string; blocks?: unknown[] } = {}) => ({
+    role: 'assistant',
+    blocks: extra.blocks ?? [],
+    ...(extra.stopReason ? { stopReason: extra.stopReason } : {}),
+  });
+  it('is true only when the newest assistant message is the empty failed request', () => {
+    expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error' })])).toBe(true);
+    expect(
+      turnEndsOnFailedRequest([
+        assistant({ blocks: [{}] }),
+        assistant({ stopReason: 'error' }),
+        { role: 'system', blocks: [{}] },
+      ])
+    ).toBe(true);
+    // A retry answered after it: the turn completed.
+    expect(
+      turnEndsOnFailedRequest([assistant({ stopReason: 'error' }), assistant({ blocks: [{}] })])
+    ).toBe(false);
+    expect(turnEndsOnFailedRequest([assistant({ stopReason: 'error', blocks: [{}] })])).toBe(false);
+    expect(turnEndsOnFailedRequest([assistant()])).toBe(false);
+    expect(turnEndsOnFailedRequest([])).toBe(false);
   });
 });
