@@ -14,6 +14,8 @@ Role: topic
 
 ## (a) 类工作，按顺序做（本机一次一个代理）
 
+执行顺序以[决策 149](../decisions/149-user-rulings-2026-10-07.md) 末尾为准：P1-3e → P1-5e → E8-A（审查判据与静态守卫，决策 150）→ P1-8c → 界面小修 → 文档收口。已完成：P1-5d `031c10f9`、E8 `35af10ab`、P1-3e `16cd195e`。
+
 1. **P1-5d 协议收口**：`ProviderSetupDialog.tsx` 仍列 10 种协议（来自 `userProviders.ts`），已有服务不标「暂不支持」。按决策 036 第 2 条：新建只能选三种协议并附说明，已有的其他协议标「当前引擎不支持」，预设也过滤。
 2. **P1-5e 管理员 key 缓存加密**：`PiModelConfigService.ts` 仍明文 `atomicWriteJson(this.sourcePath, config, 0o600)`，`configValidation.ts` 允许 managed 的 apiKey 进这份配置；R10 零命中说明公司目录目前不下发 managed key，风险是潜伏的。Linux 无钥匙串时的口径已由[决策 149](../decisions/149-user-rulings-2026-10-07.md) 第 2 条裁决：跟保险库一致。
 3. **P1-5 E8 实验**：同进程插件能否读到 IPC 上的凭据应答（`p1-10-p1-16-extensions.md` §4.5）；写测试插件在真宿主上跑，结论写进决策。
