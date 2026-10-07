@@ -55,3 +55,13 @@
 - **存疑 1**：Windows 上同一套结论是否成立（`process.send` / IPC 监听者行为、句柄继承），留给 P1-14 的 CI。
 - **存疑 2**：本次没有实测「插件改写或吞掉凭据应答」。能做到几乎是必然（同一个消息对象引用、公开的 `removeAllListeners`），但没跑就不当事实写。
 - **存疑 3**：`dsh-office-tools` 与 `dsh-tool-ask-user` 这两个试点插件是否真的碰这些 API，本实验没查，归审查单第 5 条逐包看。
+
+## 补记（2026-10-07，E8-A，[决策 153](153-e8-a-plugin-review-guard-choices.md)）
+
+第 2 节按[决策 149](149-user-rulings-2026-10-07.md) 第 4 条选了 A，已落地（代码 `350aa1b1`）。
+
+- 第 3 节的三条写进了分片 03 §6.2 第 5 项，标为「必拒」；§6.1「凭据」一行改成实测结论。
+- 静态守卫 `scripts/__tests__/dsh-plugin-review-guard.test.mjs` 扫白名单插件与产品 bundle 挂载的非我方包，命中即失败。
+- 存疑 3 有了答案：`dsh-office-tools@1.0.4` 与 `@deepseek-ai/dsh-tool-ask-user@0.1.7-rc.2` 都零命中。
+
+近似边界与盲区见决策 153 第 5、6 节。

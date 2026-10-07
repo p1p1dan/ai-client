@@ -129,7 +129,7 @@ Role: detail shard
 4. 不带 `dsh.client`；没有 `bin`；安装脚本不执行（`--ignore-scripts`），并且冒烟要证明不跑脚本也能用。
 5. 运行期依赖闭包里的每个包，要么在清单里，要么是钉住的 DSH 自带的。
 6. 单插件体积与文件数不超上限（§4.5）；许可在允许的名单里，与 P1-2 的许可流程同一套。
-7. 静态扫描敏感 API，生成报告给审查人对照（§6.2 第 5 项）。报告只作参考，不作放行依据。
+7. 静态扫描敏感 API，生成报告给审查人对照（§6.2 第 5 项）。报告只作参考，不作放行依据。§6.2 第 5 项的**三条必拒项**不在此列：它们另有静态守卫，命中即测试失败（见 §6.2，[决策 153](../../decisions/153-e8-a-plugin-review-guard-choices.md)）。
 8. 结果写进 `dsh-host-manifest.json` 的 `plugins` 段：名字、版本、说明、显示元数据、`rows`、`tools`、审查日期、体积。
 
 ### 3.3 启动期（扩展 `host.ts` 现有的组合审计，`host.ts:130-149`）
@@ -221,7 +221,7 @@ Role: detail shard
 
 | 面 | 插件能做什么 | 运行期兜底 | 其余靠 |
 |---|---|---|---|
-| 凭据 | 调 `ctx.credentials.resolve` 拿网关 key；监听 IPC 读凭据应答（推断） | 提供者只回答计划里的引用名（决策 034）；能否按调用方限制见实验 E8 | 审查 |
+| 凭据 | 调 `ctx.credentials.resolve` 拿网关 key；监听 IPC 读凭据应答；伪造凭据请求（实验 E8 实测） | 提供者只回答计划里的引用名（决策 034）。调用方可辨，但限制可绕过；应答在 `process` 级 IPC 上对同进程插件可见（[决策 150](../../decisions/150-e8-plugin-credential-isolation.md)） | 审查（§6.2 第 5 项的必拒三条） |
 | 文件 | `ctx.fs`、`node:fs` 任意读写，不过闸 | 无 | 审查 |
 | 子进程、网络 | `child_process`、`ctx.subprocess`、`fetch`，不过闸 | 无（代理只管路由，不管放行） | 审查 |
 | 工具 | 注册的工具经 `tools/pre-execute` 过闸 | 决策 042 的闸门与同步 guard；插件工具默认 ask（决策 047） | — |
@@ -238,6 +238,13 @@ Role: detail shard
 3. **依赖**：运行期依赖闭包逐个过；peer 只能是 `@deepseek-ai/*`，而且与钉住的 DSH 兼容。
 4. **组合**：bundle 补丁只插自己的行；没有 `dsh.client`；补丁里的 `!!js` 表达式逐个看。
 5. **敏感 API**（读源码，静态扫描辅助）：`ctx.credentials`、`process.env`、`process.send` / `process.on('message')`、`child_process` / `ctx.subprocess` / `spawnTerminal`、`fetch` / `http` / `https` / `net` / `dns` / `ws`、工作区外的 `fs` 写入、`eval` / `new Function` / 计算出来的动态 `import()`、`vm`、`worker_threads`、对 `Module` 或全局对象的猴子补丁、遥测或上报。
+   - 上面这些由审查人读源码判断，构建期的扫描报告只作参考（§3.2 第 7 项）。
+   - **必拒三条**（[决策 149](../../decisions/149-user-rulings-2026-10-07.md) 第 4 条裁决，判据出自[决策 150](../../decisions/150-e8-plugin-credential-isolation.md) §3）：包内（含它带进来的依赖闭包）出现任一条即**拒绝**。不做豁免，也不靠审查人解释放行。
+     1. **凭据**：出现 `ctx.credentials` 或 `ctx.get('credentials')`（含 `inject` 里声明 `credentials`）。插件确有自己的凭据需求时单独走审批，P1 不提供。
+     2. **宿主 IPC**：出现 `process.on('message')`、`process.prependListener`、`process.send`、`process.removeAllListeners('message')`。宿主的 IPC 通道是 Main 与 bridge 的私有通道，插件没有正当理由碰它。
+     3. **逃出 Cordis 代理与猴子补丁**：出现 `Symbol.for('cordis.original')`；或者对 `ctx.get(...)` 返回的对象、`Module`、全局对象、`process` 做属性赋值。
+   - **静态守卫**：`scripts/__tests__/dsh-plugin-review-guard.test.mjs` 逐文件扫描白名单插件，以及产品 bundle 挂载的非我方包（目前是 `dsh-office-tools` 与 `@deepseek-ai/dsh-tool-ask-user`）。命中任一条测试即失败，失败信息给出包名、文件、行、命中的判据。CI 的 `build.yml` gate 用 `pnpm test` 跑它。
+   - 守卫只是静态近似，近似边界与盲区见[决策 153](../../decisions/153-e8-a-plugin-review-guard-choices.md)：动态拼出来的名字、经函数参数传递的别名、混淆代码，它都看不见。逐行读源码仍是主防线；守卫通过不等于审查通过。
 6. **钩子**：有没有注册 `tools/pre-execute`、`approval/request`（自动应答就是 `aiclient-probe` 那一类问题，决策 015）、`agent/request`、`llm/*`、`system-prompt/assemble` 监听者，各自做什么。
 7. **工具**：列出全部工具，给出过闸分类与路径参数；核对目录里标的能力是否属实（`dsh-office-tools` 标的是只读，实际会写文件）。
 8. **数据**：会不会往外发数据；会在 `DSH_HOME` 或工作区之外写什么；需不需要自己的凭据（P1 不提供）。
