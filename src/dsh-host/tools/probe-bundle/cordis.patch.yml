@@ -33,3 +33,11 @@
     - id: aiclient-perm-experiment
       name: '@aiclient/dsh-probe/perm-experiment'
       disabled: !!js "process.env.AICLIENT_PERM_EXPERIMENT !== '1'"
+
+    # dsh-rebase P1-3e: a tool call that ignores its abort, so Stop cannot
+    # settle and the session cannot close (Stop ladder B, decision 021, on a
+    # real host). Holds every call whose arguments contain the text of
+    # AICLIENT_DSH_PROBE_STUCK_TOOL; off unless that is set.
+    - id: aiclient-probe-stuck
+      name: '@aiclient/dsh-probe/stuck'
+      disabled: !!js "!process.env.AICLIENT_DSH_PROBE_STUCK_TOOL"

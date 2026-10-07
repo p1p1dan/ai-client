@@ -37,7 +37,10 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
  * Two phases, each with its own supervisor, because the host restart budget
  * (decision 020: 3 per 5 min) is per supervisor: the app's singleton takes
  * three SIGKILLs inside a minute, and a fresh one takes the SIGSTOP hang and
- * Stop ladder B. They never overlap: one DSH home, one host at a time. Later
+ * Stop ladder B. They never overlap: one DSH home, one host at a time. P1-3e
+ * (decision 151): the fresh one's hosts layer the test-only probe bundle,
+ * whose stuck row holds one tool call past its abort, so ladder B is reached
+ * through a session DSH itself cannot stop or close. Later
  * phases add a close that never lands and the idle stop (P1-3d), Main's
  * read-only preview (`readPage`, P1-4a, decision 030), and rewind and fork
  * through seeded child sessions (P1-4b, decision 027).
@@ -75,7 +78,7 @@ const enabled =
 const shared = vi.hoisted(() => ({
   stateRoot: '',
   children: [] as ChildProcess[],
-  /** Main-to-host messages to swallow, as a host that never answers them would. */
+  /** Main-to-host messages to swallow before they reach the host (the third phase's close). */
   dropToHost: null as ((message: unknown) => boolean) | null,
   /** Every host's stderr as it came, before Main's redaction (KEY-CANARY). */
   rawStderr: [] as string[],
@@ -96,9 +99,10 @@ vi.mock('node:child_process', async (importOriginal) => {
         send &&
         (args[1] as readonly string[] | undefined)?.some((arg) => arg.endsWith('host.ts'))
       ) {
-        // Stop ladder B needs a channel the host never closes; the probe
-        // bundle has no switch for a stuck agent yet (P1-3e), so the test
-        // stands in for one at the IPC edge: what it drops never reaches DSH.
+        // A close that never reaches DSH (the third phase): what the test
+        // drops here is lost at the IPC edge, as a bridge that lost a
+        // channel's close would lose it. Stop ladder B uses a real stuck
+        // agent instead, the probe bundle's stuck row (P1-3e, decision 151).
         child.send = ((message: unknown, ...rest: unknown[]) => {
           if (shared.dropToHost?.(message)) {
             const callback = rest.find((arg) => typeof arg === 'function') as
@@ -139,6 +143,8 @@ vi.mock('../../git/runtime', async () => {
 const { DshHostSupervisor, DSH_HOST_TIMINGS, dshHostSupervisor } = await import(
   '../DshHostSupervisor'
 );
+// P1-3e: the launch Main builds, for the phase whose hosts add the probe bundle.
+const { currentDshHostLaunch } = await import('../DshHostProcess');
 // P1-9d: Main's migration of a legacy chat, and the index it commits to.
 const { LegacyMigrationService } = await import('../../chat/LegacyMigrationService');
 const { SessionIndexService } = await import('../../chat/SessionIndexService');
@@ -182,6 +188,27 @@ const STOP_WATCHDOG_BOUND_MS = 12_000;
  * host starts. The supervisor waits for that at most `scopeStopWaitMs`.
  */
 const SCOPE_STOP_BOUND_MS = DSH_HOST_TIMINGS.scopeStopWaitMs;
+
+/**
+ * P1-3e (decision 151): the probe bundle's stuck row holds every tool call
+ * whose arguments carry this text, and ignores its abort.
+ */
+const STUCK_NEEDLE = 'P13ESTUCK';
+
+/**
+ * What the second phase's hosts get on top of Main's environment. Test-only:
+ * Main never forwards an `AICLIENT_` variable (dshHostEnvironment), and a
+ * packaged host never layers the probe bundle (host.ts, decision 015).
+ */
+const STUCK_PROBE_ENV = {
+  AICLIENT_DSH_PROBE_BUNDLE: '1',
+  // The bundle's auto-approving IPC row would answer the bridge's approvals.
+  AICLIENT_DSH_PROBE_ROW: '0',
+  AICLIENT_DSH_PROBE_STUCK_TOOL: STUCK_NEEDLE,
+};
+
+/** The stuck row's warnings, as Main logs the host's stderr. */
+const STUCK_ROW = 'warn aiclient-probe-stuck:';
 
 const sleep = (ms: number) => new Promise<void>((done) => setTimeout(done, ms));
 
@@ -828,13 +855,30 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
     }, 180_000);
   });
 
-  /** Phase two: a supervisor of its own, so its restart budget starts fresh. */
+  /**
+   * Phase two: a supervisor of its own, so its restart budget starts fresh.
+   * P1-3e: its hosts layer the test-only probe bundle with the stuck row
+   * armed; nothing else in the phase passes the needle, so only ladder B's
+   * one call is ever held.
+   */
   describe('a fresh supervisor: a hung host, and Stop ladder B', () => {
+    type ProbeBundle = typeof import('../../../../dsh-host/tools/lib/probe-bundle.ts');
+    let probe: ProbeBundle | undefined;
+    let probeHome = '';
     let supervisor: Supervisor;
     let manager: Manager;
 
     beforeAll(async () => {
-      supervisor = new DshHostSupervisor({ modelSource: modelSource() });
+      probe = await import('../../../../dsh-host/tools/lib/probe-bundle.ts');
+      probeHome = currentDshHostLaunch().env.DSH_HOME;
+      probe.installProbeBundle(probeHome);
+      supervisor = new DshHostSupervisor({
+        modelSource: modelSource(),
+        resolveLaunch: () => {
+          const launch = currentDshHostLaunch();
+          return { ...launch, env: { ...launch.env, ...STUCK_PROBE_ENV } };
+        },
+      });
       manager = newManager(supervisor, true);
       for (const [index, id] of ['b1', 'b2', 'b3'].entries()) {
         tokens[id] = `P13C${id.toUpperCase()}${Date.now() % 100_000}`;
@@ -853,12 +897,18 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       for (const result of results)
         expect(result).toMatchObject({ settled: true, completed: true });
       expect(liveHosts()).toHaveLength(1);
+      // The probe bundle is composed on this host and its stuck row is armed.
+      expect(hostLines.some((line) => line.includes(`${STUCK_ROW} armed`))).toBe(true);
     }, 180_000);
 
     afterAll(async () => {
-      shared.dropToHost = null;
-      await manager?.disposeAll('app-shutdown');
-      expect(supervisor.status()).toMatchObject({ state: 'disposed' });
+      try {
+        await manager?.disposeAll('app-shutdown');
+        expect(supervisor.status()).toMatchObject({ state: 'disposed' });
+      } finally {
+        // The later phases share this DSH home and start from the product's profile.
+        if (probe && probeHome) probe.removeProbeBundle(probeHome);
+      }
     }, 60_000);
 
     it('kills a SIGSTOPped host on its heartbeat and recovers every session', async () => {
@@ -898,15 +948,22 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
       expect(after).toMatchObject({ settled: true, completed: true });
     }, 180_000);
 
-    it('Stop ladder B: a channel that never closes gets the host restarted once, and every session comes back', async () => {
-      const sleeper = `P13CSLEEP${Date.now() % 100_000}`;
+    // P1-3e (decision 151): the stuck agent is real. The probe bundle's stuck
+    // row holds b1's tool call and ignores its abort, so DSH hears the Stop but
+    // cannot end the turn, and cannot dispose the agent either (both wait for
+    // the loop to go idle): ladder A times out on the host's own account.
+    it('Stop ladder B: a tool call that ignores its abort gets the host restarted once, and every session comes back', async () => {
+      const stuckToken = `${STUCK_NEEDLE}${Date.now() % 100_000}`;
       const from = events.length;
-      // b1 runs a long tool; b2 streams a long answer; b3 is idle.
+      const linesFrom = hostLines.length;
+      const stuckLines = () =>
+        hostLines.slice(linesFrom).filter((line) => line.includes(STUCK_ROW));
+      // b1's bash call is held; b2 streams a long answer; b3 is idle.
       attempt += 1;
       await manager.send({
         sessionId: 'b1',
         attemptId: `attempt-${attempt}`,
-        text: `P0-SLEEPTOOL {"token":"${sleeper}","seconds":60} 跑一个慢命令。`,
+        text: `P0-SLEEPTOOL {"token":"${stuckToken}","seconds":60} 跑一个慢命令。`,
         ownerWebContentsId: 10,
       });
       attempt += 1;
@@ -916,57 +973,62 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         text: `P0-PACED {"token":"P13CPACED","chunks":400,"chunkMs":150}`,
         ownerWebContentsId: 11,
       });
-      expect(await until(() => processesWith(`sleep-tool ${sleeper}`).length > 0, 60_000)).toBe(
-        true
-      );
+      expect(
+        await until(() => stuckLines().some((line) => line.includes(' holding ')), 60_000)
+      ).toBe(true);
       expect(
         await until(() => forSession('b2', from).some((e) => e.type === 'message.delta'), 30_000)
       ).toBe(true);
+      // Held ahead of the tool body: the command never started.
+      expect(processesWith(`sleep-tool ${stuckToken}`)).toHaveLength(0);
 
-      // b1's channel: the host never hears its Stop, its dispose or its close.
-      let stuck: string | undefined;
-      shared.dropToHost = (message) => {
-        const record = message as { ch?: string; host?: string; rpc?: Record<string, unknown> };
-        const rpc = record.rpc;
-        const payload = rpc?.payload as { logicalSessionId?: string } | undefined;
-        if (rpc?.type === 'worker.stop' && payload?.logicalSessionId === 'b1') {
-          stuck = record.ch;
-          return true;
-        }
-        if (stuck === undefined || record.ch !== stuck) return false;
-        return rpc?.type === 'worker.dispose' || record.host === 'close';
-      };
       const hostBefore = supervisor.status();
       const [oldHost] = liveHosts();
       const stopAt = events.length;
       const started = Date.now();
       const stopping = manager.stop('b1').catch((error: unknown) => error);
 
+      // The Stop reaches DSH: its cancel aborts the call, which ignores it.
+      expect(
+        await until(() => stuckLines().some((line) => line.includes(' abort ignored: ')), 10_000)
+      ).toBe(true);
+      const abortIgnoredMs = Date.now() - started;
+
       // T144: the UI is settled at the watchdog, whatever the host does.
       expect(
         await until(() => told('b1', stopAt).includes('stopped(forced)'), STOP_WATCHDOG_BOUND_MS)
       ).toBe(true);
       const settledMs = Date.now() - started;
-      expect(told('b1', stopAt).slice(0, 2)).toEqual(['stopped(forced)', 'status:idle']);
+      expect(told('b1', stopAt).slice(0, 3)).toEqual([
+        'status:stopping',
+        'stopped(forced)',
+        'status:idle',
+      ]);
 
-      // 3 s for the dispose ACK, 3 s for the close, then one graceful restart.
+      // 3 s for the dispose ACK, 3 s for the close, then one restart: the
+      // graceful stop (3.5 s) cannot finish either, so the host is SIGKILLed.
       expect(
         await until(() => supervisor.status().lastExit?.reason === 'stuck-session', 30_000)
       ).toBe(true);
       const escalatedMs = Date.now() - started;
+      const exit = supervisor.status().lastExit;
       const tookMs = await recovered(['b1', 'b2', 'b3'], stopAt, 60_000);
       console.log(
-        `[p1-3] Stop ladder B: settled for the UI at ${settledMs} ms, host restarted at ` +
-          `${escalatedMs} ms, every session idle ${tookMs} ms later`
+        `[p1-3] Stop ladder B (stuck tool): abort ignored at ${abortIgnoredMs} ms, settled for ` +
+          `the UI at ${settledMs} ms, old host gone at ${escalatedMs} ms ` +
+          `(code ${String(exit?.code)}, signal ${String(exit?.signal)}), every session idle ` +
+          `${tookMs} ms later`
       );
       for (const id of ['b1', 'b2', 'b3'])
         console.log(`[p1-3]   ${id}: ${told(id, stopAt).join(' ')}`);
+      for (const line of stuckLines()) console.log(`[p1-3]   ${line.slice(0, 200)}`);
       expect(settledMs).toBeLessThan(11_000);
       expect(tookMs).toBeGreaterThanOrEqual(0);
+      expect(exit).toMatchObject({ reason: 'stuck-session', signal: 'SIGKILL' });
       await stopping;
 
       // One new host, no second one, nobody's own budget spent but b1's restart.
-      expect(oldHost.exitCode !== null || oldHost.signalCode !== null).toBe(true);
+      expect(oldHost.signalCode).toBe('SIGKILL');
       expect(liveHosts()).toHaveLength(1);
       expect(supervisor.status()).toMatchObject({
         state: 'ready',
@@ -994,12 +1056,30 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         )
       ).toBe(true);
       expect(told('b3', stopAt)[0]).toBe('status:disconnected/engine_restarted');
-      // The stuck agent's tool went with the old host.
-      expect(await until(() => processesWith(`sleep-tool ${sleeper}`).length === 0, 5_000)).toBe(
-        true
+      // One hold, on the old host only: resuming b1 does not re-run the call.
+      const holds = stuckLines().filter((line) => line.includes(' holding '));
+      expect(holds).toHaveLength(1);
+      expect(processesWith(`sleep-tool ${stuckToken}`)).toHaveLength(0);
+      // b1's history accounts for the held call: a result with no outcome.
+      const heldCallId = holds[0].match(/bash call (\S+);/)?.[1];
+      const blocksAfter = (id: string) =>
+        forSession(id, stopAt)
+          .filter((e) => e.type === 'session.history')
+          .flatMap((e) => (e.payload?.messages as Array<{ blocks?: unknown[] }> | undefined) ?? [])
+          .flatMap((message) => (message.blocks ?? []) as Array<Record<string, unknown>>);
+      expect(heldCallId).toBeDefined();
+      expect(
+        blocksAfter('b1').some(
+          (block) =>
+            block.type === 'tool_result' && block.toolCallId === heldCallId && block.ok === false
+        )
+      ).toBe(true);
+      // Observed (decision 151): whether b2's streamed text outlived the SIGKILL.
+      const keptStream = blocksAfter('b2').some((block) =>
+        String(block.text ?? '').includes('STREAMED-P13CPACED')
       );
+      console.log(`[p1-3]   b2's streamed text in its history after the restart: ${keptStream}`);
 
-      shared.dropToHost = null;
       const results = await Promise.all(
         ['b1', 'b2', 'b3'].map((id, index) =>
           turn(manager, id, 'P0-STREAM: stream a paragraph back to me.', 10 + index)

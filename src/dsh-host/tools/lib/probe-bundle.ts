@@ -75,3 +75,31 @@ export function installProbeBundle(
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   return { profileDir, bundles };
 }
+
+/**
+ * Undoes `installProbeBundle` on a DSH_HOME whose host has exited, so a later
+ * host on the same home starts from the product's own profile (P1-3e: one
+ * phase of the shared-host integration test layers the bundle, the rest
+ * must not see it). Idempotent.
+ */
+export function removeProbeBundle(dshHome: string): void {
+  const profileDir = join(dshHome, 'profiles', PROBE_PROFILE);
+  for (const target of [
+    join(profileDir, VENDORED_DIR),
+    join(profileDir, 'node_modules', '@aiclient', 'dsh-probe'),
+  ]) {
+    rmSync(target, { recursive: true, force: true });
+  }
+  const manifestPath = join(profileDir, 'package.json');
+  if (!existsSync(manifestPath)) return;
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as ProfileManifest;
+  if (manifest.dependencies) {
+    const { [PROBE_BUNDLE]: _probe, ...rest } = manifest.dependencies;
+    manifest.dependencies = rest;
+  }
+  const bundles = manifest.dsh?.profile?.bundles;
+  if (Array.isArray(bundles) && manifest.dsh?.profile) {
+    manifest.dsh.profile.bundles = bundles.filter((name) => name !== PROBE_BUNDLE);
+  }
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+}

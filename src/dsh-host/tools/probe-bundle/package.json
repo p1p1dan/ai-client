@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "license": "MIT",
-  "description": "Test-only DSH bundle for the ai-client probe drivers: the aiclient-probe IPC row (auto-approves), the P0-6 measurement row and compaction switch. Copied into a probe DSH_HOME profile; never part of the app build.",
+  "description": "Test-only DSH bundle for the ai-client probe drivers: the aiclient-probe IPC row (auto-approves), the P0-6 measurement row and compaction switch, and the P1-3e stuck-tool switch. Copied into a probe DSH_HOME profile; never part of the app build.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
     "./measure": "./lib/measure.js",
     "./perm-experiment": "./lib/perm-experiment.js",
+    "./stuck": "./lib/stuck.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./package.json": "./package.json"
   },

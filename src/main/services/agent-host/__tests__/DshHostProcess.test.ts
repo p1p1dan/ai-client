@@ -533,9 +533,12 @@ describe('the plugin selection in the launch (P1-10b, decision 110)', () => {
       ...SHELL_ENV,
       AICLIENT_DSH_PLUGINS: '{"@evil/bundle":true}',
       AICLIENT_DSH_PROBE_BUNDLE: '1',
+      // P1-3e (decision 151): the probe bundle's stuck-tool switch.
+      AICLIENT_DSH_PROBE_STUCK_TOOL: 'P13ESTUCK',
     });
     expect(env).toEqual({ ...INHERITED, ...EXPLICIT });
     expect(isStrippedDshHostEnvName('AICLIENT_DSH_PROBE_BUNDLE')).toBe(true);
+    expect(isStrippedDshHostEnvName('AICLIENT_DSH_PROBE_STUCK_TOOL')).toBe(true);
     expect(DSH_SENSITIVE_ENV_PATTERN.test(DSH_HOST_PLUGINS_ENV)).toBe(false);
   });
 
