@@ -23,3 +23,7 @@
 ## 补记（2026-09-29，P1-11，[决策 127](127-p1-11-remove-pi-tui-choices.md)）
 
 第 3 条已落实：内嵌 pi TUI 删除后，`PiModelConfigService` 只写 `models.json`，不再写 `auth.json`；T082 的「保管箱一变就重写 `auth.json`」一并删除（决策 127 第 6、7 条）。升级前留在磁盘上的 `auth.json` 不主动删除，只在登出时照旧删掉（第 8 条，待审批；备选是启动时一次性删除）。
+
+## 补记（2026-10-07，P1-5e，[决策 152](152-p1-5e-managed-key-vault-choices.md)）
+
+第 2 条已落实，口径按[决策 149](149-user-rulings-2026-10-07.md) 第 2 条：`managed-models-source.json` 不再含管理员 key，只保留 `credentials.apiKey: 'managed'`；key 存进保险库的 `managedProviderKeys` 组，有钥匙串时加密，Linux 没有钥匙串时是 `enc: none`、0600，与登录 key 同级。老版本留下的明文缓存在首次读取或下次同步时迁入保险库。登出与重新登录都会清掉这一组。
