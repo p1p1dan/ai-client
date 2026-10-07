@@ -22,7 +22,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   1. 推送分支，并推一份到 `ci/dsh-p1-6d-windows` 跑 S18 两路；手动触发 `build.yml` 在 CI 上整包构建并跑打包冒烟 L1（本机不跑整包构建）；
   2. ✅ P1-4e 录制门禁进 CI（`16e94be8`，决策 133 待审批）；
   3. ✅ P1-7d GUI 点验三批做完（50 项）；✅ 修复五组（P1-7e）全部落地，下一步复点验改过的项目。真实网关 R1～R10 放到 P1-7e 之后，要用户在开发版里登录公司账号，编排者不经手凭据；
-  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI run 37170324111 全部 job 通过）；✅ 第 4 步 `3d679576`～`4db4376a`（10-07，`src/agent-host` 删除、内部改名），待推送后整包 CI。
+  4. P1-12 删除自有 runtime，前提是 Windows CI 与 P1-7d 都通过。2026-10-01 进行中：方案 [topics/p1-12-retire-runtime.md](topics/p1-12-retire-runtime.md)，用户裁决见[决策 147](decisions/147-p1-12-retire-runtime.md)（先做第 1～3 步，Windows 整包 CI 通过后再做第 4 步）；✅ 第 1 步 `ca6cd1a9`，`1.1.0-dsh.3` 整包 `build.yml`（run 36895051539）全部 job 通过；✅ 第 2 步 `68f6fccd`、`9061fc26`；✅ 第 3 步 `fe4b9b7e`～`30245837`（10-03，`1.1.0-dsh.4` 整包 CI run 37170324111 全部 job 通过）；✅ 第 4 步 `3d679576`～`4db4376a`（10-07，`src/agent-host` 删除、内部改名）。**P1-12 已于 10-07 收口**；用户决定不单独推送，第 4 步的整包 CI 随 P1-14 的下一次推送。
 - **2026-09-29 第一次 Windows CI 结果**（推送 `a8cce6f2`）：
   - S18 两路（admin / 标准用户）全部通过；`build.yml` 的 gate（四套 tsc、lint、全量单测、runtime 冒烟）、Linux 整包构建与 L1 通过；macOS 是已知的 hdiutil 问题（与本分支无关，决策 090 不做 macOS）。
   - **Windows 打包冒烟 L1 失败 3 项**（本分支第一次在 Windows 上跑打包宿主）：
@@ -68,6 +68,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
   - `3d679576` 搬家并删除 `src/agent-host`：bridge 的 RPC 服务端与错误类型进 `src/dsh-host/bridge/`，`stderrRedaction` 与 `credentialSamples` 进 `src/shared/`，`codexItemMapper` 与 codex 夹具进 `src/main/services/legacyImport/`；删 `typecheck:agent-host`，只剩两套 tsc；build.yml gate 改为 x/5；`BRIDGE_ENTRIES`、`build-dsh-host` 脏检查、扫描测试的根、根 tsconfig 同步；`runtimeRetiredStatic` 新增 3 例。`e890aa7c` 补一处注释出处。
   - `d26f4e6b` 内部改名：`PiWorkerRpcServer` → `BridgeRpcServer`、`PiWorkerSessionError` → `BridgeSessionError`、`createPiWorkerSlot` → `createDshChatSlot`、`WorkerManager` 日志前缀 `[pi-worker:` → `[dsh-chat:` 等；线上协议、错误码与错误文案、环境变量、IPC 名、设置键、`agent: 'pi'`、Main 目录 `services/agent-host/` 都没改。
   - **请用户过目**：日志前缀改名后，查 1.0.x 日志仍要搜 `[pi-worker:`；AGENTS.md 模块表那一行按现状改写，超出了「只改开发命令」（原本留给 P1-14）。
+  - 收口：编排者在最终代码上按目录分批跑全量单测，渲染层 321 个文件 5299 例、Main / preload / shared 202 个文件 3355 例（跳过 35）、dsh-host 与 scripts 52 个文件 968 例（跳过 11）、`src/__tests__` 2 例，全部通过。
   - 代理自测（最终代码）：两套 tsc、lint；Static 759 例、`src/shared/__tests__` 437 例、scripts 208 例、`src/dsh-host` 760 例、`src/main/services` 1485 例、改过的其他目录 321 例；bridge-smoke 66 项；`--check` 28 个场景 0 差异；集成 35/35；宿主产物 82.6 MiB、L1 44 项。lockfile 未变。编排者复跑两套 tsc、Static / Scan / Wiring 759 例、`src/shared/__tests__` 437 例。全量单测与打包交推送后的 CI。
 - 2026-10-04 P1-12 第 3 步整包 CI：`1.1.0-dsh.4` 第一次触发（run 37170010400，`d961c08d`）gate 失败，原因是 `runtimeRetiredStatic` 在 CI 满负载下全仓扫描超时，`f847f66d` 改为每个文件只解析一次后重触发；run 37170324111（`f847f66d`）全部 job 通过：gate、Windows / Linux / macOS 整包与打包验证、远程 runtime。Windows、Linux 的「Verify packaged app」都报「no native worker or runtime」（含 app.asar 反向检查），Windows 带空格路径 L1 冒烟 44 项通过；`dsh-bridge-gate` 的 `--frozen-lockfile` 通过。安装包继续变小（Actions artifact 压缩后大小，对比第 1 步的 run 36895051539）：Windows 安装包 197.8 → 191.7 MB，Windows 解包目录 288.1 → 279.2 MB，Linux 包 196.6 → 189.8 MB，macOS 包 435.9 → 417.1 MB。只作 Actions artifact，不建 Release。
 - 2026-10-03 P1-12 第 3 步（[决策 147](decisions/147-p1-12-retire-runtime.md) 第二节「第 3 步」，待审批），基线 `36d1e02c`：
@@ -295,7 +296,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-没有在跑的代理。P1-12 第 4 步已落地（`3d679576`～`4db4376a`），等用户同意后升版本到 `1.1.0-dsh.5`、推送并手动触发 `build.yml`；CI 全绿后 P1-12 收口，进入 P1-14。
+P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作；正在盘点 🟡 各行的剩余项。下一次推送前先升版本到 `1.1.0-dsh.5`。
 
 本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
