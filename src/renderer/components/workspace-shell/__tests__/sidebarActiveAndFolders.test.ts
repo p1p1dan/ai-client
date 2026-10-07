@@ -451,6 +451,27 @@ describe('the rename editor keeps its focus (point-check issue 26)', () => {
     expect(mocks.rename).not.toHaveBeenCalled();
   });
 
+  // Decision 156 (decision 145's finding 7): the keyboard user's next key goes
+  // to the row they were renaming, not to <body>.
+  it('E156-7: Escape hands focus back to the row it was renaming', async () => {
+    await render();
+    await act(async () => {
+      rows('Chat a')[0]?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    const input = editor() as HTMLInputElement;
+    expect(document.activeElement).toBe(input);
+    await typeInto(input, 'Discarded');
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    });
+    await flush();
+    expect(editor()).toBeNull();
+    const row = rows('Chat a')[0];
+    expect(row, 'the row is back').toBeTruthy();
+    expect(document.activeElement).toBe(row);
+    expect(mocks.rename).not.toHaveBeenCalled();
+  });
+
   it('E6-36: Escape inside the dock cancels the rename instead of folding the sidebar', async () => {
     // The dock's own capture-phase rule, as `LeftDock` applies it to the panel
     // that hosts this list (point-check issue 36: it took the key first).

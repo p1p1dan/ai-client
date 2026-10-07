@@ -1191,6 +1191,11 @@ function SessionRow({
   // How many times a blur the user did not ask for is undone per edit — a cap
   // so the editor cannot fight a dialog's focus trap forever.
   const refocusBudgetRef = useRef(0);
+  // Decision 156 (decision 145's finding 7): the row the editor replaced, and
+  // whether focus goes back to it once the editor is gone. Escape cancels from
+  // the keyboard; leaving focus on <body> made the next key go nowhere.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const refocusRowRef = useRef(false);
 
   const endEditing = () => {
     renamingRef.current = false;
@@ -1210,8 +1215,15 @@ function SessionRow({
 
   const cancelRename = () => {
     setDraft(row.title);
+    refocusRowRef.current = true;
     endEditing();
   };
+
+  useEffect(() => {
+    if (editing || !refocusRowRef.current) return;
+    refocusRowRef.current = false;
+    rowRef.current?.focus();
+  }, [editing]);
 
   const beginRename = () => {
     renamingRef.current = true;
@@ -1306,6 +1318,7 @@ function SessionRow({
     <>
       <ContextMenuPrimitive.Root>
         <ContextMenuPrimitive.Trigger
+          ref={rowRef}
           className={cn(
             // --hover / --selection are two distinct steps of the same Flexoki
             // interactive ramp; neither takes a /N modifier.

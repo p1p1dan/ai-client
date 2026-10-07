@@ -2,6 +2,7 @@
 
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { XIcon } from 'lucide-react';
+import { type Ref, useCallback, useRef } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTrafficLightsGuard } from '@/hooks/useTrafficLightsGuard';
 import { useI18n } from '@/i18n';
@@ -40,6 +41,52 @@ function DialogBackdrop({ className, ...props }: DialogPrimitive.Backdrop.Props)
   );
 }
 
+/** A `ScrollArea` viewport: tabbable (`tabIndex=0`) so the keyboard can scroll it. */
+const SCROLL_VIEWPORT_SELECTOR = '[data-slot="scroll-area-viewport"]';
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button',
+  'input',
+  'select',
+  'textarea',
+  'iframe',
+  'summary',
+  '[tabindex]',
+  '[contenteditable]:not([contenteditable="false"])',
+].join(',');
+
+function isTabbable(element: HTMLElement): boolean {
+  if (element.tabIndex < 0) return false;
+  if ((element as HTMLButtonElement).disabled) return false;
+  if (element instanceof HTMLInputElement && element.type === 'hidden') return false;
+  return element.closest('[hidden],[inert]') === null;
+}
+
+/**
+ * dsh-rebase decision 156 (decision 145 §18, for every dialog): where focus
+ * goes when a dialog opens and its caller did not say.
+ *
+ * Base UI focuses the popup's first tabbable element. A `DialogPanel` wraps
+ * its content in a `ScrollArea` whose viewport is tabbable — and tabbable at
+ * that moment even when nothing overflows, because the overflow is measured a
+ * microtask after mount — so a dialog whose panel came first opened with focus,
+ * and its focus ring, on the scroll region. When the first tabbable element is
+ * a scroll region, focus goes to the first one that is not (a field inside the
+ * panel, a footer button, the close button), else to the popup itself. The
+ * scroll region stays in the Tab order. Every other case keeps Base UI's own
+ * choice (`true`), and a touch open focuses the popup as Base UI does.
+ */
+export function dialogInitialFocus(
+  popup: HTMLElement | null,
+  interactionType: string
+): boolean | HTMLElement {
+  if (!popup) return true;
+  if (interactionType === 'touch') return popup;
+  const tabbable = [...popup.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(isTabbable);
+  if (!tabbable[0]?.matches(SCROLL_VIEWPORT_SELECTOR)) return true;
+  return tabbable.find((element) => !element.matches(SCROLL_VIEWPORT_SELECTOR)) ?? popup;
+}
+
 function DialogViewport({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
@@ -63,6 +110,8 @@ function DialogPopup({
   showBackdrop = true,
   zIndexLevel = 'base',
   style,
+  initialFocus,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean;
@@ -70,8 +119,19 @@ function DialogPopup({
   disableNestedTransform?: boolean;
   showBackdrop?: boolean;
   zIndexLevel?: 'base' | 'nested';
+  ref?: Ref<HTMLDivElement>;
 }) {
   const { t } = useI18n();
+  // Decision 156: the popup element, for the default initial focus below.
+  const popupRef = useRef<HTMLDivElement | null>(null);
+  const setPopupRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      popupRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref]
+  );
   const mergedStyle = disableNestedTransform
     ? ({ ...(style ?? {}), '--nested-dialogs': 0 } as React.CSSProperties)
     : style;
@@ -99,6 +159,11 @@ function DialogPopup({
           style={mergedStyle}
           data-slot="dialog-popup"
           {...props}
+          ref={setPopupRef}
+          initialFocus={
+            initialFocus ??
+            ((interactionType) => dialogInitialFocus(popupRef.current, interactionType))
+          }
         >
           {children}
           {showCloseButton && (

@@ -100,6 +100,9 @@ async function mountPane(): Promise<void> {
 async function openSelectOptions(triggerLabel: string): Promise<HTMLElement[]> {
   const trigger = byLabel(triggerLabel);
   if (!trigger) throw new Error(`no select trigger labelled ${triggerLabel}`);
+  const listsBefore = new Set(document.querySelectorAll<HTMLElement>('[role="listbox"]'));
+  // Focused when the dialog opened: its list is the one already mounted.
+  const focusedAtOpen = document.activeElement === trigger && listsBefore.size === 1;
   await act(async () => {
     trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   });
@@ -109,7 +112,19 @@ async function openSelectOptions(triggerLabel: string): Promise<HTMLElement[]> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 40));
   });
-  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  // Decision 156: the options of THIS select's list — the one these steps
+  // mounted. The dialog now opens with focus on its first field, the Service
+  // select, and a Base UI select mounts its (closed) items as soon as its
+  // trigger is focused, so a document-wide query also read the Service list.
+  const lists = focusedAtOpen
+    ? [...listsBefore]
+    : [...document.querySelectorAll<HTMLElement>('[role="listbox"]')].filter(
+        (list) => !listsBefore.has(list)
+      );
+  if (lists.length !== 1) {
+    throw new Error(`expected the ${triggerLabel} select to mount one list, got ${lists.length}`);
+  }
+  return [...(lists[0] as HTMLElement).querySelectorAll<HTMLElement>('[role="option"]')];
 }
 
 async function mountDialog(editing?: UserProviderView): Promise<void> {
