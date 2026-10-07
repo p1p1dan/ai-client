@@ -15,11 +15,11 @@ Role: topic
 ## (a) 类工作，按顺序做（本机一次一个代理）
 
 1. **P1-5d 协议收口**：`ProviderSetupDialog.tsx` 仍列 10 种协议（来自 `userProviders.ts`），已有服务不标「暂不支持」。按决策 036 第 2 条：新建只能选三种协议并附说明，已有的其他协议标「当前引擎不支持」，预设也过滤。
-2. **P1-5e 管理员 key 缓存加密**：`PiModelConfigService.ts` 仍明文 `atomicWriteJson(this.sourcePath, config, 0o600)`，`configValidation.ts` 允许 managed 的 apiKey 进这份配置；R10 零命中说明公司目录目前不下发 managed key，风险是潜伏的。动手前要定 Linux 无钥匙串（保险库 `enc: none`）时的口径。
+2. **P1-5e 管理员 key 缓存加密**：`PiModelConfigService.ts` 仍明文 `atomicWriteJson(this.sourcePath, config, 0o600)`，`configValidation.ts` 允许 managed 的 apiKey 进这份配置；R10 零命中说明公司目录目前不下发 managed key，风险是潜伏的。Linux 无钥匙串时的口径已由[决策 149](../decisions/149-user-rulings-2026-10-07.md) 第 2 条裁决：跟保险库一致。
 3. **P1-5 E8 实验**：同进程插件能否读到 IPC 上的凭据应答（`p1-10-p1-16-extensions.md` §4.5）；写测试插件在真宿主上跑，结论写进决策。
 4. **P1-3e**：给 `tools/probe-bundle` 加「审批处理器不理会 abort」的卡死开关，集成测试 S5 改用它（现在在 IPC 层丢消息模拟）；补 `evidence/p1-3-shared-host-<日期>.md`。
 5. **P1-8c 接 CI**：`dsh-bridge-gate.yml` 加 loop-guard-smoke 与 LC-0～2 硬门槛（决策 067 第 5 条）；可顺带写 P1-3e 的 Windows 杀宿主场景。只写工作流，随下一次推送生效。
-6. **可选界面小修**（先问用户要不要在合入前做）：决策 145「发现（本组没有改）」（`i18n.ts` 仍有「Agent Host」、10 px 中文、读屏原语读英文、DialogPanel 焦点框、error 会话留在「正在活动」、改名 Esc 后焦点不回）；决策 146 第 13 条（指定模型时评审标题是原始 id）、第 22 条（失败回合直播空消息与回放注记并存）。
+6. **界面小修**（[决策 149](../decisions/149-user-rulings-2026-10-07.md) 第 3 条：合入前做，#44、`Session xxxxxx`、`Archive` 三条单独问用户）：决策 145「发现（本组没有改）」（`i18n.ts` 仍有「Agent Host」、10 px 中文、读屏原语读英文、DialogPanel 焦点框、error 会话留在「正在活动」、改名 Esc 后焦点不回）；决策 146 第 13 条（指定模型时评审标题是原始 id）、第 22 条（失败回合直播空消息与回放注记并存）。
 7. **文档收口**（最后做）：roadmap 各行状态；看板的 Current Phase、Next Target、Blocked By；决策 131～147 的审批汇总；runtime-hardening 回写；出站代理决策（roadmap 写「在 P1-3 定」，没有记录）；P1-13 第二轮上机手册；`CLAUDE.md`、`handoff-2026-09-28.md`、ARD 的过期内容；P1-2 证据补 CI 安装包大小；可选的 P1-6 用例数证据。
 
 ## (b) 类（需推送或需用户）
