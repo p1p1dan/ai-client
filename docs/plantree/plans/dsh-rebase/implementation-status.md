@@ -296,7 +296,7 @@ P1 分支内 DSH 替换。全部任务已出方案（[roadmap](roadmap.md)，决
 
 ## Active TODO
 
-P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作；正在盘点 🟡 各行的剩余项。下一次推送前先升版本到 `1.1.0-dsh.5`。
+P1-12 已收口（10-07）。用户 10-07 决定暂不推送打包，先做 P1-14 之前本机能做的剩余工作，清单与顺序见 [topics/pre-p1-14-remaining-2026-10-07.md](topics/pre-p1-14-remaining-2026-10-07.md)：P1-5d → P1-5e → E8 → P1-3e → P1-8c 工作流 →（可选界面小修，先问用户）→ 文档收口。10-07 派 P1-5d。下一次推送前先升版本到 `1.1.0-dsh.5`。
 
 本地遗留（用户决定）：`.gitignore` 的 `out-agent-host/` 与 `biome.json` 的对应忽略、本机 132 MB 的旧 `out-agent-host/` 产物；根目录 npm 旧锁文件 `package-lock.json` 仍列着 pi-coding-agent（pnpm 不读，只在发版时同步版本号）。
 
