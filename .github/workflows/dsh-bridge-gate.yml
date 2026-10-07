@@ -12,6 +12,15 @@ name: DSH bridge gate
 # Alongside: the DSH host's typecheck, and the two suites that read the same
 # samples (the renderer replay and the history projection). A manual run can
 # add the broader headless smoke (bridge-smoke.ts), which is not a gate yet.
+#
+# P1-8c (decisions 065-067, 154) adds two more real-host checks on the same
+# fake gateway: loop-guard-smoke.ts (the aiclient-loop-guard row, scenarios
+# G1-G7 and experiments E1-E6 — every one of them a hard gate) and
+# contention-regression.ts (long-session contention, scenarios LC-0..LC-2).
+# The latter already splits hard gates (decision 067: fail the job) from
+# soft gates (reported in the job summary, never fail the job) in its own
+# exit code; this workflow does not re-implement that split, only reads it.
+#
 # Nothing here pushes, publishes or signs anything.
 on:
   push:
@@ -35,11 +44,13 @@ concurrency:
 jobs:
   record:
     runs-on: ubuntu-latest
-    # Estimated, not yet measured: about 5 min cold (installs, typecheck, the
-    # recording's 51 s on the 2-core dev box, two test files), times 3 rounded
-    # up to 20; 30 leaves room for a dispatched smoke, which has its own cap.
-    # Re-derive from the first green runs.
-    timeout-minutes: 30
+    # Measured on the 2-core dev box (P1-8c, 2026-10-07): loop-guard-smoke
+    # took 56 s, contention-regression (LC-0..LC-2, --runs 1) took 70 s. The
+    # rest (installs, typecheck, the recording's 51 s, two test files) is
+    # still an estimate, about 5 min cold. Raw push path ~7 min, times 3
+    # rounded up to 30; +10 min leaves room for a dispatched smoke, which has
+    # its own 15 min cap. Re-derive from the first green runs.
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -99,6 +110,66 @@ jobs:
       - name: Replay and projection suites
         if: ${{ !cancelled() && steps.node.outcome == 'success' }}
         run: pnpm exec vitest run src/renderer/stores/__tests__/dshStreamReplay.test.ts src/shared/dshHistory/__tests__/dshHistoryGolden.test.ts
+
+      # P1-8c (decisions 065, 081): the aiclient-loop-guard row on a real
+      # host, scenarios G1-G7 and experiments E1-E6. Every check here is a
+      # hard gate — the script's own exit code already reflects that.
+      - name: Loop guard smoke (G1-G7, E1-E6)
+        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          mkdir -p "$RUNNER_TEMP/dsh-loop-guard-smoke"
+          out-node-runtime/node src/dsh-host/tools/loop-guard-smoke.ts --out "$RUNNER_TEMP/dsh-loop-guard-smoke/report.json"
+
+      - name: Upload the loop guard smoke report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-loop-guard-smoke
+          path: ${{ runner.temp }}/dsh-loop-guard-smoke
+          if-no-files-found: warn
+          retention-days: 14
+
+      # P1-8c (decision 067): long-session contention, scenarios LC-0..LC-2.
+      # The script already separates hard gates (its own exit code) from
+      # soft gates (reported, never failing); this step only reads that.
+      - name: Contention regression (LC-0..LC-2)
+        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        timeout-minutes: 15
+        run: |
+          mkdir -p "$RUNNER_TEMP/dsh-contention-regression"
+          out-node-runtime/node src/dsh-host/tools/contention-regression.ts --out "$RUNNER_TEMP/dsh-contention-regression/report.json"
+
+      - name: Contention regression soft-gate summary
+        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const reportPath = process.argv[1];
+            const lines = ["### Contention regression (LC-0..LC-2)", ""];
+            if (!fs.existsSync(reportPath)) {
+              lines.push("No report written (the host likely crashed before producing one).");
+            } else {
+              const report = JSON.parse(fs.readFileSync(reportPath, "utf8"));
+              const soft = report.softWarnings ?? [];
+              if (soft.length === 0) {
+                lines.push("No soft-gate warnings (decision 067).");
+              } else {
+                lines.push("Soft-gate warnings (decision 067: reported only, never fail the job):");
+                for (const warning of soft) lines.push(`- ${warning}`);
+              }
+            }
+            fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join("\n")}\n`);
+          ' "$RUNNER_TEMP/dsh-contention-regression/report.json"
+
+      - name: Upload the contention regression report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-contention-regression
+          path: ${{ runner.temp }}/dsh-contention-regression
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload the recording on failure
         if: failure()
