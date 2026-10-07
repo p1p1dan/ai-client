@@ -6,7 +6,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /** H/17 L3/L5 — the AI services pane and its form, against a stubbed bridge. */
 
-vi.mock('@/i18n', () => ({ useI18n: () => ({ t: (key: string) => key, locale: 'en' }) }));
+// Substitutes `{{token}}` the same way `translate()` does, so P1-5d's
+// assertions can check the actual interpolated text (e.g. which protocol a
+// warning names) rather than the raw template.
+vi.mock('@/i18n', () => ({
+  useI18n: () => ({
+    t: (key: string, params?: Record<string, string | number>) =>
+      params
+        ? key.replace(/\{\{(\w+)\}\}/g, (match, token: string) =>
+            token in params ? String(params[token]) : match
+          )
+        : key,
+    locale: 'en',
+  }),
+}));
 
 import { ProviderSetupDialog } from '../ProviderSetupDialog';
 import { UserProvidersSettings } from '../UserProvidersSettings';
@@ -78,6 +91,27 @@ async function mountPane(): Promise<void> {
   await settle();
 }
 
+/**
+ * Open a Base UI select by its trigger's `aria-label` and return its
+ * `[role="option"]` nodes. Same open sequence `providerIdleTimeoutSection.test.ts`
+ * and `terminalInteraction.test.ts` use: the keydown arms the popup, the click
+ * commits, and the timeout lets the positioner settle.
+ */
+async function openSelectOptions(triggerLabel: string): Promise<HTMLElement[]> {
+  const trigger = byLabel(triggerLabel);
+  if (!trigger) throw new Error(`no select trigger labelled ${triggerLabel}`);
+  await act(async () => {
+    trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  });
+  await act(async () => {
+    trigger.click();
+  });
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 40));
+  });
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+}
+
 async function mountDialog(editing?: UserProviderView): Promise<void> {
   await act(() =>
     root.render(
@@ -140,6 +174,23 @@ describe('UserProvidersSettings', () => {
     });
     await settle();
     expect(text()).toContain('Could not save AI services: crypto_not_ready');
+  });
+
+  it('flags a service whose protocol the current chat engine cannot use (P1-5d)', async () => {
+    api.get.mockResolvedValue({
+      providers: [provider({ api: 'google-generative-ai' })],
+      encrypted: true,
+    });
+    await mountPane();
+
+    expect(text()).toContain('Not supported by the current engine');
+  });
+
+  it('does not flag a service whose protocol the engine supports', async () => {
+    api.get.mockResolvedValue({ providers: [provider()], encrypted: true });
+    await mountPane();
+
+    expect(text()).not.toContain('Not supported by the current engine');
   });
 });
 
@@ -210,6 +261,88 @@ describe('ProviderSetupDialog', () => {
 
     expect(api.fetchModels.mock.calls[0][0]).toMatchObject({ id: 'svc-1' });
     expect(api.fetchModels.mock.calls[0][0]).not.toHaveProperty('apiKey');
+  });
+});
+
+/**
+ * P1-5d (decision 036 rule 2, decision 148) — the chat route only speaks
+ * `openai-completions`, `openai-responses` and `anthropic-messages`. The form
+ * narrows what a NEW service can pick to those three, and for an EXISTING
+ * service already stored with a different one, shows it rather than silently
+ * rewriting or dropping it on save.
+ */
+describe('ProviderSetupDialog — protocol narrowing (P1-5d)', () => {
+  it('offers only the three DSH-supported API styles when adding a service', async () => {
+    await mountDialog();
+
+    const options = await openSelectOptions('API style');
+    expect(options.map((option) => option.textContent?.trim())).toEqual([
+      'OpenAI Chat Completions',
+      'OpenAI Responses',
+      'Anthropic Messages',
+    ]);
+  });
+
+  it('offers exactly the same three when editing a service that already uses one', async () => {
+    await mountDialog(provider({ api: 'anthropic-messages' }));
+
+    const options = await openSelectOptions('API style');
+    expect(options).toHaveLength(3);
+  });
+
+  it('pins an unsupported protocol into the list, labelled as unsupported, when editing', async () => {
+    await mountDialog(provider({ api: 'google-generative-ai' }));
+
+    const options = await openSelectOptions('API style');
+    expect(options.map((option) => option.textContent?.trim())).toEqual([
+      'OpenAI Chat Completions',
+      'OpenAI Responses',
+      'Anthropic Messages',
+      'Google Generative AI (not supported by the current engine)',
+    ]);
+  });
+
+  it('warns, naming the protocol, when editing a service with an unsupported one', async () => {
+    await mountDialog(provider({ api: 'mistral-conversations' }));
+
+    expect(text()).toContain(
+      'This service uses Mistral Conversations, which the current chat engine cannot use. Pick one of the styles above, or remove the service.'
+    );
+  });
+
+  it('does not warn when editing a service whose protocol is supported', async () => {
+    await mountDialog(provider({ api: 'openai-responses' }));
+
+    expect(text()).not.toContain('which the current chat engine cannot use');
+    expect(text()).toContain('Only these three API styles work with the current chat engine.');
+  });
+
+  it('keeps an unsupported protocol on save when the API style field is left untouched', async () => {
+    api.upsert.mockResolvedValue(provider({ api: 'google-generative-ai' }));
+    await mountDialog(provider({ api: 'google-generative-ai' }));
+
+    const save = [...document.body.querySelectorAll('button')].find(
+      (button) => button.textContent?.trim() === 'Save'
+    );
+    await act(async () => save?.click());
+    await settle();
+
+    // Not silently switched to a supported style, and not left out of the
+    // draft either — exactly the value that was already stored.
+    expect(api.upsert.mock.calls[0][0]).toMatchObject({ api: 'google-generative-ai' });
+  });
+
+  it('does not offer the Google or Mistral presets, whose protocols the engine cannot use', async () => {
+    await mountDialog();
+
+    const options = await openSelectOptions('Service');
+    const labels = options.map((option) => option.textContent?.trim());
+    expect(labels).not.toContain('Google Gemini');
+    expect(labels).not.toContain('Mistral');
+    // The presets that DO use a supported protocol, plus "Custom", are
+    // unaffected — this is a narrowing, not an empty list.
+    expect(labels).toContain('OpenAI');
+    expect(labels).toContain('Custom');
   });
 });
 

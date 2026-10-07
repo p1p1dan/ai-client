@@ -11,6 +11,7 @@
  */
 
 import type { UserProviderState, UserProviderView } from '@shared/userProviders';
+import { isSupportedUserProviderApi } from '@shared/userProviders';
 import { AlertTriangle, Pencil, Plus, Server, ShieldOff, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -142,6 +143,17 @@ export function UserProvidersSettings() {
                   <Badge variant="secondary" className="shrink-0">
                     {apiLabel(provider.api)}
                   </Badge>
+                  {!isSupportedUserProviderApi(provider.api) && (
+                    // dsh-rebase P1-5d (decision 036 rule 2, decision 148): the
+                    // chat route only speaks three styles. Shown rather than
+                    // silently dropped or rewritten — the stored value is kept
+                    // exactly as-is until the user picks a supported style or
+                    // removes the service (edit dialog carries the same check).
+                    <Badge variant="warning" className="shrink-0 gap-1">
+                      <AlertTriangle className="h-3 w-3 shrink-0" />
+                      {t('Not supported by the current engine')}
+                    </Badge>
+                  )}
                 </div>
                 <p className="truncate text-meta text-muted-foreground">{provider.baseUrl}</p>
                 <p className="text-meta text-muted-foreground">

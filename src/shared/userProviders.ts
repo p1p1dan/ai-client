@@ -11,6 +11,11 @@
  * different sets of accepted API styles.
  */
 
+// Deep import, not the `dshModelPlan` barrel (`dshModelPlan/index.ts`): the
+// barrel re-exports `build.ts`, which pulls in `node:crypto`. This module is
+// loaded by the renderer (no Node integration there), so only the leaf file
+// that actually holds the table is imported.
+import { DSH_PROTOCOLS } from './dshModelPlan/tables';
 import { stripRedundantVersion } from './modelBaseUrl';
 
 /**
@@ -39,6 +44,29 @@ export type UserProviderApi = (typeof USER_PROVIDER_APIS)[number];
 
 export function isUserProviderApi(value: unknown): value is UserProviderApi {
   return typeof value === 'string' && (USER_PROVIDER_APIS as readonly string[]).includes(value);
+}
+
+/**
+ * dsh-rebase P1-5d (decision 036 rule 2, decision 148): the subset of
+ * {@link USER_PROVIDER_APIS} the current chat engine — DSH's hand-declared
+ * `llm-pi-ai` route — can actually drive. Equal to `DSH_PROTOCOLS`
+ * (`dshModelPlan/tables.ts`), the same table `dshModelPlan/build.ts` checks
+ * when deciding which catalog models survive translation. Settings and the
+ * model menu's "N models unavailable" footer read the SAME table rather than
+ * each keeping their own copy of "three", so a future DSH upgrade that adds or
+ * drops a protocol only has one place to update.
+ *
+ * {@link USER_PROVIDER_APIS} itself is not narrowed: the stored value and the
+ * wire format must keep taking all ten, both because a service saved before
+ * this restriction (or on a build of the app that still talks pi-ai directly)
+ * must round-trip unharmed, and because `AgentDirMigrationService` validates
+ * an imported `models.json` against the full ten, independent of which engine
+ * the importing build happens to run.
+ */
+export const SUPPORTED_USER_PROVIDER_APIS: readonly UserProviderApi[] = DSH_PROTOCOLS;
+
+export function isSupportedUserProviderApi(api: UserProviderApi): boolean {
+  return (SUPPORTED_USER_PROVIDER_APIS as readonly string[]).includes(api);
 }
 
 /**

@@ -3879,3 +3879,16 @@ Object.assign(zhTranslations, {
   'This was not retried automatically, because retrying right away gets the same answer. Switch to another model or try again later; if it keeps happening, forward the error detail to the gateway administrator.':
     '马上重试只会得到同样的答复，所以没有自动重试。请换一个模型或稍后再试；如果一直这样，请把错误详情转给网关管理员。',
 });
+
+/**
+ * dsh-rebase P1-5d (decision 036 rule 2, decision 148): the AI-services
+ * settings page, narrowed to the three protocols the DSH chat route speaks.
+ */
+Object.assign(zhTranslations, {
+  'Only these three API styles work with the current chat engine.':
+    '当前对话引擎只支持这三种协议。',
+  'This service uses {{api}}, which the current chat engine cannot use. Pick one of the styles above, or remove the service.':
+    '此服务使用的协议是 {{api}}，当前对话引擎无法用它来聊天。可以改选上方的三种协议之一，或删除这个服务。',
+  '{{label}} (not supported by the current engine)': '{{label}}（当前引擎不支持）',
+  'Not supported by the current engine': '当前引擎不支持',
+});

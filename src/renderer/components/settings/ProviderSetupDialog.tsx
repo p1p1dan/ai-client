@@ -22,9 +22,10 @@ import type {
 } from '@shared/userProviders';
 import {
   checkProviderBaseUrl,
+  isSupportedUserProviderApi,
   normalizeProviderBaseUrl,
   PROVIDER_PRESETS,
-  USER_PROVIDER_APIS,
+  SUPPORTED_USER_PROVIDER_APIS,
 } from '@shared/userProviders';
 import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -67,6 +68,19 @@ const API_LABELS: Record<UserProviderApi, string> = {
   'mistral-conversations': 'Mistral Conversations',
   'pi-messages': 'Pi Messages',
 };
+
+/**
+ * dsh-rebase P1-5d (decision 036 rule 2, decision 148): the presets a NEW
+ * service can pick from. `PROVIDER_PRESETS` itself is left whole — it is
+ * `USER_PROVIDER_APIS`-shaped, not DSH-shaped, and stays the record of what
+ * pi-ai's adapters can reach (relevant again if a self-written adapter plugin
+ * is ever built, per decision 036's idea-pool note). Picking a preset only
+ * pre-fills form fields; it writes nothing on its own, so dropping two of the
+ * sixteen entries here cannot lose stored data.
+ */
+const SELECTABLE_PRESETS = PROVIDER_PRESETS.filter((preset) =>
+  isSupportedUserProviderApi(preset.api)
+);
 
 interface ProviderSetupDialogProps {
   open: boolean;
@@ -136,6 +150,21 @@ export function ProviderSetupDialog({
     setBaseUrl(found.baseUrl);
     setApi(found.api);
   }, []);
+
+  // dsh-rebase P1-5d (decision 036 rule 2, decision 148). A new service only
+  // ever has `api` set to one of the three supported styles (the initial
+  // state and every preset in `SELECTABLE_PRESETS` are), so this only widens
+  // the list when editing a service that already carries an unsupported one —
+  // pinning it in rather than leaving it off the list keeps the current
+  // choice visible and selected instead of orphaning it.
+  const selectableApis = useMemo<readonly UserProviderApi[]>(
+    () =>
+      isSupportedUserProviderApi(api)
+        ? SUPPORTED_USER_PROVIDER_APIS
+        : [...SUPPORTED_USER_PROVIDER_APIS, api],
+    [api]
+  );
+  const apiUnsupported = !isSupportedUserProviderApi(api);
 
   const urlIssue = useMemo(() => (baseUrl ? checkProviderBaseUrl(baseUrl) : null), [baseUrl]);
   // On edit, an empty key field means "keep the stored one", so it is not a
@@ -247,7 +276,7 @@ export function ProviderSetupDialog({
                 </SelectValue>
               </SelectTrigger>
               <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_NESTED_MODAL}>
-                {PROVIDER_PRESETS.map((candidate) => (
+                {SELECTABLE_PRESETS.map((candidate) => (
                   <SelectItem key={candidate.id} value={candidate.id}>
                     {candidate.label}
                   </SelectItem>
@@ -285,15 +314,30 @@ export function ProviderSetupDialog({
             />
           </Field>
 
-          <Field label={t('API style')}>
+          <Field
+            label={t('API style')}
+            hint={
+              apiUnsupported
+                ? t(
+                    'This service uses {{api}}, which the current chat engine cannot use. Pick one of the styles above, or remove the service.',
+                    { api: API_LABELS[api] }
+                  )
+                : t('Only these three API styles work with the current chat engine.')
+            }
+            invalid={apiUnsupported}
+          >
             <Select value={api} onValueChange={(value) => setApi(value as UserProviderApi)}>
               <SelectTrigger className="w-full" aria-label={t('API style')}>
                 <SelectValue>{API_LABELS[api]}</SelectValue>
               </SelectTrigger>
               <SelectPopup zIndex={Z_INDEX.DROPDOWN_IN_NESTED_MODAL}>
-                {USER_PROVIDER_APIS.map((style) => (
+                {selectableApis.map((style) => (
                   <SelectItem key={style} value={style}>
-                    {API_LABELS[style]}
+                    {isSupportedUserProviderApi(style)
+                      ? API_LABELS[style]
+                      : t('{{label}} (not supported by the current engine)', {
+                          label: API_LABELS[style],
+                        })}
                   </SelectItem>
                 ))}
               </SelectPopup>
