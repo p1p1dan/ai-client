@@ -1,0 +1,185 @@
+{
+  "role": "evidence data for p1-3-shared-host-2026-10-07.md",
+  "baseline": "feat/dsh-p0-probe 26099763 + 4f461ece (P1-3e)",
+  "machine": "Linux dev box, 2 cores / 3.3 GB, bundled Node v24.18.0, DSH 0.1.7-rc.2",
+  "integration": {
+    "command": "AICLIENT_DSH_INTEGRATION=1 pnpm exec vitest run src/main/services/agent-host/__tests__/dshSharedHost.integration.test.ts",
+    "startedAt": "2026-10-07T10:04:28-04:00",
+    "durationS": 145.67,
+    "tests": {
+      "passed": 35,
+      "total": 35
+    },
+    "lines": [
+      "[p1-3] SIGKILL 1: all three sessions resumed and idle 914 ms after the kill",
+      "[p1-3] systemd scope: the killed host's tool gone 922 ms after the kill",
+      "[p1-3] SIGKILL 2: all three sessions resumed and idle 912 ms after the kill, 2004 ms after the first",
+      "[p1-3] SIGKILL 3: all three sessions resumed and idle 864 ms after the kill, 2872 ms after the first",
+      "[p1-3] dispose right after a turn: 0 projection-cache warning(s)",
+      "[p1-3] gc: {\"ok\":true,\"deleted\":[\"aiclient-g-empty\"],\"stubsDeleted\":1,\"skipped\":{\"claimed\":1,\"content\":5,\"locked\":1},\"ms\":54,\"host\":\"gc-result\",\"id\":2}",
+      "[p1-3] SIGSTOP: judged hung and killed after 24261 ms (bound 30000 ms); every session idle 1118 ms later",
+      "[p1-3] Stop ladder B (stuck tool): abort ignored at 53 ms, settled for the UI at 10043 ms, old host gone at 19571 ms (code null, signal SIGKILL), every session idle 1014 ms later",
+      "[p1-3]   b1: status:stopping stopped(forced) status:idle session.resumed status:idle",
+      "[p1-3]   b2: status:disconnected/engine_restarted failed(dsh_engine_restarted) session.resumed status:idle",
+      "[p1-3]   b3: status:disconnected/engine_restarted session.resumed status:idle",
+      "[p1-3]   [dsh-host:g2:stderr] [dsh-host] warn aiclient-probe-stuck: holding bash call toolu_95313ede-0d02-4a78-84f4-7f562c96c030; its abort will be ignored",
+      "[p1-3]   [dsh-host:g2:stderr] [dsh-host] warn aiclient-probe-stuck: abort ignored: bash call toolu_95313ede-0d02-4a78-84f4-7f562c96c030",
+      "[p1-3]   [dsh-host:g3:stderr] [dsh-host] warn aiclient-probe-stuck: armed: a tool call whose arguments contain \"P13ESTUCK\" is held",
+      "[p1-3]   b2's streamed text in its history after the restart: false",
+      "[p1-3] stuck close: closeSession returned after 6954 ms (host restarted), k2 idle 50 ms later: status:disconnected/engine_restarted session.resumed status:idle",
+      "[p1-3] idle stop: host stopped 3085 ms after the last close",
+      "[p1-4a] preview of a closed session: 5 of 5 rows in 25 ms, log untouched; the resume that followed did write",
+      "[p1-4a] preview after a SIGKILL mid-call: 3 rows, the interrupted turn closed in memory, log untouched; the resume wrote its closer; pages equal exactly",
+      "[p1-4b] rewind: 6 nodes after, 2 on the retired branch; the model saw P0-RECALL present=IT-KEEP-1 missing=IT-DROP-2",
+      "[p1-4b] fork: the child saw P0-RECALL present=IT-KEEP-1 missing=IT-DROP-2; the source took a turn after",
+      "[p1-5] User-Agent sent: deepseek-harness/0.1.7-rc.2 (+https://github.com/deepseek-ai/deepseek-harness)",
+      "[p1-5] KEY-CANARY scanned 80 files under DSH_HOME (19 zstd-decoded), 0 under TMPDIR, 167 B of host stderr, 5 Main log lines",
+      "[p1-15] 3 completions on host pid 57539: 4 git process(es), nothing else spawned",
+      "[p1-6b] Stop with a card up settled in 52 ms",
+      "[p1-9d] first continue of a legacy chat: migrated in 1048 ms, 8 rows resumed; the model saw P0-RECALL present=What do the notes say?,Wrote out/summary.md. missing=notes answer",
+      "[p1-9f] imported 2 conversations as DSH chats in 991 ms; 5 rows resumed; the model saw P0-RECALL present=IMPORT-USER-MARKER,IMPORT-REPLY-MARKER missing=IMPORT-TOOL-OUTPUT"
+    ]
+  },
+  "bridgeSmoke": {
+    "command": "(cd src/dsh-host && ../../out-node-runtime/node tools/bridge-smoke.ts --out /tmp/bs.json)",
+    "wallS": 39.8,
+    "verdicts": 66,
+    "true": 66,
+    "dotEnvNotRead": true
+  },
+  "bridgeRecordCheck": {
+    "command": "out-node-runtime/node src/dsh-host/tools/bridge-record.ts --check",
+    "wallS": 51.6,
+    "scenarios": 28,
+    "differences": 0
+  },
+  "p06Crash": {
+    "command": "(cd src/dsh-host && ../../out-node-runtime/node tools/p0-6-probe.ts crash --runs 1 --out <f>)",
+    "startedAt": "2026-10-07T14:13:57.058Z",
+    "finishedAt": "2026-10-07T14:14:13.103Z",
+    "systemdScope": false,
+    "exitCode": 1,
+    "exitNote": "all three kills done and the report written; the final rmSync of the scratch directory failed with ENOTEMPTY",
+    "machine": {
+      "at": "2026-10-07T14:13:58.068Z",
+      "memAvailableMb": 2018,
+      "memFreeMb": 1209,
+      "swapUsedMb": 1315,
+      "load1": 0.71
+    },
+    "kill1": {
+      "exitObservedMs": 22.2,
+      "orphansAfter1s": [],
+      "locksBefore": {
+        "s1": "held",
+        "s2": "held",
+        "s3": "held"
+      },
+      "locksAfter": {
+        "s1": "free",
+        "s2": "free",
+        "s3": "free"
+      },
+      "locksWhileLive": {
+        "s1": "held",
+        "s2": "held",
+        "s3": "held"
+      },
+      "restartToReadyMs": 879,
+      "allResumedMs": 967,
+      "killToInspectedMs": 3181,
+      "treeBeforeKill": [],
+      "resumeMsPerSession": {
+        "s1": 34,
+        "s2": 17.8,
+        "s3": 13.1
+      },
+      "recall": {
+        "s1": "RECALL:present=crash-probe R1S1,P0-CRASH R1S1 finished missing=- r0 s0",
+        "s2": "RECALL:present=crash-probe R1S2,P0-CRASH R1S2 finished missing=- r0 s0",
+        "s3": "RECALL:present=crash-probe R1S3,P0-CRASH R1S3 finished missing=- r0 s0"
+      }
+    },
+    "kill2": {
+      "exitObservedMs": 21.8,
+      "orphansAfter1s": [
+        "bash -c echo \"sleep-tool R1S5 started\"; sleep 30; echo \"sleep-tool done\"",
+        "sleep 30"
+      ],
+      "locksBefore": {
+        "s1": "held",
+        "s2": "held",
+        "s3": "held",
+        "s4": "held",
+        "s5": "held"
+      },
+      "locksAfter": {
+        "s1": "free",
+        "s2": "free",
+        "s3": "free",
+        "s4": "free",
+        "s5": "free"
+      },
+      "locksWhileLive": {
+        "s1": "held",
+        "s2": "held",
+        "s3": "held",
+        "s4": "held",
+        "s5": "held"
+      },
+      "restartToReadyMs": 745,
+      "allResumedMs": 1601,
+      "killToInspectedMs": 3783,
+      "treeBeforeKill": [
+        "bash -c echo \"sleep-tool R1S5 started\"; sleep 30; echo \"sleep-tool done\"",
+        "sleep 30"
+      ],
+      "resumeMsPerSession": {
+        "s1": 34.1,
+        "s2": 15.4,
+        "s3": 17.8,
+        "s4": 15.5,
+        "s5": 14.5
+      },
+      "recall": {
+        "s2": "RECALL:present=crash-probe R1S2,P0-CRASH R1S2 finished missing=- r0 s0",
+        "s1": "RECALL:present=crash-probe R1S1,P0-CRASH R1S1 finished missing=- r0 s0",
+        "s4": "RECALL:present=R1S4 missing=STREAMED-R1S4 r0 s0",
+        "s3": "RECALL:present=crash-probe R1S3,P0-CRASH R1S3 finished missing=- r0 s0",
+        "s5": "RECALL:present=R1S5 missing=sleep-tool R1S5 started r0 s0"
+      }
+    },
+    "kill2GuiBeforeKill": {
+      "s4Deltas": 19,
+      "toolRunning": true,
+      "streaming": true
+    },
+    "kill3": {
+      "exitObservedMs": 25.3,
+      "restartToReadyMs": 857,
+      "parallelResumeMs": [75.8, 76.5, 75, 77.2, 78],
+      "allResumedAfterReadyMs": 78.3,
+      "killToAllResumedMs": 964
+    },
+    "wedge": {
+      "lockWhileStopped": "held",
+      "whileStopped": {
+        "ok": false,
+        "error": "rpc: {\"code\":\"session_locked\",\"message\":\"DSH session aiclient-s1 is held by another process\",\"retryable\":true}"
+      },
+      "afterKill": {
+        "ok": true,
+        "ms": 31.4
+      }
+    },
+    "shutdown": {
+      "graceful": true,
+      "stopMs": 40,
+      "exit": {
+        "code": 0,
+        "signal": null
+      }
+    },
+    "leftoverProcesses": []
+  }
+}
