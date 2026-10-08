@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { BranchSwitcher } from '@/components/source-control/BranchSwitcher';
 import { Tooltip, TooltipPopup, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGitBranches, useGitCheckout, useGitCreateBranch } from '@/hooks/useGit';
+import { useWorktreeListFailure } from '@/hooks/useWorktree';
 import { useI18n } from '@/i18n';
 import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 import type { BranchColumnModel } from './composerColumns';
@@ -34,6 +35,10 @@ interface BranchColumnProps {
  * that is indistinguishable from "the click did nothing" — which is exactly the
  * defect the previous `StatusBar` shipped (it declared the error state, wrote to
  * it, and never drew it).
+ *
+ * The current branch comes from the workspace tree's worktree list. When that
+ * list could not be read the chip has no name to show, and 「选择分支」 alone
+ * read as "no branch" (decision 162): the same one-line error says so instead.
  */
 export function BranchColumn({ column, disabled, disabledReason }: BranchColumnProps) {
   const { t } = useI18n();
@@ -41,6 +46,11 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
   const checkout = useGitCheckout();
   const createBranch = useGitCreateBranch();
   const [error, setError] = useState<string | null>(null);
+  // Only while there is no branch to show: a stale list still names one.
+  const listFailure = useWorktreeListFailure(column.currentBranch ? null : column.workdir);
+  const branchReadError = listFailure
+    ? `${t('Could not read the current branch')}: ${unwrapIpcErrorMessage(listFailure)}`
+    : null;
 
   if (!column.workdir) return null;
 
@@ -133,6 +143,25 @@ export function BranchColumn({ column, disabled, disabledReason }: BranchColumnP
             <span className="truncate">{error}</span>
           </TooltipTrigger>
           <TooltipPopup className="max-w-80 whitespace-pre-wrap break-words">{error}</TooltipPopup>
+        </Tooltip>
+      )}
+
+      {!error && branchReadError && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span
+                role="status"
+                data-testid="branch-read-error"
+                className="inline-flex min-w-0 max-w-80 items-center text-ui text-destructive"
+              />
+            }
+          >
+            <span className="truncate">{branchReadError}</span>
+          </TooltipTrigger>
+          <TooltipPopup className="max-w-80 whitespace-pre-wrap break-words">
+            {branchReadError}
+          </TooltipPopup>
         </Tooltip>
       )}
     </span>

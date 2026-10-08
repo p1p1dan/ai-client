@@ -4,6 +4,7 @@
  * `.ts` only) can cover it without mounting React or Monaco.
  */
 import type { FileChange, FileChangesResult, GitLogEntry } from '@shared/types';
+import { unwrapIpcErrorMessage } from '@/lib/ipcError';
 
 // ── layout constants ────────────────────────────────────────────────────
 /** Left column width (changes list + commit box) in the `expanded` split presentation. */
@@ -22,7 +23,9 @@ export interface PartitionedFileChanges {
  * Splits a `FileChangesResult` into staged/unstaged groups for `ChangesList`.
  * `originalPath` (renames) and every other `FileChange` field pass through
  * untouched — this only partitions, never rebuilds the entries. Missing
- * input (query not yet settled) -> both groups empty, not an error state.
+ * input (query not yet settled, or failed) -> both groups empty; a failure is
+ * reported beside the list from the query's error (`describeGitReadError`),
+ * never by this partition.
  */
 export function partitionFileChanges(
   result: FileChangesResult | null | undefined
@@ -43,6 +46,18 @@ export function partitionFileChanges(
     truncated: result.truncated ?? false,
     truncatedLimit: result.truncatedLimit,
   };
+}
+
+// ── read failures ───────────────────────────────────────────────────────
+/**
+ * Decision 162: the line a git list shows when its last read failed, so a
+ * failed read is not mistaken for an empty repository (「没有更改」,
+ * 「暂无提交记录」). `null` when the query has no error. The reason is the
+ * main process's own sentence without Electron's IPC wrapper.
+ */
+export function describeGitReadError(error: unknown): string | null {
+  if (error === null || error === undefined) return null;
+  return unwrapIpcErrorMessage(error) || 'Unknown error';
 }
 
 // ── git surface selection state machine ─────────────────────────────────

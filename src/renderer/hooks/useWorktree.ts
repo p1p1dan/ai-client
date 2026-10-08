@@ -51,6 +51,35 @@ export function useWorktreeList(workdir: string | null, options?: WorktreeListOp
   });
 }
 
+/** `useWorktreeListMultiple`'s key; its third segment is the repository path as registered. */
+function worktreeListMultipleKey(repoPath: string) {
+  return ['worktree', 'listMultiple', repoPath] as const;
+}
+
+async function listWorktreesOf(
+  repoPath: string
+): Promise<{ repoPath: string; worktrees: GitWorktree[] }> {
+  const worktrees = await window.electronAPI.worktree.list(repoPath);
+  return { repoPath, worktrees };
+}
+
+/**
+ * Why the workspace tree could not list `repoPath`'s worktrees, or `null`.
+ *
+ * Observes the query `useWorktreeListMultiple` runs for the workspace tree
+ * (`useSyncChatWorkspaceTree`) and never fetches itself. When that list fails
+ * the tree has no branch for the checkout, and the composer's branch chip used
+ * to say only 「选择分支」, as if nothing had gone wrong (decision 162).
+ */
+export function useWorktreeListFailure(repoPath: string | null): unknown {
+  const query = useQuery({
+    queryKey: worktreeListMultipleKey(repoPath ?? ''),
+    queryFn: () => listWorktreesOf(repoPath ?? ''),
+    enabled: false,
+  });
+  return repoPath ? (query.error ?? null) : null;
+}
+
 /**
  * Fetch worktrees for multiple repositories in parallel.
  * Returns a map of repo path -> worktrees array and error map.
@@ -68,11 +97,8 @@ export function useWorktreeListMultiple(repoInputs: WorktreeListMultipleInput[])
 
   const queries = useQueries({
     queries: repoQueries.map(({ repoPath, enabled }) => ({
-      queryKey: ['worktree', 'listMultiple', repoPath],
-      queryFn: async () => {
-        const worktrees = await window.electronAPI.worktree.list(repoPath);
-        return { repoPath, worktrees };
-      },
+      queryKey: worktreeListMultipleKey(repoPath),
+      queryFn: () => listWorktreesOf(repoPath),
       enabled,
       retry: 1,
       retryDelay: 1000,

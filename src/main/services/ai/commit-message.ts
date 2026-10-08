@@ -1,10 +1,14 @@
-import { execSync } from 'node:child_process';
 import type { CommonAICompletionOptions } from '@shared/types/ai';
 import {
   type DshCompletionService,
   dshCompletionService,
 } from '../agent-host/DshCompletionService';
-import { isWslGitRepository, spawnGit } from '../git/runtime';
+import {
+  isGitExitError,
+  isGitOutputTooLarge,
+  probeGitExitCode,
+  readGit,
+} from '../git/gitReadFallback';
 import { stripCodeFence } from './providers';
 
 export interface CommitMessageOptions extends CommonAICompletionOptions {
@@ -20,53 +24,88 @@ export interface CommitMessageResult {
   error?: string;
 }
 
-function runGit(args: string[], cwd: string): Promise<string> {
-  if (!isWslGitRepository(cwd)) {
-    try {
-      return Promise.resolve(
-        execSync(`git ${args.join(' ')}`, { cwd, encoding: 'utf-8', timeout: 5000 }).trim()
-      );
-    } catch {
-      return Promise.resolve('');
-    }
+/**
+ * `git <args>` in `cwd` through the F3 lost-output fallback (`readGit`): on the
+ * encrypted Windows host the stdout of a git Main spawns is lost, and the
+ * staged diff used to arrive empty, so the model wrote a message for "(no
+ * staged changes detected)".
+ *
+ * A non-zero exit is git's own answer (no commits yet) and reads as '' as
+ * before; a read that could not finish (lost output on both paths, a runner
+ * that failed, a timeout) rejects, so the caller can say so.
+ */
+async function runGit(
+  cwd: string,
+  args: string[],
+  lostWhen: 'empty' | 'never' | ((stdout: string) => boolean),
+  maxBytes?: number
+): Promise<string> {
+  try {
+    const { stdout } = await readGit({
+      what: args[0] ?? 'git',
+      workdir: cwd,
+      args,
+      lostWhen,
+      ...(maxBytes !== undefined ? { maxBytes } : {}),
+    });
+    return stdout.trim();
+  } catch (error) {
+    if (isGitExitError(error)) return '';
+    throw error;
   }
+}
 
-  return new Promise((resolve) => {
-    let stdout = '';
-    let settled = false;
+/**
+ * The last five subjects, newest first. `%h %s`, not `%s`: a commit made with
+ * `--allow-empty-message` has an empty subject, and five of them printed only
+ * newlines, which read as a lost answer. With the hash every line has text, so
+ * an empty answer is still a loss (no commits exits non-zero instead).
+ */
+async function readRecentSubjects(cwd: string): Promise<string> {
+  const lines = await runGit(cwd, ['log', '-5', '--format=%h %s'], 'empty');
+  return lines
+    .split('\n')
+    .map((line) => line.replace(/^\S+ ?/, ''))
+    .join('\n')
+    .trim();
+}
 
-    const proc = spawnGit(cwd, args);
+/**
+ * Cap on the staged diff. The prompt keeps only its first `maxDiffLines`
+ * lines, but the whole diff used to be read into Main: staging a file of a few
+ * hundred MB grew Main by as much (and the runner refused past its 32 MB
+ * buffer). Past the cap the message is written from the `--stat` summary.
+ */
+export const STAGED_DIFF_MAX_BYTES = 8 * 1024 * 1024;
 
-    const timeout = setTimeout(() => {
-      if (settled) return;
-      settled = true;
-      if (!proc.killed) {
-        proc.kill('SIGKILL');
-      }
-      resolve('');
-    }, 5000);
+/** Stands in for the diff in the prompt when it is over the cap. */
+export const STAGED_DIFF_TOO_LARGE_NOTE =
+  '(staged diff over 8 MB, not included; see the change summary)';
 
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString('utf-8');
-    });
+/** The staged diff, or `null` when it is over `STAGED_DIFF_MAX_BYTES`. */
+async function readStagedDiff(
+  cwd: string,
+  lostWhen: (stdout: string) => boolean
+): Promise<string | null> {
+  try {
+    return await runGit(cwd, ['diff', '--cached'], lostWhen, STAGED_DIFF_MAX_BYTES);
+  } catch (error) {
+    if (isGitOutputTooLarge(error)) return null;
+    throw error;
+  }
+}
 
-    // Drain stderr to avoid child process blocking on full pipe buffer.
-    proc.stderr.on('data', () => {});
-
-    proc.on('error', () => {
-      clearTimeout(timeout);
-      if (settled) return;
-      settled = true;
-      resolve('');
-    });
-
-    proc.on('close', (code) => {
-      clearTimeout(timeout);
-      if (settled) return;
-      settled = true;
-      resolve(code === 0 ? stdout.trim() : '');
-    });
-  });
+/**
+ * Whether anything is staged, by exit code (`--quiet` exits 1 when the index
+ * differs from HEAD), which survives where stdout is lost. An empty staged diff
+ * is a real answer only when this says nothing is staged.
+ */
+async function hasStagedChanges(cwd: string): Promise<boolean> {
+  try {
+    return (await probeGitExitCode(cwd, ['diff', '--cached', '--quiet'])) === 1;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -80,14 +119,36 @@ export async function generateCommitMessage(
 ): Promise<CommitMessageResult> {
   const { workdir, maxDiffLines, timeout, model, effort, prompt: customPrompt } = options;
 
-  const [recentCommits, stagedStat, stagedDiff] = await Promise.all([
-    runGit(['--no-pager', 'log', '-5', '--format=%s'], workdir),
-    runGit(['--no-pager', 'diff', '--cached', '--stat'], workdir),
-    runGit(['--no-pager', 'diff', '--cached'], workdir),
-  ]);
+  let recentCommits: string;
+  let stagedStat: string;
+  let stagedDiff: string | null;
+  try {
+    const staged = await hasStagedChanges(workdir);
+    const lostWhenStaged = (out: string) => staged && out.trim() === '';
+    // Settled, not `all`: a failure is reported once every read has finished,
+    // so none is left running behind the answer.
+    const reads = await Promise.allSettled([
+      readRecentSubjects(workdir),
+      runGit(workdir, ['diff', '--cached', '--stat'], lostWhenStaged),
+      readStagedDiff(workdir, lostWhenStaged),
+    ]);
+    const failed = reads.find((read) => read.status === 'rejected');
+    if (failed) throw failed.reason;
+    const [recent, stat, diff] = reads;
+    recentCommits = recent.status === 'fulfilled' ? recent.value : '';
+    stagedStat = stat.status === 'fulfilled' ? stat.value : '';
+    stagedDiff = diff.status === 'fulfilled' ? diff.value : '';
+  } catch (error) {
+    return {
+      success: false,
+      error: `Could not read the staged changes: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
 
   const truncatedDiff =
-    stagedDiff.split('\n').slice(0, maxDiffLines).join('\n') || '(no staged changes detected)';
+    stagedDiff === null
+      ? STAGED_DIFF_TOO_LARGE_NOTE
+      : stagedDiff.split('\n').slice(0, maxDiffLines).join('\n') || '(no staged changes detected)';
 
   // Build prompt - use custom template or default
   // Use single-pass replacement to avoid injection from git content containing placeholders

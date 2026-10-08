@@ -22,7 +22,8 @@ import {
 import { takePickedAttachmentPath } from '../services/files/PickedAttachmentAccess';
 import { readPreviewFile } from '../services/files/previewFileRead';
 import { resolveSystemViewerTarget } from '../services/files/systemViewerTarget';
-import { createSimpleGit, normalizeGitRelativePath } from '../services/git/runtime';
+import { readIgnoredPaths } from '../services/git/checkIgnore';
+import { normalizeGitRelativePath } from '../services/git/runtime';
 import { remoteConnectionManager } from '../services/remote/RemoteConnectionManager';
 import { createRemoteError } from '../services/remote/RemoteI18n';
 import {
@@ -721,12 +722,11 @@ export function registerFileHandlers(): void {
       // 检查 gitignore
       if (gitRoot) {
         try {
-          const git = createSimpleGit(gitRoot);
           const relativePaths = result.map((f) =>
             normalizeGitRelativePath(relative(gitRoot, f.path))
           );
-          const ignoredResult = await git.checkIgnore(relativePaths);
-          const ignoredSet = new Set(ignoredResult.map((p) => normalizeGitRelativePath(p)));
+          // F3: through the lost-output fallback (`readIgnoredPaths`).
+          const ignoredSet = await readIgnoredPaths(gitRoot, relativePaths);
           for (const file of result) {
             const relPath = normalizeGitRelativePath(relative(gitRoot, file.path));
             file.ignored = ignoredSet.has(relPath);

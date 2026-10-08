@@ -28,6 +28,7 @@
  */
 import type { CommitFileChange, FileChangeStatus, GitLogEntry } from '@shared/types';
 import { ChevronDown, ChevronRight, GitCommit, History, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -36,7 +37,12 @@ import { useCommitFiles } from '@/hooks/useGitHistory';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import type { GitSurfaceCommitFile } from './gitSurfaceModel';
-import { formatCommitTooltip, gitHistoryPanelClass, parseRefBadges } from './gitSurfaceModel';
+import {
+  describeGitReadError,
+  formatCommitTooltip,
+  gitHistoryPanelClass,
+  parseRefBadges,
+} from './gitSurfaceModel';
 
 // D34: status letter colors for the expanded commit's inline file list.
 // Mirrors ChangesList.tsx:65-73's semantic token mapping (kept local instead
@@ -67,6 +73,25 @@ interface GitHistoryListProps {
   /** D34: which file (if any) inside the expanded commit is driving the diff view. */
   selectedCommitFile: GitSurfaceCommitFile | null;
   onSelectCommitFile: (file: GitSurfaceCommitFile) => void;
+  /**
+   * Why the last history read failed, or `null`. Shown as one line, in place of
+   * 「暂无提交记录」 when no commit is listed: a failed read is not an empty
+   * history (decision 162).
+   */
+  loadError?: string | null;
+}
+
+/** One line saying a read failed; the full sentence in the hover title. */
+function HistoryReadError({ text, testId }: { text: string; testId: string }) {
+  return (
+    <Alert variant="error" className="mx-1 my-1 w-auto shrink-0 px-2 py-1" data-testid={testId}>
+      <AlertDescription className="min-w-0 text-meta text-destructive">
+        <p className="truncate select-text" title={text}>
+          {text}
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 export function GitHistoryList({
@@ -82,10 +107,14 @@ export function GitHistoryList({
   onToggleCommit,
   selectedCommitFile,
   onSelectCommitFile,
+  loadError = null,
 }: GitHistoryListProps) {
   const { t } = useI18n();
   // Single query for whichever commit is expanded — never one per row.
   const commitFilesQuery = useCommitFiles(workdir, expandedCommitHash);
+  const commitFilesError = describeGitReadError(commitFilesQuery.error);
+  const historyErrorText =
+    loadError !== null ? `${t('Could not read the commit history')}: ${loadError}` : null;
 
   return (
     <Collapsible className="flex h-full min-h-0 flex-col" onOpenChange={onToggle} open={expanded}>
@@ -100,15 +129,21 @@ export function GitHistoryList({
       </CollapsibleTrigger>
 
       <CollapsibleContent className={gitHistoryPanelClass()}>
+        {historyErrorText !== null && !isLoading && (
+          <HistoryReadError text={historyErrorText} testId="history-load-error" />
+        )}
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
           </div>
         ) : commits.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-muted-foreground">
-            <GitCommit className="h-5 w-5 opacity-50" />
-            <p className="text-meta">{t('No commits yet')}</p>
-          </div>
+          // A failed read with nothing listed says so above, not 「暂无提交记录」.
+          historyErrorText !== null ? null : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-1.5 text-muted-foreground">
+              <GitCommit className="h-5 w-5 opacity-50" />
+              <p className="text-meta">{t('No commits yet')}</p>
+            </div>
+          )
         ) : (
           <ScrollArea className="min-h-0 flex-1">
             <div className="space-y-0.5 p-1">
@@ -177,6 +212,12 @@ export function GitHistoryList({
                             <div className="flex items-center justify-center py-2">
                               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
                             </div>
+                          ) : commitFilesError !== null &&
+                            (commitFilesQuery.data ?? []).length === 0 ? (
+                            <HistoryReadError
+                              text={`${t('Could not read the files of this commit')}: ${commitFilesError}`}
+                              testId="commit-files-load-error"
+                            />
                           ) : (commitFilesQuery.data ?? []).length === 0 ? (
                             <p className="py-1 text-meta text-muted-foreground">{t('No files')}</p>
                           ) : (

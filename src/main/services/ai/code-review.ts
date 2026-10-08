@@ -3,7 +3,7 @@ import {
   type DshCompletionService,
   dshCompletionService,
 } from '../agent-host/DshCompletionService';
-import { spawnGit } from '../git/runtime';
+import { isGitExitError, probeGitExitCode, readGit } from '../git/gitReadFallback';
 
 export interface CodeReviewOptions extends CommonAICompletionOptions {
   workdir: string;
@@ -17,30 +17,50 @@ export interface CodeReviewOptions extends CommonAICompletionOptions {
 
 const activeReviewIds = new Set<string>();
 
-async function runGit(args: string[], cwd: string): Promise<string> {
-  return new Promise((resolve) => {
-    let stdout = '';
-    const proc = spawnGit(cwd, args, { cwd });
-    const timeout = setTimeout(() => {
-      if (!proc.killed) proc.kill('SIGKILL');
-      resolve('');
-    }, 10_000);
-    proc.stdout.on('data', (data) => {
-      stdout += data.toString('utf-8');
+/**
+ * `git <args>` in `cwd` through the F3 lost-output fallback (`readGit`): on the
+ * encrypted Windows host the stdout of a git Main spawns is lost, and the
+ * review used to be asked about an empty diff. A non-zero exit is git's own
+ * answer and reads as '' as before; a read that could not finish rejects.
+ */
+async function runGit(
+  cwd: string,
+  args: string[],
+  lostWhen: 'empty' | 'never' | ((stdout: string) => boolean),
+  okExitCodes?: readonly number[]
+): Promise<string> {
+  try {
+    const { stdout } = await readGit({
+      what: args[0] ?? 'git',
+      workdir: cwd,
+      args,
+      lostWhen,
+      ...(okExitCodes ? { okExitCodes } : {}),
     });
-    proc.on('error', () => {
-      clearTimeout(timeout);
-      resolve('');
-    });
-    proc.on('close', (code) => {
-      clearTimeout(timeout);
-      resolve(code === 0 ? stdout.trim() : '');
-    });
-  });
+    return stdout.trim();
+  } catch (error) {
+    if (isGitExitError(error)) return '';
+    throw error;
+  }
+}
+
+/** The working tree differs from HEAD, by exit code (survives lost stdout). */
+async function hasChangesAgainstHead(cwd: string): Promise<boolean> {
+  try {
+    return (await probeGitExitCode(cwd, ['diff', 'HEAD', '--quiet'])) === 1;
+  } catch {
+    return false;
+  }
 }
 
 async function getDefaultBranch(workdir: string): Promise<string> {
-  const ref = await runGit(['symbolic-ref', 'refs/remotes/origin/HEAD'], workdir);
+  // Exit 1: origin/HEAD is not set. Exit 0 always prints the target.
+  const ref = await runGit(
+    workdir,
+    ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+    'empty',
+    [1]
+  );
   return ref.match(/refs\/remotes\/origin\/(.+)$/)?.[1] ?? 'main';
 }
 
@@ -93,13 +113,26 @@ export async function startCodeReview(
     onComplete,
     onError,
   } = options;
-  const gitDiff = await runGit(['--no-pager', 'diff', 'HEAD', '--submodule=diff'], workdir);
-  const defaultBranch = await getDefaultBranch(workdir);
-  let gitLog = await runGit(
-    ['--no-pager', 'log', `origin/${defaultBranch}..HEAD`, '--oneline'],
-    workdir
-  );
-  if (!gitLog) gitLog = await runGit(['--no-pager', 'log', '-10', '--oneline'], workdir);
+  let gitDiff: string;
+  let gitLog: string;
+  try {
+    const changed = await hasChangesAgainstHead(workdir);
+    gitDiff = await runGit(
+      workdir,
+      ['diff', 'HEAD', '--submodule=diff'],
+      (out) => changed && out.trim() === ''
+    );
+    const defaultBranch = await getDefaultBranch(workdir);
+    // No commits ahead of the default branch is a real (empty) answer.
+    gitLog = await runGit(workdir, ['log', `origin/${defaultBranch}..HEAD`, '--oneline'], 'never');
+    // Exit 0 always lists HEAD at least.
+    if (!gitLog) gitLog = await runGit(workdir, ['log', '-10', '--oneline'], 'empty');
+  } catch (error) {
+    onError(
+      `Could not read the changes to review: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return;
+  }
   if (!gitDiff && !gitLog && !customPrompt) {
     onError('No changes to review');
     return;

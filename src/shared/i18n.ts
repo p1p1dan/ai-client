@@ -3918,3 +3918,18 @@ Object.assign(zhTranslations, {
   'Cache tool definitions': '缓存工具定义',
   'Takes effect from the next turn; no restart needed.': '从下一轮开始生效，无需重启。',
 });
+
+/**
+ * dsh-rebase decision 162: a git read that failed is said, not shown as an
+ * empty list (`ChangesList`, `GitHistoryList`, the composer's `BranchColumn`),
+ * and the diff view names the two blob failures (`DiffViewer`).
+ */
+Object.assign(zhTranslations, {
+  'Could not read the changes': '读取更改失败',
+  'Could not read the commit history': '读取提交记录失败',
+  'Could not read the files of this commit': '读取该提交的文件失败',
+  'Could not read the current branch': '读取当前分支失败',
+  'This file is too large to show a diff (over {{size}}).':
+    '文件过大（超过 {{size}}），无法显示差异。',
+  'Reading this file from Git timed out.': '从 Git 读取该文件超时。',
+});

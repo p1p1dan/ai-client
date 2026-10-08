@@ -70,6 +70,7 @@ import { GitBranchControl } from './GitBranchControl';
 import { GitHistoryList } from './GitHistoryList';
 import {
   deriveGitSurfacePresentation,
+  describeGitReadError,
   GIT_CHANGES_PANE_WIDTH,
   type GitSurfaceCommitFile,
   type GitWorkdirResolution,
@@ -208,6 +209,9 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
   // expanded, and collapsing shouldn't throw away an already-loaded page).
   const historyQuery = useGitHistoryInfinite(workdir, GIT_HISTORY_PAGE_SIZE);
   const historyCommits = useMemo(() => historyQuery.data?.pages.flat() ?? [], [historyQuery.data]);
+  // Decision 162: a failed read is said, not shown as 「没有更改」/「暂无提交记录」.
+  const fileChangesError = describeGitReadError(fileChangesQuery.error);
+  const historyError = describeGitReadError(historyQuery.error);
 
   // T100: neither History nor the branch list polls, so a `git commit` /
   // `git checkout` / `git branch` run outside the app (terminal, agent) used to
@@ -372,6 +376,7 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
             onRefresh={refreshGitPanel}
             isRefreshing={fileChangesQuery.isFetching}
             repoPath={workdir}
+            loadError={fileChangesError}
           />
         </div>
         <CommitBox
@@ -389,6 +394,7 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
           hasNextPage={historyQuery.hasNextPage}
           isFetchingNextPage={historyQuery.isFetchingNextPage}
           isLoading={historyQuery.isLoading}
+          loadError={historyError}
           onLoadMore={handleLoadMoreHistory}
           onSelectCommitFile={handleSelectCommitFile}
           onToggle={handleToggleHistory}
@@ -416,6 +422,7 @@ export function GitSurfaceView({ surfaceId }: GitSurfaceViewProps) {
         // query's state — pass it through explicitly so the loading branch
         // renders instead of a false "Failed to load diff" flash.
         isLoading={fileDiffQuery.isPending}
+        loadError={fileDiffQuery.error}
         sideBySideInlineBreakpoint={700}
       />
     </div>

@@ -5,6 +5,7 @@ import { isAbsolute, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import type {
   ConflictResolution,
+  GitStatus,
   GitWorktree,
   MergeConflict,
   MergeConflictContent,
@@ -20,8 +21,10 @@ import iconv from 'iconv-lite';
 import jschardet from 'jschardet';
 import type { SimpleGit } from 'simple-git';
 import log from '../../utils/logger';
+import { parseBranchVerbose } from './branchVerboseParse';
 import { gitShow, readWorkingTreeFile } from './encoding';
-import { readGit } from './gitReadFallback';
+import { GitService, readHeadCommit } from './GitService';
+import { probeGitExitCode, readGit } from './gitReadFallback';
 import {
   createSimpleGit,
   fromGitPath as fromRuntimeGitPath,
@@ -36,6 +39,36 @@ const execAsync = promisify(exec);
  */
 function createGit(workdir: string): SimpleGit {
   return createSimpleGit(workdir);
+}
+
+/**
+ * `git status` of `workdir` through the porcelain v2 reader and its F3
+ * fallback. simple-git's `status()` turned a lost output into a clean tree on
+ * the encrypted host: the pre-merge check then skipped the stash, and the
+ * conflict list came back empty. The merge's own checks pass `share: false`:
+ * a status run already in flight may predate the merge (`shareRunnerRead`).
+ */
+function readStatus(workdir: string, options?: { share?: boolean }): Promise<GitStatus> {
+  return new GitService(workdir).getStatus(options);
+}
+
+/** For the reads `merge` and `continueMerge` act on (see `readStatus`). */
+const UNSHARED = { share: false } as const;
+
+/** The latest commit after a merge, rebase or commit (`undefined` when unreadable). */
+async function readLatestCommit(workdir: string): Promise<string | undefined> {
+  try {
+    return (await readHeadCommit(workdir)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toMergeConflicts(status: GitStatus): MergeConflict[] {
+  return status.conflicted.map((file) => ({
+    file,
+    type: 'content' as const, // Default to content conflict, could be enhanced
+  }));
 }
 
 function resolvePathWithinWorkdir(
@@ -165,7 +198,8 @@ export class WorktreeService {
     return warnings;
   }
 
-  async list(): Promise<GitWorktree[]> {
+  /** `share: false` when the list decides a write (which branch `merge` merges). */
+  async list(options?: { share?: boolean }): Promise<GitWorktree[]> {
     // A repository always lists at least its main worktree, so a zero-exit run
     // with no output lost it (F3: the encrypted Windows host). That is the
     // composer's branch chip: without the list it has no current branch, and a
@@ -175,6 +209,7 @@ export class WorktreeService {
       workdir: this.workdir,
       args: ['worktree', 'list', '--porcelain'],
       lostWhen: 'empty',
+      ...(options?.share === false ? { share: false } : {}),
     });
     const parsed = parseWorktreeListPorcelain(result, (inputPath) => this.fromGitPath(inputPath));
 
@@ -273,8 +308,8 @@ export class WorktreeService {
   /**
    * Get the main worktree path
    */
-  async getMainWorktreePath(): Promise<string> {
-    const worktrees = await this.list();
+  async getMainWorktreePath(options?: { share?: boolean }): Promise<string> {
+    const worktrees = await this.list(options);
     const main = worktrees.find((wt) => wt.isMainWorktree);
     if (!main) {
       throw new Error('No main worktree found');
@@ -285,8 +320,8 @@ export class WorktreeService {
   /**
    * Get the branch name for a worktree
    */
-  async getWorktreeBranch(worktreePath: string): Promise<string> {
-    const worktrees = await this.list();
+  async getWorktreeBranch(worktreePath: string, options?: { share?: boolean }): Promise<string> {
+    const worktrees = await this.list(options);
     const worktree = worktrees.find((wt) => wt.path === worktreePath);
     if (!worktree || !worktree.branch) {
       throw new Error(`No branch found for worktree: ${worktreePath}`);
@@ -299,11 +334,11 @@ export class WorktreeService {
    * Executes in the main worktree
    */
   async merge(options: WorktreeMergeOptions): Promise<WorktreeMergeResult> {
-    const mainWorktreePath = await this.getMainWorktreePath();
+    const mainWorktreePath = await this.getMainWorktreePath(UNSHARED);
     const mainGit = createGit(mainWorktreePath);
 
     // Get the source branch from the worktree
-    const sourceBranch = await this.getWorktreeBranch(options.worktreePath);
+    const sourceBranch = await this.getWorktreeBranch(options.worktreePath, UNSHARED);
 
     // Track stash state for both worktrees
     let worktreeStashed = false;
@@ -372,8 +407,8 @@ export class WorktreeService {
       worktreePath: worktreeStashed ? options.worktreePath : undefined,
     });
 
-    const worktreeStatus = await worktreeGit.status();
-    if (!worktreeStatus.isClean()) {
+    const worktreeStatus = await readStatus(options.worktreePath, UNSHARED);
+    if (!worktreeStatus.isClean) {
       if (autoStash) {
         try {
           await worktreeGit.stash(['push', '-m', 'Auto stash before merge']);
@@ -395,8 +430,8 @@ export class WorktreeService {
     }
 
     // Check if main worktree has uncommitted changes
-    const mainStatus = await mainGit.status();
-    if (!mainStatus.isClean()) {
+    const mainStatus = await readStatus(mainWorktreePath, UNSHARED);
+    if (!mainStatus.isClean) {
       if (autoStash) {
         try {
           await mainGit.stash(['push', '-m', 'Auto stash before merge']);
@@ -449,17 +484,17 @@ export class WorktreeService {
         // For rebase strategy, we need different handling
         try {
           await mainGit.rebase([sourceBranch]);
-          const log = await mainGit.log({ maxCount: 1 });
+          const commitHash = await readLatestCommit(mainWorktreePath);
           const stashResult = await restoreStashes();
           return {
             success: true,
             merged: true,
-            commitHash: log.latest?.hash,
+            commitHash,
             ...stashResult,
           };
         } catch (rebaseError) {
           // Check for conflicts
-          const conflicts = await this.getConflicts(mainWorktreePath);
+          const conflicts = await this.readConflicts(mainWorktreePath, UNSHARED);
           if (conflicts.length > 0) {
             // Don't restore stashes when there are conflicts - user needs to resolve first
             // Return 'stashed' status so UI knows changes are safely stashed
@@ -499,7 +534,7 @@ export class WorktreeService {
           await mainGit.commit(message);
         }
 
-        const log = await mainGit.log({ maxCount: 1 });
+        const commitHash = await readLatestCommit(mainWorktreePath);
 
         // Handle post-merge cleanup
         // IMPORTANT: Use mainGit for worktree removal to avoid issues when
@@ -540,13 +575,13 @@ export class WorktreeService {
         return {
           success: true,
           merged: true,
-          commitHash: log.latest?.hash,
+          commitHash,
           warnings: warnings.length > 0 ? warnings : undefined,
           ...stashResult,
         };
       } catch (mergeError) {
         // Check for conflicts
-        const conflicts = await this.getConflicts(mainWorktreePath);
+        const conflicts = await this.readConflicts(mainWorktreePath, UNSHARED);
         if (conflicts.length > 0) {
           // Don't restore stashes when there are conflicts - user needs to resolve first
           // Return 'stashed' status so UI knows changes are safely stashed
@@ -587,55 +622,65 @@ export class WorktreeService {
    * Get the current merge state
    */
   async getMergeState(workdir: string): Promise<MergeState> {
-    const git = createGit(workdir);
-
-    // Check if we're in a merge state by looking for MERGE_HEAD
+    // MERGE_HEAD exists exactly when a merge is in progress. Answered by exit
+    // code (1: absent), which survives where stdout is lost (F3).
+    let inMerge = false;
     try {
-      await git.raw(['rev-parse', 'MERGE_HEAD']);
-      // We're in a merge state
-      const conflicts = await this.getConflicts(workdir);
-
-      // Get branch names
-      let targetBranch: string | undefined;
-      let sourceBranch: string | undefined;
-
-      try {
-        const status = await git.status();
-        targetBranch = status.current || undefined;
-
-        // Try to get source branch from MERGE_HEAD
-        const mergeHead = await git.raw(['rev-parse', 'MERGE_HEAD']);
-        const branches = await git.branch(['-a', '--contains', mergeHead.trim()]);
-        if (branches.all.length > 0) {
-          sourceBranch = branches.all[0].replace('remotes/origin/', '');
-        }
-      } catch {
-        // Ignore errors getting branch names
-      }
-
-      return {
-        inProgress: true,
-        targetBranch,
-        sourceBranch,
-        conflicts,
-      };
+      inMerge =
+        (await probeGitExitCode(workdir, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'])) === 0;
     } catch {
-      // Not in a merge state
-      return { inProgress: false };
+      // Not readable: report no merge, as before.
     }
+    if (!inMerge) return { inProgress: false };
+
+    // A merge is in progress: its conflict list must be read, not assumed empty.
+    const status = await readStatus(workdir);
+    const conflicts = toMergeConflicts(status);
+    const targetBranch = status.current || undefined;
+
+    let sourceBranch: string | undefined;
+    try {
+      // Best effort, as before: which branch MERGE_HEAD came from.
+      const { stdout: mergeHead } = await readGit({
+        what: 'rev-parse',
+        workdir,
+        args: ['rev-parse', '--verify', 'MERGE_HEAD'],
+        lostWhen: 'empty',
+      });
+      const { stdout: containing } = await readGit({
+        what: 'branch',
+        workdir,
+        args: ['branch', '--no-color', '-a', '-v', '--contains', mergeHead.trim()],
+        // A commit no branch contains lists nothing.
+        lostWhen: 'never',
+      });
+      const first = Object.keys(parseBranchVerbose(containing))[0];
+      if (first) sourceBranch = first.replace('remotes/origin/', '');
+    } catch {
+      // Ignore errors getting branch names
+    }
+
+    return {
+      inProgress: true,
+      targetBranch,
+      sourceBranch,
+      conflicts,
+    };
   }
 
   /**
    * Get list of conflicted files
    */
   async getConflicts(workdir: string): Promise<MergeConflict[]> {
-    const git = createGit(workdir);
-    const status = await git.status();
+    return this.readConflicts(workdir);
+  }
 
-    return status.conflicted.map((file) => ({
-      file,
-      type: 'content' as const, // Default to content conflict, could be enhanced
-    }));
+  /** `getConflicts`; `share: false` for the checks a merge acts on. */
+  private async readConflicts(
+    workdir: string,
+    options?: { share?: boolean }
+  ): Promise<MergeConflict[]> {
+    return toMergeConflicts(await readStatus(workdir, options));
   }
 
   async getConflictContent(workdir: string, filePath: string): Promise<MergeConflictContent> {
@@ -714,7 +759,7 @@ export class WorktreeService {
     const git = createGit(workdir);
 
     // Check if there are still unresolved conflicts
-    const conflicts = await this.getConflicts(workdir);
+    const conflicts = await this.readConflicts(workdir, UNSHARED);
     if (conflicts.length > 0) {
       return {
         success: false,
@@ -729,7 +774,7 @@ export class WorktreeService {
       const commitMessage = message || 'Merge commit';
       await git.commit(commitMessage);
 
-      const log = await git.log({ maxCount: 1 });
+      const commitHash = await readLatestCommit(workdir);
 
       // Handle post-merge cleanup if options provided
       let warnings: string[] = [];
@@ -737,7 +782,7 @@ export class WorktreeService {
         // If current workdir is the worktree being deleted, use main worktree's git instead
         const cleanupGit =
           workdir === cleanupOptions.worktreePath
-            ? createGit(await this.getMainWorktreePath())
+            ? createGit(await this.getMainWorktreePath(UNSHARED))
             : git;
         warnings = await this.deleteWorktreeSafely(cleanupGit, cleanupOptions.worktreePath, {
           deleteBranch: cleanupOptions.deleteBranchAfterMerge,
@@ -753,7 +798,7 @@ export class WorktreeService {
       return {
         success: true,
         merged: true,
-        commitHash: log.latest?.hash,
+        commitHash,
         warnings: warnings.length > 0 ? warnings : undefined,
       };
     } catch (error) {

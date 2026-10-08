@@ -15,6 +15,7 @@ import {
   TreeDeciduous,
 } from 'lucide-react';
 import { useState } from 'react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,6 +40,30 @@ interface ChangesListProps {
   onRefresh?: () => void;
   isRefreshing?: boolean;
   repoPath?: string;
+  /**
+   * Why the last read of the changes failed, or `null`. Shown as one line above
+   * the list, in place of 「没有更改」 when there is nothing (left) to list: a
+   * failed read is not a clean tree (decision 162).
+   */
+  loadError?: string | null;
+}
+
+function ChangesLoadError({ detail }: { detail: string }) {
+  const { t } = useI18n();
+  const text = `${t('Could not read the changes')}: ${detail}`;
+  return (
+    <Alert
+      variant="error"
+      className="mx-3 mt-2 w-auto shrink-0 px-2 py-1"
+      data-testid="changes-load-error"
+    >
+      <AlertDescription className="min-w-0 text-meta text-destructive">
+        <p className="truncate select-text" title={text}>
+          {text}
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
 }
 
 // M=Modified, A=Added, D=Deleted, R=Renamed, C=Copied, U=Untracked, X=Conflict
@@ -157,6 +182,7 @@ export function ChangesList({
   onRefresh,
   isRefreshing,
   repoPath,
+  loadError = null,
 }: ChangesListProps) {
   const { t } = useI18n();
   const { viewMode, setViewMode } = useSourceControlStore();
@@ -243,6 +269,7 @@ export function ChangesList({
             )}
           </div>
         </div>
+        {loadError !== null && <ChangesLoadError detail={loadError} />}
         {/* Tree View */}
         <div className="min-h-0 flex-1 overflow-hidden">
           <ChangesTree
@@ -326,10 +353,14 @@ export function ChangesList({
       {/* Empty State — compact, top-aligned block (D34: no longer stretches to
           fill the pane, so the upper half's docked 50/50 split reads as
           intentional whitespace rather than a file list pretending to be tall). */}
+      {loadError !== null && <ChangesLoadError detail={loadError} />}
       {isEmpty ? (
-        <div className="flex min-h-[80px] shrink-0 items-center justify-center text-center text-muted-foreground">
-          <p className="text-meta">{t('No changes')}</p>
-        </div>
+        // A failed read with nothing to list says so above, not 「没有更改」.
+        loadError !== null ? null : (
+          <div className="flex min-h-[80px] shrink-0 items-center justify-center text-center text-muted-foreground">
+            <p className="text-meta">{t('No changes')}</p>
+          </div>
+        )
       ) : (
         /* List View */
         <ScrollArea className="min-h-0 flex-1">

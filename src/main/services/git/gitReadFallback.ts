@@ -1,9 +1,16 @@
-import { GitOutputLostError, NodeGitRunnerError, runGitViaNode } from './nodeGitRunner';
+import { existsSync } from 'node:fs';
+import {
+  GitOutputLostError,
+  NODE_GIT_RUNNER_MAX_BUFFER,
+  NodeGitRunnerError,
+  runGitViaNode,
+} from './nodeGitRunner';
 import { createGitEnv, isWslGitRepository, spawnGit } from './runtime';
 
 /**
- * F3, shared by every git READ in `GitService`, `WorktreeService` and
- * `encoding.gitShow`.
+ * F3, shared by every git READ in `GitService`, `WorktreeService`,
+ * `encoding.gitShow`, `checkIgnore` and the AI commit-message / code-review
+ * diffs (`services/ai`).
  *
  * On the encrypted Windows host (TSD driver) a git spawned directly by the
  * Electron Main process exits normally and its stderr and exit code come back
@@ -39,10 +46,29 @@ import { createGitEnv, isWslGitRepository, spawnGit } from './runtime';
  * Writes (checkout, commit, add, ...) do not come here: their exit code and
  * stderr are delivered, which is all they report. Callers that need the
  * outcome of a write read it back through here (see `GitService.checkout`).
+ *
+ * ## Failures that are not answers
+ *
+ * A read that could not finish — timed out, outgrew `maxBytes` (or the
+ * runner's buffer), lost its output on both paths, or had no directory to run
+ * in — rejects with its own type (`isGitReadTimeout`, `isGitOutputTooLarge`,
+ * `GitWorkdirMissingError`), never with an empty answer: callers that turn
+ * git's "no" into an empty value (`isGitExitError`) must not turn these into
+ * one too.
  */
 
 /** Same budget as simple-git's block timeout in `createSimpleGit`. */
 export const GIT_READ_TIMEOUT_MS = 30_000;
+
+/**
+ * Blob reads (`git show <rev>:<path>`) for the diff and conflict views. Before
+ * F3 they had no deadline at all; 30 s cut off a large file on a slow
+ * (encrypted, relayed) disk, so they get a generous one rather than none: a
+ * git that never exits still frees its slot. The size cap is the runner's
+ * buffer on both paths, so a file is "too large" on every machine alike.
+ */
+export const GIT_BLOB_READ_TIMEOUT_MS = 120_000;
+export const GIT_BLOB_MAX_BYTES = NODE_GIT_RUNNER_MAX_BUFFER;
 
 const STDERR_CAPTURE_LIMIT = 8192;
 
@@ -51,12 +77,79 @@ export class GitCommandError extends Error {
   /** `null` when git did not exit on its own (timeout, signal). */
   readonly exitCode: number | null;
   readonly stderr: string;
+  readonly reason: 'exit' | 'timeout' | 'signal';
 
-  constructor(message: string, exitCode: number | null, stderr: string) {
+  constructor(
+    message: string,
+    exitCode: number | null,
+    stderr: string,
+    reason: 'exit' | 'timeout' | 'signal' = exitCode === null ? 'signal' : 'exit'
+  ) {
     super(message);
     this.exitCode = exitCode;
     this.stderr = stderr;
+    this.reason = reason;
   }
+}
+
+export const GIT_OUTPUT_TOO_LARGE = 'GIT_OUTPUT_TOO_LARGE';
+
+/** The primary path stopped git once its stdout passed the read's `maxBytes`. */
+export class GitOutputTooLargeError extends Error {
+  readonly code = GIT_OUTPUT_TOO_LARGE;
+  readonly limitBytes: number;
+
+  constructor(message: string, limitBytes: number) {
+    super(message);
+    this.limitBytes = limitBytes;
+  }
+}
+
+export const GIT_WORKDIR_MISSING = 'GIT_WORKDIR_MISSING';
+
+/**
+ * Git could not start because its working directory does not exist (a
+ * submodule that was never checked out, a deleted worktree). Node reports that
+ * as `spawn git ENOENT`, which reads as "git is not installed".
+ */
+export class GitWorkdirMissingError extends Error {
+  readonly code = GIT_WORKDIR_MISSING;
+  readonly workdir: string;
+
+  constructor(workdir: string) {
+    super(`git cannot run in ${workdir}: the directory does not exist`);
+    this.workdir = workdir;
+  }
+}
+
+/** git's own stderr for a failed run (`isGitExitError`), on either path. */
+export function gitExitStderr(error: unknown): string {
+  if (error instanceof GitCommandError || error instanceof NodeGitRunnerError) {
+    return error.stderr.trim();
+  }
+  return '';
+}
+
+/** The read outgrew its cap, on either path. */
+export function isGitOutputTooLarge(error: unknown): boolean {
+  if (error instanceof GitOutputTooLargeError) return true;
+  return error instanceof NodeGitRunnerError && error.failure === 'max-buffer';
+}
+
+/** The read hit its deadline, on either path. */
+export function isGitReadTimeout(error: unknown): boolean {
+  if (error instanceof GitCommandError) return error.reason === 'timeout';
+  return error instanceof NodeGitRunnerError && error.failure === 'timeout';
+}
+
+/**
+ * A spawn failure, explained: `ENOENT` for a directory that is not there is
+ * the directory's fault, not git's. Anything else is returned unchanged.
+ */
+export function explainGitSpawnError(error: unknown, workdir: string): unknown {
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code === 'ENOENT' && !existsSync(workdir)) return new GitWorkdirMissingError(workdir);
+  return error;
 }
 
 /**
@@ -108,6 +201,7 @@ export function noteLostOutput(what: string): void {
 export function resetGitReadFallbackForTests(): void {
   runnerRecoveredLostOutput = false;
   reportedRunnerReads.clear();
+  inFlightRunnerReads.clear();
 }
 
 // ---- the runner, logged ------------------------------------------------------
@@ -117,6 +211,9 @@ type RunnerCall = {
   workdir: string;
   args: string[];
   timeoutMs?: number;
+  maxBytes?: number;
+  /** `false`: never join (or be joined by) another run; see `shareRunnerRead`. */
+  share?: boolean;
 };
 
 /**
@@ -132,34 +229,93 @@ function logRunnerFailure(what: string, error: unknown): void {
   }
 }
 
+/**
+ * The runner's own spawn failure (`git-spawn`) has the same blind spot as the
+ * primary path: a missing directory reads as a missing git.
+ */
+function explainRunnerFailure(error: unknown, workdir: string): unknown {
+  if (error instanceof NodeGitRunnerError && error.failure === 'git-spawn') {
+    if (!existsSync(workdir)) return new GitWorkdirMissingError(workdir);
+  }
+  return error;
+}
+
 function runnerOptions(call: RunnerCall) {
   return {
     workdir: call.workdir,
     args: call.args,
     env: createGitEnv(call.workdir),
     ...(call.timeoutMs !== undefined ? { timeoutMs: call.timeoutMs } : {}),
+    ...(call.maxBytes !== undefined ? { maxBuffer: call.maxBytes } : {}),
   };
 }
 
-/** `git <args>` through the runner, as text. Rejects with `NodeGitRunnerError`. */
-export async function runGitTextViaRunner(call: RunnerCall): Promise<string> {
-  try {
-    const { stdout } = await runGitViaNode(runnerOptions(call));
-    return stdout;
-  } catch (error) {
-    logRunnerFailure(call.what, error);
-    throw error;
-  }
+/**
+ * Identical runner reads in flight share one node.exe. The git panel's two
+ * 5 s polls (`getStatus`, `getFileChanges`) run the same `git status` command
+ * line on the same tick; once a host routes through the runner, each would
+ * otherwise start its own node.exe for the same answer.
+ *
+ * Nothing is cached past the run, but a caller that joins gets the answer of a
+ * run that started before it asked, so it can be older than the answer of a
+ * run of its own. For a poll that is the same answer a moment late. For a read
+ * that decides or confirms a write it can be the state from before that write
+ * (a status taken before an `add` + `commit` marks a just-committed file
+ * untracked and `discard` deletes it; a HEAD read from before a commit reports
+ * that HEAD did not move). Those reads pass `share: false`: they neither join
+ * a run in flight nor let a later caller join theirs. They are `discard`'s and
+ * `discardSubmodule`'s status, the HEAD reads before and after a commit or
+ * merge (`readHeadCommit`), the checkout read-back (`confirmHeadOnBranch`),
+ * and in `WorktreeService.merge` / `continueMerge` the worktree list, the
+ * clean checks and the conflict checks.
+ */
+const inFlightRunnerReads = new Map<string, Promise<string | Buffer>>();
+
+function shareRunnerRead<T extends string | Buffer>(
+  call: RunnerCall,
+  encoding: 'utf8' | 'buffer',
+  start: () => Promise<T>
+): Promise<T> {
+  if (call.share === false) return start();
+  const key = JSON.stringify([
+    encoding,
+    call.workdir,
+    call.args,
+    call.timeoutMs ?? null,
+    call.maxBytes ?? null,
+  ]);
+  const running = inFlightRunnerReads.get(key);
+  if (running) return running as Promise<T>;
+  const shared = start().finally(() => {
+    inFlightRunnerReads.delete(key);
+  });
+  inFlightRunnerReads.set(key, shared);
+  return shared;
 }
 
-async function runGitBufferViaRunner(call: RunnerCall): Promise<Buffer> {
-  try {
-    const { stdout } = await runGitViaNode({ ...runnerOptions(call), encoding: 'buffer' });
-    return stdout;
-  } catch (error) {
-    logRunnerFailure(call.what, error);
-    throw error;
-  }
+/** `git <args>` through the runner, as text. Rejects with `NodeGitRunnerError`. */
+export function runGitTextViaRunner(call: RunnerCall): Promise<string> {
+  return shareRunnerRead(call, 'utf8', async () => {
+    try {
+      const { stdout } = await runGitViaNode(runnerOptions(call));
+      return stdout;
+    } catch (error) {
+      logRunnerFailure(call.what, error);
+      throw explainRunnerFailure(error, call.workdir);
+    }
+  });
+}
+
+function runGitBufferViaRunner(call: RunnerCall): Promise<Buffer> {
+  return shareRunnerRead(call, 'buffer', async () => {
+    try {
+      const { stdout } = await runGitViaNode({ ...runnerOptions(call), encoding: 'buffer' });
+      return stdout;
+    } catch (error) {
+      logRunnerFailure(call.what, error);
+      throw explainRunnerFailure(error, call.workdir);
+    }
+  });
 }
 
 // ---- the primary path --------------------------------------------------------
@@ -173,7 +329,12 @@ type CapturedGit = { stdout: Buffer; stderr: string; exitCode: number };
  * that exit code — simple-git resolves it as success, which would make
  * `symbolic-ref --quiet` on a detached HEAD look like a lost answer.
  */
-function captureGit(workdir: string, args: string[], timeoutMs: number): Promise<CapturedGit> {
+function captureGit(
+  workdir: string,
+  args: string[],
+  timeoutMs: number,
+  maxBytes?: number
+): Promise<CapturedGit> {
   return new Promise((resolve, reject) => {
     let proc: ReturnType<typeof spawnGit>;
     try {
@@ -183,13 +344,15 @@ function captureGit(workdir: string, args: string[], timeoutMs: number): Promise
         windowsHide: true,
       });
     } catch (error) {
-      reject(error);
+      reject(explainGitSpawnError(error, workdir));
       return;
     }
 
     const chunks: Buffer[] = [];
+    let byteLength = 0;
     let stderr = '';
     let timedOut = false;
+    let tooLarge = false;
     let settled = false;
 
     const timer = setTimeout(() => {
@@ -198,6 +361,15 @@ function captureGit(workdir: string, args: string[], timeoutMs: number): Promise
     }, timeoutMs);
 
     proc.stdout.on('data', (chunk: Buffer) => {
+      if (tooLarge) return;
+      byteLength += chunk.length;
+      if (maxBytes !== undefined && byteLength > maxBytes) {
+        // Stop reading and stop git: the answer is "too large", not its prefix.
+        tooLarge = true;
+        chunks.length = 0;
+        if (!proc.killed) proc.kill('SIGKILL');
+        return;
+      }
       chunks.push(chunk);
     });
     proc.stderr.on('data', (chunk: Buffer) => {
@@ -208,15 +380,28 @@ function captureGit(workdir: string, args: string[], timeoutMs: number): Promise
       clearTimeout(timer);
       if (settled) return;
       settled = true;
-      reject(error);
+      reject(explainGitSpawnError(error, workdir));
     });
     proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
       clearTimeout(timer);
       if (settled) return;
       settled = true;
       const command = args[0] ?? '';
+      if (tooLarge && maxBytes !== undefined) {
+        reject(
+          new GitOutputTooLargeError(`git ${command} output exceeded ${maxBytes} bytes`, maxBytes)
+        );
+        return;
+      }
       if (timedOut) {
-        reject(new GitCommandError(`git ${command} timed out after ${timeoutMs}ms`, null, stderr));
+        reject(
+          new GitCommandError(
+            `git ${command} timed out after ${timeoutMs}ms`,
+            null,
+            stderr,
+            'timeout'
+          )
+        );
         return;
       }
       if (typeof code !== 'number') {
@@ -264,6 +449,17 @@ export type GitReadSpec<T> = {
    */
   okExitCodes?: readonly number[];
   timeoutMs?: number;
+  /**
+   * Cap on stdout, on both paths (the runner's buffer otherwise). Beyond it the
+   * read rejects as too large (`isGitOutputTooLarge`) instead of answering.
+   */
+  maxBytes?: number;
+  /**
+   * `false` for a read that decides or confirms a write: through the runner it
+   * always runs on its own instead of joining an identical run already in
+   * flight, which may have started before the write (`shareRunnerRead`).
+   */
+  share?: boolean;
 };
 
 export type GitReadResult<T> = { stdout: T; exitCode: number };
@@ -330,7 +526,12 @@ async function readViaRunner<T>(
 async function readGitWith<T>(spec: GitReadSpec<T>, codec: Codec<T>): Promise<GitReadResult<T>> {
   if (shouldRouteViaRunner(spec.workdir)) return readViaRunner(spec, codec, false);
 
-  const primary = await captureGit(spec.workdir, spec.args, spec.timeoutMs ?? GIT_READ_TIMEOUT_MS);
+  const primary = await captureGit(
+    spec.workdir,
+    spec.args,
+    spec.timeoutMs ?? GIT_READ_TIMEOUT_MS,
+    spec.maxBytes
+  );
   if (primary.exitCode !== 0) {
     if (spec.okExitCodes?.includes(primary.exitCode)) {
       return { stdout: codec.decode(primary.stdout), exitCode: primary.exitCode };

@@ -37,6 +37,7 @@ import { useActiveSessionId } from '@/stores/agentSessions';
 import { useNavigationStore } from '@/stores/navigation';
 import { useSettingsStore } from '@/stores/settings';
 import { useTerminalWriteStore } from '@/stores/terminalWrite';
+import { describeDiffLoadError } from './diffLoadError';
 
 type DiffEditorInstance = ReturnType<typeof monaco.editor.createDiffEditor>;
 
@@ -129,6 +130,13 @@ interface DiffViewerProps {
    */
   isLoading?: boolean;
   /**
+   * Decision 162: why the caller's own diff query failed (with `skipFetch`);
+   * the internal query's error is used otherwise. Shown under 「无法加载差异」
+   * so a file too large to read, or a read that timed out, is told apart from
+   * other failures.
+   */
+  loadError?: unknown;
+  /**
    * T-12: forwarded verbatim to Monaco's `renderSideBySideInlineBreakpoint`.
    * Default 0 = current behavior (always side-by-side, never falls back to
    * inline). Pass a real breakpoint (e.g. 700) when the host can render the
@@ -150,6 +158,7 @@ export function DiffViewer({
   isCommitView = false,
   sideBySideInlineBreakpoint = 0,
   isLoading: isLoadingProp,
+  loadError: loadErrorProp,
 }: DiffViewerProps) {
   const sessionId = useActiveSessionId(rootPath);
   const { t } = useI18n();
@@ -174,7 +183,11 @@ export function DiffViewer({
   // In commit view, we don't fetch diff - we use the provided externalDiff
   const shouldFetch = !skipFetch && !isCommitView;
 
-  const { data: fetchedDiff, isLoading: isQueryLoading } = useFileDiff(
+  const {
+    data: fetchedDiff,
+    isLoading: isQueryLoading,
+    error: fetchError,
+  } = useFileDiff(
     rootPath,
     file?.path ?? null,
     file?.staged ?? false,
@@ -975,9 +988,15 @@ export function DiffViewer({
   }
 
   if (!diff) {
+    const reason = describeDiffLoadError(loadErrorProp ?? fetchError, t);
     return (
-      <div className="flex h-full items-center justify-center text-muted-foreground">
+      <div className="flex h-full flex-col items-center justify-center gap-1 px-4 text-center text-muted-foreground">
         <p className="text-sm">{t('Failed to load diff')}</p>
+        {reason && (
+          <p className="max-w-full select-text break-words text-meta" data-testid="diff-load-error">
+            {reason}
+          </p>
+        )}
       </div>
     );
   }

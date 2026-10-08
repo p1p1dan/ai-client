@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, promises as fs } from 'node:fs';
+import { existsSync, promises as fs, statSync } from 'node:fs';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { promisify } from 'node:util';
@@ -21,12 +21,14 @@ import type {
   PullRequest,
   SubmoduleStatus,
 } from '@shared/types';
-import type { SimpleGit, StatusResult } from 'simple-git';
+import type { SimpleGit } from 'simple-git';
 import { parseBranchVerbose } from './branchVerboseParse';
+import { readIgnoredPaths } from './checkIgnore';
 import { decodeBuffer, detectBinaryFile, gitShow, readWorkingTreeFile } from './encoding';
 import { GIT_LOG_PRETTY_FORMAT, parseGitLogOutput } from './gitLogFormat';
 import {
-  GitCommandError,
+  explainGitSpawnError,
+  gitExitStderr,
   isGitExitError,
   noteLostOutput,
   noteRunnerRead,
@@ -61,6 +63,19 @@ const GIT_STATUS_STREAM_TIMEOUT_MS = 15000;
 // The status command line. The node-runner fallback runs exactly this too, so
 // both paths feed the same record parser.
 const GIT_STATUS_ARGS = ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'];
+// `discard`'s status (`readUntrackedForDiscard`): every untracked file by name.
+const GIT_DISCARD_STATUS_ARGS = [
+  'status',
+  '--porcelain=v2',
+  '--branch',
+  '-z',
+  '--untracked-files=all',
+];
+// Characters of pathspec `discard` puts on its status command line. Windows
+// caps a command line at 32,767 characters, and through the runner the same
+// arguments are on node's command line and then git's; past this budget the
+// whole status is read instead.
+const DISCARD_PATHSPEC_BUDGET = 8_000;
 // `git branch -a -v` is what simple-git runs for `this.git.branch(['-a', '-v'])`;
 // `--no-color` keeps a `color.branch=always` config out of the fallback parse.
 const GIT_BRANCH_FALLBACK_ARGS = ['branch', '--no-color', '-a', '-v'];
@@ -91,6 +106,16 @@ function branchListingLostError(via: string): GitOutputLostError {
   );
 }
 
+/** Log label of a porcelain v2 status read. */
+type PorcelainV2Read = 'status' | 'file-changes' | 'discard-status';
+
+type PorcelainV2ReadOptions = {
+  /** The status command line; `GIT_STATUS_ARGS` by default. */
+  args?: readonly string[];
+  /** `false`: never join a runner run in flight (see `shareRunnerRead`). */
+  share?: boolean;
+};
+
 function toGitBranches(
   branches: Record<string, { current: boolean; commit: string; label: string }>
 ): GitBranch[] {
@@ -100,6 +125,79 @@ function toGitBranches(
     commit: info.commit,
     label: info.label,
   }));
+}
+
+/**
+ * A path handed to `discard`, as git names it (relative to `root`,
+ * `/`-separated) and as the file system does. A `..` segment is refused
+ * outright, as is a path that resolves to `root` itself or outside it: the
+ * delete-or-restore verdict is looked up by this name in git's own list, and
+ * `untracked-dir/../.env` must not reach a file git never listed. Only Windows
+ * takes `\` as a separator; on POSIX it is an ordinary file-name character
+ * (`dir\x.txt` is one file at the top level, not `x.txt` in `dir/`).
+ *
+ * `pathApi` is a test seam for the Windows rules.
+ */
+export function resolveDiscardTarget(
+  root: string,
+  filePath: string,
+  pathApi: typeof path = path
+): { gitPath: string; absolutePath: string } {
+  const segments = filePath.split(pathApi.sep === '\\' ? /[\\/]/ : /\//);
+  const absolutePath = pathApi.resolve(root, filePath);
+  const relativePath = pathApi.relative(root, absolutePath);
+  if (
+    segments.includes('..') ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(relativePath)
+  ) {
+    throw new Error(`Invalid file path: path traversal detected - ${filePath}`);
+  }
+  if (relativePath === '') {
+    throw new Error(`Invalid file path: not a file in the repository - ${filePath}`);
+  }
+  let gitPath = relativePath.split(pathApi.sep).join('/');
+  // git names an untracked directory it does not descend into (an embedded
+  // repository) with a trailing slash; keep the caller's.
+  if (segments.length > 1 && segments[segments.length - 1] === '') gitPath += '/';
+  return { gitPath, absolutePath };
+}
+
+/**
+ * `.gitmodules` exists and is not empty: the cheap first check before asking
+ * the index whether `git submodule status` has anything to list.
+ */
+function hasGitmodules(workdir: string): boolean {
+  try {
+    return statSync(path.join(workdir, '.gitmodules')).size > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * HEAD's commit hash in `workdir`, `null` for an unborn HEAD (git exits
+ * non-zero). Exit 0 always prints the hash, so an empty answer was lost (F3).
+ * Callers read back the outcome of a commit or merge with it: simple-git takes
+ * that hash from stdout, which the encrypted host loses. Every such read is on
+ * one side of a write, so it never joins a run in flight (`share: false`): one
+ * started before the commit would report that HEAD did not move.
+ */
+export async function readHeadCommit(workdir: string): Promise<string | null> {
+  try {
+    const { stdout } = await readGit({
+      what: 'rev-parse',
+      workdir,
+      args: ['rev-parse', '--verify', 'HEAD'],
+      lostWhen: 'empty',
+      share: false,
+    });
+    return stdout.trim();
+  } catch (err) {
+    if (isGitExitError(err)) return null;
+    throw err;
+  }
 }
 
 export class GitService {
@@ -125,9 +223,14 @@ export class GitService {
   /**
    * Stream `git status --porcelain=v2 --branch -z` into `sink`, stopping git
    * once the sink is full. Rejects with a typed `GitOutputLostError` when git
-   * exited 0 without its branch headers (Q7 / F3).
+   * exited 0 without its branch headers (Q7 / F3). `workdir` is a submodule's
+   * own checkout for the submodule reads.
    */
-  private streamPorcelainV2(sink: PorcelainV2RecordSink): Promise<void> {
+  private streamPorcelainV2(
+    sink: PorcelainV2RecordSink,
+    workdir: string,
+    args: readonly string[]
+  ): Promise<void> {
     // `truncated` used to mean both "hit the entry cap" and "timed out", and the
     // close handler skipped its reject when either was set — so a timeout came
     // back as a half-read status that looked successful. Keep them apart.
@@ -139,11 +242,12 @@ export class GitService {
     const decoder = new StringDecoder('utf8');
 
     return new Promise((resolve, reject) => {
-      // Use 'normal' mode for status - only need to know if there are untracked files,
-      // not the full list. This significantly improves performance for large repos.
-      const proc = spawnGit(this.workdir, GIT_STATUS_ARGS, {
-        cwd: this.workdir,
-        env: this.getGitEnv(),
+      // `GIT_STATUS_ARGS` uses 'normal' mode: the panel only needs to know which
+      // directories hold untracked files, not every file in them, which is much
+      // faster on large repos. `discard` asks for every file (`-uall`).
+      const proc = spawnGit(workdir, [...args], {
+        cwd: workdir,
+        env: this.getGitEnv(workdir),
       });
 
       const timeout = setTimeout(() => {
@@ -172,7 +276,7 @@ export class GitService {
 
       proc.on('error', (err) => {
         clearTimeout(timeout);
-        reject(err);
+        reject(explainGitSpawnError(err, workdir));
       });
 
       proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
@@ -209,38 +313,44 @@ export class GitService {
   /**
    * The status records, through `sink`, with the F3 fallback: when the
    * primary stream lost its output, run the same command line with the bundled
-   * node as git's parent and feed the same parser. `getStatus` and
-   * `getFileChanges` both read through here; only their sinks differ.
+   * node as git's parent and feed the same parser. `getStatus`,
+   * `getFileChanges` and `discard` all read through here; their sinks differ,
+   * and `discard` runs its own command line (`read.args`).
    */
   private async readPorcelainV2<T extends PorcelainV2RecordSink>(
-    what: 'status' | 'file-changes',
-    makeSink: () => T
+    what: PorcelainV2Read,
+    makeSink: () => T,
+    workdir = this.workdir,
+    read: PorcelainV2ReadOptions = {}
   ): Promise<T> {
-    if (shouldRouteViaRunner(this.workdir)) {
-      return this.readPorcelainV2ViaNode(what, makeSink(), false);
+    if (shouldRouteViaRunner(workdir)) {
+      return this.readPorcelainV2ViaNode(what, makeSink(), false, workdir, read);
     }
     const sink = makeSink();
     try {
-      await this.streamPorcelainV2(sink);
+      await this.streamPorcelainV2(sink, workdir, read.args ?? GIT_STATUS_ARGS);
       return sink;
     } catch (err) {
       // WSL repositories go through wsl.exe, which the runner does not route.
-      if (!isGitOutputLostError(err) || isWslGitRepository(this.workdir)) throw err;
+      if (!isGitOutputLostError(err) || isWslGitRepository(workdir)) throw err;
       noteLostOutput(what);
       // A fresh sink: the lost run may have pushed nothing, but never reuse it.
-      return this.readPorcelainV2ViaNode(what, makeSink(), true);
+      return this.readPorcelainV2ViaNode(what, makeSink(), true, workdir, read);
     }
   }
 
   private async readPorcelainV2ViaNode<T extends PorcelainV2RecordSink>(
-    what: 'status' | 'file-changes',
+    what: PorcelainV2Read,
     sink: T,
-    afterLoss: boolean
+    afterLoss: boolean,
+    workdir: string,
+    read: PorcelainV2ReadOptions
   ): Promise<T> {
     const stdout = await runGitTextViaRunner({
       what,
-      workdir: this.workdir,
-      args: GIT_STATUS_ARGS,
+      workdir,
+      args: [...(read.args ?? GIT_STATUS_ARGS)],
+      ...(read.share === false ? { share: false } : {}),
     });
     feedPorcelainV2Records(stdout, sink);
     if (!sink.truncated && !sink.sawBranchHeader) {
@@ -255,11 +365,22 @@ export class GitService {
     return sink;
   }
 
-  async getStatus(): Promise<GitStatus> {
+  /**
+   * `share: false` for a status that decides a write (a merge's clean check):
+   * it never joins a status run already in flight (see `shareRunnerRead`).
+   */
+  async getStatus(options?: { share?: boolean }): Promise<GitStatus> {
+    return this.readStatusIn(this.workdir, options);
+  }
+
+  /** `getStatus` for `workdir` (the repository itself, or a submodule's checkout). */
+  private async readStatusIn(workdir: string, options?: { share?: boolean }): Promise<GitStatus> {
     const limited = (
       await this.readPorcelainV2(
         'status',
-        () => new PorcelainV2StatusAccumulator(MAX_GIT_STATUS_ENTRIES)
+        () => new PorcelainV2StatusAccumulator(MAX_GIT_STATUS_ENTRIES),
+        workdir,
+        options?.share === false ? { share: false } : {}
       )
     ).result();
     const totalListed =
@@ -372,11 +493,15 @@ export class GitService {
 
     // 1. Try to get remote default branch (origin/HEAD)
     try {
-      const originHead = await this.git.raw([
-        'symbolic-ref',
-        '--quiet',
-        'refs/remotes/origin/HEAD',
-      ]);
+      // Exit 1: origin/HEAD is not set. Exit 0 always prints the target, so an
+      // empty answer was lost (F3).
+      const { stdout: originHead } = await readGit({
+        what: 'symbolic-ref',
+        workdir: this.workdir,
+        args: ['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'],
+        okExitCodes: [1],
+        lostWhen: 'empty',
+      });
       // Example output: "refs/remotes/origin/main"
       const match = originHead.trim().match(/^refs\/remotes\/(.+)$/);
       if (match) {
@@ -432,14 +557,18 @@ export class GitService {
   /**
    * `git branch -a -v` as `GitBranch[]`, including the empty-listing judgement
    * (Q7) and the F3 recovery. `unborn` marks the synthetic fresh-repo answer.
+   * `workdir` / `git` are a submodule's own checkout for `getSubmoduleBranches`.
    */
-  private async readBranchListing(): Promise<{ branches: GitBranch[]; unborn: boolean }> {
+  private async readBranchListing(
+    workdir = this.workdir,
+    git: SimpleGit = this.git
+  ): Promise<{ branches: GitBranch[]; unborn: boolean }> {
     // Once the runner has recovered lost output in this process, skip the
     // primary run that would only lose it again (see `gitReadFallback`).
-    const viaRunner = shouldRouteViaRunner(this.workdir);
+    const viaRunner = shouldRouteViaRunner(workdir);
     const listed = viaRunner
-      ? await this.runBranchListingViaNode()
-      : toGitBranches((await this.git.branch(['-a', '-v'])).branches);
+      ? await this.runBranchListingViaNode(workdir)
+      : toGitBranches((await git.branch(['-a', '-v'])).branches);
     if (listed.length > 0) {
       if (viaRunner) noteRunnerRead('branch', `branches=${listed.length}`);
       return { branches: listed, unborn: false };
@@ -454,7 +583,7 @@ export class GitService {
     // answers by exit code, which survives where stdout is lost (F3).
     let headResolves = false;
     try {
-      await this.git.raw(['rev-parse', '--verify', 'HEAD']);
+      await git.raw(['rev-parse', '--verify', 'HEAD']);
       headResolves = true;
     } catch {
       // Unborn HEAD: this really is a fresh repo.
@@ -463,7 +592,7 @@ export class GitService {
     if (headResolves) {
       // Through the runner already: nothing left to fall back to.
       if (viaRunner) throw branchListingLostError(' via the node runner');
-      return { branches: await this.readBranchesViaNode(), unborn: false };
+      return { branches: await this.readBranchesViaNode(workdir), unborn: false };
     }
 
     try {
@@ -471,7 +600,7 @@ export class GitService {
       // always prints the name on success, so an empty answer was lost.
       const { stdout } = await readGit({
         what: 'symbolic-ref',
-        workdir: this.workdir,
+        workdir,
         args: ['symbolic-ref', '--short', 'HEAD'],
         lostWhen: 'empty',
       });
@@ -497,12 +626,12 @@ export class GitService {
    * simple-git does, so the result is the `GitBranch[]` the primary path
    * would have produced.
    */
-  private async readBranchesViaNode(): Promise<GitBranch[]> {
+  private async readBranchesViaNode(workdir: string): Promise<GitBranch[]> {
     // WSL repositories go through wsl.exe, which the runner does not route.
-    if (isWslGitRepository(this.workdir)) throw branchListingLostError('');
+    if (isWslGitRepository(workdir)) throw branchListingLostError('');
 
     noteLostOutput('branch');
-    const branches = await this.runBranchListingViaNode();
+    const branches = await this.runBranchListingViaNode(workdir);
     if (branches.length === 0) {
       console.warn('[git-fallback] branch via node runner lost its output too');
       throw branchListingLostError(' via the node runner');
@@ -512,10 +641,10 @@ export class GitService {
     return branches;
   }
 
-  private async runBranchListingViaNode(): Promise<GitBranch[]> {
+  private async runBranchListingViaNode(workdir: string): Promise<GitBranch[]> {
     const stdout = await runGitTextViaRunner({
       what: 'branch',
-      workdir: this.workdir,
+      workdir,
       args: GIT_BRANCH_FALLBACK_ARGS,
     });
     return toGitBranches(parseBranchVerbose(stdout));
@@ -572,13 +701,45 @@ export class GitService {
     }
   }
 
+  /**
+   * Commit, then confirm it from HEAD.
+   *
+   * simple-git takes the new hash from git's stdout, which the encrypted host
+   * loses (F3), so it came back as ''. It also takes a non-zero exit with an
+   * empty stderr as success: `nothing to commit` (exit 1, said on stdout) came
+   * back as a commit that never happened. HEAD is read before and after through
+   * the fallback, and a HEAD that did not move fails the call. When HEAD cannot
+   * be read back the commit's own status stands, as for `checkout`.
+   */
   async commit(message: string, files?: string[]): Promise<string> {
     if (files && files.length > 0) {
       const normalizedFiles = this.normalizePathsForGit(files);
       await this.git.add(normalizedFiles);
     }
+    // `undefined`: not known (unreadable); `null`: unborn.
+    const before = await this.readHeadCommit().catch(() => undefined);
     const result = await this.git.commit(message);
-    return result.commit;
+
+    let after: string | null;
+    try {
+      after = await this.readHeadCommit();
+    } catch (err) {
+      console.warn(
+        `[git-fallback] commit reported success but HEAD could not be read back: ${
+          isGitOutputLostError(err) ? 'output lost' : err instanceof Error ? err.name : 'unknown'
+        }`
+      );
+      return result.commit;
+    }
+    if (after === null || after === before) {
+      throw new Error('git commit reported success, but HEAD did not move (nothing was committed)');
+    }
+    // simple-git's (short) hash where it read one; HEAD's where the output was lost.
+    return result.commit || after;
+  }
+
+  private readHeadCommit(): Promise<string | null> {
+    return readHeadCommit(this.workdir);
   }
 
   async fetch(remote = 'origin'): Promise<void> {
@@ -635,6 +796,8 @@ export class GitService {
         // Exit 1: HEAD is detached.
         okExitCodes: [1],
         lostWhen: 'empty',
+        // A run in flight may have started before the checkout.
+        share: false,
       });
       head = exitCode === 0 ? stdout.trim() : null;
     } catch (err) {
@@ -717,44 +880,102 @@ export class GitService {
 
   async discard(filePaths: string | string[]): Promise<void> {
     const paths = Array.isArray(filePaths) ? filePaths : [filePaths];
+    await this.discardIn(this.workdir, this.git, paths, { removeDirectories: false });
+  }
+
+  /**
+   * Delete the untracked files among `paths` and restore the rest, in `root`
+   * (the repository, or a submodule's checkout for `discardSubmodule`).
+   *
+   * Every path is checked before anything is touched: `resolveDiscardTarget`
+   * refuses `..` and paths outside `root`, and symbolic links are refused.
+   * Untracked or tracked is then decided by exact name in git's own list of
+   * untracked files (`readUntrackedForDiscard`); anything else goes to
+   * `git checkout`, which fails for a path it does not know and deletes
+   * nothing. When that list cannot be read, nothing is touched.
+   *
+   * `removeDirectories` keeps `discardSubmodule`'s handling of an untracked
+   * entry that is a directory (an embedded repository, which git lists whole
+   * as `dir/`): it is removed recursively. `discard` only ever unlinks.
+   */
+  private async discardIn(
+    root: string,
+    git: SimpleGit,
+    paths: string[],
+    options: { removeDirectories: boolean }
+  ): Promise<void> {
+    const targets = paths.map((filePath) => ({
+      filePath,
+      ...resolveDiscardTarget(root, filePath),
+    }));
+    for (const target of targets) {
+      const stats = await fs.lstat(target.absolutePath).catch(() => null);
+      if (stats?.isSymbolicLink()) {
+        throw new Error(`Cannot discard symbolic links: ${target.filePath}`);
+      }
+    }
+
+    const untracked = await this.readUntrackedForDiscard(
+      root,
+      targets.map((target) => target.gitPath)
+    );
     const trackedPaths: string[] = [];
     const untrackedPaths: string[] = [];
-
-    const status = await this.git.status();
-
-    for (const filePath of paths) {
-      // 1. First check for symbolic links on the original path (before resolving)
-      const initialPath = path.join(this.workdir, filePath);
-      const initialStats = await fs.lstat(initialPath).catch(() => null);
-      if (initialStats?.isSymbolicLink()) {
-        throw new Error(`Cannot discard symbolic links: ${filePath}`);
-      }
-
-      // 2. Then validate path to prevent path traversal attacks
-      const absolutePath = path.resolve(this.workdir, filePath);
-      const relativePath = path.relative(this.workdir, absolutePath);
-
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-        throw new Error(`Invalid file path: path traversal detected - ${filePath}`);
-      }
-
-      // 3. Categorize files
-      if (status.not_added.includes(filePath)) {
-        untrackedPaths.push(absolutePath);
+    for (const target of targets) {
+      if (untracked.has(target.gitPath)) {
+        untrackedPaths.push(target.absolutePath);
       } else {
-        trackedPaths.push(filePath);
+        trackedPaths.push(target.gitPath);
       }
     }
 
     // Delete untracked files
     for (const absolutePath of untrackedPaths) {
+      if (options.removeDirectories) {
+        const stat = await fs.stat(absolutePath).catch(() => null);
+        if (stat?.isDirectory()) {
+          await fs.rm(absolutePath, { recursive: true });
+          continue;
+        }
+      }
       await fs.unlink(absolutePath);
     }
 
     // Restore tracked files in one git command
     if (trackedPaths.length > 0) {
-      await this.git.checkout(['--', ...trackedPaths]);
+      await git.checkout(['--', ...trackedPaths]);
     }
+  }
+
+  /**
+   * The untracked files among `gitPaths` (as `resolveDiscardTarget` names
+   * them), for `discardIn`, which deletes exactly these.
+   *
+   * Its own status, not `getStatus`'s:
+   * - `--untracked-files=all` lists every untracked file by name, so a target
+   *   matches only itself, never an untracked parent directory, and ignored
+   *   files are not listed at all;
+   * - no entry cap: `getStatus` stops at 5000 entries and lists tracked
+   *   changes first, so an untracked file past them would read as tracked;
+   * - `share: false`: a status run already in flight may predate a commit and
+   *   still list a just-committed file as untracked.
+   * Limited to `gitPaths`, unless they would crowd the command line
+   * (`DISCARD_PATHSPEC_BUDGET`): then the whole status is read. A status that
+   * is lost on both paths, or too large for the runner, fails the call.
+   */
+  private async readUntrackedForDiscard(workdir: string, gitPaths: string[]): Promise<Set<string>> {
+    const pathspecLength = gitPaths.reduce((total, gitPath) => total + gitPath.length + 3, 0);
+    const args =
+      pathspecLength <= DISCARD_PATHSPEC_BUDGET
+        ? [...GIT_DISCARD_STATUS_ARGS, '--', ...gitPaths]
+        : GIT_DISCARD_STATUS_ARGS;
+    const status = await this.readPorcelainV2(
+      'discard-status',
+      () => new PorcelainV2StatusAccumulator(Number.POSITIVE_INFINITY),
+      workdir,
+      { args, share: false }
+    );
+    return new Set(status.result().untracked);
   }
 
   async showCommit(hash: string): Promise<string> {
@@ -836,14 +1057,11 @@ export class GitService {
     return files;
   }
 
+  /** The subset of `paths` that git ignores (see `readIgnoredPaths`). */
   async checkIgnored(paths: string[]): Promise<Set<string>> {
-    if (paths.length === 0) return new Set();
     try {
-      // git check-ignore prints the ignored paths
-      const result = await this.git.checkIgnore(paths);
-      return new Set(result);
+      return await readIgnoredPaths(this.workdir, paths);
     } catch {
-      // Exits 1 (and throws) when none of the paths is ignored
       return new Set();
     }
   }
@@ -860,7 +1078,9 @@ export class GitService {
     // the runner anyway (F3, see `gitReadFallback`).
     const read = async (args: string[]): Promise<string> =>
       (await readGit({ what: args[0] ?? 'git', workdir, args, lostWhen: 'never' })).stdout;
-    const showOrEmpty = (spec: string): Promise<string> => read(['show', spec]).catch(() => '');
+    // Empty only when git says the path is not in that revision; a blob too
+    // large or too slow to read fails the diff instead of showing it as empty.
+    const showOrEmpty = (spec: string): Promise<string> => gitShow(workdir, spec);
 
     // Detect binary using git diff --numstat (binary files show "-" for insertions/deletions)
     try {
@@ -919,9 +1139,11 @@ export class GitService {
         insertions: insertionsMatch ? Number.parseInt(insertionsMatch[1], 10) : 0,
         deletions: deletionsMatch ? Number.parseInt(deletionsMatch[1], 10) : 0,
       };
-    } catch {
-      // Repository might not have HEAD (empty repo) or other issues
-      return { insertions: 0, deletions: 0 };
+    } catch (error) {
+      // No HEAD yet (an empty repository): git says so with a non-zero exit.
+      // A read that could not finish is not "no changes".
+      if (isGitExitError(error)) return { insertions: 0, deletions: 0 };
+      throw error;
     }
   }
 
@@ -1006,8 +1228,26 @@ export class GitService {
     const submodules: GitSubmodule[] = [];
 
     try {
-      // Get submodule status using git submodule status
-      const statusOutput = await this.git.raw(['submodule', 'status', '--recursive']);
+      // Get submodule status using git submodule status. No submodules prints
+      // nothing, and so does a stale .gitmodules whose gitlinks are gone from
+      // the index (`git rm --cached` without editing it). Only when the index
+      // holds a path .gitmodules maps does success print a line, so only then
+      // is an empty answer a loss (F3), asked again with the loss judged.
+      const readListing = (lostWhen: 'empty' | 'never') =>
+        readGit({
+          what: 'submodule',
+          workdir: this.workdir,
+          args: ['submodule', 'status', '--recursive'],
+          lostWhen,
+        });
+      let { stdout: statusOutput } = await readListing('never');
+      if (
+        !statusOutput.trim() &&
+        hasGitmodules(this.workdir) &&
+        (await this.indexHasGitmodulesPath())
+      ) {
+        ({ stdout: statusOutput } = await readListing('empty'));
+      }
 
       if (!statusOutput.trim()) {
         return [];
@@ -1042,22 +1282,15 @@ export class GitService {
         let branch: string | undefined;
 
         try {
-          url = await this.git.raw(['config', '-f', '.gitmodules', `submodule.${subPath}.url`]);
-          url = url.trim();
+          url = (await this.readGitmodulesKey(`submodule.${subPath}.url`)) ?? '';
         } catch {
-          // URL not found in .gitmodules
+          // URL not readable
         }
 
         try {
-          branch = await this.git.raw([
-            'config',
-            '-f',
-            '.gitmodules',
-            `submodule.${subPath}.branch`,
-          ]);
-          branch = branch.trim() || undefined;
+          branch = (await this.readGitmodulesKey(`submodule.${subPath}.branch`)) || undefined;
         } catch {
-          // Branch not specified
+          // Branch not readable
         }
 
         submodules.push({
@@ -1083,16 +1316,15 @@ export class GitService {
         if (submodule.initialized) {
           try {
             const submoduleWorkdir = path.join(this.workdir, submodule.path);
-            const subGit = createSimpleGit(submoduleWorkdir);
-            const subStatus = await subGit.status();
+            const subStatus = await this.readStatusIn(submoduleWorkdir);
             submodule.branch = subStatus.current || undefined;
             submodule.tracking = subStatus.tracking || undefined;
             submodule.ahead = subStatus.ahead;
             submodule.behind = subStatus.behind;
-            submodule.hasChanges = !subStatus.isClean();
+            submodule.hasChanges = !subStatus.isClean;
             submodule.stagedCount = subStatus.staged.length;
             submodule.unstagedCount =
-              subStatus.modified.length + subStatus.deleted.length + subStatus.not_added.length;
+              subStatus.modified.length + subStatus.deleted.length + subStatus.untracked.length;
           } catch (error) {
             console.debug(`Failed to get status for submodule ${submodule.path}:`, error);
             // Submodule status failed; keep the defaults
@@ -1100,11 +1332,59 @@ export class GitService {
         }
       }
     } catch (error) {
-      // No submodules or error reading them
+      // git refusing (not a repository, a broken .gitmodules) reads as no
+      // submodules, as before. A listing that could not be read is not "none".
+      if (!isGitExitError(error)) throw error;
       console.debug('Failed to list submodules:', error);
     }
 
     return submodules;
+  }
+
+  /**
+   * Whether the index holds a path `.gitmodules` maps (its gitlink), asked by
+   * exit code per path. The paths come through the F3 fallback: exit 0 always
+   * prints them (exit 1: there are none), so an empty answer was lost.
+   */
+  private async indexHasGitmodulesPath(): Promise<boolean> {
+    const { stdout, exitCode } = await readGit({
+      what: 'config',
+      workdir: this.workdir,
+      args: ['config', '-z', '-f', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
+      okExitCodes: [1],
+      lostWhen: 'empty',
+    });
+    if (exitCode !== 0) return false;
+    // `-z`: `<key>\n<value>\0` per entry (a submodule name may hold spaces).
+    for (const entry of stdout.split('\0')) {
+      const newline = entry.indexOf('\n');
+      const subPath = newline >= 0 ? entry.slice(newline + 1) : '';
+      if (!subPath) continue;
+      // `:0:<path>`: the stage-0 index entry; exit 1 when there is none.
+      const code = await probeGitExitCode(this.workdir, [
+        'rev-parse',
+        '--verify',
+        '--quiet',
+        `:0:${subPath}`,
+      ]);
+      if (code === 0) return true;
+    }
+    return false;
+  }
+
+  /**
+   * One key of `.gitmodules`, `null` when it is not set (git exits 1). Exit 0
+   * always prints the value, so an empty answer was lost (F3).
+   */
+  private async readGitmodulesKey(key: string): Promise<string | null> {
+    const { stdout, exitCode } = await readGit({
+      what: 'config',
+      workdir: this.workdir,
+      args: ['config', '-f', '.gitmodules', key],
+      okExitCodes: [1],
+      lostWhen: 'empty',
+    });
+    return exitCode === 0 ? stdout.trim() : null;
   }
 
   /**
@@ -1292,101 +1572,26 @@ export class GitService {
    * Discard file changes in a submodule
    */
   async discardSubmodule(submodulePath: string, paths: string[]): Promise<void> {
-    const subGit = this.getSubmoduleGit(submodulePath);
-    const submoduleDir = path.join(this.workdir, submodulePath);
-    const status = await subGit.status();
-
-    const trackedPaths: string[] = [];
-    const untrackedPaths: string[] = [];
-
-    for (const filePath of paths) {
-      // Check for symlinks
-      const initialPath = path.join(submoduleDir, filePath);
-      const initialStats = await fs.lstat(initialPath).catch(() => null);
-      if (initialStats?.isSymbolicLink()) {
-        throw new Error(`Cannot discard symbolic links: ${filePath}`);
-      }
-
-      if (status.not_added.includes(filePath)) {
-        untrackedPaths.push(initialPath);
-      } else {
-        trackedPaths.push(filePath);
-      }
-    }
-
-    // Remove untracked files/directories
-    for (const absolutePath of untrackedPaths) {
-      const stat = await fs.stat(absolutePath).catch(() => null);
-      if (stat?.isDirectory()) {
-        await fs.rm(absolutePath, { recursive: true });
-      } else {
-        await fs.unlink(absolutePath);
-      }
-    }
-
-    // Restore tracked files
-    if (trackedPaths.length > 0) {
-      await subGit.checkout(['--', ...trackedPaths]);
-    }
+    // The same checks and status as `discard`, in the submodule's own checkout.
+    await this.discardIn(
+      this.resolveSubmoduleDir(submodulePath),
+      this.getSubmoduleGit(submodulePath),
+      paths,
+      { removeDirectories: true }
+    );
   }
 
   /**
-   * Parse the file-change list from a git status result (shared logic)
-   */
-  private parseStatusToChanges(status: StatusResult): FileChange[] {
-    const changes: FileChange[] = [];
-
-    // Build a map of renamed files for quick lookup
-    const renamedMap = new Map<string, string>();
-    for (const rename of status.renamed) {
-      renamedMap.set(rename.to, rename.from);
-    }
-
-    // Use status.files for precise file status detection
-    for (const file of status.files) {
-      const filePath = file.path;
-      const indexStatus = file.index;
-      const workingDirStatus = file.working_dir;
-
-      // Check index status (staged changes)
-      if (indexStatus && indexStatus !== ' ' && indexStatus !== '?') {
-        let fileStatus: FileChangeStatus;
-        if (indexStatus === 'A') fileStatus = 'A';
-        else if (indexStatus === 'D') fileStatus = 'D';
-        else if (indexStatus === 'R') fileStatus = 'R';
-        else if (indexStatus === 'C') fileStatus = 'C';
-        else if (indexStatus === 'U') fileStatus = 'X';
-        else fileStatus = 'M';
-
-        const change: FileChange = { path: filePath, status: fileStatus, staged: true };
-        if (renamedMap.has(filePath)) {
-          change.originalPath = renamedMap.get(filePath);
-        }
-        changes.push(change);
-      }
-
-      // Check working_dir status (unstaged changes)
-      if (workingDirStatus && workingDirStatus !== ' ') {
-        let fileStatus: FileChangeStatus;
-        if (workingDirStatus === '?') fileStatus = 'U';
-        else if (workingDirStatus === 'D') fileStatus = 'D';
-        else if (workingDirStatus === 'U') fileStatus = 'X';
-        else fileStatus = 'M';
-
-        changes.push({ path: filePath, status: fileStatus, staged: false });
-      }
-    }
-
-    return changes;
-  }
-
-  /**
-   * Get file changes list for a submodule
+   * Get file changes list for a submodule: the same porcelain v2 read and
+   * parser as `getFileChanges`, in the submodule's own checkout.
    */
   async getSubmoduleChanges(submodulePath: string): Promise<FileChange[]> {
-    const subGit = this.getSubmoduleGit(submodulePath);
-    const status = await subGit.status();
-    return this.parseStatusToChanges(status);
+    const changes = await this.readPorcelainV2(
+      'file-changes',
+      () => new PorcelainV2FileChangesAccumulator(MAX_GIT_FILE_CHANGES),
+      this.resolveSubmoduleDir(submodulePath)
+    );
+    return changes.result().changes;
   }
 
   /**
@@ -1416,26 +1621,21 @@ export class GitService {
       return { path: filePath, original: '', modified: '', isBinary: true };
     }
 
-    let original = '';
+    // HEAD version: empty for a new file (git's own "no"); a blob that cannot be
+    // read fails the diff instead.
+    const original = await gitShow(fullSubPath, `HEAD:${filePath}`);
+
     let modified = '';
-
-    try {
-      // HEAD version
-      original = await gitShow(fullSubPath, `HEAD:${filePath}`);
-    } catch {
-      // New file: no HEAD version
-    }
-
-    try {
-      if (staged) {
-        // Index (staged) version
-        modified = await gitShow(fullSubPath, `:${filePath}`);
-      } else {
+    if (staged) {
+      // Index (staged) version
+      modified = await gitShow(fullSubPath, `:${filePath}`);
+    } else {
+      try {
         // Working-tree version
         modified = await readWorkingTreeFile(fullFilePath).then((buffer) => decodeBuffer(buffer));
+      } catch {
+        // Deleted file
       }
-    } catch {
-      // Deleted file
     }
 
     return { path: filePath, original, modified };
@@ -1445,14 +1645,11 @@ export class GitService {
    * Get branch list for a submodule
    */
   async getSubmoduleBranches(submodulePath: string): Promise<GitBranch[]> {
-    const subGit = this.getSubmoduleGit(submodulePath);
-    const result = await subGit.branch(['-a', '-v']);
-    return Object.entries(result.branches).map(([name, info]) => ({
-      name,
-      current: info.current,
-      commit: info.commit,
-      label: info.label,
-    }));
+    const listing = await this.readBranchListing(
+      this.resolveSubmoduleDir(submodulePath),
+      this.getSubmoduleGit(submodulePath)
+    );
+    return listing.branches;
   }
 
   /**
@@ -1609,8 +1806,9 @@ export class GitService {
       });
       return this.parsePorcelainBlame(stdout);
     } catch (err) {
-      if (err instanceof GitCommandError && err.exitCode !== null) {
-        throw new Error(`git blame failed: ${err.stderr.trim()}`);
+      // git's own refusal (untracked file, no such path), on either path.
+      if (isGitExitError(err)) {
+        throw new Error(`git blame failed: ${gitExitStderr(err) || (err as Error).message}`);
       }
       throw err;
     }

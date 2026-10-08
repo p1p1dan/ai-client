@@ -499,8 +499,35 @@ async function runSelfTest() {
   process.stdout.write(output);
 }
 
+// Porcelain v2 (-z) records carry the path verbatim after a fixed number of
+// space-separated fields, spaces included; it is never "the last word". A
+// type-2 (rename/copy) record is followed by a separate record holding the
+// ORIGINAL path. Same rules as src/main/services/git/porcelainV2Status.ts,
+// which this standalone helper cannot import.
+function porcelainPathAfterFields(record, fieldCount) {
+  let index = -1;
+  for (let i = 0; i < fieldCount; i++) {
+    index = record.indexOf(' ', index + 1);
+    if (index < 0) return '';
+  }
+  return record.slice(index + 1);
+}
+
+function porcelainPathFieldCount(kind) {
+  if (kind === '1') return 8;
+  if (kind === '2') return 9;
+  if (kind === 'u') return 10;
+  return 1;
+}
+
+function porcelainRecords(stdout) {
+  // Every record ends in NUL; an unterminated trailing fragment is not one.
+  const records = stdout.split('\0');
+  records.pop();
+  return records;
+}
+
 function parsePorcelainStatus(stdout) {
-  const lines = stdout.split('\0').map((line) => line.trim()).filter(Boolean);
   const result = {
     isClean: true,
     current: null,
@@ -514,57 +541,52 @@ function parsePorcelainStatus(stdout) {
     conflicted: [],
   };
 
-  let pendingRename = null;
+  let skipOriginalPath = false;
 
-  for (const line of lines) {
-    if (line.startsWith('# branch.head ')) {
-      const branch = line.slice('# branch.head '.length);
+  for (const record of porcelainRecords(stdout)) {
+    if (!record) continue;
+    if (skipOriginalPath) {
+      skipOriginalPath = false;
+      continue;
+    }
+    if (record.startsWith('# branch.head ')) {
+      const branch = record.slice('# branch.head '.length);
       result.current = branch === '(detached)' ? null : branch;
       continue;
     }
-    if (line.startsWith('# branch.upstream ')) {
-      result.tracking = line.slice('# branch.upstream '.length);
+    if (record.startsWith('# branch.upstream ')) {
+      result.tracking = record.slice('# branch.upstream '.length);
       continue;
     }
-    if (line.startsWith('# branch.ab ')) {
-      const parts = line.split(' ');
+    if (record.startsWith('# branch.ab ')) {
+      const parts = record.split(' ');
       result.ahead = Number.parseInt((parts[2] || '+0').replace('+', ''), 10) || 0;
       result.behind = Number.parseInt((parts[3] || '-0').replace('-', ''), 10) || 0;
       continue;
     }
-    if (pendingRename) {
-      const filePath = line;
-      const x = pendingRename.xy[0] || '.';
-      const y = pendingRename.xy[1] || '.';
-      if (x !== '.' && x !== '?' && x !== '!') result.staged.push(filePath);
-      if (y === 'D') result.deleted.push(filePath);
-      else if (y !== '.' && y !== '?' && y !== '!' && y !== ' ') result.modified.push(filePath);
-      if (x === 'U' || y === 'U') result.conflicted.push(filePath);
-      pendingRename = null;
+    if (record.startsWith('# ')) continue;
+    const kind = record[0];
+    if (kind === '?') {
+      const untrackedPath = porcelainPathAfterFields(record, 1);
+      if (untrackedPath) result.untracked.push(untrackedPath);
       continue;
     }
-    if (line.startsWith('? ')) {
-      result.untracked.push(line.slice(2));
-      continue;
-    }
-    if (line.startsWith('! ')) {
-      continue;
-    }
-    const parts = line.split(' ');
-    const kind = line[0];
-    const xy = parts[1] || '..';
-    const filePath = parts[parts.length - 1];
-    if (kind === '2') {
-      pendingRename = { xy };
-      continue;
-    }
+    if (kind !== '1' && kind !== '2' && kind !== 'u') continue;
+    const xy = record.slice(2, 4);
+    const filePath = porcelainPathAfterFields(record, porcelainPathFieldCount(kind));
+    // The record after a type-2 entry is its original path, not a new entry.
+    if (kind === '2') skipOriginalPath = true;
     if (!filePath) continue;
+    if (kind === 'u') {
+      // Every unmerged pair is a conflict and nothing else.
+      result.conflicted.push(filePath);
+      continue;
+    }
     const x = xy[0] || '.';
     const y = xy[1] || '.';
-    if (x === 'U' || y === 'U' || kind === 'u') result.conflicted.push(filePath);
-    if (x !== '.' && x !== '?' && x !== '!') result.staged.push(filePath);
+    if (x !== '.') result.staged.push(filePath);
     if (y === 'D') result.deleted.push(filePath);
-    else if (y !== '.' && y !== '?' && y !== '!' && y !== ' ') result.modified.push(filePath);
+    else if (y !== '.') result.modified.push(filePath);
   }
 
   result.isClean =
@@ -654,46 +676,53 @@ function parseLog(stdout) {
     });
 }
 
+function porcelainIndexStatus(x) {
+  if (x === 'A' || x === 'D' || x === 'R' || x === 'C') return x;
+  if (x === 'U') return 'X';
+  return 'M';
+}
+
 function parseFileChanges(stdout) {
-  const lines = stdout.split('\0').map((line) => line.trim()).filter(Boolean);
   const changes = [];
+  // A type-2 record waits for the next record, which is its original path.
   let pendingRename = null;
-  for (const line of lines) {
-    if (line.startsWith('# ') || line.startsWith('! ')) continue;
-    if (pendingRename) {
-      const filePath = line;
-      const x = pendingRename.xy[0] || '.';
-      const y = pendingRename.xy[1] || '.';
-      if (x !== '.' && x !== '?' && x !== '!') {
-        changes.push({ path: filePath, status: x === 'A' ? 'A' : x === 'D' ? 'D' : x === 'R' ? 'R' : x === 'C' ? 'C' : x === 'U' ? 'X' : 'M', staged: true, originalPath: pendingRename.originalPath });
-      }
-      if (y !== '.' && y !== ' ') {
-        changes.push({ path: filePath, status: y === 'D' ? 'D' : y === 'U' ? 'X' : 'M', staged: false });
-      }
-      pendingRename = null;
-      continue;
-    }
-    if (line.startsWith('? ')) {
-      changes.push({ path: line.slice(2), status: 'U', staged: false });
-      continue;
-    }
-    const kind = line[0];
-    const parts = line.split(' ');
-    const xy = parts[1] || '..';
-    const filePath = parts[parts.length - 1];
-    if (!filePath) continue;
-    if (kind === '2') {
-      pendingRename = { xy, originalPath: filePath };
-      continue;
-    }
+  const addEntry = (xy, filePath, originalPath) => {
     const x = xy[0] || '.';
     const y = xy[1] || '.';
     if (x !== '.' && x !== '?' && x !== '!') {
-      changes.push({ path: filePath, status: x === 'A' ? 'A' : x === 'D' ? 'D' : x === 'R' ? 'R' : x === 'C' ? 'C' : x === 'U' ? 'X' : 'M', staged: true });
+      const change = { path: filePath, status: porcelainIndexStatus(x), staged: true };
+      if (originalPath) change.originalPath = originalPath;
+      changes.push(change);
     }
     if (y !== '.' && y !== ' ') {
       changes.push({ path: filePath, status: y === 'D' ? 'D' : y === 'U' ? 'X' : 'M', staged: false });
     }
+  };
+  for (const record of porcelainRecords(stdout)) {
+    if (!record) continue;
+    // Before the header check: an original path may itself start with "# ".
+    if (pendingRename) {
+      const rename = pendingRename;
+      pendingRename = null;
+      if (rename.path) addEntry(rename.xy, rename.path, record);
+      continue;
+    }
+    if (record.startsWith('# ')) continue;
+    const kind = record[0];
+    if (kind === '?') {
+      const untrackedPath = porcelainPathAfterFields(record, 1);
+      if (untrackedPath) changes.push({ path: untrackedPath, status: 'U', staged: false });
+      continue;
+    }
+    if (kind !== '1' && kind !== '2' && kind !== 'u') continue;
+    const xy = record.slice(2, 4);
+    const filePath = porcelainPathAfterFields(record, porcelainPathFieldCount(kind));
+    if (kind === '2') {
+      // Recorded under the NEW path (this record), the old one comes next.
+      pendingRename = { xy, path: filePath };
+      continue;
+    }
+    if (filePath) addEntry(xy, filePath);
   }
   return { changes };
 }

@@ -1437,6 +1437,7 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
                         skipFetch: true,
                         isCommitView: true,
                         isLoading: commitDiffQuery.isPending,
+                        loadError: commitDiffQuery.error,
                       }
                     : {})}
                   sideBySideInlineBreakpoint={700}

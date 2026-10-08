@@ -39,17 +39,21 @@ export class NodeGitRunnerError extends Error {
   readonly failure: NodeGitRunnerFailure;
   readonly exitCode: number | string | null;
   readonly signal: string | null;
+  /** git's stderr as relayed (capped like the message), for `git-exit`. */
+  readonly stderr: string;
 
   constructor(
     message: string,
     failure: NodeGitRunnerFailure,
     exitCode: number | string | null,
-    signal: string | null
+    signal: string | null,
+    stderr = ''
   ) {
     super(message);
     this.failure = failure;
     this.exitCode = exitCode;
     this.signal = signal;
+    this.stderr = stderr;
   }
 }
 
@@ -142,7 +146,8 @@ function describeStderr(stderr: string): string {
 export function toNodeGitRunnerError(
   error: unknown,
   command: string,
-  timeoutMs: number
+  timeoutMs: number,
+  maxBuffer = NODE_GIT_RUNNER_MAX_BUFFER
 ): NodeGitRunnerError {
   const e = (error ?? {}) as ExecFileError;
   // Buffer mode (`encoding: 'buffer'`) rejects with Buffer streams.
@@ -167,7 +172,7 @@ export function toNodeGitRunnerError(
   }
   if (code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER') {
     return new NodeGitRunnerError(
-      `${prefix}: output exceeded ${NODE_GIT_RUNNER_MAX_BUFFER} bytes`,
+      `${prefix}: output exceeded ${maxBuffer} bytes`,
       'max-buffer',
       code,
       signal
@@ -197,7 +202,8 @@ export function toNodeGitRunnerError(
       `${prefix}: exit ${code}${describeStderr(stderr)}`,
       'git-exit',
       code,
-      signal
+      signal,
+      stderr.trim().slice(0, 500)
     );
   }
   const message = error instanceof Error ? error.message : String(error);
@@ -215,6 +221,8 @@ export type RunGitViaNodeOptions = {
    * caller detects itself (blobs from `git show`). Default `'utf8'`.
    */
   encoding?: 'utf8' | 'buffer';
+  /** Cap on the relayed stdout; beyond it the run fails as `max-buffer`. */
+  maxBuffer?: number;
   exec?: NodeGitRunnerExec;
 };
 
@@ -234,6 +242,7 @@ export async function runGitViaNode(
   options: RunGitViaNodeOptions
 ): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   const timeoutMs = options.timeoutMs ?? NODE_GIT_RUNNER_TIMEOUT_MS;
+  const maxBuffer = options.maxBuffer ?? NODE_GIT_RUNNER_MAX_BUFFER;
   const exec = options.exec ?? execFileAsync;
   try {
     return await exec(
@@ -244,12 +253,12 @@ export async function runGitViaNode(
         // Porcelain formats are not localized, but git's own messages and the
         // detached-HEAD text of `git branch` are; parse English only.
         env: { ...options.env, LC_ALL: 'C', LANGUAGE: 'C' },
-        maxBuffer: NODE_GIT_RUNNER_MAX_BUFFER,
+        maxBuffer,
         timeout: timeoutMs,
         windowsHide: true,
       }
     );
   } catch (error) {
-    throw toNodeGitRunnerError(error, options.args[0] ?? '', timeoutMs);
+    throw toNodeGitRunnerError(error, options.args[0] ?? '', timeoutMs, maxBuffer);
   }
 }
