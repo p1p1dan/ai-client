@@ -56,6 +56,7 @@ P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版�
 
 ## Last Landed
 
+- 2026-10-08 `1.1.0-dsh.7` 测试包：推送 `a0320fe2`（用户同意），整包 `build.yml` run 37859947558 全部 job 通过（Windows、Linux、macOS 打包与远程运行时），`dsh-bridge-gate` run 37859914736 通过。Windows 安装包 artifact `windows-installer` 182 MB。交用户在加密机上复测 git（分支显示与切换、变更与 diff、提交历史、AI 提交信息与代码审查、放弃更改）与主题「跟随系统」。
 - 2026-10-08 现场缺陷三条（未推送）：
   - **git（用户在 dsh.6 加密机上报）** `cc4f1f48`（[决策 161](decisions/161-git-read-fallback-shared.md)，待审批）：切分支「没反应」实为聊天栏当前分支来自没有回退的 `git worktree list`；「没有修改」是 `getFileChanges` 丢输出抛错后无回退；「暂无提交」是 `getLog` 把空输出当 0 条。新增共用 `gitReadFallback.ts`（每个读取声明 `lostWhen`，非零退出不算丢失，回退成功一次后本进程读取直接走 runner），log / file-changes / worktree list / diff / 提交详情 / blame 改走它，checkout 后读回 HEAD。独立审查 1 条中低（外部信号杀掉的 status 被当成丢输出、可在普通 Linux 上误开开关）已修。收尾批 `6626d618`（[决策 162](decisions/162-git-read-fallback-closeout.md)，待审批）：AI 提交信息 / 代码审查 diff、commit 读回 HEAD、合并与冲突、子模块、check-ignore 补回退；读失败时变更列表 / 提交历史 / 分支按钮显示错误行；大 diff 不再静默为空；远程端解析同修。第二次独立审查 6 条（discard 路径穿越、写后复用在飞的旧读、discard 受 5000 条上限影响等）全部已修。
   - **1.0.4 测试者报的外观与导入引导** `c373d02d`（[决策 160](decisions/160-field-fixes-theme-and-import-guide.md)）：主题「跟随系统」每次启动被 persist merge 里的 system→light 改回浅色（`4019fedf` 起，1.0.1～1.0.4 与本分支都有）；导入引导只看「本机有没有历史」不看导入状态。先在基于 1.0.4 的本地 worktree `fix-1.0.x-persist` 修好再移植。**用户裁决：只修在本分支，不发 1.0.5；本分支测试完毕后直接推为主线。** 加了设置写盘失败、settings.json 读回形状、导入计数的诊断日志。
