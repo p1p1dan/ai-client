@@ -16,6 +16,7 @@ import {
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog } from '@shared/types/agentCatalog';
 import { app, net } from 'electron';
+import { cacheControlOnToolsSettings } from '../agent-host/cacheControlOnToolsSetting';
 import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
 import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
 import { getAppStateRoot } from '../appStatePaths';
@@ -189,7 +190,11 @@ function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
   return resolveDshModelPlanWith({
     native,
     env: process.env,
-    settings: { ...(promptCacheTtl ? { promptCacheTtl } : {}), ...providerTimeoutSettings() },
+    settings: {
+      ...(promptCacheTtl ? { promptCacheTtl } : {}),
+      ...providerTimeoutSettings(),
+      ...cacheControlOnToolsSettings(),
+    },
     clientVersion: app.getVersion(),
     log: (...args) => console.info(...args),
   });

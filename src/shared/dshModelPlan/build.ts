@@ -9,6 +9,7 @@
  */
 
 import { createHash } from 'node:crypto';
+import { resolveCacheControlOnTools } from '../types/cacheControlOnTools.ts';
 import { dshRouteSettings } from './settings.ts';
 import {
   CLIENT_IDENTITY_HEADER,
@@ -158,6 +159,7 @@ export function effortsOf(reasoningEfforts: DshPlanModel['reasoningEfforts']): D
 export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
   const env = input.env ?? {};
   const settings = dshRouteSettings(input.settings);
+  const cacheControlOnTools = resolveCacheControlOnTools(input.settings?.cacheControlOnTools);
   const drops: DshPlanDrop[] = [];
   const fieldDropKeys = new Set<string>();
   const dropField = (
@@ -200,6 +202,24 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
       }
     }
     return Object.keys(out).length > 0 ? out : undefined;
+  };
+
+  /**
+   * GW-16 temporary switch (decisions 149 rule 19, 159). Off (the default):
+   * every anthropic-messages route says `supportsCacheControlOnTools: false`,
+   * so pi-ai leaves the last tool unmarked and a request carries two
+   * breakpoints at most. A row that declares the field itself is set to
+   * `false` too, because DSH's compat merge lets the row win over the route.
+   * On: models.json is followed as it stands (three breakpoints).
+   */
+  const cacheControlCompat = (
+    compat: RawRecord | undefined,
+    api: DshProtocol,
+    level: 'route' | 'row'
+  ): RawRecord | undefined => {
+    if (cacheControlOnTools || api !== 'anthropic-messages') return compat;
+    if (level === 'row' && compat?.supportsCacheControlOnTools === undefined) return compat;
+    return { ...compat, supportsCacheControlOnTools: false };
   };
 
   /** R5: expanded like the native runtime; the reserved name and dead references go. */
@@ -315,7 +335,7 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
           ),
         ]
       : [];
-    const compat = offeredCompat(raw.compat, api, providerId, id);
+    const compat = cacheControlCompat(offeredCompat(raw.compat, api, providerId, id), api, 'row');
     if (raw.samplingParams !== undefined) {
       dropField(providerId, id, 'samplingParams', 'sampling_params');
     }
@@ -418,7 +438,11 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     const headers = routeHeaders(rawHeaders, providerId);
     const routeKeys = groups.map((_, i) => (i === 0 ? providerId : `${providerId}~${i + 1}`));
     groups.forEach((group, i) => {
-      const compat = offeredCompat(provider.compat, group.api, providerId);
+      const compat = cacheControlCompat(
+        offeredCompat(provider.compat, group.api, providerId),
+        group.api,
+        'route'
+      );
       // Every route gets its own objects, so no two routes alias one another.
       routes[routeKeys[i] as string] = {
         api: group.api,

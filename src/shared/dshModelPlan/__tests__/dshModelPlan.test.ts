@@ -94,7 +94,12 @@ describe('MP-04 compat (R6)', () => {
         { compat: { forceAdaptiveThinking: true, supportsToolReferences: false } }
       ),
     });
-    expect(p.routes.claude?.compat).toEqual({ forceAdaptiveThinking: true });
+    // Decision 159: an anthropic-messages route also says no to the tools
+    // breakpoint by default (the GW-16 switch, tested below).
+    expect(p.routes.claude?.compat).toEqual({
+      forceAdaptiveThinking: true,
+      supportsCacheControlOnTools: false,
+    });
     expect(p.routes.claude?.models[0]?.compat).toEqual({ supportsStrictTools: true });
     expect(p.index['claude/sonnet']).toBeDefined();
     expect(p.dropped).toEqual(
@@ -621,6 +626,92 @@ describe('MP-09 settings mapping (decision 040 rule 3)', () => {
       streamIdleTimeoutMs: 2_147_483_647,
       retryPolicy: { maxRetries: 3 },
     });
+  });
+});
+
+describe('GW-16 cache_control on tools, the temporary switch (decisions 149 rule 19, 159)', () => {
+  const mixed = () => ({
+    claude: provider('anthropic-messages', [{ id: 'sonnet' }], {
+      compat: { forceAdaptiveThinking: true },
+    }),
+    own: provider('anthropic-messages', [{ id: 'u1' }]),
+    gpt: provider('openai-responses', [{ id: 'g' }], { compat: { supportsDeveloperRole: true } }),
+    china: provider('openai-completions', [{ id: 'glm' }]),
+  });
+
+  it('off by default: every anthropic-messages route says false, the other protocols say nothing', () => {
+    const p = plan(mixed());
+    expect(p.routes.claude?.compat).toEqual({
+      forceAdaptiveThinking: true,
+      supportsCacheControlOnTools: false,
+    });
+    // A user service with no compat of its own gets the switch alone: judged
+    // by protocol, never by name.
+    expect(p.routes.own?.compat).toEqual({ supportsCacheControlOnTools: false });
+    expect(p.routes.gpt?.compat).toEqual({ supportsDeveloperRole: true });
+    expect(p.routes.china?.compat).toBeUndefined();
+    // Rows that never named the field are left alone; the route speaks for them.
+    expect(p.routes.claude?.models[0]?.compat).toBeUndefined();
+    expect(p.dropped).not.toContainEqual(
+      expect.objectContaining({ field: 'compat.supportsCacheControlOnTools' })
+    );
+  });
+
+  it('an explicit false plans the same as the default', () => {
+    expect(plan(mixed(), { settings: { cacheControlOnTools: false } })).toEqual(plan(mixed()));
+  });
+
+  it('on: the plan says nothing about it, as before the switch', () => {
+    const p = plan(mixed(), { settings: { cacheControlOnTools: true } });
+    expect(p.routes.claude?.compat).toEqual({ forceAdaptiveThinking: true });
+    expect(p.routes.own?.compat).toBeUndefined();
+    expect(p.routes.gpt?.compat).toEqual({ supportsDeveloperRole: true });
+    expect(p.routes.china?.compat).toBeUndefined();
+  });
+
+  it("off overrides a row's own true, because DSH lets the row win; on keeps what the row says", () => {
+    const rows = () => ({
+      claude: provider('anthropic-messages', [
+        { id: 'yes', compat: { supportsCacheControlOnTools: true, supportsStrictTools: true } },
+        { id: 'no', compat: { supportsCacheControlOnTools: false } },
+      ]),
+    });
+    const off = plan(rows());
+    expect(off.routes.claude?.models.map((model) => model.compat)).toEqual([
+      { supportsCacheControlOnTools: false, supportsStrictTools: true },
+      { supportsCacheControlOnTools: false },
+    ]);
+    const on = plan(rows(), { settings: { cacheControlOnTools: true } });
+    expect(on.routes.claude?.compat).toBeUndefined();
+    expect(on.routes.claude?.models.map((model) => model.compat)).toEqual([
+      { supportsCacheControlOnTools: true, supportsStrictTools: true },
+      { supportsCacheControlOnTools: false },
+    ]);
+  });
+
+  it('a per-model protocol split is judged per route', () => {
+    const p = plan({
+      split: provider('openai-completions', [
+        { id: 'a' },
+        { id: 'b', api: 'anthropic-messages', baseUrl: GW },
+      ]),
+    });
+    expect(p.routes.split?.compat).toBeUndefined();
+    expect(p.routes['split~2']?.compat).toEqual({ supportsCacheControlOnTools: false });
+  });
+
+  it('changes the revision only for a plan with an anthropic-messages route', () => {
+    const off = plan(mixed());
+    const on = plan(mixed(), { settings: { cacheControlOnTools: true } });
+    expect(on.revision).not.toBe(off.revision);
+    const openaiOnly = () => ({ china: provider('openai-completions', [{ id: 'glm' }]) });
+    expect(plan(openaiOnly(), { settings: { cacheControlOnTools: true } }).revision).toBe(
+      plan(openaiOnly()).revision
+    );
+  });
+
+  it('leaves the route-level knobs of decision 040 as they were', () => {
+    expect(dshRouteSettings({ cacheControlOnTools: true })).toEqual(dshRouteSettings());
   });
 });
 

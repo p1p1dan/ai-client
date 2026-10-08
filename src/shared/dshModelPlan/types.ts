@@ -46,6 +46,12 @@ export interface DshRouteSettings {
 export interface DshRouteSettingsInput {
   promptCacheTtl?: PromptCacheTtl;
   providerIdleTimeoutMs?: number;
+  /**
+   * GW-16 temporary switch (decision 159): `true` keeps pi-ai's breakpoint on
+   * the last tool of an anthropic-messages request. Absent or `false` plans
+   * `compat.supportsCacheControlOnTools: false` on those routes.
+   */
+  cacheControlOnTools?: boolean;
 }
 
 /** One `llm-pi-ai` provider profile, keyed in `routes` by the route name. */

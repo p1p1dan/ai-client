@@ -236,6 +236,15 @@ export interface SettingsState {
   providerIdleTimeoutMs: number;
 
   /**
+   * GW-16 temporary switch (dsh-rebase decision 159): whether anthropic-messages
+   * requests also put a cache breakpoint on the last tool definition
+   * (`@shared/types/cacheControlOnTools`). Off by default: two breakpoints per
+   * request at most. Main reads it into the DSH model plan and rebuilds the
+   * plan when it flips (`agent-host/cacheControlOnToolsSetting.ts`).
+   */
+  experimentalCacheControlOnTools: boolean;
+
+  /**
    * T104: the chat area's own typeface and its two size tiers.
    *
    * Separate from `fontFamily` / `fontSize` above on purpose — those two are
@@ -350,6 +359,8 @@ export interface SettingsState {
   setPromptCacheTtl: (ttl: PromptCacheTtl) => void;
   /** T093: milliseconds, `0` = off. Rejects anything out of range (see the field). */
   setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
+  /** GW-16 temporary switch (decision 159). */
+  setExperimentalCacheControlOnTools: (enabled: boolean) => void;
 
   // Setters - Chat typography (T104)
   /** Empty string = follow the app's `--font-sans`. */

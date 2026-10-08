@@ -3904,3 +3904,17 @@ Object.assign(zhTranslations, {
   // The last-resort title (`fallbackSessionTitle`), read through `displaySessionTitle`.
   'Session {{id}}': '会话 {{id}}',
 });
+
+/**
+ * dsh-rebase decision 159 (GW-16, decision 149 rule 19): the temporary switch
+ * for the cache breakpoint on tool definitions (`ExperimentalCacheControlSection`).
+ * Remove this block with the switch.
+ */
+Object.assign(zhTranslations, {
+  'Cache breakpoint on tool definitions': '工具定义缓存断点',
+  'Experimental · temporary': '实验 · 临时',
+  'Also mark the tool definitions of Claude (Anthropic Messages) requests for the prompt cache. Off: at most 2 cache_control marks per request; on: 3. For tracing cache_limit errors from the company gateway; removed or made permanent once testing ends.':
+    '在 Claude（Anthropic Messages 协议）请求的工具定义上也打一个提示词缓存断点。关：每个请求最多 2 个 cache_control 标记；开：3 个。用于排查公司网关的 cache_limit 报错，测试结束后删除或转正。',
+  'Cache tool definitions': '缓存工具定义',
+  'Takes effect from the next turn; no restart needed.': '从下一轮开始生效，无需重启。',
+});

@@ -1,6 +1,7 @@
 import type { Locale } from '@shared/i18n';
 import { normalizeLocale } from '@shared/i18n';
 import { EMPTY_CHAT_AGENT_DEFAULTS } from '@shared/models/chatAgentDefaults';
+import { DEFAULT_CACHE_CONTROL_ON_TOOLS } from '@shared/types/cacheControlOnTools';
 import {
   DEFAULT_CHAT_BODY_FONT_SIZE,
   DEFAULT_CHAT_FONT_FAMILY,
@@ -179,6 +180,9 @@ export function getInitialState() {
     // cannot show a number the runtime is not using.
     providerIdleTimeoutMs: DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
 
+    // GW-16 temporary switch (decision 159): the plan's own default.
+    experimentalCacheControlOnTools: DEFAULT_CACHE_CONTROL_ON_TOOLS,
+
     // T104: chat typography. Empty family = follow the app's `--font-sans`.
     // The two sizes are D1's 17 / 14 (bumped from 16 / 13 on 2026-09-24, see
     // `a86cefa4`), and MUST equal `globals.css`'s `--text-chat-body` /
@@ -322,6 +326,9 @@ export const useSettingsStore = create<SettingsState>()(
       setProviderIdleTimeoutMs: (providerIdleTimeoutMs) => {
         if (isProviderIdleTimeoutMs(providerIdleTimeoutMs)) set({ providerIdleTimeoutMs });
       },
+
+      setExperimentalCacheControlOnTools: (experimentalCacheControlOnTools) =>
+        set({ experimentalCacheControlOnTools }),
 
       // T104: three pure `set({…})` writers with no side effects, like every
       // other setter here — the override is applied by `ChatWorkspace` reading

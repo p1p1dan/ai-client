@@ -49,6 +49,18 @@ const DEBOUNCE_MS = 500;
 const MAX_WAIT_MS = 5000;
 
 /**
+ * dsh-rebase decision 159 (GW-16 temporary switch): Main code that must act on
+ * a renderer-owned setting as soon as it changes. Called once the save is
+ * queued, so `readSettingsState()` already returns the new value.
+ */
+const rendererSettingsWriteListeners = new Set<() => void>();
+
+export function onRendererSettingsWrite(listener: () => void): () => void {
+  rendererSettingsWriteListeners.add(listener);
+  return () => rendererSettingsWriteListeners.delete(listener);
+}
+
+/**
  * Top-level keys Main owns and the renderer does not model.
  *
  * The renderer persists by writing the WHOLE object back, so every key on this
@@ -241,6 +253,14 @@ export function registerSettingsHandlers(): void {
         flushPendingRendererSettings();
         pendingWrite = null;
       }, DEBOUNCE_MS);
+
+      for (const listener of [...rendererSettingsWriteListeners]) {
+        try {
+          listener();
+        } catch (error) {
+          console.warn('[settings] a settings-write listener failed', error);
+        }
+      }
 
       return true;
     } catch {

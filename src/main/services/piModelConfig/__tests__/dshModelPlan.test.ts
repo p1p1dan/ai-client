@@ -7,7 +7,7 @@ import { USER_PROVIDER_APIS } from '@shared/userProviders';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProvider } from '../../auth/CredentialVault';
 import { validatePiManagedModelsConfig } from '../configValidation';
-import { providerKeyPresence, resolveDshModelPlanWith } from '../dshModelPlan';
+import { onDshModelPlanBuilt, providerKeyPresence, resolveDshModelPlanWith } from '../dshModelPlan';
 import { PiModelConfigService } from '../PiModelConfigService';
 
 /**
@@ -189,13 +189,92 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
-    expect(log).toHaveBeenCalledTimes(1);
-    const logged = JSON.stringify(log.mock.calls);
+    // Decision 159 adds the GW-16 mode line, once per revision as well.
+    const leftOut = log.mock.calls.filter(
+      ([first]) => first === '[dsh-model-plan] left out of the plan'
+    );
+    expect(leftOut).toHaveLength(1);
+    expect(log).toHaveBeenCalledTimes(2);
+    const logged = JSON.stringify(leftOut);
     expect(logged).toContain('u-pi-messages/u1: unsupported_api (pi-messages)');
     expect(logged).toContain('compat.supportsToolReferences: compat_not_offered');
     // Decision 146 (GW-4): the shipped catalog's Grok row reserves its whole window.
     expect(logged).toContain('grok/grok-4.6 maxTokens: max_tokens_clamped (500000 -> 125000)');
     expect(logged).not.toContain(CANARY);
+  });
+});
+
+describe('GW-16 cache_control on tools over the shipped catalog (decision 159)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dsh-model-plan-gw16-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function nativeCatalog() {
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn: async () => ({ ok: false, status: 500, text: async () => '' }),
+      now: () => 1234,
+      readBundledCatalog: shippedSnapshot,
+      userProviders: () => [userService('anthropic-messages')],
+      managedCredentialsEnabled: () => true,
+    }).buildNativeModelCatalog({ inheritedApiKey: CANARY, inheritedBaseUrl: LOGIN_BASE_URL });
+  }
+
+  it('says false on the claude route and the user anthropic service by default; on restores the old plan', () => {
+    const native = nativeCatalog();
+    const off = resolveDshModelPlanWith({ native, env: ENV, settings: {} });
+    const on = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: { cacheControlOnTools: true },
+    });
+    expect(off.routes.claude?.compat).toEqual({
+      forceAdaptiveThinking: true,
+      supportsCacheControlOnTools: false,
+    });
+    expect(off.routes['u-anthropic-messages']?.compat).toEqual({
+      supportsCacheControlOnTools: false,
+    });
+    expect(on.routes.claude?.compat).toEqual({ forceAdaptiveThinking: true });
+    expect(on.routes['u-anthropic-messages']?.compat).toBeUndefined();
+    // The other protocols plan the same either way.
+    for (const route of ['gpt', 'grok', 'china']) {
+      expect(off.routes[route]).toEqual(on.routes[route]);
+    }
+    expect(off.revision).not.toBe(on.revision);
+  });
+
+  it('announces the flipped plan to the host side and logs the mode once per revision', () => {
+    const native = nativeCatalog();
+    const log = vi.fn();
+    const announced: string[] = [];
+    const stop = onDshModelPlanBuilt((plan) => announced.push(plan.revision));
+    try {
+      const off = resolveDshModelPlanWith({ native, env: ENV, settings: {}, log });
+      resolveDshModelPlanWith({ native, env: ENV, settings: {}, log });
+      const on = resolveDshModelPlanWith({
+        native,
+        env: ENV,
+        settings: { cacheControlOnTools: true },
+        log,
+      });
+      // `WorkerManager.reconcileModelPlan` gets every revision, the new one last.
+      expect(announced).toEqual([off.revision, off.revision, on.revision]);
+      const modes = log.mock.calls
+        .map(([first]) => first)
+        .filter((first): first is string => String(first).startsWith('[dsh-plan]'));
+      expect(modes).toEqual([
+        `[dsh-plan] cache_control on tools: off (2 breakpoints max), plan ${off.revision.slice(0, 12)}`,
+        `[dsh-plan] cache_control on tools: on (3 breakpoints max), plan ${on.revision.slice(0, 12)}`,
+      ]);
+      expect(JSON.stringify(log.mock.calls)).not.toContain(CANARY);
+    } finally {
+      stop();
+    }
   });
 });
 

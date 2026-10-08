@@ -18,6 +18,7 @@ import type {
   DshModelPlan,
   DshProtocol,
   DshRetryPolicy,
+  DshRouteSettingsInput,
 } from '../../../shared/dshModelPlan/types.ts';
 
 export type Message = Record<string, unknown>;
@@ -69,12 +70,15 @@ export interface FakeRoute {
  * `aiclient-gateway`, with the non-reasoning `fake-1` (200000 / 8192), on
  * `baseUrl`. `retryPolicy` replaces every route's (default: no retry; `null`
  * keeps the product's); any DSH retry policy goes, `always` included.
+ * `settings` are the user's request settings, as Main reads them (decision
+ * 159's probe sets `cacheControlOnTools`).
  */
 export function fakeGatewayPlan(options: {
   baseUrl?: string;
   routes?: FakeRoute[];
   retryPolicy?: DshRetryPolicy | Record<string, unknown> | null;
   clientVersion?: string;
+  settings?: DshRouteSettingsInput;
 }): DshModelPlan {
   const routes: FakeRoute[] = options.routes ?? [
     {
@@ -97,6 +101,7 @@ export function fakeGatewayPlan(options: {
     models: { providers },
     keyed,
     ...(options.clientVersion ? { clientVersion: options.clientVersion } : {}),
+    ...(options.settings ? { settings: options.settings } : {}),
   });
   const retryPolicy = options.retryPolicy === undefined ? NO_RETRY : options.retryPolicy;
   if (retryPolicy) {

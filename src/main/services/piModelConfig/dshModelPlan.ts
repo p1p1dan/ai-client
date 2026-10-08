@@ -13,6 +13,10 @@ import {
   type DshModelPlan,
   type DshRouteSettingsInput,
 } from '@shared/dshModelPlan';
+import {
+  describeCacheControlOnTools,
+  resolveCacheControlOnTools,
+} from '@shared/types/cacheControlOnTools';
 import type { NativeModelCatalog } from './nativeCatalog';
 
 /**
@@ -73,6 +77,12 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
   // Once per revision, not per menu open.
   if (plan.revision !== lastLoggedRevision) {
     lastLoggedRevision = plan.revision;
+    // GW-16 temporary switch (decision 159): the mode only, never the plan.
+    deps.log?.(
+      `[dsh-plan] ${describeCacheControlOnTools(
+        resolveCacheControlOnTools(deps.settings.cacheControlOnTools)
+      )}, plan ${plan.revision.slice(0, 12)}`
+    );
     if (plan.dropped.length > 0) {
       deps.log?.('[dsh-model-plan] left out of the plan', {
         revision: plan.revision.slice(0, 12),

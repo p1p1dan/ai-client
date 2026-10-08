@@ -15,12 +15,14 @@
  * Installed once at startup (`registerIpcHandlers`), before any host starts.
  */
 
+import { onRendererSettingsWrite } from '../../ipc/settings';
 import { getCredentialVault } from '../auth';
 import {
   onDshModelPlanBuilt,
   resolveDshModelPlan,
   resolveNativeModelCatalog,
 } from '../piModelConfig';
+import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
 import { DshCredentialBroker } from './DshCredentialBroker';
 import { dshHostSupervisor } from './DshHostSupervisor';
 import { workerManager } from './WorkerManager';
@@ -40,5 +42,11 @@ export function installDshHostModelSource(): void {
     // A new plan may name other keys (a sync replaced the administrator key).
     broker.invalidate();
     workerManager.reconcileModelPlan(plan.revision);
+  });
+  // GW-16 temporary switch (decision 159): a flip rebuilds the plan at once.
+  watchCacheControlOnTools({
+    onSettingsWrite: onRendererSettingsWrite,
+    rebuild: () => resolveDshModelPlan(),
+    log: (...args) => console.info(...args),
   });
 }
