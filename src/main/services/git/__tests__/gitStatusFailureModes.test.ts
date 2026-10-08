@@ -161,3 +161,171 @@ describe('getBranches distinguishes an unborn repo from a lost branch listing (Q
     expect(branches[0]).not.toHaveProperty('merged');
   });
 });
+
+describe('getBranches recovers via node.exe fallback when simple-git loses output (F3)', () => {
+  function initRepo(): string {
+    const repo = path.join(root, 'with-commit');
+    execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+    const run = (...args: string[]) => execFileSync('git', ['-C', repo, ...args]);
+    run('config', 'user.email', 'test@example.com');
+    run('config', 'user.name', 'Test');
+    writeFileSync(path.join(repo, 'a.txt'), 'a\n');
+    run('add', 'a.txt');
+    run('commit', '-q', '-m', 'first');
+    return repo;
+  }
+
+  /** Mock runGitViaNode on a GitService instance. */
+  function mockRunGitViaNode(
+    service: InstanceType<typeof GitService>,
+    stdout: string,
+    exitCode = 0
+  ): void {
+    (service as unknown as {
+      runGitViaNode: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+    }).runGitViaNode = async () => ({ stdout, stderr: '', exitCode });
+  }
+
+  it('recovers branches when simple-git returns empty but node.exe succeeds', async () => {
+    const service = new GitService(initRepo());
+    // Simulate the encrypted host: simple-git returns empty branches
+    (service as unknown as { git: { branch: () => unknown } }).git.branch = async () => ({
+      branches: {},
+    });
+    // node.exe fallback returns real branch data
+    mockRunGitViaNode(
+      service,
+      '* main abc1234 first commit\n  remotes/origin/HEAD -> origin/main\n'
+    );
+
+    const branches = await service.getBranches({ skipMerged: true });
+    expect(branches).toHaveLength(1);
+    expect(branches[0]).toMatchObject({
+      name: 'main',
+      current: true,
+      commit: 'abc1234',
+      label: 'first commit',
+    });
+  });
+
+  it('still throws "output was lost" when the fallback also returns empty', async () => {
+    const service = new GitService(initRepo());
+    (service as unknown as { git: { branch: () => unknown } }).git.branch = async () => ({
+      branches: {},
+    });
+    // node.exe fallback also returns empty
+    mockRunGitViaNode(service, '', 0);
+
+    await expect(service.getBranches()).rejects.toThrow(/output was lost/);
+  });
+
+  it('parses multi-branch output with remote and worktree markers', async () => {
+    const service = new GitService(initRepo());
+    (service as unknown as { git: { branch: () => unknown } }).git.branch = async () => ({
+      branches: {},
+    });
+    mockRunGitViaNode(
+      service,
+      [
+        '* current                              abc1234 feat: current branch',
+        '+ worktree                             def5678 feat: worktree branch',
+        '  main                                9abcdef fix: main',
+        '  remotes/origin/HEAD                -> origin/main',
+        '  remotes/origin/main                 9abcdef build: release',
+      ].join('\n')
+    );
+
+    const branches = await service.getBranches({ skipMerged: true });
+    expect(branches).toHaveLength(4); // 4 real branches, 1 symbolic ref skipped
+    expect(branches[0]).toMatchObject({ name: 'current', current: true });
+    expect(branches[1]).toMatchObject({ name: 'worktree', current: false });
+    expect(branches[2]).toMatchObject({ name: 'main', current: false });
+    expect(branches[3]).toMatchObject({ name: 'remotes/origin/main', current: false });
+  });
+});
+
+describe('getStatus recovers via node.exe fallback when spawnGit loses output (F3)', () => {
+  function initRepo(): string {
+    const repo = path.join(root, 'with-commit');
+    execFileSync('git', ['init', '-q', '-b', 'main', repo]);
+    const run = (...args: string[]) => execFileSync('git', ['-C', repo, ...args]);
+    run('config', 'user.email', 'test@example.com');
+    run('config', 'user.name', 'Test');
+    writeFileSync(path.join(repo, 'a.txt'), 'a\n');
+    run('add', 'a.txt');
+    run('commit', '-q', '-m', 'first');
+    return repo;
+  }
+
+  /** Mock runGitViaNode on a GitService instance. */
+  function mockRunGitViaNode(
+    service: InstanceType<typeof GitService>,
+    stdout: string,
+    exitCode = 0
+  ): void {
+    (service as unknown as {
+      runGitViaNode: (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+    }).runGitViaNode = async () => ({ stdout, stderr: '', exitCode });
+  }
+
+  it('recovers status when spawnGit returns empty but node.exe succeeds', async () => {
+    const service = new GitService(initRepo());
+    // Primary path: spawnGit returns empty (no branch headers)
+    const proc = fakeGitProcess();
+    spawnGitMock.mockReturnValue(proc);
+    // Fallback: node.exe returns short format status
+    mockRunGitViaNode(service, '## main...origin/main\n M modified.txt\n?? untracked.txt\n');
+
+    const pending = service.getStatus();
+    queueMicrotask(() => proc.emit('close', 0, null));
+
+    const status = await pending;
+    expect(status.current).toBe('main');
+    expect(status.tracking).toBe('origin/main');
+    expect(status.modified).toContain('modified.txt');
+    expect(status.untracked).toContain('untracked.txt');
+    expect(status.isClean).toBe(false);
+  });
+
+  it('still throws "output was lost" when both paths fail', async () => {
+    const service = new GitService(initRepo());
+    // Primary: empty
+    const proc = fakeGitProcess();
+    spawnGitMock.mockReturnValue(proc);
+    // Fallback: also empty
+    mockRunGitViaNode(service, '', 0);
+
+    const pending = service.getStatus();
+    queueMicrotask(() => proc.emit('close', 0, null));
+
+    await expect(pending).rejects.toThrow(/output was lost/);
+  });
+
+  it('parses staged, modified, deleted, and conflicted files', async () => {
+    const service = new GitService(initRepo());
+    const proc = fakeGitProcess();
+    spawnGitMock.mockReturnValue(proc);
+    mockRunGitViaNode(
+      service,
+      [
+        '## main',
+        'A  staged.txt',
+        ' M modified.txt',
+        ' D deleted.txt',
+        '?? untracked.txt',
+        'UU conflict.txt',
+      ].join('\n')
+    );
+
+    const pending = service.getStatus();
+    queueMicrotask(() => proc.emit('close', 0, null));
+
+    const status = await pending;
+    expect(status.current).toBe('main');
+    expect(status.staged).toContain('staged.txt');
+    expect(status.modified).toContain('modified.txt');
+    expect(status.deleted).toContain('deleted.txt');
+    expect(status.untracked).toContain('untracked.txt');
+    expect(status.conflicted).toContain('conflict.txt');
+  });
+});
