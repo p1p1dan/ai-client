@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   defaultMigrationSelection,
   itemWouldCopy,
+  legacyGuideWanted,
   MIGRATION_SECRET_KINDS,
   migrationKindLabel,
   selectionCarriesSecrets,
@@ -143,5 +144,30 @@ describe('migrationKindLabel (H/21 P1)', () => {
     const labels = kinds.map(migrationKindLabel);
     for (const label of labels) expect(label.trim().length).toBeGreaterThan(0);
     expect(new Set(labels).size).toBe(kinds.length);
+  });
+});
+
+describe('legacyGuideWanted (1.0.4 field report, 2026-10-08)', () => {
+  const project = (importedSessionCount?: number) => ({
+    id: 'home-u',
+    path: '/home/u',
+    sessionCount: 11,
+    lastActivityAt: 0,
+    ...(importedSessionCount === undefined ? {} : { importedSessionCount }),
+  });
+
+  it('offers the guide while the machine has history and nothing was imported', () => {
+    expect(legacyGuideWanted([project(0)])).toBe(true);
+    // A Main that predates the count reads as "nothing imported" — the old rule.
+    expect(legacyGuideWanted([project()])).toBe(true);
+  });
+
+  it('stays quiet once any conversation has been imported, even with more left', () => {
+    expect(legacyGuideWanted([project(1)])).toBe(false);
+    expect(legacyGuideWanted([project(0), { ...project(3), id: 'other' }])).toBe(false);
+  });
+
+  it('has nothing to say without history', () => {
+    expect(legacyGuideWanted([])).toBe(false);
   });
 });

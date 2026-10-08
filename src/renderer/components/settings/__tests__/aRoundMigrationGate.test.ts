@@ -134,6 +134,21 @@ describe('AgentMigrationPrompt: Pi copy suppression + Claude Code / Codex guide'
     expect(result).toBe(true);
   });
 
+  // 1.0.4 field report (2026-10-08): the guide reopened on every launch after
+  // the user had imported, because it only asked "is there any history".
+  it('does not open the guide again once conversations have been imported', async () => {
+    legacyApi.listProjects.mockResolvedValue([{ ...LEGACY_PROJECTS[0], importedSessionCount: 2 }]);
+    await act(() => root.render(createElement(AgentMigrationPrompt)));
+    await settle();
+
+    if (!LOCAL_SETUP_ENTRY_DISABLED) {
+      expect(legacyApi.listProjects).toHaveBeenCalledTimes(1);
+    }
+    expect(document.body.textContent ?? '').not.toContain('Import conversations');
+    // The entry screen must not defer to an offer that will not appear.
+    expect(await migrationOfferWillOpen()).toBe(false);
+  });
+
   it('migrationOfferWillOpen resolves false when there is nothing to offer', async () => {
     legacyApi.listProjects.mockResolvedValue([]);
     const result = await migrationOfferWillOpen();

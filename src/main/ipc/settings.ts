@@ -5,6 +5,8 @@ import {
 import { IPC_CHANNELS } from '@shared/types';
 import { app, ipcMain } from 'electron';
 import {
+  getSettingsLoadInfo,
+  isLegacySettingsMigrated,
   readSharedSettings,
   writeSharedSettings,
   writeSharedSettingsToSession,
@@ -152,17 +154,78 @@ export function readStringSetting(key: string): string {
  */
 export const TEMPORARY_PATH_SETTING_KEY = 'defaultTemporaryPath';
 
+/** Consecutive failed saves, so the first success after them can say so. */
+let consecutiveWriteFailures = 0;
+
+/**
+ * Field diagnostics for a save that did not land: which file, the errno code
+ * and the syscall (`open` = the temp file could not be written, `rename` = it
+ * could not replace the real one). Never the path or the content.
+ *
+ * Before this the failure was swallowed, and `writeSharedSettings` had already
+ * put the new object in its memo — so the session looked saved and the next
+ * launch read the old file, with nothing in any log.
+ */
+function logWriteFailure(file: string, error: unknown): void {
+  consecutiveWriteFailures++;
+  const fsError = error as NodeJS.ErrnoException;
+  console.warn(
+    `[settings] Failed to save ${file}: code=${fsError?.code ?? 'unknown'} syscall=${fsError?.syscall ?? 'unknown'} consecutive=${consecutiveWriteFailures}`
+  );
+}
+
 /**
  * 原子写入：先写临时文件，再重命名，避免崩溃导致文件损坏
  */
 function atomicWriteSettings(data: Record<string, unknown>): boolean {
   try {
     writeSharedSettings(data);
-    writeSharedSettingsToSession(data);
-    return true;
-  } catch {
+  } catch (error) {
+    logWriteFailure('settings.json', error);
     return false;
   }
+  try {
+    writeSharedSettingsToSession(data);
+  } catch (error) {
+    logWriteFailure('session-state.json', error);
+    return false;
+  }
+  if (consecutiveWriteFailures > 0) {
+    console.log(`[settings] Saved after ${consecutiveWriteFailures} failed attempt(s).`);
+    consecutiveWriteFailures = 0;
+  }
+  return true;
+}
+
+/**
+ * One line per launch describing the settings file Main started from — shape
+ * only (outcome, size, first bytes, whether the renderer's store and its
+ * persist version are there). Logged from `registerSettingsHandlers`, i.e.
+ * after `initLogger`: the first read happens before the file transport exists.
+ *
+ * `persist-version` matters because zustand discards the whole stored state,
+ * silently, when it differs from the store's own (0) and no `migrate` exists.
+ */
+function logSettingsLoadSummary(): void {
+  const info = getSettingsLoadInfo();
+  if (!info) return;
+  const persisted = readSharedSettings()[RENDERER_SETTINGS_STORE_KEY];
+  const wrapper =
+    persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : null;
+  const state = wrapper?.state && typeof wrapper.state === 'object' ? 'present' : 'absent';
+  const version = typeof wrapper?.version === 'number' ? String(wrapper.version) : 'none';
+  const parts = [
+    `outcome=${info.outcome}`,
+    ...(info.bytes !== undefined ? [`bytes=${info.bytes}`] : []),
+    ...(info.head ? [`head=${info.head}`] : []),
+    ...(info.code ? [`code=${info.code}`] : []),
+    `renderer-state=${state}`,
+    `persist-version=${version}`,
+    `legacy-marker=${isLegacySettingsMigrated() ? 'present' : 'absent'}`,
+  ];
+  const line = `[settings] settings.json at startup: ${parts.join(' ')}`;
+  if (info.outcome === 'ok' || info.outcome === 'missing') console.log(line);
+  else console.warn(line);
 }
 
 function clearPendingTimers(): void {
@@ -219,6 +282,8 @@ export function flushSettings(): boolean {
 }
 
 export function registerSettingsHandlers(): void {
+  logSettingsLoadSummary();
+
   ipcMain.handle(IPC_CHANNELS.SETTINGS_READ, async () => {
     return readSettings();
   });

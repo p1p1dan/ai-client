@@ -85,6 +85,7 @@ import { useSettingsIntentStore } from '../../stores/settingsIntent';
 import {
   defaultMigrationSelection,
   itemWouldCopy,
+  legacyGuideWanted,
   migrationKindLabel,
   selectionCarriesSecrets,
   shouldPromptMigration,
@@ -141,13 +142,14 @@ function alreadySettled(): boolean {
  */
 /**
  * Whether this machine has Claude Code / Codex conversations worth
- * importing. The startup dialog opens for this alone while the Pi-directory
- * copy is suppressed.
+ * importing and the user has not imported any yet (`legacyGuideWanted`). The
+ * startup dialog opens for this alone while the Pi-directory copy is
+ * suppressed.
  */
 async function hasLegacyConversations(): Promise<boolean> {
   try {
     const projects = await window.electronAPI.legacyImport.listProjects();
-    return projects.length > 0;
+    return legacyGuideWanted(projects);
   } catch {
     return false;
   }
@@ -211,13 +213,14 @@ export function AgentMigrationPrompt() {
           // one time we get to ask.
         }
       }
-      // The Claude Code / Codex history guide: any project on the machine is
-      // enough to open, regardless of the Pi copy being suppressed.
+      // The Claude Code / Codex history guide: opens while the machine has
+      // history and none of it has been imported yet, regardless of the Pi
+      // copy being suppressed (`legacyGuideWanted`).
       let legacyCount = 0;
       try {
         const projects = await window.electronAPI.legacyImport.listProjects();
         if (cancelled) return;
-        legacyCount = projects.length;
+        legacyCount = legacyGuideWanted(projects) ? projects.length : 0;
         setLegacyProjects(legacyCount);
       } catch {
         // A scan that failed is not an offer either.

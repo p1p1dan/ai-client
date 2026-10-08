@@ -578,7 +578,19 @@ export const useSettingsStore = create<SettingsState>()(
       merge: (persistedState, currentState) => {
         return migrateSettings(persistedState as Partial<SettingsState>, currentState);
       },
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
+        if (error) {
+          // zustand swallows a failed read/parse/merge and leaves the store on
+          // defaults for this launch; the next save then writes those defaults
+          // over the file. `console.error` is the level that reaches the main
+          // log by default. Only the error's name: a JSON SyntaxError message
+          // quotes a slice of the file.
+          console.error(
+            `[settings] Settings rehydrate failed, this launch runs on defaults: ${
+              error instanceof Error ? error.name : typeof error
+            }`
+          );
+        }
         const effectiveState = state ?? useSettingsStore.getState();
         applyInitialSettings(effectiveState);
 

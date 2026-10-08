@@ -1129,3 +1129,60 @@ describe('LegacyImportService coded failures (T067)', () => {
     expect(result.results[0]?.errorCode).toBeUndefined();
   });
 });
+
+/**
+ * 1.0.4 field report (2026-10-08): "I already imported my Claude Code / Codex
+ * history, and every launch asks again". The startup dialog had no import
+ * state to look at; `listProjects` now carries it, read from the manifest, and
+ * it has to survive a restart for the dialog to stay quiet on the next launch.
+ */
+describe('LegacyImportService.listProjects import state', () => {
+  beforeEach(() => {
+    vi.spyOn(console, 'log').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('reports zero imported sessions before any import', async () => {
+    const h = harness();
+    const [project] = await h.service.listProjects();
+    expect(project).toMatchObject({ id: 'project-a', sessionCount: 1, importedSessionCount: 0 });
+  });
+
+  it('counts a completed import, once per source session, and keeps it across a restart', async () => {
+    const h = harness();
+    expect((await h.service.importBatch([source])).results[0]?.status).toBe('imported');
+    // A grown source is a second snapshot of the SAME session: still one.
+    await writeSource('hello again');
+    expect((await h.service.importBatch([source])).results[0]?.status).toBe('imported');
+    expect((await h.service.listProjects())[0]?.importedSessionCount).toBe(1);
+
+    const restarted = new LegacyImportService({
+      scanner: new ClaudeSessionScanner({
+        resolveRoots: () => [{ dir: configDir, kind: 'legacy' }],
+      }),
+      manifest: new LegacyImportManifest({ manifestPath, integrityKey: TEST_INTEGRITY_KEY }),
+      sessionIndex: h.index,
+      createImport: h.createImport,
+      inspectImport: h.inspectImport,
+      reconcileImport: vi.fn(async () => ({ removedFiles: 0, remainingFiles: 0 })),
+    });
+    const logged = vi.mocked(console.log);
+    logged.mockClear();
+    expect((await restarted.listProjects())[0]?.importedSessionCount).toBe(1);
+    const lines = logged.mock.calls.map((call) => call.map(String).join(' '));
+    expect(lines).toContain(
+      '[legacy-import] Listed 1 project(s): 1 source session(s), 1 with a completed import, manifest=ok.'
+    );
+  });
+
+  it('does not count an import that failed', async () => {
+    const h = harness();
+    h.index.failCreate = true;
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect((await h.service.importBatch([source])).results[0]?.status).toBe('failed');
+    expect((await h.service.listProjects())[0]?.importedSessionCount).toBe(0);
+  });
+});

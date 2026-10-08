@@ -66,24 +66,80 @@ function normalizeSettings(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
 
-function readJsonFile<T>(targetPath: string): T | null {
+/**
+ * What the disk read of settings.json found, as shape only — never content and
+ * never the path. A file Main cannot parse is read as `{}`, i.e. "every setting
+ * at its default", which is indistinguishable on screen from settings that were
+ * never saved; this is what lets a field log tell the two apart.
+ */
+export interface SharedFileLoadInfo {
+  outcome: 'ok' | 'missing' | 'read-error' | 'invalid-json' | 'not-object';
+  bytes?: number;
+  /** errno code of a failed read. */
+  code?: string;
+  /** What the file starts with: `{`, a UTF-8 BOM, the TSD driver's header, nothing, or else. */
+  head?: 'brace' | 'bom' | 'tsd-header' | 'empty' | 'other';
+}
+
+const UTF8_BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+// Same magic as `utils/tsdSafeRead.ts`, spelled here so this module does not
+// pull `child_process` into everything that reads settings.
+const TSD_HEADER = Buffer.from('%TSD-Header-###%');
+
+let settingsLoadInfo: SharedFileLoadInfo | null = null;
+
+function classifyHead(raw: Buffer): NonNullable<SharedFileLoadInfo['head']> {
+  if (raw.length === 0) return 'empty';
+  if (raw.subarray(0, UTF8_BOM.length).equals(UTF8_BOM)) return 'bom';
+  if (raw.subarray(0, TSD_HEADER.length).equals(TSD_HEADER)) return 'tsd-header';
+  const first = raw.toString('utf-8', 0, Math.min(raw.length, 64)).trimStart();
+  return first.startsWith('{') ? 'brace' : 'other';
+}
+
+function readJsonFileWithInfo<T>(targetPath: string): {
+  value: T | null;
+  info: SharedFileLoadInfo;
+} {
   if (!existsSync(targetPath)) {
-    return null;
+    return { value: null, info: { outcome: 'missing' } };
   }
+  let raw: Buffer;
   try {
-    return safeJsonParse<T>(readFileSync(targetPath, 'utf-8'));
-  } catch {
-    return null;
+    raw = readFileSync(targetPath);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    return { value: null, info: { outcome: 'read-error', code: code ?? 'unknown' } };
   }
+  const head = classifyHead(raw);
+  // A BOM is what an editor such as older Notepad adds on save; JSON.parse
+  // rejects it, which used to turn one hand-edit into "every setting lost".
+  const text = raw.toString('utf-8', head === 'bom' ? UTF8_BOM.length : 0);
+  const value = safeJsonParse<T>(text);
+  if (value === null) {
+    return { value: null, info: { outcome: 'invalid-json', bytes: raw.length, head } };
+  }
+  const isObject = typeof value === 'object' && !Array.isArray(value);
+  return { value, info: { outcome: isObject ? 'ok' : 'not-object', bytes: raw.length, head } };
+}
+
+function readJsonFile<T>(targetPath: string): T | null {
+  return readJsonFileWithInfo<T>(targetPath).value;
 }
 
 export function readSharedSettings(): Record<string, unknown> {
   if (cachedSettings) {
     return cachedSettings;
   }
-  const parsed = normalizeSettings(readJsonFile<Record<string, unknown>>(getSettingsPath()));
+  const { value, info } = readJsonFileWithInfo<Record<string, unknown>>(getSettingsPath());
+  settingsLoadInfo = info;
+  const parsed = normalizeSettings(value);
   cachedSettings = parsed;
   return parsed;
+}
+
+/** The last disk read of settings.json, or `null` when it has not been read from disk yet. */
+export function getSettingsLoadInfo(): SharedFileLoadInfo | null {
+  return settingsLoadInfo ? { ...settingsLoadInfo } : null;
 }
 
 export function writeSharedSettings(data: Record<string, unknown>): void {
@@ -189,4 +245,5 @@ export function markLegacyLocalStorageMigrated(): void {
 export function clearSharedStateCache(): void {
   cachedSettings = null;
   cachedSessionState = null;
+  settingsLoadInfo = null;
 }

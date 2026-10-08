@@ -42,6 +42,8 @@ function sanitizeString(value: unknown, fallback: string): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+const THEME_MODES: readonly SettingsState['theme'][] = ['light', 'dark', 'system', 'sync-terminal'];
+
 const LEGACY_AI_FEATURE_KEYS = [
   'commitMessageGenerator',
   'codeReview',
@@ -137,10 +139,15 @@ export function migrateSettings(
 
   const persisted = persistedState;
 
-  // Migrate a persisted 'system' theme to 'light': 'system' was the unchosen
-  // default, never an explicit user pick — the product default moved to
-  // light. Users who explicitly want system/dark can re-pick in Settings.
-  const migratedTheme = persisted.theme === 'system' ? 'light' : persisted.theme;
+  // A persisted theme is kept as-is, 'system' included. `4019fedf` rewrote a
+  // persisted 'system' to 'light' here to move the old unchosen default over
+  // to the new light default — but `merge` runs on EVERY launch and nothing
+  // recorded that it had already run, so an explicit "System" pick was undone
+  // by each restart (1.0.4 field report, 2026-10-08). The default itself still
+  // comes from `getInitialState()`. Unknown values fall back to it: an
+  // unrecognised mode would leave `applyAppTheme` without a dark/light answer.
+  const sanitizedTheme =
+    persisted.theme && THEME_MODES.includes(persisted.theme) ? persisted.theme : currentState.theme;
 
   // Sanitize background image settings
   const sanitizedBackgroundOpacity = clampNumber(
@@ -230,7 +237,7 @@ export function migrateSettings(
     ...currentState,
     ...sanitizedPersisted,
     // Override with migrated/sanitized values
-    ...(migratedTheme && { theme: migratedTheme }),
+    theme: sanitizedTheme,
     ...(terminalRenderer && { terminalRenderer }),
     xtermKeybindings: migratedXtermKeybindings,
 

@@ -26,6 +26,12 @@ export interface LegacyImportProject {
   path: string;
   sessionCount: number;
   lastActivityAt: number;
+  /**
+   * Distinct source sessions of this project with at least one completed
+   * import, per the manifest. Set by `LegacyImportService.listProjects`;
+   * absent on a scanner's raw output.
+   */
+  importedSessionCount?: number;
 }
 
 export interface LegacyImportSessionPreview {

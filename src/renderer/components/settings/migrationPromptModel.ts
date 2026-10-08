@@ -14,6 +14,7 @@
  */
 
 import type { MigrationItem, MigrationItemKind, MigrationPlan } from '@shared/agentMigration';
+import type { LegacyImportProject } from '@shared/types';
 
 /**
  * One label per kind. Display text, not a domain fact — kept next to the
@@ -90,4 +91,25 @@ export function shouldPromptMigration(input: MigrationPromptInput): boolean {
   const { plan } = input;
   if (!plan || !plan.sourceExists || plan.nothingToDo) return false;
   return defaultMigrationSelection(plan).length > 0;
+}
+
+/**
+ * Whether the Claude Code / Codex history guide still has something to say.
+ *
+ * The guide is a pointer to the import pane, so it is done once the user has
+ * used that pane: any project with a completed import (`importedSessionCount`,
+ * counted by Main from the import manifest) settles it, the same way a
+ * finished Pi copy settles the Pi offer. Before this the dialog opened on
+ * "any project exists", so someone who had already imported was asked again on
+ * every launch (1.0.4 field report, 2026-10-08).
+ *
+ * Not "every session imported": people import a few conversations on purpose,
+ * and new sessions keep appearing while they still use Claude Code / Codex —
+ * a rule built on that would never stop asking either. The pane itself shows
+ * per-session import state; "Don't ask again" remains for people who never
+ * want to import.
+ */
+export function legacyGuideWanted(projects: readonly LegacyImportProject[]): boolean {
+  if (projects.length === 0) return false;
+  return !projects.some((project) => (project.importedSessionCount ?? 0) > 0);
 }

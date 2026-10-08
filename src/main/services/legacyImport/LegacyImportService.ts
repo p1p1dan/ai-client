@@ -227,9 +227,46 @@ export class LegacyImportService {
     return this.reconcilePromise;
   }
 
+  /**
+   * Every project on the machine, each with how many of its source sessions
+   * already have a completed import.
+   *
+   * `importedSessionCount` is what lets the startup dialog tell "has history it
+   * has never brought over" from "has history, already imported" — without it
+   * the dialog opened on `projects.length > 0` alone, so a user who had
+   * imported was asked again on every launch (1.0.4 field report, 2026-10-08).
+   * Counted from the manifest by source session id, not by snapshot: a session
+   * that grew since its import still counts as imported once.
+   */
   async listProjects(): Promise<LegacyImportProject[]> {
     await this.reconcile();
-    return scanAllLegacySources(this.importers);
+    const projects = await scanAllLegacySources(this.importers);
+    let manifestState: 'ok' | 'unavailable' = 'ok';
+    const importedByProject = new Map<string, Set<string>>();
+    try {
+      for (const record of await this.manifest.list()) {
+        if (record.status !== 'complete') continue;
+        const key = `${record.source.sourceKind}:${record.source.projectId}`;
+        const sessions = importedByProject.get(key) ?? new Set<string>();
+        sessions.add(record.source.sourceSessionId);
+        importedByProject.set(key, sessions);
+      }
+    } catch {
+      // An unreadable manifest must not hide the projects; counts read as 0,
+      // which is the pre-fix behaviour.
+      manifestState = 'unavailable';
+    }
+    const listed = projects.map((project) => ({
+      ...project,
+      importedSessionCount:
+        importedByProject.get(`${project.sourceKind ?? 'claude-code'}:${project.id}`)?.size ?? 0,
+    }));
+    const sessions = listed.reduce((sum, project) => sum + project.sessionCount, 0);
+    const imported = listed.reduce((sum, project) => sum + project.importedSessionCount, 0);
+    console.log(
+      `[legacy-import] Listed ${listed.length} project(s): ${sessions} source session(s), ${imported} with a completed import, manifest=${manifestState}.`
+    );
+    return listed;
   }
 
   async listSessions(
