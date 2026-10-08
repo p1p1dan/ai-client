@@ -170,6 +170,33 @@ export function LeftNav({
     setRepoToRemove(null);
   }, [repoToRemove, onRemoveRepository]);
 
+  // "Reveal in Finder/Explorer" on the repository row — unlike the file tree's
+  // same-named action (`file.revealInFileManager`, which highlights an item
+  // inside its parent), this opens the repository directory itself, so it goes
+  // through `shell.openPath` instead. `openPath` resolves to an error string
+  // (never throws) on a normal failure, but the preload rejects outright for a
+  // remote virtual path — both are reported the same way here since the menu
+  // item is already hidden for remote repositories (see `repoMenuItems`).
+  const handleOpenRepositoryFolder = useCallback(
+    async (repoPath: string) => {
+      try {
+        const error = await window.electronAPI.shell.openPath(repoPath);
+        if (error) {
+          toastManager.add({
+            type: 'error',
+            title: t('Could not open "{{path}}".', { path: repoPath }),
+          });
+        }
+      } catch {
+        toastManager.add({
+          type: 'error',
+          title: t('Could not open "{{path}}".', { path: repoPath }),
+        });
+      }
+    },
+    [t]
+  );
+
   /**
    * Folder → repository by the same key the tree was built with. Matching on
    * display name or a path suffix would let one repo answer for another
@@ -817,6 +844,20 @@ export function LeftNav({
                           <Settings />
                           {t('Repository Settings')}
                         </MenuItem>
+                        {/* Remote repositories have no local directory to open —
+                            same unsupported case `files.ts` throws on for
+                            `file:revealInFileManager`, handled here by hiding the
+                            action instead of exposing a click that always fails. */}
+                        {folderRepo.kind !== 'remote' && (
+                          <MenuItem
+                            onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}
+                          >
+                            <Search />
+                            {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+                              ? t('Reveal in Finder')
+                              : t('Reveal in Explorer')}
+                          </MenuItem>
+                        )}
                         {onRemoveRepository && (
                           <MenuItem
                             variant="destructive"
