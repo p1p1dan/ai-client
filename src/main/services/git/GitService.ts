@@ -1,4 +1,4 @@
-import { exec, execFile } from 'node:child_process';
+import { exec } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -21,8 +21,20 @@ import type {
   SubmoduleStatus,
 } from '@shared/types';
 import type { SimpleGit, StatusResult } from 'simple-git';
+import { parseBranchVerbose } from './branchVerboseParse';
 import { decodeBuffer, detectBinaryFile, gitShow, readWorkingTreeFile } from './encoding';
 import { GIT_LOG_PRETTY_FORMAT, parseGitLogOutput } from './gitLogFormat';
+import {
+  GitOutputLostError,
+  isGitOutputLostError,
+  NodeGitRunnerError,
+  runGitViaNode,
+} from './nodeGitRunner';
+import {
+  type PorcelainV2Status,
+  PorcelainV2StatusAccumulator,
+  parsePorcelainV2Status,
+} from './porcelainV2Status';
 import {
   createGitEnv,
   createSimpleGit,
@@ -33,11 +45,17 @@ import {
 } from './runtime';
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 const MAX_GIT_STATUS_ENTRIES = 5000;
 const MAX_GIT_FILE_CHANGES = 5000;
 const GIT_STATUS_STREAM_TIMEOUT_MS = 15000;
+
+// The status command line. The node-runner fallback runs exactly this too, so
+// both paths feed the same record parser.
+const GIT_STATUS_ARGS = ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'];
+// `git branch -a -v` is what simple-git runs for `this.git.branch(['-a', '-v'])`;
+// `--no-color` keeps a `color.branch=always` config out of the fallback parse.
+const GIT_BRANCH_FALLBACK_ARGS = ['branch', '--no-color', '-a', '-v'];
 
 /**
  * `git status --porcelain=v2 --branch` always emits the `# branch.*` headers
@@ -46,8 +64,10 @@ const GIT_STATUS_STREAM_TIMEOUT_MS = 15000;
  * Windows host is exactly this shape, and every reader used to turn it into a
  * confident "clean repo" answer instead of an error.
  */
-function noStatusOutputError(stderr: string): Error {
-  return new Error(
+function noStatusOutputError(stderr: string): GitOutputLostError {
+  // Typed regardless of the message: when git also wrote to stderr, the message
+  // is that stderr, but the output is lost all the same (F3 keys on the type).
+  return new GitOutputLostError(
     stderr.trim() || 'git status exited 0 without emitting branch headers; its output was lost'
   );
 }
@@ -56,21 +76,16 @@ function statusTimedOutError(): Error {
   return new Error(`git status timed out after ${GIT_STATUS_STREAM_TIMEOUT_MS}ms`);
 }
 
-type PorcelainBranchInfo = {
-  current: string | null;
-  tracking: string | null;
-  ahead: number;
-  behind: number;
-};
-
-type LimitedGitStatus = PorcelainBranchInfo & {
-  staged: string[];
-  modified: string[];
-  deleted: string[];
-  untracked: string[];
-  conflicted: string[];
-  truncated: boolean;
-};
+function toGitBranches(
+  branches: Record<string, { current: boolean; commit: string; label: string }>
+): GitBranch[] {
+  return Object.entries(branches).map(([name, info]) => ({
+    name,
+    current: info.current,
+    commit: info.commit,
+    label: info.label,
+  }));
+}
 
 export class GitService {
   private git: SimpleGit;
@@ -92,156 +107,22 @@ export class GitService {
     return paths.map((filePath) => normalizeGitRelativePath(toGitPath(this.workdir, filePath)));
   }
 
-  private async readPorcelainV2Limited(maxEntries: number): Promise<LimitedGitStatus> {
-    const branchInfo: PorcelainBranchInfo = {
-      current: null,
-      tracking: null,
-      ahead: 0,
-      behind: 0,
-    };
-
-    const staged: string[] = [];
-    const modified: string[] = [];
-    const deleted: string[] = [];
-    const untracked: string[] = [];
-    const conflicted: string[] = [];
-
-    let entries = 0;
-    let truncated = false;
+  private async readPorcelainV2Limited(maxEntries: number): Promise<PorcelainV2Status> {
+    const status = new PorcelainV2StatusAccumulator(maxEntries);
     // `truncated` used to mean both "hit the entry cap" and "timed out", and the
     // close handler skipped its reject when either was set — so a timeout came
     // back as a half-read status that looked successful. Keep them apart.
     let timedOut = false;
-    let sawBranchHeader = false;
     let remainder = '';
     let stderr = '';
-    let pendingRename: { xy: string } | null = null;
-
-    const killIfTruncated = (proc: ReturnType<typeof spawnGit>) => {
-      if (!truncated) return;
-      if (!proc.killed) proc.kill('SIGTERM');
-    };
-
-    const processRecord = (recordRaw: string, proc: ReturnType<typeof spawnGit>) => {
-      const record = recordRaw.trim();
-      if (!record) return;
-
-      if (pendingRename) {
-        const p = record;
-        const xy = pendingRename.xy;
-        pendingRename = null;
-
-        const x = xy[0] ?? '.';
-        const y = xy[1] ?? '.';
-
-        if (x !== '.' && x !== '?' && x !== '!') {
-          staged.push(p);
-        }
-
-        if (y === 'D') {
-          deleted.push(p);
-        } else if (y !== '.' && y !== '?' && y !== '!' && y !== 'U') {
-          modified.push(p);
-        }
-
-        if (x === 'U' || y === 'U') {
-          conflicted.push(p);
-        }
-
-        entries++;
-        if (entries >= maxEntries) {
-          truncated = true;
-          killIfTruncated(proc);
-        }
-        return;
-      }
-
-      if (record.startsWith('# ')) {
-        const parts = record.split(' ');
-        const key = parts[1];
-        if (key?.startsWith('branch.')) sawBranchHeader = true;
-        if (key === 'branch.head') {
-          const head = parts.slice(2).join(' ');
-          branchInfo.current = head === '(detached)' ? null : head || null;
-        } else if (key === 'branch.upstream') {
-          branchInfo.tracking = parts.slice(2).join(' ') || null;
-        } else if (key === 'branch.ab') {
-          const aheadToken = parts[2] || '+0';
-          const behindToken = parts[3] || '-0';
-          branchInfo.ahead = Number.parseInt(aheadToken.replace(/^\+/, ''), 10) || 0;
-          branchInfo.behind = Number.parseInt(behindToken.replace(/^-/, ''), 10) || 0;
-        }
-        return;
-      }
-
-      if (entries >= maxEntries) {
-        truncated = true;
-        killIfTruncated(proc);
-        return;
-      }
-
-      if (record.startsWith('? ')) {
-        const p = record.slice(2);
-        if (p) untracked.push(p);
-        entries++;
-        if (entries >= maxEntries) {
-          truncated = true;
-          killIfTruncated(proc);
-        }
-        return;
-      }
-
-      if (record.startsWith('! ')) {
-        return;
-      }
-
-      const type = record[0];
-      if (type !== '1' && type !== '2' && type !== 'u') {
-        return;
-      }
-
-      const parts = record.split(' ');
-      const xy = parts[1] ?? '..';
-      const p = parts[parts.length - 1] ?? '';
-      if (!p) return;
-
-      if (type === '2') {
-        pendingRename = { xy };
-        return;
-      }
-
-      const x = xy[0] ?? '.';
-      const y = xy[1] ?? '.';
-
-      if (type === 'u' || x === 'U' || y === 'U') {
-        conflicted.push(p);
-      }
-
-      if (x !== '.' && x !== '?' && x !== '!') {
-        staged.push(p);
-      }
-
-      if (y === 'D') {
-        deleted.push(p);
-      } else if (y !== '.' && y !== '?' && y !== '!' && y !== 'U') {
-        modified.push(p);
-      }
-
-      entries++;
-      if (entries >= maxEntries) {
-        truncated = true;
-        killIfTruncated(proc);
-      }
-    };
 
     return new Promise((resolve, reject) => {
       // Use 'normal' mode for status - only need to know if there are untracked files,
       // not the full list. This significantly improves performance for large repos.
-      const proc = spawnGit(
-        this.workdir,
-        ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'],
-        { cwd: this.workdir, env: this.getGitEnv() }
-      );
+      const proc = spawnGit(this.workdir, GIT_STATUS_ARGS, {
+        cwd: this.workdir,
+        env: this.getGitEnv(),
+      });
 
       const timeout = setTimeout(() => {
         timedOut = true;
@@ -249,13 +130,16 @@ export class GitService {
       }, GIT_STATUS_STREAM_TIMEOUT_MS);
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        if (truncated || timedOut) return;
+        if (status.truncated || timedOut) return;
         remainder += chunk.toString('utf8');
         const records = remainder.split('\0');
         remainder = records.pop() ?? '';
         for (const record of records) {
-          processRecord(record, proc);
-          if (truncated) break;
+          status.push(record);
+          if (status.truncated) {
+            if (!proc.killed) proc.kill('SIGTERM');
+            break;
+          }
         }
       });
 
@@ -275,179 +159,77 @@ export class GitService {
           reject(statusTimedOutError());
           return;
         }
-        if (!truncated && code && code !== 0) {
+        if (!status.truncated && code && code !== 0) {
           reject(new Error(stderr.trim() || `git status failed (${code})`));
           return;
         }
-        if (!truncated && !sawBranchHeader) {
+        if (!status.truncated && !status.sawBranchHeader) {
           reject(noStatusOutputError(stderr));
           return;
         }
-        resolve({
-          ...branchInfo,
-          staged,
-          modified,
-          deleted,
-          untracked,
-          conflicted,
-          truncated,
-        });
+        resolve(status.result());
       });
     });
   }
 
   /**
-   * F3 fallback for readPorcelainV2Limited: when the direct spawnGit call
-   * returns empty output (exit 0 but no `# branch.*` headers), retry via
-   * the bundled node.exe intermediary. node.exe is whitelisted by the TSD
-   * encryption driver (confirmed by tsdSafeRead), so git's stdout passes
-   * through when the parent is node.exe instead of the Electron Main
-   * process. Uses `git status -s -b` (short format) which provides the
-   * same information as porcelain v2 in a simpler-to-parse layout.
+   * F3 fallback for `readPorcelainV2Limited`: run the same status command line
+   * with the bundled node as git's parent (see `nodeGitRunner`) and parse the
+   * output with the same record parser and entry cap.
    */
-  private async readStatusViaNode(maxEntries: number): Promise<LimitedGitStatus> {
-    const branchInfo: PorcelainBranchInfo = {
-      current: null,
-      tracking: null,
-      ahead: 0,
-      behind: 0,
-    };
-    const staged: string[] = [];
-    const modified: string[] = [];
-    const deleted: string[] = [];
-    const untracked: string[] = [];
-    const conflicted: string[] = [];
-    let entries = 0;
-    let truncated = false;
-    let sawBranchHeader = false;
-
-    const { stdout, stderr, exitCode } = await this.runGitViaNode([
-      'status',
-      '-s',
-      '-b',
-      '--untracked-files=normal',
-    ]);
-
+  private async readPorcelainV2ViaNode(maxEntries: number): Promise<PorcelainV2Status> {
+    const stdout = await this.runGitViaNodeLogged('status', GIT_STATUS_ARGS);
+    const parsed = parsePorcelainV2Status(stdout, maxEntries);
     console.warn(
-      `[GitService] node.exe status fallback: exit=${exitCode} stdout_len=${stdout.length}`
+      `[GitService] status via node runner: exit=0 chars=${stdout.length} ` +
+        `entries=${parsed.entries} truncated=${parsed.status.truncated}`
     );
-    if (exitCode !== 0 && stdout.length === 0) {
-      throw new Error(
-        stderr.trim() ||
-          'git status (node.exe fallback) failed without output; output was lost'
+    if (!parsed.status.truncated && !parsed.sawBranchHeader) {
+      throw new GitOutputLostError(
+        'git status via the node runner exited 0 without emitting branch headers; ' +
+          'its output was lost'
       );
     }
+    return parsed.status;
+  }
 
-    for (const line of stdout.split('\n')) {
-      if (!line) continue;
-
-      // Branch header: ## branch...tracking [ahead N, behind M]
-      if (line.startsWith('## ')) {
-        sawBranchHeader = true;
-        const rest = line.slice(3).replace(/\r$/, '');
-
-        // Extract ahead/behind
-        const abMatch = rest.match(
-          /\[ahead (\d+)(?:,?\s*behind (\d+))?\]|\[behind (\d+)(?:,?\s*ahead (\d+))?\]/
+  /**
+   * F3: run `git <args>` with the bundled node as git's parent, using the git
+   * environment of the primary path. Logs only the failure kind and exit code:
+   * stderr can carry paths and already travels in the thrown error.
+   */
+  private async runGitViaNodeLogged(what: 'status' | 'branch', args: string[]): Promise<string> {
+    try {
+      const { stdout } = await runGitViaNode({
+        workdir: this.workdir,
+        args,
+        env: this.getGitEnv(),
+      });
+      return stdout;
+    } catch (err) {
+      if (err instanceof NodeGitRunnerError) {
+        console.warn(
+          `[GitService] ${what} via node runner failed: ${err.failure} exit=${err.exitCode}`
         );
-        if (abMatch) {
-          branchInfo.ahead = Number.parseInt(abMatch[1] || abMatch[4] || '0', 10) || 0;
-          branchInfo.behind = Number.parseInt(abMatch[2] || abMatch[3] || '0', 10) || 0;
-        }
-
-        // Extract branch and tracking (strip the [ahead/behind] suffix)
-        const branchPart = rest.replace(/\[.*\]/, '').trim();
-        if (branchPart === 'HEAD (no branch)' || branchPart.startsWith('No commits yet')) {
-          branchInfo.current = null;
-        } else {
-          const dotsIdx = branchPart.indexOf('...');
-          if (dotsIdx >= 0) {
-            branchInfo.current = branchPart.substring(0, dotsIdx) || null;
-            branchInfo.tracking = branchPart.substring(dotsIdx + 3) || null;
-          } else {
-            branchInfo.current = branchPart || null;
-          }
-        }
-        continue;
       }
-
-      if (entries >= maxEntries) {
-        truncated = true;
-        continue;
-      }
-
-      // File status line: XY filename (X=index, Y=working-tree)
-      if (line.length < 4) continue;
-      const x = line[0];
-      const y = line[1];
-      // filename = everything after "XY " (3 chars)
-      const filename = line.slice(3).replace(/\r$/, '');
-      if (!filename) continue;
-
-      if (x === '?' && y === '?') {
-        untracked.push(filename);
-        entries++;
-        continue;
-      }
-      if (x === '!' && y === '!') continue;
-
-      if (x === 'U' || y === 'U') {
-        conflicted.push(filename);
-      }
-      if (x !== '.' && x !== '?' && x !== '!') {
-        staged.push(filename);
-      }
-      if (y === 'D') {
-        deleted.push(filename);
-      } else if (y !== '.' && y !== '?' && y !== '!' && y !== 'U') {
-        modified.push(filename);
-      }
-
-      entries++;
-      if (entries >= maxEntries) {
-        truncated = true;
-      }
+      throw err;
     }
+  }
 
-    if (!sawBranchHeader) {
-      throw new Error(
-        'git status (node.exe fallback) produced no branch headers; output was lost'
-      );
+  /** Primary status read, retried through the node runner when its output was lost. */
+  private async readStatusLimited(maxEntries: number): Promise<PorcelainV2Status> {
+    try {
+      return await this.readPorcelainV2Limited(maxEntries);
+    } catch (err) {
+      // WSL repositories go through wsl.exe, which the runner does not route.
+      if (!isGitOutputLostError(err) || isWslGitRepository(this.workdir)) throw err;
+      console.warn('[GitService] status output lost; retrying via node runner');
+      return this.readPorcelainV2ViaNode(maxEntries);
     }
-
-    console.warn(
-      `[GitService] node.exe status fallback: ${entries} entries, current=${branchInfo.current}`
-    );
-
-    return {
-      ...branchInfo,
-      staged,
-      modified,
-      deleted,
-      untracked,
-      conflicted,
-      truncated,
-    };
   }
 
   async getStatus(): Promise<GitStatus> {
-    let limited: LimitedGitStatus;
-    try {
-      limited = await this.readPorcelainV2Limited(MAX_GIT_STATUS_ENTRIES);
-    } catch (err) {
-      // F3 fallback: spawnGit returned empty output (exit 0 but no branch
-      // headers). Retry via execAsync, which uses cmd.exe as a shell
-      // intermediary — git's parent becomes cmd.exe (whitelisted by the
-      // TSD encryption driver) instead of the Electron Main process.
-      if (err instanceof Error && err.message.includes('output was lost')) {
-        console.warn(
-          '[GitService] getStatus: spawnGit returned empty output, trying execAsync fallback'
-        );
-        limited = await this.readStatusViaNode(MAX_GIT_STATUS_ENTRIES);
-      } else {
-        throw err;
-      }
-    }
+    const limited = await this.readStatusLimited(MAX_GIT_STATUS_ENTRIES);
     const totalListed =
       limited.staged.length +
       limited.modified.length +
@@ -528,67 +310,13 @@ export class GitService {
    * old behaviour, so every existing caller is untouched.
    */
   async getBranches(options?: { skipMerged?: boolean }): Promise<GitBranch[]> {
-    const result = await this.git.branch(['-a', '-v']);
-    const branches = Object.entries(result.branches).map(([name, info]) => ({
-      name,
-      current: info.current,
-      commit: info.commit,
-      label: info.label,
-    }));
-
-    if (branches.length === 0) {
-      // An empty listing has two causes and they need opposite answers: a repo
-      // with no commits yet, or a `git branch -a -v` whose output never made it
-      // back. `symbolic-ref --short HEAD` cannot tell them apart — it succeeds
-      // on any repo with a branch checked out — so using it as the test labelled
-      // healthy repos "(no commits yet)" (Q7). `rev-parse --verify HEAD` fails
-      // only when HEAD is genuinely unborn, which is the actual question.
-      let headResolves = false;
-      try {
-        await this.git.raw(['rev-parse', '--verify', 'HEAD']);
-        headResolves = true;
-      } catch {
-        // Unborn HEAD: this really is a fresh repo.
-      }
-
-      if (headResolves) {
-        // F3 fallback: simple-git returned empty branches but the repo has
-        // commits. Retry with a direct spawnGit call that bypasses
-        // simple-git's internal child_process spawn. On the encrypted
-        // Windows host (TSD encryption driver), simple-git's spawn can
-        // return empty stdout while a direct spawnGit call succeeds.
-        console.warn(
-          '[GitService] getBranches: simple-git returned 0 branches with valid HEAD, trying spawnGit fallback'
-        );
-        const fallback = await this.getBranchesViaNode();
-        if (fallback.length > 0) {
-          console.warn(
-            `[GitService] getBranches: spawnGit fallback recovered ${fallback.length} branches`
-          );
-          branches = fallback;
-        } else {
-          throw new Error(
-            'git branch -a -v returned no branches for a repository that has commits; ' +
-              'its output was lost'
-          );
-        }
-      } else {
-        try {
-          // Empty repo: rev-parse cannot name the branch, symbolic-ref can.
-          const currentBranch = await this.git.raw(['symbolic-ref', '--short', 'HEAD']);
-          return [
-            {
-              name: currentBranch.trim(),
-              current: true,
-              commit: '',
-              label: '(no commits yet)',
-            },
-          ];
-        } catch {
-          return [];
-        }
-      }
+    const listing = await this.readBranchListing();
+    // The fresh-repo answer (one synthetic entry, or none) is final: there is
+    // nothing to mark as merged.
+    if (listing.unborn) {
+      return listing.branches;
     }
+    const branches = listing.branches;
 
     // After the empty-listing judgement, not before: a picker needs the
     // synthetic unborn-HEAD entry and the lost-output error just as much.
@@ -659,118 +387,75 @@ export class GitService {
   }
 
   /**
-   * Resolve the bundled node.exe that is whitelisted by the TSD encryption
-   * driver. Same logic as tsdSafeRead.resolveDecryptingNode: prefer the
-   * runtime we ship (the binary whitelisting was verified against), fall
-   * back to PATH `node` for dev and other platforms.
+   * `git branch -a -v` as `GitBranch[]`, including the empty-listing judgement
+   * (Q7) and the F3 recovery. `unborn` marks the synthetic fresh-repo answer.
    */
-  private resolveBundledNode(): string {
-    const override = process.env.AICLIENT_TSD_NODE_PATH?.trim();
-    if (override) return override;
-    if (process.platform !== 'win32') return 'node';
-    const resourcesPath = (process as NodeJS.Process & { resourcesPath?: string })
-      .resourcesPath;
-    if (!resourcesPath) return 'node';
-    const bundled = path.join(resourcesPath, 'node-runtime', 'node.exe');
-    return existsSync(bundled) ? bundled : 'node';
-  }
+  private async readBranchListing(): Promise<{ branches: GitBranch[]; unborn: boolean }> {
+    const result = await this.git.branch(['-a', '-v']);
+    const listed = toGitBranches(result.branches);
+    if (listed.length > 0) {
+      return { branches: listed, unborn: false };
+    }
 
-  /**
-   * F3 fallback: run a git command via the bundled node.exe as an
-   * intermediary. The node.exe binary is whitelisted by the TSD encryption
-   * driver (confirmed by tsdSafeRead), so git's stdout passes through when
-   * the parent is node.exe instead of the Electron Main process. Uses the
-   * same execFile pattern as tsdSafeRead.readViaNodeExe.
-   */
-  private async runGitViaNode(
-    args: string[]
-  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-    // Inline runner: spawn git, pipe stdout/stderr, exit with git's code.
-    const script =
-      "const{spawn:s}=require('child_process');" +
-      'const g=s("git",process.argv.slice(2),{cwd:process.argv[1],windowsHide:true,env:process.env});' +
-      'g.stdout.on("data",d=>process.stdout.write(d));' +
-      'g.stderr.on("data",d=>process.stderr.write(d));' +
-      'g.on("close",c=>process.exit(c??1));' +
-      'g.on("error",()=>process.exit(1));';
+    // An empty listing has two causes and they need opposite answers: a repo
+    // with no commits yet, or a `git branch -a -v` whose output never made it
+    // back. `symbolic-ref --short HEAD` cannot tell them apart — it succeeds
+    // on any repo with a branch checked out — so using it as the test labelled
+    // healthy repos "(no commits yet)" (Q7). `rev-parse --verify HEAD` fails
+    // only when HEAD is genuinely unborn, which is the actual question.
+    let headResolves = false;
+    try {
+      await this.git.raw(['rev-parse', '--verify', 'HEAD']);
+      headResolves = true;
+    } catch {
+      // Unborn HEAD: this really is a fresh repo.
+    }
+
+    if (headResolves) {
+      return { branches: await this.readBranchesViaNode(), unborn: false };
+    }
 
     try {
-      const { stdout, stderr } = await execFileAsync(
-        this.resolveBundledNode(),
-        ['-e', script, '--', this.workdir, ...args],
-        {
-          encoding: 'utf8',
-          maxBuffer: 10 * 1024 * 1024,
-          timeout: 30_000,
-          windowsHide: true,
-        }
-      );
-      return { stdout, stderr, exitCode: 0 };
-    } catch (err) {
-      const e = err as { stdout?: string; stderr?: string; code?: number };
+      // Empty repo: rev-parse cannot name the branch, symbolic-ref can.
+      const currentBranch = await this.git.raw(['symbolic-ref', '--short', 'HEAD']);
       return {
-        stdout: e.stdout ?? '',
-        stderr: e.stderr ?? '',
-        exitCode: e.code ?? 1,
+        branches: [
+          {
+            name: currentBranch.trim(),
+            current: true,
+            commit: '',
+            label: '(no commits yet)',
+          },
+        ],
+        unborn: true,
       };
+    } catch {
+      return { branches: [], unborn: true };
     }
   }
 
   /**
-   * F3 fallback for getBranches: run `git branch -a -v` via the bundled
-   * node.exe intermediary, bypassing simple-git's internal child_process
-   * spawn. On the encrypted Windows host (TSD encryption driver),
-   * simple-git's spawn can return empty stdout; this node.exe intermediary
-   * is whitelisted by TSD (confirmed by tsdSafeRead) and recovers the
-   * output.
+   * F3 fallback for a lost branch listing: run `git branch -a -v` with the
+   * bundled node as git's parent (see `nodeGitRunner`) and parse it the way
+   * simple-git does, so the result is the `GitBranch[]` the primary path
+   * would have produced.
    */
-  private async getBranchesViaNode(): Promise<GitBranch[]> {
-    const { stdout, stderr, exitCode } = await this.runGitViaNode([
-      'branch',
-      '-a',
-      '-v',
-    ]);
-    console.warn(
-      `[GitService] node.exe branch fallback: exit=${exitCode} stdout_len=${stdout.length} stderr_len=${stderr.length}`
+  private async readBranchesViaNode(): Promise<GitBranch[]> {
+    const lost = new GitOutputLostError(
+      'git branch -a -v returned no branches for a repository that has commits; ' +
+        'its output was lost'
     );
-    if (exitCode !== 0 || stdout.length === 0) {
-      if (stderr.length > 0) {
-        console.warn(
-          `[GitService] node.exe branch fallback stderr: ${stderr.substring(0, 300)}`
-        );
-      }
-      return [];
-    }
-    return this.parseBranchVerbose(stdout);
-  }
+    // WSL repositories go through wsl.exe, which the runner does not route.
+    if (isWslGitRepository(this.workdir)) throw lost;
 
-  /**
-   * Parse `git branch -a -v` output into GitBranch[].
-   *
-   * Each line format: `[marker] [name padded] [commit] [label]`
-   * - Marker: `*` (current), `+` (checked out in a worktree), ` ` (regular)
-   * - Lines containing `->` are symbolic refs (e.g.
-   *   `remotes/origin/HEAD -> origin/main`) and are skipped.
-   */
-  private parseBranchVerbose(stdout: string): GitBranch[] {
-    const branches: GitBranch[] = [];
-    for (const line of stdout.split('\n')) {
-      if (!line.trim() || line.includes('->')) continue;
-
-      const match = line.match(/^([*+ ])\s+(\S+)\s+([0-9a-f]+)\s*(.*)$/);
-      if (!match) continue;
-
-      // Skip detached HEAD markers like "(HEAD detached at xxx)" or
-      // "(no branch)" — they are not real branch entries.
-      if (match[2].startsWith('(')) continue;
-
-      branches.push({
-        name: match[2],
-        current: match[1] === '*',
-        commit: match[3],
-        label: match[4],
-      });
-    }
+    console.warn('[GitService] branch listing lost; retrying via node runner');
+    const stdout = await this.runGitViaNodeLogged('branch', GIT_BRANCH_FALLBACK_ARGS);
+    const branches = toGitBranches(parseBranchVerbose(stdout));
+    console.warn(
+      `[GitService] branches via node runner: exit=0 chars=${stdout.length} ` +
+        `branches=${branches.length}`
+    );
+    if (branches.length === 0) throw lost;
     return branches;
   }
 
