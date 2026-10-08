@@ -1,6 +1,6 @@
 /**
- * dsh-rebase P1-8 long-session contention regression (decision 067; plan
- * P1-8 shard 05 §3-§4): LC-0 to LC-2 on the shared DSH host, driven the way
+ * dsh-rebase P1-8 long-session contention regression (decisions 067, 158;
+ * plan P1-8 shard 05 §3-§4): LC-0 to LC-2 on the shared DSH host, driven the way
  * Main's supervisor drives it (channel envelopes, heartbeat pings), observed
  * through the heartbeat's own pong (`eldMaxMs`, `rssMb`). Local script only;
  * no CI wiring yet.
@@ -25,12 +25,18 @@
  *   LC-1  all 8 x 200 deltas on the right channel, turns completed,
  *         ELD <= 150 ms, RSS <= 350 MB              (soft 60 ms / 260 MB)
  *   LC-2  5 turns completed, ELD <= 1000 ms, the victim's largest gap between
- *         deltas <= ELD + 150 ms, RSS <= 600 MB, every ping answered, no pong
- *         slower than 2 s                           (soft 450 ms / 450 MB)
+ *         deltas <= ELD + 150 ms pacing + 100 ms jitter (decision 158), RSS
+ *         <= 600 MB, every ping answered, no pong slower than 2 s
+ *                                                    (soft 450 ms / 450 MB)
  *         The victim (P8-VICTIM) stamps every delta with its send time; its
  *         gaps are corrected for the fake gateway's own stalls (one process
  *         also parsing the four long requests), so the gate sees what the host
- *         and the IPC link added. The raw gaps are reported beside it.
+ *         and the IPC link added. The raw gaps are reported beside it. The
+ *         150 ms pacing term is VICTIM_CHUNK_MS, the same constant the
+ *         scenario paces the victim's own deltas with, not a second literal
+ *         that happens to match it; the 100 ms jitter is an explicit margin
+ *         for scheduling/IPC noise the gate used to give zero room to
+ *         (decision 158; see decisions/158-lc2-victim-gap-jitter.md).
  * ELD is the pong's `eldMaxMs` (worst stall beyond the bridge's 50 ms sampling
  * period since the previous pong), pinged every 250 ms as Main's supervisor
  * would, if more often.
@@ -46,6 +52,13 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { convertPiSessionBytes } from '../../shared/legacyPiSession/convert/index.ts';
+import {
+  GATES,
+  judge,
+  type PingStats,
+  type Scenario,
+  VICTIM_CHUNK_MS,
+} from './lib/contentionGates.ts';
 import {
   BYPASS_PERMISSIONS,
   fakeGatewayPlan,
@@ -102,21 +115,8 @@ const log = (message: string) => process.stderr.write(`[contention] ${message}\n
 const MIN_AVAILABLE_MB = 900;
 const PING_MS = 250;
 const STAMP = /‹t\d+›/g;
-/** The victim's pacing (P8-VICTIM), the 150 of the gate "gap <= ELD + 150 ms". */
-const VICTIM_CHUNK_MS = 150;
 const nowUs = () => Number(process.hrtime.bigint() / 1000n);
-
-/** Decision 067 / shard 05 §4. */
-const GATES = {
-  'LC-0': { hard: { eldMs: 50, rssMb: 300 }, soft: { eldMs: 10, rssMb: 230 } },
-  'LC-1': { hard: { eldMs: 150, rssMb: 350 }, soft: { eldMs: 60, rssMb: 260 } },
-  'LC-2': {
-    hard: { eldMs: 1000, rssMb: 600, victimGapOverEldMs: 150, pongRttMs: 2000 },
-    soft: { eldMs: 450, rssMb: 450 },
-  },
-} as const;
-
-type Scenario = keyof typeof GATES;
+// GATES, VICTIM_CHUNK_MS, Scenario, PingStats, judge: see lib/contentionGates.ts.
 
 function availableMb(): number {
   const match = readFileSync('/proc/meminfo', 'utf8').match(/^MemAvailable:\s+(\d+)/m);
@@ -231,16 +231,6 @@ async function stopHost(host: Host) {
 }
 
 // ---- heartbeat ---------------------------------------------------------------------
-
-interface PingStats {
-  pings: number;
-  answered: number;
-  unanswered: number;
-  maxRttMs: number;
-  eldMaxMs: number;
-  rssMaxMb: number;
-  rssLastMb: number;
-}
 
 /** Ping every 250 ms as the supervisor does; collect what each pong says. */
 function startPings(host: Host) {
@@ -689,61 +679,9 @@ async function lc2(box: Sandbox, port: number, stubs: string[], run: number) {
 }
 
 // ---- gates -------------------------------------------------------------------------
-
-interface GateResult {
-  hard: Record<string, boolean>;
-  softWarnings: string[];
-  numbers: Record<string, number[]>;
-}
-
-function judge(scenario: Scenario, results: Message[]): GateResult {
-  const gates = GATES[scenario];
-  const pings = results.map((r) => (r.pings ?? {}) as PingStats);
-  const eld = pings.map((p) => p.eldMaxMs);
-  const rss = pings.map((p) => p.rssMaxMb);
-  const hard: Record<string, boolean> = {
-    [`${scenario} ELD <= ${gates.hard.eldMs} ms`]: eld.every((v) => v <= gates.hard.eldMs),
-    [`${scenario} RSS <= ${gates.hard.rssMb} MB`]: rss.every((v) => v <= gates.hard.rssMb),
-  };
-  const numbers: Record<string, number[]> = { eldMaxMs: eld, rssMaxMb: rss };
-  if (scenario === 'LC-1') {
-    const turns = results.flatMap((r) => (r.turns ?? []) as Message[]);
-    hard['LC-1 8 x 200 deltas, each on its own channel'] =
-      results.every((r) => ((r.turns ?? []) as Message[]).length === 8) &&
-      turns.every((t) => t.stamps === 200 && t.foreignEvents === 0);
-    hard['LC-1 all turns completed'] = turns.every((t) => t.completed === true);
-  }
-  if (scenario === 'LC-2') {
-    const lc2Gates = GATES['LC-2'].hard;
-    hard['LC-2 no host error'] = results.every((r) => r.error === undefined);
-    hard['LC-2 victim deltas stamped'] = results.every(
-      (r) => Number((r.victim as Message | undefined)?.stamped ?? 0) >= 60
-    );
-    hard['LC-2 5 turns completed'] = results.every(
-      (r) =>
-        ((r.recalls ?? []) as Message[]).filter((t) => t.completed === true).length === 4 &&
-        (r.victim as Message | undefined)?.completed === true
-    );
-    const gaps = results.map((r) =>
-      Number((r.victim as Message | undefined)?.maxGapMs ?? Infinity)
-    );
-    numbers.victimMaxGapMs = gaps;
-    hard[`LC-2 victim gap <= ELD + ${lc2Gates.victimGapOverEldMs} ms`] = results.every(
-      (_r, i) => (gaps[i] ?? Infinity) <= (eld[i] ?? 0) + lc2Gates.victimGapOverEldMs
-    );
-    hard['LC-2 every ping answered'] = pings.every((p) => p.unanswered === 0 && p.answered > 0);
-    numbers.maxPongRttMs = pings.map((p) => p.maxRttMs);
-    hard[`LC-2 no pong slower than ${lc2Gates.pongRttMs} ms`] = pings.every(
-      (p) => p.maxRttMs <= lc2Gates.pongRttMs
-    );
-  }
-  const softWarnings: string[] = [];
-  if (median(eld) > gates.soft.eldMs)
-    softWarnings.push(`${scenario} ELD median ${median(eld)} ms > soft ${gates.soft.eldMs} ms`);
-  if (median(rss) > gates.soft.rssMb)
-    softWarnings.push(`${scenario} RSS median ${median(rss)} MB > soft ${gates.soft.rssMb} MB`);
-  return { hard, softWarnings, numbers };
-}
+// GateResult and judge() now live in lib/contentionGates.ts (decision 158), so the
+// pure gate logic has a side-effect-free unit-test entry point separate from this
+// script's `process.exitCode = await main()` (see src/dsh-host/__tests__).
 
 // ---- main --------------------------------------------------------------------------
 
