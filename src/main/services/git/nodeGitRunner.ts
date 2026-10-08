@@ -100,7 +100,7 @@ export function resolveBundledNode(): string {
 }
 
 type ExecFileOptions = {
-  encoding: 'utf8';
+  encoding: 'utf8' | 'buffer';
   env: NodeJS.ProcessEnv;
   maxBuffer: number;
   timeout: number;
@@ -111,7 +111,7 @@ export type NodeGitRunnerExec = (
   file: string,
   args: string[],
   options: ExecFileOptions
-) => Promise<{ stdout: string; stderr: string }>;
+) => Promise<{ stdout: string | Buffer; stderr: string | Buffer }>;
 
 const execFileAsync = promisify(execFile) as unknown as NodeGitRunnerExec;
 
@@ -120,9 +120,14 @@ type ExecFileError = {
   code?: number | string | null;
   signal?: string | null;
   killed?: boolean;
-  stdout?: string;
-  stderr?: string;
+  stdout?: string | Buffer;
+  stderr?: string | Buffer;
 };
+
+function streamText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return Buffer.isBuffer(value) ? value.toString('utf8') : '';
+}
 
 function describeStderr(stderr: string): string {
   const text = stderr.trim();
@@ -140,7 +145,8 @@ export function toNodeGitRunnerError(
   timeoutMs: number
 ): NodeGitRunnerError {
   const e = (error ?? {}) as ExecFileError;
-  const stderr = typeof e.stderr === 'string' ? e.stderr : '';
+  // Buffer mode (`encoding: 'buffer'`) rejects with Buffer streams.
+  const stderr = streamText(e.stderr);
   const code = e.code ?? null;
   const signal = e.signal ?? null;
   const prefix = `git ${command} via the node runner failed`;
@@ -204,6 +210,11 @@ export type RunGitViaNodeOptions = {
   /** Git environment of the primary path (`createGitEnv(workdir)`). */
   env: NodeJS.ProcessEnv;
   timeoutMs?: number;
+  /**
+   * `'buffer'` relays stdout as raw bytes, for content whose encoding the
+   * caller detects itself (blobs from `git show`). Default `'utf8'`.
+   */
+  encoding?: 'utf8' | 'buffer';
   exec?: NodeGitRunnerExec;
 };
 
@@ -214,8 +225,14 @@ export type RunGitViaNodeOptions = {
  * the caller's judgement (it knows what a complete answer looks like).
  */
 export async function runGitViaNode(
+  options: RunGitViaNodeOptions & { encoding: 'buffer' }
+): Promise<{ stdout: Buffer; stderr: Buffer }>;
+export async function runGitViaNode(
+  options: RunGitViaNodeOptions & { encoding?: 'utf8' }
+): Promise<{ stdout: string; stderr: string }>;
+export async function runGitViaNode(
   options: RunGitViaNodeOptions
-): Promise<{ stdout: string; stderr: string }> {
+): Promise<{ stdout: string | Buffer; stderr: string | Buffer }> {
   const timeoutMs = options.timeoutMs ?? NODE_GIT_RUNNER_TIMEOUT_MS;
   const exec = options.exec ?? execFileAsync;
   try {
@@ -223,7 +240,7 @@ export async function runGitViaNode(
       resolveBundledNode(),
       ['-e', NODE_GIT_RUNNER_SCRIPT, '--', options.workdir, ...options.args],
       {
-        encoding: 'utf8',
+        encoding: options.encoding ?? 'utf8',
         // Porcelain formats are not localized, but git's own messages and the
         // detached-HEAD text of `git branch` are; parse English only.
         env: { ...options.env, LC_ALL: 'C', LANGUAGE: 'C' },

@@ -8,7 +8,7 @@ const { isBinaryFile } = createRequire(import.meta.url)('isbinaryfile') as {
 
 import jschardet from 'jschardet';
 import { isFileTsdEncrypted, readFileTsdSafe } from '../../utils/tsdSafeRead';
-import { spawnGit } from './runtime';
+import { readGitBuffer } from './gitReadFallback';
 
 export function decodeBuffer(buffer: Buffer): string {
   if (buffer.length === 0) return '';
@@ -61,31 +61,27 @@ export async function detectBinaryFile(
   }
 }
 
-export function gitShowBuffer(workdir: string, ref: string): Promise<Buffer> {
-  return new Promise((resolve) => {
-    const chunks: Buffer[] = [];
-
-    const proc = spawnGit(workdir, ['show', ref], {
-      cwd: workdir,
-      windowsHide: true,
+/**
+ * `git show <ref>` as raw bytes; empty on any failure (a path absent at that
+ * ref is the normal case for added and deleted files).
+ *
+ * F3: an empty blob is a real answer, so an empty stdout cannot show that the
+ * output was lost; once a lost read has been recovered elsewhere in this
+ * process, this goes through the node runner like every other read (see
+ * `gitReadFallback`). Bytes, not text: `decodeBuffer` detects the encoding.
+ */
+export async function gitShowBuffer(workdir: string, ref: string): Promise<Buffer> {
+  try {
+    const { stdout } = await readGitBuffer({
+      what: 'show',
+      workdir,
+      args: ['show', ref],
+      lostWhen: 'never',
     });
-
-    proc.stdout.on('data', (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    proc.on('close', (code) => {
-      if (code !== 0 || chunks.length === 0) {
-        resolve(Buffer.alloc(0));
-        return;
-      }
-      resolve(Buffer.concat(chunks));
-    });
-
-    proc.on('error', () => {
-      resolve(Buffer.alloc(0));
-    });
-  });
+    return stdout;
+  } catch {
+    return Buffer.alloc(0);
+  }
 }
 
 export async function gitShow(workdir: string, ref: string): Promise<string> {

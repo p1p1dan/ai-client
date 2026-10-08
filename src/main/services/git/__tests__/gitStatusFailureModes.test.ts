@@ -13,8 +13,14 @@ vi.mock('../../terminal/PtyManager', () => ({
 
 const spawnGitMock = vi.fn();
 const isWslGitRepositoryMock = vi.fn((_workdir: string) => false);
+// Tests that do not fake a git process get the real `spawnGit` (real git on a
+// scratch repository — the ordinary-machine path).
+const runtimeActual = vi.hoisted(() => ({
+  spawnGit: null as unknown as (...a: unknown[]) => unknown,
+}));
 vi.mock('../runtime', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../runtime')>();
+  runtimeActual.spawnGit = actual.spawnGit as (...a: unknown[]) => unknown;
   return {
     ...actual,
     spawnGit: (...args: unknown[]) => spawnGitMock(...args),
@@ -33,6 +39,7 @@ vi.mock('../nodeGitRunner', async (importOriginal) => {
 
 const { GitService } = await import('../GitService');
 const { createGitEnv } = await import('../runtime');
+const { resetGitReadFallbackForTests, shouldRouteViaRunner } = await import('../gitReadFallback');
 const { NodeGitRunnerError, isGitOutputLostError } = await import('../nodeGitRunner');
 
 const STATUS_ARGS = ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'];
@@ -92,11 +99,17 @@ let root: string;
 
 beforeEach(() => {
   root = mkdtempSync(path.join(tmpdir(), 'aiclient-git-q7-'));
+  // The runner routing switch is process-wide; every test starts before any
+  // recovery.
+  resetGitReadFallbackForTests();
   spawnGitMock.mockReset();
+  spawnGitMock.mockImplementation((...args: unknown[]) => runtimeActual.spawnGit(...args));
   isWslGitRepositoryMock.mockReset();
   isWslGitRepositoryMock.mockReturnValue(false);
   runGitViaNodeMock.mockReset();
   runGitViaNodeMock.mockResolvedValue({ stdout: '', stderr: '' });
+  // The fallback's one-per-kind success line.
+  vi.spyOn(console, 'info').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -154,6 +167,30 @@ describe('git status readers reject lost output instead of inventing a clean rep
     await vi.advanceTimersByTimeAsync(15_000);
     await assertion;
     expect(runGitViaNodeMock).not.toHaveBeenCalled();
+  });
+
+  it('treats an outside kill before the branch headers as a failure, not a lost output', async () => {
+    const proc = fakeGitProcess();
+    spawnGitMock.mockReturnValue(proc);
+    const pending = new GitService(root).getStatus();
+    queueMicrotask(() => proc.emit('close', null, 'SIGKILL'));
+    await expect(pending).rejects.toThrow(/terminated by SIGKILL/);
+    expect(isGitOutputLostError(await pending.catch((e: unknown) => e))).toBe(false);
+    expect(runGitViaNodeMock).not.toHaveBeenCalled();
+    expect(shouldRouteViaRunner(root)).toBe(false);
+  });
+
+  it('rejects a status killed from outside after its headers instead of returning it half-read', async () => {
+    const proc = fakeGitProcess();
+    spawnGitMock.mockReturnValue(proc);
+    const pending = new GitService(root).getFileChanges();
+    queueMicrotask(() => {
+      emitRecords(proc, ['# branch.oid deadbeef', '# branch.head main']);
+      proc.emit('close', null, 'SIGTERM');
+    });
+    await expect(pending).rejects.toThrow(/terminated by SIGTERM/);
+    expect(runGitViaNodeMock).not.toHaveBeenCalled();
+    expect(shouldRouteViaRunner(root)).toBe(false);
   });
 
   it('getFileChanges fails on the same lost-output shape', async () => {

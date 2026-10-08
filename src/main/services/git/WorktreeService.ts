@@ -21,6 +21,7 @@ import jschardet from 'jschardet';
 import type { SimpleGit } from 'simple-git';
 import log from '../../utils/logger';
 import { gitShow, readWorkingTreeFile } from './encoding';
+import { readGit } from './gitReadFallback';
 import {
   createSimpleGit,
   fromGitPath as fromRuntimeGitPath,
@@ -165,7 +166,16 @@ export class WorktreeService {
   }
 
   async list(): Promise<GitWorktree[]> {
-    const result = await this.git.raw(['worktree', 'list', '--porcelain']);
+    // A repository always lists at least its main worktree, so a zero-exit run
+    // with no output lost it (F3: the encrypted Windows host). That is the
+    // composer's branch chip: without the list it has no current branch, and a
+    // checkout looked like it did nothing.
+    const { stdout: result } = await readGit({
+      what: 'worktree-list',
+      workdir: this.workdir,
+      args: ['worktree', 'list', '--porcelain'],
+      lostWhen: 'empty',
+    });
     const parsed = parseWorktreeListPorcelain(result, (inputPath) => this.fromGitPath(inputPath));
 
     if (parsed.emptyDiagnostic) {

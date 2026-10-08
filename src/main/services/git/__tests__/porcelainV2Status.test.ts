@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { PorcelainV2StatusAccumulator, parsePorcelainV2Status } from '../porcelainV2Status';
+import {
+  feedPorcelainV2Records,
+  PorcelainV2FileChangesAccumulator,
+  PorcelainV2StatusAccumulator,
+  parsePorcelainV2Status,
+} from '../porcelainV2Status';
 
 /**
  * The record parser shared by the streaming `git status` reader and the F3
@@ -241,5 +246,100 @@ describe('PorcelainV2StatusAccumulator fed record by record', () => {
       modified: ['a.txt'],
       untracked: [],
     });
+  });
+});
+
+/**
+ * `getFileChanges` reads the same records through its own accumulator, on the
+ * primary stream and on the F3 fallback alike. Its inline predecessor took the
+ * last space-separated word as the path and stored renames the wrong way round.
+ */
+function fileChangesOf(records: string[], maxChanges = 5000) {
+  const accumulator = new PorcelainV2FileChangesAccumulator(maxChanges);
+  feedPorcelainV2Records(z(records), accumulator);
+  return { accumulator, result: accumulator.result() };
+}
+
+describe('PorcelainV2FileChangesAccumulator', () => {
+  it('emits one change per changed side, with whole unquoted paths', () => {
+    const { accumulator, result } = fileChangesOf(WORKTREE_RECORDS);
+    expect(accumulator.sawBranchHeader).toBe(true);
+    expect(result).toEqual({
+      changes: [
+        { path: 'both.txt', status: 'M', staged: true },
+        { path: 'both.txt', status: 'M', staged: false },
+        { path: 'new name.txt', status: 'R', staged: true, originalPath: 'old-name.txt' },
+        { path: 'staged-del.txt', status: 'D', staged: true },
+        { path: 'staged.txt', status: 'M', staged: true },
+        { path: 'unstaged.txt', status: 'M', staged: false },
+        { path: 'with space.txt', status: 'M', staged: false },
+        { path: 'wt-del.txt', status: 'D', staged: false },
+        { path: '中文 文件.md', status: 'M', staged: false },
+        { path: 'untracked 新.txt', status: 'U', staged: false },
+      ],
+      skippedDirs: undefined,
+      truncated: false,
+      truncatedLimit: undefined,
+    });
+  });
+
+  it('reads the path of an unmerged entry after its ten fields', () => {
+    const { result } = fileChangesOf(CONFLICT_RECORDS);
+    const paths = new Set(result.changes.map((change) => change.path));
+    expect([...paths]).toEqual([
+      'aa.txt',
+      'dd-main.txt',
+      'dd-other.txt',
+      'dd.txt',
+      'conflict file.txt',
+    ]);
+    expect(result.changes.filter((c) => c.path === 'conflict file.txt')).toEqual([
+      { path: 'conflict file.txt', status: 'X', staged: true },
+      { path: 'conflict file.txt', status: 'X', staged: false },
+    ]);
+  });
+
+  it('takes the record after a rename as its original path even when it looks like a header', () => {
+    const { result } = fileChangesOf([
+      '# branch.oid deadbeef',
+      '# branch.head main',
+      '2 R. N... 100644 100644 100644 6a69f92020f5df77af6e8813ff1232493383b708 6a69f92020f5df77af6e8813ff1232493383b708 R100 notes.md',
+      '# notes.md',
+    ]);
+    expect(result.changes).toEqual([
+      { path: 'notes.md', status: 'R', staged: true, originalPath: '# notes.md' },
+    ]);
+  });
+
+  it('drops files under build and dependency directories and reports them', () => {
+    const { result } = fileChangesOf([
+      '# branch.head main',
+      '? node_modules/',
+      '1 .M N... 100644 100644 100644 78981922613b2afb6025042ff6bd878ac1994e85 78981922613b2afb6025042ff6bd878ac1994e85 dist/app.js',
+      '? src/node_modules/x.js',
+    ]);
+    expect(result.changes).toEqual([{ path: 'src/node_modules/x.js', status: 'U', staged: false }]);
+    expect(result.skippedDirs).toEqual(['node_modules', 'dist']);
+  });
+
+  it('keeps at most maxChanges entries and marks a dropped one as truncated', () => {
+    const { result } = fileChangesOf(WORKTREE_RECORDS, 3);
+    expect(result.changes.map((c) => [c.path, c.staged])).toEqual([
+      ['both.txt', true],
+      ['both.txt', false],
+      ['new name.txt', true],
+    ]);
+    expect(result.truncated).toBe(true);
+    expect(result.truncatedLimit).toBe(3);
+  });
+
+  it('is not truncated when everything fits', () => {
+    expect(fileChangesOf(WORKTREE_RECORDS, 10).result.truncated).toBe(false);
+  });
+
+  it('reports output without branch headers as such', () => {
+    const { accumulator, result } = fileChangesOf([]);
+    expect(accumulator.sawBranchHeader).toBe(false);
+    expect(result.changes).toEqual([]);
   });
 });

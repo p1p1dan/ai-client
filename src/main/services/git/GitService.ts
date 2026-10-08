@@ -2,6 +2,7 @@ import { exec } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, promises as fs } from 'node:fs';
 import path from 'node:path';
+import { StringDecoder } from 'node:string_decoder';
 import { promisify } from 'node:util';
 import type {
   CloneProgress,
@@ -25,15 +26,22 @@ import { parseBranchVerbose } from './branchVerboseParse';
 import { decodeBuffer, detectBinaryFile, gitShow, readWorkingTreeFile } from './encoding';
 import { GIT_LOG_PRETTY_FORMAT, parseGitLogOutput } from './gitLogFormat';
 import {
-  GitOutputLostError,
-  isGitOutputLostError,
-  NodeGitRunnerError,
-  runGitViaNode,
-} from './nodeGitRunner';
+  GitCommandError,
+  isGitExitError,
+  noteLostOutput,
+  noteRunnerRead,
+  noteRunnerRecovered,
+  probeGitExitCode,
+  readGit,
+  runGitTextViaRunner,
+  shouldRouteViaRunner,
+} from './gitReadFallback';
+import { GitOutputLostError, isGitOutputLostError } from './nodeGitRunner';
 import {
-  type PorcelainV2Status,
+  feedPorcelainV2Records,
+  PorcelainV2FileChangesAccumulator,
+  type PorcelainV2RecordSink,
   PorcelainV2StatusAccumulator,
-  parsePorcelainV2Status,
 } from './porcelainV2Status';
 import {
   createGitEnv,
@@ -76,6 +84,13 @@ function statusTimedOutError(): Error {
   return new Error(`git status timed out after ${GIT_STATUS_STREAM_TIMEOUT_MS}ms`);
 }
 
+function branchListingLostError(via: string): GitOutputLostError {
+  return new GitOutputLostError(
+    `git branch -a -v${via} returned no branches for a repository that has commits; ` +
+      'its output was lost'
+  );
+}
+
 function toGitBranches(
   branches: Record<string, { current: boolean; commit: string; label: string }>
 ): GitBranch[] {
@@ -107,14 +122,21 @@ export class GitService {
     return paths.map((filePath) => normalizeGitRelativePath(toGitPath(this.workdir, filePath)));
   }
 
-  private async readPorcelainV2Limited(maxEntries: number): Promise<PorcelainV2Status> {
-    const status = new PorcelainV2StatusAccumulator(maxEntries);
+  /**
+   * Stream `git status --porcelain=v2 --branch -z` into `sink`, stopping git
+   * once the sink is full. Rejects with a typed `GitOutputLostError` when git
+   * exited 0 without its branch headers (Q7 / F3).
+   */
+  private streamPorcelainV2(sink: PorcelainV2RecordSink): Promise<void> {
     // `truncated` used to mean both "hit the entry cap" and "timed out", and the
     // close handler skipped its reject when either was set — so a timeout came
     // back as a half-read status that looked successful. Keep them apart.
     let timedOut = false;
     let remainder = '';
     let stderr = '';
+    // Decode across chunk boundaries: a multi-byte character split between two
+    // chunks used to become U+FFFD in the middle of a path.
+    const decoder = new StringDecoder('utf8');
 
     return new Promise((resolve, reject) => {
       // Use 'normal' mode for status - only need to know if there are untracked files,
@@ -130,13 +152,13 @@ export class GitService {
       }, GIT_STATUS_STREAM_TIMEOUT_MS);
 
       proc.stdout.on('data', (chunk: Buffer) => {
-        if (status.truncated || timedOut) return;
-        remainder += chunk.toString('utf8');
+        if (sink.truncated || timedOut) return;
+        remainder += decoder.write(chunk);
         const records = remainder.split('\0');
         remainder = records.pop() ?? '';
         for (const record of records) {
-          status.push(record);
-          if (status.truncated) {
+          sink.push(record);
+          if (sink.truncated) {
             if (!proc.killed) proc.kill('SIGTERM');
             break;
           }
@@ -153,83 +175,93 @@ export class GitService {
         reject(err);
       });
 
-      proc.on('close', (code) => {
+      proc.on('close', (code: number | null, signal: NodeJS.Signals | null) => {
         clearTimeout(timeout);
         if (timedOut) {
           reject(statusTimedOutError());
           return;
         }
-        if (!status.truncated && code && code !== 0) {
+        // Our own SIGTERM once the sink is full: the records read so far stand.
+        if (sink.truncated) {
+          resolve();
+          return;
+        }
+        // Killed from outside (OOM killer, `pkill git`): a failure, never a lost
+        // output — that would fall back and flip the process-wide runner switch
+        // on an ordinary machine, or pass a half-read status off as complete.
+        if (code === null) {
+          reject(new Error(`git status terminated by ${signal ?? 'a signal'}`));
+          return;
+        }
+        if (code !== 0) {
           reject(new Error(stderr.trim() || `git status failed (${code})`));
           return;
         }
-        if (!status.truncated && !status.sawBranchHeader) {
+        if (!sink.sawBranchHeader) {
           reject(noStatusOutputError(stderr));
           return;
         }
-        resolve(status.result());
+        resolve();
       });
     });
   }
 
   /**
-   * F3 fallback for `readPorcelainV2Limited`: run the same status command line
-   * with the bundled node as git's parent (see `nodeGitRunner`) and parse the
-   * output with the same record parser and entry cap.
+   * The status records, through `sink`, with the F3 fallback: when the
+   * primary stream lost its output, run the same command line with the bundled
+   * node as git's parent and feed the same parser. `getStatus` and
+   * `getFileChanges` both read through here; only their sinks differ.
    */
-  private async readPorcelainV2ViaNode(maxEntries: number): Promise<PorcelainV2Status> {
-    const stdout = await this.runGitViaNodeLogged('status', GIT_STATUS_ARGS);
-    const parsed = parsePorcelainV2Status(stdout, maxEntries);
-    console.warn(
-      `[GitService] status via node runner: exit=0 chars=${stdout.length} ` +
-        `entries=${parsed.entries} truncated=${parsed.status.truncated}`
-    );
-    if (!parsed.status.truncated && !parsed.sawBranchHeader) {
+  private async readPorcelainV2<T extends PorcelainV2RecordSink>(
+    what: 'status' | 'file-changes',
+    makeSink: () => T
+  ): Promise<T> {
+    if (shouldRouteViaRunner(this.workdir)) {
+      return this.readPorcelainV2ViaNode(what, makeSink(), false);
+    }
+    const sink = makeSink();
+    try {
+      await this.streamPorcelainV2(sink);
+      return sink;
+    } catch (err) {
+      // WSL repositories go through wsl.exe, which the runner does not route.
+      if (!isGitOutputLostError(err) || isWslGitRepository(this.workdir)) throw err;
+      noteLostOutput(what);
+      // A fresh sink: the lost run may have pushed nothing, but never reuse it.
+      return this.readPorcelainV2ViaNode(what, makeSink(), true);
+    }
+  }
+
+  private async readPorcelainV2ViaNode<T extends PorcelainV2RecordSink>(
+    what: 'status' | 'file-changes',
+    sink: T,
+    afterLoss: boolean
+  ): Promise<T> {
+    const stdout = await runGitTextViaRunner({
+      what,
+      workdir: this.workdir,
+      args: GIT_STATUS_ARGS,
+    });
+    feedPorcelainV2Records(stdout, sink);
+    if (!sink.truncated && !sink.sawBranchHeader) {
+      console.warn(`[git-fallback] ${what} via node runner lost its output too`);
       throw new GitOutputLostError(
         'git status via the node runner exited 0 without emitting branch headers; ' +
           'its output was lost'
       );
     }
-    return parsed.status;
-  }
-
-  /**
-   * F3: run `git <args>` with the bundled node as git's parent, using the git
-   * environment of the primary path. Logs only the failure kind and exit code:
-   * stderr can carry paths and already travels in the thrown error.
-   */
-  private async runGitViaNodeLogged(what: 'status' | 'branch', args: string[]): Promise<string> {
-    try {
-      const { stdout } = await runGitViaNode({
-        workdir: this.workdir,
-        args,
-        env: this.getGitEnv(),
-      });
-      return stdout;
-    } catch (err) {
-      if (err instanceof NodeGitRunnerError) {
-        console.warn(
-          `[GitService] ${what} via node runner failed: ${err.failure} exit=${err.exitCode}`
-        );
-      }
-      throw err;
-    }
-  }
-
-  /** Primary status read, retried through the node runner when its output was lost. */
-  private async readStatusLimited(maxEntries: number): Promise<PorcelainV2Status> {
-    try {
-      return await this.readPorcelainV2Limited(maxEntries);
-    } catch (err) {
-      // WSL repositories go through wsl.exe, which the runner does not route.
-      if (!isGitOutputLostError(err) || isWslGitRepository(this.workdir)) throw err;
-      console.warn('[GitService] status output lost; retrying via node runner');
-      return this.readPorcelainV2ViaNode(maxEntries);
-    }
+    if (afterLoss) noteRunnerRecovered(what);
+    noteRunnerRead(what, `length=${stdout.length} truncated=${sink.truncated}`);
+    return sink;
   }
 
   async getStatus(): Promise<GitStatus> {
-    const limited = await this.readStatusLimited(MAX_GIT_STATUS_ENTRIES);
+    const limited = (
+      await this.readPorcelainV2(
+        'status',
+        () => new PorcelainV2StatusAccumulator(MAX_GIT_STATUS_ENTRIES)
+      )
+    ).result();
     const totalListed =
       limited.staged.length +
       limited.modified.length +
@@ -270,23 +302,34 @@ export class GitService {
     let ref: string | null = null;
 
     try {
-      const output = await this.git.raw(['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD']);
-      const [headLine = '', refLine = ''] = output.split('\n').map((line) => line.trim());
+      // Exit 0 always prints the two lines, so an empty answer was lost (F3).
+      const { stdout } = await readGit({
+        what: 'rev-parse',
+        workdir: this.workdir,
+        args: ['rev-parse', 'HEAD', '--symbolic-full-name', 'HEAD'],
+        lostWhen: 'empty',
+      });
+      const [headLine = '', refLine = ''] = stdout.split('\n').map((line) => line.trim());
       head = headLine || null;
       // `--symbolic-full-name HEAD` prints the literal string "HEAD" when no
       // branch is checked out; that is a detached head, not a ref name.
       ref = refLine && refLine !== 'HEAD' ? refLine : null;
-    } catch {
+    } catch (err) {
       // Unborn HEAD: a fresh repository with no commits is a normal state, not
-      // a failure. The branch-ref digest below is still meaningful.
+      // a failure, and git says so with a non-zero exit. The branch-ref digest
+      // below is still meaningful. Anything else (lost output, a runner that
+      // could not start) is not "unborn" and must not pass for it.
+      if (!isGitExitError(err)) throw err;
     }
 
-    const refLines = await this.git.raw([
-      'for-each-ref',
-      '--format=%(objectname) %(refname)',
-      'refs/heads',
-      'refs/remotes',
-    ]);
+    const { stdout: refLines } = await readGit({
+      what: 'for-each-ref',
+      workdir: this.workdir,
+      args: ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/heads', 'refs/remotes'],
+      // No refs at all is a real answer, except when HEAD is on a branch: that
+      // branch exists, so the listing cannot be empty.
+      lostWhen: (out) => out.trim() === '' && ref?.startsWith('refs/heads/') === true,
+    });
 
     // `for-each-ref` sorts by refname by default, so equal repositories hash
     // equal without sorting here.
@@ -391,9 +434,14 @@ export class GitService {
    * (Q7) and the F3 recovery. `unborn` marks the synthetic fresh-repo answer.
    */
   private async readBranchListing(): Promise<{ branches: GitBranch[]; unborn: boolean }> {
-    const result = await this.git.branch(['-a', '-v']);
-    const listed = toGitBranches(result.branches);
+    // Once the runner has recovered lost output in this process, skip the
+    // primary run that would only lose it again (see `gitReadFallback`).
+    const viaRunner = shouldRouteViaRunner(this.workdir);
+    const listed = viaRunner
+      ? await this.runBranchListingViaNode()
+      : toGitBranches((await this.git.branch(['-a', '-v'])).branches);
     if (listed.length > 0) {
+      if (viaRunner) noteRunnerRead('branch', `branches=${listed.length}`);
       return { branches: listed, unborn: false };
     }
 
@@ -402,7 +450,8 @@ export class GitService {
     // back. `symbolic-ref --short HEAD` cannot tell them apart — it succeeds
     // on any repo with a branch checked out — so using it as the test labelled
     // healthy repos "(no commits yet)" (Q7). `rev-parse --verify HEAD` fails
-    // only when HEAD is genuinely unborn, which is the actual question.
+    // only when HEAD is genuinely unborn, which is the actual question, and it
+    // answers by exit code, which survives where stdout is lost (F3).
     let headResolves = false;
     try {
       await this.git.raw(['rev-parse', '--verify', 'HEAD']);
@@ -412,16 +461,24 @@ export class GitService {
     }
 
     if (headResolves) {
+      // Through the runner already: nothing left to fall back to.
+      if (viaRunner) throw branchListingLostError(' via the node runner');
       return { branches: await this.readBranchesViaNode(), unborn: false };
     }
 
     try {
-      // Empty repo: rev-parse cannot name the branch, symbolic-ref can.
-      const currentBranch = await this.git.raw(['symbolic-ref', '--short', 'HEAD']);
+      // Empty repo: rev-parse cannot name the branch, symbolic-ref can. It
+      // always prints the name on success, so an empty answer was lost.
+      const { stdout } = await readGit({
+        what: 'symbolic-ref',
+        workdir: this.workdir,
+        args: ['symbolic-ref', '--short', 'HEAD'],
+        lostWhen: 'empty',
+      });
       return {
         branches: [
           {
-            name: currentBranch.trim(),
+            name: stdout.trim(),
             current: true,
             commit: '',
             label: '(no commits yet)',
@@ -441,42 +498,78 @@ export class GitService {
    * would have produced.
    */
   private async readBranchesViaNode(): Promise<GitBranch[]> {
-    const lost = new GitOutputLostError(
-      'git branch -a -v returned no branches for a repository that has commits; ' +
-        'its output was lost'
-    );
     // WSL repositories go through wsl.exe, which the runner does not route.
-    if (isWslGitRepository(this.workdir)) throw lost;
+    if (isWslGitRepository(this.workdir)) throw branchListingLostError('');
 
-    console.warn('[GitService] branch listing lost; retrying via node runner');
-    const stdout = await this.runGitViaNodeLogged('branch', GIT_BRANCH_FALLBACK_ARGS);
-    const branches = toGitBranches(parseBranchVerbose(stdout));
-    console.warn(
-      `[GitService] branches via node runner: exit=0 chars=${stdout.length} ` +
-        `branches=${branches.length}`
-    );
-    if (branches.length === 0) throw lost;
+    noteLostOutput('branch');
+    const branches = await this.runBranchListingViaNode();
+    if (branches.length === 0) {
+      console.warn('[git-fallback] branch via node runner lost its output too');
+      throw branchListingLostError(' via the node runner');
+    }
+    noteRunnerRecovered('branch');
+    noteRunnerRead('branch', `branches=${branches.length}`);
     return branches;
   }
 
+  private async runBranchListingViaNode(): Promise<GitBranch[]> {
+    const stdout = await runGitTextViaRunner({
+      what: 'branch',
+      workdir: this.workdir,
+      args: GIT_BRANCH_FALLBACK_ARGS,
+    });
+    return toGitBranches(parseBranchVerbose(stdout));
+  }
+
+  /**
+   * One page of `git log`, newest first.
+   *
+   * F3: on success the first page always holds at least HEAD's commit (an
+   * unborn HEAD makes `git log` exit non-zero instead), so an empty first page
+   * means the output was lost. A later page is legitimately empty once the
+   * history is exhausted; it can only be told apart from a lost one after a
+   * recovery, when every read already goes through the runner.
+   */
   async getLog(maxCount = 50, skip = 0, submodulePath?: string): Promise<GitLogEntry[]> {
-    const git = this.getGitInstance(submodulePath);
-    const options: string[] = [`-n${maxCount}`, `--pretty=format:${GIT_LOG_PRETTY_FORMAT}`];
+    const workdir = this.repoDir(submodulePath);
+    const args = ['log', `-n${maxCount}`, `--pretty=format:${GIT_LOG_PRETTY_FORMAT}`];
     if (skip > 0) {
-      options.push(`--skip=${skip}`);
+      args.push(`--skip=${skip}`);
     }
 
-    let result: string;
     try {
-      result = await git.raw(['log', ...options]);
+      const { stdout } = await readGit({
+        what: 'log',
+        workdir,
+        args,
+        lostWhen: (out) => out.trim() === '' && skip === 0 && maxCount > 0,
+      });
+      return parseGitLogOutput(stdout);
     } catch (error) {
-      // Empty repo (no commits yet) - return empty array
-      if (error instanceof Error && error.message.includes('does not have any commits yet')) {
-        return [];
+      // Empty repo (no commits yet) - return empty array. The message is
+      // English only under the C locale (the runner's); a localized git says
+      // the same thing in its own words, so ask HEAD directly by exit code.
+      if (isGitExitError(error)) {
+        if (error instanceof Error && error.message.includes('does not have any commits yet')) {
+          return [];
+        }
+        if (await this.isHeadUnborn(workdir)) return [];
       }
       throw error;
     }
-    return parseGitLogOutput(result);
+  }
+
+  /**
+   * `rev-parse --verify --quiet HEAD` exits 1 exactly when HEAD does not
+   * resolve (128 is a broken or missing repository). Exit codes survive where
+   * stdout is lost, so this needs no runner.
+   */
+  private async isHeadUnborn(workdir: string): Promise<boolean> {
+    try {
+      return (await probeGitExitCode(workdir, ['rev-parse', '--verify', '--quiet', 'HEAD'])) === 1;
+    } catch {
+      return false;
+    }
   }
 
   async commit(message: string, files?: string[]): Promise<string> {
@@ -493,15 +586,69 @@ export class GitService {
   }
 
   async checkout(branch: string): Promise<void> {
+    let localBranch = branch;
     if (branch.startsWith('remotes/')) {
-      await this.checkoutRemoteBranch(this.git, branch);
+      localBranch = await this.checkoutRemoteBranch(this.git, branch);
     } else {
       await this.git.checkout(branch);
     }
+    await this.confirmHeadOnBranch(localBranch, branch);
   }
 
   async createBranch(name: string, startPoint?: string): Promise<void> {
     await this.git.checkoutBranch(name, startPoint || 'HEAD');
+    await this.confirmHeadOnBranch(name, name);
+  }
+
+  /**
+   * Read HEAD back after a checkout that git reported as successful, and fail
+   * when it is not on `localBranch`.
+   *
+   * simple-git treats a non-zero exit with an EMPTY stderr as success, so a
+   * checkout that failed without a word would otherwise come back as a switch
+   * that never happened. The read goes through the F3 fallback, so it holds on
+   * the encrypted host too. Only a positive mismatch fails the call: when HEAD
+   * cannot be read back the checkout's own exit status stands, and a target
+   * that is not a local branch (a commit, a tag, the detached-HEAD entry of the
+   * branch list) has no symbolic HEAD to compare against.
+   */
+  private async confirmHeadOnBranch(localBranch: string, requested: string): Promise<void> {
+    try {
+      const isLocalBranch =
+        (await probeGitExitCode(this.workdir, [
+          'show-ref',
+          '--verify',
+          '--quiet',
+          `refs/heads/${localBranch}`,
+        ])) === 0;
+      if (!isLocalBranch) return;
+    } catch {
+      return;
+    }
+
+    let head: string | null;
+    try {
+      const { stdout, exitCode } = await readGit({
+        what: 'symbolic-ref',
+        workdir: this.workdir,
+        args: ['symbolic-ref', '--quiet', 'HEAD'],
+        // Exit 1: HEAD is detached.
+        okExitCodes: [1],
+        lostWhen: 'empty',
+      });
+      head = exitCode === 0 ? stdout.trim() : null;
+    } catch (err) {
+      console.warn(
+        `[git-fallback] checkout reported success but HEAD could not be read back: ${
+          isGitOutputLostError(err) ? 'output lost' : err instanceof Error ? err.name : 'unknown'
+        }`
+      );
+      return;
+    }
+
+    if (head === `refs/heads/${localBranch}`) return;
+    const actual = head ? `on ${head.replace(/^refs\/heads\//, '')}` : 'detached';
+    throw new Error(`git checkout ${requested} reported success, but HEAD is ${actual}`);
   }
 
   async init(): Promise<void> {
@@ -509,199 +656,11 @@ export class GitService {
   }
 
   async getFileChanges(): Promise<FileChangesResult> {
-    const ignoredPrefixes = ['node_modules/', '.pnpm/', 'dist/', 'out/', '.next/', 'build/'];
-    const skippedDirsSet = new Set<string>();
-
-    const changes: FileChange[] = [];
-    let truncated = false;
-    // Same split as readPorcelainV2Limited: a timeout is a failure, not a
-    // truncated-but-valid result (Q7).
-    let timedOut = false;
-    let sawBranchHeader = false;
-    let remainder = '';
-    let stderr = '';
-    let pendingRename: { xy: string; originalPath?: string } | null = null;
-
-    const env = this.getGitEnv();
-
-    const shouldSkip = (p: string) => {
-      for (const prefix of ignoredPrefixes) {
-        if (p.startsWith(prefix)) {
-          skippedDirsSet.add(prefix.slice(0, -1));
-          return true;
-        }
-      }
-      return false;
-    };
-
-    const pushIndexChange = (statusChar: string, filePath: string, originalPath?: string) => {
-      if (changes.length >= MAX_GIT_FILE_CHANGES) {
-        truncated = true;
-        return;
-      }
-
-      let status: FileChangeStatus;
-      if (statusChar === 'A') status = 'A';
-      else if (statusChar === 'D') status = 'D';
-      else if (statusChar === 'R') status = 'R';
-      else if (statusChar === 'C') status = 'C';
-      else if (statusChar === 'U') status = 'X';
-      else status = 'M';
-
-      const change: FileChange = { path: filePath, status, staged: true };
-      if (originalPath) change.originalPath = originalPath;
-      changes.push(change);
-    };
-
-    const pushWorkingChange = (statusChar: string, filePath: string) => {
-      if (changes.length >= MAX_GIT_FILE_CHANGES) {
-        truncated = true;
-        return;
-      }
-
-      let status: FileChangeStatus;
-      if (statusChar === 'D') status = 'D';
-      else if (statusChar === 'U') status = 'X';
-      else status = 'M';
-
-      changes.push({ path: filePath, status, staged: false });
-    };
-
-    const processRecord = (recordRaw: string, proc: ReturnType<typeof spawnGit>) => {
-      const record = recordRaw.trim();
-      if (!record) return;
-      if (record.startsWith('# ')) {
-        if (record.startsWith('# branch.')) sawBranchHeader = true;
-        return;
-      }
-      if (record.startsWith('! ')) return;
-
-      if (pendingRename) {
-        const filePath = record;
-        const { xy, originalPath } = pendingRename;
-        pendingRename = null;
-
-        if (!filePath || shouldSkip(filePath)) return;
-
-        const indexStatus = xy[0] ?? '.';
-        const workingDirStatus = xy[1] ?? '.';
-
-        if (indexStatus !== '.' && indexStatus !== '?' && indexStatus !== '!') {
-          pushIndexChange(indexStatus, filePath, originalPath);
-        }
-        if (workingDirStatus !== '.' && workingDirStatus !== ' ') {
-          pushWorkingChange(workingDirStatus, filePath);
-        }
-
-        if (truncated && !proc.killed) proc.kill('SIGTERM');
-        return;
-      }
-
-      if (changes.length >= MAX_GIT_FILE_CHANGES) {
-        truncated = true;
-        if (!proc.killed) proc.kill('SIGTERM');
-        return;
-      }
-
-      if (record.startsWith('? ')) {
-        const p = record.slice(2);
-        if (!p || shouldSkip(p)) return;
-        changes.push({ path: p, status: 'U', staged: false });
-        if (changes.length >= MAX_GIT_FILE_CHANGES) {
-          truncated = true;
-          if (!proc.killed) proc.kill('SIGTERM');
-        }
-        return;
-      }
-
-      const type = record[0];
-      if (type !== '1' && type !== '2' && type !== 'u') return;
-
-      const parts = record.split(' ');
-      const xy = parts[1] ?? '..';
-      const p = parts[parts.length - 1] ?? '';
-      if (!p) return;
-
-      const indexStatus = xy[0] ?? '.';
-      const workingDirStatus = xy[1] ?? '.';
-
-      if (type === '2') {
-        pendingRename = { xy, originalPath: p };
-        return;
-      }
-
-      if (shouldSkip(p)) return;
-
-      if (indexStatus !== '.' && indexStatus !== '?' && indexStatus !== '!') {
-        pushIndexChange(indexStatus, p);
-      }
-      if (workingDirStatus !== '.' && workingDirStatus !== ' ') {
-        pushWorkingChange(workingDirStatus, p);
-      }
-
-      if (truncated && !proc.killed) proc.kill('SIGTERM');
-    };
-
-    await new Promise<void>((resolve, reject) => {
-      // Use 'normal' mode to avoid recursively listing all files in untracked directories.
-      // The UI (ChangesTree) already handles folder paths ending with '/' correctly.
-      const proc = spawnGit(
-        this.workdir,
-        ['status', '--porcelain=v2', '--branch', '-z', '--untracked-files=normal'],
-        { cwd: this.workdir, env }
-      );
-
-      const timeout = setTimeout(() => {
-        timedOut = true;
-        if (!proc.killed) proc.kill('SIGKILL');
-      }, GIT_STATUS_STREAM_TIMEOUT_MS);
-
-      proc.stdout.on('data', (chunk: Buffer) => {
-        if (truncated || timedOut) return;
-        remainder += chunk.toString('utf8');
-        const records = remainder.split('\0');
-        remainder = records.pop() ?? '';
-        for (const record of records) {
-          processRecord(record, proc);
-          if (truncated) break;
-        }
-      });
-
-      proc.stderr.on('data', (chunk: Buffer) => {
-        if (stderr.length > 8192) return;
-        stderr += chunk.toString('utf8');
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timeout);
-        reject(err);
-      });
-
-      proc.on('close', (code) => {
-        clearTimeout(timeout);
-        if (timedOut) {
-          reject(statusTimedOutError());
-          return;
-        }
-        if (!truncated && code && code !== 0) {
-          reject(new Error(stderr.trim() || `git status failed (${code})`));
-          return;
-        }
-        if (!truncated && !sawBranchHeader) {
-          reject(noStatusOutputError(stderr));
-          return;
-        }
-        resolve();
-      });
-    });
-
-    const skippedDirs = skippedDirsSet.size > 0 ? Array.from(skippedDirsSet) : undefined;
-    return {
-      changes,
-      skippedDirs,
-      truncated,
-      truncatedLimit: truncated ? MAX_GIT_FILE_CHANGES : undefined,
-    };
+    const changes = await this.readPorcelainV2(
+      'file-changes',
+      () => new PorcelainV2FileChangesAccumulator(MAX_GIT_FILE_CHANGES)
+    );
+    return changes.result();
   }
 
   async getFileDiff(filePath: string, staged: boolean): Promise<FileDiff> {
@@ -799,20 +758,39 @@ export class GitService {
   }
 
   async showCommit(hash: string): Promise<string> {
-    return this.git.show([hash, '--pretty=format:%H%n%an%n%ae%n%ad%n%s%n%b', '--stat']);
+    // The header always prints the hash, so an empty answer was lost (F3).
+    const { stdout } = await readGit({
+      what: 'show',
+      workdir: this.workdir,
+      args: ['show', hash, '--pretty=format:%H%n%an%n%ae%n%ad%n%s%n%b', '--stat'],
+      lostWhen: 'empty',
+    });
+    return stdout;
   }
 
   async getCommitFiles(hash: string, submodulePath?: string): Promise<CommitFileChange[]> {
-    const git = this.getGitInstance(submodulePath);
-    // Use cat-file to reliably detect merge commits (check parent count)
-    const commitInfo = await git.catFile(['-p', hash]);
+    const workdir = this.repoDir(submodulePath);
+    // Use cat-file to reliably detect merge commits (check parent count). A
+    // commit object always has a `tree` line, so an empty answer was lost.
+    const { stdout: commitInfo } = await readGit({
+      what: 'cat-file',
+      workdir,
+      args: ['cat-file', '-p', hash],
+      lostWhen: 'empty',
+    });
     const isMergeCommit = (commitInfo.match(/^parent /gm) ?? []).length >= 2;
 
     const files: CommitFileChange[] = [];
 
     if (isMergeCommit) {
       // Merge commit: use git diff to compare with first parent
-      const mergeDiff = await git.diff([`${hash}^1`, hash, '--name-status']);
+      // An empty merge diff is a real answer (a merge that changed nothing).
+      const { stdout: mergeDiff } = await readGit({
+        what: 'diff',
+        workdir,
+        args: ['diff', `${hash}^1`, hash, '--name-status'],
+        lostWhen: 'never',
+      });
       const diffLines = mergeDiff.split('\n').filter((line) => line.trim());
 
       for (const line of diffLines) {
@@ -831,7 +809,13 @@ export class GitService {
       }
     } else {
       // Regular commit: use show --name-status
-      const commitShow = await git.show([hash, '--name-status', '--pretty=format:%P']);
+      // A root commit with no files prints nothing: empty is a real answer.
+      const { stdout: commitShow } = await readGit({
+        what: 'show',
+        workdir,
+        args: ['show', hash, '--name-status', '--pretty=format:%P'],
+        lostWhen: 'never',
+      });
       const lines = commitShow.split('\n').filter((line) => line.trim());
 
       for (const line of lines) {
@@ -870,11 +854,17 @@ export class GitService {
     status?: FileChangeStatus,
     submodulePath?: string
   ): Promise<FileDiff> {
-    const git = this.getGitInstance(submodulePath);
+    const workdir = this.repoDir(submodulePath);
+    // Every read here may legitimately be empty (an empty file, no numstat),
+    // so none of them can detect a loss; after a recovery they all go through
+    // the runner anyway (F3, see `gitReadFallback`).
+    const read = async (args: string[]): Promise<string> =>
+      (await readGit({ what: args[0] ?? 'git', workdir, args, lostWhen: 'never' })).stdout;
+    const showOrEmpty = (spec: string): Promise<string> => read(['show', spec]).catch(() => '');
 
     // Detect binary using git diff --numstat (binary files show "-" for insertions/deletions)
     try {
-      const numstat = await git.diff(['--numstat', `${hash}^..${hash}`, '--', filePath]);
+      const numstat = await read(['diff', '--numstat', `${hash}^..${hash}`, '--', filePath]);
       if (numstat.startsWith('-\t-\t')) {
         return { path: filePath, original: '', modified: '', isBinary: true };
       }
@@ -888,17 +878,17 @@ export class GitService {
     // Handle different file statuses
     if (status === 'A') {
       // Added file: original is empty, get from current commit
-      modifiedContent = await git.show([`${hash}:${filePath}`]).catch(() => '');
+      modifiedContent = await showOrEmpty(`${hash}:${filePath}`);
       originalContent = '';
     } else if (status === 'D') {
       // Deleted file: modified is empty, get from parent commit
-      originalContent = await git.show([`${hash}^:${filePath}`]).catch(() => '');
+      originalContent = await showOrEmpty(`${hash}^:${filePath}`);
       modifiedContent = '';
     } else {
       // Modified or other: get from both parent and current commit
       const parentHash = `${hash}^`;
-      originalContent = await git.show([`${parentHash}:${filePath}`]).catch(() => '');
-      modifiedContent = await git.show([`${hash}:${filePath}`]).catch(() => '');
+      originalContent = await showOrEmpty(`${parentHash}:${filePath}`);
+      modifiedContent = await showOrEmpty(`${hash}:${filePath}`);
     }
 
     return {
@@ -910,8 +900,14 @@ export class GitService {
 
   async getDiffStats(): Promise<{ insertions: number; deletions: number }> {
     try {
-      // Get stats for both staged and unstaged changes
-      const output = await this.git.diff(['--shortstat', 'HEAD']);
+      // Get stats for both staged and unstaged changes. Empty means no
+      // changes, a real answer (F3: routed through the runner after a recovery).
+      const { stdout: output } = await readGit({
+        what: 'diff',
+        workdir: this.workdir,
+        args: ['diff', '--shortstat', 'HEAD'],
+        lostWhen: 'never',
+      });
       // Output format: " 3 files changed, 10 insertions(+), 5 deletions(-)"
       // or empty if no changes
       if (!output.trim()) {
@@ -1137,18 +1133,14 @@ export class GitService {
   }
 
   /**
-   * Get Git instance for main repo or submodule
-   * @param submodulePath Optional submodule path
-   * @returns SimpleGit instance
+   * The directory a read runs in: the repository itself, or a submodule's own
+   * checkout (validated against path traversal).
    */
-  private getGitInstance(submodulePath?: string): SimpleGit {
-    return submodulePath ? this.getSubmoduleGit(submodulePath) : this.git;
+  private repoDir(submodulePath?: string): string {
+    return submodulePath ? this.resolveSubmoduleDir(submodulePath) : this.workdir;
   }
 
-  /**
-   * Get Git instance for a submodule
-   */
-  private getSubmoduleGit(submodulePath: string): SimpleGit {
+  private resolveSubmoduleDir(submodulePath: string): string {
     // Validate path to prevent path traversal attacks
     const absolutePath = path.resolve(this.workdir, submodulePath);
     const relativePath = path.relative(this.workdir, absolutePath);
@@ -1157,7 +1149,14 @@ export class GitService {
       throw new Error('Invalid submodule path: path traversal detected');
     }
 
-    return createSimpleGit(absolutePath);
+    return absolutePath;
+  }
+
+  /**
+   * Get Git instance for a submodule
+   */
+  private getSubmoduleGit(submodulePath: string): SimpleGit {
+    return createSimpleGit(this.resolveSubmoduleDir(submodulePath));
   }
 
   /**
@@ -1210,7 +1209,7 @@ export class GitService {
    * @param git - SimpleGit instance (main repo or submodule)
    * @param branch - Remote branch name in format "remotes/origin/branch-name"
    */
-  private async checkoutRemoteBranch(git: SimpleGit, branch: string): Promise<void> {
+  private async checkoutRemoteBranch(git: SimpleGit, branch: string): Promise<string> {
     // "remotes/origin/dev" → remoteBranch="origin/dev", localBranch="dev"
     const remoteBranch = branch.slice(8);
     const slashIdx = remoteBranch.indexOf('/');
@@ -1234,6 +1233,7 @@ export class GitService {
         throw error;
       }
     }
+    return localBranch;
   }
 
   /**
@@ -1597,50 +1597,23 @@ export class GitService {
       relativePath = normalizedFilePath.slice(normalizedSubPath.length + 1);
     }
 
-    return new Promise((resolve, reject) => {
-      const proc = spawnGit(workdir, ['blame', '--porcelain', '--', relativePath]);
-
-      let stdout = '';
-      let stderr = '';
-      let timedOut = false;
-
-      const timeoutTimer = setTimeout(() => {
-        timedOut = true;
-        proc.kill('SIGKILL');
-        reject(new Error(`git blame timed out after ${BLAME_TIMEOUT_MS}ms`));
-      }, BLAME_TIMEOUT_MS);
-
-      proc.stdout.on('data', (data: Buffer) => {
-        stdout += data.toString('utf-8');
+    try {
+      // An empty file blames to nothing, so an empty answer cannot show a loss;
+      // after a recovery this goes through the runner anyway (F3).
+      const { stdout } = await readGit({
+        what: 'blame',
+        workdir,
+        args: ['blame', '--porcelain', '--', relativePath],
+        lostWhen: 'never',
+        timeoutMs: BLAME_TIMEOUT_MS,
       });
-
-      proc.stderr.on('data', (data: Buffer) => {
-        stderr += data.toString('utf-8');
-      });
-
-      proc.on('close', (code) => {
-        clearTimeout(timeoutTimer);
-        if (timedOut) return;
-
-        if (code !== 0) {
-          reject(new Error(`git blame failed: ${stderr.trim()}`));
-          return;
-        }
-
-        try {
-          const result = this.parsePorcelainBlame(stdout);
-          resolve(result);
-        } catch (e) {
-          reject(e);
-        }
-      });
-
-      proc.on('error', (err) => {
-        clearTimeout(timeoutTimer);
-        if (timedOut) return;
-        reject(err);
-      });
-    });
+      return this.parsePorcelainBlame(stdout);
+    } catch (err) {
+      if (err instanceof GitCommandError && err.exitCode !== null) {
+        throw new Error(`git blame failed: ${err.stderr.trim()}`);
+      }
+      throw err;
+    }
   }
 
   /**

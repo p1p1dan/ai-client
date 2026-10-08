@@ -110,6 +110,38 @@ describe('runGitViaNode', () => {
     expect(error.failure).toBe('max-buffer');
   });
 
+  it('relays raw bytes in buffer mode', async () => {
+    const blob = Buffer.from([0xc4, 0xe3, 0xba, 0xc3]); // GBK, not valid UTF-8
+    const exec = vi.fn<NodeGitRunnerExec>(async () => ({ stdout: blob, stderr: Buffer.alloc(0) }));
+
+    const result = await runGitViaNode({
+      workdir: WORKDIR,
+      args: ['show', 'HEAD:a.txt'],
+      env: {},
+      encoding: 'buffer',
+      exec,
+    });
+
+    expect(result.stdout).toBe(blob);
+    expect(exec.mock.calls[0][2]).toMatchObject({ encoding: 'buffer' });
+  });
+
+  it('still recognises the spawn marker when stderr comes back as a Buffer', async () => {
+    const error = await runGitViaNode({
+      workdir: WORKDIR,
+      args: ['show', 'HEAD:a.txt'],
+      env: {},
+      encoding: 'buffer',
+      exec: rejectingExec({
+        code: 127,
+        stdout: Buffer.alloc(0),
+        stderr: Buffer.from(`${GIT_SPAWN_ERROR_MARKER} ENOENT`),
+      }),
+    }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(NodeGitRunnerError);
+    expect((error as NodeGitRunnerError).failure).toBe('git-spawn');
+  });
+
   it('fails when killed by a signal it did not send', async () => {
     const error = await failureOf(
       rejectingExec({ code: null, killed: false, signal: 'SIGKILL', stdout: '', stderr: '' })
