@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-10-07。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-10-08。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -56,6 +56,10 @@ P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版�
 
 ## Last Landed
 
+- 2026-10-08 现场缺陷三条（未推送）：
+  - **git（用户在 dsh.6 加密机上报）** `cc4f1f48`（[决策 161](decisions/161-git-read-fallback-shared.md)，待审批）：切分支「没反应」实为聊天栏当前分支来自没有回退的 `git worktree list`；「没有修改」是 `getFileChanges` 丢输出抛错后无回退；「暂无提交」是 `getLog` 把空输出当 0 条。新增共用 `gitReadFallback.ts`（每个读取声明 `lostWhen`，非零退出不算丢失，回退成功一次后本进程读取直接走 runner），log / file-changes / worktree list / diff / 提交详情 / blame 改走它，checkout 后读回 HEAD。独立审查 1 条中低（外部信号杀掉的 status 被当成丢输出、可在普通 Linux 上误开开关）已修。剩余读取与渲染层错误提示在收尾批（决策 162，代理在做）。
+  - **1.0.4 测试者报的外观与导入引导** `c373d02d`（[决策 160](decisions/160-field-fixes-theme-and-import-guide.md)）：主题「跟随系统」每次启动被 persist merge 里的 system→light 改回浅色（`4019fedf` 起，1.0.1～1.0.4 与本分支都有）；导入引导只看「本机有没有历史」不看导入状态。先在基于 1.0.4 的本地 worktree `fix-1.0.x-persist` 修好再移植。**用户裁决：只修在本分支，不发 1.0.5；本分支测试完毕后直接推为主线。** 加了设置写盘失败、settings.json 读回形状、导入计数的诊断日志。
+  - 验证：git 目录 131 例、设置与导入 92 例、Static / Scan / Wiring + shared 1181 例、根 `pnpm typecheck`、biome。没有起 Electron。
 - 2026-10-08 `1.1.0-dsh.6` 测试包：推送 `386e3428`，整包 `build.yml` run 37737061023 全部 job 通过（Windows、Linux 打包验证，Windows L1 冒烟 44 项），`dsh-bridge-gate` run 37737027212 通过（含 LC-2 新门槛）。Windows 安装包 artifact `windows-installer` 191.8 MB。交用户在加密机上复测 git 回退与「在资源管理器中显示」。（同日从 Windows 触发的 run 37722594114 在 `acfe0a4e` 上因 TS2588 卡在 gate。）
 - 2026-10-08 Windows 端提交 `acfe0a4e`（加密机上 git 输出丢失时经随包 node.exe 中转重跑 git，版本升 `1.1.0-dsh.6`）复核与修复 `a065c849`：审查工作流 61 个代理、27 条发现经两票对抗核实成立，其中三处会卡 CI（`const` 重赋值使回退成功即抛 TypeError 且 tsc 报错、原 Q7 测试串到真实 node 进程、biome 格式），回退的 `-s` 短格式解析把未暂存改动算成已暂存、中文与空格路径被转义、改名成「旧 -> 新」、中文 git 下 ahead/behind 恒 0、提交标题含 `->` 的分支消失；主路径原有的「路径含空格只取最后一个词、改名记旧路径」一并修。修法：回退改跑与主路径相同的 `status --porcelain=v2 --branch -z`，共用解析器 `porcelainV2Status.ts`；分支回退 `branch --no-color -a -v` 按 simple-git 规则解析；runner 抽到 `nodeGitRunner.ts`，用 `createGitEnv` 加 C locale，WSL 不走回退，非零退出、超时、超 32MB 都报错；丢输出改用 `GitOutputLostError`（`GIT_OUTPUT_LOST`）触发。6 组核实一轮全过；门禁：两套 tsc、lint、Static 764、shared 446、git 86、ipc 225、source-control 与侧栏 814。**加密机上需用户复测**（命令行变了）。核实中发现的原有问题（非本次引入，待定）：主路径按块解码 UTF-8 在大输出时可能弄坏中文路径；`getFileChanges` 路径含空格只取最后一个词、改名 path/originalPath 反了；主路径 simple-git 未固定 locale；加密机上回退每 5 s 写 2 行 warn。
 - 2026-10-08 用户新需求：侧栏仓库行右键菜单加「在资源管理器中显示」（macOS 为「在 Finder 中显示」），点击用 `shell.openPath` 打开仓库目录本身，远程仓库不显示该项，失败弹 toast；`beeab1c7`，复用现有 preload API 与词条，`workspace-shell` 809 例、Static 764 例通过。第二次推送（`6c06b309`）的 `dsh-bridge-gate` run 37717728544 全部通过，LC-2 门槛修复（决策 158）在 CI 上验证。
