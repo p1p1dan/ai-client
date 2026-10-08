@@ -1,12 +1,13 @@
 {
-  "revision": "b8679f8db240dd489388cf3145eb2a4036c97aedab39ecde713a932811d4ed01",
+  "revision": "4031e408019abe07089e2d96f641aa36beae74b17b746c67fab570d46311bb2d",
   "routes": {
     "claude": {
       "api": "anthropic-messages",
       "baseURL": "https://gateway.example.test",
       "apiKeyEnv": "AICLIENT_KEY_CLAUDE_C857",
       "compat": {
-        "forceAdaptiveThinking": true
+        "forceAdaptiveThinking": true,
+        "supportsCacheControlOnTools": false
       },
       "defaultContextWindow": 128000,
       "defaultMaxTokens": 8192,
