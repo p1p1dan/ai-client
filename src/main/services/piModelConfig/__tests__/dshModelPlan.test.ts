@@ -170,6 +170,102 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     expect(advisories).toEqual(['claude-sonnet-4-5: adaptive_thinking_undeclared']);
   });
 
+  it('MP-05 plans the model settings panel through the real assembly (decision 168)', () => {
+    const { plan } = assemble([
+      userService('anthropic-messages', {
+        models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+        modelMeta: {
+          // The prefill a fresh selection gets: Low / Medium / High / Max.
+          'claude-opus-5-5': {
+            name: 'Opus 5.5',
+            reasoning: true,
+            adaptiveThinking: true,
+            efforts: ['low', 'medium', 'high', 'max'],
+          },
+          'claude-haiku-4-5': {
+            reasoning: true,
+            adaptiveThinking: false,
+            efforts: ['minimal', 'low', 'high'],
+          },
+        },
+      }),
+      userService('openai-completions', {
+        models: ['deepseek-v4-pro', 'qwen3-local'],
+        modelMeta: {
+          'deepseek-v4-pro': {
+            reasoning: true,
+            compatPreset: 'deepseek',
+            efforts: ['minimal', 'high', 'max'],
+          },
+          'qwen3-local': { reasoning: true, compatPreset: 'qwen-chat-template' },
+        },
+      }),
+    ]);
+    const anthropic = plan.routes['u-anthropic-messages'];
+    expect(anthropic?.models).toEqual([
+      {
+        id: 'claude-opus-5-5',
+        name: 'Opus 5.5',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high', max: 'max' },
+        compat: { forceAdaptiveThinking: true },
+      },
+      {
+        id: 'claude-haiku-4-5',
+        reasoningEfforts: { minimal: 'minimal', low: 'low', high: 'high' },
+      },
+    ]);
+    expect(plan.index['u-anthropic-messages/claude-opus-5-5']?.efforts).toEqual([
+      'low',
+      'medium',
+      'high',
+      'max',
+    ]);
+    const completions = plan.routes['u-openai-completions'];
+    expect(completions?.models).toEqual([
+      {
+        id: 'deepseek-v4-pro',
+        reasoningEfforts: { minimal: 'minimal', high: 'high', max: 'max' },
+        compat: {
+          thinkingFormat: 'deepseek',
+          supportsDeveloperRole: false,
+          supportsStore: false,
+          supportsReasoningEffort: true,
+          maxTokensField: 'max_tokens',
+          requiresReasoningContentOnAssistantMessages: true,
+        },
+      },
+      {
+        id: 'qwen3-local',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+        compat: {
+          thinkingFormat: 'qwen-chat-template',
+          supportsDeveloperRole: false,
+          supportsStore: false,
+          supportsReasoningEffort: false,
+          maxTokensField: 'max_tokens',
+          requiresReasoningContentOnAssistantMessages: false,
+        },
+      },
+    ]);
+    expect(plan.index['u-openai-completions/deepseek-v4-pro']?.efforts).toEqual([
+      'minimal',
+      'high',
+      'max',
+    ]);
+    // Nothing the rows carry is refused or unset; off is never declared.
+    const fieldDrops = plan.dropped.flatMap((drop) =>
+      drop.kind === 'field' && drop.providerId.startsWith('u-') ? [drop.reason] : []
+    );
+    expect(fieldDrops).not.toContain('compat_not_offered');
+    expect(fieldDrops).not.toContain('compat_unset');
+    expect(fieldDrops).not.toContain('adaptive_thinking_forced');
+    for (const route of [anthropic, completions]) {
+      for (const model of route?.models ?? []) {
+        expect(model.reasoningEfforts && 'off' in model.reasoningEfforts).toBe(false);
+      }
+    }
+  });
+
   it('drops a user service with no key, and only that one', () => {
     const { plan } = assemble([userService('openai-completions', { apiKey: '' })]);
     expect(plan.routes['u-openai-completions']).toBeUndefined();

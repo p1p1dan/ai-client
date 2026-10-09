@@ -43,7 +43,7 @@ const GATE =
   '502 {"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow","family":"anthropic"}}';
 const SETTING = '400 "thinking.type.disabled" is not supported for this model';
 const SETTING_HINT_ZH =
-  '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中调整：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。';
+  '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。';
 
 let seq = 0;
 function push(event: Omit<RuntimeEvent, 'seq' | 'timestamp'>) {

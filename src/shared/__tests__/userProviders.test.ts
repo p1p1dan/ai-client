@@ -1,17 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { DSH_PROTOCOLS } from '../dshModelPlan/tables';
+import { DSH_OFFERED_COMPAT, DSH_PROTOCOLS } from '../dshModelPlan/tables';
 import {
   applyModelMetaPatch,
+  availableModelEfforts,
+  compatForPreset,
+  compatPresetSendsEfforts,
   hasModelMeta,
+  isModelMetaCustomized,
   isSupportedUserProviderApi,
+  isUserCompatPreset,
   isUserProviderApi,
   modelMetaDraft,
   modelMetaForApi,
+  normalizeModelEfforts,
   PROVIDER_PRESETS,
+  parseModelTokenCount,
   prefillModelMeta,
   providerModelListAttempts,
   SUPPORTED_USER_PROVIDER_APIS,
   suggestsAdaptiveThinking,
+  USER_COMPAT_PRESETS,
+  USER_MODEL_EFFORTS,
   USER_PROVIDER_APIS,
 } from '../userProviders';
 
@@ -234,14 +243,14 @@ describe('per-model metadata helpers', () => {
   });
 
   it('prefillModelMeta: only anthropic-messages, only a matching id, only with no metadata yet', () => {
-    expect(prefillModelMeta('claude-opus-5-5', 'anthropic-messages', undefined)).toEqual({
+    // Decision 168 (user ruling 2026-10-09): Low / Medium / High / Max, not X-High.
+    const prefill = {
       reasoning: true,
       adaptiveThinking: true,
-    });
-    expect(prefillModelMeta('claude-opus-5-5', 'anthropic-messages', {})).toEqual({
-      reasoning: true,
-      adaptiveThinking: true,
-    });
+      efforts: ['low', 'medium', 'high', 'max'],
+    };
+    expect(prefillModelMeta('claude-opus-5-5', 'anthropic-messages', undefined)).toEqual(prefill);
+    expect(prefillModelMeta('claude-opus-5-5', 'anthropic-messages', {})).toEqual(prefill);
     expect(prefillModelMeta('claude-haiku-4-5', 'anthropic-messages', undefined)).toBeUndefined();
     expect(prefillModelMeta('claude-opus-5-5', 'openai-completions', undefined)).toBeUndefined();
     expect(
@@ -296,5 +305,174 @@ describe('per-model metadata helpers', () => {
     expect(
       modelMetaDraft({ selected: [], meta: stored, api: 'anthropic-messages', stored })
     ).toEqual({});
+  });
+});
+
+/** Decision 168 — the settings panel's rules, kept pure for the form, the IPC and Main. */
+describe('model settings helpers (decision 168)', () => {
+  it('offers every level but off, in escalation order', () => {
+    expect(USER_MODEL_EFFORTS).toEqual(['minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+  });
+
+  it('availableModelEfforts follows the matrix', () => {
+    expect(availableModelEfforts('anthropic-messages', true)).toEqual([
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+    ]);
+    expect(availableModelEfforts('anthropic-messages', false)).toEqual([
+      'minimal',
+      'low',
+      'medium',
+      'high',
+    ]);
+    for (const api of ['openai-completions', 'openai-responses']) {
+      expect(availableModelEfforts(api, false)).toEqual(USER_MODEL_EFFORTS);
+      // Adaptive thinking means nothing outside anthropic-messages.
+      expect(availableModelEfforts(api, true)).toEqual(USER_MODEL_EFFORTS);
+    }
+  });
+
+  it('normalizeModelEfforts filters, dedupes, orders, and collapses to absent', () => {
+    expect(
+      normalizeModelEfforts(['max', 'low', 'max', 'off', 'bogus', 7], 'openai-completions', false)
+    ).toEqual(['low', 'max']);
+    // Adaptive: no minimal. Budget: no xhigh / max.
+    expect(normalizeModelEfforts(['minimal', 'max'], 'anthropic-messages', true)).toEqual(['max']);
+    expect(normalizeModelEfforts(['high', 'xhigh', 'max'], 'anthropic-messages', false)).toEqual([
+      'high',
+    ]);
+    // Nothing left, or exactly the implied three: no field.
+    expect(normalizeModelEfforts(['max'], 'anthropic-messages', false)).toBeUndefined();
+    expect(normalizeModelEfforts(['off'], 'openai-completions', false)).toBeUndefined();
+    expect(normalizeModelEfforts([], 'openai-completions', false)).toBeUndefined();
+    expect(
+      normalizeModelEfforts(['high', 'low', 'medium'], 'openai-responses', false)
+    ).toBeUndefined();
+    expect(normalizeModelEfforts('low', 'openai-completions', false)).toBeUndefined();
+    expect(normalizeModelEfforts(undefined, 'openai-completions', false)).toBeUndefined();
+  });
+
+  it('applyModelMetaPatch normalizes efforts when adaptive thinking flips', () => {
+    const adaptiveMax = { reasoning: true, adaptiveThinking: true, efforts: ['max' as const] };
+    // Off: budget thinking has no Max, nothing is left, so the field goes.
+    expect(
+      applyModelMetaPatch(adaptiveMax, { adaptiveThinking: undefined }, 'anthropic-messages')
+    ).toEqual({ reasoning: true, adaptiveThinking: undefined, efforts: undefined });
+    const budget = { reasoning: true, efforts: ['minimal' as const, 'low' as const] };
+    expect(
+      applyModelMetaPatch(budget, { adaptiveThinking: true }, 'anthropic-messages').efforts
+    ).toEqual(['low']);
+    // An edit of the levels is normalized too; one that touches neither is not.
+    expect(
+      applyModelMetaPatch({ reasoning: true }, { efforts: ['max', 'low'] }, 'openai-completions')
+        .efforts
+    ).toEqual(['low', 'max']);
+    const openaiMeta = { reasoning: true, efforts: ['minimal' as const] };
+    expect(
+      applyModelMetaPatch(openaiMeta, { maxTokens: 32000 }, 'anthropic-messages').efforts
+    ).toEqual(['minimal']);
+    // Without an api the decision 165 behavior is unchanged.
+    expect(applyModelMetaPatch(adaptiveMax, { adaptiveThinking: undefined }).efforts).toEqual([
+      'max',
+    ]);
+  });
+
+  it('modelMetaForApi keeps efforts and the preset only while reasoning is on', () => {
+    const meta = {
+      name: '  Opus  ',
+      reasoning: true,
+      efforts: ['minimal' as const, 'max' as const],
+      compatPreset: 'deepseek' as const,
+    };
+    expect(modelMetaForApi(meta, 'openai-completions')).toEqual({
+      name: 'Opus',
+      reasoning: true,
+      efforts: ['minimal', 'max'],
+      compatPreset: 'deepseek',
+    });
+    // The preset only exists for openai-completions; levels follow the matrix.
+    expect(modelMetaForApi(meta, 'openai-responses')).toEqual({
+      name: 'Opus',
+      reasoning: true,
+      efforts: ['minimal', 'max'],
+    });
+    expect(modelMetaForApi(meta, 'anthropic-messages')).toEqual({
+      name: 'Opus',
+      reasoning: true,
+      efforts: ['minimal'],
+    });
+    expect(modelMetaForApi({ ...meta, reasoning: undefined }, 'openai-completions')).toEqual({
+      name: 'Opus',
+    });
+    expect(modelMetaForApi({ name: '   ' }, 'openai-completions')).toEqual({});
+  });
+
+  it('modelMetaForApi drops the levels of a preset that sends none', () => {
+    expect(compatPresetSendsEfforts('qwen-chat-template')).toBe(false);
+    expect(compatPresetSendsEfforts('qwen')).toBe(true);
+    expect(compatPresetSendsEfforts(undefined)).toBe(true);
+    expect(
+      modelMetaForApi(
+        { reasoning: true, efforts: ['max'], compatPreset: 'qwen-chat-template' },
+        'openai-completions'
+      )
+    ).toEqual({ reasoning: true, compatPreset: 'qwen-chat-template' });
+  });
+
+  it('every preset writes only compat keys DSH offers on openai-completions', () => {
+    const offered = DSH_OFFERED_COMPAT['openai-completions'];
+    for (const preset of USER_COMPAT_PRESETS) {
+      const compat = compatForPreset(preset);
+      expect(compat.thinkingFormat).toBe(preset);
+      expect(Object.keys(compat).every((key) => offered.includes(key))).toBe(true);
+      expect(Object.keys(compat).sort()).toEqual([
+        'maxTokensField',
+        'requiresReasoningContentOnAssistantMessages',
+        'supportsDeveloperRole',
+        'supportsReasoningEffort',
+        'supportsStore',
+        'thinkingFormat',
+      ]);
+    }
+    // The vendor groups pi-ai's catalog gives the native endpoints.
+    expect(compatForPreset('deepseek')).toMatchObject({
+      supportsDeveloperRole: false,
+      maxTokensField: 'max_tokens',
+      requiresReasoningContentOnAssistantMessages: true,
+    });
+    expect(compatForPreset('zai')).toMatchObject({ maxTokensField: 'max_tokens' });
+    expect(compatForPreset('openai')).toMatchObject({
+      supportsDeveloperRole: true,
+      maxTokensField: 'max_completion_tokens',
+    });
+    expect(isUserCompatPreset('qwen')).toBe(true);
+    expect(isUserCompatPreset('chat-template')).toBe(false);
+    expect(isUserCompatPreset(undefined)).toBe(false);
+  });
+
+  it('isModelMetaCustomized compares with what a fresh selection would get', () => {
+    const prefill = prefillModelMeta('claude-opus-5-5', 'anthropic-messages', undefined);
+    expect(isModelMetaCustomized('claude-opus-5-5', 'anthropic-messages', prefill)).toBe(false);
+    expect(isModelMetaCustomized('claude-opus-5-5', 'anthropic-messages', undefined)).toBe(true);
+    expect(isModelMetaCustomized('gpt-5', 'openai-completions', undefined)).toBe(false);
+    expect(isModelMetaCustomized('gpt-5', 'openai-completions', { name: ' ' })).toBe(false);
+    expect(isModelMetaCustomized('gpt-5', 'openai-completions', { maxTokens: 1 })).toBe(true);
+    // A field the style hides is not a customization.
+    expect(isModelMetaCustomized('gpt-5', 'openai-completions', { adaptiveThinking: true })).toBe(
+      false
+    );
+  });
+
+  it('parseModelTokenCount reads digits only, as a positive whole number', () => {
+    expect(parseModelTokenCount('')).toEqual({ invalid: false });
+    expect(parseModelTokenCount('  ')).toEqual({ invalid: false });
+    expect(parseModelTokenCount('200000')).toEqual({ value: 200000, invalid: false });
+    expect(parseModelTokenCount(' 128,000 ')).toEqual({ value: 128000, invalid: false });
+    for (const raw of ['0', '-1', '1.5', '1e999', '32k', 'abc', '99999999999999999999']) {
+      expect(parseModelTokenCount(raw)).toEqual({ invalid: true });
+    }
   });
 });

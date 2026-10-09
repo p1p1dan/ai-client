@@ -270,12 +270,12 @@ const FAILURE_VIEWS = {
   // The provider refused a parameter this model does not take (`"thinking.type.disabled"
   // is not supported for this model`, `… requires adaptive thinking`): nothing
   // changes until the settings do. Decision 165: the hint names the switch for
-  // both directions and where it lives.
+  // both directions and where it lives (decision 168: the model settings panel).
   MODEL_SETTING_UNSUPPORTED: {
     title: 'The model settings do not fit this model',
     reason:
       'The model service refused a setting this app sent with the request, because this model does not support it.',
-    hint: 'For an AI service you added, open Settings · Models · AI services → Edit → Per-model metadata: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.',
+    hint: 'For an AI service you added, open Settings · Models · AI services → Edit → Model settings and select this model: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.',
     action: 'configure',
   },
   unknown: {

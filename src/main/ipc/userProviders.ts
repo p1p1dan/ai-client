@@ -11,10 +11,13 @@
  */
 
 import { IPC_CHANNELS } from '@shared/types';
+import { isSessionEffortLevel } from '@shared/types/agentHost';
 import {
   type FetchProviderModelsRequest,
   type FetchProviderModelsResult,
+  isUserCompatPreset,
   isUserProviderApi,
+  USER_MODEL_EFFORTS,
   type UserModelMeta,
   type UserProviderDraft,
   type UserProviderState,
@@ -22,6 +25,9 @@ import {
 } from '@shared/userProviders';
 import { ipcMain } from 'electron';
 import { getUserProviderService } from '../services/userProviders';
+
+/** Decision 168: the display name's limit, the same as the form field's `maxLength`. */
+const MODEL_NAME_MAX = 200;
 
 function readString(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new Error(`Invalid AI service request: ${field}`);
@@ -100,6 +106,34 @@ function readDraft(payload: unknown): UserProviderDraft {
           throw new Error(`Invalid AI service request: modelMeta[${modelId}].input`);
         }
         entry.input = fields.input as Array<'text' | 'image'>;
+      }
+      // Decision 168. The form trims, normalizes and never sends an empty
+      // list or `off`, so each rejection below is a caller bug, not a state
+      // a user can reach through the dialog.
+      if (fields.name !== undefined) {
+        if (typeof fields.name !== 'string' || fields.name.trim().length > MODEL_NAME_MAX) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].name`);
+        }
+        const name = fields.name.trim();
+        if (name) entry.name = name;
+      }
+      if (fields.efforts !== undefined) {
+        const efforts = fields.efforts;
+        if (
+          !Array.isArray(efforts) ||
+          efforts.length === 0 ||
+          efforts.some((level) => !isSessionEffortLevel(level) || level === 'off')
+        ) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].efforts`);
+        }
+        // Deduplicated, in escalation order.
+        entry.efforts = USER_MODEL_EFFORTS.filter((level) => efforts.includes(level));
+      }
+      if (fields.compatPreset !== undefined) {
+        if (!isUserCompatPreset(fields.compatPreset)) {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].compatPreset`);
+        }
+        entry.compatPreset = fields.compatPreset;
       }
       meta[modelId] = entry;
     }

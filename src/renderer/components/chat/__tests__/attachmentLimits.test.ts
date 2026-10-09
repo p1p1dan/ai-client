@@ -364,10 +364,10 @@ describe('modelLacksImageInput (T3)', () => {
   it('words the hint in both languages and names the only editable place', () => {
     const english = imageInputUnsupportedHint();
     expect(english).toContain('will not see this image');
-    expect(english).toContain('Per-model metadata');
+    expect(english).toContain('Edit → Model settings and turn on Image input');
     const chinese = imageInputUnsupportedHint((key, params) => translate('zh', key, params));
     expect(chinese).toBe(
-      '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。'
+      '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型，打开「图片输入」。'
     );
   });
 });

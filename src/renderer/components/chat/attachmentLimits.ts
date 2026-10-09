@@ -235,12 +235,12 @@ export function modelLacksImageInput(input: {
 
 /**
  * The warning's sentence. It names the one place a user can declare image
- * input — the per-model metadata of an AI service they added themselves
- * (`ProviderSetupDialog`, commit cfd19433); administrator-managed models have
- * no such editor, hence "you added yourself".
+ * input — the model settings of an AI service they added themselves
+ * (`ModelSettingsPanel`, decision 168); administrator-managed models have no
+ * such editor, hence "you added yourself".
  */
 export function imageInputUnsupportedHint(t: Translate = englishTranslate): string {
   return t(
-    'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Models · AI services → Edit → Per-model metadata.'
+    'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, select the model under Settings · Models · AI services → Edit → Model settings and turn on Image input.'
   );
 }

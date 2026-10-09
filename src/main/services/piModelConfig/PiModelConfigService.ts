@@ -25,7 +25,15 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
-import type { UserModelMeta } from '@shared/userProviders';
+import { SESSION_EFFORT_LEVELS } from '@shared/types/agentHost';
+import {
+  compatForPreset,
+  compatPresetSendsEfforts,
+  isUserCompatPreset,
+  normalizeModelEfforts,
+  type UserModelEffort,
+  type UserModelMeta,
+} from '@shared/userProviders';
 import type { UserProvider } from '../auth/CredentialVault';
 import { type BundledCatalogReader, createBundledCatalogReader } from './catalogSnapshot';
 import {
@@ -999,35 +1007,73 @@ function toPiUserProvider(provider: UserProvider): Record<string, unknown> {
 /**
  * One model row of a user service: its id plus the metadata typed for it.
  *
- * Decision 165: `adaptiveThinking` is the form's name for pi's own spelling
- * and never reaches models.json under that name. On an `anthropic-messages`
- * service it becomes `reasoning: true`, `compat.forceAdaptiveThinking` and
- * `thinkingLevelMap.off: null` — the same three the 1.0.x workaround writes
- * by hand, so any pi reader of the file (not only the model plan) sends
- * adaptive thinking and never `thinking: {type: "disabled"}`. Other styles
- * have no such switch; the field is dropped there instead of becoming a
- * compat key their route does not offer. Anything already in the row's
- * `compat` / `thinkingLevelMap` is merged into, not replaced.
+ * Built field by field from a whitelist, never by spreading the stored
+ * object: the vault does not validate `modelMeta` on read, and the form's
+ * own names (`adaptiveThinking`, `efforts`, `compatPreset`) must never reach
+ * models.json as keys pi would not understand.
+ *
+ * - Decision 165: on an `anthropic-messages` service `adaptiveThinking`
+ *   becomes `reasoning: true`, `compat.forceAdaptiveThinking` and
+ *   `thinkingLevelMap.off: null` — the same three the 1.0.x workaround writes
+ *   by hand, so any pi reader of the file sends adaptive thinking and never
+ *   `thinking: {type: "disabled"}`. Other styles drop the field.
+ * - Decision 168: with reasoning on, `efforts` (normalized again here, the
+ *   same function the form uses) becomes a `thinkingLevelMap` naming all
+ *   seven levels — an offered level as its own name, every other one, `off`
+ *   included, as `null`; `compatPreset` (`openai-completions` only) becomes
+ *   the vendor's compat group; `name` is written trimmed.
  */
 function toPiUserModel(
   id: string,
   api: string,
   meta: UserModelMeta | undefined
 ): Record<string, unknown> {
-  const { adaptiveThinking, ...rest } = meta ?? {};
-  const row: Record<string, unknown> = { id, ...rest };
-  if (api === 'anthropic-messages' && adaptiveThinking === true) {
-    row.reasoning = true;
-    row.compat = { ...asRecord(row.compat), forceAdaptiveThinking: true };
-    row.thinkingLevelMap = { ...asRecord(row.thinkingLevelMap), off: null };
+  const fields: Record<string, unknown> =
+    meta && typeof meta === 'object' && !Array.isArray(meta) ? { ...meta } : {};
+  const row: Record<string, unknown> = { id };
+  const name = typeof fields.name === 'string' ? fields.name.trim() : '';
+  if (name) row.name = name;
+  if (isPositiveInteger(fields.contextWindow)) row.contextWindow = fields.contextWindow;
+  if (isPositiveInteger(fields.maxTokens)) row.maxTokens = fields.maxTokens;
+  if (typeof fields.reasoning === 'boolean') row.reasoning = fields.reasoning;
+  if (Array.isArray(fields.input)) {
+    const input = (['text', 'image'] as const).filter((kind) =>
+      (fields.input as unknown[]).includes(kind)
+    );
+    if (input.length > 0) row.input = input;
   }
+
+  const adaptive = api === 'anthropic-messages' && fields.adaptiveThinking === true;
+  const compat: Record<string, unknown> = {};
+  const thinkingLevelMap: Record<string, string | null> = {};
+  if (adaptive) {
+    row.reasoning = true;
+    compat.forceAdaptiveThinking = true;
+    thinkingLevelMap.off = null;
+  }
+  if (row.reasoning === true) {
+    const preset =
+      api === 'openai-completions' && isUserCompatPreset(fields.compatPreset)
+        ? fields.compatPreset
+        : undefined;
+    if (preset) Object.assign(compat, compatForPreset(preset));
+    const efforts = compatPresetSendsEfforts(preset)
+      ? normalizeModelEfforts(fields.efforts, api, adaptive)
+      : undefined;
+    if (efforts) {
+      for (const level of SESSION_EFFORT_LEVELS) {
+        thinkingLevelMap[level] =
+          level !== 'off' && efforts.includes(level as UserModelEffort) ? level : null;
+      }
+    }
+  }
+  if (Object.keys(compat).length > 0) row.compat = compat;
+  if (Object.keys(thinkingLevelMap).length > 0) row.thinkingLevelMap = thinkingLevelMap;
   return row;
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
+function isPositiveInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 function safeMtime(path: string): number | null {

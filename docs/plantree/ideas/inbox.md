@@ -12,3 +12,4 @@
 - 2026-09-27（DSH [决策 065](../plans/dsh-rebase/decisions/065-loop-guard-host-plugin.md)）：通用工具总量闸，即任何工具单条回复超过 64 个调用就掐断。它超出 09-24 决策 042 限定的范围，要用户点头才做。未立项。
 - 2026-10-09（DSH [决策 165](../plans/dsh-rebase/decisions/165-user-provider-adaptive-thinking-and-anthropic-model-list.md)）：只支持自适应思考的 Claude 模型「关闭思考」时，上游建议发 `thinking:{type:"between_tools"}`（issue #4 症状三）。pi-ai 0.85.1 与随附 Anthropic SDK 都不认识这个取值，决策 036 不给 `llm-pi-ai` 打补丁；计划层对强制自适应的行本来就不下发 off（决策 141），现状是省略 thinking。等 pi-ai / DSH 支持后再议。未立项。
 - 2026-10-09（DSH 决策 165）：自定义 AI 服务对话框允许手动输入模型 id，拉不到模型列表（代理不实现列表接口）时也能添加模型。未立项。
+- 2026-10-09（DSH [决策 168](../plans/dsh-rebase/decisions/168-custom-service-model-settings-panel.md)）：自定义服务「模型设置」本轮没做的几项：①「关闭」档（取值按格式不同，GPT-5.1 及之后是 `"none"`，更早的模型不认；还牵涉决策 040）；② 高级兼容性分区（developer 角色、`max_tokens` 字段名、回放 `reasoning_content` 等单独开关）；③「把当前设置应用到其他已选模型」；④ 默认尺寸改为 DSH 的 262144 / 32768（要改 `tables.ts` 并重录金样本）；⑤ 每档自定义线上取值、思考预算、每模型默认档位。未立项。

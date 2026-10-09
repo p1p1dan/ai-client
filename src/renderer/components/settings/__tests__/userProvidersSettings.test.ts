@@ -362,17 +362,22 @@ describe('ProviderSetupDialog — protocol narrowing (P1-5d)', () => {
 });
 
 /**
- * P2 / c-2 — the per-model metadata editor is the only place a user's model
- * capabilities are typed in, and it was the one surface the main-process tests
- * could not reach: `readDraft` and `toPiUserProvider` were covered, the form
- * that feeds them was not.
+ * P2 / c-2, rebuilt by decision 168 — the 「模型设置」 block is the only place a
+ * user's model capabilities are typed in: a column of the selected models
+ * (a vertical tab list) beside one shared settings panel.
  *
  * Everything below drives the REAL dialog and asserts what `userProviders.upsert`
- * is handed, so the four regressions these guard are the ones a user would hit
- * (a value that never arrives, a value pi will silently ignore, metadata for a
- * model that was deselected, and a section that will not reopen).
+ * is handed: the rules themselves are tested on the shared helpers
+ * (`src/shared/__tests__/userProviders.test.ts`), these check the form is wired
+ * to them and that the panel shows the model the column says it shows.
  */
-describe('ProviderSetupDialog — per-model metadata', () => {
+describe('ProviderSetupDialog — model settings (decision 168)', () => {
+  const CLAUDE = {
+    api: 'anthropic-messages' as const,
+    name: 'Claude Proxy',
+    baseUrl: 'https://proxy.example',
+  };
+
   /** React tracks its own value on the node, so the native setter has to be used. */
   async function type(node: Element | null, value: string, event = 'input'): Promise<void> {
     const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')?.set;
@@ -382,287 +387,453 @@ describe('ProviderSetupDialog — per-model metadata', () => {
     });
   }
 
-  /**
-   * The metadata block for the single selected model. `placeholder="tokens"` is
-   * shared by both number fields, so they are read positionally (context window
-   * then output limit) — the same order the row renders them in.
-   */
-  function metaBlock(): { contextWindow: HTMLInputElement; maxTokens: HTMLInputElement } {
-    const fields = [
-      ...document.body.querySelectorAll<HTMLInputElement>('input[placeholder="tokens"]'),
-    ];
-    if (fields.length < 2) throw new Error('per-model metadata fields are not on screen');
-    return { contextWindow: fields[0], maxTokens: fields[1] };
+  async function click(node: Element | null | undefined): Promise<void> {
+    await act(async () => (node as HTMLElement | null | undefined)?.click());
   }
 
-  function panelButton(text: string): HTMLButtonElement | undefined {
-    return [...document.body.querySelectorAll('button')].find((button) =>
-      button.textContent?.trim().includes(text)
+  function button(label: string): HTMLButtonElement | undefined {
+    return [...document.body.querySelectorAll('button')].find(
+      (candidate) => candidate.textContent?.trim() === label
     );
   }
 
-  /**
-   * The probe's model chips. They are `aria-pressed` buttons too, and so are
-   * the Text/Image toggles in every metadata row — those two are never model
-   * ids, so they are excluded by name.
-   */
-  function modelChips(): HTMLButtonElement[] {
-    return [...document.body.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].filter(
-      (button) => !['Text', 'Image'].includes(button.textContent?.trim() ?? '')
-    );
-  }
-
-  /** Inside the metadata section, the only `aria-label`d control is that row's X. */
-  function rowRemoveButton(modelId: string): HTMLButtonElement | undefined {
-    const row = [...document.body.querySelectorAll('p')].find(
-      (node) => node.textContent?.trim() === modelId
-    )?.parentElement;
-    return row?.querySelector<HTMLButtonElement>('button[aria-label="Remove"]') ?? undefined;
-  }
-
-  async function fetchModels(): Promise<void> {
-    await act(async () => panelButton('Fetch models')?.click());
-    await settle();
+  function saveButton(): HTMLButtonElement | undefined {
+    return button('Save');
   }
 
   async function save(): Promise<void> {
-    const button = [...document.body.querySelectorAll('button')].find(
-      (candidate) => candidate.textContent?.trim() === 'Save'
-    );
-    await act(async () => button?.click());
+    await click(saveButton());
     await settle();
   }
 
-  it('pre-fills the row from stored metadata, so reopening is not a blank form', async () => {
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(
-      provider({
-        modelMeta: {
-          'deepseek-chat': {
-            contextWindow: 65536,
-            maxTokens: 4096,
-            reasoning: true,
-            input: ['text'],
-          },
-        },
-      })
+  async function fetchModels(): Promise<void> {
+    const fetch = [...document.body.querySelectorAll('button')].find((candidate) =>
+      candidate.textContent?.includes('Fetch models')
     );
+    await click(fetch);
+    await settle();
+  }
 
-    expect(text()).toContain('Per-model metadata');
-    expect(text()).toContain('deepseek-chat');
-    const { contextWindow, maxTokens } = metaBlock();
-    expect(contextWindow.value).toBe('65536');
-    expect(maxTokens.value).toBe('4096');
-    const reasoning = document.body.querySelector('input[type="checkbox"]') as HTMLInputElement;
-    expect(reasoning.checked).toBe(true);
+  /** The probe's model chips, inside their own group. */
+  function chips(): HTMLButtonElement[] {
+    const group = byLabel('Available models');
+    return group ? [...group.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')] : [];
+  }
 
-    // Round-tripping the form unchanged must not lose any of it.
-    await save();
-    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
-      'deepseek-chat': { contextWindow: 65536, maxTokens: 4096, reasoning: true, input: ['text'] },
-    });
-  });
+  function chip(modelId: string): HTMLButtonElement | undefined {
+    return chips().find((candidate) => candidate.textContent?.trim() === modelId);
+  }
 
-  it.each([
-    '0',
-    '-1',
-    '1.5',
-    '1e999',
-  ])('drops a context window of %s instead of writing a number pi ignores', async (raw) => {
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(provider());
+  /** The column of selected models. */
+  function tabs(): HTMLElement[] {
+    const list = byLabel('Selected models');
+    return list ? [...list.querySelectorAll<HTMLElement>('[role="tab"]')] : [];
+  }
 
-    await type(metaBlock().contextWindow, raw);
-    await save();
+  function tab(modelId: string): HTMLElement | undefined {
+    return tabs().find((candidate) => candidate.textContent?.includes(modelId));
+  }
 
-    // Not `null`, not `Infinity`, not `NaN`: the field is simply absent, which
-    // is what `pi`'s `parseModel` treats as "use the default".
-    expect(api.upsert.mock.calls[0][0].modelMeta).toBeUndefined();
-  });
+  function panel(): HTMLElement | null {
+    return document.body.querySelector('[role="tabpanel"]');
+  }
 
-  it('carries a valid context window and output limit through as numbers', async () => {
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(provider());
+  /** The model id the panel's header names. */
+  function panelModel(): string | undefined {
+    return panel()?.querySelector('[data-slot="model-settings-id"]')?.textContent ?? undefined;
+  }
 
-    const { contextWindow, maxTokens } = metaBlock();
-    await type(contextWindow, '200000');
-    await type(maxTokens, '8192');
-    await save();
+  function switchFor(label: string): HTMLElement | null {
+    return panel()?.querySelector<HTMLElement>(`[role="switch"][aria-label="${label}"]`) ?? null;
+  }
 
-    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
-      'deepseek-chat': { contextWindow: 200000, maxTokens: 8192 },
-    });
-  });
+  function isOn(control: HTMLElement | null): boolean {
+    return control?.getAttribute('aria-checked') === 'true';
+  }
 
-  it('sends the reasoning switch and the input modalities', async () => {
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(provider());
+  function contextWindow(): HTMLInputElement | null {
+    return panel()?.querySelector<HTMLInputElement>('input[placeholder="Default 128000"]') ?? null;
+  }
 
+  function maxTokens(): HTMLInputElement | null {
+    return panel()?.querySelector<HTMLInputElement>('input[placeholder="Default 8192"]') ?? null;
+  }
+
+  function displayName(): HTMLInputElement | null {
+    return panel()?.querySelector<HTMLInputElement>('input[maxlength="200"]') ?? null;
+  }
+
+  function effortButtons(): HTMLButtonElement[] {
+    const group = byLabel('Available reasoning efforts');
+    return group ? [...group.querySelectorAll<HTMLButtonElement>('button')] : [];
+  }
+
+  function effort(label: string): HTMLButtonElement | undefined {
+    return effortButtons().find((candidate) => candidate.textContent?.trim() === label);
+  }
+
+  function pressedEfforts(): string[] {
+    return effortButtons()
+      .filter((candidate) => candidate.getAttribute('aria-pressed') === 'true')
+      .map((candidate) => candidate.textContent?.trim() ?? '');
+  }
+
+  function disabledEfforts(): string[] {
+    return effortButtons()
+      .filter(
+        (candidate) =>
+          candidate.hasAttribute('disabled') || candidate.getAttribute('aria-disabled') === 'true'
+      )
+      .map((candidate) => candidate.textContent?.trim() ?? '');
+  }
+
+  /** Same open-then-pick sequence the other Base UI select tests use. */
+  async function pick(
+    triggerLabel: string,
+    optionText: string,
+    seen?: (labels: string[]) => void
+  ): Promise<void> {
+    const options = await openSelectOptions(triggerLabel);
+    seen?.(options.map((candidate) => candidate.textContent?.trim() ?? ''));
+    const option = options.find((candidate) => candidate.textContent?.trim() === optionText);
+    if (!option) throw new Error(`no option ${optionText} under ${triggerLabel}`);
     await act(async () => {
-      (document.body.querySelector('input[type="checkbox"]') as HTMLInputElement).click();
+      option.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
     });
-    // One row per selected model, so the modality buttons repeat down the
-    // list; the first pair belongs to the only model here.
-    const modalities = [
-      ...document.body.querySelectorAll<HTMLButtonElement>('button[aria-pressed]'),
-    ].filter((button) => ['Text', 'Image'].includes(button.textContent?.trim() ?? ''));
-    const image = modalities.find((button) => button.textContent?.trim() === 'Image');
-    await act(async () => image?.click());
-    await save();
+    await act(async () => option.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+  }
 
-    // `text` is left out on purpose: pi's `parseInputs` falls back to it, and
-    // the form only stores what the user actually declared (U08-2's rule that
-    // an undeclared level is a guess).
-    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
-      'deepseek-chat': { reasoning: true, input: ['image'] },
-    });
-  });
+  function sentMeta(): unknown {
+    return api.upsert.mock.calls[0][0].modelMeta;
+  }
 
-  it('drops metadata for a model the user deselected', async () => {
-    api.upsert.mockResolvedValue(provider());
-    api.fetchModels.mockResolvedValue({
-      ok: true,
-      models: ['deepseek-chat', 'deepseek-reasoner'],
-    });
-    await mountDialog(
-      provider({
-        models: ['deepseek-chat', 'deepseek-reasoner'],
-        modelMeta: {
-          'deepseek-chat': { contextWindow: 65536 },
-          'deepseek-reasoner': { contextWindow: 163840 },
+  describe('layout and selection', () => {
+    it('opens an edit on the stored models and metadata, first model shown, without a fetch', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          models: ['deepseek-chat', 'deepseek-reasoner'],
+          modelMeta: {
+            'deepseek-chat': {
+              name: 'Chat',
+              contextWindow: 65536,
+              maxTokens: 4096,
+              reasoning: true,
+              input: ['text'],
+            },
+          },
+        })
+      );
+
+      expect(text()).toContain('Model settings');
+      expect(chips()).toHaveLength(0);
+      expect(tabs()).toHaveLength(2);
+      expect(tab('deepseek-chat')?.getAttribute('aria-selected')).toBe('true');
+      // The display name leads, the id follows, and the entry is marked customized.
+      expect(tab('deepseek-chat')?.textContent).toContain('Chat');
+      expect(tab('deepseek-chat')?.textContent).toContain('Customized');
+      expect(tab('deepseek-reasoner')?.textContent).not.toContain('Customized');
+      expect(panelModel()).toBe('deepseek-chat');
+      expect(displayName()?.value).toBe('Chat');
+      expect(contextWindow()?.value).toBe('65536');
+      expect(maxTokens()?.value).toBe('4096');
+      expect(isOn(switchFor('Reasoning'))).toBe(true);
+
+      // Round-tripping the form unchanged must not lose any of it.
+      await save();
+      expect(sentMeta()).toEqual({
+        'deepseek-chat': {
+          name: 'Chat',
+          contextWindow: 65536,
+          maxTokens: 4096,
+          reasoning: true,
+          input: ['text'],
         },
-      })
-    );
-
-    // The chips only exist after a probe answers, and they carry `aria-pressed`
-    // — that is the one control in this form that clears a selection.
-    await fetchModels();
-    const chip = modelChips().find((button) => button.textContent?.trim() === 'deepseek-reasoner');
-    expect(chip?.getAttribute('aria-pressed')).toBe('true');
-    await act(async () => chip?.click());
-    await save();
-
-    expect(api.upsert.mock.calls[0][0]).toMatchObject({
-      models: ['deepseek-chat'],
-      modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
+      });
     });
-  });
 
-  it('removes a selected model from the row itself, without a fetch first', async () => {
-    // The scenario: an edit opened but never probed. The chips are not on
-    // screen at all, so the row's X is the only way to deselect.
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(
-      provider({
+    it('shows the model picked in the column', async () => {
+      await mountDialog(
+        provider({
+          models: ['deepseek-chat', 'deepseek-reasoner'],
+          modelMeta: { 'deepseek-reasoner': { contextWindow: 163840 } },
+        })
+      );
+
+      await click(tab('deepseek-reasoner'));
+      expect(tab('deepseek-reasoner')?.getAttribute('aria-selected')).toBe('true');
+      expect(panelModel()).toBe('deepseek-reasoner');
+      expect(contextWindow()?.value).toBe('163840');
+    });
+
+    it('a ticked chip becomes the shown model; unticking it falls back to the first', async () => {
+      api.fetchModels.mockResolvedValue({ ok: true, models: ['a', 'b', 'c'] });
+      await mountDialog(provider({ models: [] }));
+      await fetchModels();
+      // Nothing ticked yet: the hint, no block.
+      expect(text()).toContain('Select models above to configure them here.');
+      expect(panel()).toBeNull();
+
+      await click(chip('a'));
+      chip('b')?.focus();
+      await click(chip('b'));
+      expect(panelModel()).toBe('b');
+      expect(tab('b')?.getAttribute('aria-selected')).toBe('true');
+      // Focus stays on the chip that was clicked.
+      expect(document.activeElement).toBe(chip('b'));
+      expect(text()).not.toContain('Select models above to configure them here.');
+      await click(chip('b'));
+      expect(panelModel()).toBe('a');
+      await click(chip('a'));
+      expect(panel()).toBeNull();
+    });
+
+    it('removing the shown model from the panel drops it and its metadata, and sends {}', async () => {
+      // The scenario: an edit opened but never probed. The chips are not on
+      // screen at all, so the panel's X is the only way to deselect.
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          models: ['deepseek-chat', 'deepseek-reasoner'],
+          modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
+        })
+      );
+
+      await click(byLabel('Remove this model'));
+      expect(tabs()).toHaveLength(1);
+      expect(panelModel()).toBe('deepseek-reasoner');
+      await save();
+
+      // Sent as an explicit empty map, because leaving it out would tell the
+      // service to keep the stored entry (decision 165).
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({ models: ['deepseek-reasoner'] });
+      expect(sentMeta()).toEqual({});
+    });
+
+    it('drops metadata for a model the user deselected', async () => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({
+        ok: true,
         models: ['deepseek-chat', 'deepseek-reasoner'],
+      });
+      await mountDialog(
+        provider({
+          models: ['deepseek-chat', 'deepseek-reasoner'],
+          modelMeta: {
+            'deepseek-chat': { contextWindow: 65536 },
+            'deepseek-reasoner': { contextWindow: 163840 },
+          },
+        })
+      );
+
+      await fetchModels();
+      expect(chip('deepseek-reasoner')?.getAttribute('aria-pressed')).toBe('true');
+      await click(chip('deepseek-reasoner'));
+      await save();
+
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({
+        models: ['deepseek-chat'],
         modelMeta: { 'deepseek-chat': { contextWindow: 65536 } },
-      })
-    );
+      });
+    });
 
-    expect(modelChips()).toHaveLength(0);
-    const remove = rowRemoveButton('deepseek-chat');
-    expect(remove).toBeDefined();
-    await act(async () => remove?.click());
-    await save();
+    it('keeps a hand-typed model across a fetch the service does not list it in', async () => {
+      // The regression: `runProbe` used to filter `selected` down to the
+      // service's answer, silently deleting a model the user had typed — and
+      // with it the metadata they had just filled in.
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({ ok: true, models: ['deepseek-chat'] });
+      await mountDialog(
+        provider({
+          models: ['my-gateway/llama-4-preview'],
+          modelMeta: { 'my-gateway/llama-4-preview': { contextWindow: 131072 } },
+        })
+      );
 
-    // Gone from the selection, and its metadata with it — the same state the
-    // chip path produces. Sent as an explicit empty map, because leaving it out
-    // would tell the service to keep the stored entry (decision 165).
-    expect(api.upsert.mock.calls[0][0]).toMatchObject({ models: ['deepseek-reasoner'] });
-    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({});
-  });
+      await fetchModels();
 
-  it('keeps a hand-typed model across a fetch the service does not list it in', async () => {
-    // The regression: `runProbe` used to filter `selected` down to the
-    // service's answer, silently deleting a model the user had typed — and
-    // with it the metadata they had just filled in.
-    api.upsert.mockResolvedValue(provider());
-    api.fetchModels.mockResolvedValue({ ok: true, models: ['deepseek-chat'] });
-    await mountDialog(
-      provider({
+      expect(tab('my-gateway/llama-4-preview')).toBeDefined();
+      await save();
+      expect(api.upsert.mock.calls[0][0]).toMatchObject({
         models: ['my-gateway/llama-4-preview'],
         modelMeta: { 'my-gateway/llama-4-preview': { contextWindow: 131072 } },
-      })
-    );
+      });
+    });
 
-    await fetchModels();
+    it('does not auto-select anything on a first fetch', async () => {
+      // 200 returned models must not become 200 selected models.
+      api.fetchModels.mockResolvedValue({ ok: true, models: ['a', 'b', 'c'] });
+      await mountDialog(provider({ models: [] }));
 
-    // Still selected, still carrying its metadata, still on screen.
-    expect(text()).toContain('my-gateway/llama-4-preview');
-    await save();
-    expect(api.upsert.mock.calls[0][0]).toMatchObject({
-      models: ['my-gateway/llama-4-preview'],
-      modelMeta: { 'my-gateway/llama-4-preview': { contextWindow: 131072 } },
+      await fetchModels();
+
+      expect(text()).not.toContain('1 selected');
+      expect(text()).not.toContain('3 selected');
+      expect(chips()).toHaveLength(3);
+      expect(chips().every((candidate) => candidate.getAttribute('aria-pressed') === 'false')).toBe(
+        true
+      );
+    });
+
+    it('omits modelMeta entirely when every field is left blank', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(provider());
+
+      await save();
+
+      expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
     });
   });
 
-  it('does not auto-select anything on a first fetch', async () => {
-    // The intent the old filter also served, and the one it must not lose:
-    // 200 returned models must not become 200 selected models.
-    api.upsert.mockResolvedValue(provider());
-    api.fetchModels.mockResolvedValue({ ok: true, models: ['a', 'b', 'c'] });
-    await mountDialog(provider({ models: [] }));
-
-    await fetchModels();
-
-    expect(document.body.textContent).not.toContain('1 selected');
-    expect(document.body.textContent).not.toContain('3 selected');
-    const chips = modelChips();
-    expect(chips).toHaveLength(3);
-    expect(chips.every((chip) => chip.getAttribute('aria-pressed') === 'false')).toBe(true);
-  });
-
-  it('omits modelMeta entirely when every field is left blank', async () => {
-    api.upsert.mockResolvedValue(provider());
-    await mountDialog(provider());
-
-    await save();
-
-    // An empty entry is noise in `models.json`; the save filter drops it.
-    expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
-  });
-
-  /**
-   * Decision 165 — the adaptive thinking switch. The rules themselves are
-   * tested on the shared helpers (`src/shared/__tests__/userProviders.test.ts`);
-   * these only check the form is wired to them.
-   */
-  describe('adaptive thinking', () => {
-    const CLAUDE = {
-      api: 'anthropic-messages' as const,
-      name: 'Claude Proxy',
-      baseUrl: 'https://proxy.example',
-    };
-
-    function checkboxes(): HTMLInputElement[] {
-      return [...document.body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
-    }
-
-    function details(): HTMLDetailsElement | null {
-      return document.body.querySelector('details');
-    }
-
-    it('is offered only for Anthropic Messages, after Reasoning', async () => {
+  describe('fields', () => {
+    it('carries a display name (trimmed), numbers and the image switch through', async () => {
+      api.upsert.mockResolvedValue(provider());
       await mountDialog(provider());
-      expect(checkboxes()).toHaveLength(1);
-      expect(text()).not.toContain('Adaptive thinking');
+
+      await type(displayName(), '  DeepSeek Chat  ');
+      await type(contextWindow(), '200000');
+      await type(maxTokens(), '8,192');
+      await click(switchFor('Image input'));
+      expect(isOn(switchFor('Image input'))).toBe(true);
+      await save();
+
+      // Text is always implied, so the switch writes both.
+      expect(sentMeta()).toEqual({
+        'deepseek-chat': {
+          name: 'DeepSeek Chat',
+          contextWindow: 200000,
+          maxTokens: 8192,
+          input: ['text', 'image'],
+        },
+      });
+    });
+
+    it.each([
+      '0',
+      '-1',
+      '1.5',
+      '1e999',
+      '32k',
+    ])('marks a context window of %s invalid, in the field and the column, and blocks the save', async (raw) => {
+      await mountDialog(provider());
+
+      await type(contextWindow(), raw);
+
+      expect(contextWindow()?.value).toBe(raw);
+      expect(contextWindow()?.getAttribute('aria-invalid')).toBe('true');
+      expect(panel()?.textContent).toContain('Enter a whole number greater than 0.');
+      expect(tab('deepseek-chat')?.textContent).toContain('Has invalid values');
+      expect(saveButton()?.disabled).toBe(true);
+      expect(text()).toContain(
+        'Some model settings are not valid. Fix the models marked in the list, then save.'
+      );
+
+      await type(contextWindow(), '');
+      expect(saveButton()?.disabled).toBe(false);
+    });
+
+    it("keeps each model's typed text to itself", async () => {
+      await mountDialog(provider({ models: ['a', 'b'] }));
+
+      await type(contextWindow(), 'abc');
+      await click(tab('b'));
+      expect(panelModel()).toBe('b');
+      expect(contextWindow()?.value).toBe('');
+      expect(panel()?.textContent).not.toContain('Enter a whole number greater than 0.');
+      // Still blocked: the invalid text is on a model that is not shown.
+      expect(saveButton()?.disabled).toBe(true);
+      expect(tab('a')?.textContent).toContain('Has invalid values');
+      expect(tab('b')?.textContent).not.toContain('Has invalid values');
+
+      await click(tab('a'));
+      expect(contextWindow()?.value).toBe('abc');
+    });
+
+    it('warns, without blocking, when the output limit is over half the context window', async () => {
+      await mountDialog(provider());
+
+      await type(maxTokens(), '100000');
+      expect(panel()?.textContent).toContain(
+        'Over half of the default context window (128000): fill in the context window as well'
+      );
+      // Declared: 100000 is over half of 150000, planned as a quarter of it.
+      await type(contextWindow(), '150000');
+      expect(panel()?.textContent).toContain(
+        'the reply reservation is planned as 37500 tokens (a quarter of the window)'
+      );
+      await type(contextWindow(), '200000');
+      expect(panel()?.textContent).not.toContain('Over half of');
+      expect(saveButton()?.disabled).toBe(false);
+    });
+
+    it('resets a model to its defaults: the prefill for an adaptive Claude, nothing otherwise', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          ...CLAUDE,
+          models: ['claude-opus-5-5', 'gpt-x'],
+          modelMeta: {
+            'claude-opus-5-5': { maxTokens: 32000 },
+            'gpt-x': { contextWindow: 65536 },
+          },
+        })
+      );
+
+      const reset = () => byLabel('Reset to defaults') as HTMLButtonElement | null;
+      expect(reset()?.disabled).toBe(false);
+      await click(reset());
+      expect(maxTokens()?.value).toBe('');
+      expect(isOn(switchFor('Adaptive thinking'))).toBe(true);
+      // Already the default now.
+      expect(reset()?.disabled).toBe(true);
+      expect(tab('claude-opus-5-5')?.textContent).not.toContain('Customized');
+
+      await click(tab('gpt-x'));
+      await click(reset());
+      expect(contextWindow()?.value).toBe('');
+      await save();
+      expect(sentMeta()).toEqual({
+        'claude-opus-5-5': {
+          reasoning: true,
+          adaptiveThinking: true,
+          efforts: ['low', 'medium', 'high', 'max'],
+        },
+      });
+    });
+  });
+
+  describe('thinking', () => {
+    it('offers adaptive thinking only for Anthropic Messages', async () => {
+      await mountDialog(provider());
+      expect(switchFor('Reasoning')).not.toBeNull();
+      expect(switchFor('Adaptive thinking')).toBeNull();
       await act(() => root.unmount());
       root = createRoot(container);
 
       await mountDialog(provider({ ...CLAUDE, models: ['claude-opus-5-5'] }));
-      expect(checkboxes()).toHaveLength(2);
-      expect(checkboxes()[1]?.parentElement?.textContent).toBe('Adaptive thinking');
+      expect(switchFor('Adaptive thinking')).not.toBeNull();
     });
 
-    it('ticking it ticks Reasoning; unticking Reasoning unticks it', async () => {
+    it('ticking adaptive thinking turns Reasoning on; turning Reasoning off turns it off', async () => {
       await mountDialog(provider({ ...CLAUDE, models: ['claude-opus-5-5'] }));
-      await act(async () => checkboxes()[1]?.click());
-      expect(checkboxes().map((box) => box.checked)).toEqual([true, true]);
-      await act(async () => checkboxes()[0]?.click());
-      expect(checkboxes().map((box) => box.checked)).toEqual([false, false]);
+      await click(switchFor('Adaptive thinking'));
+      expect([isOn(switchFor('Reasoning')), isOn(switchFor('Adaptive thinking'))]).toEqual([
+        true,
+        true,
+      ]);
+      await click(switchFor('Reasoning'));
+      expect([isOn(switchFor('Reasoning')), isOn(switchFor('Adaptive thinking'))]).toEqual([
+        false,
+        false,
+      ]);
+      // No levels without reasoning.
+      expect(byLabel('Available reasoning efforts')).toBeNull();
     });
 
-    it('unticking both on an edit sends an empty map, so the stored switch is cleared', async () => {
+    it('turning both off on an edit sends an empty map, so the stored switch is cleared', async () => {
       api.upsert.mockResolvedValue(provider());
       await mountDialog(
         provider({
@@ -671,14 +842,13 @@ describe('ProviderSetupDialog — per-model metadata', () => {
           modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
         })
       );
-      expect(checkboxes().map((box) => box.checked)).toEqual([true, true]);
-      await act(async () => checkboxes()[1]?.click());
-      await act(async () => checkboxes()[0]?.click());
+      await click(switchFor('Adaptive thinking'));
+      await click(switchFor('Reasoning'));
       await save();
-      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({});
+      expect(sentMeta()).toEqual({});
     });
 
-    it('prefills and shows it when a matching Claude model is selected', async () => {
+    it('prefills a ticked adaptive Claude, levels up to Max, and shows it', async () => {
       api.upsert.mockResolvedValue(provider());
       api.fetchModels.mockResolvedValue({
         ok: true,
@@ -687,14 +857,22 @@ describe('ProviderSetupDialog — per-model metadata', () => {
       await mountDialog(provider({ ...CLAUDE, models: [] }));
       await fetchModels();
 
-      const chip = (id: string) => modelChips().find((button) => button.textContent?.trim() === id);
-      await act(async () => chip('claude-haiku-4-5')?.click());
-      expect(details()?.open).toBe(false);
-      await act(async () => chip('claude-opus-5-5')?.click());
-      expect(details()?.open).toBe(true);
+      await click(chip('claude-haiku-4-5'));
+      expect(panelModel()).toBe('claude-haiku-4-5');
+      expect(isOn(switchFor('Adaptive thinking'))).toBe(false);
+      await click(chip('claude-opus-5-5'));
+      expect(panelModel()).toBe('claude-opus-5-5');
+      expect(isOn(switchFor('Adaptive thinking'))).toBe(true);
+      expect(pressedEfforts()).toEqual(['Low', 'Medium', 'High', 'Max']);
+      // The prefill is the default, not a customization.
+      expect(tab('claude-opus-5-5')?.textContent).not.toContain('Customized');
       await save();
-      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
-        'claude-opus-5-5': { reasoning: true, adaptiveThinking: true },
+      expect(sentMeta()).toEqual({
+        'claude-opus-5-5': {
+          reasoning: true,
+          adaptiveThinking: true,
+          efforts: ['low', 'medium', 'high', 'max'],
+        },
       });
     });
 
@@ -704,10 +882,153 @@ describe('ProviderSetupDialog — per-model metadata', () => {
       await mountDialog(provider({ models: [] }));
       await fetchModels();
 
-      await act(async () => modelChips()[0]?.click());
-      expect(checkboxes().map((box) => box.checked)).toEqual([false]);
+      await click(chips()[0]);
+      expect(isOn(switchFor('Reasoning'))).toBe(false);
       await save();
       expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+    });
+
+    it('disables the levels the style cannot use, unpressed (matrix)', async () => {
+      await mountDialog(
+        provider({
+          ...CLAUDE,
+          models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+          modelMeta: {
+            'claude-opus-5-5': { reasoning: true, adaptiveThinking: true },
+            'claude-haiku-4-5': { reasoning: true, efforts: ['minimal', 'low', 'max'] },
+          },
+        })
+      );
+      // Six levels, never Off.
+      expect(effortButtons().map((candidate) => candidate.textContent?.trim())).toEqual([
+        'Minimal',
+        'Low',
+        'Medium',
+        'High',
+        'X-High',
+        'Max',
+      ]);
+      // Adaptive: no Minimal.
+      expect(disabledEfforts()).toEqual(['Minimal']);
+      expect(pressedEfforts()).toEqual(['Low', 'Medium', 'High']);
+
+      // Budget thinking: X-High and Max are High; a stored Max shows unpressed.
+      await click(tab('claude-haiku-4-5'));
+      expect(disabledEfforts()).toEqual(['X-High', 'Max']);
+      expect(pressedEfforts()).toEqual(['Minimal', 'Low']);
+    });
+
+    it('offers all six on OpenAI styles and keeps at least one pressed', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(provider({ modelMeta: { 'deepseek-chat': { reasoning: true } } }));
+      expect(disabledEfforts()).toEqual([]);
+      expect(pressedEfforts()).toEqual(['Low', 'Medium', 'High']);
+
+      await click(effort('Minimal'));
+      await click(effort('Max'));
+      await click(effort('Low'));
+      await click(effort('Medium'));
+      await click(effort('High'));
+      await click(effort('Minimal'));
+      // Only Max left: it cannot be the one to go.
+      expect(pressedEfforts()).toEqual(['Max']);
+      expect(disabledEfforts()).toEqual(['Max']);
+      await click(effort('Max'));
+      expect(pressedEfforts()).toEqual(['Max']);
+
+      await save();
+      expect(sentMeta()).toEqual({ 'deepseek-chat': { reasoning: true, efforts: ['max'] } });
+    });
+
+    it('normalizes the levels when adaptive thinking is turned off', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          ...CLAUDE,
+          models: ['claude-opus-5-5'],
+          modelMeta: {
+            'claude-opus-5-5': { reasoning: true, adaptiveThinking: true, efforts: ['max'] },
+          },
+        })
+      );
+      expect(pressedEfforts()).toEqual(['Max']);
+
+      await click(switchFor('Adaptive thinking'));
+      // Budget thinking has no Max: back to the implied three.
+      expect(pressedEfforts()).toEqual(['Low', 'Medium', 'High']);
+      await save();
+      expect(sentMeta()).toEqual({ 'claude-opus-5-5': { reasoning: true } });
+    });
+
+    it('normalizes the levels for a new API style, keeping the hidden fields out of the save', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          modelMeta: {
+            'deepseek-chat': {
+              reasoning: true,
+              efforts: ['minimal', 'xhigh'],
+              compatPreset: 'deepseek',
+            },
+          },
+        })
+      );
+      expect(pressedEfforts()).toEqual(['Minimal', 'X-High']);
+
+      await pick('API style', 'Anthropic Messages');
+      expect(byLabel('Vendor protocol')).toBeNull();
+      expect(pressedEfforts()).toEqual(['Minimal']);
+      await save();
+      expect(sentMeta()).toEqual({ 'deepseek-chat': { reasoning: true, efforts: ['minimal'] } });
+    });
+
+    it('offers the vendor protocol only for Chat Completions with reasoning on', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(provider());
+      expect(byLabel('Vendor protocol')).toBeNull();
+
+      await click(switchFor('Reasoning'));
+      expect(byLabel('Vendor protocol')?.textContent).toContain(
+        'Automatic (by service name and address)'
+      );
+      let labels: string[] = [];
+      await pick('Vendor protocol', 'DeepSeek', (seen) => {
+        labels = seen;
+      });
+      expect(labels).toEqual([
+        'Automatic (by service name and address)',
+        'OpenAI',
+        'DeepSeek',
+        'Qwen',
+        'Qwen (chat template)',
+        'Zhipu GLM',
+        'OpenRouter',
+      ]);
+      expect(byLabel('Vendor protocol')?.textContent).toContain('DeepSeek');
+      await save();
+      expect(sentMeta()).toEqual({
+        'deepseek-chat': { reasoning: true, compatPreset: 'deepseek' },
+      });
+    });
+
+    it('replaces the levels with a note for the chat-template dialect', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          modelMeta: { 'deepseek-chat': { reasoning: true, efforts: ['max'] } },
+        })
+      );
+      expect(effortButtons()).toHaveLength(6);
+
+      await pick('Vendor protocol', 'Qwen (chat template)');
+      expect(byLabel('Available reasoning efforts')).toBeNull();
+      expect(panel()?.textContent).toContain(
+        'This format only turns thinking on or off and sends no level'
+      );
+      await save();
+      expect(sentMeta()).toEqual({
+        'deepseek-chat': { reasoning: true, compatPreset: 'qwen-chat-template' },
+      });
     });
   });
 });

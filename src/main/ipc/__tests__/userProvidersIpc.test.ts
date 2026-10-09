@@ -85,7 +85,45 @@ describe('userProviders:upsert — modelMeta IPC boundary (P1)', () => {
     expect(upsert).toHaveBeenLastCalledWith(expect.objectContaining({ modelMeta: {} }));
   });
 
+  it('passes the decision 168 fields: a trimmed name, deduplicated levels, a preset', async () => {
+    await invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, {
+      ...validPayload,
+      modelMeta: {
+        m1: {
+          name: '  Opus 5.5  ',
+          reasoning: true,
+          efforts: ['max', 'low', 'max', 'minimal'],
+          compatPreset: 'qwen-chat-template',
+        },
+        m2: { name: '   ' },
+      },
+    });
+    expect(upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        modelMeta: {
+          m1: {
+            name: 'Opus 5.5',
+            reasoning: true,
+            efforts: ['minimal', 'low', 'max'],
+            compatPreset: 'qwen-chat-template',
+          },
+          // A blank name is no name.
+          m2: {},
+        },
+      })
+    );
+  });
+
   it.each<[unknown, string]>([
+    [{ m1: { name: 42 } }, 'name'],
+    [{ m1: { name: 'x'.repeat(201) } }, 'name'],
+    [{ m1: { efforts: 'max' } }, 'efforts'],
+    [{ m1: { efforts: [] } }, 'efforts'],
+    [{ m1: { efforts: ['off'] } }, 'efforts'],
+    [{ m1: { efforts: ['low', 'off'] } }, 'efforts'],
+    [{ m1: { efforts: ['ultra'] } }, 'efforts'],
+    [{ m1: { compatPreset: 'chat-template' } }, 'compatPreset'],
+    [{ m1: { compatPreset: true } }, 'compatPreset'],
     [{ m1: { contextWindow: 'big' } }, 'contextWindow'],
     [{ m1: { contextWindow: -1 } }, 'contextWindow'],
     [{ m1: { contextWindow: 1.5 } }, 'contextWindow'],

@@ -27,10 +27,11 @@ import {
   modelMetaDraft,
   normalizeProviderBaseUrl,
   PROVIDER_PRESETS,
+  parseModelTokenCount,
   prefillModelMeta,
   SUPPORTED_USER_PROVIDER_APIS,
 } from '@shared/userProviders';
-import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
@@ -51,10 +52,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { Z_INDEX } from '@/lib/z-index';
+import {
+  hasInvalidTokenDraft,
+  ModelSettingsPanel,
+  type TokenDrafts,
+  type TokenField,
+} from './ModelSettingsPanel';
 
 const CUSTOM_SERVICE = 'custom';
 
@@ -113,8 +119,12 @@ export function ProviderSetupDialog({
   const [apiKey, setApiKey] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [modelMeta, setModelMeta] = useState<Record<string, UserModelMeta>>({});
-  // Controlled so a prefilled switch can open the section it sits in.
-  const [metaOpen, setMetaOpen] = useState(false);
+  // Decision 168: the raw text of the number fields, per model, so a value
+  // that is not a number yet stays on screen (and blocks the save) instead of
+  // vanishing — and never leaks into another model's panel.
+  const [tokenDrafts, setTokenDrafts] = useState<Record<string, TokenDrafts>>({});
+  // The model the settings panel shows. Kept as a wish, not a fact: see `activeModel`.
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [probe, setProbe] = useState<Probe>({ state: 'idle' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -125,7 +135,7 @@ export function ProviderSetupDialog({
     setProbe({ state: 'idle' });
     setSaveError(null);
     setApiKey('');
-    setMetaOpen(false);
+    setTokenDrafts({});
     if (editing) {
       const matched = PROVIDER_PRESETS.find(
         (candidate) =>
@@ -137,6 +147,7 @@ export function ProviderSetupDialog({
       setApi(editing.api);
       setSelected(editing.models);
       setModelMeta(editing.modelMeta ?? {});
+      setActiveId(editing.models[0] ?? null);
       return;
     }
     setPreset(CUSTOM_SERVICE);
@@ -145,6 +156,7 @@ export function ProviderSetupDialog({
     setApi('openai-completions');
     setSelected([]);
     setModelMeta({});
+    setActiveId(null);
   }, [open, editing]);
 
   const applyPreset = useCallback((id: string | null) => {
@@ -177,7 +189,15 @@ export function ProviderSetupDialog({
   // reason to block either the probe or the save.
   const hasUsableKey = apiKey.trim().length > 0 || Boolean(editing?.hasApiKey);
   const canProbe = Boolean(baseUrl) && !urlIssue && hasUsableKey && probe.state !== 'running';
-  const canSave = Boolean(name.trim()) && canProbe;
+  // Decision 168: a number that is not one yet blocks the save, wherever it is.
+  const invalidModels = useMemo(
+    () => selected.filter((model) => hasInvalidTokenDraft(tokenDrafts[model])),
+    [selected, tokenDrafts]
+  );
+  const canSave = Boolean(name.trim()) && canProbe && invalidModels.length === 0;
+  // Unticking or removing the shown model falls back to the first selected one.
+  const activeModel =
+    activeId !== null && selected.includes(activeId) ? activeId : (selected[0] ?? null);
 
   const runProbe = useCallback(async () => {
     setProbe({ state: 'running' });
@@ -194,7 +214,7 @@ export function ProviderSetupDialog({
       // hand-typed model together with the metadata just filled in for it —
       // and gave no sign it had done so. A model the service does not list is
       // the user's call, not this form's: removing it stays explicit, through
-      // the row's own X.
+      // the settings panel's own X.
       //
       // Nothing is ADDED here, which is the intent this always had: a first
       // fetch must not silently enable the 200 models it returned.
@@ -203,17 +223,39 @@ export function ProviderSetupDialog({
     setProbe({ state: 'failed', error: result.error });
   }, [baseUrl, api, apiKey, editing]);
 
-  const updateMeta = useCallback((modelId: string, patch: Partial<UserModelMeta>) => {
-    setModelMeta((current) => ({
-      ...current,
-      [modelId]: applyModelMetaPatch(current[modelId], patch),
-    }));
-  }, []);
+  const updateMeta = useCallback(
+    (modelId: string, patch: Partial<UserModelMeta>) => {
+      setModelMeta((current) => ({
+        ...current,
+        [modelId]: applyModelMetaPatch(current[modelId], patch, api),
+      }));
+    },
+    [api]
+  );
 
   /**
-   * A chip click. Selecting a Claude model that only accepts adaptive thinking
-   * ticks that switch for it (decision 165, user ruling 2026-10-09) when the
-   * model has no metadata yet, and opens the section so the user sees it.
+   * A number field's text. A usable value (or an empty field) goes into the
+   * metadata at once; anything else stays as text only, marked and blocking
+   * the save, so the stored value is never silently dropped (decision 168).
+   */
+  const updateTokenDraft = useCallback(
+    (modelId: string, field: TokenField, raw: string) => {
+      setTokenDrafts((current) => ({
+        ...current,
+        [modelId]: { ...current[modelId], [field]: raw },
+      }));
+      const parsed = parseModelTokenCount(raw);
+      if (!parsed.invalid) updateMeta(modelId, { [field]: parsed.value });
+    },
+    [updateMeta]
+  );
+
+  /**
+   * A chip click. Ticking a model makes it the one the settings panel shows
+   * (focus stays on the chip). Selecting a Claude model that only accepts
+   * adaptive thinking fills that in for it (decisions 165, 168, user rulings
+   * 2026-10-09) when the model has no metadata yet. Unticking keeps whatever
+   * was set, so ticking it again restores it rather than prefilling anew.
    */
   const toggleModel = useCallback(
     (model: string, on: boolean) => {
@@ -222,25 +264,54 @@ export function ProviderSetupDialog({
         return;
       }
       setSelected((current) => (current.includes(model) ? current : [...current, model]));
+      setActiveId(model);
       const prefill = prefillModelMeta(model, api, modelMeta[model]);
       if (!prefill) return;
       setModelMeta((current) => ({ ...current, [model]: prefill }));
-      setMetaOpen(true);
     },
     [api, modelMeta]
   );
 
   /**
+   * Back to what a fresh selection would get: the prefill for an adaptive-only
+   * Claude, nothing for anything else (decision 168). Typed text goes too.
+   */
+  const resetModel = useCallback(
+    (modelId: string) => {
+      const defaults = prefillModelMeta(modelId, api, undefined);
+      setModelMeta((current) => {
+        const rest = { ...current };
+        if (defaults) rest[modelId] = defaults;
+        else delete rest[modelId];
+        return rest;
+      });
+      setTokenDrafts((current) => {
+        if (!(modelId in current)) return current;
+        const rest = { ...current };
+        delete rest[modelId];
+        return rest;
+      });
+    },
+    [api]
+  );
+
+  /**
    * Drop one model from the selection, metadata and all.
    *
-   * The row's own removal control exists because the chips below only render
+   * The panel's own removal control exists because the chips only render
    * once a probe has answered: on an edit opened without fetching, the
-   * metadata section is on screen while the only other way to deselect a
+   * settings panel is on screen while the only other way to deselect a
    * model is not.
    */
   const removeModel = useCallback((modelId: string) => {
     setSelected((current) => current.filter((id) => id !== modelId));
     setModelMeta((current) => {
+      if (!(modelId in current)) return current;
+      const rest = { ...current };
+      delete rest[modelId];
+      return rest;
+    });
+    setTokenDrafts((current) => {
       if (!(modelId in current)) return current;
       const rest = { ...current };
       delete rest[modelId];
@@ -282,7 +353,8 @@ export function ProviderSetupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Opened from within SettingsDialog: must render above the base modal, not rely on DOM mount order */}
-      <DialogPopup className="max-w-lg" zIndexLevel="nested">
+      {/* Decision 168: wide enough for the model column beside the settings panel. */}
+      <DialogPopup className="max-w-2xl" zIndexLevel="nested">
         <DialogHeader>
           <DialogTitle>{editing ? t('Edit AI service') : t('Add AI service')}</DialogTitle>
         </DialogHeader>
@@ -404,7 +476,11 @@ export function ProviderSetupDialog({
 
             {probe.state === 'ok' && (
               <ScrollArea className="max-h-48 rounded-md border">
-                <div className="flex flex-wrap gap-1.5 p-2">
+                <div
+                  role="group"
+                  aria-label={t('Available models')}
+                  className="flex flex-wrap gap-1.5 p-2"
+                >
                   {probe.models.map((model) => {
                     const on = selected.includes(model);
                     return (
@@ -434,37 +510,36 @@ export function ProviderSetupDialog({
               </p>
             )}
 
-            {selected.length > 0 && (
-              <details
-                className="rounded-md border"
-                open={metaOpen}
-                onToggle={(event) => setMetaOpen(event.currentTarget.open)}
-              >
-                <summary className="cursor-pointer select-none px-3 py-2 text-meta text-muted-foreground">
-                  {t('Per-model metadata')}
-                </summary>
-                <div className="space-y-3 border-t px-3 py-3">
-                  {api === 'anthropic-messages' && (
-                    <p className="text-meta text-muted-foreground">
-                      {t(
-                        'Adaptive thinking: Claude Opus 4.6 / Sonnet 4.6 and later (5.x included) only accept adaptive thinking. Turn it on when requests fail with "requires adaptive thinking"; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off. With it on, set the output limit to 32000 or more: without one a model gets 8192 tokens, which thinking at a high level can use up.'
-                      )}
-                    </p>
-                  )}
-                  {selected.map((model) => (
-                    <ModelMetaRow
-                      key={model}
-                      modelId={model}
-                      api={api}
-                      meta={modelMeta[model]}
-                      onChange={updateMeta}
-                      onRemove={removeModel}
-                    />
-                  ))}
-                </div>
-              </details>
+            {probe.state === 'ok' && selected.length === 0 && (
+              <p className="text-meta text-muted-foreground">
+                {t('Select models above to configure them here.')}
+              </p>
             )}
           </div>
+
+          {activeModel !== null && (
+            <ModelSettingsPanel
+              models={selected}
+              activeId={activeModel}
+              onActiveChange={setActiveId}
+              api={api}
+              meta={modelMeta}
+              drafts={tokenDrafts}
+              onPatch={updateMeta}
+              onTokenDraft={updateTokenDraft}
+              onReset={resetModel}
+              onRemove={removeModel}
+            />
+          )}
+
+          {invalidModels.length > 0 && (
+            <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-meta text-destructive">
+              <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+              {t(
+                'Some model settings are not valid. Fix the models marked in the list, then save.'
+              )}
+            </p>
+          )}
 
           {saveError && (
             <p className="flex gap-2 rounded-sm border border-destructive/30 bg-destructive/8 p-2 text-meta text-destructive">
@@ -506,124 +581,6 @@ function Field({
           {hint}
         </p>
       )}
-    </div>
-  );
-}
-
-/**
- * One row of per-model metadata: context window, output cap, reasoning and
- * (Anthropic Messages only) adaptive thinking switches, and input modality.
- * All optional; a blank row is the same as no metadata.
- */
-function ModelMetaRow({
-  modelId,
-  api,
-  meta,
-  onChange,
-  onRemove,
-}: {
-  modelId: string;
-  api: UserProviderApi;
-  meta: UserModelMeta | undefined;
-  onChange: (modelId: string, patch: Partial<UserModelMeta>) => void;
-  onRemove: (modelId: string) => void;
-}) {
-  const { t } = useI18n();
-  const input = meta?.input ?? [];
-  // `min={0}` only clamps the spinner, not typing; `Number('1e999')` is
-  // `Infinity` which `JSON.stringify` turns to `null`, and pi's `parseModel`
-  // silently drops anything that is not a positive integer. So invalid input
-  // is dropped here rather than written as a number pi will ignore.
-  const toPositiveInt = (raw: string): number | undefined => {
-    const trimmed = raw.trim();
-    if (!trimmed) return undefined;
-    const n = Number(trimmed);
-    return Number.isInteger(n) && n > 0 ? n : undefined;
-  };
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <p className="min-w-0 flex-1 truncate text-meta font-semibold">{modelId}</p>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 shrink-0"
-          aria-label={t('Remove')}
-          onClick={() => onRemove(modelId)}
-        >
-          <X className="h-3.5 w-3.5" />
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
-          {t('Context window')}
-          <Input
-            type="number"
-            min={1}
-            className="h-7 w-28"
-            value={meta?.contextWindow ?? ''}
-            onChange={(event) =>
-              onChange(modelId, { contextWindow: toPositiveInt(event.target.value) })
-            }
-            placeholder="tokens"
-          />
-        </label>
-        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
-          {t('Output limit')}
-          <Input
-            type="number"
-            min={1}
-            className="h-7 w-28"
-            value={meta?.maxTokens ?? ''}
-            onChange={(event) =>
-              onChange(modelId, { maxTokens: toPositiveInt(event.target.value) })
-            }
-            placeholder="tokens"
-          />
-        </label>
-      </div>
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={meta?.reasoning === true}
-            onChange={(event) =>
-              onChange(modelId, { reasoning: event.target.checked || undefined })
-            }
-          />
-          {t('Reasoning')}
-        </label>
-        {api === 'anthropic-messages' && (
-          <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={meta?.adaptiveThinking === true}
-              onChange={(event) =>
-                onChange(modelId, { adaptiveThinking: event.target.checked || undefined })
-              }
-            />
-            {t('Adaptive thinking')}
-          </label>
-        )}
-        <div className="flex items-center gap-1.5 text-meta text-muted-foreground">
-          {t('Input')}
-          <ToggleGroup
-            value={input}
-            onValueChange={(value) =>
-              onChange(modelId, {
-                input:
-                  (value as string[]).length > 0
-                    ? ([...value] as Array<'text' | 'image'>)
-                    : undefined,
-              })
-            }
-          >
-            <ToggleGroupItem value="text">{t('Text')}</ToggleGroupItem>
-            <ToggleGroupItem value="image">{t('Image')}</ToggleGroupItem>
-          </ToggleGroup>
-        </div>
-      </div>
     </div>
   );
 }

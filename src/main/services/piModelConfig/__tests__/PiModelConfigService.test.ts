@@ -1660,8 +1660,9 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     expect(readFileSync(join(dir, 'models.json'), 'utf8')).not.toContain('adaptiveThinking');
   });
 
-  it('merges the adaptive thinking compat into whatever the row already carries', () => {
-    // Not something the form writes, but the vault round-trips what it is handed.
+  it('builds the row from a whitelist, never from whatever the vault holds (decision 168)', () => {
+    // The vault does not validate modelMeta on read: keys the form never
+    // writes, and garbage in the ones it does, must not reach models.json.
     const anthropic = {
       ...userProvider,
       name: 'Claude Proxy',
@@ -1672,10 +1673,16 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
           adaptiveThinking: true,
           compat: { supportsCacheControlOnTools: false },
           thinkingLevelMap: { max: 'max' },
+          samplingParams: { temperature: 1 },
+          headers: { Authorization: 'Bearer leaked' },
+          contextWindow: -5,
+          maxTokens: 1.5,
+          input: ['image', 'pdf', 'image'],
+          name: 42,
         },
       },
     };
-    const built = service([anthropic]).buildNativeModelCatalog({
+    const built = service([anthropic as typeof userProvider]).buildNativeModelCatalog({
       inheritedApiKey: '',
       inheritedBaseUrl: '',
     });
@@ -1684,8 +1691,157 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
       {
         id: 'claude-opus-5-5',
         reasoning: true,
-        compat: { supportsCacheControlOnTools: false, forceAdaptiveThinking: true },
-        thinkingLevelMap: { max: 'max', off: null },
+        input: ['image'],
+        compat: { forceAdaptiveThinking: true },
+        thinkingLevelMap: { off: null },
+      },
+    ]);
+  });
+
+  it('writes the offered levels as all seven thinkingLevelMap keys, merged with adaptive thinking (decision 168)', () => {
+    const anthropic = {
+      ...userProvider,
+      name: 'Claude Proxy',
+      api: 'anthropic-messages',
+      models: ['claude-opus-5-5', 'claude-haiku-4-5', 'plain'],
+      modelMeta: {
+        'claude-opus-5-5': {
+          name: '  Opus 5.5  ',
+          reasoning: true,
+          adaptiveThinking: true,
+          // Minimal is not an adaptive effort: normalized away here as well.
+          efforts: ['minimal', 'low', 'medium', 'high', 'max'],
+        },
+        // Budget thinking clamps X-High / Max to High: only High survives.
+        'claude-haiku-4-5': { reasoning: true, efforts: ['high', 'max'] },
+        // No reasoning, no levels.
+        plain: { efforts: ['max'] },
+      },
+    };
+    service([anthropic as typeof userProvider]).writeUserProviderConfig({
+      userProviders: [anthropic as typeof userProvider],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const raw = readFileSync(join(dir, 'models.json'), 'utf8');
+    const models = JSON.parse(raw);
+    expect(models.providers['claude-proxy'].models).toEqual([
+      {
+        id: 'claude-opus-5-5',
+        name: 'Opus 5.5',
+        reasoning: true,
+        compat: { forceAdaptiveThinking: true },
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: 'low',
+          medium: 'medium',
+          high: 'high',
+          xhigh: null,
+          max: 'max',
+        },
+      },
+      {
+        id: 'claude-haiku-4-5',
+        reasoning: true,
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: 'high',
+          xhigh: null,
+          max: null,
+        },
+      },
+      { id: 'plain' },
+    ]);
+    expect(raw).not.toContain('efforts');
+    expect(raw).not.toContain('compatPreset');
+  });
+
+  it('writes a vendor preset as its whole compat group, on openai-completions with reasoning only (decision 168)', () => {
+    const completions = {
+      ...userProvider,
+      name: 'New API',
+      api: 'openai-completions',
+      models: ['deepseek-v4-pro', 'qwen3-local', 'no-reasoning'],
+      modelMeta: {
+        'deepseek-v4-pro': {
+          reasoning: true,
+          compatPreset: 'deepseek',
+          efforts: ['high', 'max'],
+        },
+        // The chat-template dialect sends no level: no thinkingLevelMap.
+        'qwen3-local': { reasoning: true, compatPreset: 'qwen-chat-template', efforts: ['max'] },
+        'no-reasoning': { compatPreset: 'zai' },
+      },
+    };
+    const responses = {
+      ...userProvider,
+      id: '3f2a9c11-0000-4000-8000-000000000002',
+      name: 'Responses',
+      api: 'openai-responses',
+      models: ['gpt-5'],
+      modelMeta: { 'gpt-5': { reasoning: true, compatPreset: 'openai', efforts: ['minimal'] } },
+    };
+    const providersIn = [completions, responses] as (typeof userProvider)[];
+    service(providersIn).writeUserProviderConfig({
+      userProviders: providersIn,
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers['new-api'].models).toEqual([
+      {
+        id: 'deepseek-v4-pro',
+        reasoning: true,
+        compat: {
+          thinkingFormat: 'deepseek',
+          supportsDeveloperRole: false,
+          supportsStore: false,
+          supportsReasoningEffort: true,
+          maxTokensField: 'max_tokens',
+          requiresReasoningContentOnAssistantMessages: true,
+        },
+        thinkingLevelMap: {
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: 'high',
+          xhigh: null,
+          max: 'max',
+        },
+      },
+      {
+        id: 'qwen3-local',
+        reasoning: true,
+        compat: {
+          thinkingFormat: 'qwen-chat-template',
+          supportsDeveloperRole: false,
+          supportsStore: false,
+          supportsReasoningEffort: false,
+          maxTokensField: 'max_tokens',
+          requiresReasoningContentOnAssistantMessages: false,
+        },
+      },
+      { id: 'no-reasoning' },
+    ]);
+    // Another style has no presets: dropped, not turned into compat keys.
+    expect(models.providers.responses.models).toEqual([
+      {
+        id: 'gpt-5',
+        reasoning: true,
+        thinkingLevelMap: {
+          off: null,
+          minimal: 'minimal',
+          low: null,
+          medium: null,
+          high: null,
+          xhigh: null,
+          max: null,
+        },
       },
     ]);
   });

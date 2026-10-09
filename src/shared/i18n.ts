@@ -849,16 +849,12 @@ export const zhTranslations: Record<string, string> = {
   'Logout failed': '退出登录失败',
   'No favorite themes yet. Click the heart icon to add favorites.':
     '还没有收藏的主题。点心形图标即可收藏。',
-  // D4 回炉 — ProviderSetupDialog 的「各模型元数据」小节。这六个键是
-  // i18nCoverage 唯一漏掉的一组：它们全部只在该对话框里使用，所以译名按
-  // 「模型能力声明」的语境定，`Input` 取「输入类型」而非孤零零的「输入」，
-  // 免得和同一行的「输出上限」读成一对数值字段。
-  Image: '图像',
+  // D4 回炉 — ProviderSetupDialog 的「各模型元数据」小节（决策 168 起为
+  // ModelSettingsPanel 的「模型设置」）。译名按「模型能力声明」的语境定，
+  // `Input` 取「输入类型」而非孤零零的「输入」。
   Input: '输入类型',
   'Output limit': '输出上限',
-  'Per-model metadata': '各模型元数据',
   Reasoning: '推理',
-  Text: '文本',
 
   'Preview limit': '预览上限',
   'Review changes with AI assistance': '用 AI 协助审阅改动',
@@ -3340,12 +3336,6 @@ export const zhTranslations: Record<string, string> = {
     '当前工作区以外的文件无法在这里预览。',
   'Open with system viewer': '用系统程序打开',
   'Could not open the file with the system viewer.': '无法用系统程序打开这个文件。',
-
-  // --- 模型未声明图片输入（T3）---------------------------------------------------
-  // 只有「自己添加的 AI 服务」能在设置里改输入类型（ProviderSetupDialog 的
-  // 各模型元数据）；管理员下发的模型没有编辑入口，所以不许诺。
-  'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, set its input type to Image under Settings · Models · AI services → Edit → Per-model metadata.':
-    '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中把输入类型设为「图像」。',
 };
 
 export function normalizeLocale(input?: string): Locale {
@@ -3760,10 +3750,6 @@ Object.assign(zhTranslations, {
   'The model settings do not fit this model': '模型设置与该模型不兼容',
   'The model service refused a setting this app sent with the request, because this model does not support it.':
     '模型服务拒绝了本应用随请求发送的一项设置：这个模型不支持它。',
-  // Decision 165 revises decision 140 §24: the hint works both ways (adaptive
-  // thinking on for newer Claude models, off for older ones) and names where.
-  'For an AI service you added, open Settings · Models · AI services → Edit → Per-model metadata: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.':
-    '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中调整：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。',
 });
 
 // dsh-rebase P1-7e e3 (decision 142): a read of an attached file names the
@@ -3935,8 +3921,6 @@ Object.assign(zhTranslations, {
  */
 Object.assign(zhTranslations, {
   'Adaptive thinking': '自适应思考',
-  'Adaptive thinking: Claude Opus 4.6 / Sonnet 4.6 and later (5.x included) only accept adaptive thinking. Turn it on when requests fail with "requires adaptive thinking"; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off. With it on, set the output limit to 32000 or more: without one a model gets 8192 tokens, which thinking at a high level can use up.':
-    '自适应思考：Claude Opus 4.6 / Sonnet 4.6 及之后的模型（含 5.x）只接受自适应思考，请求报「requires adaptive thinking」时请打开；更早的模型（Haiku 4.5、Sonnet 4.5 及之前）要关闭。打开后建议把输出上限设为 32000 或更高：不填时只有 8192，高档位下的思考可能把它用完。',
 });
 
 /**
@@ -3991,4 +3975,66 @@ Object.assign(zhTranslations, {
   'Expand temporary chats': '展开临时对话',
   'Collapse temporary chats': '收起临时对话',
   'Temporary workspaces': '临时工作区',
+});
+
+// Custom service model settings panel (decision 168)
+/**
+ * dsh-rebase decision 168: the 「模型设置」 block of the add/edit AI service
+ * form — a column of the selected models beside one shared settings panel
+ * (`ModelSettingsPanel`, `ProviderSetupDialog`) — and the two hints that send
+ * the user there (`attachmentLimits`, `sessionFailure`).
+ */
+Object.assign(zhTranslations, {
+  'Model settings': '模型设置',
+  'Selected models': '已选模型',
+  'Available models': '可用模型',
+  'Select models above to configure them here.': '在上方勾选模型后，可以在这里逐个设置。',
+  Customized: '已自定义',
+  'Has invalid values': '有填写错误',
+  'Reset to defaults': '恢复默认',
+  'Remove this model': '移除此模型',
+  'Display name': '显示名称',
+  'Shown in the model menu. Leave empty to use the model ID.':
+    '在模型菜单里显示；留空则显示模型 ID。',
+  'Thinking settings': '思考',
+  'Turn on for a model that thinks before it answers. A model without reasoning refuses requests sent with it on.':
+    '模型会先思考再回答时打开；对不支持推理的模型打开，请求会被拒收。',
+  'Claude Opus / Sonnet 4.6 and later (5.x included) only accept adaptive thinking; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off.':
+    'Claude Opus / Sonnet 4.6 及之后（含 5.x）只接受自适应思考；更早的模型（Haiku 4.5、Sonnet 4.5 及之前）要关闭。',
+  'Vendor protocol': '厂商协议',
+  'Automatic (by service name and address)': '自动（按服务名称和地址识别）',
+  Qwen: '通义千问',
+  'Qwen (chat template)': '通义千问（chat template）',
+  'Zhipu GLM': '智谱 GLM',
+  'Decides how thinking, the reasoning level and the output limit are sent. Through a proxy such as new-api, automatic detection sends them the OpenAI way; pick the vendor the model really comes from.':
+    '决定思考开关、推理强度和输出上限按哪家的格式发送。经 new-api 等代理接入时，自动识别会按 OpenAI 的格式发送，请按模型实际所属的厂商选择。',
+  'Available reasoning efforts': '可选推理强度',
+  'Levels offered in the chat\'s reasoning effort menu. "Default" uses Medium when it is offered; without Medium no level is sent and the service decides.':
+    '对话里推理强度菜单可选的档位。选「默认」时，有「中」就用「中」；没勾「中」时不指定强度，由服务端决定。',
+  'Adaptive thinking has no Minimal level.': '自适应思考没有「极低」这一档。',
+  'Without adaptive thinking, X-High and Max are sent as High.':
+    '不开自适应思考时，「极高」和「最高」都按「高」发送。',
+  'Keep at least one level while Reasoning is on.': '推理开着时至少保留一个档位。',
+  'This format only turns thinking on or off and sends no level, so every level in the chat menu behaves the same.':
+    '这种格式只开关思考、不发送强度档位：对话里选哪一档效果都一样。',
+  'Context and output': '上下文与输出',
+  'Default {{value}}': '默认 {{value}}',
+  'Enter a whole number greater than 0.': '请输入大于 0 的整数。',
+  'Thinking counts toward the output limit; 32000 or more is recommended for high levels.':
+    '思考也计入输出上限；高档位建议 32000 以上。',
+  'Over half of the context window: the reply reservation is planned as {{value}} tokens (a quarter of the window) so that automatic compaction keeps working.':
+    '超过上下文窗口的一半：实际按 {{value}}（窗口的四分之一）预留输出，以免自动压缩失效。',
+  'Over half of the default context window ({{window}}): fill in the context window as well, or automatic compaction may have no room to run.':
+    '超过默认上下文窗口（{{window}}）的一半：请一并填写上下文窗口，否则自动压缩可能没有余量。',
+  'Image input': '图片输入',
+  'Turn on only for a model that can see images. Text input is always on.':
+    '只对能看图的模型打开；文本输入始终可用。',
+  'Some model settings are not valid. Fix the models marked in the list, then save.':
+    '有模型设置填写不正确，请先改好列表中标出的模型再保存。',
+  // Only an AI service the user added has this editor; administrator-provided
+  // models do not, so the hints do not promise one.
+  'The selected model does not declare image input, so it will not see this image. Switch to a model that supports images, or, for an AI service you added yourself, select the model under Settings · Models · AI services → Edit → Model settings and turn on Image input.':
+    '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型，打开「图片输入」。',
+  'For an AI service you added, open Settings · Models · AI services → Edit → Model settings and select this model: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.':
+    '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。',
 });
