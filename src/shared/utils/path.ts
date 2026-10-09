@@ -59,6 +59,40 @@ export function canonicalPathKey(inputPath: string): string {
   return trimTrailingPathSeparators(normalizePath(inputPath)).toLowerCase();
 }
 
+const WINDOWS_STYLE_PATH = /^(?:[a-zA-Z]:[\\/]|[\\/]{2})/;
+
+/**
+ * Whether a path is written Windows-style: a drive letter or a UNC prefix.
+ * Judged from the spelling, not the platform this code runs on.
+ */
+export function isWindowsStylePath(inputPath: string): boolean {
+  return WINDOWS_STYLE_PATH.test(inputPath);
+}
+
+/**
+ * `target` relative to the directory `root`, or null when it lies outside it.
+ *
+ * A Windows-style root matches either separator and ignores case (`E:/x`
+ * contains `E:\X\src\a.ts`); any other root is compared verbatim, so POSIX
+ * stays case-sensitive. The result is the remainder of `target` in its own
+ * spelling, leading separators dropped: `''` for the root itself. Callers that
+ * need `/` (git, segment splitting) pass it through `normalizePath`.
+ */
+export function relativeToRoot(root: string, target: string): string | null {
+  if (!root || !target) return null;
+  const base = trimTrailingPathSeparators(root);
+  const windows = isWindowsStylePath(base);
+  const isSeparator = (char: string | undefined) => char === '/' || (windows && char === '\\');
+  const key = (value: string) => (windows ? normalizePath(value).toLowerCase() : value);
+  if (target.length < base.length || key(target.slice(0, base.length)) !== key(base)) return null;
+  let rest = target.slice(base.length);
+  // `/repo` must not contain `/repo2`; a root that ends in a separator
+  // (`/`, `C:\`) is already on a boundary.
+  if (rest && !isSeparator(base[base.length - 1]) && !isSeparator(rest[0])) return null;
+  while (isSeparator(rest[0])) rest = rest.slice(1);
+  return rest;
+}
+
 /**
  * Whether path is a Windows WSL UNC path.
  * Supports both "\\wsl.localhost\..." and "//wsl.localhost/..." forms.

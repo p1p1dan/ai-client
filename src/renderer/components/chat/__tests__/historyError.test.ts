@@ -275,6 +275,12 @@ describe('encodePiResumeError (T32 / ah-lib-03)', () => {
     ["ENOENT: no such file or directory, open '/home/ai/.pi/sessions/a.jsonl'", 'jsonl_not_found'],
     // Main's own index lookup, for a session row whose file was never recorded.
     ['pi_session_not_found: No indexed Pi session file for s1', 'jsonl_not_found'],
+    // Main's resume check (GitHub issue #1, decision 163), as the field log
+    // showed it: a different directory is not something a Retry can fix.
+    [
+      "Error invoking remote method 'chat:resumeSession': Error: pi_session_workspace_mismatch: Indexed workspace does not match the resume request",
+      'session_cwd_mismatch',
+    ],
     // The one WORKER_* code that still has a producer (`createDshChatSlot.ts`);
     // this is the 1.0.x native worker's wording, still found in old logs.
     [

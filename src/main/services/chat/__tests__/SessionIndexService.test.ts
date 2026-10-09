@@ -832,6 +832,25 @@ describe('SessionIndexService', () => {
       expect(await service.get('s1')).toBeDefined();
     });
 
+    // Decision 163 (GitHub issue #1): a spelling change is not a move.
+    it('takes back a row whose workspace is spelled differently but is the same directory', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: 'E:/ws/a' });
+
+      await expect(service.removeUncommittedCreated('s1', 'E:\\ws\\a\\')).resolves.toBe(true);
+      expect(await service.get('s1')).toBeUndefined();
+    });
+
+    it('keeps a POSIX row whose workspace differs only by case', async () => {
+      const { SessionIndexService } = await import('../SessionIndexService');
+      const service = new SessionIndexService();
+      await service.recordCreated({ sessionId: 's1', workspacePath: '/ws/a' });
+
+      await expect(service.removeUncommittedCreated('s1', '/ws/A')).resolves.toBe(false);
+      expect(await service.get('s1')).toMatchObject({ sessionId: 's1', workspacePath: '/ws/a' });
+    });
+
     it('restores the row in memory when the flush fails (T038 rollback)', async () => {
       const { SessionIndexService } = await import('../SessionIndexService');
       let writes = 0;

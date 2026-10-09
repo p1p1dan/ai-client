@@ -207,7 +207,12 @@ export function deriveChatWorkspaceTree(
       continue;
     }
 
-    const mainPath = mainWt?.path ?? repo.path;
+    // A local main workspace keeps the registered spelling even when git
+    // lists the same root: past this point the two keys are equal, but git
+    // prints `E:/x` where the project was registered as `E:\x`. Taking git's
+    // form made the path flip with whether the list loaded (GitHub issue #1,
+    // decision 163); the branch still comes from `mainWt`.
+    const mainPath = isRemote ? (mainWt?.path ?? repo.path) : repo.path;
     const mainKind: WorkspaceKind = isRemote ? 'remote' : 'main';
     const mainBranch = isRemote ? undefined : workspaceBranch(mainWt);
     // T-27: gates the Composer target bar's branch/worktree dropdown and the
@@ -241,7 +246,7 @@ export function deriveChatWorkspaceTree(
       if (wt.isMainWorktree) {
         continue;
       }
-      if (normalizePath(wt.path).toLowerCase() === normalizePath(mainPath).toLowerCase()) {
+      if (canonicalPathKey(wt.path) === canonicalPathKey(mainPath)) {
         continue;
       }
       const wtBranch = workspaceBranch(wt);

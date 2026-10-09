@@ -1,3 +1,4 @@
+import { relativeToRoot } from '@shared/utils/path';
 import { MessageSquare, Plus, Send } from 'lucide-react';
 import type * as monaco from 'monaco-editor';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -145,9 +146,8 @@ export function useEditorLineComment({
 
       // Convert to relative path if within project
       let displayPath = filePath;
-      if (rootPath && filePath.startsWith(rootPath)) {
-        displayPath = filePath.slice(rootPath.length).replace(/^\//, '');
-      }
+      const relative = rootPath ? relativeToRoot(rootPath, filePath) : null;
+      if (relative !== null) displayPath = relative;
 
       // Send comment to terminal
       const message = text

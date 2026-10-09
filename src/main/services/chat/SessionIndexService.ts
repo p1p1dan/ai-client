@@ -24,6 +24,7 @@ import type {
   SessionMigratedFrom,
 } from '@shared/types/sessionIndex';
 import { app } from 'electron';
+import { sameWorkerDirectory } from '../agent-host/workerSessionKey';
 
 const SESSION_INDEX_FILENAME = 'session-index.json';
 
@@ -382,7 +383,9 @@ export class SessionIndexService {
       const existing = this.entries.get(sessionId);
       if (
         !existing ||
-        existing.workspacePath !== workspacePath ||
+        // Same directory, not same string (decision 163): a spelling change
+        // alone is not a move.
+        !sameWorkerDirectory(existing.workspacePath, workspacePath) ||
         existing.runtimeIdentity ||
         existing.piLeaf ||
         existing.legacyImport ||

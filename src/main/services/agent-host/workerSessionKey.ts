@@ -43,6 +43,38 @@ export function normalizedWorkerPathIdentity(value: string, label = 'Worker path
 }
 
 /**
+ * Identity of a directory: the path identity above with trailing separators
+ * dropped, roots (`C:\`, `\\srv\share\`, `/`) kept. Both `normalize` flavours
+ * preserve a trailing separator, so it is stripped here by hand.
+ */
+function directoryIdentity(value: string): string {
+  const identity = normalizedWorkerPathIdentity(value, 'Directory path');
+  const flavour = isWindowsStyle(identity) ? path.win32 : path.posix;
+  const rootLength = flavour.parse(identity).root.length;
+  let end = identity.length;
+  while (end > rootLength && identity[end - 1] === flavour.sep) end -= 1;
+  return identity.slice(0, end);
+}
+
+/**
+ * Whether two spellings name the same directory, judged by the path's own
+ * style rather than the host platform: a Windows-style path (drive letter or
+ * UNC) folds separators and case, a POSIX path stays case-sensitive. Both
+ * sides are normalized (`.`/`..`, repeated and trailing separators).
+ *
+ * Purely lexical: `\\?\` prefixes, 8.3 short names, junctions and `subst`
+ * drives are not folded. An empty or relative input matches nothing.
+ */
+export function sameWorkerDirectory(a: string, b: string): boolean {
+  if (a === b) return true;
+  try {
+    return directoryIdentity(a) === directoryIdentity(b);
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Join a child name onto a worker path in the path's OWN flavour.
  *
  * `path.join` is the host's: running on Windows it rewrites a foreign

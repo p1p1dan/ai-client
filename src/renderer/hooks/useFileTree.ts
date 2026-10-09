@@ -1,4 +1,5 @@
 import type { FileEntry } from '@shared/types';
+import { isWindowsStylePath, relativeToRoot } from '@shared/utils/path';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { loadFileTreeExpandedPaths, saveFileTreeExpandedPaths } from '@/App/storage';
@@ -672,24 +673,22 @@ export function useFileTree({ rootPath, enabled = true, isActive = true }: UseFi
   // Reveal a file in the tree by expanding all parent directories
   const revealFile = useCallback(
     async (filePath: string) => {
-      if (!rootPath || !filePath.startsWith(rootPath)) return;
+      if (!rootPath) return;
 
-      // Get relative path and split into parts
-      const relativePath = filePath.slice(rootPath.length).replace(/^\//, '');
+      // Matches the root whichever separators either side uses (`E:\x` vs
+      // `E:/x`). The parent directories are then cut from the file path
+      // itself, so they keep its spelling — the one Main's joins gave the
+      // tree's node paths.
+      const relativePath = relativeToRoot(rootPath, filePath);
       if (!relativePath) return;
-
-      const parts = relativePath.split('/');
-      // Remove the file name, keep only directories
-      parts.pop();
-
-      if (parts.length === 0) return;
-
-      // Build paths for each parent directory
-      let currentPath = rootPath;
+      const windows = isWindowsStylePath(rootPath);
+      const offset = filePath.length - relativePath.length;
       const pathsToExpand: string[] = [];
 
-      for (const part of parts) {
-        currentPath = `${currentPath}/${part}`;
+      for (let index = 0; index < relativePath.length; index += 1) {
+        const char = relativePath[index];
+        if (char !== '/' && !(windows && char === '\\')) continue;
+        const currentPath = filePath.slice(0, offset + index);
         // Use ref to get current expanded state (avoids stale closure)
         if (!expandedPathsRef.current.has(currentPath)) {
           pathsToExpand.push(currentPath);

@@ -1,4 +1,5 @@
 import Editor, { type OnMount } from '@monaco-editor/react';
+import { relativeToRoot, normalizePath as sharedNormalizePath } from '@shared/utils/path';
 import { ChevronRight, Eye, EyeOff, FileCode, FileX, Maximize2, MessageSquare } from 'lucide-react';
 import type * as monaco from 'monaco-editor';
 import {
@@ -411,9 +412,10 @@ export const EditorArea = forwardRef<EditorAreaRef, EditorAreaProps>(function Ed
     // GitSurfaceView's own diff panes never show one either).
     if (!activeTabPath || !rootPath || isDiffTab) return [];
 
-    const relativePath = activeTabPath.startsWith(rootPath)
-      ? activeTabPath.slice(rootPath.length).replace(/^\//, '')
-      : activeTabPath;
+    // Split on `/` either way: a Windows tab path under the root is spelled
+    // with backslashes, and `relativeToRoot` keeps that spelling.
+    const relative = relativeToRoot(rootPath, activeTabPath);
+    const relativePath = relative === null ? activeTabPath : sharedNormalizePath(relative);
 
     if (!relativePath) return [];
 

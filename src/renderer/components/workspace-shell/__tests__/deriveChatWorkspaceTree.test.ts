@@ -681,6 +681,64 @@ describe('branch resolution on real Windows path shapes (M4)', () => {
     });
     expect(diagnostics).toEqual([]);
   });
+
+  /**
+   * GitHub issue #1 (decision 163): the main workspace path used to switch to
+   * git's `D:/...` spelling once the worktree list loaded, and a chat recorded
+   * under the other spelling could no longer resume. It is now the registered
+   * path whether the list is present, empty or never queried.
+   */
+  it('keeps the registered spelling for the main workspace whatever the list says', () => {
+    const variants = [
+      {
+        [winRepo.path]: [wt('D:/Code/demo', 'main', true), wt('D:/Code/demo-wt', 'feat/x', false)],
+      },
+      { [winRepo.path]: [] },
+      {},
+    ];
+    const mains = variants.map((worktreesByRepoPath) => {
+      const { workspaces } = deriveChatWorkspaceTree({
+        repositories: [winRepo],
+        worktreesByRepoPath,
+        tempItems: [],
+      });
+      return { all: workspaces, main: workspaces.find((w) => w.kind === 'main') };
+    });
+
+    for (const { main } of mains) {
+      expect(main?.path).toBe('D:\\Code\\demo');
+      expect(main?.id).toBe(mains[0].main?.id);
+    }
+    // The branch still comes from git's main entry when it is listed.
+    expect(mains[0].main?.branch).toBe('main');
+    // A linked worktree keeps git's own spelling: it has no registered one.
+    expect(mains[0].all.find((w) => w.kind === 'worktree')?.path).toBe('D:/Code/demo-wt');
+    expect(mains[0].all).toHaveLength(2);
+  });
+
+  it('leaves a remote repo on the listed main path', () => {
+    const remote: Repository = {
+      id: 'repo-remote',
+      name: 'remote',
+      path: '/remote/host/repo',
+      kind: 'remote',
+    };
+    const listed = deriveChatWorkspaceTree({
+      repositories: [remote],
+      worktreesByRepoPath: { [remote.path]: [wt('/srv/repo', 'main', true)] },
+      tempItems: [],
+    });
+    const unlisted = deriveChatWorkspaceTree({
+      repositories: [remote],
+      worktreesByRepoPath: {},
+      tempItems: [],
+    });
+
+    expect(listed.workspaces).toHaveLength(1);
+    expect(listed.workspaces[0]).toMatchObject({ kind: 'remote', path: '/srv/repo' });
+    expect(listed.workspaces[0]).not.toHaveProperty('branch');
+    expect(unlisted.workspaces[0]).toMatchObject({ kind: 'remote', path: '/remote/host/repo' });
+  });
 });
 
 /**

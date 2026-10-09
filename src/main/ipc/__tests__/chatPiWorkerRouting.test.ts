@@ -873,6 +873,107 @@ describe('Pi WorkerSlot chat routing', () => {
   });
 
   /**
+   * GitHub issue #1 (decision 163): the index row and the renderer can spell
+   * one directory differently (`E:\x` registered, `E:/x` from git's worktree
+   * list). The resume compares directory identity and runs in the row's
+   * spelling; a genuinely different directory still fails.
+   */
+  describe('workspace identity on resume (decision 163)', () => {
+    async function indexRow(workspacePath: string, extra: Record<string, unknown> = {}) {
+      const { sessionIndexService } = await import('../../services/chat/SessionIndexService');
+      vi.mocked(sessionIndexService.get).mockResolvedValueOnce({
+        sessionId: 's1',
+        agent: 'dsh',
+        workspacePath,
+        title: 'Source',
+        updatedAt: 1,
+        archived: false,
+        runtimeIdentity: '/session.jsonl',
+        piLeaf: { activeEntryId: 'a', fileTailEntryId: 'c' },
+        ...extra,
+      });
+    }
+
+    it('accepts a forward-slash request for a backslash row and spawns in the row spelling', async () => {
+      await indexRow('E:\\Projects\\repo');
+      await expect(
+        invoke('chat:resumeSession', {
+          sessionId: 's1',
+          runtimeIdentity: '/session.jsonl',
+          workspacePath: 'E:/Projects/repo',
+        })
+      ).resolves.toEqual({ requestId: 'resume-1' });
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: 'E:\\Projects\\repo' })
+      );
+    });
+
+    it('accepts the reverse direction with a trailing backslash', async () => {
+      await indexRow('E:/Projects/repo');
+      await expect(
+        invoke('chat:resumeSession', {
+          sessionId: 's1',
+          runtimeIdentity: '/session.jsonl',
+          workspacePath: 'E:\\Projects\\repo\\',
+        })
+      ).resolves.toEqual({ requestId: 'resume-1' });
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: 'E:/Projects/repo' })
+      );
+    });
+
+    it.each([
+      ['E:\\x', 'E:\\y'],
+      ['/repo', '/Repo'],
+    ])('still refuses a different directory (%s vs %s)', async (rowPath, requested) => {
+      await indexRow(rowPath);
+      await expect(
+        invoke('chat:resumeSession', {
+          sessionId: 's1',
+          runtimeIdentity: '/session.jsonl',
+          workspacePath: requested,
+        })
+      ).rejects.toThrow(
+        'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
+      );
+      expect(resumeSession).not.toHaveBeenCalled();
+      expect(prepareResume).not.toHaveBeenCalled();
+    });
+
+    it('adopts an unbound chat’s scratch directory in the row spelling', async () => {
+      // The scratch fake recognises only the exact SCRATCH_DIR string, so the
+      // request's trailing separator would miss it if the request were used.
+      await indexRow(SCRATCH_DIR, { unbound: true });
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/session.jsonl',
+        workspacePath: `${SCRATCH_DIR}/`,
+      });
+      expect(adoptScratch).toHaveBeenCalledWith('s1', SCRATCH_DIR);
+      expect(ensureScratch).not.toHaveBeenCalled();
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: SCRATCH_DIR, unbound: true })
+      );
+    });
+
+    it('migrates a legacy pi row into the row spelling, not the request', async () => {
+      await indexRow('E:\\Projects\\repo', { agent: 'pi', runtimeIdentity: '/legacy.jsonl' });
+      await invoke('chat:resumeSession', {
+        sessionId: 's1',
+        runtimeIdentity: '/legacy.jsonl',
+        workspacePath: 'E:/Projects/repo',
+      });
+      expect(prepareResume).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionId: 's1', agent: 'pi' }),
+        'E:\\Projects\\repo'
+      );
+      expect(resumeSession).toHaveBeenCalledWith(
+        expect.objectContaining({ workspacePath: 'E:\\Projects\\repo' })
+      );
+    });
+  });
+
+  /**
    * dsh-rebase P1-7e (problem 28, decision 139). A legacy row with no `piLeaf`
    * whose file is gone used to be "repaired" into a new, empty DSH session: the
    * resume answered with a create, the renderer (which waits for

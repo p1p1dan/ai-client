@@ -1,4 +1,5 @@
 import type { GitBlameLineInfo } from '@shared/types';
+import { normalizePath, relativeToRoot } from '@shared/utils/path';
 import type * as monaco from 'monaco-editor';
 import { useEffect, useRef } from 'react';
 
@@ -181,10 +182,12 @@ export function useEditorBlame({
 
       if (stateRef.current.loadingFiles.has(filePath)) return;
 
-      if (!filePath.startsWith(rootPath)) return;
-
-      const relativePath = filePath.slice(rootPath.length).replace(/^\//, '');
-      if (!relativePath) return;
+      // Separator- and (for Windows paths) case-agnostic: the root and the
+      // file path can be spelled differently (`E:\x` vs `E:/x`), and git wants
+      // a forward-slash path relative to the root.
+      const relative = relativeToRoot(rootPath, filePath);
+      if (!relative) return;
+      const relativePath = normalizePath(relative);
 
       stateRef.current.loadingFiles.add(filePath);
       try {

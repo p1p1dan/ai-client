@@ -70,6 +70,10 @@ const RESUME_ERROR_CODES: Readonly<Record<string, HistoryErrorCode>> = {
   // Main's own index lookup (`src/main/ipc/chat.ts`), for a row whose session
   // file was never recorded.
   pi_session_not_found: 'jsonl_not_found',
+  // Main's resume check (`src/main/ipc/chat.ts`, decision 163): the request
+  // names a different directory than the index row. A retry sends the same
+  // path and fails the same way, so it must not land on `read_failed`.
+  pi_session_workspace_mismatch: 'session_cwd_mismatch',
   // The only `WORKER_*` code left with a producer (`createDshChatSlot.ts`,
   // before it opens a DSH channel). 1.0.x worker text still maps the same way.
   WORKER_WORKSPACE_MISSING: 'workspace_missing',

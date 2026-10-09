@@ -32,6 +32,7 @@ import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
 import { adoptTempWorkspace } from '../services/agent-host/TempWorkspaceService';
 import { WorkerManagerError, workerManager } from '../services/agent-host/WorkerManager';
+import { sameWorkerDirectory } from '../services/agent-host/workerSessionKey';
 import { assertAgentSpawnAllowed } from '../services/auth/spawnGate';
 import { legacyMigrationService } from '../services/chat/LegacyMigrationService';
 import { sessionIndexService } from '../services/chat/SessionIndexService';
@@ -487,16 +488,26 @@ export function registerChatHandlers(): void {
           'pi_session_identity_mismatch: Indexed session file does not match the resume request'
         );
       }
-      if (row.workspacePath !== payload.workspacePath) {
+      // GitHub issue #1 (decision 163): one directory reaches here in more than
+      // one spelling (`E:\x` from the registered project, `E:/x` from git's
+      // worktree list, the normalized form `commitResumed` writes back), so
+      // compare directory identity, not the string. A different directory
+      // still fails, with the same text (`historyError.ts` maps it to the
+      // non-retryable workspace card).
+      if (!sameWorkerDirectory(row.workspacePath, payload.workspacePath)) {
         throw new Error(
           'pi_session_workspace_mismatch: Indexed workspace does not match the resume request'
         );
       }
       const ownerWebContentsId = claimSessionForSender(e, payload.sessionId);
+      // The index row is the authoritative cwd; the renderer's path is only a
+      // claim, validated above. Everything below (scratch adoption, the legacy
+      // migration's cwd, the worker spawn) uses the row's own spelling.
+      //
       // U05-a: an unbound chat's directory was wiped when the app last quit,
       // so recreate it (empty) at the exact path the index still names before
       // anything tries to spawn Pi in it.
-      let workspacePath = payload.workspacePath;
+      let workspacePath = row.workspacePath;
       let unbound = scratchWorkspaceService.isScratchPath(workspacePath);
       if (unbound) {
         await scratchWorkspaceService.adopt(payload.sessionId, workspacePath);

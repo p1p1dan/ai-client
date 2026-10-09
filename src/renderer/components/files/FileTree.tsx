@@ -1,4 +1,4 @@
-import { getDisplayPath } from '@shared/utils/path';
+import { getDisplayPath, relativeToRoot } from '@shared/utils/path';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   ChevronRight,
@@ -377,7 +377,8 @@ export function FileTree({
   const handleCopyRelativePath = useCallback(
     (path: string) => {
       if (!rootPath) return;
-      const relativePath = path.startsWith(rootPath) ? path.substring(rootPath.length + 1) : path;
+      // Keeps the path's own separators; matches whatever spelling the root has.
+      const relativePath = relativeToRoot(rootPath, path) ?? path;
       navigator.clipboard.writeText(relativePath);
     },
     [rootPath]
