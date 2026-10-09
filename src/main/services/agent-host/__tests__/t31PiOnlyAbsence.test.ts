@@ -116,6 +116,11 @@ describe('T31 Pi-only absence gate', () => {
     ]) {
       expect(composer, legacy).not.toContain(legacy);
     }
+    // Decision 169's one exception: the composer closes this chat's pending
+    // plan review (always a cancel, never an answer) through this one named
+    // store action, so `PendingQuestionDock` stays the single answerer for
+    // every other question.
+    expect(composer).toContain('closePlanReview(');
   });
 
   it('preserves migration-only readers without giving them an execution import', () => {

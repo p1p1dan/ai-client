@@ -180,6 +180,7 @@ function baseState(ids: readonly string[]): ChatSessionsState {
     sendMessage: async () => {},
     stopActiveSession: async () => {},
     respondQuestion: async () => false,
+    closePlanReview: async () => {},
     initRuntime: () => () => {},
   };
 }

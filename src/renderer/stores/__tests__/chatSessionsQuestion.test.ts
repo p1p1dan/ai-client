@@ -1,6 +1,6 @@
-import type { QuestionItem, RuntimeEvent } from '@shared/types/runtimeEvents';
-import { describe, expect, it } from 'vitest';
-import { applyRuntimeEvent, type ChatSessionsState } from '../chatSessions';
+import type { PlanReviewCard, QuestionItem, RuntimeEvent } from '@shared/types/runtimeEvents';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { applyRuntimeEvent, type ChatSessionsState, useChatSessionsStore } from '../chatSessions';
 
 function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsState {
   return {
@@ -403,5 +403,83 @@ describe('applyRuntimeEvent — concurrent questions (chat-event-01/02)', () => 
     const patch = applyRuntimeEvent(ended, resolvedEvent('q1', 'cancelled'));
 
     expect(patch.sessions).toBeUndefined();
+  });
+});
+
+/** A minimal, valid `PlanReviewCard` — only its required fields matter here. */
+const PLAN_REVIEW_CARD: PlanReviewCard = {
+  kind: 'plan',
+  source: 'exit_plan_mode',
+  goalObjective: '',
+};
+
+describe('closePlanReview (decision 169)', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'window');
+  });
+
+  /** Stubs `window.electronAPI.chat.respondQuestion`, the only IPC this action drives. */
+  function stubRespondQuestion(): ReturnType<typeof vi.fn> {
+    const respondQuestion = vi.fn().mockResolvedValue({ handled: true });
+    (globalThis as { window?: unknown }).window = {
+      electronAPI: { chat: { respondQuestion } },
+    } as unknown as typeof globalThis.window;
+    return respondQuestion;
+  }
+
+  /** Parks a plan-review question block on s1, as `question.requested` with a `review` would. */
+  function seedPendingPlanReview(): void {
+    useChatSessionsStore.setState({
+      ...baseState(),
+      pendingQuestions: [{ sessionId: 's1', questionId: 'q1', messageId: 'asst-1' }],
+      messages: {
+        s1: [
+          {
+            id: 'asst-1',
+            sessionId: 's1',
+            role: 'assistant',
+            blocks: [
+              {
+                id: 'q1',
+                type: 'question',
+                questionId: 'q1',
+                resolved: false,
+                planReview: PLAN_REVIEW_CARD,
+              },
+            ],
+          },
+        ],
+      },
+    });
+  }
+
+  it('cancels the pending plan review, same as the dock’s close button', async () => {
+    const respondQuestion = stubRespondQuestion();
+    seedPendingPlanReview();
+
+    await useChatSessionsStore.getState().closePlanReview('s1');
+
+    expect(respondQuestion).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: 's1', questionId: 'q1', cancel: true })
+    );
+  });
+
+  it('is a no-op when this chat has no plan review pending', async () => {
+    const respondQuestion = stubRespondQuestion();
+    useChatSessionsStore.setState(baseState());
+
+    await useChatSessionsStore.getState().closePlanReview('s1');
+
+    expect(respondQuestion).not.toHaveBeenCalled();
+  });
+
+  it('leaves a plain (non-review) pending question alone', async () => {
+    const respondQuestion = stubRespondQuestion();
+    const requested = applyRuntimeEvent(baseState(), requestedEvent('q1'));
+    useChatSessionsStore.setState({ ...baseState(), ...requested });
+
+    await useChatSessionsStore.getState().closePlanReview('s1');
+
+    expect(respondQuestion).not.toHaveBeenCalled();
   });
 });

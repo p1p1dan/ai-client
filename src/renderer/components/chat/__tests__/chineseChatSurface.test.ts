@@ -473,6 +473,7 @@ function stateWithActiveSession(): ChatSessionsState {
     sendMessage: async () => {},
     stopActiveSession: async () => {},
     respondQuestion: async () => false,
+    closePlanReview: async () => {},
     initRuntime: () => () => {},
   };
 }

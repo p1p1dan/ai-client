@@ -8,7 +8,14 @@ import { stripComments } from './stripComments';
  * dsh-rebase decision 169: where the plan review is wired into the window.
  * `ChatComposer` cannot be rendered in this suite (see `retryLastTurn.test.ts`),
  * so the call sites are pinned by source scan; what the called functions do
- * is `planReviewModel.test.ts`'s and `planReviewCard.test.ts`'s.
+ * is `planReviewModel.test.ts`'s, the store's `closePlanReview` unit test's
+ * (`chatSessionsQuestion.test.ts`), and `planReviewCard.test.ts`'s.
+ *
+ * The close itself moved into `stores/chatSessions.ts` as `closePlanReview`
+ * (it used to be a composer-local helper) so the T31 Pi-only gate's blanket
+ * "composer must not contain `respondQuestion`" rule holds without an
+ * exception carved into that string match; the composer only ever calls the
+ * named store action now.
  */
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -18,16 +25,14 @@ const read = (file: string) =>
 const COMPOSER = read('../ChatComposer.tsx');
 const HANDLE_SEND = COMPOSER.slice(
   COMPOSER.indexOf('const handleSend = async'),
-  COMPOSER.indexOf('const closePendingPlanReview = async')
-);
-const CLOSE = COMPOSER.slice(
-  COMPOSER.indexOf('const closePendingPlanReview = async'),
   COMPOSER.indexOf('const interjectIntoTurn = async')
 );
 
 describe('[decision 169] a message sent while the review is up closes it first', () => {
   it('handleSend closes the review before steering (Ctrl+Enter) or queueing (Enter)', () => {
-    const close = HANDLE_SEND.indexOf('await closePendingPlanReview(activeSessionId)');
+    const close = HANDLE_SEND.indexOf(
+      'useChatSessionsStore.getState().closePlanReview(activeSessionId)'
+    );
     expect(close).toBeGreaterThan(0);
     expect(close).toBeLessThan(HANDLE_SEND.indexOf("if (mode === 'interject')"));
     expect(close).toBeLessThan(HANDLE_SEND.indexOf('.enqueue(queued)'));
@@ -35,9 +40,10 @@ describe('[decision 169] a message sent while the review is up closes it first',
     expect(close).toBeGreaterThan(HANDLE_SEND.indexOf("if (action === 'send')"));
   });
 
-  it('answers only this chat’s plan review, with a cancel', () => {
-    expect(CLOSE).toContain('pendingPlanReviewId(store, sessionId)');
-    expect(CLOSE).toContain('respondQuestion({ questionId, cancel: true })');
+  it('the close reaches the store action, not a local answerer', () => {
+    const store = read('../../../stores/chatSessions.ts');
+    expect(store).toContain('pendingPlanReviewId(get(), sessionId)');
+    expect(store).toContain('respondQuestion({ questionId, cancel: true })');
   });
 
   it('the message box takes the keyboard when the review is closed', () => {

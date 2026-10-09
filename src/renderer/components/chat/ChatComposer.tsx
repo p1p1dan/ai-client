@@ -138,7 +138,6 @@ import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingErr
 import { resolveResumeModel, toWireModel } from './models';
 import { PiModelSyncNotice } from './PiModelSyncNotice';
 import { catalogModels } from './piModelCatalog';
-import { pendingPlanReviewId } from './planReviewModel';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
@@ -1334,7 +1333,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // stops and waits), so the message goes out next — still in plan mode —
     // instead of waiting behind a card. Ctrl+Enter alike. Other question cards
     // keep their own rule (decision 114 rule 6).
-    await closePendingPlanReview(activeSessionId);
+    await useChatSessionsStore.getState().closePlanReview(activeSessionId);
     if (mode === 'interject') {
       // Decision 093: straight into the running turn. Only a worker with no
       // turn at all sends the message on to the queue, as Enter would.
@@ -1367,13 +1366,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
-  };
-
-  /** Decision 169: answer this chat's pending plan review with a cancel, if one is up. */
-  const closePendingPlanReview = async (sessionId: string): Promise<void> => {
-    const store = useChatSessionsStore.getState();
-    const questionId = pendingPlanReviewId(store, sessionId);
-    if (questionId) await store.respondQuestion({ questionId, cancel: true });
   };
 
   /**

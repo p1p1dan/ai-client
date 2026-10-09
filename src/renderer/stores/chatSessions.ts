@@ -37,6 +37,11 @@ import {
   mergePermissionActivity,
   type PermissionActivityRecord,
 } from '@/components/chat/permissionActivityRow';
+// Decision 169: the plan-review card's pure lookup. Its only reference back
+// to this store is `import type { ChatBlock }`, which TypeScript erases at
+// compile time, so pulling its value export in here never closes a runtime
+// cycle onto this file.
+import { pendingPlanReviewId } from '@/components/chat/planReviewModel';
 // Leaf module (no imports of its own) on purpose: importing the hook module
 // `sessionIndex/useSessionIndex.ts` here would close a cycle back onto this
 // store. Read by the `sendMessage` ghost-session guard below.
@@ -610,6 +615,15 @@ export interface ChatSessionsState {
     response?: string;
     cancel?: boolean;
   }) => Promise<boolean>;
+  /**
+   * Decision 169: cancels this chat's pending plan review, if one is up — the
+   * model stops and waits, same as the dock's "close the review" button. A
+   * no-op when no review is pending. This is the composer's one route into
+   * answering a question: it only ever sends a plan review's cancel, never
+   * any other question, so `PendingQuestionDock` stays the single answerer
+   * for everything else.
+   */
+  closePlanReview: (sessionId: string) => Promise<void>;
   /** Subscribe to Host Runtime Events; returns unsubscribe. */
   initRuntime: () => () => void;
 }
@@ -2439,6 +2453,12 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
       set({ lastError: err instanceof Error ? err.message : String(err) });
       return false;
     }
+  },
+
+  closePlanReview: async (sessionId) => {
+    const questionId = pendingPlanReviewId(get(), sessionId);
+    if (!questionId) return;
+    await get().respondQuestion({ questionId, cancel: true });
   },
 
   initRuntime: () => {

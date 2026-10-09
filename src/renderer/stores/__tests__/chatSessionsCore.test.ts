@@ -33,6 +33,7 @@ function baseState(overrides: Partial<ChatSessionsState> = {}): ChatSessionsStat
     sendMessage: async () => {},
     stopActiveSession: async () => {},
     respondQuestion: async () => false,
+    closePlanReview: async () => {},
     initRuntime: () => () => {},
     ...overrides,
   };
