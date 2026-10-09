@@ -141,7 +141,10 @@
     # tool call to the gate the bridge attached for its chat session and
     # refuses calls nobody attached. Always on: the bridge injects it, host.ts
     # restates it on after every user layer and refuses a composition without
-    # it (hostProfile.ts REQUIRED_ENABLED, RESTATED_ENABLED).
+    # it (hostProfile.ts REQUIRED_ENABLED, RESTATED_ENABLED). Also registers
+    # the `aiclient:permission` and `aiclient:environment` runtime contexts
+    # (decision 164: OS, shell, workspace, home, date) and checks a shell
+    # call's `workdir` before it runs.
     - id: aiclient-permissions
       name: '@aiclient/dsh-app/permissions'
 

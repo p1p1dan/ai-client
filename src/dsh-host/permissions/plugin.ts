@@ -5,7 +5,10 @@
  * The behaviour lives in `permissionHost.ts`; this file only wires it to the
  * row's Cordis context, publishes `ctx.aiclientPermissions`, the service the
  * bridge injects to attach one `PermissionGate` per chat session, and
- * registers the `aiclient:permission` prompt context (`promptContext.ts`).
+ * registers two prompt contexts: `aiclient:permission` (`promptContext.ts`)
+ * and `aiclient:environment` (`environmentContext.ts`, decision 164: the OS,
+ * shell, workspace, home and date, with the `aiclient_cwd` / `aiclient_home`
+ * prompt variables its text references).
  *
  * Always on in the product bundle (P1-6b part 2): the bridge injects the
  * service and attaches a gate per chat session before it opens the session's
@@ -27,6 +30,15 @@ import type {
   DshToolCall,
   DshToolResult,
 } from './dshTypes.ts';
+import {
+  ENVIRONMENT_CWD_VARIABLE,
+  ENVIRONMENT_HOME_VARIABLE,
+  ENVIRONMENT_PROMPT_CONTEXT,
+  ENVIRONMENT_PROMPT_CONTEXT_BEFORE,
+  ENVIRONMENT_PROMPT_CONTEXT_GAP,
+  environmentPromptText,
+  hostEnvironmentFacts,
+} from './environmentContext.ts';
 import { PERMISSION_HOST_SERVICE, PermissionHost } from './permissionHost.ts';
 import { PERMISSION_PROMPT_CONTEXT, PERMISSION_PROMPT_CONTEXT_AFTER } from './promptContext.ts';
 import { loadBashParser } from './treeSitter.ts';
@@ -60,15 +72,27 @@ export interface PermissionRowContext {
   inject?(deps: string[], callback: (scope: PromptRowScope) => void): unknown;
 }
 
-/** The slice of `ctx.systemPrompt` (dsh-system-prompt) the prompt context needs. */
+/** What a prompt context's text and a prompt variable's provider are given. */
+export interface PromptAssemblyView {
+  agent?: DshAgentView;
+}
+
+/** The slice of `ctx.systemPrompt` (dsh-system-prompt) the prompt contexts need. */
 export interface PromptRowScope {
   systemPrompt: {
     context(context: {
       name: string;
       order: number;
-      text: (assembly: { agent?: DshAgentView }) => string;
+      text: (assembly: PromptAssemblyView) => string;
     }): () => void;
-    getContextOrder(name: typeof PERMISSION_PROMPT_CONTEXT_AFTER): number;
+    getContextOrder(
+      name: typeof PERMISSION_PROMPT_CONTEXT_AFTER | typeof ENVIRONMENT_PROMPT_CONTEXT_BEFORE
+    ): number;
+    /** `{{name}}` in prompt text; a provider may return undefined when nothing references it. */
+    variable(
+      name: string,
+      provider: (assembly: PromptAssemblyView) => string | undefined
+    ): () => void;
   };
 }
 
@@ -78,6 +102,7 @@ interface LoopGuardView {
 }
 
 export function apply(ctx: PermissionRowContext): void {
+  const environment = hostEnvironmentFacts();
   const host = new PermissionHost({
     loadParser: loadBashParser,
     // Decision 081 rule 2: looked up per call, not injected, so neither row
@@ -114,7 +139,21 @@ export function apply(ctx: PermissionRowContext): void {
   );
   // P1-6b: the posture, for the model. Not in `inject`: the gate must not
   // wait on prompt assembly, and a host without it still judges every call.
+  // Decision 164: the environment beside it, on the same scope, so both go
+  // away with it. Paths reach the text as variables, never spliced in.
   ctx.inject?.(['systemPrompt'], (scope) => {
+    scope.systemPrompt.variable(
+      ENVIRONMENT_CWD_VARIABLE,
+      (assembly) => assembly.agent?.session?.header?.cwd
+    );
+    scope.systemPrompt.variable(ENVIRONMENT_HOME_VARIABLE, () => environment.homedir || undefined);
+    scope.systemPrompt.context({
+      name: ENVIRONMENT_PROMPT_CONTEXT,
+      order:
+        scope.systemPrompt.getContextOrder(ENVIRONMENT_PROMPT_CONTEXT_BEFORE) -
+        ENVIRONMENT_PROMPT_CONTEXT_GAP,
+      text: (assembly) => environmentPromptText(environment, assembly.agent),
+    });
     scope.systemPrompt.context({
       name: PERMISSION_PROMPT_CONTEXT,
       order: scope.systemPrompt.getContextOrder(PERMISSION_PROMPT_CONTEXT_AFTER) + 1,

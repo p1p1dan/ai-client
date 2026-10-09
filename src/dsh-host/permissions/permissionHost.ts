@@ -21,6 +21,10 @@
  *   systemPrompt context         `aiclient:permission`: the mode and gear of
  *                                the calling session's gate (`promptContext`)
  *
+ * A shell call's `workdir` is checked twice (`shellWorkdir.ts`, decision
+ * 164): a Windows path with no drive is refused before the gate, a directory
+ * that does not exist (or cannot be entered) after the gate allowed it.
+ *
  * Gates are attached per chat session by the bridge (`attachGate`); this row
  * never builds one.
  */
@@ -55,6 +59,12 @@ import { permissionPromptText } from './promptContext.ts';
 import { authorizeCall } from './requestBuilder.ts';
 import { PermissionRouter } from './router.ts';
 import { filterSearchValue } from './searchFilter.ts';
+import {
+  nodeWorkdirProbe,
+  type WorkdirProbe,
+  workdirExistenceDenial,
+  workdirSyntaxDenial,
+} from './shellWorkdir.ts';
 
 /** The Cordis service name the bridge injects to reach `attachGate`. */
 export const PERMISSION_HOST_SERVICE = 'aiclientPermissions';
@@ -127,6 +137,10 @@ export interface PermissionHostOptions {
    * without a card whatever order the rows' listeners run in.
    */
   refusalFor?: (exec: DshToolCall) => string | undefined;
+  /** Whose path rules the shell `workdir` checks follow; defaults to the host's. */
+  platform?: NodeJS.Platform;
+  /** How the shell `workdir` check reads the disk; defaults to node:fs. */
+  workdirProbe?: WorkdirProbe;
   log?: (...args: unknown[]) => void;
 }
 
@@ -251,6 +265,8 @@ export class PermissionHost {
   private readonly env: Record<string, string>;
   private readonly isTrustedPath: (path: string) => boolean;
   private readonly maxTrackedCalls: number;
+  private readonly platform: NodeJS.Platform;
+  private readonly workdirProbe: WorkdirProbe;
   private readonly options: PermissionHostOptions;
   private syntheticIds = 0;
 
@@ -266,6 +282,8 @@ export class PermissionHost {
       options.isTrustedPath ??
       ((path) => isSpillPath(path) || isAttachmentPath(path, attachmentRoot));
     this.maxTrackedCalls = options.maxTrackedCalls ?? 4096;
+    this.platform = options.platform ?? process.platform;
+    this.workdirProbe = options.workdirProbe ?? nodeWorkdirProbe;
     this.api = {
       attachGate: (channelId, attach) => this.attachGate(channelId, attach),
       detachGate: (channelId) => this.detachGate(channelId),
@@ -363,6 +381,9 @@ export class PermissionHost {
         reason: 'the calling session has no workspace',
         info: info('tool_denied', 'error'),
       };
+    // Before any card: the gate and DSH would not agree on where it runs.
+    const noDrive = workdirSyntaxDenial(exec.name, exec.arguments, cwd, this.platform);
+    if (noDrive) return noDrive;
     const record: CallRecord = { prompted: false };
     this.track(exec.callId, record);
     const env = route.gate.env ?? this.env;
@@ -392,6 +413,19 @@ export class PermissionHost {
       record.verdict = 'deny';
       if (exec.signal.aborted || denialSource(error) === 'cancelled') return { kind: 'cancel' };
       return denialDecision(error);
+    }
+    // After the gate, so an unapproved call cannot probe the disk.
+    const missing = await workdirExistenceDenial(
+      exec.name,
+      exec.arguments,
+      cwd,
+      this.platform,
+      this.workdirProbe
+    );
+    if (missing) {
+      record.verdict = 'deny';
+      // A Stop while a slow share was being read is still a Stop.
+      return exec.signal.aborted ? { kind: 'cancel' } : missing;
     }
     record.verdict = 'allow';
     this.allowed.add(exec);

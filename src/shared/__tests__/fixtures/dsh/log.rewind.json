@@ -120,6 +120,10 @@
           "form": "snapshot",
           "sections": [
             {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -714,6 +718,10 @@
               "kind": "runtime-context",
               "form": "snapshot",
               "sections": [
+                {
+                  "name": "aiclient:environment",
+                  "text": "<aiclient:environment>"
+                },
                 {
                   "name": "sandbox:policy",
                   "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."

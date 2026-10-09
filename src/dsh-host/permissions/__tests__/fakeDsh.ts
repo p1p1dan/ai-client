@@ -2,8 +2,10 @@
  * A fake DSH context for the aiclient-permissions row: listener lists with
  * Cordis' prepend semantics, waterfall dispatch, the guard stage exactly where
  * dsh-tools runs it (only after an `allow`), `provide`, and `inject` of a
- * `systemPrompt` that records the runtime contexts registered on it (DSH's
- * `APPROVAL_POLICY` sits at 115, as in dsh-system-prompt).
+ * `systemPrompt` that records the runtime contexts and prompt variables
+ * registered on it (DSH's `SANDBOX_POLICY` / `APPROVAL_POLICY` sit at 110 /
+ * 115, as in dsh-system-prompt). It does not interpolate: tests that render
+ * text with variables use dsh-system-prompt's own `renderContextSections`.
  */
 
 import type {
@@ -27,11 +29,16 @@ export interface FakePromptContext {
   text: (assembly: { agent?: DshAgentView }) => string;
 }
 
+/** One `systemPrompt.variable` provider. */
+export type FakePromptVariable = (assembly: { agent?: DshAgentView }) => string | undefined;
+
 export interface FakeDsh {
   ctx: PermissionRowContext;
   services: Map<string, unknown>;
   /** Runtime contexts registered through `inject(['systemPrompt'])`, in order. */
   contexts: FakePromptContext[];
+  /** Prompt variables registered through `inject(['systemPrompt'])`, by name. */
+  variables: Map<string, FakePromptVariable>;
   hooks(name: string): Array<{ listener: AnyListener; prepend: boolean }>;
   /** `tools/pre-execute` + guards, as dsh-tools' prepare stage runs them. */
   prepare(exec: DshToolCall): Promise<DshPreToolDecision>;
@@ -47,6 +54,7 @@ export function createFakeDsh(): FakeDsh {
   const guards: Array<(exec: object) => string | undefined> = [];
   const services = new Map<string, unknown>();
   const contexts: FakePromptContext[] = [];
+  const variables = new Map<string, FakePromptVariable>();
   const contextOrders: Record<string, number> = {
     SANDBOX_POLICY: 110,
     APPROVAL_POLICY: 115,
@@ -105,6 +113,14 @@ export function createFakeDsh(): FakeDsh {
             };
           },
           getContextOrder: (name) => contextOrders[name] ?? Number.NaN,
+          variable: (name, provider) => {
+            if (!/^[a-z][a-z0-9_]*$/.test(name)) throw new Error(`invalid prompt variable ${name}`);
+            if (variables.has(name)) throw new Error(`duplicate prompt variable ${name}`);
+            variables.set(name, provider);
+            return () => {
+              variables.delete(name);
+            };
+          },
         },
       });
     },
@@ -113,6 +129,7 @@ export function createFakeDsh(): FakeDsh {
     ctx,
     services,
     contexts,
+    variables,
     hooks: (name) => lists.get(name) ?? [],
     async prepare(exec) {
       const decision = await waterfall<DshPreToolDecision>(

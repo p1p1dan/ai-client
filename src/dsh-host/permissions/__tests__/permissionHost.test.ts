@@ -20,6 +20,7 @@ import { loadPermissionPolicy } from '../../../shared/permissions/policy.ts';
 import { modeSegment, permissionGearSegment } from '../../../shared/permissions/promptText.ts';
 import type { PermissionGear, RuntimeMode } from '../../../shared/types/runtimePermission.ts';
 import type { DshPreToolDecision } from '../dshTypes.ts';
+import { ENVIRONMENT_PROMPT_CONTEXT } from '../environmentContext.ts';
 import {
   type AttachableGate,
   type DshPermissionHost,
@@ -28,11 +29,14 @@ import {
   isAttachmentPath,
   isSpillPath,
   PERMISSION_HOST_SERVICE,
+  PermissionHost,
   spillRootOf,
 } from '../permissionHost.ts';
 import { apply, inject, name } from '../plugin.ts';
 import { PERMISSION_PROMPT_CONTEXT } from '../promptContext.ts';
 import { authorizeCall } from '../requestBuilder.ts';
+import { SHELL_WORKDIR_DENIAL } from '../shellWorkdir.ts';
+import { loadBashParser } from '../treeSitter.ts';
 import { agent, call, createFakeDsh, type FakeDsh } from './fakeDsh.ts';
 
 /**
@@ -115,6 +119,9 @@ function recordingGate() {
 
 const root = (id = 'aiclient-root') => agent(id, { cwd: ws });
 
+const permissionContext = (fake: FakeDsh) =>
+  fake.contexts.find((context) => context.name === PERMISSION_PROMPT_CONTEXT);
+
 describe('the aiclient-permissions row', () => {
   it('is a tools-injecting row that publishes the attach service', () => {
     const { fake } = setup();
@@ -134,11 +141,17 @@ describe('the aiclient:permission prompt context (P1-6b; design shard 03 §8)', 
   const posture = (mode: RuntimeMode, gear: PermissionGear) =>
     `${modeSegment(mode).text}\n${permissionGearSegment(gear).text}`;
 
-  it("is registered once, right after DSH's approval policy", () => {
+  it("is registered once, right after DSH's approval policy; the environment before the sandbox's", () => {
     const { fake } = setup();
-    expect(fake.contexts.map((context) => [context.name, context.order])).toEqual([
+    expect(
+      [...fake.contexts]
+        .sort((a, b) => a.order - b.order)
+        .map((context) => [context.name, context.order])
+    ).toEqual([
+      [ENVIRONMENT_PROMPT_CONTEXT, 100],
       [PERMISSION_PROMPT_CONTEXT, 116],
     ]);
+    expect([...fake.variables.keys()].sort()).toEqual(['aiclient_cwd', 'aiclient_home']);
   });
 
   it("tells each session its own mode and gear, a delegate its root's, and follows a change", () => {
@@ -147,7 +160,8 @@ describe('the aiclient:permission prompt context (P1-6b; design shard 03 §8)', 
     const two = realGate({ mode: 'plan', gear: 'bypass' });
     host.attachGate('c1-1', { dshSessionId: 'aiclient-one', gate: one.gate });
     host.attachGate('c1-2', { dshSessionId: 'aiclient-two', gate: two.gate });
-    const text = (view?: ReturnType<typeof agent>) => fake.contexts[0]?.text({ agent: view });
+    const text = (view?: ReturnType<typeof agent>) =>
+      permissionContext(fake)?.text({ agent: view });
     expect(text(agent('aiclient-one', { cwd: ws }))).toBe(posture('agent', 'ask'));
     expect(text(agent('aiclient-two'))).toBe(posture('plan', 'bypass'));
     expect(text(agent('child-1', { parentSession: 'aiclient-one' }))).toBe(posture('agent', 'ask'));
@@ -161,7 +175,8 @@ describe('the aiclient:permission prompt context (P1-6b; design shard 03 §8)', 
   it('says nothing for an agent no gate owns, or a gate that does not tell its posture', () => {
     const { fake, host } = setup();
     host.attachGate('c1-1', { dshSessionId: 'aiclient-quiet', gate: recordingGate().gate });
-    const text = (view?: ReturnType<typeof agent>) => fake.contexts[0]?.text({ agent: view });
+    const text = (view?: ReturnType<typeof agent>) =>
+      permissionContext(fake)?.text({ agent: view });
     expect(text(agent('aiclient-stranger'))).toBe('');
     expect(text(undefined)).toBe('');
     expect(text(agent('aiclient-quiet'))).toBe('');
@@ -1089,4 +1104,92 @@ describe('the trusted roots are canonical as the targets are (decision 134)', ()
       expect(spillRootOf(tmp)).toBe(await realpath(tmp));
     }
   );
+});
+
+describe('shell workdir checks (decision 164)', () => {
+  /** The row's host without Cordis, so the guard and `next` can be read directly. */
+  function direct(
+    options: { platform?: NodeJS.Platform; gate?: Parameters<typeof realGate>[0] } = {}
+  ) {
+    const host = new PermissionHost({
+      loadParser: loadBashParser,
+      ...(options.platform ? { platform: options.platform } : {}),
+    });
+    const real = realGate(options.gate);
+    host.api.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate: real.gate });
+    const next = vi.fn(async (): Promise<DshPreToolDecision> => ({ kind: 'allow' }));
+    return { host, next, ...real };
+  }
+
+  it('refuses a missing workdir after the gate allowed it (bypass), and the guard stays shut', async () => {
+    const { host, next, asked } = direct({ gate: { gear: 'bypass' } });
+    const exec = call('bash', { command: 'ls', workdir: 'missing-dir' }, root());
+    expect(await host.preExecute(exec, next)).toEqual({
+      kind: 'deny',
+      reason: `working directory does not exist: ${join(ws, 'missing-dir')} (the session workspace is ${ws})`,
+      info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(host.guard(exec)).toBeDefined();
+    expect(asked).toEqual([]);
+    // An existing one runs as before.
+    const fine = call('bash', { command: 'ls', workdir: 'a' }, root());
+    expect(await host.preExecute(fine, next)).toEqual({ kind: 'allow' });
+    expect(host.guard(fine)).toBeUndefined();
+  });
+
+  it('refuses it through the row as DSH runs it, not as a gate refusal', async () => {
+    const { fake, host } = setup();
+    host.attachGate('c1-1', {
+      dshSessionId: 'aiclient-root',
+      gate: realGate({ gear: 'bypass' }).gate,
+    });
+    const decision = await fake.prepare(call('bash', { command: 'ls', workdir: 'nope' }, root()));
+    expect(decision).toMatchObject({
+      kind: 'deny',
+      info: { name: 'ShellWorkdir', code: 'workdir_missing' },
+    });
+    expect(decision.kind === 'deny' && decision.info?.name).not.toBe('PermissionDenial');
+  });
+
+  it('refuses a Windows workdir with no drive before any card', async () => {
+    const { host, next, asked } = direct({ platform: 'win32' });
+    const exec = call(
+      'pwsh',
+      { command: 'git status', workdir: '/Users/tester/work/monorepo' },
+      root()
+    );
+    expect(await host.preExecute(exec, next)).toEqual({
+      kind: 'deny',
+      reason: `workdir "/Users/tester/work/monorepo" has no drive letter; on Windows give a full path such as ${ws}, or omit workdir to run in the session workspace`,
+      info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_no_drive' },
+    });
+    expect(asked).toEqual([]);
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('asks first in the ask gear: an approved call is then refused for its workdir, a refused one is the gate refusal', async () => {
+    const approved = direct();
+    const exec = call('bash', { command: 'echo a > out.txt', workdir: 'missing-dir' }, root());
+    expect(await approved.host.preExecute(exec, approved.next)).toMatchObject({
+      kind: 'deny',
+      info: { name: SHELL_WORKDIR_DENIAL, code: 'workdir_missing' },
+    });
+    expect(approved.asked.map((request) => request.tool)).toEqual(['bash']);
+    // The ledger agrees: DSH's own ask for that call is answered as refused.
+    expect(
+      await approved.host.answerApproval(
+        { agent: root(), toolName: 'bash', callId: exec.callId },
+        async () => 'unavailable'
+      )
+    ).toBe('rejected');
+
+    const refused = direct({ gate: { answer: () => 'deny' } });
+    const again = call('bash', { command: 'echo a > out.txt', workdir: 'missing-dir' }, root());
+    expect(await refused.host.preExecute(again, refused.next)).toMatchObject({
+      kind: 'deny',
+      info: { name: 'PermissionDenial' },
+    });
+    expect(refused.asked).toHaveLength(1);
+  });
 });

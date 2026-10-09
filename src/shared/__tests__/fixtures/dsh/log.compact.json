@@ -119,6 +119,10 @@
           "form": "snapshot",
           "sections": [
             {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
               "name": "sandbox:policy",
               "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
             },
@@ -767,7 +771,7 @@
           "end": 20
         },
         "shadowedSeqs": [5, 6, 10, 17, 18, 20],
-        "shadowedTokenCount": 334,
+        "shadowedTokenCount": 0,
         "provider": "aiclient-gateway",
         "model": "fake-1",
         "maxTokens": 65536,
@@ -829,7 +833,7 @@
       "data": {
         "commandId": "cmd-id-13",
         "kind": "success",
-        "text": "Compacted 6 history items (~334 tokens).",
+        "text": "Compacted 6 history items (~0 tokens).",
         "sourceEventSeq": 28
       }
     },

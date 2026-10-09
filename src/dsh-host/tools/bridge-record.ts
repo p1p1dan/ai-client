@@ -135,15 +135,18 @@
  * UUIDs renumbered `id-N` in first-seen order, one map per scenario shared by
  * its three samples (so the projection of `log` can be compared with `rpc`);
  * paths -> `<workspace>` / `<dsh-home>` / `<scratch>`; epoch milliseconds ->
- * `<ms>`; token counts -> 0; consecutive deltas of one block merged, in the
- * stream and in DSH's stored stream records, and stream timing (`dt`) dropped;
+ * `<ms>`; token counts -> 0 (compaction's estimate too, decision 164);
+ * consecutive deltas of one block merged, in the stream and in DSH's stored
+ * stream records, and stream timing (`dt`) dropped;
  * a tool row's size updates while its arguments stream (P1-4d1) dropped, since
  * whether one exists depends on the wall clock between two deltas; a running
  * command's live tail (`tool.output`, P1-7b) dropped for the same reason — how
  * many there are depends on when the job's output was pumped (the bridge's
  * unit tests and bridge-smoke check them).
  * The system prompt, tool schemas and injected context bodies are replaced by
- * placeholders: they are DSH's text, not the bridge's, and carry dates. The
+ * placeholders: they are DSH's text, not the bridge's, and carry dates; so is
+ * the `aiclient:environment` section of a runtime-context snapshot (decision
+ * 164: the recording machine's OS, home and date). The
  * history's `settledAt` is dropped from `rpc`: whether it is present depends
  * on two events landing in the same millisecond (projection unit tests pin it).
  *
@@ -194,8 +197,15 @@ function isEpochMs(value: number): boolean {
   return Number.isInteger(value) && value >= 1_000_000_000_000 && value < 10_000_000_000_000;
 }
 
-/** Keys whose numbers are token counts. */
-const USAGE_KEY = /^(usage|tokenUsage)$/;
+/**
+ * Keys whose numbers are token counts. DSH's compaction estimate is one too:
+ * it counts the runtime-context snapshot, whose `aiclient:environment` text
+ * differs by machine (decision 164).
+ */
+const USAGE_KEY = /^(usage|tokenUsage|shadowedTokenCount)$/;
+
+/** The same estimate in `/compact`'s answer: `Compacted 6 history items (~553 tokens).` */
+const COMPACTED_TOKENS = /\(~\d+ tokens\)/g;
 
 /** The source kinds whose text the timeline shows; every other `user/message` body is injected context. */
 const SHOWN_SOURCES = new Set(['user', 'compact-checkpoint', 'aiclient-retry']);
@@ -326,6 +336,18 @@ function placeholderContent(content: unknown, placeholder: string): unknown {
   );
 }
 
+/**
+ * Decision 164: `aiclient:environment` states the recording machine's OS,
+ * home directory and date, so its section keeps only its name. The other
+ * runtime-context sections stay verbatim (the posture the scenario set).
+ */
+const MACHINE_SECTIONS = new Set(['aiclient:environment']);
+
+function runtimeContextSection(section: unknown): unknown {
+  if (!isRecord(section) || !MACHINE_SECTIONS.has(String(section.name))) return section;
+  return { ...section, text: `<${String(section.name)}>` };
+}
+
 function logEvent(event: Message): Message {
   const data = isRecord(event.data) ? event.data : undefined;
   if (!data) return event;
@@ -350,13 +372,23 @@ function logEvent(event: Message): Message {
         : header?.tools;
       return { ...event, data: { ...data, header: { ...header, tools } } };
     }
+    case 'command/done':
+      return typeof data.text === 'string'
+        ? { ...event, data: { ...data, text: data.text.replace(COMPACTED_TOKENS, '(~0 tokens)') } }
+        : event;
     case 'user/message': {
       const source = data.source as Message | undefined;
       const kind = String(source?.kind ?? '');
       if (SHOWN_SOURCES.has(kind) || source?.form === 'notice') return event;
       return {
         ...event,
-        data: { ...data, content: placeholderContent(data.content, `<${kind}>`) },
+        data: {
+          ...data,
+          content: placeholderContent(data.content, `<${kind}>`),
+          ...(kind === 'runtime-context' && Array.isArray(source?.sections)
+            ? { source: { ...source, sections: source.sections.map(runtimeContextSection) } }
+            : {}),
+        },
       };
     }
     default:
