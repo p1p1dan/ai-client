@@ -39,7 +39,7 @@
     "requestId": "turn-PERM-PLAN",
     "type": "message.started",
     "payload": {
-      "messageId": "dsh-user-5",
+      "messageId": "dsh-user-6",
       "role": "user",
       "attemptId": "attempt-PERM-PLAN"
     }
@@ -49,8 +49,8 @@
     "requestId": "turn-PERM-PLAN",
     "type": "message.delta",
     "payload": {
-      "messageId": "dsh-user-5",
-      "blockId": "dsh-user-5-text",
+      "messageId": "dsh-user-6",
+      "blockId": "dsh-user-6-text",
       "text": "P1-PERM-PLAN: write, then read."
     }
   },
@@ -59,7 +59,7 @@
     "requestId": "turn-PERM-PLAN",
     "type": "message.completed",
     "payload": {
-      "messageId": "dsh-user-5"
+      "messageId": "dsh-user-6"
     }
   },
   {

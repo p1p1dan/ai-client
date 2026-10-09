@@ -218,6 +218,60 @@ describe('the loop guard goes first (decision 081 rule 2)', () => {
   });
 });
 
+describe('plan review (decision 169)', () => {
+  it("refuses the root session's own calls while its bridge holds them, a delegate's never", async () => {
+    const { fake, host } = setup();
+    const { gate, asked } = realGate({ gear: 'auto' });
+    let held = true;
+    host.attachGate('c1-1', {
+      dshSessionId: 'aiclient-root',
+      gate,
+      refuseCall: () => (held ? 'held: next step' : undefined),
+    });
+    fake.emit('session/created', {
+      id: 'child',
+      header: { id: 'child', cwd: ws, parentSession: 'aiclient-root' },
+    });
+    const write = { file_path: 'notes.txt', content: 'x' };
+    expect(await fake.prepare(call('write', write, root()))).toEqual({
+      kind: 'deny',
+      reason: 'held: next step',
+      info: { name: 'PermissionDenial', code: 'plan_review_hold' },
+    });
+    // Internal tools too: the hold is about the step, not the tool.
+    expect((await fake.prepare(call('create_goal', { objective: 'x' }, root()))).kind).toBe('deny');
+    const child = agent('child', { cwd: ws, parentSession: 'aiclient-root' });
+    expect((await fake.prepare(call('read', { file_path: 'notes.txt' }, child))).kind).toBe(
+      'allow'
+    );
+    held = false;
+    expect((await fake.prepare(call('write', write, root()))).kind).toBe('allow');
+    expect(asked).toHaveLength(0);
+  });
+
+  it('refuses update_goal resume in plan mode, with the way out; other actions and modes pass', async () => {
+    const { fake, host } = setup();
+    const { gate } = realGate({ mode: 'plan', gear: 'auto' });
+    host.attachGate('c1-1', { dshSessionId: 'aiclient-root', gate });
+    const resume = { goal_id: 'g', revision: 1, action: 'resume' };
+    const decision = await fake.prepare(call('update_goal', resume, root()));
+    expect(decision).toMatchObject({
+      kind: 'deny',
+      info: { name: 'PermissionDenial', code: 'plan_mode_goal_resume' },
+    });
+    expect(decision.kind === 'deny' && decision.reason).toContain('exit_plan_mode');
+    expect(
+      (await fake.prepare(call('update_goal', { ...resume, action: 'complete' }, root()))).kind
+    ).toBe('allow');
+    // Not refused here: the bridge reviews create_goal in plan mode.
+    expect((await fake.prepare(call('create_goal', { objective: 'x' }, root()))).kind).toBe(
+      'allow'
+    );
+    gate.configure({ mode: 'agent', gear: 'auto' });
+    expect((await fake.prepare(call('update_goal', resume, root()))).kind).toBe('allow');
+  });
+});
+
 describe('routing (decision 042 rule 1)', () => {
   it('refuses a call from a session nobody attached', async () => {
     const { fake } = setup();

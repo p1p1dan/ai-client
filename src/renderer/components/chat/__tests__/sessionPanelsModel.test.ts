@@ -10,6 +10,7 @@ import {
   deriveTodoCardView,
   goalCommandLine,
   goalDismissKey,
+  goalObjectiveHeadline,
   initialSessionPanels,
   panelsMark,
   pruneSessionPanels,
@@ -521,5 +522,14 @@ describe('sessionPanelsModel — a worker that went away (P1-7e problem 17)', ()
     empty = reduceSessionPanels(empty, gone('s2'));
     expect(empty.bySession.s2?.workerEpoch).toBe(1);
     expect(empty.bySession.s2?.formerJobs).toBeUndefined();
+  });
+});
+
+describe('the folded goal bar’s line (decision 169)', () => {
+  it('a goal set from a plan shows its title without the heading marks; others their first line', () => {
+    expect(goalObjectiveHeadline('# Ship CSV export\n\n## Goal\n- CSV')).toBe('Ship CSV export');
+    expect(goalObjectiveHeadline('\n  ## Nested title\nrest')).toBe('Nested title');
+    expect(goalObjectiveHeadline('Make CI green\nthen tag')).toBe('Make CI green');
+    expect(goalObjectiveHeadline('#hashtag stays')).toBe('#hashtag stays');
   });
 });

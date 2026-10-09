@@ -61,7 +61,7 @@ const PRESET_OPTIONS: readonly {
     // Plan mode on full auto: reads, searches and read-only commands run
     // without a card; plan mode refuses the rest at call time (gate.ts).
     description:
-      'Read-only: explores without asking and writes up a plan. Edits, other commands and web tools are refused.',
+      'Read-only: explores without asking, then presents its plan for your review. Edits, other commands and web tools are refused.',
     icon: ClipboardList,
   },
   { id: 'ask', description: 'Asks before each write, edit and command.', icon: Shield },

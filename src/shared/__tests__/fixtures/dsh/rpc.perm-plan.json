@@ -36,7 +36,7 @@
               "text": "P1-PERM-PLAN: write, then read."
             }
           ],
-          "liveMessageId": "dsh-user-5"
+          "liveMessageId": "dsh-user-6"
         },
         {
           "id": "h:id-6",
@@ -124,7 +124,7 @@
       "workspacePath": "<workspace>/perm-plan",
       "leaf": {
         "activeEntryId": "id-13",
-        "fileTailEntryId": "aiclient-rec-perm-plan#22"
+        "fileTailEntryId": "aiclient-rec-perm-plan#23"
       },
       "nodes": [
         {

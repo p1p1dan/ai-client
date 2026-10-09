@@ -106,6 +106,18 @@
  *                 the model got. `rpc.respond` keeps both `worker.question.respond`
  *                 answers
  *
+ * Plan review scenarios (decision 169), recorded after the question:
+ *   plan-review   plan + full auto: DSH's plan mode is on from the bootstrap; the
+ *                 model reads, then presents its plan (`exit_plan_mode`); the
+ *                 review is answered keep-planning with feedback, the revised
+ *                 plan approved as a goal on full auto: the gate leaves plan
+ *                 mode mid-turn (`session.permissions`), the goal is set, the
+ *                 next step writes, and the goal round that follows completes
+ *                 it. `rpc` keeps both answers and whether the file was written
+ *   plan-dismiss  plan + full auto: the review is closed (ASK_CANCELLED) and the
+ *                 model stops; the next turn is still in plan mode — its plan
+ *                 is presented again, and that review closed too
+ *
  * Permission scenarios (P1-6c; plan P1-6 shard 04 §5, E class). Each opens its
  * session in a workspace of its own (`<workspace>/<scenario>`), so what a turn
  * lists or searches does not depend on which scenarios ran before it; `rpc`
@@ -207,8 +219,17 @@ const USAGE_KEY = /^(usage|tokenUsage|shadowedTokenCount)$/;
 /** The same estimate in `/compact`'s answer: `Compacted 6 history items (~553 tokens).` */
 const COMPACTED_TOKENS = /\(~\d+ tokens\)/g;
 
-/** The source kinds whose text the timeline shows; every other `user/message` body is injected context. */
-const SHOWN_SOURCES = new Set(['user', 'compact-checkpoint', 'aiclient-retry']);
+/**
+ * The source kinds whose text the timeline shows; every other `user/message`
+ * body is injected context. A plan review's notice (decision 169) is ours and
+ * carries no date.
+ */
+const SHOWN_SOURCES = new Set([
+  'user',
+  'compact-checkpoint',
+  'aiclient-retry',
+  'aiclient-plan-review',
+]);
 
 class Normalizer {
   private readonly ids = new Map<string, string>();
@@ -688,6 +709,9 @@ const SCENARIOS: Record<string, Scenario> = {
   // P1-4d3 (decisions 098, 114): DSH's ask_user_question on the card. After
   // the attachments, so every scenario above keeps its recorded host state.
   question: questionScenario,
+  // Decision 169: plan mode's review, after the question.
+  'plan-review': planReviewScenario,
+  'plan-dismiss': planDismissScenario,
   // P1-7b (decisions 069, 119): background work. Last, for the same reason.
   'jobs-kill': jobsKillScenario,
   'sub-cont': subContScenario,
@@ -1480,6 +1504,116 @@ async function questionScenario(context: RecordContext, host: Host): Promise<Rec
     answeringQuestion(session, 'skipped', { cancel: true }, respond)
   );
   return finish(context, session, [boot], [answered, skipped], { respond });
+}
+
+// ---- plan review scenarios (decision 169) -------------------------------------------
+
+const PLAN_PERMISSIONS = Object.freeze({ mode: 'plan', gear: 'auto' } as const);
+
+/**
+ * A `during` answering the turn's plan review cards in order with `replies`
+ * (`worker.question.respond`, as the review card sends them); the answers
+ * are kept under `label`.
+ */
+function answeringReviews(
+  session: Session,
+  label: string,
+  replies: readonly Message[],
+  answered: Message
+): (from: number) => Promise<void> {
+  return async (from) => {
+    const { client } = session.host;
+    const isReview = (event: Message) =>
+      event.type === 'question.requested' && payloadOf(event).review !== undefined;
+    const answers: Message[] = [];
+    for (const [index, reply] of replies.entries()) {
+      const up = await client.until(
+        session.ch,
+        (events) => events.slice(from).filter(isReview).length > index,
+        60_000
+      );
+      if (!up)
+        throw new Error(`${session.logicalSessionId} ${label}: review ${index + 1} never came up`);
+      const card = payloadOf(
+        client.events(session.ch).slice(from).filter(isReview)[index] as Message
+      );
+      answers.push(
+        answerOf(
+          await client.call(session.ch, 'worker.question.respond', {
+            logicalSessionId: session.logicalSessionId,
+            questionId: card.questionId,
+            ...reply,
+          })
+        )
+      );
+    }
+    answered[label] = answers;
+  };
+}
+
+async function planReviewScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'plan-review', { 'plan-notes.txt': 'plan notes\n' });
+  const { session, boot } = await context.openSession(host, 'plan-review', undefined, {
+    cwd,
+    permissions: PLAN_PERMISSIONS,
+  });
+  const { client } = session.host;
+  const respond: Message = {};
+  const from = client.events(session.ch).length;
+  await context.turn(
+    session,
+    'PLAN-REVIEW',
+    'P1-PLAN-REVIEW: plan the change, then carry it out.',
+    answeringReviews(
+      session,
+      'PLAN-REVIEW',
+      [
+        {
+          answers: { 'plan-review': 'keep-planning' },
+          response: 'Name the output file in the goal.',
+        },
+        { answers: { 'plan-review': 'goal:auto' } },
+      ],
+      respond
+    )
+  );
+  // The goal's first round: a turn nobody sent, which completes the goal.
+  const round = `dsh-turn-${session.dshSessionId}-2`;
+  await wakeIdle(session, from, round);
+  const events = client.events(session.ch).slice(from);
+  return finish(
+    context,
+    session,
+    [boot],
+    [
+      events.filter((event) => event.requestId === 'turn-PLAN-REVIEW'),
+      events.filter((event) => event.requestId === round),
+    ],
+    { respond, written: existsSync(join(cwd, 'plan-output.txt')) }
+  );
+}
+
+async function planDismissScenario(context: RecordContext, host: Host): Promise<Recording> {
+  const cwd = scenarioWorkspace(context.box, 'plan-dismiss');
+  const { session, boot } = await context.openSession(host, 'plan-dismiss', undefined, {
+    cwd,
+    permissions: PLAN_PERMISSIONS,
+  });
+  const respond: Message = {};
+  const closed = await context.turn(
+    session,
+    'PLAN-DISMISS',
+    'P1-PLAN-DISMISS: present a plan; I will close the review.',
+    answeringReviews(session, 'PLAN-DISMISS', [{ cancel: true }], respond)
+  );
+  // Still plan mode: the next message gets the plan presented again.
+  const again = await context.turn(
+    session,
+    'PLAN-DISMISS-2',
+    'P1-PLAN-DISMISS: present it again.',
+    answeringReviews(session, 'PLAN-DISMISS-2', [{ cancel: true }], respond)
+  );
+  return finish(context, session, [boot], [closed, again], { respond });
 }
 
 /** The durable `tool/call` has been appended: the call is dispatched. */

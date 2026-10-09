@@ -1,0 +1,440 @@
+{
+  "bootstrap": [
+    {
+      "bootstrapped": true,
+      "logicalSessionId": "rec-plan-review",
+      "piSessionId": "aiclient-rec-plan-review",
+      "cwd": "<workspace>/plan-review",
+      "agentDir": "<dsh-home>",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-plan-review.dsh.json",
+      "leaf": {
+        "activeEntryId": null,
+        "fileTailEntryId": null
+      },
+      "projectTrusted": true,
+      "permissionGate": "bundled",
+      "capabilities": {
+        "skills": 0
+      }
+    }
+  ],
+  "history": {
+    "logicalSessionId": "rec-plan-review",
+    "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-plan-review.dsh.json",
+    "workspacePath": "<workspace>/plan-review",
+    "page": {
+      "messages": [
+        {
+          "id": "h:id-1",
+          "entryId": "id-1",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-1:text:0",
+              "text": "P1-PLAN-REVIEW: plan the change, then carry it out."
+            }
+          ],
+          "liveMessageId": "dsh-user-6"
+        },
+        {
+          "id": "h:id-6",
+          "entryId": "id-6",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-6:tool-call:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "name": "read",
+              "input": {
+                "file_path": "plan-notes.txt",
+                "path": "plan-notes.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-7:tool-result:toolu_id-4",
+              "toolCallId": "toolu_id-4",
+              "ok": true,
+              "output": "<path><workspace>/plan-review/plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t1-s1"
+        },
+        {
+          "id": "h:id-10",
+          "entryId": "id-10",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-10:tool-call:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "name": "exit_plan_mode",
+              "input": {
+                "plan": "# P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-11:tool-result:toolu_id-8",
+              "toolCallId": "toolu_id-8",
+              "ok": false,
+              "output": "Error: The user chose to keep planning; their feedback: Name the output file in the goal.",
+              "error": "Error: The user chose to keep planning; their feedback: Name the output file in the goal."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t1-s2"
+        },
+        {
+          "id": "h:id-14",
+          "entryId": "id-14",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-14:tool-call:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "name": "exit_plan_mode",
+              "input": {
+                "plan": "# P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW done\".\n- The output file is named in this goal (review feedback).\n\n## Changes\n1. Write plan-output.txt in the workspace.\n"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-16:tool-result:toolu_id-12",
+              "toolCallId": "toolu_id-12",
+              "ok": true,
+              "output": "Plan approved — plan mode exited; carry out the plan starting with your next step."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t1-s3"
+        },
+        {
+          "id": "h:id-17",
+          "entryId": "id-17",
+          "role": "system",
+          "timestamp": "<ms>",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-17:notice:0",
+              "text": "Plan approved: set as the goal, running on full auto."
+            }
+          ],
+          "liveMessageId": "dsh-notice-31"
+        },
+        {
+          "id": "h:id-22",
+          "entryId": "id-22",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-22:tool-call:toolu_id-20",
+              "toolCallId": "toolu_id-20",
+              "name": "write",
+              "input": {
+                "file_path": "plan-output.txt",
+                "content": "P1-PLAN-REVIEW done\n",
+                "path": "plan-output.txt"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-23:tool-result:toolu_id-20",
+              "toolCallId": "toolu_id-20",
+              "ok": true,
+              "output": "<path><workspace>/plan-review/plan-output.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>",
+              "review": {
+                "version": 1,
+                "path": "plan-output.txt",
+                "status": "added",
+                "patch": "@@ -0,0 +1,1 @@\n+P1-PLAN-REVIEW done"
+              }
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t1-s4"
+        },
+        {
+          "id": "h:id-25",
+          "entryId": "id-25",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-25:text:0",
+              "text": "P1-PLAN-REVIEW wrote plan-output.txt."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t1-s5"
+        },
+        {
+          "id": "h:id-26",
+          "entryId": "id-26",
+          "role": "user",
+          "timestamp": "<ms>",
+          "blocks": [],
+          "origin": {
+            "kind": "goal",
+            "round": 1,
+            "maxRounds": 256
+          },
+          "liveMessageId": "dsh-user-46"
+        },
+        {
+          "id": "h:id-29",
+          "entryId": "id-29",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-29:tool-call:toolu_id-27",
+              "toolCallId": "toolu_id-27",
+              "name": "get_goal",
+              "input": {}
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-30:tool-result:toolu_id-27",
+              "toolCallId": "toolu_id-27",
+              "ok": true,
+              "output": "{\"goal\":{\"id\":\"goal-id-15\",\"revision\":1,\"objective\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\",\"phase\":\"active\",\"roundsStarted\":1,\"maxGoalRounds\":256},\"activation\":\"armed\"}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t2-s1"
+        },
+        {
+          "id": "h:id-33",
+          "entryId": "id-33",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "tool_call",
+              "id": "h:id-33:tool-call:toolu_id-31",
+              "toolCallId": "toolu_id-31",
+              "name": "update_goal",
+              "input": {
+                "goal_id": "goal-id-15",
+                "revision": 1,
+                "action": "complete"
+              }
+            },
+            {
+              "type": "tool_result",
+              "id": "h:id-34:tool-result:toolu_id-31",
+              "toolCallId": "toolu_id-31",
+              "ok": true,
+              "output": "{\"goal\":{\"id\":\"goal-id-15\",\"revision\":2,\"objective\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\",\"phase\":\"complete\",\"roundsStarted\":1,\"maxGoalRounds\":256},\"activation\":\"disarmed\"}"
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t2-s2"
+        },
+        {
+          "id": "h:id-37",
+          "entryId": "id-37",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "model": "aiclient-gateway/fake-1",
+          "blocks": [
+            {
+              "type": "text",
+              "id": "h:id-37:text:0",
+              "text": "Wrapping up the goal for the user."
+            }
+          ],
+          "liveMessageId": "dsh-aiclient-rec-plan-review-t2-s3"
+        }
+      ],
+      "offset": 0,
+      "limit": 80,
+      "totalCount": 11,
+      "hasMore": false
+    }
+  },
+  "tree": {
+    "snapshot": {
+      "logicalSessionId": "rec-plan-review",
+      "sessionFile": "<dsh-home>/aiclient-sessions/aiclient-rec-plan-review.dsh.json",
+      "workspacePath": "<workspace>/plan-review",
+      "leaf": {
+        "activeEntryId": "id-37",
+        "fileTailEntryId": "aiclient-rec-plan-review#64"
+      },
+      "nodes": [
+        {
+          "id": "id-1",
+          "parentId": null,
+          "depth": 0,
+          "entryType": "message",
+          "role": "user",
+          "preview": "P1-PLAN-REVIEW: plan the change, then carry it out.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": false,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-6",
+          "parentId": "id-1",
+          "depth": 1,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-10",
+          "parentId": "id-6",
+          "depth": 2,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-14",
+          "parentId": "id-10",
+          "depth": 3,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-17",
+          "parentId": "id-14",
+          "depth": 4,
+          "entryType": "notice",
+          "role": "system",
+          "preview": "Plan approved: set as the goal, running on full auto.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-22",
+          "parentId": "id-17",
+          "depth": 5,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-25",
+          "parentId": "id-22",
+          "depth": 6,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "P1-PLAN-REVIEW wrote plan-output.txt.",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-26",
+          "parentId": "id-25",
+          "depth": 7,
+          "entryType": "message",
+          "role": "user",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-29",
+          "parentId": "id-26",
+          "depth": 8,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-33",
+          "parentId": "id-29",
+          "depth": 9,
+          "entryType": "message",
+          "role": "assistant",
+          "timestamp": "<ms>",
+          "childCount": 1,
+          "forkable": true,
+          "active": true,
+          "leaf": false
+        },
+        {
+          "id": "id-37",
+          "parentId": "id-33",
+          "depth": 10,
+          "entryType": "message",
+          "role": "assistant",
+          "preview": "Wrapping up the goal for the user.",
+          "timestamp": "<ms>",
+          "childCount": 0,
+          "forkable": true,
+          "active": true,
+          "leaf": true
+        }
+      ],
+      "totalNodes": 11,
+      "returnedNodes": 11,
+      "truncated": false
+    }
+  },
+  "respond": {
+    "PLAN-REVIEW": [
+      {
+        "ok": true,
+        "result": {
+          "handled": true
+        }
+      },
+      {
+        "ok": true,
+        "result": {
+          "handled": true
+        }
+      }
+    ]
+  },
+  "written": true
+}

@@ -974,6 +974,93 @@ scenario('question', (events, id) => {
   });
 });
 
+/**
+ * Decision 169: plan mode's review. The card docks as the review card, an
+ * approval's posture switch comes as `session.permissions` before the card
+ * settles, the review's rows end in a word (never red), and the approval
+ * leaves its notice; a closed review is closed, not failed.
+ */
+scenario('plan-review', (events, id) => {
+  it('docks each review as the review card, the revised plan after the first', () => {
+    const mid = replayUntil(events, (event) => event.type === 'question.resolved');
+    expect(mid.pendingQuestions).toHaveLength(1);
+    const card = bucket(mid, id)
+      .flatMap((message) => message.blocks)
+      .find((block) => block.type === 'question');
+    expect(card?.planReview).toMatchObject({
+      kind: 'plan',
+      source: 'exit_plan_mode',
+      title: 'P1-PLAN-REVIEW: write the plan output',
+    });
+    expect(sessionOf(mid, id)?.status).toBe('waiting_question');
+  });
+
+  it('reports the posture switch before the card settles, then runs the work and the goal round', () => {
+    const switched = events.findIndex((event) => event.type === 'session.permissions');
+    const settled = events.findIndex(
+      (event, index) => index > switched && event.type === 'question.resolved'
+    );
+    expect(switched).toBeGreaterThan(0);
+    expect(settled).toBe(switched + 1);
+    expect(events[switched]?.payload).toMatchObject({
+      permissions: { mode: 'agent', gear: 'auto' },
+      cause: 'plan-approved',
+      goal: { set: true },
+    });
+    const state = replay(events);
+    const cards = bucket(state, id)
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'question');
+    expect(cards.map((card) => card.planReviewResult?.choice)).toEqual([
+      'keep-planning',
+      'goal:auto',
+    ]);
+    const [turn, round] = turnsOf(state, id);
+    expect(turn?.rows.map((row) => [row.toolName, row.failed, row.planReview?.key])).toEqual([
+      ['read', false, undefined],
+      ['exit_plan_mode', false, 'Keep revising: {{feedback}}'],
+      ['exit_plan_mode', false, 'Plan approved'],
+      ['write', false, undefined],
+    ]);
+    expect(turn?.notices).toHaveLength(1);
+    expect(round?.head).toBe('origin:goal');
+  });
+
+  it('reopened, the rows say the same, and the approval notice stays', () => {
+    const reopened = turnsOf(reopen(id, loadRpc('plan-review').history.page.messages), id);
+    expect(reopened[0]?.rows.map((row) => [row.toolName, row.failed, row.planReview?.key])).toEqual(
+      [
+        ['read', false, undefined],
+        ['exit_plan_mode', false, 'Keep revising: {{feedback}}'],
+        ['exit_plan_mode', false, 'Plan approved'],
+        ['write', false, undefined],
+      ]
+    );
+    expect(reopened[0]?.notices).toHaveLength(1);
+  });
+});
+
+scenario('plan-dismiss', (events, id) => {
+  it('a closed review reads as closed, and the next message is reviewed again', () => {
+    const state = replay(events);
+    const turns = turnsOf(state, id);
+    expect(turns).toHaveLength(2);
+    for (const turn of turns) {
+      expect(turn.rows.map((row) => [row.toolName, row.failed, row.planReview?.key])).toEqual([
+        ['exit_plan_mode', false, 'Review closed'],
+      ]);
+    }
+    const cards = bucket(state, id)
+      .flatMap((message) => message.blocks)
+      .filter((block) => block.type === 'question');
+    expect(cards.map((card) => [card.questionOutcome, card.questionStopped ?? false])).toEqual([
+      ['cancelled', false],
+      ['cancelled', false],
+    ]);
+    expect(events.some((event) => event.type === 'session.permissions')).toBe(false);
+  });
+});
+
 scenario('steer', (events, id) => {
   const rpc = loadRpc('steer');
 
@@ -1262,6 +1349,10 @@ const REOPEN_DIFFERS: Readonly<Record<string, string>> = {
   'perm-restart': 'the session-grant activity row is live only (decision 143)',
   'perm-subagent': 'a child’s approval card is live only',
   question: 'the question card is live only; the answer stays in the ask_user_question row',
+  'plan-dismiss':
+    'the review card is live only (decision 169); the exit_plan_mode row says the review closed',
+  'plan-review':
+    'the review card is live only (decision 169); the rows and the approval notice say what was chosen',
 };
 
 describe('reopening a recorded chat', () => {

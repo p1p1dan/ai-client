@@ -667,6 +667,31 @@ describe('rewind keeps the grants (P1-6c, decision 043)', () => {
   });
 });
 
+describe('rewind keeps DSH’s plan mode with the gate (decision 169)', () => {
+  it('[rewind-plan-mode] the child’s agent is told the gate’s mode, as the bootstrap told the old one', async () => {
+    const stubFile = writeRootStub();
+    const dsh = fakeDsh({ [ROOT]: TWO_TURNS });
+    const selected: Array<[string, boolean]> = [];
+    const planMode = {
+      get: () => ({ active: false }),
+      set: (agent: { id: string }, active: boolean) => {
+        selected.push([agent.id, active]);
+        return 'noop';
+      },
+    };
+    const get = (dsh.ctx as { get: (name: string) => unknown }).get;
+    (dsh.ctx as { get: (name: string) => unknown }).get = (name) =>
+      name === 'planMode' ? planMode : get(name);
+    const runtime = await open(dsh, stubFile);
+    expect(selected).toEqual([[ROOT, false]]);
+    await rewind(runtime, 'u2');
+    expect(selected).toEqual([
+      [ROOT, false],
+      [`${ROOT}_r2`, false],
+    ]);
+  });
+});
+
 describe('fork — a child for the id Main minted (decision 027 rule 4)', () => {
   const TARGET = 'session-fork-7';
   const CHILD = dshSessionIdFor(TARGET);

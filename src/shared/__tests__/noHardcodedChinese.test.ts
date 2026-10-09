@@ -83,6 +83,10 @@ const ALLOWED = new Map<string, string>([
   ['shared/i18n.ts', 'the dictionary itself'],
   ['renderer/stores/settings/defaults.ts', 'default prompts sent to the model, not UI copy'],
   ['renderer/hooks/useCodeReview.ts', 'the code-review output language, sent to the model'],
+  [
+    'shared/planReview.ts',
+    'decision 169: the Chinese headings of a plan it reads (its goal section), never shown',
+  ],
 ]);
 
 const CJK = /[一-鿿]/;

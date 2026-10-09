@@ -3,6 +3,7 @@ import { readdir, stat, unlink } from 'node:fs/promises';
 import os from 'node:os';
 import { dirname } from 'node:path';
 import { translate } from '@shared/i18n';
+import { decodePlanReviewResponse } from '@shared/planReview';
 import { forkSessionTitle } from '@shared/sessionTitles';
 import { STDERR_FORWARD_MAX_LINES_PER_TURN, sanitizeStderrLine } from '@shared/stderrRedaction';
 import type { SessionAttachment, SessionEffortLevel } from '@shared/types/agentHost';
@@ -288,6 +289,23 @@ interface ManagedSlot {
   hostFaultStreak?: number;
   /** It was running or stopping a turn when the host last went away: recovered early. */
   activeAtHostExit?: boolean;
+  /**
+   * dsh-rebase decision 169 — the plan review cards this worker raised and
+   * Main has not seen settle: `null` while up, then the posture an approval
+   * Main itself forwarded derives (`decodePlanReviewResponse`). The worker's
+   * `session.permissions` is accepted only for an approval recorded here,
+   * and only with that posture; anything else is dropped.
+   */
+  planReviews?: Map<string, RuntimePermissionSettings | null>;
+  /**
+   * dsh-rebase decision 169 — `permissions` was last set by a plan review's
+   * approval, not by the renderer. A renderer that missed that event (a
+   * reload while the card was answered) reopens the chat with its older
+   * posture; a warm create / resume then hands this one back
+   * (`session.permissions` cause `sync`) instead of re-applying the stale
+   * one. Cleared by the next `setPermissions`.
+   */
+  postureFromPlanReview?: boolean;
 }
 
 /**
@@ -933,12 +951,7 @@ export class WorkerManager {
         await this.retireAndDispose(existing, 'slot-dispose').catch(() => undefined);
       } else if (existing && existing.state !== 'disposing') {
         this.claimEntry(existing, input.ownerWebContentsId);
-        if (
-          input.permissions &&
-          (existing.permissions?.mode !== input.permissions.mode ||
-            existing.permissions?.gear !== input.permissions.gear)
-        )
-          await this.setPermissions(input.sessionId, input.permissions);
+        await this.reconcilePermissions(existing, input.permissions, requestId);
         existing.lastUsedAt = this.now();
         if (existing.state === 'ready' && existing.sessionFile) {
           // Re-announcing an uncommitted path would put the reservation back in
@@ -1207,12 +1220,7 @@ export class WorkerManager {
           );
         }
         this.claimEntry(entry, input.ownerWebContentsId);
-        if (
-          input.permissions &&
-          (entry.permissions?.mode !== input.permissions.mode ||
-            entry.permissions?.gear !== input.permissions.gear)
-        )
-          await this.setPermissions(input.sessionId, input.permissions);
+        await this.reconcilePermissions(entry, input.permissions, requestId);
         const history = await this.readHistory(entry, 0, 80);
         await this.commitResumed({
           sessionId: input.sessionId,
@@ -2367,10 +2375,25 @@ export class WorkerManager {
       ...(input.response ? { response: input.response } : {}),
       ...(input.cancel ? { cancel: true } : {}),
     };
-    const result = await entry.slot.request<
-      WorkerQuestionRespondResult,
-      WorkerQuestionRespondPayload
-    >('worker.question.respond', payload);
+    // Decision 169: the posture a plan review's approval may switch to is
+    // the one THIS answer names, recorded before the worker acts on it (it
+    // reports the switch before it acknowledges the answer).
+    const review = entry.planReviews;
+    if (review?.has(input.questionId)) {
+      const decision = decodePlanReviewResponse(input);
+      review.set(input.questionId, decision.kind === 'approve' ? decision.permissions : null);
+    }
+    let result: unknown;
+    try {
+      result = await entry.slot.request<WorkerQuestionRespondResult, WorkerQuestionRespondPayload>(
+        'worker.question.respond',
+        payload
+      );
+    } finally {
+      // Whatever the worker did with it, an approval it has not reported by
+      // now is not one Main will take later.
+      if (review?.get(input.questionId)) review.set(input.questionId, null);
+    }
     if (!isWorkerQuestionRespondResult(result)) {
       throw new WorkerManagerError(
         'worker_invalid_question_ack',
@@ -2378,6 +2401,66 @@ export class WorkerManager {
       );
     }
     return result.handled;
+  }
+
+  /**
+   * Decision 169 — a warm create / resume carries the posture the renderer
+   * stored. Applied as before, unless the worker's posture came from a plan
+   * review's approval the renderer has not stored yet (a reload while the
+   * card was answered): then Main hands its own back (`session.permissions`
+   * `sync`) and keeps it.
+   */
+  private async reconcilePermissions(
+    entry: ManagedSlot,
+    permissions: RuntimePermissionSettings | undefined,
+    requestId: string
+  ): Promise<void> {
+    if (
+      !permissions ||
+      (entry.permissions?.mode === permissions.mode && entry.permissions?.gear === permissions.gear)
+    )
+      return;
+    if (entry.postureFromPlanReview && entry.permissions) {
+      this.dispatch({
+        type: 'session.permissions',
+        sessionId: entry.logicalSessionId,
+        requestId,
+        payload: { permissions: { ...entry.permissions }, cause: 'sync' },
+      });
+      return;
+    }
+    await this.setPermissions(entry.logicalSessionId, permissions);
+  }
+
+  /**
+   * Decision 169 — the worker switched the posture on a plan review's
+   * approval. Taken only for an approval Main forwarded itself, with the
+   * posture derived from that answer (never the payload's alone); then it is
+   * what a crash restart re-applies and what a gear change mid-turn compares
+   * against. False: drop the event.
+   */
+  private acceptPlanApproval(
+    entry: ManagedSlot,
+    payload: { permissions?: RuntimePermissionSettings; cause?: string; questionId?: string }
+  ): boolean {
+    const approved =
+      payload.cause === 'plan-approved' && payload.questionId
+        ? entry.planReviews?.get(payload.questionId)
+        : undefined;
+    if (
+      !approved ||
+      payload.permissions?.mode !== approved.mode ||
+      payload.permissions?.gear !== approved.gear
+    ) {
+      console.warn(
+        `[dsh-chat:${entry.logicalSessionId}] posture change refused: no plan review approval of Main's matches it`
+      );
+      return false;
+    }
+    entry.planReviews?.set(payload.questionId as string, null);
+    entry.permissions = { ...approved };
+    entry.postureFromPlanReview = true;
+    return true;
   }
 
   /**
@@ -2477,7 +2560,10 @@ export class WorkerManager {
         );
       entry.lastUsedAt = this.now();
     }
-    if (entry) entry.permissions = { ...permissions };
+    if (entry) {
+      entry.permissions = { ...permissions };
+      entry.postureFromPlanReview = false;
+    }
     return requestId;
   }
 
@@ -3413,6 +3499,24 @@ export class WorkerManager {
     }
 
     entry.lastUsedAt = this.now();
+    // Decision 169: plan review cards, and the posture an approval of one switched.
+    if (event.type === 'question.requested' && event.payload?.review) {
+      entry.planReviews ??= new Map();
+      entry.planReviews.set(event.payload.questionId, null);
+    }
+    if (event.type === 'question.resolved') entry.planReviews?.delete(event.payload?.questionId);
+    if (event.type === 'session.permissions') {
+      if (!this.acceptPlanApproval(entry, event.payload ?? {})) return;
+      this.dispatch({
+        ...event,
+        sessionId: event.sessionId ?? entry.logicalSessionId,
+        payload: {
+          ...event.payload,
+          permissions: { ...(entry.permissions as RuntimePermissionSettings) },
+        },
+      });
+      return;
+    }
     if (event.type === 'preview.requested') {
       // P5-2-3. Answered HERE rather than forwarded to a card: the preview
       // surface is an Electron window, which is Main's to own. It is still

@@ -93,6 +93,7 @@ import { ComposerTargetBar } from './ComposerTargetBar';
 import { ComposerUsageChip } from './ComposerUsageChip';
 import { deriveChatEmptySurface } from './chatEmptyState';
 import { runCompactCommand } from './compactCommand';
+import { onComposerFocusRequest } from './composerFocus';
 import { resolveActiveTarget } from './composerTarget';
 import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
@@ -137,6 +138,7 @@ import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingErr
 import { resolveResumeModel, toWireModel } from './models';
 import { PiModelSyncNotice } from './PiModelSyncNotice';
 import { catalogModels } from './piModelCatalog';
+import { pendingPlanReviewId } from './planReviewModel';
 import { QueuedMessageStrip } from './QueuedMessageStrip';
 import {
   decideAdmittedTimeoutOutcome,
@@ -1017,6 +1019,22 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     updateValue(mergeOfferedText(valueRef.current, text));
   }, [activeSessionId, offeredText, updateValue]);
 
+  // Decision 169: the plan review card closed so the user can type — the
+  // message box takes the keyboard, caret at the end of the draft.
+  useEffect(
+    () =>
+      onComposerFocusRequest(
+        () => draftOwnerRef.current,
+        () => {
+          const ta = textareaRef.current;
+          if (!ta) return;
+          ta.focus();
+          ta.setSelectionRange(ta.value.length, ta.value.length);
+        }
+      ),
+    []
+  );
+
   // B9 (round-4 point-check fix, Codex 2.3): `mode` flipping empty->session
   // (the FIRST send) remounts `textareaEl` under a structurally different
   // parent below, destroying the native <textarea> node. If the user was
@@ -1312,6 +1330,11 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // the queue instead of racing it. `decideSendAction`'s `hasTarget` check
     // already guarantees `activeSessionId` is non-null here.
     if (!activeSessionId) return;
+    // Decision 169: a plan review up in this chat is closed first (the model
+    // stops and waits), so the message goes out next — still in plan mode —
+    // instead of waiting behind a card. Ctrl+Enter alike. Other question cards
+    // keep their own rule (decision 114 rule 6).
+    await closePendingPlanReview(activeSessionId);
     if (mode === 'interject') {
       // Decision 093: straight into the running turn. Only a worker with no
       // turn at all sends the message on to the queue, as Enter would.
@@ -1344,6 +1367,13 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // (decision 2.2): the draft is now owned by the queue entry.
     updateValue('');
     attachments.removeDrafts(queued.attachments.map((draft) => draft.id));
+  };
+
+  /** Decision 169: answer this chat's pending plan review with a cancel, if one is up. */
+  const closePendingPlanReview = async (sessionId: string): Promise<void> => {
+    const store = useChatSessionsStore.getState();
+    const questionId = pendingPlanReviewId(store, sessionId);
+    if (questionId) await store.respondQuestion({ questionId, cancel: true });
   };
 
   /**

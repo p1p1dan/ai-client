@@ -32,6 +32,15 @@
  *                       and the second call runs without one
  *        PERM-PLAN      a second channel opened in plan mode: its write is
  *                       refused without a card, its read runs
+ *        PLAN-SIBLING   (decision 169) the same session: DSH's plan mode
+ *                       followed the gate from the bootstrap, so the model's
+ *                       `exit_plan_mode` raises our review card; answered
+ *                       "run once" it switches the posture mid-turn, and the
+ *                       write the model put beside it waits for the next step
+ *        PLAN-GOAL      back in plan mode, the model's own `create_goal` opens
+ *                       the same review; approved as a goal it is set, the
+ *                       call answers with it, the next step writes, and the
+ *                       goal round completes it
  *      two P1-3a experiments, ENV (no .env file reaches a tool, decision 023)
  *      and FDS (the descriptors a tool inherits, decision 034's precondition),
  *      P1-15's one-shot completions beside S1 (decision 125: `complete`, no
@@ -453,7 +462,9 @@ async function main() {
     logicalSessionId: string,
     label: string,
     text: string,
-    answer: 'allow' | 'deny' | ((card: Message, index: number) => string) = 'allow'
+    answer: 'allow' | 'deny' | ((card: Message, index: number) => string) = 'allow',
+    /** Decision 169: the answer to each plan review card of the turn. */
+    review?: (card: Message, index: number) => Message
   ) => {
     const { client } = host;
     const requestId = `turn-${label}`;
@@ -471,9 +482,15 @@ async function main() {
       );
     const answered = new Set<unknown>();
     const cards: Array<{ toolName: unknown; action: unknown; decision: string }> = [];
+    const reviews: Message[] = [];
     const unanswered = (events: Message[]) =>
       events.filter(
-        (e) => e.type === 'permission.requested' && !answered.has(payloadOf(e).permissionId)
+        (e) =>
+          (e.type === 'permission.requested' && !answered.has(payloadOf(e).permissionId)) ||
+          (review !== undefined &&
+            e.type === 'question.requested' &&
+            payloadOf(e).review !== undefined &&
+            !answered.has(payloadOf(e).questionId))
       );
     let idle = false;
     for (;;) {
@@ -485,6 +502,16 @@ async function main() {
       const slice = client.events(ch).slice(from);
       for (const card of unanswered(slice)) {
         const payload = payloadOf(card);
+        if (card.type === 'question.requested' && review) {
+          answered.add(payload.questionId);
+          reviews.push(payload.review as Message);
+          await client.request(ch, 'worker.question.respond', {
+            logicalSessionId,
+            questionId: payload.questionId,
+            ...review(payload, reviews.length - 1),
+          });
+          continue;
+        }
         answered.add(payload.permissionId);
         const decision = typeof answer === 'function' ? answer(payload, cards.length) : answer;
         cards.push({ toolName: payload.toolName, action: payload.action, decision });
@@ -511,6 +538,9 @@ async function main() {
         .filter((e) => e.type === 'permission.resolved')
         .map((e) => String(payloadOf(e).decision)),
       tools: events.filter((e) => e.type === 'tool.completed').map((e) => payloadOf(e)),
+      // Decision 169: the plan reviews answered, and the posture switches they brought.
+      reviews,
+      postures: events.filter((e) => e.type === 'session.permissions').map((e) => payloadOf(e)),
       // Decision 131: the titles plugin calls declared (`presentCall`), in the order they came.
       presentations: events
         .filter(
@@ -643,6 +673,50 @@ async function main() {
     if (!bootPlan.ok) throw new Error(`plan bootstrap: ${JSON.stringify(bootPlan.error)}`);
     await runTurn(a, chPlan, PLAN_SESSION, 'PERM-PLAN', 'P1-PERM-PLAN: write, then read.');
     report.planFileWritten = existsSync(join(box.workspace, 'perm-plan.txt'));
+    // Decision 169: DSH's plan mode followed the gate from the bootstrap, so
+    // exit_plan_mode reaches our review card; "run once" switches the posture,
+    // and the write beside it waits for the next step.
+    await runTurn(
+      a,
+      chPlan,
+      PLAN_SESSION,
+      'PLAN-SIBLING',
+      'P1-PLAN-SIBLING: present the plan with a write beside it.',
+      'allow',
+      () => ({ answers: { 'plan-review': 'run:auto' } })
+    );
+    const siblingFile = join(box.workspace, 'plan-sibling.txt');
+    report.planSiblingFile = existsSync(siblingFile) ? readFileSync(siblingFile, 'utf8') : null;
+    // Back in plan mode between turns: the model's own create_goal is reviewed too.
+    report.planModeAgain = await a.client.call(chPlan, 'worker.setPermissions', {
+      logicalSessionId: PLAN_SESSION,
+      permissions: { mode: 'plan', gear: 'auto' },
+    });
+    const goalFrom = a.client.events(chPlan).length;
+    await runTurn(
+      a,
+      chPlan,
+      PLAN_SESSION,
+      'PLAN-GOAL',
+      'P1-PLAN-GOAL: propose the goal.',
+      'allow',
+      () => ({ answers: { 'plan-review': 'goal:auto' } })
+    );
+    // The goal's first round, a turn nobody sent, completes it.
+    report.planGoalRound = await a.client.until(
+      chPlan,
+      (events) =>
+        events
+          .slice(goalFrom)
+          .some(
+            (e) =>
+              e.type === 'session.status' &&
+              payloadOf(e).status === 'idle' &&
+              String(e.requestId).startsWith('dsh-turn-')
+          ),
+      90_000
+    );
+    report.planGoalFile = existsSync(join(box.workspace, 'plan-goal.txt'));
     await closeSession(a, chPlan);
 
     // Experiment (decision 023): no .env file reaches a tool.
@@ -1433,6 +1507,9 @@ async function main() {
   const permDeny = turns['PERM-DENY'] as GateTurn | undefined;
   const permSession = turns['PERM-SESSION'] as GateTurn | undefined;
   const permPlan = turns['PERM-PLAN'] as GateTurn | undefined;
+  type PlanTurn = GateTurn & { reviews?: Message[]; postures?: Message[] };
+  const planSibling = turns['PLAN-SIBLING'] as PlanTurn | undefined;
+  const planGoal = turns['PLAN-GOAL'] as PlanTurn | undefined;
   const files = report.files as { allowed?: boolean; denied?: boolean } | undefined;
   type Turn = { idle?: boolean; completed?: boolean; reply?: string };
   const resumedTurn = turns['RESUMED-STREAM'] as Turn | undefined;
@@ -1695,6 +1772,33 @@ async function main() {
       String(permPlan.tools?.[1]?.output).includes('plan notes') &&
       report.planFileWritten === false &&
       permPlan.completed === true,
+    // Decision 169: DSH's plan mode is on for a plan-mode session, its review
+    // is our card, and an approval switches the posture inside the turn.
+    planReviewSwitchesPostureMidTurn:
+      planSibling !== undefined &&
+      planSibling.reviews?.[0]?.source === 'exit_plan_mode' &&
+      String(planSibling.reviews?.[0]?.title).startsWith('P1-PLAN-SIBLING') &&
+      JSON.stringify(planSibling.postures?.map((posture) => posture.permissions)) ===
+        JSON.stringify([{ mode: 'agent', gear: 'auto' }]) &&
+      planSibling.tools?.[0]?.ok === true &&
+      planSibling.completed === true,
+    siblingCallWaitsForTheNextStep:
+      planSibling !== undefined &&
+      planSibling.tools?.[1]?.ok === false &&
+      String(planSibling.tools?.[1]?.error).includes('approved during this step') &&
+      planSibling.tools?.[2]?.ok === true &&
+      report.planSiblingFile === 'next step\n',
+    planModeGoalIsReviewed:
+      planGoal !== undefined &&
+      (report.planModeAgain as Message | undefined)?.ok === true &&
+      planGoal.reviews?.[0]?.source === 'create_goal' &&
+      planGoal.reviews?.[0]?.objective === 'P1-PLAN-GOAL: write plan-goal.txt and verify it' &&
+      planGoal.tools?.[0]?.ok === true &&
+      String(planGoal.tools?.[0]?.output).includes('"phase":"active"') &&
+      planGoal.postures?.[0]?.goal !== undefined &&
+      (planGoal.postures?.[0]?.goal as Message).set === true &&
+      report.planGoalFile === true &&
+      report.planGoalRound === true,
     toolsDoNotInheritIpc:
       ipcHandle !== undefined &&
       ipcHandle.hostFd3 !== null &&

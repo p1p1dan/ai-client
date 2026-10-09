@@ -130,6 +130,7 @@ import {
 import { TIMELINE_PADDING_CLASS } from './middleColumnLayout';
 import { isModelMissingError, MODEL_MISSING_ERROR_VIEW } from './modelMissingError';
 import { PermissionActivityRows } from './PermissionActivityRows';
+import { FrozenPlanReview } from './PlanReviewCard';
 import { type PromptNavItem, PromptNavRail } from './PromptNavRail';
 import { QuestionCard } from './QuestionCard';
 import { deriveQuestionCardState } from './questionCardModel';
@@ -3123,6 +3124,8 @@ function TurnItemView({
       // original block position.
       const state = deriveQuestionCardState(item.block);
       if (state === 'pending') return null;
+      // Decision 169: a settled plan review is one line saying what was chosen.
+      if (item.block.planReview) return <FrozenPlanReview block={item.block} />;
       return <QuestionCard variant="frozen" block={item.block} />;
     }
 

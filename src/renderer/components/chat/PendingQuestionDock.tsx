@@ -24,8 +24,12 @@
 
 import { useState } from 'react';
 import { useChatSessionsStore } from '../../stores/chatSessions';
+import { useSessionPanelsStore } from '../../stores/sessionPanels';
+import { requestComposerFocus } from './composerFocus';
+import { PlanReviewCard } from './PlanReviewCard';
 import { QuestionCard } from './QuestionCard';
 import { deriveQuestionCardState } from './questionCardModel';
+import { deriveGoalBarView } from './sessionPanelsModel';
 
 export function PendingQuestionDock({ sessionId }: { sessionId: string | null }) {
   // chat-event-01: a turn can park several questions at once, so this takes the
@@ -44,6 +48,10 @@ export function PendingQuestionDock({ sessionId }: { sessionId: string | null })
   });
   const respondQuestion = useChatSessionsStore((state) => state.respondQuestion);
   const [collapsed, setCollapsed] = useState(false);
+  // Decision 169: whether a plan review may still set a goal is the goal bar's call.
+  const goalPanels = useSessionPanelsStore((state) =>
+    sessionId ? state.bySession[sessionId] : undefined
+  );
 
   // `pending` without a block is a real intermediate state, not a bug: the
   // event that docks the question and the one that writes its block are the
@@ -52,6 +60,26 @@ export function PendingQuestionDock({ sessionId }: { sessionId: string | null })
   // Belt and braces with the store: a card frozen by `question.resolved` must
   // not linger here answerable, whichever of the two updates lands first.
   if (deriveQuestionCardState(block) !== 'pending') return null;
+
+  if (block.planReview) {
+    // Decision 169: a plan review is its own card. Keyed by the question, so
+    // the next review (a revised plan) starts from the defaults again.
+    return (
+      <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">
+        <div className="mx-auto w-full max-w-reading">
+          <PlanReviewCard
+            key={pending.questionId}
+            block={block}
+            goal={deriveGoalBarView(goalPanels, false)}
+            onRespond={(payload) => respondQuestion({ ...payload, questionId: pending.questionId })}
+            onClosed={() => {
+              if (sessionId) requestComposerFocus(sessionId);
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-w-0 shrink-0 px-2 pb-2 sm:px-6">

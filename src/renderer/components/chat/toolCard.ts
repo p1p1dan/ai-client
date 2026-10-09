@@ -15,6 +15,7 @@ import {
   PI_TOOL_NAMES,
   RUNTIME_TOOL_NAMES,
 } from './piToolNames';
+import { type PlanReviewWord, planReviewRowWord } from './planReviewRowWord';
 import { derivePermissionAutoNote, derivePermissionVerb } from './questionCardModel';
 import { deriveToolDiff, type ToolDiff } from './toolDiff';
 import { dshShellOutputHead, isDshAbortedText, startAtLine } from './toolOutputHead';
@@ -523,6 +524,14 @@ export interface ToolRowView {
    */
   outcome?: ToolRunOutcome;
   /**
+   * dsh-rebase decision 169: how a plan review the call raised ended
+   * (`exit_plan_mode`, or `create_goal` in plan mode) — approved, keep
+   * revising (with what the user wrote), closed. Said as a word after the
+   * row, like `outcome`, never in the failed tone: a review that was not
+   * approved is an answer, not an error. A dictionary key and its params.
+   */
+  planReview?: PlanReviewWord;
+  /**
    * The `tool.started` stamp of a running row (2026-09-23), for its live
    * elapsed tail. Only the START is derived here; the elapsed is computed at
    * paint (`runningElapsedMs`) by the one leaf that reads the ticking clock,
@@ -667,10 +676,13 @@ interface ThinkingRowOptions {
 export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): ToolRowView {
   const outcome = toolRunOutcome(run) ?? undefined;
   const running = run.status === 'running';
+  // Decision 169: a plan review's answer, read off the row (live and replayed alike).
+  const planReview = outcome ? undefined : planReviewRowWord(run.toolName, run.status, run.output);
   // A call that never ran did not FAIL: nothing was attempted. Its row says
   // what happened instead (`outcome`), in the row's ordinary tone — a
   // loop-guard cut used to paint 47 red rows for calls none of which executed.
-  const failed = run.status === 'failed' && !outcome;
+  // A plan review that was not approved did not fail either: it was answered.
+  const failed = run.status === 'failed' && !outcome && !planReview;
   // A refused call never ran, so it must not be described in the past tense —
   // the collapsed row is the only thing most readers see (§6.4, G-9). The same
   // holds for a call the runtime refused or never started (N5). A stopped one
@@ -709,9 +721,12 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
   // note, which `outcome` already says in the reader's language; so has one
   // whose outcome the engine never recorded (decision 032). A refusal keeps
   // its body: the runtime's reason is the only account of why.
+  // Decision 169: nor has a plan review's — DSH's English account of the
+  // answer, which the row's word already says (the plan stays the input body).
   const showOutputBody =
     !showTodos &&
     !running &&
+    !planReview &&
     outcome !== 'notStarted' &&
     outcome !== 'outcomeUnknown' &&
     (failed || Boolean(recordedOutput));
@@ -791,6 +806,7 @@ export function deriveToolRowView(run: ToolRun, options: ToolCardOptions = {}): 
     running,
     failed,
     ...(outcome ? { outcome } : {}),
+    ...(planReview ? { planReview } : {}),
     ...(backgroundJob ? { backgroundJob } : {}),
     ...(exitCode !== undefined ? { exitCode } : {}),
     runningStartedAtMs,

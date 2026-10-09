@@ -8,7 +8,7 @@ import type {
 import { getDisplayPathBasename } from '@shared/utils/path';
 import { isRemoteVirtualPath, toRemoteVirtualPath } from '@shared/utils/remotePath';
 import { buildRepositoryId } from '@shared/utils/workspace';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { closeConfirmCopy } from './App/closeConfirmCopy';
 import { type Repository, TEMP_REPO_ID } from './App/constants';
@@ -30,6 +30,7 @@ import {
 } from './App/hooks';
 import { getStoredWorktreeMap, pathsEqual, STORAGE_KEYS } from './App/storage';
 import { SignInConfirmHost } from './components/auth/SignInConfirmHost';
+import { writeSessionPermissions } from './components/chat/sessionPreferenceStore';
 import { DevToolsOverlay } from './components/DevToolsOverlay';
 import { UnsavedPromptHost } from './components/files/UnsavedPromptHost';
 import { AddRepositoryDialog } from './components/git';
@@ -68,7 +69,9 @@ import {
 import { useI18n } from './i18n';
 import { initCloneProgressListener } from './stores/cloneTasks';
 import { useEditorStore } from './stores/editor';
+import { useLegacyMigrationStore } from './stores/legacyMigration';
 import { startPermissionGateWatch } from './stores/permissionGate';
+import { startPlanApprovalPostureWatch } from './stores/planApprovalPosture';
 import { useSettingsStore } from './stores/settings';
 import { useTempWorkspaceStore } from './stores/tempWorkspace';
 import { useWorkspaceModeStore } from './stores/workspaceMode';
@@ -136,6 +139,23 @@ export default function App() {
   useEffect(() => {
     return startPermissionGateWatch();
   }, []);
+
+  // Decision 169: a plan review's approval switched a chat's posture inside
+  // its worker (or Main restates it to this window). Stored for that chat
+  // whichever chat is on screen, so the chip and the next resume agree.
+  const tRef = useRef(t);
+  tRef.current = t;
+  useEffect(
+    () =>
+      startPlanApprovalPostureWatch(() => ({
+        t: (key, params) => tRef.current(key, params),
+        writeSessionPermissions,
+        notePostureSynced: (sessionId) =>
+          useLegacyMigrationStore.getState().notePostureSynced(sessionId),
+        toast: (toast) => addToast(toast),
+      })),
+    []
+  );
 
   // Listen for auto-fetch completion events to refresh git status
   useAutoFetchListener();

@@ -3,6 +3,8 @@
 import { dshNoticeKindOf } from '@shared/dshNotices';
 // Leaf module too (no imports at all): a plugin call's own title (decision 131).
 import { sameToolCallPresentation, type ToolCallPresentation } from '@shared/dshToolPresentation';
+// Types only: the plan review's choice and goal outcome (decision 169).
+import type { PlanReviewChoice, PlanReviewGoalOutcome } from '@shared/planReview';
 import type { AgentWireName } from '@shared/types/agentWire';
 import type {
   PermissionAskReason,
@@ -12,6 +14,7 @@ import type {
   PermissionGrantScope,
   PermissionRequestAction,
   PermissionRequestKind,
+  PlanReviewCard,
   QuestionItem,
   RuntimeEvent,
   SessionRecoveryNote,
@@ -340,6 +343,13 @@ export interface ChatBlock {
    */
   questionAnswers?: Record<string, string>;
   questionResponse?: string;
+  /**
+   * dsh-rebase decision 169: the question is a plan review, drawn as the
+   * review card (`PlanReviewCard`) instead of the question card.
+   */
+  planReview?: PlanReviewCard;
+  /** Decision 169: what the user chose on the review, and an approval's goal. */
+  planReviewResult?: { choice: PlanReviewChoice; goal?: PlanReviewGoalOutcome };
 }
 
 /** Read-only attachment metadata echoed on a user message (round-2 P0). Mirrors
@@ -2153,6 +2163,7 @@ function applyRuntimeEventCore(
                 type: 'question',
                 questionId,
                 questions: event.payload.questions,
+                ...(event.payload.review ? { planReview: event.payload.review } : {}),
                 resolved: false,
               },
             ],
@@ -2171,7 +2182,7 @@ function applyRuntimeEventCore(
     }
 
     case 'question.resolved': {
-      const { questionId, outcome, answers, response, stopped } = event.payload;
+      const { questionId, outcome, answers, response, stopped, review } = event.payload;
       const bucket = state.messages[sessionId];
       // Retire only the entry this event names. A resolution for another
       // session, or one the worker emits for a request that never produced a
@@ -2196,6 +2207,7 @@ function applyRuntimeEventCore(
                 ...(answers ? { questionAnswers: answers } : {}),
                 ...(response ? { questionResponse: response } : {}),
                 ...(stopped && outcome === 'cancelled' ? { questionStopped: true as const } : {}),
+                ...(review ? { planReviewResult: review } : {}),
               }
             : block
         ),

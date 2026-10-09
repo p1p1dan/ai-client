@@ -3933,8 +3933,6 @@ Object.assign(zhTranslations, {
   'Plan mode': '计划模式',
   'Confirm before changes': '改动前确认',
   'Auto edit': '自动编辑',
-  'Read-only: explores without asking and writes up a plan. Edits, other commands and web tools are refused.':
-    '只读：勘察时不再询问，最后写出计划。改文件、其他命令和联网工具都会被拒绝。',
   'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.':
     '工作区内的改动和命令直接执行；工作区外的路径、联网和其他工具仍会询问。',
   'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.':
@@ -4037,4 +4035,73 @@ Object.assign(zhTranslations, {
     '当前模型未声明支持图片，发送后模型看不到这张图片。可换用支持图片的模型；如果是你自己添加的 AI 服务，也可以在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型，打开「图片输入」。',
   'For an AI service you added, open Settings · Models · AI services → Edit → Model settings and select this model: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.':
     '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「模型设置」中选中该模型：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。',
+});
+
+// Plan review (decision 169)
+/**
+ * dsh-rebase decision 169: plan mode's end. The review card in the dock
+ * (`PlanReviewCard`, `planReviewModel`), the line a settled review leaves in
+ * the timeline, the word a review's tool row ends with (`planReviewRowWord`),
+ * the notice an approval leaves in the log (`PLAN_REVIEW_NOTICE_SUMMARIES`),
+ * the toast when an approval switches the posture (`planApprovalPosture`),
+ * and the plan preset's menu line, which now says the plan is reviewed
+ * (replacing decision 166's neutral one).
+ */
+Object.assign(zhTranslations, {
+  'Read-only: explores without asking, then presents its plan for your review. Edits, other commands and web tools are refused.':
+    '只读：勘察时不再询问，完成后把计划交给你审阅。改文件、其他命令和联网工具都会被拒绝。',
+  'Plan ready for review': '计划待审阅',
+  'Goal proposed for review': '目标待审阅',
+  'Expand the plan review': '展开计划审阅',
+  'Collapse the plan review': '收起计划审阅',
+  'Show the whole plan': '展开完整计划',
+  'Show less of the plan': '收起计划',
+  'Goal it would set': '将设定的目标',
+  'After approval': '批准后怎么执行',
+  'Set as goal, run on full auto': '设为目标，全自动执行',
+  'Works toward this plan round after round until it is done; edits and commands are not asked about one by one.':
+    '以本计划为目标多轮推进直到完成；改动与命令不再逐一询问。',
+  'Set as goal, bypass all prompts': '设为目标，完全放行执行',
+  'Also runs what full auto would stop to ask about. You confirm this once more.':
+    '连全自动会停下询问的操作也直接执行；需要再确认一次。',
+  'Run it once, without a goal': '只执行这一次，不设目标',
+  'Carries out the plan in this run on full auto, then stops.':
+    '以全自动在本轮执行计划，完成后停下。',
+  'Keep discussing and revising': '继续讨论修改',
+  'Stays in plan mode; what you write goes back to the model.':
+    '留在计划模式，你写的意见会交给模型。',
+  'This chat has an unfinished goal. Pause, finish or clear it in the goal bar first.':
+    '本会话已有未完成的目标，请先在目标条暂停、完成或清除它。',
+  'What should change': '需要修改的地方',
+  'Say what should change, or close the review to type a message.':
+    '写下需要修改的地方，或关闭审阅直接输入消息。',
+  'Close the review and type a message': '关闭审阅，改为输入消息',
+  'With all prompts bypassed, nothing is asked again (explicit deny rules still apply) until you pick another permission level at the bottom left of the message box.':
+    '完全放行后，所有操作都不再询问（明确的拒绝规则除外），直到你在输入框左下角改回其他权限。',
+  'Confirm: run with all prompts bypassed': '确认以完全放行执行',
+  'Plan review · approved: set as goal, full auto': '计划审阅 · 已批准：设为目标，全自动执行',
+  'Plan review · approved: set as goal, all prompts bypassed':
+    '计划审阅 · 已批准：设为目标，完全放行执行',
+  'Plan review · approved: run once, no goal': '计划审阅 · 已批准：只执行这一次，不设目标',
+  'Plan review · keep revising: {{feedback}}': '计划审阅 · 继续讨论修改：{{feedback}}',
+  'Plan review · keep revising': '计划审阅 · 继续讨论修改',
+  'Plan review · closed': '计划审阅 · 已关闭审阅',
+  'Plan review · stopped': '计划审阅 · 已停止',
+  'Goal not set: {{reason}}': '未能设定目标：{{reason}}',
+  'Plan approved': '已批准',
+  'Keep revising: {{feedback}}': '继续修改：{{feedback}}',
+  'Keep revising': '继续修改',
+  'Review closed': '已关闭审阅',
+  'Approved, no goal set': '已批准，未设目标',
+  'Approved; the goal could not be set': '已批准，未能设定目标',
+  'Plan approved: switched to {{preset}}': '计划已批准，已切换到「{{preset}}」',
+  'Plan approved: set as the goal, running on full auto.': '计划已批准：已设为目标，以全自动执行。',
+  'Plan approved: set as the goal, running with all prompts bypassed.':
+    '计划已批准：已设为目标，以完全放行执行。',
+  'Plan approved for this run only, on full auto; no goal was set.':
+    '计划已批准：只执行这一次（全自动），未设目标。',
+  'Plan approved on full auto; the goal could not be set.':
+    '计划已批准（全自动），但未能设定目标。',
+  'Plan approved with all prompts bypassed; the goal could not be set.':
+    '计划已批准（完全放行），但未能设定目标。',
 });

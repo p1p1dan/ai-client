@@ -451,6 +451,17 @@ export function deriveGoalBarView(
   }
 }
 
+/**
+ * Decision 169: the objective as the folded bar's one line. A goal set from
+ * an approved plan is markdown that opens with the plan's `# title`; the line
+ * shows that title without the heading marks. Any other objective is its
+ * first line as written.
+ */
+export function goalObjectiveHeadline(objective: string): string {
+  const first = objective.split(/\r\n|\n|\r/u).find((line) => line.trim().length > 0) ?? '';
+  return first.replace(/^\s{0,3}#{1,6}\s+/u, '').trim();
+}
+
 /** The key a dismissed complete goal is remembered by: its id and revision. */
 export function goalDismissKey(goalId: string, revision: number): string {
   return `${goalId}#${revision}`;

@@ -25,6 +25,12 @@
  * 164): a Windows path with no drive is refused before the gate, a directory
  * that does not exist (or cannot be entered) after the gate allowed it.
  *
+ * Plan review (decision 169), before any classification: a chat session's
+ * own call is refused while its bridge holds them (`refuseCall`: a plan was
+ * approved in the agent's current step), and `update_goal` resuming a goal
+ * is refused in plan mode, with how to leave it. `create_goal` in plan mode
+ * is not refused here: the bridge reviews it (`tools/execute`).
+ *
  * Gates are attached per chat session by the bridge (`attachGate`); this row
  * never builds one.
  */
@@ -42,6 +48,7 @@ import {
 } from '../../shared/permissions/gate.ts';
 import type { PermissionFileSystem } from '../../shared/permissions/shellPaths.ts';
 import { canonicalSpelling, type SyncRealpath } from '../../shared/permissions/workspace.ts';
+import { isGoalResumeCall, PLAN_MODE_RESUME_REASON } from '../../shared/planReview.ts';
 import { TURN_CEILING_REFUSAL_CODE } from '../loopGuard/constants.ts';
 import { classifyTool } from './classification.ts';
 import type {
@@ -90,6 +97,11 @@ export interface AttachGateOptions {
    * (pwsh) against; defaults to the host's environment.
    */
   env?: Record<string, string>;
+  /**
+   * Decision 169: why a call of the root session itself (not a delegate's)
+   * may not run now, asked before the gate; undefined lets it through.
+   */
+  refuseCall?: (exec: DshToolCall) => string | undefined;
 }
 
 export interface AttachedGate {
@@ -148,6 +160,7 @@ interface Attachment {
   gate: AttachableGate;
   cwd?: string;
   env?: Record<string, string>;
+  refuseCall?: (exec: DshToolCall) => string | undefined;
   release: () => void;
 }
 
@@ -304,6 +317,7 @@ export class PermissionHost {
       gate: options.gate,
       ...(options.cwd ? { cwd: options.cwd } : {}),
       ...(options.env ? { env: options.env } : {}),
+      ...(options.refuseCall ? { refuseCall: options.refuseCall } : {}),
       release: unsubscribe,
     };
     try {
@@ -369,6 +383,15 @@ export class PermissionHost {
         kind: 'deny',
         reason: refusal,
         info: { name: 'LoopGuard', code: TURN_CEILING_REFUSAL_CODE },
+      };
+    // Decision 169: held by the plan review, or a goal plan mode cannot run.
+    const held = route.delegate ? undefined : route.gate.refuseCall?.(exec);
+    if (held !== undefined) return { kind: 'deny', reason: held, info: info('plan_review_hold') };
+    if (route.gate.gate.mode === 'plan' && isGoalResumeCall(exec.name, exec.arguments))
+      return {
+        kind: 'deny',
+        reason: PLAN_MODE_RESUME_REASON,
+        info: info('plan_mode_goal_resume'),
       };
     if (classifyTool(exec.name) === 'internal') {
       this.allowed.add(exec);

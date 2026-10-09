@@ -125,3 +125,21 @@ describe('Turn heads (P1-7a, replacing decision 106 rule 36’s empty bubble)', 
     expect(turns[1]?.body.map((message) => message.id)).toEqual(['a2']);
   });
 });
+
+describe('a plan review’s approval notice (decision 169)', () => {
+  it('is the app’s own sentence, a dictionary key the row translates; other notices are not', () => {
+    const approval = reduced(
+      customMessage(
+        'dsh:aiclient-plan-review',
+        'Plan approved: set as the goal, running on full auto.'
+      )
+    );
+    expect(dshNoticeRowView(approval)).toMatchObject({
+      kind: 'notice',
+      text: 'Plan approved: set as the goal, running on full auto.',
+      translatable: true,
+    });
+    const job = reduced(customMessage('dsh:tool-jobs', 'background job bash-3 finished'));
+    expect(dshNoticeRowView(job)).not.toHaveProperty('translatable');
+  });
+});

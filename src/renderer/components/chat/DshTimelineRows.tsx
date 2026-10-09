@@ -174,8 +174,11 @@ export function DshNoticeRow({ view }: { view: DshNoticeRowView }) {
             )}
           </button>
         ) : (
-          <span className="min-w-0 flex-1 select-text truncate" title={view.text}>
-            {view.text}
+          <span
+            className="min-w-0 flex-1 select-text truncate"
+            title={view.translatable ? t(view.text) : view.text}
+          >
+            {view.translatable ? t(view.text) : view.text}
           </span>
         )}
       </div>

@@ -1,0 +1,1956 @@
+{
+  "header": {
+    "version": 4,
+    "id": "aiclient-rec-plan-review",
+    "createdAt": "<ms>",
+    "cwd": "<workspace>/plan-review",
+    "isSeeded": false
+  },
+  "inheritedEventCount": 0,
+  "cursor": 64,
+  "events": [
+    {
+      "type": "plan/mode",
+      "seq": 0,
+      "time": "<ms>",
+      "data": {
+        "active": true
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 1,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "P1-PLAN-REVIEW: plan the change, then carry it out."
+              }
+            ],
+            "source": {
+              "kind": "user"
+            },
+            "role": "user",
+            "id": "id-1"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 2,
+      "time": "<ms>",
+      "data": {
+        "turn": 1
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 3,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 4,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 5,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-prompt>"
+            }
+          ],
+          "source": {
+            "kind": "system-prompt"
+          },
+          "id": "id-2"
+        }
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 6,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "P1-PLAN-REVIEW: plan the change, then carry it out."
+          }
+        ],
+        "source": {
+          "kind": "user"
+        },
+        "role": "user",
+        "id": "id-1"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 7,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: plan. Inspect and produce an implementation plan for user approval. Write, Edit and write-capable plugins are unavailable. Bash is for inspection only; do not use it to modify files or execute the plan.\nPermission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-3"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 8,
+      "time": "<ms>",
+      "data": {
+        "header": {
+          "config": {
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "maxTokens": 8192
+          },
+          "adapterDefaults": {
+            "maxTokens": true
+          },
+          "tools": [
+            "ask_user_question",
+            "bash",
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "initial"
+      }
+    },
+    {
+      "type": "request/context",
+      "seq": 9,
+      "time": "<ms>",
+      "data": {
+        "provider": "aiclient-gateway",
+        "model": "fake-1",
+        "contextWindow": 200000
+      }
+    },
+    {
+      "type": "session/title",
+      "seq": 10,
+      "time": "<ms>",
+      "data": {
+        "title": "P1-PLAN-REVIEW: plan the change, then",
+        "messageSeqs": [6],
+        "source": {
+          "kind": "fallback"
+        }
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 11,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-4",
+              "name": "read",
+              "arguments": "{\"file_path\":\"plan-notes.txt\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-5",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-6"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-4",
+            "name": "read",
+            "args": ["{\"file_path\":\"plan-notes.txt\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-4",
+                "name": "read",
+                "arguments": "{\"file_path\":\"plan-notes.txt\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-5",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 12,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "callId": "toolu_id-4",
+        "name": "read",
+        "arguments": "{\"file_path\":\"plan-notes.txt\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 13,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-4"
+          },
+          "toolCallId": "toolu_id-4",
+          "content": [
+            {
+              "type": "text",
+              "text": "<path><workspace>/plan-review/plan-notes.txt</path>\n<type>file</type>\n<content>\n1: plan notes\n\n(End of file - total 1 lines)\n</content>"
+            }
+          ],
+          "isError": false,
+          "id": "id-7"
+        },
+        "meta": {
+          "path": "<workspace>/plan-review/plan-notes.txt",
+          "offset": 1,
+          "lines": [
+            {
+              "number": 1,
+              "text": "plan notes"
+            }
+          ],
+          "totalLines": 1
+        }
+      },
+      "sourceEventSeqs": [12],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 14,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 15,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 16,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-8",
+              "name": "exit_plan_mode",
+              "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-9",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-10"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-8",
+            "name": "exit_plan_mode",
+            "args": [
+              "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+            ]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-8",
+                "name": "exit_plan_mode",
+                "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-9",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 17,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "callId": "toolu_id-8",
+        "name": "exit_plan_mode",
+        "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 18,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-8"
+          },
+          "toolCallId": "toolu_id-8",
+          "content": [
+            {
+              "type": "text",
+              "text": "Error: The user chose to keep planning; their feedback: Name the output file in the goal."
+            }
+          ],
+          "isError": true,
+          "id": "id-11"
+        }
+      },
+      "sourceEventSeqs": [17],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 19,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 2
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 20,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 21,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-12",
+              "name": "exit_plan_mode",
+              "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-13",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-14"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-12",
+            "name": "exit_plan_mode",
+            "args": [
+              "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+            ]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-12",
+                "name": "exit_plan_mode",
+                "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-13",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 22,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "callId": "toolu_id-12",
+        "name": "exit_plan_mode",
+        "arguments": "{\"plan\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\\n\\n## Changes\\n1. Write plan-output.txt in the workspace.\\n\"}"
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 23,
+      "time": "<ms>",
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "create",
+        "goal": {
+          "id": "goal-id-15",
+          "revision": 1,
+          "objective": "# P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW done\".\n- The output file is named in this goal (review feedback).",
+          "phase": "active",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 0,
+        "createdAt": "<ms>",
+        "updatedAt": "<ms>"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 24,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-12"
+          },
+          "toolCallId": "toolu_id-12",
+          "content": [
+            {
+              "type": "text",
+              "text": "Plan approved — plan mode exited; carry out the plan starting with your next step."
+            }
+          ],
+          "isError": false,
+          "id": "id-16"
+        }
+      },
+      "sourceEventSeqs": [22],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 25,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "The user approved the plan in the review and set it as the session goal; after this turn, automatic goal rounds continue until the goal is complete. Tool calls now run without ordinary approval prompts (full auto)."
+              }
+            ],
+            "source": {
+              "kind": "aiclient-plan-review",
+              "form": "notice",
+              "summary": "Plan approved: set as the goal, running on full auto.",
+              "choice": "goal:auto",
+              "goal": true
+            },
+            "role": "user",
+            "id": "id-17"
+          }
+        ]
+      }
+    },
+    {
+      "type": "step/end",
+      "seq": 26,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 3
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 27,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "plan/mode",
+      "seq": 28,
+      "time": "<ms>",
+      "data": {
+        "active": false
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 29,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4
+      }
+    },
+    {
+      "type": "system/message",
+      "seq": 30,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4,
+        "message": {
+          "role": "system",
+          "content": [
+            {
+              "type": "text",
+              "text": "<system-prompt>"
+            }
+          ],
+          "source": {
+            "kind": "system-prompt"
+          },
+          "id": "id-18"
+        }
+      },
+      "sourceEventSeqs": [5],
+      "surfaceOp": {
+        "op": "replace",
+        "startSeq": 5,
+        "endSeq": 5
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 31,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "The user approved the plan in the review and set it as the session goal; after this turn, automatic goal rounds continue until the goal is complete. Tool calls now run without ordinary approval prompts (full auto)."
+          }
+        ],
+        "source": {
+          "kind": "aiclient-plan-review",
+          "form": "notice",
+          "summary": "Plan approved: set as the goal, running on full auto.",
+          "choice": "goal:auto",
+          "goal": true
+        },
+        "role": "user",
+        "id": "id-17"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "user/message",
+      "seq": 32,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<runtime-context>"
+          }
+        ],
+        "source": {
+          "kind": "runtime-context",
+          "form": "snapshot",
+          "sections": [
+            {
+              "name": "aiclient:environment",
+              "text": "<aiclient:environment>"
+            },
+            {
+              "name": "sandbox:policy",
+              "text": "Current DSH file policy: danger-full-access. The DSH file sandbox does not restrict file modifications by available operations."
+            },
+            {
+              "name": "approval:policy",
+              "text": "Approval policy: ask. Operations that require approval may ask through the configured answerers; without an available answerer, the request fails closed."
+            },
+            {
+              "name": "aiclient:permission",
+              "text": "Mode: agent. Execute the approved work with the available tools, under the selected permission gear.\nPermission gear: auto. Available tools may execute without ordinary approval. Explicit deny rules and the tool whitelist remain enforced. Never bypass a denied tool or path by switching tools."
+            }
+          ]
+        },
+        "role": "user",
+        "id": "id-19"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 33,
+      "time": "<ms>",
+      "data": {
+        "header": {
+          "config": {
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "maxTokens": 8192
+          },
+          "adapterDefaults": {
+            "maxTokens": true
+          },
+          "tools": [
+            "ask_user_question",
+            "bash",
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "series"
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 34,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-20",
+              "name": "write",
+              "arguments": "{\"file_path\":\"plan-output.txt\",\"content\":\"P1-PLAN-REVIEW done\\n\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-21",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-22"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-20",
+            "name": "write",
+            "args": ["{\"file_path\":\"plan-output.txt\",\"content\":\"P1-PLAN-REVIEW done\\n\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-20",
+                "name": "write",
+                "arguments": "{\"file_path\":\"plan-output.txt\",\"content\":\"P1-PLAN-REVIEW done\\n\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-21",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 35,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4,
+        "callId": "toolu_id-20",
+        "name": "write",
+        "arguments": "{\"file_path\":\"plan-output.txt\",\"content\":\"P1-PLAN-REVIEW done\\n\"}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 36,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-20"
+          },
+          "toolCallId": "toolu_id-20",
+          "content": [
+            {
+              "type": "text",
+              "text": "<path><workspace>/plan-review/plan-output.txt</path>\n<type>file</type>\n<content>\nCreated file\n</content>"
+            }
+          ],
+          "isError": false,
+          "id": "id-23"
+        },
+        "meta": {
+          "operation": "create",
+          "diffs": []
+        }
+      },
+      "sourceEventSeqs": [35],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 37,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 4
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 38,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 5
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 39,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 5,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "P1-PLAN-REVIEW wrote plan-output.txt."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-24",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-25"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["P1-PLAN-REVIEW wrote plan-output.txt."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "P1-PLAN-REVIEW wrote plan-output.txt."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-24",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 40,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "step": 5
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 41,
+      "time": "<ms>",
+      "data": {
+        "turn": 1,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 42,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "<goal_round>\nObjective: \"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\"\nRound: 1/256\n\nContinue working toward the objective in this same session. Treat the current workspace, tool results, and durable session state as authoritative; inspect them instead of assuming earlier narration is still current. Make concrete progress and verify the result. Before claiming completion, gather evidence that the whole objective is achieved, read the current goal, and mark it complete. If work remains, leave the goal active for the next round. Follow the configured goal-tool policy before reporting a blocker.\n</goal_round>"
+              }
+            ],
+            "source": {
+              "kind": "goal",
+              "goalId": "goal-id-15",
+              "revision": 1,
+              "round": 1
+            },
+            "role": "user",
+            "id": "id-26"
+          }
+        ]
+      }
+    },
+    {
+      "type": "turn/start",
+      "seq": 43,
+      "time": "<ms>",
+      "data": {
+        "turn": 2
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 44,
+      "time": "<ms>",
+      "data": {
+        "target": "next-turn",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 45,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 46,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<goal>"
+          }
+        ],
+        "source": {
+          "kind": "goal",
+          "goalId": "goal-id-15",
+          "revision": 1,
+          "round": 1
+        },
+        "role": "user",
+        "id": "id-26"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "request/header",
+      "seq": 47,
+      "time": "<ms>",
+      "data": {
+        "header": {
+          "config": {
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "maxTokens": 8192
+          },
+          "adapterDefaults": {
+            "maxTokens": true
+          },
+          "tools": [
+            "ask_user_question",
+            "bash",
+            "create_goal",
+            "edit",
+            "exit_plan_mode",
+            "get_goal",
+            "glob",
+            "grep",
+            "interrupt_agent",
+            "job_kill",
+            "job_list",
+            "job_output",
+            "list_agents",
+            "read",
+            "read_image",
+            "send_message",
+            "skill",
+            "subagent",
+            "subagent_fork",
+            "todo_write",
+            "update_goal",
+            "workflow",
+            "write"
+          ]
+        },
+        "reason": "series"
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 48,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-27",
+              "name": "get_goal",
+              "arguments": "{}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-28",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-29"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-27",
+            "name": "get_goal",
+            "args": ["{}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-27",
+                "name": "get_goal",
+                "arguments": "{}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-28",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 49,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "callId": "toolu_id-27",
+        "name": "get_goal",
+        "arguments": "{}"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 50,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-27"
+          },
+          "toolCallId": "toolu_id-27",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"goal\":{\"id\":\"goal-id-15\",\"revision\":1,\"objective\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\",\"phase\":\"active\",\"roundsStarted\":1,\"maxGoalRounds\":256},\"activation\":\"armed\"}"
+            }
+          ],
+          "isError": false,
+          "id": "id-30"
+        }
+      },
+      "sourceEventSeqs": [49],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 51,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 1
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 52,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "assistant/message",
+      "seq": 53,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "tool-call",
+              "id": "toolu_id-31",
+              "name": "update_goal",
+              "arguments": "{\"goal_id\":\"goal-id-15\",\"revision\":1,\"action\":\"complete\"}"
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-32",
+                "stopReason": "toolUse"
+              },
+              "blocks": [
+                {
+                  "type": "tool-call"
+                }
+              ]
+            }
+          },
+          "id": "id-33"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "tool-call"
+            }
+          },
+          {
+            "type": "tool-call-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "id": "toolu_id-31",
+            "name": "update_goal",
+            "args": ["{\"goal_id\":\"goal-id-15\",\"revision\":1,\"action\":\"complete\"}"]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "tool-call",
+                "id": "toolu_id-31",
+                "name": "update_goal",
+                "arguments": "{\"goal_id\":\"goal-id-15\",\"revision\":1,\"action\":\"complete\"}"
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "tool-calls"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-32",
+                  "stopReason": "toolUse"
+                },
+                "blocks": [
+                  {
+                    "type": "tool-call"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "tool/call",
+      "seq": 54,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "callId": "toolu_id-31",
+        "name": "update_goal",
+        "arguments": "{\"goal_id\":\"goal-id-15\",\"revision\":1,\"action\":\"complete\"}"
+      }
+    },
+    {
+      "type": "goal/change",
+      "seq": 55,
+      "time": "<ms>",
+      "data": {
+        "kind": "goal/change",
+        "version": 1,
+        "operation": "complete",
+        "goal": {
+          "id": "goal-id-15",
+          "revision": 2,
+          "objective": "# P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW done\".\n- The output file is named in this goal (review feedback).",
+          "phase": "complete",
+          "maxGoalRounds": 256
+        },
+        "roundsStarted": 1,
+        "createdAt": "<ms>",
+        "updatedAt": "<ms>"
+      }
+    },
+    {
+      "type": "tool/result",
+      "seq": 56,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 2,
+        "message": {
+          "role": "tool",
+          "source": {
+            "kind": "tool",
+            "callId": "toolu_id-31"
+          },
+          "toolCallId": "toolu_id-31",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"goal\":{\"id\":\"goal-id-15\",\"revision\":2,\"objective\":\"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\",\"phase\":\"complete\",\"roundsStarted\":1,\"maxGoalRounds\":256},\"activation\":\"disarmed\"}"
+            }
+          ],
+          "isError": false,
+          "id": "id-34"
+        }
+      },
+      "sourceEventSeqs": [54],
+      "surfaceOp": "append"
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 57,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "inserted": [
+          {
+            "content": [
+              {
+                "type": "text",
+                "text": "<goal_complete>\nObjective: \"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\"\nThe goal is marked complete and this autonomous run is ending. Write the closing message to the user now: state the outcome, summarize what was done and how it was verified, and point to the concrete results (files, commits, or other artifacts). Report only what earlier rounds and tool results in this session actually establish; when a detail is not in the session, say so instead of inventing it. Note anything the user should review or do next. Address the user directly. Do not call any more tools in this run; further work waits for the user's next instruction.\n</goal_complete>"
+              }
+            ],
+            "source": {
+              "kind": "tool-goal",
+              "form": "notice",
+              "summary": "complete: # P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW…"
+            },
+            "role": "user",
+            "id": "id-35"
+          }
+        ]
+      }
+    },
+    {
+      "type": "step/end",
+      "seq": 58,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 2
+      }
+    },
+    {
+      "type": "agent/inbox/spliced",
+      "seq": 59,
+      "time": "<ms>",
+      "data": {
+        "target": "next-step",
+        "start": 0,
+        "removedCount": 1,
+        "inserted": []
+      }
+    },
+    {
+      "type": "step/start",
+      "seq": 60,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 3
+      }
+    },
+    {
+      "type": "user/message",
+      "seq": 61,
+      "time": "<ms>",
+      "data": {
+        "content": [
+          {
+            "type": "text",
+            "text": "<goal_complete>\nObjective: \"# P1-PLAN-REVIEW: write the plan output\\n\\n## Goal and success criteria\\n- plan-output.txt holds \\\"P1-PLAN-REVIEW done\\\".\\n- The output file is named in this goal (review feedback).\"\nThe goal is marked complete and this autonomous run is ending. Write the closing message to the user now: state the outcome, summarize what was done and how it was verified, and point to the concrete results (files, commits, or other artifacts). Report only what earlier rounds and tool results in this session actually establish; when a detail is not in the session, say so instead of inventing it. Note anything the user should review or do next. Address the user directly. Do not call any more tools in this run; further work waits for the user's next instruction.\n</goal_complete>"
+          }
+        ],
+        "source": {
+          "kind": "tool-goal",
+          "form": "notice",
+          "summary": "complete: # P1-PLAN-REVIEW: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-REVIEW…"
+        },
+        "role": "user",
+        "id": "id-35"
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "assistant/message",
+      "seq": 62,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 3,
+        "message": {
+          "role": "assistant",
+          "content": [
+            {
+              "type": "text",
+              "text": "Wrapping up the goal for the user."
+            }
+          ],
+          "source": {
+            "kind": "model",
+            "provider": "aiclient-gateway",
+            "model": "fake-1",
+            "replayState": {
+              "response": {
+                "kind": "pi-ai",
+                "version": 2,
+                "api": "anthropic-messages",
+                "provider": "aiclient-gateway",
+                "model": "fake-1",
+                "responseId": "msg_id-36",
+                "stopReason": "stop"
+              },
+              "blocks": [
+                {
+                  "type": "text"
+                }
+              ]
+            }
+          },
+          "id": "id-37"
+        },
+        "usage": {
+          "inputTokens": 0,
+          "outputTokens": 0,
+          "totalTokens": 0
+        },
+        "stream": [
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-start",
+              "index": 0,
+              "blockType": "text"
+            }
+          },
+          {
+            "type": "text-chunks",
+            "time0": "<ms>",
+            "index": 0,
+            "texts": ["Wrapping up the goal for the user."]
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "block-end",
+              "index": 0,
+              "block": {
+                "type": "text",
+                "text": "Wrapping up the goal for the user."
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "usage",
+              "usage": {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0
+              }
+            }
+          },
+          {
+            "type": "chunk",
+            "time": "<ms>",
+            "chunk": {
+              "type": "finish",
+              "reason": {
+                "kind": "stop"
+              },
+              "replayState": {
+                "response": {
+                  "kind": "pi-ai",
+                  "version": 2,
+                  "api": "anthropic-messages",
+                  "provider": "aiclient-gateway",
+                  "model": "fake-1",
+                  "responseId": "msg_id-36",
+                  "stopReason": "stop"
+                },
+                "blocks": [
+                  {
+                    "type": "text"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "surfaceOp": "append"
+    },
+    {
+      "type": "step/end",
+      "seq": 63,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "step": 3
+      }
+    },
+    {
+      "type": "turn/end",
+      "seq": 64,
+      "time": "<ms>",
+      "data": {
+        "turn": 2,
+        "reason": {
+          "kind": "completed"
+        }
+      }
+    }
+  ]
+}

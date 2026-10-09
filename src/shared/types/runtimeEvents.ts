@@ -5,7 +5,9 @@
  */
 
 import type { ToolCallPresentation } from '../dshToolPresentation.ts';
+import type { PlanReviewChoice, PlanReviewGoalOutcome } from '../planReview.ts';
 import type { AgentWireName } from './agentWire';
+import type { RuntimePermissionSettings } from './runtimePermission.ts';
 import type {
   HistoryMessage,
   HistoryParseStats,
@@ -44,6 +46,7 @@ export type RuntimeEventType =
   | 'permission.activity'
   | 'subagent.activity'
   | 'session.projection'
+  | 'session.permissions'
   | 'session.completed'
   | 'session.failed'
   | 'session.stopped';
@@ -837,7 +840,34 @@ export interface QuestionRequestedEvent extends RuntimeEventBase {
      * settles it — which is the same outcome as a user who does not answer.
      */
     autoResolutionMs?: number | null;
+    /**
+     * dsh-rebase decision 169: the question is a plan review, drawn as the
+     * review card rather than as `questions` (which still carries the one
+     * question, keyed `plan-review`). Answered with `planReviewResponse`
+     * (`@shared/planReview`); a cancel closes the review.
+     */
+    review?: PlanReviewCard;
   };
+}
+
+/**
+ * dsh-rebase decision 169: what a plan review shows. Raised by DSH's
+ * `exit_plan_mode` (the plan the model presents) or by `create_goal` called
+ * in plan mode (the goal the model proposes, beside the latest plan).
+ */
+export interface PlanReviewCard {
+  kind: 'plan';
+  source: 'exit_plan_mode' | 'create_goal';
+  /** The plan's first heading. */
+  title?: string;
+  /** The plan, markdown; for `create_goal`, the plan last presented in the session, if any. */
+  plan?: string;
+  /** `create_goal`'s own objective. */
+  objective?: string;
+  /** The tool call that raised the review. */
+  callId?: string;
+  /** The objective of the goal an approval with a goal sets. */
+  goalObjective: string;
 }
 
 export interface SessionTerminalEvent extends RuntimeEventBase {
@@ -972,6 +1002,12 @@ export interface QuestionResolvedEvent extends RuntimeEventBase {
      * bridge sends it; an older sender's cancel reads as a Skip, as before.
      */
     stopped?: true;
+    /**
+     * dsh-rebase decision 169: a plan review the user answered — the choice,
+     * and for an approval that asked for a goal, whether it was set. A
+     * closed review is `cancelled` with no `review`.
+     */
+    review?: { choice: PlanReviewChoice; goal?: PlanReviewGoalOutcome };
   };
 }
 
@@ -1406,6 +1442,28 @@ export interface SessionProjectionEvent extends RuntimeEventBase {
 }
 
 /**
+ * dsh-rebase decision 169: the session's posture changed without the
+ * renderer asking — a plan review approved mid-turn switched it to execute
+ * mode (`plan-approved`, from the worker), or Main re-states the posture it
+ * holds for a renderer that missed that (`sync`). Main forwards a worker's
+ * `plan-approved` only for a review answer it forwarded itself, with the
+ * posture it derived from that answer. The renderer stores it as the
+ * session's posture and re-reads the chip.
+ */
+export interface SessionPermissionsEvent extends RuntimeEventBase {
+  type: 'session.permissions';
+  sessionId: string;
+  payload: {
+    permissions: RuntimePermissionSettings;
+    cause: 'plan-approved' | 'sync';
+    /** The review card answered (`plan-approved`). */
+    questionId?: string;
+    /** The goal the approval asked for, when it asked for one. */
+    goal?: PlanReviewGoalOutcome;
+  };
+}
+
+/**
  * T08-b — what the permission plugin BROADCAST, as opposed to what it asked.
  *
  * ## Why this is not `permission.requested`
@@ -1519,6 +1577,7 @@ export type RuntimeEvent =
   | PermissionActivityEvent
   | SubagentActivityEvent
   | SessionProjectionEvent
+  | SessionPermissionsEvent
   | SessionTerminalEvent;
 
 /**

@@ -59,6 +59,17 @@
  * `worker.question.respond`, settled with `question.resolved`; the asker's
  * abort (a Stop) and a closing session take the card down.
  *
+ * Plan mode and its review (decision 169, revising 047 rule 3): our gate's
+ * mode is the truth, and DSH's plan mode follows it (`syncPlanMode`, at the
+ * bootstrap, an idle posture change and a rewind), so DSH's `plan:policy`
+ * guides the model and `exit_plan_mode` presents the plan. Its review is our
+ * card (`planReview.ts`); `create_goal` in plan mode opens the same card
+ * (`tools/execute`). An approval switches the posture mid-turn — the one
+ * mode change a running turn takes, and only from here (`approvePlan`; the
+ * RPC setter still answers busy) — sets the goal when asked, tells Main
+ * (`session.permissions`) and leaves a notice for the model and the
+ * timeline; until the agent's next step its other calls are held.
+ *
  * Turn semantics (P1-4c1, decisions 093-095): Ctrl+Enter steers the running
  * turn (`agent.steer`): the message waits in DSH's inbox and the turn takes it
  * in at its next step boundary, echoed with the renderer's attempt id; with no
@@ -114,6 +125,19 @@ import {
   type PermissionPolicyFiles,
 } from '../../shared/permissions/policy.ts';
 import { type SyncRealpath, workspaceSpellings } from '../../shared/permissions/workspace.ts';
+import {
+  GOAL_NOT_SET_PREFIX,
+  PLAN_APPROVAL_HOLD_REASON,
+  PLAN_REVIEW_SOURCE_KIND,
+  type PlanReviewApproval,
+  type PlanReviewDecision,
+  type PlanReviewGoalOutcome,
+  planGoalObjective,
+  planReviewNoticeSummary,
+  planReviewNoticeText,
+  REVIEW_DISMISSED_TEXT,
+  RUN_WITHOUT_GOAL_TEXT,
+} from '../../shared/planReview.ts';
 import { resolveSettingSources } from '../../shared/settingSources.ts';
 import {
   type DshGoalActivation,
@@ -223,12 +247,29 @@ import {
   outOfBandCommandName,
 } from './panels.ts';
 import {
+  abortedOutcome,
+  approveAnswer,
+  askCancelled,
+  createGoalReviewCard,
+  type DshCreatedGoal,
+  type DshPlanReviewRequest,
+  exitPlanReviewCard,
+  goalObjectiveOf,
+  goalRoundCapOf,
+  goalToolValue,
+  keepPlanningAnswer,
+  keepPlanningMessage,
+  reviewAlreadyApproved,
+  reviewErrorOutcome,
+} from './planReview.ts';
+import {
   createDshQuestionPrompt,
   DSH_QUESTION_ID_PREFIX,
   type DshQuestionAnswer,
   type DshQuestionPrompt,
   type DshQuestionRequest,
   type DshQuestionResponse,
+  type PlanReviewSettlement,
 } from './questions.ts';
 import { type ApplySandboxMode, dshSandboxModeFor } from './sandboxMode.ts';
 import {
@@ -335,6 +376,18 @@ export interface DshBridgeOptionalServices {
   goals: DshGoalsView;
   /** `ctx.tools` (decision 131): a plugin tool's own title for a call (`toolPresentation.ts`). */
   tools: DshToolRegistryView;
+  /** `ctx.planMode` (decision 169): DSH's plan mode, following our gate's. */
+  planMode: DshPlanModeView;
+}
+
+/**
+ * `ctx.planMode` (dsh-plan-mode), narrowed. `set` commits at once between
+ * turns and is queued for the next accepted step inside one; selecting the
+ * state already logged or pending is a no-op.
+ */
+export interface DshPlanModeView {
+  get(agent: unknown): { active: boolean; pending?: boolean };
+  set(agent: unknown, active: boolean): 'committed' | 'queued' | 'cancelled' | 'noop';
 }
 
 /** The Cordis context of the `aiclient-bridge` row, narrowed to what is used here. */
@@ -430,7 +483,14 @@ export interface DshBridgeContext {
  */
 export type DshUserMessageSource =
   | { kind: 'user' }
-  | { kind: typeof DSH_SOURCE_AICLIENT_RETRY; form: 'notice'; summary: string };
+  | { kind: typeof DSH_SOURCE_AICLIENT_RETRY; form: 'notice'; summary: string }
+  | {
+      kind: typeof PLAN_REVIEW_SOURCE_KIND;
+      form: 'notice';
+      summary: string;
+      choice: PlanReviewApproval;
+      goal?: boolean;
+    };
 
 /** DSH's `AgentSetup`: runs on the agent's own scope before it is published. */
 export type DshAgentSetup = (agentCtx: unknown) => void;
@@ -449,6 +509,8 @@ export interface DshToolDispatch {
   readonly agent?: { readonly id: string };
   /** Set on a transport sub-dispatch (a `run_code` program's call): not the model's own. */
   readonly parent?: unknown;
+  /** The call's cancellation (a Stop). */
+  readonly signal?: AbortSignal;
 }
 
 /** What `tools/execute` answers (dsh-tools' `ToolExecutionResult`), narrowed. */
@@ -456,6 +518,8 @@ export interface DshToolOutcome {
   readonly isError: boolean;
   /** Execution-local; never in the log (`{kind: 'promoted', jobId}`, `{kind: 'continuable', …}`). */
   readonly value?: unknown;
+  /** Model context committed with the result, read at the next step (decision 169's notice). */
+  readonly additionalContexts?: readonly unknown[];
 }
 
 /** What the bridge takes besides the Cordis context, injected so it can run without DSH installed. */
@@ -705,6 +769,19 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private readonly jobs: DshJobsTracker;
   /** P1-7b: the session's children on the timeline (`subagents.ts`). */
   private readonly children: DshSubagentsTracker;
+  /**
+   * Decision 169: a plan was approved in the agent's current step. Until its
+   * next step (the next `assistant/message`) or the turn's end, the agent's
+   * other calls are refused (`PLAN_APPROVAL_HOLD_REASON`) and a further
+   * review raises no card.
+   */
+  private planHold = false;
+  /** Decision 169: an approval's notice, by the call that raised the review, for its result. */
+  private readonly planNotices = new Map<string, unknown>();
+  /** Decision 169: the plan `exit_plan_mode` last presented in this runtime. */
+  private lastPlan: string | undefined;
+  /** Decision 169: a host without `ctx.planMode` was reported once. */
+  private planModeMissingLogged = false;
   private disposed = false;
 
   constructor(ctx: DshBridgeContext, options: BridgeSessionRuntimeOptions, deps: DshBridgeDeps) {
@@ -745,6 +822,15 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       // Through `emit` as well: a card raised inside a turn carries its requestId.
       emit: (event) => this.emit(event as BridgeDraft),
       newId: () => `${DSH_QUESTION_ID_PREFIX}${randomUUID()}`,
+      planReviews: {
+        card: (review) => {
+          this.lastPlan = review.plan;
+          return exitPlanReviewCard(review, planGoalObjective(review.plan));
+        },
+        refuse: () => (this.planHold ? reviewAlreadyApproved() : undefined),
+        decide: (review) => (decision, questionId) =>
+          this.decideExitPlan(review, decision, questionId),
+      },
     });
     this.live = new DshLiveEvents({
       emit: (event) => this.emit(event),
@@ -933,6 +1019,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       capabilities: skills === undefined ? {} : { skills },
     };
     this.syncSandboxMode();
+    this.syncPlanMode();
     // P1-7b: the session's jobs from now on (a resumed session's live ones included).
     this.jobs.follow();
     this.projectionBaseline = this.readProjections();
@@ -1080,6 +1167,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
         dshSessionId,
         gate,
         cwd: this.cwd,
+        // Decision 169: the agent's own calls between an approval and its next step.
+        refuseCall: () => (this.planHold ? PLAN_APPROVAL_HOLD_REASON : undefined),
       });
     } catch (error) {
       // Another channel of this host has the session open: its lock, in our words.
@@ -1233,6 +1322,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     this.questions.drain('the chat session closed before the user answered');
     this.disposed = true;
     this.steered.clear();
+    this.planHold = false;
+    this.planNotices.clear();
     for (const send of this.commandSends.values()) send.controller.abort();
     this.commandSends.clear();
     this.projectionBaseline = null;
@@ -1766,6 +1857,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       );
     }
     this.syncSandboxMode();
+    this.syncPlanMode();
   }
 
   /**
@@ -1809,6 +1901,226 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     } catch (error) {
       this.options.log?.('[dsh-bridge] sandbox mode not applied', error);
     }
+  }
+
+  // ---- plan mode and its review (decision 169) ------------------------------------
+
+  /**
+   * DSH's plan mode follows the gate's mode. Between turns DSH commits the
+   * change at once (and tells the model, when its last request described the
+   * other mode); inside one the mode cannot have moved, so this is a no-op —
+   * except after an approval, which queues the exit itself. Selecting the
+   * state DSH already has does nothing, so a session never in plan mode logs
+   * nothing. A host without `ctx.planMode` keeps 1.0.x's plan mode: the gate
+   * alone, no review.
+   */
+  private syncPlanMode(): void {
+    const gate = this.gate;
+    const agent = this.handle?.agent;
+    if (!gate || !agent || this.disposed) return;
+    this.setPlanMode(agent, gate.mode === 'plan');
+  }
+
+  private setPlanMode(agent: DshAgent, active: boolean): void {
+    const planMode = this.ctx.get?.('planMode');
+    if (!planMode) {
+      if (active && !this.planModeMissingLogged) {
+        this.planModeMissingLogged = true;
+        this.options.log?.('[dsh-bridge] no plan-mode service: plan mode is the gate alone');
+      }
+      return;
+    }
+    try {
+      planMode.set(agent, active);
+    } catch (error) {
+      this.options.log?.('[dsh-bridge] plan mode not selected', error);
+    }
+  }
+
+  /** `exit_plan_mode`'s review answered: DSH's answer, after an approval switched the posture. */
+  private decideExitPlan(
+    review: DshPlanReviewRequest,
+    decision: PlanReviewDecision,
+    questionId: string
+  ): PlanReviewSettlement<DshQuestionAnswer> {
+    if (decision.kind === 'dismiss') return { result: askCancelled() };
+    if (decision.kind === 'keep-planning') {
+      return { result: keepPlanningAnswer(decision.feedback, review.item.id) };
+    }
+    const { goal } = this.approvePlan(
+      decision,
+      { objective: planGoalObjective(review.plan) },
+      questionId,
+      review.callId
+    );
+    return { result: approveAnswer(review.item.id), ...(goal ? { goal } : {}) };
+  }
+
+  /**
+   * An approval, in one synchronous block while the review's turn is open —
+   * no step can start in between:
+   *   1. the gate goes to execute mode on the chosen gear (`configure`: the
+   *      session's grants are forgotten, as any posture change forgets them,
+   *      decision 092). The one mode change a running turn takes; the RPC
+   *      setter still refuses it as busy;
+   *   2. the sandbox mode follows, and DSH's plan mode is told to exit at the
+   *      next step (`exit_plan_mode` queues the same exit itself; this one
+   *      covers `create_goal` and a plan-mode service reloaded meanwhile);
+   *   3. the agent's other calls are held until its next step;
+   *   4. the goal, when the choice asked for one: created here
+   *      (`ctx.goals.create`, armed) — the user's click is the authority,
+   *      as the goal bar's buttons are (decision 118). A refusal (an
+   *      unfinished goal is current) keeps the approval, and says why;
+   *   5. the notice the model and the timeline read, attached to the call's
+   *      result; and `session.permissions` to Main, before the card settles.
+   */
+  private approvePlan(
+    decision: Extract<PlanReviewDecision, { kind: 'approve' }>,
+    request: { objective: string; maxGoalRounds?: number },
+    questionId: string,
+    callId: string | undefined
+  ): { goal?: PlanReviewGoalOutcome; created?: DshCreatedGoal } {
+    const gate = this.requireGate();
+    const agent = this.requireAgent();
+    gate.configure(decision.permissions);
+    this.syncSandboxMode();
+    this.setPlanMode(agent, false);
+    this.planHold = true;
+    let goal: PlanReviewGoalOutcome | undefined;
+    let created: DshCreatedGoal | undefined;
+    if (decision.goal) {
+      try {
+        const goals = this.ctx.get?.('goals');
+        if (!goals?.create) throw new Error('this host has no goal service');
+        created = goals.create(agent, {
+          objective: request.objective,
+          ...(request.maxGoalRounds !== undefined ? { maxGoalRounds: request.maxGoalRounds } : {}),
+        });
+        goal = { set: true };
+      } catch (error) {
+        goal = { set: false, reason: error instanceof Error ? error.message : String(error) };
+        this.options.log?.('[dsh-bridge] plan approved without its goal', error);
+      }
+    }
+    if (callId) {
+      this.planNotices.set(
+        callId,
+        this.deps.createUserMessage({
+          content: [{ type: 'text', text: planReviewNoticeText(decision.choice, goal) }],
+          source: {
+            kind: PLAN_REVIEW_SOURCE_KIND,
+            form: 'notice',
+            summary: planReviewNoticeSummary(decision.choice, goal),
+            choice: decision.choice,
+            ...(goal ? { goal: goal.set } : {}),
+          },
+        })
+      );
+    }
+    this.emit({
+      type: 'session.permissions',
+      payload: {
+        permissions: { ...decision.permissions },
+        cause: 'plan-approved',
+        questionId,
+        ...(goal ? { goal } : {}),
+      },
+    });
+    return { ...(goal ? { goal } : {}), ...(created ? { created } : {}) };
+  }
+
+  /**
+   * `create_goal` while the gate is in plan mode (decision 169, the user's
+   * ruling): not refused — the goal the model proposes goes to the review
+   * card, beside the plan last presented. The call settles with what the
+   * user chose: the goal DSH's own tool would have returned (created here on
+   * approval, so no second goal can follow), or why there is none.
+   */
+  private async reviewGoalCall(exec: DshToolDispatch, objective: string): Promise<DshToolOutcome> {
+    if (this.planHold) return reviewErrorOutcome(PLAN_APPROVAL_HOLD_REASON, 'plan_review_hold');
+    const card = createGoalReviewCard({
+      objective,
+      callId: exec.callId,
+      ...(this.latestPlan() ? { plan: this.latestPlan() as string } : {}),
+    });
+    const maxGoalRounds = goalRoundCapOf(exec.arguments);
+    try {
+      return await this.questions.review<DshToolOutcome>(
+        card,
+        exec.signal,
+        (decision, questionId) =>
+          this.decideGoalCall(exec.callId, { objective, maxGoalRounds }, decision, questionId)
+      );
+    } catch (error) {
+      if (exec.signal?.aborted) return abortedOutcome();
+      return reviewErrorOutcome(
+        error instanceof Error ? error.message : String(error),
+        'plan_review_withdrawn'
+      );
+    }
+  }
+
+  private decideGoalCall(
+    callId: string,
+    request: { objective: string; maxGoalRounds: number | undefined },
+    decision: PlanReviewDecision,
+    questionId: string
+  ): PlanReviewSettlement<DshToolOutcome> {
+    if (decision.kind === 'dismiss') {
+      return { result: reviewErrorOutcome(REVIEW_DISMISSED_TEXT, 'plan_review_dismissed') };
+    }
+    if (decision.kind === 'keep-planning') {
+      return {
+        result: reviewErrorOutcome(
+          keepPlanningMessage(decision.feedback),
+          'plan_review_keep_planning'
+        ),
+      };
+    }
+    const { goal, created } = this.approvePlan(
+      decision,
+      {
+        objective: request.objective,
+        ...(request.maxGoalRounds !== undefined ? { maxGoalRounds: request.maxGoalRounds } : {}),
+      },
+      questionId,
+      callId
+    );
+    if (!decision.goal) {
+      return { result: reviewErrorOutcome(RUN_WITHOUT_GOAL_TEXT, 'plan_review_no_goal') };
+    }
+    if (!created) {
+      const reason = goal?.set === false ? goal.reason : 'unknown';
+      return {
+        result: reviewErrorOutcome(`${GOAL_NOT_SET_PREFIX}${reason}`, 'plan_review_goal_not_set'),
+        ...(goal ? { goal } : {}),
+      };
+    }
+    return { result: { isError: false, value: goalToolValue(created) }, ...(goal ? { goal } : {}) };
+  }
+
+  /** The plan last presented: this runtime's, else the newest `exit_plan_mode` call on the timeline. */
+  private latestPlan(): string | undefined {
+    if (this.lastPlan) return this.lastPlan;
+    const messages = this.historyCache.messages();
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const blocks = messages[index]?.blocks ?? [];
+      for (let position = blocks.length - 1; position >= 0; position -= 1) {
+        const block = blocks[position];
+        if (block?.type !== 'tool_call' || block.name !== 'exit_plan_mode') continue;
+        const plan = (block.input as { plan?: unknown } | undefined)?.plan;
+        if (typeof plan === 'string' && plan.trim()) return plan;
+      }
+    }
+    return undefined;
+  }
+
+  /** The call's result with the approval notice it raised, if it raised one. */
+  private withPlanNotice(callId: string, outcome: DshToolOutcome): DshToolOutcome {
+    const notice = this.planNotices.get(callId);
+    if (notice === undefined) return outcome;
+    this.planNotices.delete(callId);
+    return { ...outcome, additionalContexts: [...(outcome.additionalContexts ?? []), notice] };
   }
 
   // ---- reads (the projected log, historyCache.ts) ---------------------------------
@@ -1938,6 +2250,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       this.options.log?.('[dsh-bridge] rewind could not re-point the permission gate', error);
     }
     this.syncSandboxMode();
+    this.syncPlanMode();
     this.resetLiveState();
     // P1-7b: the jobs and children of the session the rewind left are not
     // the child's (a rewind waits for jobs; the retired agent's children go
@@ -2411,6 +2724,12 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       return next();
     }
     const { callId, name } = exec;
+    // Decision 169: in plan mode the goal the model proposes goes to the review.
+    const objective =
+      name === 'create_goal' && this.gate?.mode === 'plan'
+        ? goalObjectiveOf(exec.arguments)
+        : undefined;
+    const run = objective !== undefined ? () => this.reviewGoalCall(exec, objective) : next;
     try {
       this.live.onExecStarted(callId, this.now());
       this.jobs.beginCall(callId, name, exec.arguments);
@@ -2420,8 +2739,8 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
     }
     let outcome: DshToolOutcome | undefined;
     try {
-      outcome = await next();
-      return outcome;
+      outcome = await run();
+      return this.withPlanNotice(callId, outcome);
     } finally {
       const value = outcome && !outcome.isError ? outcome.value : undefined;
       try {
@@ -2459,6 +2778,11 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
             this.options.log?.('[dsh-bridge] subagent event failed', event.type, error);
           }
           return;
+        }
+        // Decision 169: the agent's next step (or the turn's end) lifts an approval's hold.
+        if (event.type === 'assistant/message' || event.type === 'turn/end') {
+          this.planHold = false;
+          if (event.type === 'turn/end') this.planNotices.clear();
         }
         // The history first: the live translation reads the fold (usage steps, goal budget).
         try {

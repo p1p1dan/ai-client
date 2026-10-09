@@ -67,6 +67,7 @@ import {
   type GoalBarView,
   goalCommandLine,
   goalDismissKey,
+  goalObjectiveHeadline,
 } from './sessionPanelsModel';
 
 /** The state word and what follows it, before the objective (prototype `GOAL_STATES`). */
@@ -226,7 +227,7 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
           <span className={cn(panelStripTextClass(), 'tabular-nums')}>
             {lead.title}
             <span className="text-muted-foreground">{middle}</span>
-            {view.objective}
+            {goalObjectiveHeadline(view.objective)}
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-0.5">
@@ -321,7 +322,9 @@ export function GoalBar({ sessionId, view }: { sessionId: string; view: GoalBarV
 function GoalBarBody({ view, t }: { view: GoalBarView; t: TFunction }) {
   return (
     <div className={cn(panelStripBodyClass(), 'space-y-0.5 pl-7')}>
-      <p className="select-text whitespace-pre-wrap break-words text-foreground">
+      {/* Decision 169: a goal set from a plan can run long; the open bar
+          scrolls it instead of pushing the timeline away. */}
+      <p className="max-h-48 select-text overflow-y-auto whitespace-pre-wrap break-words text-foreground">
         {view.objective}
       </p>
       {view.blockedMessage && (

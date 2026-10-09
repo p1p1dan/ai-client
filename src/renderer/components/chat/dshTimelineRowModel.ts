@@ -1,5 +1,6 @@
 import { CONTEXT_SUMMARY_TITLE } from '@shared/dshHistory/types';
 import type { Translate } from '@shared/i18n';
+import { PLAN_REVIEW_NOTICE_SUMMARIES } from '@shared/planReview';
 import type { TurnOrigin } from '@shared/types/sessionHistory';
 import type { ChatMessage } from '@/stores/chatSessions';
 
@@ -35,6 +36,12 @@ export interface DshNoticeRowView {
   text: string;
   /** A notice longer than one line (a subagent's message): it opens in place. */
   expandable: boolean;
+  /**
+   * Decision 169: `text` is the app's own sentence (a plan review's
+   * approval), a dictionary key the row translates; every other notice is
+   * the engine's text, shown as it came.
+   */
+  translatable?: true;
 }
 
 /** Past this, or with a line break, a notice line offers to open in full. */
@@ -67,6 +74,9 @@ export function dshNoticeRowView(message: ChatMessage): DshNoticeRowView | null 
     kind,
     text,
     expandable: kind === 'notice' && (text.includes('\n') || text.length > NOTICE_LINE_CHARS),
+    ...(kind === 'notice' && PLAN_REVIEW_NOTICE_SUMMARIES.includes(text)
+      ? { translatable: true as const }
+      : {}),
   };
 }
 

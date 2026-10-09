@@ -1,0 +1,553 @@
+[
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.projection",
+    "payload": {
+      "key": "todos",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.projection",
+    "payload": {
+      "key": "goal",
+      "view": null
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.projection",
+    "payload": {
+      "key": "subagentCatalog",
+      "view": []
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-6",
+      "role": "user",
+      "attemptId": "attempt-PLAN-DISMISS"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-6",
+      "blockId": "dsh-user-6-text",
+      "text": "P1-PLAN-DISMISS: present a plan; I will close the review."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-6"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "name": "exit_plan_mode",
+      "input": {
+        "__streaming": {
+          "bytes": 65,
+          "lines": 3
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "input": {
+        "plan": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "question.requested",
+    "payload": {
+      "questionId": "dsh-question-id-17",
+      "questions": [
+        {
+          "id": "plan-review",
+          "header": "Plan review",
+          "question": "P1-PLAN-DISMISS: write the plan output",
+          "options": []
+        }
+      ],
+      "review": {
+        "kind": "plan",
+        "source": "exit_plan_mode",
+        "title": "P1-PLAN-DISMISS: write the plan output",
+        "plan": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n",
+        "callId": "toolu_id-4",
+        "goalObjective": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\"."
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "question.resolved",
+    "payload": {
+      "questionId": "dsh-question-id-17",
+      "outcome": "cancelled"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1",
+      "toolCallId": "toolu_id-4",
+      "ok": false,
+      "error": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s2",
+      "blockId": "dsh-aiclient-rec-plan-dismiss-t1-s2-b0",
+      "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t1-s2"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "session.status",
+    "payload": {
+      "status": "running"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-user-23",
+      "role": "user",
+      "attemptId": "attempt-PLAN-DISMISS-2"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-user-23",
+      "blockId": "dsh-user-23-text",
+      "text": "P1-PLAN-DISMISS: present it again."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-user-23"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "tool.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "name": "exit_plan_mode",
+      "input": {
+        "__streaming": {
+          "bytes": 65,
+          "lines": 3
+        }
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "input": {
+        "plan": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n"
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "tool.updated",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "execStartedAt": "<ms>"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "question.requested",
+    "payload": {
+      "questionId": "dsh-question-id-18",
+      "questions": [
+        {
+          "id": "plan-review",
+          "header": "Plan review",
+          "question": "P1-PLAN-DISMISS: write the plan output",
+          "options": []
+        }
+      ],
+      "review": {
+        "kind": "plan",
+        "source": "exit_plan_mode",
+        "title": "P1-PLAN-DISMISS: write the plan output",
+        "plan": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\".\n\n## Changes\n1. Write plan-output.txt in the workspace.\n",
+        "callId": "toolu_id-11",
+        "goalObjective": "# P1-PLAN-DISMISS: write the plan output\n\n## Goal and success criteria\n- plan-output.txt holds \"P1-PLAN-DISMISS done\"."
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "question.resolved",
+    "payload": {
+      "questionId": "dsh-question-id-18",
+      "outcome": "cancelled"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "tool.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1",
+      "toolCallId": "toolu_id-11",
+      "ok": false,
+      "error": "Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.started",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s2",
+      "role": "assistant",
+      "model": "aiclient-gateway/fake-1"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.delta",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s2",
+      "blockId": "dsh-aiclient-rec-plan-dismiss-t2-s2-b0",
+      "text": "P1-PLAN-DISMISS waiting: Error: The user dismissed the plan review to speak instead; stay in plan mode, stop here, and wait for their message."
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "pending": true
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "usage.updated",
+    "payload": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "totalTokens": 0,
+      "costUsd": 0,
+      "context": {
+        "tokens": 0,
+        "contextWindow": 0,
+        "percent": 0
+      },
+      "session": {
+        "turns": 0,
+        "toolResults": 0,
+        "input": 0,
+        "output": 0,
+        "cacheRead": 0,
+        "cacheWrite": 0,
+        "totalTokens": 0,
+        "costUsd": 0
+      }
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "message.completed",
+    "payload": {
+      "messageId": "dsh-aiclient-rec-plan-dismiss-t2-s2"
+    }
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "session.completed",
+    "payload": {}
+  },
+  {
+    "sessionId": "rec-plan-dismiss",
+    "requestId": "turn-PLAN-DISMISS-2",
+    "type": "session.status",
+    "payload": {
+      "status": "idle"
+    }
+  }
+]

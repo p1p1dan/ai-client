@@ -194,6 +194,18 @@
  *                       dsh-rebase P1-4d3 adds P1-QUESTION (tools/bridge-record.ts
  *                       `question`): one `ask_user_question` call, then an answer
  *                       quoting the tool result the model got back.
+ *                       dsh-rebase decision 169 adds four for plan mode's review
+ *                       (tools/bridge-record.ts `plan-review` / `plan-dismiss`,
+ *                       tools/bridge-smoke.ts, the shared-host test's PLN-*):
+ *                       P1-PLAN-REVIEW (a read, then `exit_plan_mode`; presented
+ *                       again after keep-planning feedback; once approved, a write
+ *                       — the gate has left plan mode — and goal rounds that
+ *                       complete the goal), P1-PLAN-DISMISS (`exit_plan_mode`; a
+ *                       closed review is answered with text and nothing else),
+ *                       P1-PLAN-SIBLING (`exit_plan_mode` and a write in ONE reply:
+ *                       the write is held until the next step, then written) and
+ *                       P1-PLAN-GOAL (`create_goal` in plan mode, reviewed like a
+ *                       plan; once set, a write and goal rounds that complete it).
  *                       dsh-rebase P1-7b adds three for the recorder's `jobs-kill` and
  *                       `sub-cont`: P1-JOBKILL (a background ticker the window stops;
  *                       the kill's notice wakes the agent), P1-SUBCONT (a continuable
@@ -408,7 +420,7 @@ const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|S18)/;
+  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -519,6 +531,30 @@ function fileMarkers(text) {
 
 const tool = (name, input) => ({ kind: 'tool_use', status: 200, name, input });
 const say = (text) => ({ kind: 'text', status: 200, text });
+/** Several tool calls in one reply (decision 169's sibling call after exit_plan_mode). */
+const calls_ = (list) => ({ kind: 'burst', status: 200, calls: list, chunkMs: 15 });
+
+/** Decision 169: the plans the P1-PLAN-* scripts present; the title carries the marker. */
+function planFor(scenario, revision) {
+  return [
+    `# ${scenario}: write the plan output`,
+    '',
+    '## Goal and success criteria',
+    `- plan-output.txt holds "${scenario} done".`,
+    ...(revision > 0 ? ['- The output file is named in this goal (review feedback).'] : []),
+    '',
+    '## Changes',
+    '1. Write plan-output.txt in the workspace.',
+    '',
+  ].join('\n');
+}
+
+/** A goal round of a P1-PLAN-* script: read the goal, then complete it. */
+function planGoalRound(scenario, step, calls) {
+  if (step === 0) return tool('get_goal', {});
+  if (step === 1) return tool('update_goal', { ...goalRefFrom(calls), action: 'complete' });
+  return say(`${scenario} goal complete.`);
+}
 
 // dsh-rebase P0-4: the prompt carries a JSON object after the marker, e.g.
 // `P0-FS {"tag":"on","dir":"D:\\enc\\ws-on","marker":"...","token":"...","shell":"pwsh"}`.
@@ -1201,6 +1237,78 @@ const DSH_P0_2_SCRIPTS = {
       asked?.isError
         ? `P1-QUESTION failed: ${String(asked.result ?? '').slice(0, 300)}`
         : `P1-QUESTION got ${String(asked?.result ?? '(nothing)').slice(0, 400)}`
+    );
+  },
+  // dsh-rebase decision 169: plan mode's review (tools/bridge-record.ts
+  // `plan-review` / `plan-dismiss`, tools/bridge-smoke.ts, the shared-host PLN-*).
+  'P1-PLAN-REVIEW'(round, step, calls) {
+    if (round >= 1) return planGoalRound('P1-PLAN-REVIEW', step, calls);
+    if (step === 0) return tool('read', { file_path: 'plan-notes.txt' });
+    const last = calls[calls.length - 1];
+    const presented = calls.filter((c) => c.name === 'exit_plan_mode').length;
+    if (last.name === 'read') {
+      return tool('exit_plan_mode', { plan: planFor('P1-PLAN-REVIEW', 0) });
+    }
+    if (last.name === 'exit_plan_mode') {
+      if (!last.isError) {
+        return tool('write', {
+          file_path: 'plan-output.txt',
+          content: 'P1-PLAN-REVIEW done\n',
+        });
+      }
+      if (/keep planning/.test(String(last.result)) && presented < 3) {
+        return tool('exit_plan_mode', { plan: planFor('P1-PLAN-REVIEW', presented) });
+      }
+      return say(`P1-PLAN-REVIEW waiting: ${String(last.result ?? '').slice(0, 200)}`);
+    }
+    return say(
+      last.isError
+        ? `P1-PLAN-REVIEW could not write: ${String(last.result ?? '').slice(0, 200)}`
+        : 'P1-PLAN-REVIEW wrote plan-output.txt.'
+    );
+  },
+  'P1-PLAN-DISMISS'(_round, step, calls) {
+    if (step === 0) return tool('exit_plan_mode', { plan: planFor('P1-PLAN-DISMISS', 0) });
+    const last = calls[calls.length - 1];
+    return say(
+      last.isError
+        ? `P1-PLAN-DISMISS waiting: ${String(last.result ?? '').slice(0, 200)}`
+        : 'P1-PLAN-DISMISS approved.'
+    );
+  },
+  'P1-PLAN-SIBLING'(_round, step, calls) {
+    if (step === 0) {
+      return calls_([
+        { name: 'exit_plan_mode', input: { plan: planFor('P1-PLAN-SIBLING', 0) } },
+        { name: 'write', input: { file_path: 'plan-sibling.txt', content: 'sibling\n' } },
+      ]);
+    }
+    const last = calls[calls.length - 1];
+    if (step === 2 && last.name === 'write' && last.isError) {
+      return tool('write', { file_path: 'plan-sibling.txt', content: 'next step\n' });
+    }
+    return say(
+      `P1-PLAN-SIBLING ${calls
+        .map((c) => `${c.name}:${c.isError ? 'error' : 'ok'}`)
+        .join(' ')} ${String(calls[1]?.result ?? '').slice(0, 120)}`
+    );
+  },
+  'P1-PLAN-GOAL'(round, step, calls) {
+    if (round >= 1) return planGoalRound('P1-PLAN-GOAL', step, calls);
+    if (step === 0) {
+      return tool('create_goal', {
+        objective: 'P1-PLAN-GOAL: write plan-goal.txt and verify it',
+        max_goal_rounds: 3,
+      });
+    }
+    const last = calls[calls.length - 1];
+    if (step === 1 && !last.isError) {
+      return tool('write', { file_path: 'plan-goal.txt', content: 'P1-PLAN-GOAL done\n' });
+    }
+    return say(
+      last.isError
+        ? `P1-PLAN-GOAL stopped: ${String(last.result ?? '').slice(0, 200)}`
+        : 'P1-PLAN-GOAL wrote plan-goal.txt.'
     );
   },
   // dsh-rebase P1-6b: permission plugin experiments (tools/perm-experiments.ts).

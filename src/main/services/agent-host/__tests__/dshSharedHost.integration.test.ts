@@ -2244,6 +2244,197 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
   });
 
   /**
+   * Decision 169: plan mode's end through Main. A plan-mode chat's DSH plan
+   * mode is on, the model's `exit_plan_mode` reaches Main as the review card,
+   * and the answers Main forwards decide: an approval switches the posture
+   * inside the turn (Main takes it and hands it back on a reopen), sets the
+   * goal and lets the work run; a Stop or a closed review moves nothing.
+   */
+  describe('a plan review supervisor (decision 169)', () => {
+    let supervisor: Supervisor;
+    let manager: Manager;
+    const PLAN = { mode: 'plan', gear: 'auto' } as const;
+
+    beforeAll(() => {
+      supervisor = new DshHostSupervisor({ idleStopMs: 0, modelSource: modelSource() });
+      manager = newManager(supervisor, true);
+    });
+
+    afterAll(async () => {
+      await manager?.disposeAll('app-shutdown');
+      expect(liveHosts()).toHaveLength(0);
+    }, 60_000);
+
+    const reviewsOf = (id: string, from: number) =>
+      forSession(id, from).filter((e) => e.type === 'question.requested' && e.payload?.review);
+    const idleAfter = (id: string, from: number, requestId: (r: string) => boolean, ms = 120_000) =>
+      until(
+        () =>
+          forSession(id, from).some(
+            (e) =>
+              requestId(String(e.requestId)) &&
+              e.type === 'session.status' &&
+              e.payload?.status === 'idle'
+          ),
+        ms
+      );
+    async function sendTo(id: string, text: string): Promise<string> {
+      attempt += 1;
+      return manager.send({
+        sessionId: id,
+        attemptId: `attempt-${attempt}`,
+        text,
+        ownerWebContentsId: 81,
+      });
+    }
+
+    it('[PLN-1] approved through Main: the posture switches mid-turn, the goal is set, the work runs, the goal round completes it', async () => {
+      writeFileSync(join(workspace, 'plan-notes.txt'), 'plan notes\n');
+      await manager.createSession({
+        sessionId: 'pl1',
+        workspacePath: workspace,
+        ownerWebContentsId: 81,
+        permissions: PLAN,
+      });
+      const from = events.length;
+      const requestId = await sendTo('pl1', 'P1-PLAN-REVIEW: plan the change, then carry it out.');
+      expect(await until(() => reviewsOf('pl1', from).length === 1, 60_000)).toBe(true);
+      const first = reviewsOf('pl1', from)[0]?.payload;
+      expect(first?.review).toMatchObject({ kind: 'plan', source: 'exit_plan_mode' });
+      expect(
+        await manager.respondQuestion({
+          sessionId: 'pl1',
+          questionId: String(first?.questionId),
+          answers: { 'plan-review': 'keep-planning' },
+          response: 'Name the output file in the goal.',
+        })
+      ).toBe(true);
+      expect(await until(() => reviewsOf('pl1', from).length === 2, 60_000)).toBe(true);
+      // The RPC setter still refuses a mode change while the turn runs.
+      await expect(
+        manager.setPermissions('pl1', { mode: 'agent', gear: 'auto' })
+      ).rejects.toMatchObject({ code: 'session_busy' });
+      const second = String(reviewsOf('pl1', from)[1]?.payload?.questionId);
+      expect(
+        await manager.respondQuestion({
+          sessionId: 'pl1',
+          questionId: second,
+          answers: { 'plan-review': 'goal:auto' },
+        })
+      ).toBe(true);
+      expect(await idleAfter('pl1', from, (r) => r === requestId)).toBe(true);
+      expect(await idleAfter('pl1', from, (r) => r.startsWith('dsh-turn-'))).toBe(true);
+      expect(
+        forSession('pl1', from)
+          .filter((e) => e.type === 'session.permissions')
+          .map((e) => e.payload)
+      ).toEqual([
+        {
+          permissions: { mode: 'agent', gear: 'auto' },
+          cause: 'plan-approved',
+          questionId: second,
+          goal: { set: true },
+        },
+      ]);
+      expect(readFileSync(join(workspace, 'plan-output.txt'), 'utf8')).toBe(
+        'P1-PLAN-REVIEW done\n'
+      );
+      const goal = forSession('pl1', from)
+        .filter((e) => e.type === 'session.projection' && e.payload?.key === 'goal')
+        .at(-1)?.payload?.view as { goal?: { phase?: string } } | undefined;
+      expect(goal?.goal?.phase).toBe('complete');
+      // Main took the posture: a window reopening the chat with the old one gets it back.
+      const reopened = events.length;
+      await manager.createSession({
+        sessionId: 'pl1',
+        workspacePath: workspace,
+        ownerWebContentsId: 81,
+        permissions: PLAN,
+      });
+      expect(
+        forSession('pl1', reopened)
+          .filter((e) => e.type === 'session.permissions')
+          .map((e) => e.payload)
+      ).toEqual([{ permissions: { mode: 'agent', gear: 'auto' }, cause: 'sync' }]);
+      await manager.closeSession('pl1');
+    }, 300_000);
+
+    it('[PLN-2] Stop with the review up: the card goes, the turn stops, nothing switches; the next message presents the plan again', async () => {
+      await manager.createSession({
+        sessionId: 'pl2',
+        workspacePath: workspace,
+        ownerWebContentsId: 81,
+        permissions: PLAN,
+      });
+      const from = events.length;
+      const requestId = await sendTo('pl2', 'P1-PLAN-DISMISS: present a plan; I will stop you.');
+      expect(await until(() => reviewsOf('pl2', from).length === 1, 60_000)).toBe(true);
+      const questionId = String(reviewsOf('pl2', from)[0]?.payload?.questionId);
+      await manager.stop('pl2');
+      expect(await idleAfter('pl2', from, (r) => r === requestId, STOP_WATCHDOG_BOUND_MS)).toBe(
+        true
+      );
+      expect(
+        forSession('pl2', from)
+          .filter((e) => e.type === 'question.resolved')
+          .map((e) => e.payload)
+      ).toEqual([{ questionId, outcome: 'cancelled', stopped: true }]);
+      expect(forSession('pl2', from).some((e) => e.type === 'session.stopped')).toBe(true);
+      expect(forSession('pl2', from).some((e) => e.type === 'session.permissions')).toBe(false);
+      // Still plan mode: exit_plan_mode (plan mode only) presents the plan again.
+      const again = events.length;
+      const next = await sendTo('pl2', 'P1-PLAN-DISMISS: present it again.');
+      expect(await until(() => reviewsOf('pl2', again).length === 1, 60_000)).toBe(true);
+      await manager.respondQuestion({
+        sessionId: 'pl2',
+        questionId: String(reviewsOf('pl2', again)[0]?.payload?.questionId),
+        cancel: true,
+      });
+      expect(await idleAfter('pl2', again, (r) => r === next)).toBe(true);
+      await manager.closeSession('pl2');
+    }, 300_000);
+
+    it('[PLN-3] a closed review stops the model; the next message is still in plan mode', async () => {
+      await manager.createSession({
+        sessionId: 'pl3',
+        workspacePath: workspace,
+        ownerWebContentsId: 81,
+        permissions: PLAN,
+      });
+      const from = events.length;
+      const requestId = await sendTo(
+        'pl3',
+        'P1-PLAN-DISMISS: present a plan; I will close the review.'
+      );
+      expect(await until(() => reviewsOf('pl3', from).length === 1, 60_000)).toBe(true);
+      const questionId = String(reviewsOf('pl3', from)[0]?.payload?.questionId);
+      expect(await manager.respondQuestion({ sessionId: 'pl3', questionId, cancel: true })).toBe(
+        true
+      );
+      expect(await idleAfter('pl3', from, (r) => r === requestId)).toBe(true);
+      expect(
+        forSession('pl3', from)
+          .filter((e) => e.type === 'question.resolved')
+          .map((e) => e.payload)
+      ).toEqual([{ questionId, outcome: 'cancelled' }]);
+      const closed = forSession('pl3', from).find((e) => e.type === 'tool.completed')?.payload;
+      expect(closed).toMatchObject({ ok: false });
+      expect(String(closed?.error)).toContain('dismissed the plan review');
+      expect(forSession('pl3', from).some((e) => e.type === 'session.permissions')).toBe(false);
+      const again = events.length;
+      const next = await sendTo('pl3', 'P1-PLAN-DISMISS: present it again.');
+      expect(await until(() => reviewsOf('pl3', again).length === 1, 60_000)).toBe(true);
+      await manager.respondQuestion({
+        sessionId: 'pl3',
+        questionId: String(reviewsOf('pl3', again)[0]?.payload?.questionId),
+        cancel: true,
+      });
+      expect(await idleAfter('pl3', again, (r) => r === next)).toBe(true);
+      await manager.closeSession('pl3');
+    }, 300_000);
+  });
+
+  /**
    * P1-6c (decisions 043, 092): "allow for this session" is written beside the
    * stub and read back by the host that reopens the session; Main's setter
    * reaches the gate; the user policy layer comes from the directory Main

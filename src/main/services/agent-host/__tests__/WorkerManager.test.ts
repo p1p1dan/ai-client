@@ -1868,6 +1868,182 @@ describe('WorkerManager unwritten Pi session files', () => {
     });
   });
 
+  /**
+   * dsh-rebase decision 169: a plan review's approval switches the posture
+   * inside the worker, mid-turn. Main takes that change only for an approval
+   * it forwarded itself, with the posture it derives from that answer, and
+   * hands it back to a renderer that reopens the chat with an older one.
+   */
+  describe('plan review posture (decision 169)', () => {
+    const REVIEW = {
+      kind: 'plan',
+      source: 'exit_plan_mode',
+      title: 'Plan',
+      plan: '# Plan',
+      goalObjective: '# Plan',
+    };
+
+    async function reviewing() {
+      const h = createHarness({ sessionFileExists: async () => false });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+      await h.manager.send({ sessionId: 's1', attemptId: 'a1', text: 'plan it' });
+      const record = h.records[0];
+      record.emit({
+        type: 'question.requested',
+        sessionId: 's1',
+        payload: { questionId: 'q1', questions: [], review: REVIEW },
+      });
+      /** The worker's answer to `worker.question.respond`: it reports `claimed` first. */
+      const answerWith = (claimed: Record<string, unknown> | null) => {
+        record.request.mockImplementation(async (type: string) => {
+          if (type === 'worker.question.respond') {
+            if (claimed) {
+              record.emit({
+                type: 'session.permissions',
+                sessionId: 's1',
+                payload: { cause: 'plan-approved', questionId: 'q1', ...claimed },
+              });
+            }
+            record.emit({
+              type: 'question.resolved',
+              sessionId: 's1',
+              payload: { questionId: 'q1', outcome: 'answered' },
+            });
+            return { handled: true };
+          }
+          if (type === 'worker.setPermissionGear' || type === 'worker.setPermissions')
+            return { applied: true };
+          return {};
+        });
+      };
+      const postures = () => h.events.filter((event) => event.type === 'session.permissions');
+      return { h, record, answerWith, postures };
+    }
+
+    it('takes the posture an approval it forwarded names, then lets the gear move mid-turn', async () => {
+      const { h, record, answerWith, postures } = await reviewing();
+      answerWith({ permissions: { mode: 'agent', gear: 'auto' }, goal: { set: true } });
+      await expect(
+        h.manager.respondQuestion({
+          sessionId: 's1',
+          questionId: 'q1',
+          answers: { 'plan-review': 'goal:auto' },
+        })
+      ).resolves.toBe(true);
+      expect(postures()).toEqual([
+        expect.objectContaining({
+          sessionId: 's1',
+          payload: {
+            cause: 'plan-approved',
+            questionId: 'q1',
+            permissions: { mode: 'agent', gear: 'auto' },
+            goal: { set: true },
+          },
+        }),
+      ]);
+      // Main's record moved: a gear change mid-turn is no longer a mode change.
+      await h.manager.setPermissions('s1', { mode: 'agent', gear: 'bypass' });
+      expect(record.request).toHaveBeenCalledWith('worker.setPermissionGear', {
+        logicalSessionId: 's1',
+        gear: 'bypass',
+      });
+      record.crash('killed');
+      await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+      expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+        permissions: { mode: 'agent', gear: 'bypass' },
+      });
+    });
+
+    it('drops a posture no forwarded approval names: unasked, another gear, or a review not approved', async () => {
+      for (const [answer, claimed] of [
+        [
+          { answers: { 'plan-review': 'goal:auto' } },
+          { permissions: { mode: 'agent', gear: 'bypass' } },
+        ],
+        [
+          { answers: { 'plan-review': 'keep-planning' }, response: 'more' },
+          { permissions: { mode: 'agent', gear: 'auto' } },
+        ],
+        [{ cancel: true }, { permissions: { mode: 'agent', gear: 'auto' } }],
+        [
+          { answers: { 'plan-review': 'goal:auto' } },
+          { permissions: { mode: 'agent', gear: 'auto' }, questionId: 'q9' },
+        ],
+      ] as const) {
+        const { h, record, answerWith, postures } = await reviewing();
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        answerWith(claimed);
+        await h.manager.respondQuestion({ sessionId: 's1', questionId: 'q1', ...answer });
+        expect(postures()).toEqual([]);
+        expect(warn).toHaveBeenCalledWith(expect.stringContaining('posture change refused'));
+        warn.mockRestore();
+        // Still plan mode in Main's eyes: a mode change mid-turn is refused.
+        await expect(
+          h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' })
+        ).rejects.toMatchObject({ code: 'session_busy' });
+        record.crash('killed');
+        await vi.waitFor(() => expect(h.createSlot).toHaveBeenCalledTimes(2));
+        expect(h.createSlot.mock.calls[1][0]).toMatchObject({
+          permissions: { mode: 'plan', gear: 'auto' },
+        });
+      }
+    });
+
+    it('a posture the worker sends unasked, with no review up, is dropped', async () => {
+      const h = createHarness({ sessionFileExists: async () => false });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      h.records[0].emit({
+        type: 'session.permissions',
+        sessionId: 's1',
+        payload: { cause: 'plan-approved', permissions: { mode: 'agent', gear: 'bypass' } },
+      });
+      warn.mockRestore();
+      expect(h.events.filter((event) => event.type === 'session.permissions')).toEqual([]);
+    });
+
+    it('hands the approved posture back to a renderer that reopens the chat with an older one', async () => {
+      const { h, record, answerWith, postures } = await reviewing();
+      answerWith({ permissions: { mode: 'agent', gear: 'auto' } });
+      await h.manager.respondQuestion({
+        sessionId: 's1',
+        questionId: 'q1',
+        answers: { 'plan-review': 'run:auto' },
+      });
+      record.emit({ type: 'session.completed', sessionId: 's1', payload: {} });
+      record.request.mockClear();
+      // The window reloaded before it stored the approval: it still says plan mode.
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+      expect(record.request).not.toHaveBeenCalledWith('worker.setPermissions', expect.anything());
+      expect(postures().at(-1)).toMatchObject({
+        payload: { cause: 'sync', permissions: { mode: 'agent', gear: 'auto' } },
+      });
+      // Once the renderer picks a posture itself, its stored one is applied again.
+      await h.manager.setPermissions('s1', { mode: 'agent', gear: 'auto' });
+      await h.manager.createSession({
+        sessionId: 's1',
+        workspacePath: '/repo',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+      expect(record.request).toHaveBeenCalledWith('worker.setPermissions', {
+        logicalSessionId: 's1',
+        permissions: { mode: 'plan', gear: 'auto' },
+      });
+    });
+  });
+
   describe('permission tier survives every spawn', () => {
     it('carries the tier into the spawn instead of leaving the worker on the default', async () => {
       const h = createHarness();

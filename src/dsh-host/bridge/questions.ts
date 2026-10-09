@@ -25,10 +25,34 @@
  * The card's answers are keyed by `QuestionItem.id`. DSH ids are the model's
  * own and may repeat within one call, so a repeated id is given a unique key
  * here (`<id>#<n>`) and mapped back to the model's id in the answer.
+ *
+ * Plan reviews (decision 169, revising 114 rules 3, 5 and 6): DSH's
+ * `exit_plan_mode` question (`intent.kind === 'plan-review'`) is not the
+ * generic card. It goes out with `review` (the plan as markdown, apart from
+ * the question), its answer is the review's choice (`@shared/planReview`),
+ * decoded fail-closed, and the runtime turns it into DSH's answer
+ * (`DshPlanReviews.decide`): it switches the posture on an approval before
+ * the answer settles. A cancel — the card closed, or a message sent while it
+ * was up — is DSH's `ASK_CANCELLED`, never a skip (which DSH would read as
+ * "keep planning" and present the plan again at once). The runtime raises
+ * the same card for `create_goal` in plan mode (`review`).
  */
 
+import {
+  decodePlanReviewResponse,
+  PLAN_REVIEW_QUESTION_ID,
+  type PlanReviewChoice,
+  type PlanReviewDecision,
+  type PlanReviewGoalOutcome,
+} from '../../shared/planReview.ts';
 import { splitQuestionAnswer } from '../../shared/questionAnswer.ts';
-import type { QuestionItem, RuntimeEventDraft } from '../../shared/types/runtimeEvents.ts';
+import type {
+  PlanReviewCard,
+  QuestionItem,
+  QuestionRequestedEvent,
+  RuntimeEventDraft,
+} from '../../shared/types/runtimeEvents.ts';
+import { type DshPlanReviewRequest, planReviewOf } from './planReview.ts';
 
 /** DSH's `AskUserQuestionItem` (dsh-user-questions), as read here. */
 export interface DshQuestionItem {
@@ -155,11 +179,37 @@ export class DshQuestionWithdrawn extends Error {
   }
 }
 
+/** How a plan review settles: what its asker gets, and the goal echoed on `question.resolved`. */
+export interface PlanReviewSettlement<T> {
+  /** The asker's answer, or the error it is rejected with. */
+  result: T | Error;
+  /** An approval's goal, when it asked for one. */
+  goal?: PlanReviewGoalOutcome;
+}
+
+/** Decides a plan review's answer; called synchronously from `respond`. */
+export type PlanReviewDecide<T> = (
+  decision: PlanReviewDecision,
+  questionId: string
+) => PlanReviewSettlement<T>;
+
+/** The runtime's side of `exit_plan_mode` reviews (decision 169). */
+export interface DshPlanReviews {
+  /** The card a review request is drawn as. */
+  card(review: DshPlanReviewRequest): PlanReviewCard;
+  /** Why a review is refused without a card (a plan already approved in this step), if it is. */
+  refuse(): Error | undefined;
+  /** DSH's answer to a review the user answered; an approval switches the posture first. */
+  decide(review: DshPlanReviewRequest): PlanReviewDecide<DshQuestionAnswer>;
+}
+
 export interface DshQuestionPromptOptions {
   /** Through the runtime's `emit`, so a card raised inside a turn carries its requestId. */
   emit: (event: Omit<RuntimeEventDraft, 'sessionId'>) => void;
   /** The card's id; one per request. */
   newId: () => string;
+  /** Without it a plan review is drawn on the generic card, as before decision 169. */
+  planReviews?: DshPlanReviews;
 }
 
 export interface DshQuestionPrompt {
@@ -169,6 +219,16 @@ export interface DshQuestionPrompt {
    * request's signal aborts or `drain` withdraws it.
    */
   ask(request: DshQuestionRequest): Promise<DshQuestionAnswer>;
+  /**
+   * Raise a plan review card the runtime asks for itself (`create_goal` in
+   * plan mode) and settle with what `decide` makes of the answer. Rejects as
+   * `ask` does when `signal` aborts or `drain` withdraws it.
+   */
+  review<T>(
+    card: PlanReviewCard,
+    signal: AbortSignal | undefined,
+    decide: PlanReviewDecide<T>
+  ): Promise<T>;
   /** `false` when nothing waits on `questionId` (answered already, withdrawn, or not ours). */
   respond(input: DshQuestionResponse): boolean;
   /** Withdraw every card still up (the session closes). */
@@ -188,16 +248,54 @@ interface CardAnswer {
    * apart.
    */
   stopped?: true;
+  /** Decision 169: a plan review's choice, and an approval's goal. */
+  review?: { choice: PlanReviewChoice; goal?: PlanReviewGoalOutcome };
 }
 
 interface Parked {
-  settle(
-    outcome: 'answered' | 'cancelled',
-    result: DshQuestionAnswer | Error,
-    card?: CardAnswer
-  ): void;
-  questions: DshQuestionItem[];
-  keys: string[];
+  settle(outcome: 'answered' | 'cancelled', result: unknown, card?: CardAnswer): void;
+  /** How a card response settles this card. */
+  answer(response: Omit<DshQuestionResponse, 'questionId'>): {
+    outcome: 'answered' | 'cancelled';
+    result: unknown;
+    card?: CardAnswer;
+  };
+}
+
+/** The choice the card sent, for the echo; a closed review has none. */
+function choiceOf(decision: PlanReviewDecision): PlanReviewChoice | undefined {
+  if (decision.kind === 'approve') return decision.choice;
+  return decision.kind === 'keep-planning' ? 'keep-planning' : undefined;
+}
+
+/** A plan review response settled through `decide`. */
+function reviewAnswer<T>(
+  decide: PlanReviewDecide<T>,
+  questionId: string,
+  response: Omit<DshQuestionResponse, 'questionId'>
+): ReturnType<Parked['answer']> {
+  const decision = decodePlanReviewResponse(response);
+  let settlement: PlanReviewSettlement<T>;
+  try {
+    settlement = decide(decision, questionId);
+  } catch (error) {
+    // The asker is refused rather than left waiting on a card nobody can answer again.
+    return {
+      outcome: 'cancelled',
+      result: error instanceof Error ? error : new Error(String(error)),
+    };
+  }
+  const choice = choiceOf(decision);
+  if (!choice) return { outcome: 'cancelled', result: settlement.result };
+  return {
+    outcome: 'answered',
+    result: settlement.result,
+    card: {
+      answers: { [PLAN_REVIEW_QUESTION_ID]: choice },
+      ...(decision.kind === 'keep-planning' ? { response: decision.feedback } : {}),
+      review: { choice, ...(settlement.goal ? { goal: settlement.goal } : {}) },
+    },
+  };
 }
 
 /**
@@ -209,70 +307,127 @@ interface Parked {
 export function createDshQuestionPrompt(options: DshQuestionPromptOptions): DshQuestionPrompt {
   const parked = new Map<string, Parked>();
 
+  /**
+   * One card up until it settles: answered, cancelled, withdrawn by `drain`,
+   * or taken down by `signal` (a Stop). Settled exactly once.
+   */
+  function park<T>(
+    signal: AbortSignal | undefined,
+    payload: (questionId: string) => QuestionRequestedEvent['payload'],
+    answer: (questionId: string) => Parked['answer']
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(new DshQuestionWithdrawn('the question was aborted before it was shown'));
+        return;
+      }
+      const questionId = options.newId();
+      let settled = false;
+      const settle: Parked['settle'] = (outcome, result, card = {}) => {
+        if (settled) return;
+        settled = true;
+        parked.delete(questionId);
+        signal?.removeEventListener('abort', onAbort);
+        options.emit({
+          type: 'question.resolved',
+          payload: {
+            questionId,
+            outcome,
+            ...(card.answers ? { answers: card.answers } : {}),
+            ...(card.response ? { response: card.response } : {}),
+            ...(card.stopped ? { stopped: true as const } : {}),
+            ...(card.review ? { review: card.review } : {}),
+          },
+        });
+        if (result instanceof Error) reject(result);
+        else resolve(result as T);
+      };
+      function onAbort() {
+        settle('cancelled', new DshQuestionWithdrawn('the asker aborted the question'), {
+          stopped: true,
+        });
+      }
+      parked.set(questionId, { settle, answer: answer(questionId) });
+      signal?.addEventListener('abort', onAbort, { once: true });
+      options.emit({ type: 'question.requested', payload: payload(questionId) });
+    });
+  }
+
+  function askGeneric(request: DshQuestionRequest): Promise<DshQuestionAnswer> {
+    const questions = [...request.questions];
+    const keys = questionKeys(questions);
+    return park<DshQuestionAnswer>(
+      request.signal,
+      (questionId) => ({
+        questionId,
+        questions: questions.map((question, index) =>
+          questionItemFor(question, keys[index] as string)
+        ),
+      }),
+      () => (response) => {
+        const answer = dshAnswerFor(questions, keys, response);
+        if (answer === null) return { outcome: 'cancelled', result: skippedAnswer(questions) };
+        return {
+          outcome: 'answered',
+          result: answer,
+          card: {
+            ...(response.answers ? { answers: response.answers } : {}),
+            ...(response.response ? { response: response.response } : {}),
+          },
+        };
+      }
+    );
+  }
+
+  function reviewCard<T>(
+    card: PlanReviewCard,
+    signal: AbortSignal | undefined,
+    decide: PlanReviewDecide<T>
+  ): Promise<T> {
+    return park<T>(
+      signal,
+      (questionId) => ({
+        questionId,
+        questions: [
+          {
+            id: PLAN_REVIEW_QUESTION_ID,
+            header: 'Plan review',
+            question: card.title ?? 'Plan review',
+            options: [],
+          },
+        ],
+        review: card,
+      }),
+      (questionId) => (response) => reviewAnswer(decide, questionId, response)
+    );
+  }
+
   return {
     get pending() {
       return parked.size;
     },
 
     ask(request) {
-      return new Promise<DshQuestionAnswer>((resolve, reject) => {
-        const signal = request.signal;
-        if (signal?.aborted) {
-          reject(new DshQuestionWithdrawn('the question was aborted before it was shown'));
-          return;
-        }
-        const questionId = options.newId();
-        const questions = [...request.questions];
-        const keys = questionKeys(questions);
-        let settled = false;
-        const settle: Parked['settle'] = (outcome, result, card = {}) => {
-          if (settled) return;
-          settled = true;
-          parked.delete(questionId);
-          signal?.removeEventListener('abort', onAbort);
-          options.emit({
-            type: 'question.resolved',
-            payload: {
-              questionId,
-              outcome,
-              ...(card.answers ? { answers: card.answers } : {}),
-              ...(card.response ? { response: card.response } : {}),
-              ...(card.stopped ? { stopped: true as const } : {}),
-            },
-          });
-          if (result instanceof Error) reject(result);
-          else resolve(result);
-        };
-        function onAbort() {
-          settle('cancelled', new DshQuestionWithdrawn('the asker aborted the question'), {
-            stopped: true,
-          });
-        }
-        parked.set(questionId, { settle, questions, keys });
-        signal?.addEventListener('abort', onAbort, { once: true });
-        options.emit({
-          type: 'question.requested',
-          payload: {
-            questionId,
-            questions: questions.map((question, index) =>
-              questionItemFor(question, keys[index] as string)
-            ),
-          },
-        });
-      });
+      const review = options.planReviews ? planReviewOf(request) : undefined;
+      if (!review || !options.planReviews) return askGeneric(request);
+      const refused = options.planReviews.refuse();
+      if (refused) return Promise.reject(refused);
+      return reviewCard(
+        options.planReviews.card(review),
+        request.signal,
+        options.planReviews.decide(review)
+      );
+    },
+
+    review(card, signal, decide) {
+      return reviewCard(card, signal, decide);
     },
 
     respond({ questionId, ...response }) {
       const entry = parked.get(questionId);
       if (!entry) return false;
-      const answer = dshAnswerFor(entry.questions, entry.keys, response);
-      if (answer === null) entry.settle('cancelled', skippedAnswer(entry.questions));
-      else {
-        entry.settle('answered', answer, {
-          ...(response.answers ? { answers: response.answers } : {}),
-          ...(response.response ? { response: response.response } : {}),
-        });
-      }
+      const { outcome, result, card } = entry.answer(response);
+      entry.settle(outcome, result, card);
       return true;
     },
 

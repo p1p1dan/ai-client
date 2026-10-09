@@ -30,6 +30,7 @@ import {
   HIDDEN_DSH_COMMANDS,
   WINDOW_OWNED_COMMANDS,
 } from './commands.ts';
+import type { DshCreatedGoal } from './planReview.ts';
 
 /** `GoalView` of `@deepseek-ai/dsh-goal`, narrowed to what the bar needs from it. */
 export interface DshGoalView {
@@ -42,6 +43,11 @@ export interface DshGoalView {
 export interface DshGoalsView {
   /** Throws when the agent is not the registry's live instance. */
   get(agent: unknown): DshGoalView | undefined;
+  /**
+   * Creates and arms a goal (decision 169: a plan review's approval); throws
+   * `GOAL_ALREADY_EXISTS` while an unfinished goal is current.
+   */
+  create?(agent: unknown, request: { objective: string; maxGoalRounds?: number }): DshCreatedGoal;
 }
 
 /** `GoalActivationChanged` of `@deepseek-ai/dsh-goal`: one live activation edge. */

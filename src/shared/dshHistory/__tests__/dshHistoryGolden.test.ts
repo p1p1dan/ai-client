@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { PLAN_REVIEW_NOTICE_SUMMARIES, planReviewRowOutcome } from '../../planReview.ts';
 import type {
   HistoryMessage,
   SessionHistoryPage,
@@ -150,6 +151,9 @@ it('finds every recorded scenario (a walker that found none would pass everythin
     'perm-search',
     'perm-stop',
     'perm-subagent',
+    // Decision 169: plan mode's review.
+    'plan-dismiss',
+    'plan-review',
     // P1-4d3 (decisions 098, 114): recorded by the orchestrator at close-out.
     'question',
     'rewind',
@@ -322,6 +326,59 @@ describe('what the recordings show a user', () => {
       'P1-IMAGE: what do you see?',
       'P1-IMAGE saw 1 image block(s).',
     ]);
+  });
+
+  /** The `tool_call` / `tool_result` pairs of a timeline, by the tool's name. */
+  function calls(messages: readonly HistoryMessage[], name: string) {
+    const blocks = blocksOf(messages);
+    return blocks.flatMap((block) => {
+      if (block.type !== 'tool_call' || block.name !== name) return [];
+      const result = blocks.find(
+        (other) => other.type === 'tool_result' && other.toolCallId === block.toolCallId
+      );
+      return result?.type === 'tool_result' ? [{ call: block, result }] : [];
+    });
+  }
+
+  it('plan-review (decision 169): the reviews read back, the approval leaves its notice, then the work and the goal round', () => {
+    const { messages } = project('plan-review');
+    const reviews = calls(messages, 'exit_plan_mode');
+    expect(reviews).toHaveLength(2);
+    expect(reviews[0]?.result).toMatchObject({ ok: false });
+    expect(planReviewRowOutcome(reviews[0]?.result.error)).toEqual({
+      kind: 'keep-planning',
+      feedback: 'Name the output file in the goal.',
+    });
+    expect(reviews[1]?.result).toMatchObject({ ok: true });
+    expect(planReviewRowOutcome(reviews[1]?.result.error)).toBeUndefined();
+    // The notice the approval left, a light row named after its live copy.
+    const notice = messages.find((message) => message.role === 'system');
+    const text = notice?.blocks[0];
+    expect(text?.type === 'text' && text.text).toBe(
+      'Plan approved: set as the goal, running on full auto.'
+    );
+    expect(PLAN_REVIEW_NOTICE_SUMMARIES).toContain(text?.type === 'text' ? text.text : '');
+    expect(notice?.liveMessageId?.startsWith('dsh-notice-')).toBe(true);
+    // Out of plan mode at the next step: the write ran; then the goal's round.
+    const index = messages.indexOf(notice as HistoryMessage);
+    expect(calls(messages.slice(index), 'write')[0]?.result).toMatchObject({ ok: true });
+    expect(messages.find((message) => message.origin)?.origin).toMatchObject({
+      kind: 'goal',
+      round: 1,
+    });
+    expect(calls(messages, 'update_goal')[0]?.result).toMatchObject({ ok: true });
+  });
+
+  it('plan-dismiss (decision 169): a closed review reads as closed, and the next message is still in plan mode', () => {
+    const { messages } = project('plan-dismiss');
+    const reviews = calls(messages, 'exit_plan_mode');
+    // Two turns, each presenting the plan: exit_plan_mode works in plan mode only.
+    expect(reviews).toHaveLength(2);
+    for (const review of reviews) {
+      expect(review.result).toMatchObject({ ok: false });
+      expect(planReviewRowOutcome(review.result.error)).toEqual({ kind: 'dismissed' });
+    }
+    expect(messages.some((message) => message.role === 'system')).toBe(false);
   });
 
   it('file-attach (P1-4c2): the bubble keeps the words, the chip names the file, the model read it', () => {

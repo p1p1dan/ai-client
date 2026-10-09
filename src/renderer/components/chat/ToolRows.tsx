@@ -307,6 +307,13 @@ function ToolRowContent({ view: derived, onOpenFile, sessionId }: ToolRowProps) 
           · {t(TOOL_RUN_OUTCOME_LABEL[view.outcome])}
         </span>
       )}
+      {/* Decision 169: how the plan review the call raised ended — an answer,
+          in the outcome word's slot and tone, never red. */}
+      {view.planReview && (
+        <span data-slot="tool-row-plan-review" className={toolRowPermissionClass()}>
+          · {t(view.planReview.key, view.planReview.params)}
+        </span>
+      )}
       {/* dsh-rebase P1-7c (plan P1-7 shard 04 §4): where the call left its
           work — 「后台 · bash-2」 for `run_in_background`, 「已转后台 · bash-3」
           for a command its timeout moved there — and a shell's non-zero exit,
