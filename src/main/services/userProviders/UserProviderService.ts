@@ -21,7 +21,8 @@ import {
   type FetchProviderModelsResult,
   isUserProviderApi,
   normalizeProviderBaseUrl,
-  PROVIDER_MODELS_PATH,
+  type ProviderModelListAuth,
+  providerModelListAttempts,
   type UserProviderApi,
   type UserProviderDraft,
   type UserProviderState,
@@ -125,8 +126,11 @@ export class UserProviderService {
 
     // Absent modelMeta means "keep whatever is stored", not "clear it": a
     // save that did not open the metadata section (or a non-form path like
-    // setEnabled) must not silently drop metadata the user already typed.
+    // setEnabled) must not silently drop metadata the user already typed. An
+    // explicit empty map is how the form clears it (decision 165), and an
+    // empty map is not stored.
     const modelMeta = draft.modelMeta ?? existing?.modelMeta;
+    const keepsMeta = modelMeta !== undefined && Object.keys(modelMeta).length > 0;
     const next: UserProvider = {
       id: existing?.id ?? randomUUID(),
       name,
@@ -135,7 +139,7 @@ export class UserProviderService {
       apiKey,
       ...(existing?.headers ? { headers: existing.headers } : {}),
       models: draft.models ?? existing?.models ?? [],
-      ...(modelMeta ? { modelMeta } : {}),
+      ...(keepsMeta ? { modelMeta } : {}),
       enabled: draft.enabled ?? existing?.enabled ?? true,
       createdAt: existing?.createdAt ?? this.now().toISOString(),
       // Carried, never editable. It is the key older sessions recorded, so
@@ -186,36 +190,25 @@ export class UserProviderService {
     const apiKey = request.apiKey?.trim() || this.storedKey(request.id);
     if (!apiKey) return { ok: false, error: 'AI service needs an API key' };
 
-    let response: Awaited<ReturnType<UserProviderServiceOptions['fetchFn']>>;
-    try {
-      response = await this.fetchFn(`${baseUrl}${PROVIDER_MODELS_PATH}`, {
-        headers: authHeaders(request.api, apiKey),
-      });
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    // Decision 165: more than one path for some styles, tried in order. A
+    // transport failure ends the loop at once — another path on the same host
+    // cannot help — while any answer from the service moves on to the next.
+    const failures: ModelListFailure[] = [];
+    let previousRefused = false;
+    for (const attempt of providerModelListAttempts(baseUrl, request.api)) {
+      if (attempt.onlyAfterRefusal && !previousRefused) continue;
+      let response: ModelListResponse;
+      try {
+        response = await this.fetchFn(attempt.url, { headers: authHeaders(attempt.auth, apiKey) });
+      } catch (error) {
+        return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      }
+      const outcome = await readModelList(response);
+      if (outcome.ok) return { ok: true, models: outcome.models.slice(0, MAX_MODEL_IDS) };
+      failures.push({ ...outcome, path: attempt.path });
+      previousRefused = isRefusal(outcome.status);
     }
-
-    if (!response.ok) {
-      // 401/403 is the one worth naming: it is the answer people misread as
-      // "the URL is wrong" and then spend ten minutes on.
-      const detail =
-        response.status === 401 || response.status === 403
-          ? 'the service refused this API key'
-          : `the service answered ${response.status}`;
-      return { ok: false, error: detail };
-    }
-
-    let body: unknown;
-    try {
-      body = await response.json();
-    } catch {
-      return { ok: false, error: 'the service did not answer with JSON' };
-    }
-    const models = extractModelIds(body);
-    if (models.length === 0) {
-      return { ok: false, error: 'the service listed no models' };
-    }
-    return { ok: true, models: models.slice(0, MAX_MODEL_IDS) };
+    return { ok: false, error: describeModelListFailures(failures) };
   }
 
   private storedKey(id: string | undefined): string | undefined {
@@ -270,15 +263,81 @@ function toView(provider: UserProvider): UserProviderView {
   };
 }
 
-/** How each API style expects the key to be presented. */
-function authHeaders(api: UserProviderApi, apiKey: string): Record<string, string> {
-  if (api === 'anthropic-messages' || api === 'pi-messages') {
-    return { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
+type ModelListResponse = Awaited<ReturnType<UserProviderServiceOptions['fetchFn']>>;
+
+interface ModelListFailure {
+  path: string;
+  /** The HTTP status, when the service answered with a non-2xx one. */
+  status?: number;
+  detail: string;
+}
+
+function isRefusal(status: number | undefined): boolean {
+  return status === 401 || status === 403;
+}
+
+/** One answer read as a model list, or as the reason it is not one. */
+async function readModelList(
+  response: ModelListResponse
+): Promise<{ ok: true; models: string[] } | { ok: false; status?: number; detail: string }> {
+  if (!response.ok) {
+    discardBody(response);
+    return {
+      ok: false,
+      status: response.status,
+      detail: `the service answered ${response.status}`,
+    };
   }
-  if (api === 'google-generative-ai') {
-    return { 'x-goog-api-key': apiKey };
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return { ok: false, detail: 'the service did not answer with JSON' };
   }
-  return { authorization: `Bearer ${apiKey}` };
+  const models = extractModelIds(body);
+  if (models.length === 0) return { ok: false, detail: 'the service listed no models' };
+  return { ok: true, models };
+}
+
+/**
+ * Read an unwanted body to its end in the background, so the connection is
+ * released rather than left open behind a response nobody reads.
+ */
+function discardBody(response: ModelListResponse): void {
+  try {
+    void response.text().catch(() => undefined);
+  } catch {
+    // Nothing to release.
+  }
+}
+
+/**
+ * The one sentence a failed fetch shows. A refused key anywhere is the answer
+ * worth naming: it is the one people misread as "the URL is wrong" and then
+ * spend ten minutes on. Otherwise the first status the service answered (the
+ * first failure when none had one), plus the paths tried when there were
+ * several, so "404" is not read as "the only path is wrong".
+ */
+function describeModelListFailures(failures: readonly ModelListFailure[]): string {
+  if (failures.some((failure) => isRefusal(failure.status))) {
+    return 'the service refused this API key';
+  }
+  const first = failures.find((failure) => failure.status !== undefined) ?? failures[0];
+  if (!first) return 'the service listed no models';
+  const paths = [...new Set(failures.map((failure) => failure.path))];
+  return paths.length > 1 ? `${first.detail} (tried ${paths.join(', ')})` : first.detail;
+}
+
+/** The headers that present the key the way `auth` says; never two at once. */
+function authHeaders(auth: ProviderModelListAuth, apiKey: string): Record<string, string> {
+  switch (auth) {
+    case 'anthropic':
+      return { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' };
+    case 'google':
+      return { 'x-goog-api-key': apiKey };
+    case 'bearer':
+      return { authorization: `Bearer ${apiKey}` };
+  }
 }
 
 /**

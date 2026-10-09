@@ -185,7 +185,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
  * Per-model metadata a user can set for a model they picked.
  *
  * Mirrors the subset of {@link PiManagedModelDefinition} the add/edit form
- * exposes: the four fields a personal service cannot be inferred from a bare
+ * exposes: the fields a personal service cannot be inferred from a bare
  * model id. Everything here is optional so a model with no metadata typed in
  * behaves exactly like before — pi falls back to its own defaults.
  */
@@ -194,6 +194,13 @@ export interface UserModelMeta {
   maxTokens?: number;
   reasoning?: boolean;
   input?: Array<'text' | 'image'>;
+  /**
+   * Decision 165: the model only accepts adaptive thinking (Claude Opus /
+   * Sonnet 4.6 and later). Only meaningful for `anthropic-messages`; implies
+   * `reasoning`. Written to models.json as `compat.forceAdaptiveThinking` with
+   * `thinkingLevelMap.off: null`, never under this name.
+   */
+  adaptiveThinking?: boolean;
 }
 
 /** One user-added service as the renderer sees it — never carries the key. */
@@ -311,11 +318,164 @@ export function checkProviderBaseUrl(value: string): BaseUrlIssue | null {
   return null;
 }
 
+/** How a model-list request presents the key; the caller adds the key itself. */
+export type ProviderModelListAuth = 'anthropic' | 'bearer' | 'google';
+
+/** One request {@link providerModelListAttempts} plans. */
+export interface ProviderModelListAttempt {
+  url: string;
+  /** The path relative to the base, for the "tried …" note of a failed fetch. */
+  path: string;
+  auth: ProviderModelListAuth;
+  /** Only made when the attempt right before it was refused (401 / 403). */
+  onlyAfterRefusal?: boolean;
+}
+
+/** Anthropic's own maximum page size for `GET /v1/models` (its default is 20). */
+const ANTHROPIC_MODEL_PAGE_LIMIT = 1000;
+
+function modelListAuth(api: UserProviderApi): ProviderModelListAuth {
+  if (api === 'anthropic-messages' || api === 'pi-messages') return 'anthropic';
+  if (api === 'google-generative-ai') return 'google';
+  return 'bearer';
+}
+
 /**
- * Where a service lists its models, relative to the stored base URL.
+ * Where a service lists its models, in the order to ask (decision 165).
  *
- * One path for every style: PI-Desktop's own `endpointPathSuffixes` lists
- * `/models` for all seven of its styles, and the version segment (`/v1`) is
- * part of the base URL every vendor documents, not something to guess at here.
+ * Every style but one asks `{base}/models` once: the version segment of an
+ * OpenAI-style base is part of the URL its vendor documents (PI-Desktop's
+ * `endpointPathSuffixes` says the same for all its styles).
+ *
+ * `anthropic-messages` is the exception, because its base is stored WITHOUT
+ * `/v1` (the SDK appends `/v1/messages`), so `{base}/models` is a path neither
+ * Anthropic nor most compatible proxies serve. Its order:
+ *  1. `{base}/v1/models?limit=1000` with Anthropic's headers — the official API;
+ *  2. the same URL with a bearer token, only if (1) was refused — proxies
+ *     (new-api / one-api style) that only check `Authorization` there;
+ *  3. `{base}/models` with Anthropic's headers, after any other failure of the
+ *     `/v1` attempts — what this client asked before, kept so a service that
+ *     answered it keeps working.
+ *
+ * Takes a stored or a pasted base: it is normalized here the same way the
+ * service stores it, which is a no-op for an already stored one.
  */
-export const PROVIDER_MODELS_PATH = '/models';
+export function providerModelListAttempts(
+  baseUrl: string,
+  api: UserProviderApi
+): ProviderModelListAttempt[] {
+  const base = normalizeProviderBaseUrl(baseUrl, api);
+  if (api === 'anthropic-messages') {
+    const v1 = `${base}/v1/models?limit=${ANTHROPIC_MODEL_PAGE_LIMIT}`;
+    return [
+      { url: v1, path: '/v1/models', auth: 'anthropic' },
+      { url: v1, path: '/v1/models', auth: 'bearer', onlyAfterRefusal: true },
+      { url: `${base}/models`, path: '/models', auth: 'anthropic' },
+    ];
+  }
+  return [{ url: `${base}/models`, path: '/models', auth: modelListAuth(api) }];
+}
+
+/**
+ * Decision 165 (user ruling 2026-10-09): whether a model id names a Claude
+ * model that only accepts adaptive thinking, so the add/edit form can tick
+ * that switch for the user. A suggestion for the form only — the model plan
+ * never guesses from ids (decision 141).
+ *
+ * Matches what pi-ai's bundled catalog marks `forceAdaptiveThinking`: Opus /
+ * Sonnet 4.6 and later, every 5.x (Fable included) and Mythos; never Haiku,
+ * never Opus / Sonnet 4.5 or earlier. Vendor and region prefixes
+ * (`anthropic/`, `us.anthropic.`) and both version spellings (`4-6`, `4.6`)
+ * are accepted, as are suffixes (`-20260101`, `-v1`, `:batch`, `[1m]`).
+ */
+const ADAPTIVE_ONLY_CLAUDE =
+  /^(?:[a-z0-9-]+\.)*claude-(?:(?:opus|sonnet)-4[-.][6-9]|(?:opus|sonnet|fable|mythos)-[5-9])(?![0-9])/;
+
+export function suggestsAdaptiveThinking(modelId: string): boolean {
+  const tail = modelId.trim().toLowerCase().split('/').pop() ?? '';
+  return ADAPTIVE_ONLY_CLAUDE.test(tail);
+}
+
+/** Whether any field of a model's metadata is set. */
+export function hasModelMeta(meta: UserModelMeta | undefined): boolean {
+  return meta !== undefined && Object.values(meta).some((value) => value !== undefined);
+}
+
+/**
+ * Apply one edit of the form to a model's metadata (decision 165).
+ *
+ * The two thinking switches are tied: adaptive thinking is a kind of
+ * reasoning, so turning it on turns reasoning on, and turning reasoning off
+ * turns adaptive thinking off with it. A field patched to `undefined` is
+ * cleared.
+ */
+export function applyModelMetaPatch(
+  meta: UserModelMeta | undefined,
+  patch: Partial<UserModelMeta>
+): UserModelMeta {
+  const next: UserModelMeta = { ...meta, ...patch };
+  if (patch.adaptiveThinking === true) next.reasoning = true;
+  if ('reasoning' in patch && next.reasoning !== true) next.adaptiveThinking = undefined;
+  return next;
+}
+
+/**
+ * A model's metadata without the fields its service's API style cannot use,
+ * and without fields that are not set. `adaptiveThinking` only exists for
+ * `anthropic-messages`.
+ */
+export function modelMetaForApi(meta: UserModelMeta, api: UserProviderApi): UserModelMeta {
+  const out: UserModelMeta = {};
+  if (meta.contextWindow !== undefined) out.contextWindow = meta.contextWindow;
+  if (meta.maxTokens !== undefined) out.maxTokens = meta.maxTokens;
+  if (meta.reasoning !== undefined) out.reasoning = meta.reasoning;
+  if (meta.input !== undefined) out.input = meta.input;
+  if (api === 'anthropic-messages' && meta.adaptiveThinking !== undefined) {
+    out.adaptiveThinking = meta.adaptiveThinking;
+  }
+  return out;
+}
+
+/**
+ * Decision 165 (user ruling 2026-10-09): the metadata to fill in when the user
+ * selects `modelId`, or `undefined` for none.
+ *
+ * Only for `anthropic-messages`, only for an id {@link suggestsAdaptiveThinking}
+ * recognises, and only while the model has no metadata yet — anything already
+ * typed or stored is the user's, and is never overwritten.
+ */
+export function prefillModelMeta(
+  modelId: string,
+  api: UserProviderApi,
+  existing: UserModelMeta | undefined
+): UserModelMeta | undefined {
+  if (api !== 'anthropic-messages' || hasModelMeta(existing)) return undefined;
+  if (!suggestsAdaptiveThinking(modelId)) return undefined;
+  return { reasoning: true, adaptiveThinking: true };
+}
+
+/**
+ * The `modelMeta` of the draft the form saves, or `undefined` to leave it out.
+ *
+ * Only selected models, only set fields, only fields the API style takes.
+ * Leaving it out means "keep what is stored" to the service, so when the
+ * service already has metadata (`stored`, the edited row's) the map is always
+ * sent, empty if everything was cleared — otherwise unticking the last switch
+ * of a model would never reach the vault (decision 165).
+ */
+export function modelMetaDraft(input: {
+  selected: readonly string[];
+  meta: Readonly<Record<string, UserModelMeta>>;
+  api: UserProviderApi;
+  stored?: Readonly<Record<string, UserModelMeta>>;
+}): Record<string, UserModelMeta> | undefined {
+  const out: Record<string, UserModelMeta> = {};
+  for (const id of input.selected) {
+    const entry = input.meta[id];
+    if (!entry) continue;
+    const kept = modelMetaForApi(entry, input.api);
+    if (hasModelMeta(kept)) out[id] = kept;
+  }
+  if (Object.keys(out).length > 0) return out;
+  return input.stored && Object.keys(input.stored).length > 0 ? out : undefined;
+}

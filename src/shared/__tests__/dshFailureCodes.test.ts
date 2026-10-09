@@ -169,6 +169,57 @@ describe('classifyDshFailureText / dshFailureErrorCode', () => {
 });
 
 /**
+ * Decision 165: Anthropic's answers when an adaptive-only model was sent
+ * budget thinking or `disabled` are the same kind of refused setting. Bodies
+ * from issue #4 (request ids made up).
+ */
+describe('an adaptive-only model sent the wrong thinking (decision 165)', () => {
+  const REQUIRES =
+    '400 {"error":{"type":"<nil>","message":"claude-opus-5-5 requires adaptive thinking; omit thinking or use ***.type=adaptive and output_config.effort (request id: x)"}}';
+  const BETWEEN_TOOLS =
+    'status_code=400, To turn thinking off on this model, send "thinking": {"type": "between_tools"} instead of {"type": "disabled"}.';
+
+  it('[AT-CLASS-1] names both answers, and each marker alone, as a refused setting', () => {
+    for (const text of [
+      REQUIRES,
+      BETWEEN_TOOLS,
+      'status_code=400, claude-opus-5-5 requires adaptive thinking; omit thinking',
+      'Requires Adaptive Thinking',
+      'between_tools',
+      'use thinking.type=adaptive and output_config.effort',
+    ]) {
+      expect(classifyDshFailureText(text), text).toBe(MODEL_SETTING_UNSUPPORTED);
+    }
+    expect(dshFailureErrorCode({ message: REQUIRES, code: 'INVALID_REQUEST' })).toBe(
+      MODEL_SETTING_UNSUPPORTED
+    );
+    expect(isUnretryableDshFailure({ message: REQUIRES, code: 'INVALID_REQUEST' })).toBe(true);
+    expect(isUnretryableDshFailure({ message: BETWEEN_TOOLS, code: 'INVALID_REQUEST' })).toBe(true);
+  });
+
+  it('[AT-CLASS-2] leaves a 400 without these markers as it was', () => {
+    for (const text of [
+      '400 {"error":{"type":"invalid_request_error","message":"max_tokens: must be at most 8192"}}',
+      '400 thinking budget too small',
+      '400 adaptive',
+      '400 output_config is invalid',
+      '400 between tools',
+      '400 effort must be one of low, medium, high',
+    ]) {
+      expect(classifyDshFailureText(text), text).toBeUndefined();
+      expect(dshFailureErrorCode({ message: text, code: 'INVALID_REQUEST' }), text).toBe(
+        'PROVIDER_ERROR'
+      );
+    }
+  });
+
+  it('[AT-CLASS-3] the stream gate and the no-upstream answer still win over it', () => {
+    expect(classifyDshFailureText(`stream_gate_precommit ${REQUIRES}`)).toBe(GATEWAY_STREAM_GATE);
+    expect(classifyDshFailureText(`no_available_providers ${REQUIRES}`)).toBe(GATEWAY_NO_UPSTREAM);
+  });
+});
+
+/**
  * dsh-rebase decision 146 (GW-2): a company gateway that answers it has no
  * upstream left for the request is read off its text too, and is not retried.
  * The bodies are shaped like the real-gateway pass's (P1-5 R2, R8), with the

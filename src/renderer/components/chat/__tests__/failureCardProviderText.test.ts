@@ -8,10 +8,12 @@
  *   a Continue that says it is a long shot — 「仍然继续」 beside the hint that
  *   retrying the same request usually fails again;
  * - a parameter the model does not take (`… is not supported for this
- *   model`): a card that sends the user to the model's thinking settings, the
- *   raw text kept, and no Continue (resending fails the same way).
+ *   model`, decision 165's `… requires adaptive thinking`): a card that sends
+ *   the user to the per-model thinking switches, the raw text kept, and no
+ *   Continue (resending fails the same way).
  */
 
+import { dshFailureErrorCode } from '@shared/dshFailureCodes';
 import { translate } from '@shared/i18n';
 import type { RuntimeEvent } from '@shared/types/runtimeEvents';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -40,6 +42,8 @@ vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () 
 const GATE =
   '502 {"error":{"type":"stream_gate_precommit","reason":"prebuffer_overflow","family":"anthropic"}}';
 const SETTING = '400 "thinking.type.disabled" is not supported for this model';
+const SETTING_HINT_ZH =
+  '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中调整：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。';
 
 let seq = 0;
 function push(event: Omit<RuntimeEvent, 'seq' | 'timestamp'>) {
@@ -157,13 +161,32 @@ it('[E2B-CARD-GATE-DOM] the stream gate: its own card, the raw text, and a Conti
   });
 });
 
-it('[E2B-CARD-SETTING-DOM] a refused model setting: points at the thinking settings, no Continue', async () => {
+it('[E2B-CARD-SETTING-DOM] a refused model setting: points at the per-model switches, no Continue', async () => {
   fail(SETTING, 'MODEL_SETTING_UNSUPPORTED');
   const card = await render();
   const text = card.textContent ?? '';
   expect(text).toContain('模型设置与该模型不兼容');
-  expect(text).toContain('请在模型设置里检查这个模型的思考相关配置，改好后再发一次消息。');
+  expect(text).toContain(SETTING_HINT_ZH);
   expect(text).toContain('is not supported for this model');
+  expect(card.querySelector('[data-testid="failure-continue"]')).toBeNull();
+});
+
+/** Decision 165: issue #4's own text, classified the way the bridge does it. */
+const REQUIRES_ADAPTIVE =
+  '400 {"error":{"type":"<nil>","message":"claude-opus-5-5 requires adaptive thinking; omit thinking or use ***.type=adaptive and output_config.effort (request id: x)"}}';
+
+it('[AT-CARD-DOM] an adaptive-only model sent budget thinking: the settings card, no Continue', async () => {
+  const errorCode = dshFailureErrorCode({ message: REQUIRES_ADAPTIVE, code: 'INVALID_REQUEST' });
+  expect(errorCode).toBe('MODEL_SETTING_UNSUPPORTED');
+  fail(REQUIRES_ADAPTIVE, errorCode ?? '');
+  const card = await render();
+  const text = card.textContent ?? '';
+  expect(text).toContain('模型设置与该模型不兼容');
+  expect(text).toContain(SETTING_HINT_ZH);
+  expect(text).toContain('requires adaptive thinking');
+  const buttons = [...card.querySelectorAll('button')].map((button) => button.textContent);
+  expect(buttons).not.toContain('继续');
+  expect(buttons).not.toContain('仍然继续');
   expect(card.querySelector('[data-testid="failure-continue"]')).toBeNull();
 });
 

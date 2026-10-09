@@ -566,9 +566,10 @@ describe('ProviderSetupDialog — per-model metadata', () => {
     await save();
 
     // Gone from the selection, and its metadata with it — the same state the
-    // chip path produces.
+    // chip path produces. Sent as an explicit empty map, because leaving it out
+    // would tell the service to keep the stored entry (decision 165).
     expect(api.upsert.mock.calls[0][0]).toMatchObject({ models: ['deepseek-reasoner'] });
-    expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+    expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({});
   });
 
   it('keeps a hand-typed model across a fetch the service does not list it in', async () => {
@@ -619,5 +620,94 @@ describe('ProviderSetupDialog — per-model metadata', () => {
 
     // An empty entry is noise in `models.json`; the save filter drops it.
     expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+  });
+
+  /**
+   * Decision 165 — the adaptive thinking switch. The rules themselves are
+   * tested on the shared helpers (`src/shared/__tests__/userProviders.test.ts`);
+   * these only check the form is wired to them.
+   */
+  describe('adaptive thinking', () => {
+    const CLAUDE = {
+      api: 'anthropic-messages' as const,
+      name: 'Claude Proxy',
+      baseUrl: 'https://proxy.example',
+    };
+
+    function checkboxes(): HTMLInputElement[] {
+      return [...document.body.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    }
+
+    function details(): HTMLDetailsElement | null {
+      return document.body.querySelector('details');
+    }
+
+    it('is offered only for Anthropic Messages, after Reasoning', async () => {
+      await mountDialog(provider());
+      expect(checkboxes()).toHaveLength(1);
+      expect(text()).not.toContain('Adaptive thinking');
+      await act(() => root.unmount());
+      root = createRoot(container);
+
+      await mountDialog(provider({ ...CLAUDE, models: ['claude-opus-5-5'] }));
+      expect(checkboxes()).toHaveLength(2);
+      expect(checkboxes()[1]?.parentElement?.textContent).toBe('Adaptive thinking');
+    });
+
+    it('ticking it ticks Reasoning; unticking Reasoning unticks it', async () => {
+      await mountDialog(provider({ ...CLAUDE, models: ['claude-opus-5-5'] }));
+      await act(async () => checkboxes()[1]?.click());
+      expect(checkboxes().map((box) => box.checked)).toEqual([true, true]);
+      await act(async () => checkboxes()[0]?.click());
+      expect(checkboxes().map((box) => box.checked)).toEqual([false, false]);
+    });
+
+    it('unticking both on an edit sends an empty map, so the stored switch is cleared', async () => {
+      api.upsert.mockResolvedValue(provider());
+      await mountDialog(
+        provider({
+          ...CLAUDE,
+          models: ['claude-opus-5-5'],
+          modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+        })
+      );
+      expect(checkboxes().map((box) => box.checked)).toEqual([true, true]);
+      await act(async () => checkboxes()[1]?.click());
+      await act(async () => checkboxes()[0]?.click());
+      await save();
+      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({});
+    });
+
+    it('prefills and shows it when a matching Claude model is selected', async () => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({
+        ok: true,
+        models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+      });
+      await mountDialog(provider({ ...CLAUDE, models: [] }));
+      await fetchModels();
+
+      const chip = (id: string) => modelChips().find((button) => button.textContent?.trim() === id);
+      await act(async () => chip('claude-haiku-4-5')?.click());
+      expect(details()?.open).toBe(false);
+      await act(async () => chip('claude-opus-5-5')?.click());
+      expect(details()?.open).toBe(true);
+      await save();
+      expect(api.upsert.mock.calls[0][0].modelMeta).toEqual({
+        'claude-opus-5-5': { reasoning: true, adaptiveThinking: true },
+      });
+    });
+
+    it('does not prefill under another API style', async () => {
+      api.upsert.mockResolvedValue(provider());
+      api.fetchModels.mockResolvedValue({ ok: true, models: ['claude-opus-5-5'] });
+      await mountDialog(provider({ models: [] }));
+      await fetchModels();
+
+      await act(async () => modelChips()[0]?.click());
+      expect(checkboxes().map((box) => box.checked)).toEqual([false]);
+      await save();
+      expect(api.upsert.mock.calls[0][0]).not.toHaveProperty('modelMeta');
+    });
   });
 });

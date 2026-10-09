@@ -38,7 +38,8 @@ export const GATEWAY_STREAM_GATE = 'GATEWAY_STREAM_GATE';
 /**
  * dsh-rebase P1-7e (decision 140): the provider refused a request parameter
  * this model does not take (`"thinking.type.disabled" is not supported for
- * this model`). Resending changes nothing until the model's settings do.
+ * this model`, or decision 165's `… requires adaptive thinking`). Resending
+ * changes nothing until the model's settings do.
  */
 export const MODEL_SETTING_UNSUPPORTED = 'MODEL_SETTING_UNSUPPORTED';
 
@@ -110,7 +111,17 @@ export function mapDshFailureCode(code: unknown): DshMappedFailureCode | undefin
 
 // Either marker alone is enough: a gateway may name only the gate or only its reason.
 const STREAM_GATE_PATTERN = /\bstream_gate_precommit\b|\bprebuffer_overflow\b/i;
-const MODEL_SETTING_PATTERN = /\bis not supported for this model\b/i;
+/**
+ * The provider's own sentences for a thinking setting the model does not take
+ * (decision 140 §22: upstream wording only). Decision 165 adds what Anthropic
+ * answers an adaptive-only model sent budget thinking (`… requires adaptive
+ * thinking; omit thinking or use thinking.type=adaptive and
+ * output_config.effort`) or `disabled` (`… send "thinking": {"type":
+ * "between_tools"} instead`).
+ */
+const MODEL_SETTING_PATTERN =
+  /\bis not supported for this model\b|\brequires adaptive thinking\b|\bbetween_tools\b|\boutput_config\.effort\b/i;
+
 /**
  * Decision 146: the gateway's own statement that no upstream is left for this
  * request — its `no_available_providers` type/code, its English sentence for

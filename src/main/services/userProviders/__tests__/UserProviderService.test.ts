@@ -311,6 +311,41 @@ describe('UserProviderService — upsert', () => {
       'deepseek-chat': { contextWindow: 65536, reasoning: true },
     });
   });
+
+  it('clears stored modelMeta when an edit sends an empty map (decision 165)', async () => {
+    // The form's way to say "everything was unticked"; absent still keeps.
+    store.rows = [
+      makeProvider({
+        api: 'anthropic-messages',
+        baseUrl: 'https://proxy.example',
+        modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+      }),
+    ];
+    const view = await service().upsert({
+      id: 'svc-1',
+      name: 'My DeepSeek',
+      baseUrl: 'https://proxy.example',
+      api: 'anthropic-messages',
+      modelMeta: {},
+    });
+    expect(store.rows[0]).not.toHaveProperty('modelMeta');
+    expect(view).not.toHaveProperty('modelMeta');
+  });
+
+  it('stores the adaptive thinking switch as sent', async () => {
+    await service().upsert({
+      name: 'Claude proxy',
+      baseUrl: 'https://proxy.example/v1/messages',
+      api: 'anthropic-messages',
+      apiKey: 'K',
+      models: ['claude-opus-5-5'],
+      modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+    });
+    expect(store.rows[0]).toMatchObject({
+      baseUrl: 'https://proxy.example',
+      modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+    });
+  });
 });
 
 describe('UserProviderService — remove / setEnabled', () => {
@@ -409,5 +444,158 @@ describe('UserProviderService — fetchModels', () => {
         apiKey: 'K',
       })
     ).resolves.toEqual({ ok: false, error: 'the service listed no models' });
+  });
+});
+
+/**
+ * Decision 165 — an anthropic-messages base is stored without `/v1`, so its
+ * models are asked for at `/v1/models` first, with a bearer retry when that is
+ * refused and the old `/models` as the last resort.
+ */
+describe('UserProviderService — fetchModels for anthropic-messages', () => {
+  const ROOT = 'https://proxy.example';
+  const V1 = `${ROOT}/v1/models?limit=1000`;
+  const LEGACY = `${ROOT}/models`;
+  const ANTHROPIC = { 'x-api-key': 'K', 'anthropic-version': '2023-06-01' };
+  const BEARER = { authorization: 'Bearer K' };
+
+  function htmlResponse(status = 200) {
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+      text: vi.fn(async () => '<html>not here</html>'),
+    };
+  }
+
+  function fetchAnthropic(baseUrl = ROOT) {
+    return service().fetchModels({ baseUrl, api: 'anthropic-messages', apiKey: 'K' });
+  }
+
+  it('lists the official shape from /v1/models with the anthropic headers alone', async () => {
+    fetchFn.mockResolvedValue(
+      jsonResponse({
+        data: [
+          { id: 'claude-opus-5-5', type: 'model', display_name: 'Claude Opus 5.5' },
+          { id: 'claude-haiku-4-5', type: 'model' },
+        ],
+        has_more: false,
+        last_id: 'claude-haiku-4-5',
+      })
+    );
+    await expect(fetchAnthropic()).resolves.toEqual({
+      ok: true,
+      models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn).toHaveBeenCalledWith(V1, { headers: ANTHROPIC });
+    expect(fetchFn.mock.calls[0][1].headers).not.toHaveProperty('authorization');
+  });
+
+  it('keeps a subpath and reduces a pasted /v1/messages before asking', async () => {
+    fetchFn.mockResolvedValue(jsonResponse({ data: [{ id: 'claude-sonnet-5' }] }));
+    await fetchAnthropic('https://gw.example/anthropic');
+    await fetchAnthropic('https://gw.example/v1/messages');
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([
+      'https://gw.example/anthropic/v1/models?limit=1000',
+      'https://gw.example/v1/models?limit=1000',
+    ]);
+  });
+
+  it('retries a refused /v1/models with a bearer token, never with both headers', async () => {
+    fetchFn
+      .mockResolvedValueOnce(jsonResponse({ error: 'invalid x-api-key' }, 401))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'claude-opus-5-5' }] }));
+    await expect(fetchAnthropic()).resolves.toEqual({ ok: true, models: ['claude-opus-5-5'] });
+    expect(fetchFn.mock.calls).toEqual([
+      [V1, { headers: ANTHROPIC }],
+      [V1, { headers: BEARER }],
+    ]);
+  });
+
+  it.each([
+    400, 404, 500,
+  ])('falls back to the old /models after /v1/models answered %i', async (status) => {
+    const failed = jsonResponse({ error: 'no' }, status);
+    const drain = vi.spyOn(failed, 'text');
+    fetchFn
+      .mockResolvedValueOnce(failed)
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'claude-sonnet-5' }] }));
+    await expect(fetchAnthropic()).resolves.toEqual({ ok: true, models: ['claude-sonnet-5'] });
+    // No bearer retry: the first answer was not a refusal.
+    expect(fetchFn.mock.calls).toEqual([
+      [V1, { headers: ANTHROPIC }],
+      [LEGACY, { headers: ANTHROPIC }],
+    ]);
+    // The unread error body is drained so the connection is released.
+    expect(drain).toHaveBeenCalledOnce();
+  });
+
+  it('falls through an HTML page and an empty list on /v1/models', async () => {
+    fetchFn
+      .mockResolvedValueOnce(htmlResponse(200))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'claude-opus-5' }] }));
+    await expect(fetchAnthropic()).resolves.toEqual({ ok: true, models: ['claude-opus-5'] });
+
+    fetchFn.mockReset();
+    fetchFn
+      .mockResolvedValueOnce(jsonResponse({ data: [], has_more: false }))
+      .mockResolvedValueOnce(jsonResponse({ data: [{ id: 'claude-opus-5' }] }));
+    await expect(fetchAnthropic()).resolves.toEqual({ ok: true, models: ['claude-opus-5'] });
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual([V1, LEGACY]);
+  });
+
+  it('names a refused key when any attempt was refused, after trying all three', async () => {
+    fetchFn
+      .mockResolvedValueOnce(jsonResponse({ error: 'no' }, 403))
+      .mockResolvedValueOnce(jsonResponse({ error: 'no' }, 404))
+      .mockResolvedValueOnce(htmlResponse(404));
+    await expect(fetchAnthropic()).resolves.toEqual({
+      ok: false,
+      error: 'the service refused this API key',
+    });
+    expect(fetchFn.mock.calls).toEqual([
+      [V1, { headers: ANTHROPIC }],
+      [V1, { headers: BEARER }],
+      [LEGACY, { headers: ANTHROPIC }],
+    ]);
+  });
+
+  it('otherwise reports the first status and the paths it tried', async () => {
+    fetchFn.mockResolvedValueOnce(htmlResponse(404)).mockResolvedValueOnce(htmlResponse(502));
+    await expect(fetchAnthropic()).resolves.toEqual({
+      ok: false,
+      error: 'the service answered 404 (tried /v1/models, /models)',
+    });
+
+    fetchFn.mockReset();
+    fetchFn.mockResolvedValueOnce(htmlResponse(200)).mockResolvedValueOnce(htmlResponse(200));
+    await expect(fetchAnthropic()).resolves.toEqual({
+      ok: false,
+      error: 'the service did not answer with JSON (tried /v1/models, /models)',
+    });
+  });
+
+  it('stops at the first transport failure instead of trying another path', async () => {
+    fetchFn.mockRejectedValue(new Error('getaddrinfo ENOTFOUND proxy.example'));
+    await expect(fetchAnthropic()).resolves.toEqual({
+      ok: false,
+      error: 'getaddrinfo ENOTFOUND proxy.example',
+    });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves the other styles on a single request', async () => {
+    fetchFn.mockResolvedValue(jsonResponse({ error: 'no' }, 404));
+    await expect(
+      service().fetchModels({
+        baseUrl: 'https://api.example.com/v1',
+        api: 'openai-completions',
+        apiKey: 'K',
+      })
+    ).resolves.toEqual({ ok: false, error: 'the service answered 404' });
+    expect(fetchFn).toHaveBeenCalledTimes(1);
   });
 });

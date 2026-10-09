@@ -10,3 +10,5 @@
 - 2026-09-26（DSH [决策 036](../plans/dsh-rebase/decisions/036-filter-unsupported-protocols.md)）：DSH 手写路由只支持三种协议，用户自建的 google / mistral / bedrock / vertex / azure / codex / pi-messages 服务在 DSH 下不可用。若确有用户需要，可自写一个 LLM 适配插件承接。未立项。
 - 2026-09-27（DSH [决策 061](../plans/dsh-rebase/decisions/061-port-mcp-bridge-as-host-plugin.md)）：P1 先移植我方 MCP 桥；以后可评估白名单官方 `dsh-mcp-client`（配置格式、工具命名、起进程方式待联网核实），以便与 DSH 生态对齐。未立项。
 - 2026-09-27（DSH [决策 065](../plans/dsh-rebase/decisions/065-loop-guard-host-plugin.md)）：通用工具总量闸，即任何工具单条回复超过 64 个调用就掐断。它超出 09-24 决策 042 限定的范围，要用户点头才做。未立项。
+- 2026-10-09（DSH [决策 165](../plans/dsh-rebase/decisions/165-user-provider-adaptive-thinking-and-anthropic-model-list.md)）：只支持自适应思考的 Claude 模型「关闭思考」时，上游建议发 `thinking:{type:"between_tools"}`（issue #4 症状三）。pi-ai 0.85.1 与随附 Anthropic SDK 都不认识这个取值，决策 036 不给 `llm-pi-ai` 打补丁；计划层对强制自适应的行本来就不下发 off（决策 141），现状是省略 thinking。等 pi-ai / DSH 支持后再议。未立项。
+- 2026-10-09（DSH 决策 165）：自定义 AI 服务对话框允许手动输入模型 id，拉不到模型列表（代理不实现列表接口）时也能添加模型。未立项。

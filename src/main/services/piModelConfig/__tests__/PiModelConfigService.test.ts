@@ -1616,6 +1616,80 @@ describe('PiModelConfigService — user-added services (H/17 L2)', () => {
     ]);
   });
 
+  it('writes the adaptive thinking switch as pi spells it, on anthropic-messages only (decision 165)', () => {
+    const anthropic = {
+      ...userProvider,
+      name: 'Claude Proxy',
+      baseUrl: 'https://proxy.example',
+      api: 'anthropic-messages',
+      models: ['claude-opus-5-5', 'claude-haiku-4-5'],
+      modelMeta: {
+        'claude-opus-5-5': { adaptiveThinking: true, maxTokens: 32000 },
+        'claude-haiku-4-5': { reasoning: true, adaptiveThinking: false },
+      },
+    };
+    const openai = {
+      ...userProvider,
+      id: '3f2a9c11-0000-4000-8000-000000000001',
+      name: 'Claude Via OpenAI',
+      api: 'openai-completions',
+      models: ['claude-opus-5-5'],
+      modelMeta: { 'claude-opus-5-5': { reasoning: true, adaptiveThinking: true } },
+    };
+    service([anthropic, openai]).writeUserProviderConfig({
+      userProviders: [anthropic, openai],
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const models = JSON.parse(readFileSync(join(dir, 'models.json'), 'utf8'));
+    expect(models.providers['claude-proxy'].models).toEqual([
+      {
+        id: 'claude-opus-5-5',
+        maxTokens: 32000,
+        reasoning: true,
+        compat: { forceAdaptiveThinking: true },
+        thinkingLevelMap: { off: null },
+      },
+      // Off is a choice too: no compat, and the name never reaches the file.
+      { id: 'claude-haiku-4-5', reasoning: true },
+    ]);
+    // Another style has no such switch: dropped, not turned into a compat key.
+    expect(models.providers['claude-via-openai'].models).toEqual([
+      { id: 'claude-opus-5-5', reasoning: true },
+    ]);
+    expect(readFileSync(join(dir, 'models.json'), 'utf8')).not.toContain('adaptiveThinking');
+  });
+
+  it('merges the adaptive thinking compat into whatever the row already carries', () => {
+    // Not something the form writes, but the vault round-trips what it is handed.
+    const anthropic = {
+      ...userProvider,
+      name: 'Claude Proxy',
+      api: 'anthropic-messages',
+      models: ['claude-opus-5-5'],
+      modelMeta: {
+        'claude-opus-5-5': {
+          adaptiveThinking: true,
+          compat: { supportsCacheControlOnTools: false },
+          thinkingLevelMap: { max: 'max' },
+        },
+      },
+    };
+    const built = service([anthropic]).buildNativeModelCatalog({
+      inheritedApiKey: '',
+      inheritedBaseUrl: '',
+    });
+    const providers = built.models.providers as Record<string, { models: unknown[] }>;
+    expect(providers['claude-proxy']?.models).toEqual([
+      {
+        id: 'claude-opus-5-5',
+        reasoning: true,
+        compat: { supportsCacheControlOnTools: false, forceAdaptiveThinking: true },
+        thinkingLevelMap: { max: 'max', off: null },
+      },
+    ]);
+  });
+
   it('falls back to `{ id }` when no metadata is present (back-compat)', () => {
     service([userProvider]).writeUserProviderConfig({
       userProviders: [userProvider],

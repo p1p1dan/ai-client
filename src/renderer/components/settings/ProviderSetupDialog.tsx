@@ -21,10 +21,13 @@ import type {
   UserProviderView,
 } from '@shared/userProviders';
 import {
+  applyModelMetaPatch,
   checkProviderBaseUrl,
   isSupportedUserProviderApi,
+  modelMetaDraft,
   normalizeProviderBaseUrl,
   PROVIDER_PRESETS,
+  prefillModelMeta,
   SUPPORTED_USER_PROVIDER_APIS,
 } from '@shared/userProviders';
 import { AlertTriangle, CheckCircle2, Loader2, X } from 'lucide-react';
@@ -110,6 +113,8 @@ export function ProviderSetupDialog({
   const [apiKey, setApiKey] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
   const [modelMeta, setModelMeta] = useState<Record<string, UserModelMeta>>({});
+  // Controlled so a prefilled switch can open the section it sits in.
+  const [metaOpen, setMetaOpen] = useState(false);
   const [probe, setProbe] = useState<Probe>({ state: 'idle' });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -120,6 +125,7 @@ export function ProviderSetupDialog({
     setProbe({ state: 'idle' });
     setSaveError(null);
     setApiKey('');
+    setMetaOpen(false);
     if (editing) {
       const matched = PROVIDER_PRESETS.find(
         (candidate) =>
@@ -198,8 +204,31 @@ export function ProviderSetupDialog({
   }, [baseUrl, api, apiKey, editing]);
 
   const updateMeta = useCallback((modelId: string, patch: Partial<UserModelMeta>) => {
-    setModelMeta((current) => ({ ...current, [modelId]: { ...current[modelId], ...patch } }));
+    setModelMeta((current) => ({
+      ...current,
+      [modelId]: applyModelMetaPatch(current[modelId], patch),
+    }));
   }, []);
+
+  /**
+   * A chip click. Selecting a Claude model that only accepts adaptive thinking
+   * ticks that switch for it (decision 165, user ruling 2026-10-09) when the
+   * model has no metadata yet, and opens the section so the user sees it.
+   */
+  const toggleModel = useCallback(
+    (model: string, on: boolean) => {
+      if (on) {
+        setSelected((current) => current.filter((id) => id !== model));
+        return;
+      }
+      setSelected((current) => (current.includes(model) ? current : [...current, model]));
+      const prefill = prefillModelMeta(model, api, modelMeta[model]);
+      if (!prefill) return;
+      setModelMeta((current) => ({ ...current, [model]: prefill }));
+      setMetaOpen(true);
+    },
+    [api, modelMeta]
+  );
 
   /**
    * Drop one model from the selection, metadata and all.
@@ -223,22 +252,14 @@ export function ProviderSetupDialog({
     setSaving(true);
     setSaveError(null);
     try {
-      // Only carry metadata for models that are actually selected, and only
-      // if at least one field is set — an empty entry is noise pi can do
-      // without.
-      const meta: Record<string, UserModelMeta> = {};
-      for (const id of selected) {
-        const m = modelMeta[id];
-        if (
-          m &&
-          (m.contextWindow !== undefined ||
-            m.maxTokens !== undefined ||
-            m.reasoning !== undefined ||
-            m.input !== undefined)
-        ) {
-          meta[id] = m;
-        }
-      }
+      // Only selected models and set fields; sent as `{}` when an edit cleared
+      // what the service has stored (decision 165).
+      const meta = modelMetaDraft({
+        selected,
+        meta: modelMeta,
+        api,
+        stored: editing?.modelMeta,
+      });
       const draft: UserProviderDraft = {
         ...(editing ? { id: editing.id } : {}),
         name: name.trim(),
@@ -246,7 +267,7 @@ export function ProviderSetupDialog({
         api,
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
         models: selected,
-        ...(Object.keys(meta).length > 0 ? { modelMeta: meta } : {}),
+        ...(meta ? { modelMeta: meta } : {}),
       };
       await window.electronAPI.userProviders.upsert(draft);
       onSaved();
@@ -391,11 +412,7 @@ export function ProviderSetupDialog({
                         key={model}
                         type="button"
                         aria-pressed={on}
-                        onClick={() =>
-                          setSelected((current) =>
-                            on ? current.filter((id) => id !== model) : [...current, model]
-                          )
-                        }
+                        onClick={() => toggleModel(model, on)}
                         className={cn(
                           'rounded-sm border px-2 py-0.5 text-meta transition-colors',
                           on
@@ -418,15 +435,27 @@ export function ProviderSetupDialog({
             )}
 
             {selected.length > 0 && (
-              <details className="rounded-md border">
+              <details
+                className="rounded-md border"
+                open={metaOpen}
+                onToggle={(event) => setMetaOpen(event.currentTarget.open)}
+              >
                 <summary className="cursor-pointer select-none px-3 py-2 text-meta text-muted-foreground">
                   {t('Per-model metadata')}
                 </summary>
                 <div className="space-y-3 border-t px-3 py-3">
+                  {api === 'anthropic-messages' && (
+                    <p className="text-meta text-muted-foreground">
+                      {t(
+                        'Adaptive thinking: Claude Opus 4.6 / Sonnet 4.6 and later (5.x included) only accept adaptive thinking. Turn it on when requests fail with "requires adaptive thinking"; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off. With it on, set the output limit to 32000 or more: without one a model gets 8192 tokens, which thinking at a high level can use up.'
+                      )}
+                    </p>
+                  )}
                   {selected.map((model) => (
                     <ModelMetaRow
                       key={model}
                       modelId={model}
+                      api={api}
                       meta={modelMeta[model]}
                       onChange={updateMeta}
                       onRemove={removeModel}
@@ -482,16 +511,19 @@ function Field({
 }
 
 /**
- * One row of per-model metadata: context window, output cap, reasoning switch
- * and input modality. All optional; a blank row is the same as no metadata.
+ * One row of per-model metadata: context window, output cap, reasoning and
+ * (Anthropic Messages only) adaptive thinking switches, and input modality.
+ * All optional; a blank row is the same as no metadata.
  */
 function ModelMetaRow({
   modelId,
+  api,
   meta,
   onChange,
   onRemove,
 }: {
   modelId: string;
+  api: UserProviderApi;
   meta: UserModelMeta | undefined;
   onChange: (modelId: string, patch: Partial<UserModelMeta>) => void;
   onRemove: (modelId: string) => void;
@@ -562,6 +594,18 @@ function ModelMetaRow({
           />
           {t('Reasoning')}
         </label>
+        {api === 'anthropic-messages' && (
+          <label className="flex items-center gap-1.5 text-meta text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={meta?.adaptiveThinking === true}
+              onChange={(event) =>
+                onChange(modelId, { adaptiveThinking: event.target.checked || undefined })
+              }
+            />
+            {t('Adaptive thinking')}
+          </label>
+        )}
         <div className="flex items-center gap-1.5 text-meta text-muted-foreground">
           {t('Input')}
           <ToggleGroup

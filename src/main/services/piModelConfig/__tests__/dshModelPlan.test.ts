@@ -134,6 +134,42 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     ]);
   });
 
+  it('MP-05 plans a user row with the adaptive thinking switch as forced, with no advisory (decision 165)', () => {
+    const { plan } = assemble([
+      userService('anthropic-messages', {
+        models: ['claude-opus-5-5', 'claude-sonnet-4-5'],
+        modelMeta: {
+          'claude-opus-5-5': { reasoning: true, adaptiveThinking: true },
+          'claude-sonnet-4-5': { reasoning: true },
+        },
+      }),
+    ]);
+    const route = plan.routes['u-anthropic-messages'];
+    expect(route?.models).toEqual([
+      {
+        id: 'claude-opus-5-5',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+        compat: { forceAdaptiveThinking: true },
+      },
+      {
+        id: 'claude-sonnet-4-5',
+        reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' },
+      },
+    ]);
+    expect(plan.index['u-anthropic-messages/claude-opus-5-5']?.efforts).toEqual([
+      'low',
+      'medium',
+      'high',
+    ]);
+    const advisories = plan.dropped.flatMap((drop) =>
+      drop.kind === 'field' && drop.providerId === 'u-anthropic-messages' && drop.modelId
+        ? [`${drop.modelId}: ${drop.reason}`]
+        : []
+    );
+    // The switched-on row is not undeclared; the row without it still is.
+    expect(advisories).toEqual(['claude-sonnet-4-5: adaptive_thinking_undeclared']);
+  });
+
   it('drops a user service with no key, and only that one', () => {
     const { plan } = assemble([userService('openai-completions', { apiKey: '' })]);
     expect(plan.routes['u-openai-completions']).toBeUndefined();

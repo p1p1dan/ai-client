@@ -172,6 +172,33 @@ describe('adaptive-only thinking hardening (decision 141)', () => {
     );
   });
 
+  it('plans the row a user service writes for its adaptive thinking switch (decision 165)', () => {
+    // `toPiUserModel`'s output: off already null, so nothing is withheld or advised.
+    const p = plan({
+      mine: provider('anthropic-messages', [
+        {
+          id: 'claude-opus-5-5',
+          reasoning: true,
+          compat: { forceAdaptiveThinking: true },
+          thinkingLevelMap: { off: null },
+        },
+      ]),
+    });
+    expect(p.routes.mine?.models[0]?.reasoningEfforts).toStrictEqual({
+      low: 'low',
+      medium: 'medium',
+      high: 'high',
+    });
+    expect(p.routes.mine?.models[0]?.compat).toMatchObject({ forceAdaptiveThinking: true });
+    expect(p.index['mine/claude-opus-5-5']?.efforts).toEqual(['low', 'medium', 'high']);
+    expect(p.dropped).not.toContainEqual(
+      expect.objectContaining({ reason: 'adaptive_thinking_undeclared' })
+    );
+    expect(p.dropped).not.toContainEqual(
+      expect.objectContaining({ reason: 'adaptive_thinking_forced' })
+    );
+  });
+
   it("inherits the provider-level switch, matching dsh-llm-pi-ai's own route/model compat merge", () => {
     const p = plan({
       claude: provider(

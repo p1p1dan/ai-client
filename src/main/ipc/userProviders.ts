@@ -86,6 +86,12 @@ function readDraft(payload: unknown): UserProviderDraft {
         }
         entry.reasoning = fields.reasoning;
       }
+      if (fields.adaptiveThinking !== undefined) {
+        if (typeof fields.adaptiveThinking !== 'boolean') {
+          throw new Error(`Invalid AI service request: modelMeta[${modelId}].adaptiveThinking`);
+        }
+        entry.adaptiveThinking = fields.adaptiveThinking;
+      }
       if (fields.input !== undefined) {
         if (
           !Array.isArray(fields.input) ||

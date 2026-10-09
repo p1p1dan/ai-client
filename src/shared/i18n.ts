@@ -3767,8 +3767,10 @@ Object.assign(zhTranslations, {
   'The model settings do not fit this model': '模型设置与该模型不兼容',
   'The model service refused a setting this app sent with the request, because this model does not support it.':
     '模型服务拒绝了本应用随请求发送的一项设置：这个模型不支持它。',
-  'Check the thinking settings of this model in the model settings, then send your message again.':
-    '请在模型设置里检查这个模型的思考相关配置，改好后再发一次消息。',
+  // Decision 165 revises decision 140 §24: the hint works both ways (adaptive
+  // thinking on for newer Claude models, off for older ones) and names where.
+  'For an AI service you added, open Settings · Models · AI services → Edit → Per-model metadata: Claude Opus 4.6 / Sonnet 4.6 and later need Adaptive thinking on (API style Anthropic Messages); older models need it off. Or turn off Reasoning for this model. For a model your administrator provides, forward the detail to them. Then send your message again.':
+    '如果是你自己添加的 AI 服务，请在「设置 · 模型 · AI 服务」里编辑该服务，在「各模型元数据」中调整：Claude Opus 4.6 / Sonnet 4.6 及之后的模型要打开「自适应思考」（接口风格为 Anthropic Messages），更早的模型要关闭它；也可以关掉这个模型的「推理」。如果是管理员提供的模型，请把错误详情转给管理员。改好后再发一次消息。',
 });
 
 // dsh-rebase P1-7e e3 (decision 142): a read of an attached file names the
@@ -3932,4 +3934,14 @@ Object.assign(zhTranslations, {
   'This file is too large to show a diff (over {{size}}).':
     '文件过大（超过 {{size}}），无法显示差异。',
   'Reading this file from Git timed out.': '从 Git 读取该文件超时。',
+});
+
+/**
+ * dsh-rebase decision 165: the per-model adaptive thinking switch of a user's
+ * own Anthropic Messages service (`ProviderSetupDialog`).
+ */
+Object.assign(zhTranslations, {
+  'Adaptive thinking': '自适应思考',
+  'Adaptive thinking: Claude Opus 4.6 / Sonnet 4.6 and later (5.x included) only accept adaptive thinking. Turn it on when requests fail with "requires adaptive thinking"; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off. With it on, set the output limit to 32000 or more: without one a model gets 8192 tokens, which thinking at a high level can use up.':
+    '自适应思考：Claude Opus 4.6 / Sonnet 4.6 及之后的模型（含 5.x）只接受自适应思考，请求报「requires adaptive thinking」时请打开；更早的模型（Haiku 4.5、Sonnet 4.5 及之前）要关闭。打开后建议把输出上限设为 32000 或更高：不填时只有 8192，高档位下的思考可能把它用完。',
 });

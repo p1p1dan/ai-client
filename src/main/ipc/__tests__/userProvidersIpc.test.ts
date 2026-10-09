@@ -73,12 +73,25 @@ describe('userProviders:upsert — modelMeta IPC boundary (P1)', () => {
     );
   });
 
+  it('passes the adaptive thinking switch, and an empty map that clears (decision 165)', async () => {
+    await invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, {
+      ...validPayload,
+      modelMeta: { m1: { reasoning: true, adaptiveThinking: true } },
+    });
+    expect(upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelMeta: { m1: { reasoning: true, adaptiveThinking: true } } })
+    );
+    await invoke(IPC_CHANNELS.USER_PROVIDERS_UPSERT, { ...validPayload, modelMeta: {} });
+    expect(upsert).toHaveBeenLastCalledWith(expect.objectContaining({ modelMeta: {} }));
+  });
+
   it.each<[unknown, string]>([
     [{ m1: { contextWindow: 'big' } }, 'contextWindow'],
     [{ m1: { contextWindow: -1 } }, 'contextWindow'],
     [{ m1: { contextWindow: 1.5 } }, 'contextWindow'],
     [{ m1: { maxTokens: 1.5 } }, 'maxTokens'],
     [{ m1: { reasoning: 'yes' } }, 'reasoning'],
+    [{ m1: { adaptiveThinking: 1 } }, 'adaptiveThinking'],
     [{ m1: { input: ['pdf'] } }, 'input'],
     [{ m1: 'nope' }, 'modelMeta[m1]'],
   ])('rejects malformed modelMeta: %o', async (modelMeta, field) => {

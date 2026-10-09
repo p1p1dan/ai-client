@@ -396,7 +396,13 @@ describe('the gateway stream gate and a refused model setting', () => {
       error: '"thinking.type.disabled" is not supported for this model',
     });
     expect(zh(view.title)).toBe('模型设置与该模型不兼容');
-    expect(zh(view.hint)).toContain('思考相关配置');
+    // Decision 165: both directions of the switch, and where it lives.
+    expect(zh(view.hint)).toContain('「设置 · 模型 · AI 服务」');
+    expect(zh(view.hint)).toContain('「各模型元数据」');
+    expect(zh(view.hint)).toContain('要打开「自适应思考」');
+    expect(zh(view.hint)).toContain('更早的模型要关闭它');
+    expect(zh(view.hint)).toContain('转给管理员');
+    expect(view.hint).toContain('Settings · Models · AI services → Edit → Per-model metadata');
     expect(view.action).toBe('configure');
     expect(canContinueSession(view, true)).toBe(false);
     expect(view.showsDetail).toBe(true);

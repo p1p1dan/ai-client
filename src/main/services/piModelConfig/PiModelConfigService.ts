@@ -25,6 +25,7 @@ import {
   piModelOption,
 } from '@shared/piModelConfig';
 import type { AgentModelCatalog, AgentModelCatalogError } from '@shared/types/agentCatalog';
+import type { UserModelMeta } from '@shared/userProviders';
 import type { UserProvider } from '../auth/CredentialVault';
 import { type BundledCatalogReader, createBundledCatalogReader } from './catalogSnapshot';
 import {
@@ -989,11 +990,44 @@ function toPiUserProvider(provider: UserProvider): Record<string, unknown> {
     baseUrl: provider.baseUrl,
     api: provider.api,
     headers,
-    models: (provider.models ?? []).map((id) => ({
-      id,
-      ...(provider.modelMeta?.[id] ?? {}),
-    })),
+    models: (provider.models ?? []).map((id) =>
+      toPiUserModel(id, provider.api, provider.modelMeta?.[id])
+    ),
   };
+}
+
+/**
+ * One model row of a user service: its id plus the metadata typed for it.
+ *
+ * Decision 165: `adaptiveThinking` is the form's name for pi's own spelling
+ * and never reaches models.json under that name. On an `anthropic-messages`
+ * service it becomes `reasoning: true`, `compat.forceAdaptiveThinking` and
+ * `thinkingLevelMap.off: null` — the same three the 1.0.x workaround writes
+ * by hand, so any pi reader of the file (not only the model plan) sends
+ * adaptive thinking and never `thinking: {type: "disabled"}`. Other styles
+ * have no such switch; the field is dropped there instead of becoming a
+ * compat key their route does not offer. Anything already in the row's
+ * `compat` / `thinkingLevelMap` is merged into, not replaced.
+ */
+function toPiUserModel(
+  id: string,
+  api: string,
+  meta: UserModelMeta | undefined
+): Record<string, unknown> {
+  const { adaptiveThinking, ...rest } = meta ?? {};
+  const row: Record<string, unknown> = { id, ...rest };
+  if (api === 'anthropic-messages' && adaptiveThinking === true) {
+    row.reasoning = true;
+    row.compat = { ...asRecord(row.compat), forceAdaptiveThinking: true };
+    row.thinkingLevelMap = { ...asRecord(row.thinkingLevelMap), off: null };
+  }
+  return row;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function safeMtime(path: string): number | null {
