@@ -45,9 +45,11 @@ describe('[U12 fix] the send path carries the stored tier into the spawn', () =>
     expect(COMPOSER).toContain('readSessionPermissions');
     // Matched across normalized whitespace: the D14 rename made the assignment
     // long enough for the formatter to wrap it, and the exact-text scan then
-    // failed on a wiring that was in fact intact.
+    // failed on a wiring that was in fact intact. `let` since decision 166: a
+    // live goal start that switched the posture also moves what a
+    // `session_not_found` re-create spawns on (`goalStartWiringStatic`).
     expect(COMPOSER.replace(/\s+/g, ' ')).toContain(
-      'const spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined'
+      'let spawnPermissions = readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined'
     );
   });
 

@@ -72,6 +72,7 @@ Role: detail shard。上位：[P1-7 方案](../p1-7-renderer.md)。回答调研�
   - Ctrl+Enter：见 U5；
   - 回退、fork、宿主重启：目标变为 disarmed（P1-4 §8），显示「已挂起」；
   - 创建目标：只有 `/goal <目标>` 与模型的 `create_goal`，输入框不加「目标模式」开关（与 Claude Code、Codex、DSH 一致）。
+    - 修订（2026-10-09，[决策 166](../../decisions/166-permission-menu-single-column-and-goal-entry.md)）：权限菜单里加「设定目标…」，预填 `/goal ` 并聚焦输入框，不是开关；会话有未完成目标或正在发送时不可用。
 
 ```text
 │ ◎ 目标 · 第 3/256 轮 · 进行中 · 让 CI 全绿并提交修复          [暂停] ⋯

@@ -37,10 +37,46 @@ export const PERMISSION_GEAR_LABELS: Record<PermissionGear, string> = {
   // permission-mode picker, whose catalog entry reads 「跳过权限确认」.
   bypass: 'Bypass all prompts',
 };
-export const RUNTIME_MODE_LABELS: Record<RuntimeMode, string> = {
-  plan: 'Plan',
-  agent: 'Execute',
+
+/**
+ * Decision 166 (GitHub issue #5): the composer offers ONE column of five
+ * presets instead of the two axes. Storage stays the `{mode, gear}` pair, so
+ * a preset is only a name for a pair: `plan` is plan mode on full auto (it
+ * explores without asking; plan mode refuses the rest at call time), every
+ * other preset is execute mode on the gear of the same name.
+ */
+export type PermissionPreset = 'plan' | PermissionGear;
+/** Menu order. */
+export const PERMISSION_PRESETS: readonly PermissionPreset[] = [
+  'plan',
+  'ask',
+  'accept-edits',
+  'auto',
+  'bypass',
+];
+/** Dictionary keys, like `PERMISSION_GEAR_LABELS`. */
+export const PERMISSION_PRESET_LABELS: Record<PermissionPreset, string> = {
+  plan: 'Plan mode',
+  ask: 'Confirm before changes',
+  'accept-edits': 'Auto edit',
+  auto: 'Full auto',
+  bypass: 'Bypass all prompts',
 };
+/**
+ * The preset a stored pair shows as. Any plan-mode pair is `plan`, including
+ * the `plan + ask` a 1.0.x `readonly` tier migrates to: it is displayed, never
+ * rewritten.
+ */
+export function presetOf(settings: RuntimePermissionSettings): PermissionPreset {
+  return settings.mode === 'plan' ? 'plan' : settings.gear;
+}
+/** The pair a picked preset writes. */
+export function settingsOf(preset: PermissionPreset): RuntimePermissionSettings {
+  return preset === 'plan' ? { mode: 'plan', gear: 'auto' } : { mode: 'agent', gear: preset };
+}
+export function isPermissionPreset(value: unknown): value is PermissionPreset {
+  return value === 'plan' || isPermissionGear(value);
+}
 
 export function migratePermissionTier(tier: LegacyPermissionTier): RuntimePermissionSettings {
   switch (tier) {

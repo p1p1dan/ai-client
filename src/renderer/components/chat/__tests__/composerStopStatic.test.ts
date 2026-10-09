@@ -1154,9 +1154,10 @@ describe('decision 046 — Stop always settles the composer', () => {
     const body = runSendBody();
     const races = (body.match(/cancellation(?:\s*\.race\(|\.race\()/g) ?? []).length;
     // ensureHost, scratch dir, createSession, resumeSession, send, the exact-file
-    // reopen, and the diagnostic host probe.
-    expect(races).toBe(7);
-    expect((body.match(/=== SEND_CANCELLED/g) ?? []).length).toBe(7);
+    // reopen, the diagnostic host probe, and (decision 166) the live posture
+    // switch of a goal-creating `/goal`.
+    expect(races).toBe(8);
+    expect((body.match(/=== SEND_CANCELLED/g) ?? []).length).toBe(8);
     // A cancelled create routes to the shared Stop exit at both call sites.
     expect(offsets("if (seq === 'cancelled') return settleStoppedAttempt();")).toHaveLength(2);
     // A cancelled dispatch classifies exactly like a Stop during the wait.

@@ -2867,7 +2867,6 @@ export const zhTranslations: Record<string, string> = {
   'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.':
     '所有工具调用都不再询问，包括「全自动」仍会停下确认的那些命令。明确的拒绝规则依然生效。该档位不会被保存为新对话的默认。',
   'Can be turned on once this chat exists.': '需要先有对话才能开启。',
-  'Carries out approved work.': '执行已批准的工作。',
   'Check that Claude Code or Codex has been used on this machine and that its session directory holds JSONL records.':
     '请确认本机使用过 Claude Code 或 Codex，且会话目录中存在 JSONL 记录。',
   "Copies history read-only from this machine's Claude Code or Codex session directories, so you can carry on in Pi":
@@ -2878,7 +2877,6 @@ export const zhTranslations: Record<string, string> = {
   Email: '邮箱',
   'Enter the code': '输入验证码',
   'Enter your email to receive a verification code.': '输入邮箱以接收验证码。',
-  Execute: '执行',
   'Failed to load the PDF': 'PDF 加载失败',
   'Failed to read history': '读取历史失败',
   'Failed to render the page': '页面渲染失败',
@@ -2897,7 +2895,6 @@ export const zhTranslations: Record<string, string> = {
   'Import history': '导入历史',
   'Import report: {{imported}} new snapshots, {{existing}} already there, {{failed}} failed. Imported sessions are not opened automatically.':
     '导入报告：{{imported}} 个新快照，{{existing}} 个已存在，{{failed}} 个失败。导入完成后不会自动打开会话。',
-  'Investigates and submits a plan, then waits for approval.': '勘察并提交实现计划，等待批准。',
   'Keep the original file for recovery; start a new chat to carry on.':
     '请保留原文件用于恢复；新建会话后再继续工作。',
   'Loading Mermaid diagram...': '加载 Mermaid 图表…',
@@ -2960,8 +2957,6 @@ export const zhTranslations: Record<string, string> = {
     '请把该目录恢复到原路径后重试，或归档该会话并新建一个继续工作。',
   'Runs the available tools automatically; explicit deny rules still apply.':
     '自动执行可用工具；显式拒绝规则仍生效。',
-  'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.':
-    '自动执行当前模式下的可用工具，包括工作区外操作；显式拒绝规则仍生效。',
   'Select all in this project': '全选当前项目',
   'Send code': '发送验证码',
   'Sending may or may not still work; if it fails, start a new chat to carry on.':
@@ -3098,8 +3093,6 @@ export const zhTranslations: Record<string, string> = {
   'Continue to try again. The detail below is what to report if it repeats.':
     '点「继续」再试一次。如果反复出现，下面那行细节就是该反馈的内容。',
   'Workspace folder is gone': '工作目录已不存在',
-  'Writes, edits and commands inside the workspace run automatically; paths outside it still ask.':
-    '工作区内写入、编辑和命令自动执行；外部路径仍询问。',
   'Wrong code.': '验证码错误。',
   'Wrong code. {{count}} attempts left.': '验证码错误，还可重试 {{count}} 次。',
   Yesterday: '昨天',
@@ -3407,11 +3400,11 @@ export const englishTranslate: Translate = (key, params) => translate('en', key,
  *
  * The composer control used to grey out entirely while a turn ran, which put
  * the one setting that stops approval cards out of reach at the exact moment a
- * card was on screen. The gear is live now; the mode is still locked, and these
- * two strings are how the UI says which is which.
+ * card was on screen. The gear is live now; the mode is still locked. This
+ * string marks a locked menu item; the footer's note moved to decision 166's
+ * block below ('Plan mode cannot be turned on or off while this turn runs.').
  */
 Object.assign(zhTranslations, {
-  'While this turn runs, only the permission level can change.': '本轮对话进行中只能修改权限档位。',
   'Can be changed once this turn ends.': '本轮对话结束后可修改。',
 });
 
@@ -3944,4 +3937,40 @@ Object.assign(zhTranslations, {
   'Adaptive thinking': '自适应思考',
   'Adaptive thinking: Claude Opus 4.6 / Sonnet 4.6 and later (5.x included) only accept adaptive thinking. Turn it on when requests fail with "requires adaptive thinking"; older models (Haiku 4.5, Sonnet 4.5 and earlier) need it off. With it on, set the output limit to 32000 or more: without one a model gets 8192 tokens, which thinking at a high level can use up.':
     '自适应思考：Claude Opus 4.6 / Sonnet 4.6 及之后的模型（含 5.x）只接受自适应思考，请求报「requires adaptive thinking」时请打开；更早的模型（Haiku 4.5、Sonnet 4.5 及之前）要关闭。打开后建议把输出上限设为 32000 或更高：不填时只有 8192，高档位下的思考可能把它用完。',
+});
+
+/**
+ * dsh-rebase decision 166 (GitHub issue #5): the composer's permission menu as
+ * one column of five presets, and 「设定目标…」 under it
+ * (`ComposerPermissionTrigger`, `goalStart.ts`); DSH command descriptions in
+ * the slash menu, keyed by DSH's English text (`buildSlashCatalog`).
+ */
+Object.assign(zhTranslations, {
+  'Plan mode': '计划模式',
+  'Confirm before changes': '改动前确认',
+  'Auto edit': '自动编辑',
+  'Read-only: explores without asking and writes up a plan. Edits, other commands and web tools are refused.':
+    '只读：勘察时不再询问，最后写出计划。改文件、其他命令和联网工具都会被拒绝。',
+  'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.':
+    '工作区内的改动和命令直接执行；工作区外的路径、联网和其他工具仍会询问。',
+  'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.':
+    '自动执行可用工具，包括工作区外操作；显式拒绝规则仍生效。',
+  'Read-only tools keep the earlier approval level: {{gear}}.':
+    '只读工具沿用之前的确认方式：{{gear}}。',
+  'Plan mode cannot be turned on or off while this turn runs.':
+    '本轮对话进行中不能进入或退出计划模式。',
+  'Set a goal…': '设定目标…',
+  'Fills in /goal. Once sent, the goal runs round after round, switching to Full auto if needed.':
+    '在输入框填入 /goal，写好目标后发送；目标会自动多轮推进，必要时切换到「全自动」。',
+  'This chat has an unfinished goal. Pause, resume, edit or clear it from the goal bar.':
+    '当前对话有未完成的目标，可在目标条里暂停、继续、修改或清除。',
+  'This chat has an unfinished goal. Send /goal to see it, or /goal clear to end it.':
+    '当前对话有未完成的目标。发送 /goal 可查看，发送 /goal clear 可结束它。',
+  'Available once the current message is sent.': '当前消息发出后可用。',
+  'Switched to {{preset}} so the goal can run round after round':
+    '已切换到「{{preset}}」，目标会自动多轮推进',
+  'Could not switch to {{preset}}': '未能切换到「{{preset}}」',
+  'The goal was sent anyway and may stop to ask for approval. ({{error}})':
+    '目标仍已发出，执行中可能会停下来请求确认。（{{error}}）',
+  'Set or view the goal for a long-running task': '设定或查看长任务目标',
 });

@@ -1,3 +1,4 @@
+import { translate } from '@shared/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   BUILTIN_SLASH_COMMANDS,
@@ -114,6 +115,46 @@ describe('buildSlashCatalog', () => {
     const rows = catalog.filter((c) => c.name === 'new');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.source).toBe('extension');
+  });
+});
+
+describe('buildSlashCatalog · DSH command descriptions (decision 166)', () => {
+  const zh = (key: string) => translate('zh', key);
+
+  it('translates a DSH command’s description, keyed by its English text', () => {
+    const catalog = buildSlashCatalog(
+      [item('goal', 'command', 'Set or view the goal for a long-running task')],
+      zh
+    );
+    expect(catalog.find((c) => c.name === 'goal')).toEqual({
+      name: 'goal',
+      description: '设定或查看长任务目标',
+      source: 'command',
+    });
+  });
+
+  it('keeps a sentence the dictionary does not know, and a skill’s own words', () => {
+    const catalog = buildSlashCatalog(
+      [
+        item('mystery', 'command', 'Does something new'),
+        item('skill:goal', 'skill', 'Set or view the goal for a long-running task'),
+      ],
+      zh
+    );
+    expect(catalog.find((c) => c.name === 'mystery')?.description).toBe('Does something new');
+    expect(catalog.find((c) => c.name === 'skill:goal')?.description).toBe(
+      'Set or view the goal for a long-running task'
+    );
+  });
+
+  it('is DSH’s own text in English', () => {
+    const catalog = buildSlashCatalog(
+      [item('goal', 'command', 'Set or view the goal for a long-running task')],
+      (key) => translate('en', key)
+    );
+    expect(catalog.find((c) => c.name === 'goal')?.description).toBe(
+      'Set or view the goal for a long-running task'
+    );
   });
 });
 

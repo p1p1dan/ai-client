@@ -51,10 +51,13 @@ const ATTACH = process.env.PERM1_ATTACH === '1';
 const REPORT_NAME = 'perm1-report.json';
 const SHOT_PREFIX = 'perm1';
 
-/** 输入框旁边那个权限档触发器。标签形如「执行 · 每次询问」。 */
+/**
+ * 输入框旁边那个权限档触发器。决策 166 起标签就是预设名（「改动前确认」「计划模式」……），
+ * aria-label 形如「改动前确认 — 立即生效，作用于当前线程。」。
+ */
 const TRIGGER = `(() => {
   return [...document.querySelectorAll('button[aria-label]')]
-    .find((b) => /(执行|规划)\\s·\\s(每次询问|自动接受编辑|全自动)/.test(b.getAttribute('aria-label') ?? ''))
+    .find((b) => /^(计划模式|改动前确认|自动编辑|全自动|完全放行)\\s[·—]/.test(b.getAttribute('aria-label') ?? ''))
     ?? null;
 })()`;
 
@@ -208,7 +211,7 @@ async function main() {
     report.steps.popupContents = await cdp.evaluate(POPUP_STATE);
     report.screenshots = { popup: await screenshot(cdp, 'popup') };
 
-    await cdp.evaluate(clickRadio('自动接受编辑'));
+    await cdp.evaluate(clickRadio('自动编辑'));
     report.steps.closedOnPlainGear = await popupGone(cdp);
     await sleep(1200);
     report.steps.labelAfterGear = await cdp.evaluate(TRIGGER_LABEL);
@@ -231,19 +234,15 @@ async function main() {
       await cdp.evaluate(openTrigger);
       await cdp.waitFor(`${POPUP} !== null`, { timeoutMs: 15_000, label: 'popup open 3' });
     }
-    await cdp.evaluate(clickRadio('规划'));
+    await cdp.evaluate(clickRadio('计划模式'));
     report.steps.closedOnMode = await popupGone(cdp);
     await sleep(1200);
     report.steps.labelAfterMode = await cdp.evaluate(TRIGGER_LABEL);
 
-    // 复位成「执行 · 每次询问」，否则下一步不会弹权限卡。
+    // 复位成「改动前确认」，否则下一步不会弹权限卡。
     await cdp.evaluate(openTrigger);
     await cdp.waitFor(`${POPUP} !== null`, { timeoutMs: 15_000, label: 'popup open 4' });
-    await cdp.evaluate(clickRadio('执行'));
-    await sleep(1200);
-    await cdp.evaluate(openTrigger);
-    await cdp.waitFor(`${POPUP} !== null`, { timeoutMs: 15_000, label: 'popup open 5' });
-    await cdp.evaluate(clickRadio('每次询问'));
+    await cdp.evaluate(clickRadio('改动前确认'));
     await sleep(1500);
     report.steps.labelAfterReset = await cdp.evaluate(TRIGGER_LABEL);
 
@@ -292,20 +291,21 @@ async function main() {
       // A bare count told me "6 ≠ 5" and nothing about WHICH row was new, so it
       // reads as a regression when it is really a stale expectation. Naming the
       // rows makes the next addition say what it is.
-      popupHasAllFourGearsAndModes: (() => {
-        const want = ['规划', '执行', '每次询问', '自动接受编辑', '全自动', '完全放行'];
+      // Decision 166: one column of five presets.
+      popupHasAllFivePresets: (() => {
+        const want = ['计划模式', '改动前确认', '自动编辑', '全自动', '完全放行'];
         const got = (s.popupContents?.items ?? []).map((i) =>
           (i.text ?? '').split(' | ')[0].trim()
         );
         return want.length === got.length && want.every((row, i) => got[i] === row);
       })(),
       closesOnPlainGear: s.closedOnPlainGear === true,
-      labelFollowsGear: (s.labelAfterGear ?? '').includes('自动接受编辑'),
+      labelFollowsGear: (s.labelAfterGear ?? '').includes('自动编辑'),
       autoKeepsPopupOpen: s.autoKeepsPopup === true,
-      cancelAppliesNothing: (s.labelAfterCancel ?? '').includes('自动接受编辑'),
+      cancelAppliesNothing: (s.labelAfterCancel ?? '').includes('自动编辑'),
       closesOnModeChange: s.closedOnMode === true,
-      labelFollowsMode: (s.labelAfterMode ?? '').includes('规划'),
-      resetBackToAsk: (s.labelAfterReset ?? '').includes('执行 · 每次询问'),
+      labelFollowsMode: (s.labelAfterMode ?? '').includes('计划模式'),
+      resetBackToAsk: (s.labelAfterReset ?? '').includes('改动前确认'),
       approvalSurfaceAppeared: card !== null,
       // 只有结构化中文卡算数；抓到别的弹窗这一格记为 null（没测到），不记为通过。
       nativeCardIsChinese:

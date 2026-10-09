@@ -115,6 +115,11 @@ export function filterSlashCommands(
  * `new` is what the menu offers and what runs — see `resolveSlashAction`. A
  * client that quietly takes a name from a plugin breaks it in a way neither the
  * user nor the plugin author can see.
+ *
+ * Decision 166: a DSH command's description is DSH's own English sentence, so
+ * it is looked up as a dictionary key; a sentence the dictionary does not
+ * know stays as DSH wrote it (`translate` returns the key). Skills keep their
+ * author's words.
  */
 export function buildSlashCatalog(
   runtime: readonly SlashCatalogItem[],
@@ -128,7 +133,12 @@ export function buildSlashCatalog(
       source: 'builtin',
     })
   );
-  return [...runtime, ...builtins].sort((a, b) => a.name.localeCompare(b.name));
+  const commands = runtime.map((item) =>
+    item.source === 'command' && item.description
+      ? { ...item, description: translate(item.description) }
+      : item
+  );
+  return [...commands, ...builtins].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 /**

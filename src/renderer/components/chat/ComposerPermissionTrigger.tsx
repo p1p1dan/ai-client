@@ -2,13 +2,22 @@ import { Menu as MenuPrimitive } from '@base-ui/react/menu';
 import {
   DEFAULT_RUNTIME_PERMISSION,
   isPermissionGear,
-  isRuntimeMode,
   PERMISSION_GEAR_LABELS,
-  type PermissionGear,
-  RUNTIME_MODE_LABELS,
+  PERMISSION_PRESET_LABELS,
+  type PermissionPreset,
+  presetOf,
   type RuntimePermissionSettings,
+  settingsOf,
 } from '@shared/types/runtimePermission';
-import { Shield, ShieldAlert, ShieldBan, ShieldOff, ShieldQuestion } from 'lucide-react';
+import {
+  ClipboardList,
+  Shield,
+  ShieldAlert,
+  ShieldBan,
+  ShieldOff,
+  ShieldQuestion,
+  Target,
+} from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Menu, MenuPopup, MenuRadioGroup, MenuSeparator } from '@/components/ui/menu';
 import { addToast } from '@/components/ui/toast';
@@ -37,13 +46,29 @@ function readPermissionsFor(sessionId: string | null): RuntimePermissionSettings
   );
 }
 
-/** `description` is a dictionary key; the menu item translates it. */
-const GEAR_OPTIONS: readonly { id: PermissionGear; description: string; icon: typeof Shield }[] = [
+/**
+ * Decision 166 (GitHub issue #5): one column of five presets, in
+ * `PERMISSION_PRESETS` order. `description` is a dictionary key; the menu item
+ * translates it.
+ */
+const PRESET_OPTIONS: readonly {
+  id: PermissionPreset;
+  description: string;
+  icon: typeof Shield;
+}[] = [
+  {
+    id: 'plan',
+    // Plan mode on full auto: reads, searches and read-only commands run
+    // without a card; plan mode refuses the rest at call time (gate.ts).
+    description:
+      'Read-only: explores without asking and writes up a plan. Edits, other commands and web tools are refused.',
+    icon: ClipboardList,
+  },
   { id: 'ask', description: 'Asks before each write, edit and command.', icon: Shield },
   {
     id: 'accept-edits',
     description:
-      'Writes, edits and commands inside the workspace run automatically; paths outside it still ask.',
+      'Edits and commands inside the workspace run without asking; paths outside it, web access and other tools still ask.',
     icon: ShieldOff,
   },
   {
@@ -60,13 +85,24 @@ const GEAR_OPTIONS: readonly { id: PermissionGear; description: string; icon: ty
 ];
 
 /**
- * Gears that take effect only after the user confirms a second time.
+ * Presets that take effect only after the user confirms a second time.
  *
  * Both hand work to the model that nobody will be asked about again, and both
- * are one keystroke away from the quiet gears in the same radio group.
+ * are one keystroke away from the quiet presets in the same radio group.
  */
-function needsConfirmation(gear: PermissionGear): gear is 'auto' | 'bypass' {
+function needsConfirmation(gear: PermissionPreset): gear is 'auto' | 'bypass' {
   return gear === 'auto' || gear === 'bypass';
+}
+
+/**
+ * Decision 166: 「设定目标…」 below the presets. The composer owns what it
+ * does (prefill `/goal `) and when it is off (`goalEntryState`).
+ */
+export interface ComposerGoalEntry {
+  disabled: boolean;
+  /** Dictionary key of the reason it is off. */
+  hint: string | null;
+  onSelect: () => void;
 }
 
 interface ComposerPermissionTriggerProps {
@@ -82,6 +118,7 @@ interface ComposerPermissionTriggerProps {
    * latch falls back to false long before an approval card can appear.
    */
   turnActive?: boolean;
+  goalEntry?: ComposerGoalEntry;
 }
 
 export function ComposerPermissionTrigger({
@@ -90,6 +127,7 @@ export function ComposerPermissionTrigger({
   mode,
   disabled,
   turnActive,
+  goalEntry,
 }: ComposerPermissionTriggerProps) {
   const { t } = useI18n();
   const [settings, setSettings] = useState(() => readPermissionsFor(sessionId));
@@ -99,6 +137,8 @@ export function ComposerPermissionTrigger({
   const [error, setError] = useState<string | null>(null);
   // Keep Base UI's own close bookkeeping: never drive its open prop manually.
   const menuActions = useRef<MenuPrimitive.Root.Actions | null>(null);
+  // Set by 「设定目标…」: focus goes to the message box, not back to the chip.
+  const goalPicked = useRef(false);
   const currentSession = useRef(sessionId);
   currentSession.current = sessionId;
   // dsh-rebase P1-9e (decision 121, 122 rule 13): a chat from the previous
@@ -150,11 +190,18 @@ export function ComposerPermissionTrigger({
     }
   };
   const degraded = usePermissionGateStore((state) => isTierControlDegraded(state.gates, sessionId));
-  const current = GEAR_OPTIONS.find((option) => option.id === settings.gear) ?? GEAR_OPTIONS[0];
+  const preset = presetOf(settings);
+  const current = PRESET_OPTIONS.find((option) => option.id === preset) ?? PRESET_OPTIONS[1];
   const Icon = degraded ? ShieldQuestion : current.icon;
-  const label = degraded
-    ? t('Your own policy')
-    : `${t(RUNTIME_MODE_LABELS[settings.mode])} · ${t(PERMISSION_GEAR_LABELS[settings.gear])}`;
+  const label = degraded ? t('Your own policy') : t(PERMISSION_PRESET_LABELS[preset]);
+  // A plan-mode pair on another gear (1.0.x `readonly` migrates to plan + ask)
+  // shows as 「计划模式」 and is left as stored; the tooltip names its gear.
+  const legacyNote =
+    !degraded && settings.mode === 'plan' && settings.gear !== 'auto'
+      ? t('Read-only tools keep the earlier approval level: {{gear}}.', {
+          gear: t(PERMISSION_GEAR_LABELS[settings.gear]),
+        })
+      : null;
   const scope = sessionId ? t('Applies immediately, to this thread.') : t('Applies to new chats.');
   /**
    * A running turn locks the MODE and leaves the gear open.
@@ -166,15 +213,22 @@ export function ComposerPermissionTrigger({
    * which is precisely when the whole control used to go grey. A gear widened
    * now also releases the card that is already waiting (the runtime re-judges
    * it), so this is not merely a setting for next time.
+   *
+   * With presets (decision 166): 「计划模式」 is off while a turn runs, and so
+   * is every other preset while the chat is in plan mode, since each of them
+   * leaves it. In execute mode the four gear presets stay pickable.
    */
   const modeLocked = turnActive === true;
-  const turnNote = t('While this turn runs, only the permission level can change.');
+  const lockedByTurn = (id: PermissionPreset) =>
+    modeLocked && (id === 'plan' || settings.mode === 'plan');
+  const turnNote = t('Plan mode cannot be turned on or off while this turn runs.');
   const isDisabled = disabled || pending || (sessionId !== null && !isHostUsable(hostState));
   // While bypass is on, the chip is the only thing on screen that says so — no
   // card will ever appear again to remind anyone. So it stops being quiet
   // chrome and carries the destructive tone for as long as the gear is live.
   const bypassing = !degraded && settings.gear === 'bypass';
-  const title = modeLocked ? `${label} — ${turnNote}` : `${label} — ${scope}`;
+  const head = legacyNote ? `${label} · ${legacyNote}` : label;
+  const title = modeLocked ? `${head} — ${turnNote}` : `${head} — ${scope}`;
 
   return (
     <Menu
@@ -199,6 +253,11 @@ export function ComposerPermissionTrigger({
         align="start"
         className="min-w-52 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
+        finalFocus={() => {
+          const picked = goalPicked.current;
+          goalPicked.current = false;
+          return !picked;
+        }}
       >
         {degraded ? (
           <DegradedGateNotice />
@@ -215,7 +274,7 @@ export function ComposerPermissionTrigger({
                     'Every tool call runs without asking, including the commands full auto still stops to confirm. Explicit deny rules still apply. This is never saved as the default for new chats.'
                   )
                 : t(
-                    'Runs the tools available in the current mode automatically, including operations outside the workspace; explicit deny rules still apply.'
+                    'Runs the available tools automatically, including operations outside the workspace; explicit deny rules still apply.'
                   )}
               {confirming === 'bypass' ? '' : scope}
             </p>
@@ -232,7 +291,7 @@ export function ComposerPermissionTrigger({
                 type="button"
                 disabled={pending}
                 className="rounded-sm bg-destructive/10 px-2 py-1 text-ui text-destructive hover:bg-destructive/20"
-                onClick={() => void apply({ ...settings, gear: confirming })}
+                onClick={() => void apply(settingsOf(confirming))}
               >
                 {t('Apply')}
               </button>
@@ -241,75 +300,49 @@ export function ComposerPermissionTrigger({
         ) : (
           <>
             <MenuRadioGroup
-              value={settings.mode}
+              value={preset}
               onValueChange={(value) => {
-                if (isRuntimeMode(value)) void apply({ ...settings, mode: value });
-              }}
-            >
-              {(['plan', 'agent'] as const).map((runtimeMode) => (
-                <MenuPrimitive.RadioItem
-                  key={runtimeMode}
-                  value={runtimeMode}
-                  disabled={pending || modeLocked}
-                  // U30 rev.3 — closing is Base UI's own press handling, never a
-                  // consequence of the worker acknowledging. `closeOnClick={false}`
-                  // (D14's rework) made the popup's fate depend on an await: a
-                  // slow or failed `setPermissions` left it up with the trigger
-                  // disabled underneath, which is the "菜单关不掉" the field pass
-                  // reported for a second time. A picked mode is a finished
-                  // decision; failures are reported by toast, not by a popup
-                  // that refuses to leave.
-                  closeOnClick
-                  className={composerMenuItemClass()}
-                >
-                  <span className="flex min-w-0 flex-1 flex-col">
-                    <span>{t(RUNTIME_MODE_LABELS[runtimeMode])}</span>
-                    <span className="text-meta text-muted-foreground">
-                      {modeLocked
-                        ? t('Can be changed once this turn ends.')
-                        : runtimeMode === 'plan'
-                          ? t('Investigates and submits a plan, then waits for approval.')
-                          : t('Carries out approved work.')}
-                    </span>
-                  </span>
-                  <MenuPrimitive.RadioItemIndicator>
-                    <span className="size-1.5 rounded-full bg-foreground" />
-                  </MenuPrimitive.RadioItemIndicator>
-                </MenuPrimitive.RadioItem>
-              ))}
-            </MenuRadioGroup>
-            <MenuSeparator />
-            <MenuRadioGroup
-              value={settings.gear}
-              onValueChange={(value) => {
+                if (value === 'plan') {
+                  // Plan mode on full auto applies at once: it only explores,
+                  // and plan mode refuses edits and other commands anyway.
+                  void apply(settingsOf('plan'));
+                  return;
+                }
                 if (!isPermissionGear(value)) return;
                 if (needsConfirmation(value)) setConfirming(value);
-                else void apply({ ...settings, gear: value });
+                else void apply(settingsOf(value));
               }}
             >
-              {GEAR_OPTIONS.map((option) => {
+              {PRESET_OPTIONS.map((option) => {
                 const OptionIcon = option.icon;
                 // `bypass` never becomes a new-chat default, so offering it on
                 // the start screen would show a chip the next session would not
                 // honour. It is a live-thread decision, taken in the thread.
                 const unavailable = option.id === 'bypass' && !sessionId;
+                const locked = lockedByTurn(option.id);
                 return (
                   <MenuPrimitive.RadioItem
                     key={option.id}
                     value={option.id}
-                    disabled={pending || unavailable}
-                    // `auto` and `bypass` keep the popup up because picking one
-                    // opens the confirmation panel instead of applying anything.
+                    disabled={pending || unavailable || locked}
+                    // U30 rev.3 — closing is Base UI's own press handling, never
+                    // a consequence of the worker acknowledging: a slow or failed
+                    // `setPermissions` must not leave the popup up with the
+                    // trigger disabled underneath. `auto` and `bypass` keep it up
+                    // because picking one opens the confirmation panel instead of
+                    // applying anything.
                     closeOnClick={!needsConfirmation(option.id)}
                     className={composerMenuItemClass()}
                   >
                     <OptionIcon className="size-3.5 shrink-0" />
                     <span className="flex min-w-0 flex-1 flex-col">
-                      <span>{t(PERMISSION_GEAR_LABELS[option.id])}</span>
+                      <span>{t(PERMISSION_PRESET_LABELS[option.id])}</span>
                       <span className="text-meta text-muted-foreground">
-                        {unavailable
-                          ? t('Can be turned on once this chat exists.')
-                          : t(option.description)}
+                        {locked
+                          ? t('Can be changed once this turn ends.')
+                          : unavailable
+                            ? t('Can be turned on once this chat exists.')
+                            : t(option.description)}
                       </span>
                     </span>
                     <MenuPrimitive.RadioItemIndicator>
@@ -319,6 +352,31 @@ export function ComposerPermissionTrigger({
                 );
               })}
             </MenuRadioGroup>
+            {goalEntry && (
+              <>
+                <MenuSeparator />
+                <MenuPrimitive.Item
+                  disabled={goalEntry.disabled}
+                  className={composerMenuItemClass()}
+                  onClick={() => {
+                    goalPicked.current = true;
+                    goalEntry.onSelect();
+                  }}
+                >
+                  <Target className="size-3.5 shrink-0" />
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span>{t('Set a goal…')}</span>
+                    <span className="text-meta text-muted-foreground">
+                      {goalEntry.hint
+                        ? t(goalEntry.hint)
+                        : t(
+                            'Fills in /goal. Once sent, the goal runs round after round, switching to Full auto if needed.'
+                          )}
+                    </span>
+                  </span>
+                </MenuPrimitive.Item>
+              </>
+            )}
             <MenuSeparator />
             <div className="px-2 py-1.5 text-meta text-muted-foreground">
               {modeLocked ? turnNote : scope}

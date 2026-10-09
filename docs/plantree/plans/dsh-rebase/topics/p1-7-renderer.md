@@ -62,6 +62,8 @@ Role: topic
 
 七种状态、按钮与线框见分片 03 §2。要点：暂停会中止当前轮；Stop 之后 DSH 在下一个空闲点把目标置为暂停；回退、fork、宿主重启后目标挂起；round-limit 阻塞时「继续」置灰并提示让助手调高上限。创建目标只靠 `/goal <目标>` 与模型的 `create_goal`，输入框不加开关（与 Claude Code、Codex、DSH 一致）。
 
+修订（2026-10-09，[决策 166](../decisions/166-permission-menu-single-column-and-goal-entry.md)，GitHub issue #5 用户裁决）：权限菜单末尾加「设定目标…」，只往输入框预填 `/goal `，仍不是开关；创建目标的 `/goal` 发出前会把会话切到执行模式、至少「全自动」。
+
 ### 4.3 待办卡（待办 D8）
 
 分片 03 §3。清单只属于根会话；子代理的清单首版不显示。

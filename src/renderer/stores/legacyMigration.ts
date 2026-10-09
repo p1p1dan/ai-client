@@ -15,6 +15,8 @@
  * migration brought the chat up on the posture its 1.0.x file recorded
  * (`legacyPermissionsApplied`): the chip reads its value from storage when its
  * session changes, and this revision is the second reason to read it again.
+ * Decision 166 bumps it too, when a goal-creating `/goal` switched the chat's
+ * posture (`goalStart.ts`).
  *
  * Not persisted: both facts are about calls in flight in this run.
  */
@@ -23,7 +25,7 @@ import { create } from 'zustand';
 interface LegacyMigrationState {
   /** Resumes in flight that migrate their chat, per session id. */
   migrating: Readonly<Record<string, number>>;
-  /** Bumped when a migration wrote the session's permission posture. */
+  /** Bumped when a migration (or a goal start) wrote the session's permission posture. */
   postureRevisions: Readonly<Record<string, number>>;
   begin: (sessionId: string) => void;
   end: (sessionId: string) => void;

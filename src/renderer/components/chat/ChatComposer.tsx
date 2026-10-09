@@ -1,5 +1,6 @@
 import { agentDefaultEffort, agentDefaultModel } from '@shared/models/chatAgentDefaults';
 import type { RuntimeEvent, SessionRuntimeStatus } from '@shared/types/runtimeEvents';
+import { DEFAULT_RUNTIME_PERMISSION } from '@shared/types/runtimePermission';
 import type { FileSearchResult } from '@shared/types/search';
 import {
   File as FileIcon,
@@ -51,6 +52,7 @@ import { useMessageQueueStore } from '@/stores/messageQueue';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { subscribeRuntimeEvent } from '@/stores/runtimeEventBus';
 import { useScratchWorkspaceStore } from '@/stores/scratchWorkspace';
+import { useSessionPanelsStore } from '@/stores/sessionPanels';
 import { useSettingsStore } from '@/stores/settings';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
 import { type TurnSendOwner, useTurnSendStatusStore } from '@/stores/turnSendStatus';
@@ -96,6 +98,14 @@ import { resolveEffortSelection, toWireEffort } from './efforts';
 import { createEventRing, type EventRing } from './eventRing';
 import { extractMentionQuery, parseMentionChips, replaceMention } from './fileMention';
 import { consumeForkDraftCarry } from './forkDraftCarry';
+import {
+  applyGoalStartBeforeSpawn,
+  applyGoalStartLive,
+  type GoalStartEffects,
+  goalEntryState,
+  goalPrefill,
+  planGoalStart,
+} from './goalStart';
 import {
   ENGINE_UNAVAILABLE_HINT,
   encodePiResumeError,
@@ -172,7 +182,12 @@ import { willMigrateOnResume } from './sessionIndex/resumeIntent';
 import { sessionHasUserMessage } from './sessionIndex/sessionTitle';
 import { resumeSessionById } from './sessionIndex/useResumeSession';
 import { archiveSessionIndexEntry } from './sessionIndex/useSessionIndex';
-import { readDefaultPermissions, readSessionPermissions } from './sessionPreferenceStore';
+import { deriveGoalBarView } from './sessionPanelsModel';
+import {
+  readDefaultPermissions,
+  readSessionPermissions,
+  writeSessionPermissions,
+} from './sessionPreferenceStore';
 import {
   buildSlashCatalog,
   extractSlashQuery,
@@ -671,6 +686,12 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
    * the next keystroke (`decideSendAction` reads the global latch).
    */
   const otherSendInFlight = sendingSessionId !== null && sendingSessionId !== activeSessionId;
+  // Decision 166: what the permission menu's 「设定目标…」 knows about this
+  // chat's goal — the goal bar's own view of it.
+  const goalPanels = useSessionPanelsStore((state) =>
+    activeSessionId ? state.bySession[activeSessionId] : undefined
+  );
+  const goalEntry = goalEntryState(deriveGoalBarView(goalPanels, false), sendingHere);
   const sessions = useChatSessionsStore((state) => state.sessions);
   const workspaces = useChatSessionsStore((state) => state.workspaces);
   const lastError = useChatSessionsStore((state) => {
@@ -1512,6 +1533,36 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     }, 0);
   };
 
+  /**
+   * Decision 166: 「设定目标…」 — `/goal ` ahead of the draft, caret at the
+   * end, focus in the box (the menu does not hand focus back to its chip). No
+   * dialog: the line is sent like any other, and `runSend` switches the
+   * posture when it goes out.
+   */
+  const startGoal = () => {
+    const out = goalPrefill(valueRef.current);
+    updateValue(out.text);
+    setSlashQuery(null);
+    setTimeout(() => {
+      const ta = textareaRef.current;
+      if (!ta) return;
+      ta.focus();
+      ta.setSelectionRange(out.cursor, out.cursor);
+    }, 0);
+  };
+
+  /** Decision 166: how `runSend` stores, applies and announces a goal's posture. */
+  const goalStartEffects: GoalStartEffects = {
+    t,
+    writeSessionPermissions,
+    setPermissions: (sessionId, permissions) =>
+      window.electronAPI.chat.setPermissions({ sessionId, permissions }),
+    // The chip re-reads the stored posture on this revision (P1-9e's).
+    notePostureSynced: (sessionId) =>
+      useLegacyMigrationStore.getState().notePostureSynced(sessionId),
+    toast: (toast) => toastManager.add(toast),
+  };
+
   const insertSlash = (item: SlashCatalogItem) => {
     const out = replaceSlashCommand(value, item.name);
     updateValue(out.text);
@@ -1787,6 +1838,36 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     const effort = toWireEffort(
       resolveEffortSelection(getSessionEffort(sessionId), agentDefaultEffort(chatAgentDefaults))
     );
+    // 2026-07-28 continuity fix: decide, off a store snapshot and BEFORE any
+    // IPC, whether the Host registry entry is still alive (direct send — no
+    // close/create round-trip needed), gone but resumable (we still know its
+    // runtimeIdentity), or genuinely new (create). Closing and recreating the
+    // Host session on every send used to wipe the resume identity each turn,
+    // silently starting a brand-new conversation every time.
+    const preState = useChatSessionsStore.getState();
+    const hostBound = preState.hostBoundSessionIds.includes(sessionId);
+    const preSession = preState.sessions.find((session) => session.id === sessionId);
+    const knownIdentity = preSession?.runtimeIdentity ?? null;
+    const preamble = decideSendPreamble({ hostBound, runtimeIdentity: knownIdentity });
+    // Decision 166: a goal-creating `/goal <objective>` goes out on a posture
+    // its rounds can run under (execute mode, full auto at least). Decided
+    // here, at dispatch — a queued `/goal` switches when it is released, not
+    // when it was typed — and only for this chat: a chat this send creates
+    // gets its own row, never the new-chat default. A chat whose worker this
+    // send brings up spawns on it; a live one is switched just before the
+    // send below.
+    const goalStart = retryLastTurn
+      ? null
+      : planGoalStart(
+          trimmed,
+          readSessionPermissions(sessionId) ??
+            readDefaultPermissions() ??
+            DEFAULT_RUNTIME_PERMISSION,
+          deriveGoalBarView(useSessionPanelsStore.getState().bySession[sessionId], false)
+        );
+    if (goalStart && preamble.action !== 'direct') {
+      applyGoalStartBeforeSpawn(sessionId, goalStart, goalStartEffects);
+    }
     // U12 fix: the tier the worker must COME UP on. `chat:setPermissionTier`
     // only reaches a worker that already exists, so a tier picked before this
     // first send had nowhere to go and the runtime started on the default
@@ -1796,7 +1877,9 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // U29: falls back to the global default, so a tier chosen on the start
     // screen (before this session existed) is the one it comes up on. `null`
     // from both still omits the field and lets Main pick, unchanged.
-    const spawnPermissions =
+    // `let`: a live goal switch (decision 166) also moves what a
+    // `session_not_found` re-create below spawns on.
+    let spawnPermissions =
       readSessionPermissions(sessionId) ?? readDefaultPermissions() ?? undefined;
     const wireAttachments = toWireAttachments(drafts);
     // F2 (2026-08-18): `sendTimeoutMs(attachmentBytes)` is gone. The wait is no
@@ -1810,18 +1893,6 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
     // ticker. Re-stamped at dispatch (below) so it names the AWAITING phase,
     // the one the user is actually watching, rather than the handshake.
     let turnStartedAtMs = Date.now();
-
-    // 2026-07-28 continuity fix: decide, off a store snapshot and BEFORE any
-    // IPC, whether the Host registry entry is still alive (direct send — no
-    // close/create round-trip needed), gone but resumable (we still know its
-    // runtimeIdentity), or genuinely new (create). Closing and recreating the
-    // Host session on every send used to wipe the resume identity each turn,
-    // silently starting a brand-new conversation every time.
-    const preState = useChatSessionsStore.getState();
-    const hostBound = preState.hostBoundSessionIds.includes(sessionId);
-    const preSession = preState.sessions.find((session) => session.id === sessionId);
-    const knownIdentity = preSession?.runtimeIdentity ?? null;
-    const preamble = decideSendPreamble({ hostBound, runtimeIdentity: knownIdentity });
 
     // Starting a fresh send invalidates any prior failure's retryable prompt:
     // the new prompt is what the user wants now, and a stale ghost Retry would
@@ -2731,6 +2802,16 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       }
       // 'direct': the Host registry entry is already alive — no close/create
       // round-trip, straight to send below.
+      //
+      // Decision 166: switch its posture first. A refusal is reported and the
+      // goal still goes out on the posture it has.
+      if (goalStart && preamble.action === 'direct') {
+        const switched = await cancellation.race(
+          applyGoalStartLive(sessionId, goalStart, goalStartEffects)
+        );
+        if (switched === SEND_CANCELLED) return settleStoppedAttempt();
+        if (switched) spawnPermissions = goalStart.next;
+      }
 
       let waitResult = await sendAndWait();
 
@@ -4069,6 +4150,7 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
         // T091: the latch half is per-session, so another chat's turn no
         // longer locks the tier picker on the one the user is looking at.
         turnActive={busy || sendingHere}
+        goalEntry={{ ...goalEntry, onSelect: startGoal }}
       />
     ),
     // U06-b: renders nothing until the runtime reports occupancy (T38-a).
