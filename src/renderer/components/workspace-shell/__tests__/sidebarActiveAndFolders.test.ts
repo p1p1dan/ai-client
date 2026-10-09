@@ -12,10 +12,12 @@ import {
 
 /**
  * Decision 137 (user ruling, sidebar) and decision 138 (P1-7e e1), rendered
- * for real: the "Active now" section, Recent collapsed by default, a folder
- * header that only folds, folders capped at 8 rows, the rename editor keeping
- * its focus (point-check issue 26) and the 1.0.x branch suffix kept whole
- * (issue 32).
+ * for real: "Active now" (since decision 167 the upper segment of Recent),
+ * Recent collapsed by default, a folder header that only folds, folders capped
+ * at 8 rows, the rename editor keeping its focus (point-check issue 26) and
+ * the 1.0.x branch suffix kept whole (issue 32). Decision 167 (GitHub issue
+ * #3): Recent listing a chat at most once, the branch on the folder row, and
+ * the three-line row tooltip.
  *
  * Stubbed like the other LeftNav mount tests: the persisted index (IPC),
  * session activation (starts a worker) and the diff-stats poller.
@@ -132,17 +134,41 @@ function allRows(scope: ParentNode = container): HTMLElement[] {
   return [...scope.querySelectorAll<HTMLElement>('[role="button"]')];
 }
 
+/** An L1 section, by its title (a `<p>` in the sticky header). */
 function sectionTitled(label: string): HTMLElement | null {
   const heading = [...container.querySelectorAll('p')].find((node) => node.textContent === label);
   return heading?.closest('section') ?? null;
 }
 
-function folderHeader(name: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll('button')].find(
-    (node) => node.textContent?.trim() === name
+/**
+ * Decision 167 §1: one of Recent's two segments, by its small label — a
+ * `role="group"` named by that label.
+ */
+function segmentLabelled(label: string): HTMLElement | null {
+  return (
+    [...container.querySelectorAll<HTMLElement>('[role="group"]')].find((group) => {
+      const id = group.getAttribute('aria-labelledby');
+      return id !== null && document.getElementById(id)?.textContent === label;
+    }) ?? null
   );
+}
+
+/**
+ * The folder header's toggle, found by the name's own slot: since decision
+ * 167 the button also holds the main branch, so its text is not the name.
+ */
+function folderHeader(name: string): HTMLButtonElement {
+  const slot = [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')].find(
+    (node) => node.textContent === name
+  );
+  const button = slot?.closest('button');
   if (!button) throw new Error(`folder header ${name} not rendered`);
   return button;
+}
+
+/** The first line of a row's tooltip — its title (decision 167 §3). */
+function tooltipTitle(node: Element | undefined): string | undefined {
+  return node?.getAttribute('title')?.split('\n')[0];
 }
 
 function buttonText(text: string): HTMLButtonElement | undefined {
@@ -178,10 +204,11 @@ describe('Recent (decision 137 §2)', () => {
   });
 });
 
-describe('Active now (decision 137 §1)', () => {
+describe("Active now (decision 137 §1, Recent's upper segment since decision 167)", () => {
   it('is absent while nothing is started on the engine', async () => {
     await render();
-    expect(sectionTitled('Active now')).toBeNull();
+    expect(segmentLabelled('Active now')).toBeNull();
+    expect(container.textContent).not.toContain('Active now');
   });
 
   it('lists started chats with running turns first, and marks running vs waiting', async () => {
@@ -196,10 +223,12 @@ describe('Active now (decision 137 §1)', () => {
     });
     await render();
 
-    const section = sectionTitled('Active now');
-    expect(section, 'the section renders').toBeTruthy();
-    // The row's tooltip is its title.
-    const listed = allRows(section as HTMLElement).map((node) => node.getAttribute('title'));
+    const section = segmentLabelled('Active now');
+    expect(section, 'the segment renders').toBeTruthy();
+    // It is a segment of Recent, not a section of its own.
+    expect(section?.closest('section')).toBe(sectionTitled('Recent'));
+    // The row's tooltip starts with its title.
+    const listed = allRows(section as HTMLElement).map((node) => tooltipTitle(node));
     // Running turns first (by last activity among them), then the rest.
     expect(listed).toEqual(['Chat running', 'Chat waiting', 'Chat idle-bound']);
 
@@ -216,12 +245,12 @@ describe('Active now (decision 137 §1)', () => {
       hostBoundSessionIds: ['a'],
     });
     await render();
-    expect(sectionTitled('Active now')).toBeTruthy();
+    expect(segmentLabelled('Active now')).toBeTruthy();
 
     await act(async () => {
       useChatSessionsStore.setState({ hostBoundSessionIds: [] });
     });
-    expect(sectionTitled('Active now')).toBeNull();
+    expect(segmentLabelled('Active now')).toBeNull();
   });
 
   it('E6-37: chats the engine let go of (a plugin switch, the idle sweep) leave the section', async () => {
@@ -230,7 +259,7 @@ describe('Active now (decision 137 §1)', () => {
       hostBoundSessionIds: ['a', 'b'],
     });
     await render();
-    expect(allRows(sectionTitled('Active now') as HTMLElement)).toHaveLength(2);
+    expect(allRows(segmentLabelled('Active now') as HTMLElement)).toHaveLength(2);
 
     // What Main sends for each session `invalidateAll` retires (decision 145).
     await act(async () => {
@@ -247,10 +276,171 @@ describe('Active now (decision 137 §1)', () => {
         )
       );
     });
-    expect(sectionTitled('Active now')).toBeNull();
+    expect(segmentLabelled('Active now')).toBeNull();
     // Still in their folder, only no longer marked as running in the background.
     expect(rows('Chat a')).toHaveLength(1);
     expect(rows('Chat a')[0]?.querySelector('[title="Running in the background"]')).toBeNull();
+  });
+});
+
+describe('Recent lists a chat at most once (decision 167 §1)', () => {
+  it('keeps the upper segment while Recent is collapsed, and drops its rows from the lower one', async () => {
+    useChatSessionsStore.setState({
+      sessions: [chat('bound', { updatedAt: NOW }), chat('fresh', { updatedAt: NOW - 1000 })],
+      hostBoundSessionIds: ['bound'],
+      activeSessionId: 'bound',
+    });
+    await render();
+
+    // Collapsed by default (decision 137 §2): the upper segment stays.
+    const upper = segmentLabelled('Active now');
+    expect(allRows(upper as HTMLElement).map((node) => tooltipTitle(node))).toEqual(['Chat bound']);
+    expect(container.textContent).not.toContain('Last 48 hours');
+    // Once in Recent, once in its folder — both carry the selection.
+    expect(rows('Chat bound')).toHaveLength(2);
+    for (const row of rows('Chat bound')) expect(row.className).toContain('bg-selection');
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Expand Recent"]')?.click()
+    );
+    const lower = segmentLabelled('Last 48 hours');
+    expect(lower, 'the lower segment is labelled while the upper one is there').toBeTruthy();
+    expect(allRows(lower as HTMLElement).map((node) => tooltipTitle(node))).toEqual(['Chat fresh']);
+    // Still twice in all, not three times (the issue's screenshot).
+    expect(rows('Chat bound')).toHaveLength(2);
+  });
+
+  it('caps the lower segment after taking the upper rows out, and counts "View more" that way', async () => {
+    const twelve = Array.from({ length: 12 }, (_, i) =>
+      chat(`n${String(i).padStart(2, '0')}`, { updatedAt: NOW - i * 1000 })
+    );
+    useChatSessionsStore.setState({
+      sessions: twelve,
+      hostBoundSessionIds: ['n00', 'n04', 'n07'],
+    });
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+    await render();
+
+    expect(allRows(segmentLabelled('Active now') as HTMLElement)).toHaveLength(3);
+    // 12 - 3 = 9 in the lower segment: 7 listed, 2 behind "View more".
+    expect(allRows(segmentLabelled('Last 48 hours') as HTMLElement)).toHaveLength(7);
+    expect(buttonText('View more (2)')).toBeTruthy();
+    // Counted before the dedupe it would have said 5.
+    expect(buttonText('View more (5)')).toBeUndefined();
+    // The folder is untouched: 8 listed, 4 behind its own "View more".
+    expect(buttonText('View more (4)')).toBeTruthy();
+  });
+
+  it('leaves the lower segment unlabelled when there is no upper one', async () => {
+    useChatSessionsStore.setState({ sessions: [chat('a'), chat('b')] });
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+    await render();
+    expect(allRows(sectionTitled('Recent') as HTMLElement)).toHaveLength(2);
+    expect(container.textContent).not.toContain('Active now');
+    expect(container.textContent).not.toContain('Last 48 hours');
+  });
+});
+
+describe('the branch lives on the folder row (decision 167 §2)', () => {
+  beforeEach(() => {
+    useChatSessionsStore.setState({
+      workspaces: [
+        {
+          id: 'ws-alpha',
+          projectId: ALPHA,
+          name: 'Main',
+          kind: 'main',
+          path: '/repo/alpha',
+          branch: 'main',
+        },
+        {
+          id: 'ws-alpha-wt',
+          projectId: ALPHA,
+          name: 'feature/sidebar-redesign',
+          kind: 'worktree',
+          path: '/repo/alpha-wt',
+          branch: 'feature/sidebar-redesign',
+        },
+        { id: 'ws-beta', projectId: BETA, name: 'Main', kind: 'main', path: '/repo/beta' },
+      ],
+      sessions: [
+        chat('main-row', { updatedAt: NOW }),
+        chat('worktree-row', { workspaceId: 'ws-alpha-wt', updatedAt: NOW - 1000 }),
+      ],
+    });
+    localStorage.setItem(STORAGE_KEYS.SIDEBAR_RECENT_COLLAPSED, 'false');
+  });
+
+  it('names the main branch once on the folder row, with the name in its own slot', async () => {
+    await render();
+    const header = folderHeader('alpha');
+    expect(header.textContent).toBe('alphamain');
+    expect(header.getAttribute('title')).toBe('alpha\nMain branch: main');
+    // No row repeats it.
+    const repos = sectionTitled('Repositories') as HTMLElement;
+    const [mainRow] = rows('Chat main-row', repos);
+    expect(mainRow?.textContent).not.toContain('main ');
+    expect(mainRow?.querySelector('[title="main"]')).toBeNull();
+  });
+
+  it('shows a worktree row s branch as its last segment, in the folder only', async () => {
+    await render();
+    const repos = sectionTitled('Repositories') as HTMLElement;
+    const [inFolder] = rows('Chat worktree-row', repos);
+    const branch = inFolder?.querySelector('[title="feature/sidebar-redesign"]');
+    expect(branch?.textContent).toBe('sidebar-redesign');
+    expect(branch?.className).toContain('max-w-24');
+
+    const recent = sectionTitled('Recent') as HTMLElement;
+    const [inRecent] = rows('Chat worktree-row', recent);
+    expect(inRecent, 'the row is in Recent too').toBeTruthy();
+    expect(inRecent?.textContent).not.toContain('sidebar-redesign');
+  });
+
+  it('gives every row the three-line tooltip: title / folder · branch / updated', async () => {
+    await render();
+    const [row] = rows('Chat worktree-row');
+    const lines = row?.getAttribute('title')?.split('\n') ?? [];
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toBe('Chat worktree-row');
+    expect(lines[1]).toBe('alpha · feature/sidebar-redesign');
+    expect(lines[2]).toMatch(/^Updated \d{4}-\d{2}-\d{2} \d{2}:\d{2}$/);
+  });
+});
+
+describe('Temporary chats is a section of its own (decision 167 §5)', () => {
+  it('lists its rows directly under an L1 title, without the 「临时」 chip, and folds from the title', async () => {
+    useChatSessionsStore.setState({
+      sessions: [
+        chat('a'),
+        {
+          id: 'scratch',
+          projectId: '',
+          workspaceId: '',
+          title: 'Scratch chat',
+          status: 'idle',
+          updatedAt: NOW,
+          unbound: { workspacePath: '/tmp/scratch' },
+        },
+      ],
+    });
+    await render();
+    const section = sectionTitled('Temporary chats') as HTMLElement;
+    expect(section, 'an L1 section titled Temporary chats').toBeTruthy();
+    // Not a folder inside Repositories, and no folder-style header of its own.
+    expect(section.closest('section')).toBe(section);
+    expect(sectionTitled('Repositories')?.contains(section)).toBe(false);
+    expect(section.querySelector('[data-slot="sidebar-folder-name"]')).toBeNull();
+
+    const [row] = rows('Scratch chat', section);
+    expect(row?.textContent).not.toContain('Temporary');
+    expect(row?.getAttribute('title')?.split('\n')[1]).toBe('Temporary chats');
+
+    await act(async () =>
+      section.querySelector<HTMLButtonElement>('[aria-label="Collapse temporary chats"]')?.click()
+    );
+    expect(rows('Scratch chat')).toHaveLength(0);
+    expect(section.querySelector('[aria-label="Expand temporary chats"]')).toBeTruthy();
   });
 });
 
@@ -520,7 +710,7 @@ describe('the 1.0.x branch suffix stays whole (point-check issue 32)', () => {
     await render();
 
     const [row] = rows('（1.0.x 分支）');
-    expect(row?.getAttribute('title')).toBe(title);
+    expect(tooltipTitle(row)).toBe(title);
     const suffix = [...(row?.querySelectorAll('span') ?? [])].find(
       (node) => node.textContent === '（1.0.x 分支）'
     );

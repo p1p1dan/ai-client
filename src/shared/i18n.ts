@@ -3974,3 +3974,21 @@ Object.assign(zhTranslations, {
     '目标仍已发出，执行中可能会停下来请求确认。（{{error}}）',
   'Set or view the goal for a long-running task': '设定或查看长任务目标',
 });
+
+// Sidebar hierarchy (issue #3)
+/**
+ * dsh-rebase decision 167 (GitHub issue #3): the 「聊天」 sidebar's section
+ * hierarchy — Recent's lower segment label, the three-line row tooltip, the
+ * folder row's tooltip, the Temporary chats section toggle and the Temp
+ * Session project's display name (`LeftNav`, `sidebarTree`).
+ */
+Object.assign(zhTranslations, {
+  'Last 48 hours': '48 小时内',
+  'Updated {{time}}': '更新于 {{time}}',
+  'Main branch: {{branch}}': '主工作区分支：{{branch}}',
+  'Remote repository': '远程仓库',
+  '{{place}} (remote)': '{{place}}（远程）',
+  'Expand temporary chats': '展开临时对话',
+  'Collapse temporary chats': '收起临时对话',
+  'Temporary workspaces': '临时工作区',
+});

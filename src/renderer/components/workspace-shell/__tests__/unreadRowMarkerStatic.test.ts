@@ -16,19 +16,28 @@ const nav = stripComments(readFileSync(navPath, 'utf8'), navPath);
 const rowSource = nav.slice(nav.indexOf('function SessionRow('));
 
 describe('S3 unread marker on the session row', () => {
-  it('every list the sidebar renders passes it — Active now, Recent, folders and temporary chats', () => {
-    // Four call sites, four lists (decision 137 added "Active now"). Missing
-    // one would leave a whole section silently unable to report a finished run.
+  it('every list the sidebar renders passes it — both Recent segments, folders and temporary chats', () => {
+    // Four call sites, four lists: Recent's upper ("Active now", decision 137;
+    // a segment of Recent since decision 167) and lower segments, the folders
+    // and the temporary-chat section. Missing one would leave a whole list
+    // silently unable to report a finished run.
     expect(nav.split('unread={unreadSessionIds.includes(row.sessionId)}')).toHaveLength(5);
+    expect(nav.split('<SessionRow\n').length - 1).toBe(4);
     expect(nav).toContain(
       'const unreadSessionIds = useChatSessionsStore((state) => state.unreadSessionIds);'
     );
   });
 
   it('shares the row s one marker slot instead of adding a second dot', () => {
-    // The slot is 6px and the row is width-starved (see the `min-w-20` note on
-    // the title). A second marker would push the title, so the states share one
-    // slot in urgency order: busy, then unread, then merely started.
+    // The slot is the row's fixed `w-4` status slot (decision 167) and the row
+    // is width-starved (see the `min-w-20` note on the title). A second marker
+    // would push the title, so the states share one slot in urgency order:
+    // busy, then unread, then merely started.
+    const slotStart = rowSource.indexOf(
+      '<span className="flex w-4 shrink-0 items-center justify-center">'
+    );
+    expect(slotStart).toBeGreaterThan(-1);
+    expect(slotStart).toBeLessThan(rowSource.indexOf('{onToggleSelect ? null : row.busy ? ('));
     const slot = rowSource.slice(
       rowSource.indexOf('{onToggleSelect ? null : row.busy ? ('),
       rowSource.indexOf('<span className="min-w-20 flex-1 truncate">')

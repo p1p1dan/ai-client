@@ -6,7 +6,7 @@ import {
 } from '@shared/models/chatAgentDefaults';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
   Menu,
   MenuGroup,
@@ -450,19 +450,26 @@ function SessionModelTrigger({
         className="min-w-40 rounded-md before:rounded-[calc(var(--radius-md)-1px)]"
         side={composerPopupSide(mode)}
       >
-        <div className="relative px-1 pb-1">
-          <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            size="sm"
-            value={modelQuery}
-            onChange={(event) => setModelQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape') event.stopPropagation();
-            }}
-            placeholder={t('Search models')}
-            className="h-7 pl-7"
-            aria-label={t('Search models')}
-          />
+        {/* Decision 167 (issue #3 item 5): coss's InputGroup with the input
+            FIRST and the icon addon after it (`order-first` draws it on the
+            left). An absolutely positioned icon placed before `Input` is
+            painted over by the input's `relative`, opaque wrapper. */}
+        <div className="px-1 pb-1">
+          <InputGroup className="h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
+            <InputGroupInput
+              size="sm"
+              value={modelQuery}
+              onChange={(event) => setModelQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') event.stopPropagation();
+              }}
+              placeholder={t('Search models')}
+              aria-label={t('Search models')}
+            />
+            <InputGroupAddon align="inline-start">
+              <Search className="size-4 text-muted-foreground" />
+            </InputGroupAddon>
+          </InputGroup>
         </div>
         {menu.sections.map((section, index) => (
           <div key={section.id}>

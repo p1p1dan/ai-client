@@ -123,10 +123,15 @@ async function rightClick(element: Element): Promise<void> {
   });
 }
 
+/**
+ * Decision 167: the header row also holds the main branch, so it is found by
+ * the folder name's own slot rather than by its whole text.
+ */
 function findFolderHeader(name: string): Element | undefined {
-  return [...container.querySelectorAll('div')].find(
-    (element) =>
-      element.className.includes('group flex h-7') && element.textContent?.trim() === name
+  return (
+    [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')]
+      .find((element) => element.textContent === name)
+      ?.closest('div.group') ?? undefined
   );
 }
 

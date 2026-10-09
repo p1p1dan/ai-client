@@ -11,7 +11,8 @@ import { useChatSessionsStore } from '@/stores/chatSessions';
  *
  * `sidebarTree.test.ts` pins the rule inside `matchesQuery`. This file pins the
  * half that rule cannot see — that LeftNav actually HANDS it `activeSessionId`
- * at all three derivations (folders, temporary chats, Recent). The defect it
+ * at every derivation (folders, temporary chats, and both segments of Recent:
+ * "Active now" above, the 48-hour list below — decision 167). The defect it
  * guards was reported as "New did nothing": with a search active, the new chat
  * is titled `New chat`, the query does not match it, and the row the click was
  * supposed to produce never appeared.
@@ -174,6 +175,31 @@ it('keeps an active temporary chat in its own partition too', async () => {
 
   expect(container.textContent).toContain('Temporary chats');
   expect(rowsTitled('Untitled chat')).toBe(2);
+
+  await act(async () => {
+    useChatSessionsStore.setState({ activeSessionId: null });
+  });
+  expect(rowsTitled('Untitled chat')).toBe(0);
+});
+
+it('keeps an active, started chat in Recent once — in the upper segment — and in its folder', async () => {
+  // The fourth derivation (`deriveActiveRows`, Recent's upper segment since
+  // decision 167). The chat is started on the engine, so it belongs to the
+  // upper segment, and the lower one must leave it out: two rows in all, not
+  // three — and still two once a query that does not match its title is typed,
+  // which is what proves the upper segment was given `activeSessionId` too.
+  useChatSessionsStore.setState({ hostBoundSessionIds: ['session-open'] });
+  await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
+  expect(rowsTitled('Untitled chat')).toBe(2);
+  // Recent's segments are groups named by their label (the search field is a
+  // group too, but an unnamed one).
+  const upper = () => container.querySelector('[role="group"][aria-labelledby]');
+  expect(upper()?.textContent).toContain('Active now');
+  expect(upper()?.textContent).toContain('Untitled chat');
+
+  await typeSearch('parser');
+  expect(rowsTitled('Untitled chat')).toBe(2);
+  expect(upper()?.textContent).toContain('Untitled chat');
 
   await act(async () => {
     useChatSessionsStore.setState({ activeSessionId: null });

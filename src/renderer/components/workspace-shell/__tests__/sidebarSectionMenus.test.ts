@@ -33,7 +33,14 @@ describe('S1 partition context menus', () => {
     expect(unboundSection).toContain('<ContextMenuPrimitive.Root>');
     // Rendered AS the <section>, so the menu covers the header and the gaps
     // between rows rather than adding a wrapper element with its own box.
-    expect(unboundSection).toContain('render={<section />}');
+    // Decision 167 §5: that section is an L1 section of its own now, with the
+    // shared section class (divider above unless it is the first).
+    expect(unboundSection).toContain('render={<section className={sidebarSectionClass(first)} />}');
+    expect(unboundSection).toContain('<SidebarSectionHeader title={unboundFolder.name}>');
+    // The duplicated folder-header markup is gone: no folder icon, no h-7
+    // header row of its own.
+    expect(unboundSection).not.toContain('FolderOpen');
+    expect(unboundSection).not.toContain('group flex h-7');
     expect(unboundSection).toContain("{t('New temporary chat')}");
     // Goes through the same create-or-reuse wrapper as the three New buttons,
     // so this menu item cannot be the one route left for stacking up empty
@@ -48,9 +55,15 @@ describe('S1 partition context menus', () => {
     const titleAt = nav.indexOf("{t('Repositories')}");
     const partition = nav.slice(
       nav.lastIndexOf('<ContextMenuPrimitive.Root>', titleAt),
-      nav.indexOf('{renderUnboundSection()}', titleAt)
+      nav.indexOf('{renderUnboundSection(', titleAt)
     );
-    expect(partition).toContain('<ContextMenuPrimitive.Trigger className="space-y-3">');
+    expect(partition.length).toBeLessThan(nav.length / 2);
+    // Rendered AS the partition's <section> (decision 167): the sticky title's
+    // containing block is then the partition itself, so it sticks for exactly
+    // as long as the repositories are on screen. No wrapper restating a
+    // `space-y-*` any more — sections are spaced by the shared section class.
+    expect(partition).toContain('render={<section className={sidebarSectionClass(false)} />}');
+    expect(partition).not.toContain('space-y-3');
     expect(partition).toContain('onClick={() => onAddRepository?.()}');
     expect(partition).toContain("{t('Add Repository')}");
   });

@@ -1,0 +1,5317 @@
+[
+  {
+    "file": "01-current-280-light.png",
+    "query": {
+      "mode": "current"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "current",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": false,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["14px/600"],
+              "L1": ["15px/500"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": [
+              {
+                "level": "L1",
+                "text": "正在活动",
+                "fontSize": 15,
+                "fontWeight": 500
+              }
+            ]
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 152.8
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 500,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "02-proposal-280-light.png",
+    "query": {
+      "mode": "proposal"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "03-compare-280-light.png",
+    "query": {
+      "mode": "compare"
+    },
+    "image": {
+      "width": 664,
+      "height": 928
+    },
+    "state": {
+      "mode": "compare",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": false,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["14px/600"],
+              "L1": ["15px/500"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": [
+              {
+                "level": "L1",
+                "text": "正在活动",
+                "fontSize": 15,
+                "fontWeight": 500
+              }
+            ]
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 152.8
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 500,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      },
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "04-proposal-280-dark.png",
+    "query": {
+      "mode": "proposal",
+      "theme": "dark"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "dark",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.6956 0.0103 93.62)",
+              "contrastL": 0.5,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "05-current-280-dark.png",
+    "query": {
+      "mode": "current",
+      "theme": "dark"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "current",
+      "l1": "A",
+      "temp": "X",
+      "theme": "dark",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": false,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["14px/600"],
+              "L1": ["15px/500"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": [
+              {
+                "level": "L1",
+                "text": "正在活动",
+                "fontSize": 15,
+                "fontWeight": 500
+              }
+            ]
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 152.8
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 500,
+              "winWeight": 400,
+              "color": "oklch(0.6956 0.0103 93.62)",
+              "contrastL": 0.5,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.8463 0.0137 102.05)",
+              "contrastL": 0.65,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.6956 0.0103 93.62)",
+              "contrastL": 0.5,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "06-proposal-360-light.png",
+    "query": {
+      "mode": "proposal",
+      "w": "360"
+    },
+    "image": {
+      "width": 724,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "360",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 360,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 247,
+            "max": 247
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 145,
+            "max": 145
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 198.9,
+            "max": 205.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 213,
+            "max": 259
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "07-proposal-500-light.png",
+    "query": {
+      "mode": "proposal",
+      "w": "500"
+    },
+    "image": {
+      "width": 864,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "500",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 500,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 387,
+            "max": 387
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 285,
+            "max": 285
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 338.9,
+            "max": 345.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 353,
+            "max": 399
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "08-proposal-280-scrolled-sticky.png",
+    "query": {
+      "mode": "proposal",
+      "scroll": "mid"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "mid",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": true,
+            "pass": true,
+            "section": "repos",
+            "headerTopMinusViewportTop": 0,
+            "scrollTop": 1595
+          },
+          "focusClearsStickyHeader": {
+            "info": true,
+            "pass": true,
+            "rowTopBeforeFocus": 8,
+            "rowTopAfterFocus": 32
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "09-current-280-scrolled.png",
+    "query": {
+      "mode": "current",
+      "scroll": "mid"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "current",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "mid",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": false,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["14px/600"],
+              "L1": ["15px/500"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": [
+              {
+                "level": "L1",
+                "text": "正在活动",
+                "fontSize": 15,
+                "fontWeight": 500
+              }
+            ]
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": true,
+            "pass": false,
+            "section": "repos",
+            "headerTopMinusViewportTop": -1306,
+            "scrollTop": 1728
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 152.8
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 500,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "10-proposal-280-recent-collapsed.png",
+    "query": {
+      "mode": "proposal",
+      "recent": "collapsed"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "collapsed",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 0,
+              "expected": 0
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 33
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 7,
+            "min": 137.1,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "11-proposal-280-variant-B.png",
+    "query": {
+      "mode": "proposal",
+      "l1": "B"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "B",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 3,
+              "L1-L2": 6,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["颜色", "字距", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["颜色", "字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "12-proposal-280-temp-X-bottom.png",
+    "query": {
+      "mode": "proposal",
+      "temp": "X",
+      "scroll": "bottom"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "bottom",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": true,
+            "pass": true,
+            "section": "repos",
+            "headerTopMinusViewportTop": 0,
+            "scrollTop": 2232
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "13-proposal-280-temp-Y-bottom.png",
+    "query": {
+      "mode": "proposal",
+      "temp": "Y",
+      "scroll": "bottom"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "Y",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "bottom",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 38
+              },
+              "depth1": {
+                "50": 55
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": true,
+            "pass": true,
+            "section": "repos",
+            "headerTopMinusViewportTop": 0,
+            "scrollTop": 2223
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 46,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 10,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "14-compare-280-cjk-win.png",
+    "query": {
+      "mode": "compare",
+      "cjk": "1"
+    },
+    "image": {
+      "width": 664,
+      "height": 928
+    },
+    "state": {
+      "mode": "compare",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": true,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 700],
+            "seen": {
+              "L0": ["14px/700"],
+              "L1": ["15px/400"],
+              "L2": ["15px/700"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 153.1
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 700,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 700,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      },
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 700],
+            "seen": {
+              "L0": ["15px/700"],
+              "L1": ["15px/700"],
+              "L2": ["15px/700"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 119.2,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 700,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 700,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 700,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "15-proposal-280-guides-tooltip.png",
+    "query": {
+      "mode": "proposal",
+      "guides": "1",
+      "tip": "1"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": true,
+      "tip": true,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "16-proposal-280-select-mode.png",
+    "query": {
+      "mode": "proposal",
+      "select": "1"
+    },
+    "image": {
+      "width": 644,
+      "height": 900
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": false,
+      "guides": false,
+      "tip": false,
+      "select": true
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 2,
+              "L3-L4": 4
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高", "图标"],
+              "count": 4,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "17-current-280-full-length.png",
+    "query": {
+      "mode": "current",
+      "tall": "1"
+    },
+    "image": {
+      "width": 644,
+      "height": 3396
+    },
+    "state": {
+      "mode": "current",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": true,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "current",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": false,
+            "duplicates": [
+              {
+                "id": "s1",
+                "title": "拉取远端更新",
+                "times": 2
+              },
+              {
+                "id": "b1",
+                "title": "梳理权限审批的边界情况",
+                "times": 2
+              },
+              {
+                "id": "s2",
+                "title": "重构侧栏会话列表的层级与间距",
+                "times": 2
+              }
+            ],
+            "maxAppearancesInSidebar": 3,
+            "selectedRowHighlights": 3,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 9,
+              "expected": 9
+            }
+          },
+          "levelFonts": {
+            "pass": false,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["14px/600"],
+              "L1": ["15px/500"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400", "15px/400"]
+            },
+            "violations": [
+              {
+                "level": "L1",
+                "text": "正在活动",
+                "fontSize": 15,
+                "fontWeight": 500
+              }
+            ]
+          },
+          "noSmallCjk": {
+            "pass": false,
+            "violations": [
+              {
+                "text": "新建",
+                "fontSize": 12,
+                "inButton": true
+              },
+              {
+                "text": "添加仓库",
+                "fontSize": 12,
+                "inButton": true
+              }
+            ]
+          },
+          "sameDepthX": {
+            "pass": false,
+            "xByDepth": {
+              "depth0": {
+                "16": 3,
+                "28": 6,
+                "34": 29
+              },
+              "depth1": {
+                "28": 48,
+                "40": 5,
+                "44": 1,
+                "46": 1
+              }
+            }
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 6,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 2
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": false,
+            "weakerThanLowerLevel": ["L0-L1", "L1-L2"]
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": null,
+          "folderIconX": 16,
+          "folderNameX": 34,
+          "unnestedSlotX": null,
+          "unnestedTitleX": 34,
+          "inFolderSlotX": null,
+          "inFolderTitleX": 40,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 28,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 28,
+            "L4sublabel": null
+          }
+        },
+        "gaps": {
+          "betweenSections": 12,
+          "betweenFolderGroups": 12,
+          "folderHeaderToFirstRow": 4,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": null,
+          "inFolderWithContext": {
+            "n": 52,
+            "min": 80,
+            "max": 152.8
+          },
+          "inFolderWithAlertBadge": null,
+          "unnested": {
+            "n": 10,
+            "min": 87,
+            "max": 155
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 14,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.02,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "正在活动",
+              "fontSize": 15,
+              "fontWeight": 500,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 28,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 34,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 28,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 40,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "分隔线"],
+              "count": 6,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字重", "颜色", "字距", "缩进", "图标"],
+              "count": 5,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["颜色", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["颜色", "字距", "缩进"],
+              "count": 3,
+              "higherNotWeaker": false
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字距", "缩进"],
+              "count": 2,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "file": "18-proposal-280-full-length.png",
+    "query": {
+      "mode": "proposal",
+      "tall": "1"
+    },
+    "image": {
+      "width": 644,
+      "height": 3132
+    },
+    "state": {
+      "mode": "proposal",
+      "l1": "A",
+      "temp": "X",
+      "theme": "light",
+      "w": "280",
+      "recent": "expanded",
+      "scroll": "top",
+      "cjk": false,
+      "tall": true,
+      "guides": false,
+      "tip": false,
+      "select": false
+    },
+    "roots": [
+      {
+        "mode": "proposal",
+        "panelWidth": 280,
+        "checks": {
+          "noRowOverflow": {
+            "pass": true,
+            "count": 0,
+            "overflow": []
+          },
+          "recentAtMostOnce": {
+            "pass": true,
+            "duplicates": [],
+            "maxAppearancesInSidebar": 2,
+            "selectedRowHighlights": 2,
+            "recentRowsMissingFromFolder": [],
+            "viewMore": {
+              "shown": 6,
+              "expected": 6
+            }
+          },
+          "levelFonts": {
+            "pass": true,
+            "allowedWeights": [400, 600],
+            "seen": {
+              "L0": ["15px/600"],
+              "L1": ["15px/600"],
+              "L2": ["15px/600"],
+              "L3": ["15px/400"],
+              "L4": ["14px/400"]
+            },
+            "violations": []
+          },
+          "noSmallCjk": {
+            "pass": true,
+            "violations": []
+          },
+          "sameDepthX": {
+            "pass": true,
+            "xByDepth": {
+              "depth0": {
+                "38": 41
+              },
+              "depth1": {
+                "50": 51
+              }
+            }
+          },
+          "titleWidth160": {
+            "pass": true,
+            "rule": "rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)",
+            "inFolderPlainMin": 167,
+            "othersMin": 80
+          },
+          "sticky": {
+            "applicable": false,
+            "pass": true
+          },
+          "carriers": {
+            "pass": true,
+            "adjacentCounts": {
+              "L0-L1": 2,
+              "L1-L2": 5,
+              "L2-L3": 3,
+              "L3-L4": 3
+            }
+          },
+          "monotonic": {
+            "info": true,
+            "pass": true,
+            "weakerThanLowerLevel": []
+          }
+        },
+        "coords": {
+          "L0TextX": 12,
+          "L1TextX": 16,
+          "sublabelTextX": 16,
+          "folderIconX": 16,
+          "folderNameX": 38,
+          "unnestedSlotX": 16,
+          "unnestedTitleX": 38,
+          "inFolderSlotX": 28,
+          "inFolderTitleX": 50,
+          "timeBoxRightInset": 16,
+          "heights": {
+            "L0": 36,
+            "L1": 32,
+            "L2": 28,
+            "L3": 28,
+            "L4aux": 24,
+            "L4sublabel": 24
+          }
+        },
+        "gaps": {
+          "betweenSections": 8,
+          "betweenFolderGroups": 4,
+          "folderHeaderToFirstRow": 2,
+          "betweenRows": 2
+        },
+        "titleWidths": {
+          "inFolderPlain": {
+            "n": 42,
+            "min": 167,
+            "max": 167
+          },
+          "inFolderWithContext": {
+            "n": 3,
+            "min": 80,
+            "max": 80
+          },
+          "inFolderWithAlertBadge": {
+            "n": 3,
+            "min": 118.9,
+            "max": 125.1
+          },
+          "unnested": {
+            "n": 14,
+            "min": 133,
+            "max": 179
+          }
+        },
+        "carriers": {
+          "levels": [
+            {
+              "text": "聊天",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 36,
+              "textX": 12,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "最近",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0.04,
+              "boxHeight": 32,
+              "textX": 16,
+              "leadingIcon": false,
+              "divider": true
+            },
+            {
+              "text": "atlas-web",
+              "fontSize": 15,
+              "fontWeight": 600,
+              "winWeight": 700,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 38,
+              "leadingIcon": true,
+              "divider": false
+            },
+            {
+              "text": "优化首页首屏加载时间",
+              "fontSize": 15,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.1696 0.0017 17.32)",
+              "contrastL": 0.82,
+              "letterSpacingEm": 0,
+              "boxHeight": 28,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            },
+            {
+              "text": "查看更多（2）",
+              "fontSize": 14,
+              "fontWeight": 400,
+              "winWeight": 400,
+              "color": "oklch(0.4531 0.005 91.5)",
+              "contrastL": 0.54,
+              "letterSpacingEm": 0,
+              "boxHeight": 24,
+              "textX": 50,
+              "leadingIcon": false,
+              "divider": false
+            }
+          ],
+          "pairs": [
+            {
+              "pair": "L0-L1",
+              "adjacent": true,
+              "carriers": ["字距", "行高"],
+              "count": 2,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L2",
+              "adjacent": true,
+              "carriers": ["字距", "行高", "缩进", "图标", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L2-L3",
+              "adjacent": true,
+              "carriers": ["字重", "缩进", "图标"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L3-L4",
+              "adjacent": true,
+              "carriers": ["字号", "颜色", "行高"],
+              "count": 3,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L3",
+              "adjacent": false,
+              "carriers": ["字重", "字距", "行高", "缩进", "分隔线"],
+              "count": 5,
+              "higherNotWeaker": true
+            },
+            {
+              "pair": "L1-L4",
+              "adjacent": false,
+              "carriers": ["字号", "字重", "颜色", "字距", "行高", "缩进", "分隔线"],
+              "count": 7,
+              "higherNotWeaker": true
+            }
+          ]
+        }
+      }
+    ]
+  }
+]

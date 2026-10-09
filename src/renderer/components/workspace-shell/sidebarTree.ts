@@ -2,22 +2,26 @@
  * T-26 (D21): pure derivations for the two-level sidebar — folder → session.
  *
  * Workspace is no longer a tree level: sessions from every worktree of a
- * project merge under one folder node, and each session row carries a branch
- * chip derived from its workspace instead. Selection of "where to run" is the
- * Composer target bar's job (T-27); nothing here is selectable or expandable
- * per workspace.
+ * project merge under one folder node. Decision 167 (GitHub issue #3) moved
+ * the branch off the rows: the folder row names its main workspace's branch
+ * once (`folderPrimaryChip`), and only a chat on another workspace (a linked
+ * worktree) shows its own (`chipShownInFolder`). Selection of "where to run"
+ * is the Composer target bar's job (T-27); nothing here is selectable or
+ * expandable per workspace.
  *
  * Pure so vitest (node env, `.ts` only) can cover it — same pattern as
  * `addRepositoryEntry.ts` / `hostStatus.ts`.
  */
 
-import { englishTranslate, type Translate, translate } from '@shared/i18n';
+import { englishTranslate, type Locale, type Translate, translate } from '@shared/i18n';
 import { PI_AGENT, sessionAgent } from '@shared/types/agentWire';
 import { LEGACY_FORK_TITLE_KEY } from '@shared/types/legacyMigration';
 import type { SessionRuntimeStatus } from '@shared/types/runtimeEvents';
 import { displaySessionTitle } from '@/components/chat/sessionIndex/sessionTitle';
+import { formatAbsoluteDateTime } from '@/lib/relativeTime';
 import type { ChatProject, ChatSession, ChatWorkspace } from '@/stores/chatSessions';
 import { isUsableWorkspace } from './addRepositoryEntry';
+import { TEMP_PROJECT_ID } from './deriveChatWorkspaceTree';
 
 /**
  * dsh-rebase P1-9e: what the `1.0.x` mark on a diverged legacy row means
@@ -40,65 +44,70 @@ export const FOLDER_DEFAULT_LIMIT = 8;
  * Decision 137 §2: Recent starts collapsed. Only a value the user wrote by
  * toggling the section counts — nothing stored (first run, cleared storage)
  * means collapsed, and so does anything that is not the literal `'false'`
- * the toggle writes for "expanded".
+ * the toggle writes for "expanded". Decision 167 §1 narrowed what collapsing
+ * folds: only the lower segment — the "Active now" rows above it stay.
  */
 export function resolveRecentCollapsed(stored: string | null): boolean {
   return stored !== 'false';
 }
 
+/**
+ * The git branch of the workspace a chat runs in. Decision 167 retired the
+ * `kind` chips (「临时」「远程」 on every row, decision 144 §2–3): a temporary
+ * chat is told by its own section (`SidebarSessionRow.unbound`), a remote
+ * repository by its folder row.
+ */
 export interface SidebarChip {
-  /**
-   * 'branch' renders the actual git branch; 'kind' renders the workspace kind
-   * (temp/remote).
-   */
-  variant: 'branch' | 'kind';
+  variant: 'branch';
   label: string;
 }
 
 /**
- * dsh-rebase P1-7e problem 9 (decision 144): a kind chip's `label` is an
- * identifier (`temporary`, `temp`, `remote`), so it is shown through the
- * catalog; a branch chip is the branch's own name and is shown as it is.
- */
-const KIND_CHIP_KEYS: Readonly<Record<string, string>> = {
-  temporary: 'Temporary',
-  temp: 'Temporary',
-  remote: 'Remote',
-};
-
-/** The text a row's chip shows. An unknown kind label falls back to itself. */
-export function sidebarChipText(chip: SidebarChip, t: Translate = englishTranslate): string {
-  if (chip.variant !== 'kind') return chip.label;
-  const key = KIND_CHIP_KEYS[chip.label];
-  return key ? t(key) : chip.label;
-}
-
-/**
  * Decision 144: a row as the sidebar paints it — its placeholder title
- * (`displaySessionTitle`) and its kind chip (`sidebarChipText`) in the UI
- * language. Derivation keeps the identifiers (ordering, search and the chip's
- * `variant` read those); only the row component asks for this. The same row
- * comes back when there is nothing to word.
+ * (`displaySessionTitle`) in the UI language. Derivation keeps the identifier
+ * (ordering and search read it); only the row component asks for this. The
+ * same row comes back when there is nothing to word.
  */
 export function sidebarRowForDisplay(
   row: SidebarSessionRow,
   t: Translate = englishTranslate
 ): SidebarSessionRow {
   const title = displaySessionTitle(row.title, t);
-  let chip = row.chip;
-  if (chip) {
-    const label = sidebarChipText(chip, t);
-    if (label !== chip.label) chip = { ...chip, label };
-  }
-  return title === row.title && chip === row.chip ? row : { ...row, title, chip };
+  return title === row.title ? row : { ...row, title };
+}
+
+/**
+ * Decision 167 §5: the synthetic Temp project keeps the identifier `Temp` as
+ * its name (`deriveChatWorkspaceTree`); the sidebar words it here, at display
+ * time, the way decision 144 §3 words a placeholder title. Every other folder
+ * is a repository and shows its own name.
+ */
+export function sidebarFolderNameForDisplay(
+  projectId: string,
+  name: string,
+  t: Translate = englishTranslate
+): string {
+  return projectId === TEMP_PROJECT_ID ? t('Temporary workspaces') : name;
 }
 
 export interface SidebarSessionRow {
   sessionId: string;
   workspaceId: string;
   title: string;
-  /** null when the branch is unknown (detached HEAD / list still loading) — never guess. */
+  /**
+   * The branch of the chat's workspace (main or linked worktree). null when
+   * the branch is unknown (detached HEAD / list still loading) — never guess —
+   * and for temp, remote and unbound workspaces, which have none. Whether a
+   * row SHOWS it is `chipShownInFolder`'s call.
+   */
   chip: SidebarChip | null;
+  /**
+   * U05-b ③: the chat has no folder and works in a private throwaway
+   * directory — no workspace, or the empty-path placeholder a fresh install
+   * starts on. Present only when true. Decision 167 moved this fact off the
+   * row's chip (「临时」) and into its tooltip and section.
+   */
+  unbound?: true;
   updatedAt: number;
   /** Drives the 6px `--status-running` dot (A07 `.sb-row .live`). */
   busy: boolean;
@@ -117,7 +126,10 @@ export interface SidebarSessionRow {
 export interface SidebarFolder {
   projectId: string;
   name: string;
-  /** Flat, updatedAt desc — no workspace grouping (D21-A: flat + chip). */
+  /**
+   * Flat, updatedAt desc — no workspace grouping (D21-A). Decision 167 shows a
+   * row's branch only off the folder's main workspace (`chipShownInFolder`).
+   */
   rows: SidebarSessionRow[];
   /** Target for the "+ new chat" row; null hides the row (no usable workspace). */
   newSessionWorkspaceId: string | null;
@@ -178,24 +190,162 @@ export function isWaitingSessionStatus(status: SessionRuntimeStatus): boolean {
 }
 
 /**
- * Chip for a session row (D21-A, user ruling 2026-07-29): every row shows its
- * actual branch — main/master included — while temp/remote workspaces show
- * their kind label. Branch unknown → no chip; a display name like "Main" is
- * not a branch and must not be shown as one.
+ * The branch chip a session row carries: the actual branch of a main or linked
+ * worktree, main/master included. Branch unknown → no chip; a display name
+ * like "Main" is not a branch and must not be shown as one. Temp, remote and
+ * unbound workspaces have no branch (decision 167 retired their kind chips).
+ *
+ * D21-A (user ruling 2026-07-29) showed this chip on every row; decision 167
+ * (user ruling 2026-10-09) shows it only off the folder's main workspace —
+ * see `chipShownInFolder`.
  */
 export function chipForWorkspace(workspace: ChatWorkspace | undefined): SidebarChip | null {
-  // U05-b ③: the session-list half of the temporary-chat marker. A missing
-  // workspace, or one carrying no path (the seeded placeholder a fresh install
-  // starts on), both mean the same thing now that unbound chats can run: this
-  // chat has no folder and works in a private throwaway directory instead.
-  // Before U05 that state simply could not send, so it needed no label.
-  if (!workspace || !isUsableWorkspace(workspace)) {
-    return { variant: 'kind', label: 'temporary' };
-  }
-  if (workspace.kind === 'temp' || workspace.kind === 'remote') {
-    return { variant: 'kind', label: workspace.kind };
-  }
+  if (!workspace || !isUsableWorkspace(workspace)) return null;
+  if (workspace.kind !== 'main' && workspace.kind !== 'worktree') return null;
   return workspace.branch ? { variant: 'branch', label: workspace.branch } : null;
+}
+
+/**
+ * Decision 167 §2: what a folder row says about where its chats run — the
+ * main workspace's branch, shown once after the folder name, and whether the
+ * repository is remote. null for a folder with no main workspace (the
+ * synthetic Temp project holds one temp workspace per directory).
+ */
+export interface FolderPrimaryChip {
+  /** The main (or remote) workspace the folder row speaks for. */
+  workspaceId: string;
+  /** Its branch; null when unknown, and always for a remote repository. */
+  branch: string | null;
+  remote: boolean;
+}
+
+export function folderPrimaryChip(
+  projectId: string,
+  workspaces: readonly ChatWorkspace[]
+): FolderPrimaryChip | null {
+  const primary = workspaces.find(
+    (ws) => ws.projectId === projectId && (ws.kind === 'main' || ws.kind === 'remote')
+  );
+  if (!primary) return null;
+  return {
+    workspaceId: primary.id,
+    branch: primary.kind === 'main' ? (primary.branch ?? null) : null,
+    remote: primary.kind === 'remote',
+  };
+}
+
+/**
+ * Decision 167 §2 (replaces D21-A): inside its folder a row shows its branch
+ * only when the chat runs on another workspace than the folder's main one —
+ * a linked worktree. The folder row already names the main branch, and eight
+ * rows repeating it was the issue. Rows in 「最近」 never show it (the caller
+ * simply does not ask).
+ */
+export function chipShownInFolder(
+  row: Pick<SidebarSessionRow, 'chip' | 'workspaceId'>,
+  primary: FolderPrimaryChip | null
+): boolean {
+  return row.chip !== null && row.workspaceId !== primary?.workspaceId;
+}
+
+/**
+ * Decision 167 §2: a worktree row shows only the last segment of its branch
+ * (`feature/sidebar-redesign` → `sidebar-redesign`); the full name is the
+ * tooltip. A name with no segment to drop comes back unchanged.
+ */
+export function lastBranchSegment(name: string): string {
+  const segments = name.split('/').filter((segment) => segment.length > 0);
+  return segments[segments.length - 1] ?? name;
+}
+
+/**
+ * Decision 167 §2: the folder row's branch text — the main branch, with
+ * 「· 远程」 after it for a remote repository (just 「远程」 when a remote
+ * repository has no branch to name, which is always today). null hides it.
+ */
+export function folderBranchLabel(
+  primary: FolderPrimaryChip | null,
+  t: Translate = englishTranslate
+): string | null {
+  if (!primary) return null;
+  if (primary.remote) return primary.branch ? `${primary.branch} · ${t('Remote')}` : t('Remote');
+  return primary.branch;
+}
+
+/** Decision 167 §2: the folder row's tooltip — name / main branch / remote. */
+export function folderTooltip(
+  name: string,
+  primary: FolderPrimaryChip | null,
+  t: Translate = englishTranslate
+): string {
+  const lines = [name];
+  if (primary?.branch) lines.push(t('Main branch: {{branch}}', { branch: primary.branch }));
+  if (primary?.remote) lines.push(t('Remote repository'));
+  return lines.join('\n');
+}
+
+/** Where a row's chat runs, for its tooltip's second line (decision 167 §3). */
+export interface SidebarRowPlace {
+  /** The folder as the sidebar shows it; null for an unbound (temporary) chat. */
+  folderName: string | null;
+  /** The branch of the chat's own workspace; null when there is none to name. */
+  branch: string | null;
+  remote: boolean;
+}
+
+const UNBOUND_PLACE: SidebarRowPlace = { folderName: null, branch: null, remote: false };
+
+/**
+ * Resolves a row's place from the same maps the sidebar renders from. A row
+ * whose workspace is gone is never rendered (the derivations drop orphans), so
+ * the unbound fallback only ever describes a temporary chat.
+ */
+export function sidebarRowPlace(
+  row: Pick<SidebarSessionRow, 'workspaceId' | 'unbound'>,
+  workspaceById: ReadonlyMap<string, ChatWorkspace>,
+  folderNameByProjectId: ReadonlyMap<string, string>
+): SidebarRowPlace {
+  if (row.unbound) return UNBOUND_PLACE;
+  const workspace = workspaceById.get(row.workspaceId);
+  if (!workspace) return UNBOUND_PLACE;
+  return {
+    folderName: folderNameByProjectId.get(workspace.projectId) ?? null,
+    branch: workspace.branch ?? null,
+    remote: workspace.kind === 'remote',
+  };
+}
+
+/**
+ * Decision 167 §3: every chat row's `title`, three lines —
+ *
+ *   title
+ *   folder · branch        (「临时对话」 for an unbound chat; 「（远程）」 after a remote one)
+ *   Updated YYYY-MM-DD HH:MM
+ *
+ * The third line always carries the date (`formatAbsoluteDateTime`): sidebar
+ * rows span days, and a bare 「14:32」 is ambiguous the moment it is not today.
+ */
+export function sidebarRowTooltip(input: {
+  /** The title as shown (`sidebarRowForDisplay`). */
+  title: string;
+  place: SidebarRowPlace;
+  updatedAt: number;
+  locale?: Locale;
+  t?: Translate;
+}): string {
+  const t = input.t ?? englishTranslate;
+  const { place } = input;
+  let where: string;
+  if (place.folderName === null) {
+    where = t('Temporary chats');
+  } else {
+    where = place.branch ? `${place.folderName} · ${place.branch}` : place.folderName;
+    if (place.remote) where = t('{{place}} (remote)', { place: where });
+  }
+  const updated = t('Updated {{time}}', {
+    time: formatAbsoluteDateTime(input.updatedAt, input.locale),
+  });
+  return [input.title, where, updated].join('\n');
 }
 
 function normalizeQuery(query: string | undefined): string {
@@ -264,6 +414,7 @@ function toRow(session: ChatSession, workspace: ChatWorkspace | undefined): Side
     workspaceId: session.workspaceId,
     title: session.title,
     chip: chipForWorkspace(workspace),
+    ...(workspace && isUsableWorkspace(workspace) ? {} : { unbound: true as const }),
     updatedAt: session.updatedAt,
     busy: isBusySessionStatus(session.status),
     failed: session.status === 'failed',
@@ -527,7 +678,10 @@ export interface ActiveRowsInput {
 }
 
 /**
- * Decision 137 §1 — the "Active now" section above Recent.
+ * Decision 137 §1 — "Active now". Since decision 167 §1 (user ruling
+ * 2026-10-09) it is no longer a section of its own but the upper segment of
+ * Recent, shown even while Recent is collapsed; the lower segment drops these
+ * rows (`deriveRecentRows`' `excludeSessionIds`).
  *
  * A conversation is listed while its session is started on the engine in this
  * run (`hostBoundSessionIds`: a send created or resumed it; a preview never
@@ -615,6 +769,12 @@ export interface RecentRowsInput {
   activeSessionId?: string | null;
   /** Decision 145: see `SidebarTreeInput.t`. */
   t?: Translate;
+  /**
+   * Decision 167 §1: the upper segment's rows (`deriveActiveRows`). Dropped
+   * BEFORE the 7-row cap, so the lower segment still lists up to 7 rows and
+   * "View more (N)" counts only what is really hidden.
+   */
+  excludeSessionIds?: ReadonlySet<string>;
 }
 
 export interface RecentRowsResult {
@@ -630,17 +790,23 @@ export interface RecentRowsResult {
  * model yet (subagent layer deferred, open-q #17), so neither is re-filtered
  * here. Orphan sessions are excluded like in the folder tree — except unbound
  * ones (U13), which are not orphans and stay visible.
+ *
+ * Decision 167 §1: this is Recent's lower segment, so a chat already in the
+ * upper one (`excludeSessionIds`) is left out before the cap — a chat appears
+ * in Recent at most once.
  */
 export function deriveRecentRows(input: RecentRowsInput): RecentRowsResult {
   const normalized = normalizeQuery(input.query);
   const workspaceById = new Map(input.workspaces.map((ws) => [ws.id, ws] as const));
 
+  const excluded = input.excludeSessionIds;
   const rows = input.sessions
     .filter((session) => {
+      if (excluded?.has(session.id)) return false;
       // U13: an unbound chat has no workspace by design and must not be
       // filtered out with the genuinely orphaned rows — Recent is where the
       // user looks first, and after a restart it is the fastest way back into
-      // one. Its row renders with the same `temporary` chip as in the tree.
+      // one. Its row is marked `unbound` like in the Temporary chats section.
       // T091: `isUnboundSessionRow` also admits the marker-less shape a
       // temporary chat has before its first send; a genuine orphan (a
       // non-empty workspaceId nothing resolves) is still dropped here.

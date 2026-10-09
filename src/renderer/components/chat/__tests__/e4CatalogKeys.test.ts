@@ -3,7 +3,7 @@ import type { SessionTreeNode } from '@shared/types/sessionHistory';
 import { describe, expect, it } from 'vitest';
 import {
   type SidebarSessionRow,
-  sidebarChipText,
+  sidebarFolderNameForDisplay,
   sidebarRowForDisplay,
 } from '@/components/workspace-shell/sidebarTree';
 import { composerModelLabelParts, composerModelMenuModel } from '../composerModel';
@@ -35,8 +35,9 @@ import { slashRowsForDisplay, slashSourceLabel } from '../slashCommands';
 /**
  * dsh-rebase P1-7e group e4 (decision 144): the P1-7d point-check's English
  * and 1.0.x (pi) leftovers. Most of the new copy reaches `t()` through a TABLE
- * (effort levels, catalog notices, slash sources, retry classes, tree labels,
- * kind chips), which `i18nCoverage.test.ts` cannot see — it only reads literal
+ * (effort levels, catalog notices, slash sources, retry classes, tree labels;
+ * the sidebar's kind chips until decision 167 retired them), which
+ * `i18nCoverage.test.ts` cannot see — it only reads literal
  * `t('…')` calls. This holds each table to a Chinese entry, and pins the
  * identifier-in, words-out behaviour of the pure helpers.
  */
@@ -227,37 +228,39 @@ describe('chat titles and the start-up chat (decision 138 rule 21)', () => {
   });
 });
 
-describe('sidebar chips (problem 9: temporary)', () => {
-  it('words a kind chip and leaves a branch name alone', () => {
-    expect(sidebarChipText({ variant: 'kind', label: 'temporary' }, zh)).toBe('临时');
-    expect(sidebarChipText({ variant: 'kind', label: 'temp' }, zh)).toBe('临时');
-    expect(sidebarChipText({ variant: 'kind', label: 'remote' }, zh)).toBe('远程');
-    expect(sidebarChipText({ variant: 'branch', label: 'temporary' }, zh)).toBe('temporary');
-    expect(sidebarChipText({ variant: 'kind', label: 'other' }, zh)).toBe('other');
-  });
-
-  it('gives the row component the title and chip as shown, and the same row when nothing changes', () => {
+/**
+ * Problem 9 (decision 144 §2–3) put the 「临时」「远程」 kind chips on every
+ * row in the UI language. Decision 167 retired those chips — a temporary chat
+ * is told by its section, a remote repository by its folder row — so what is
+ * left to word at display time is the placeholder title and the Temp Session
+ * project's name.
+ */
+describe('sidebar display words (problem 9, decision 167)', () => {
+  it('gives the row component the title as shown, and the same row when nothing changes', () => {
     const row: SidebarSessionRow = {
       sessionId: 's1',
       workspaceId: '',
       title: NEW_CHAT_TITLE,
-      chip: { variant: 'kind', label: 'temporary' },
+      chip: null,
+      unbound: true,
       updatedAt: 0,
       busy: false,
       failed: false,
       status: 'idle',
     };
-    expect(sidebarRowForDisplay(row, zh)).toEqual({
-      ...row,
-      title: '新建对话',
-      chip: { variant: 'kind', label: '临时' },
-    });
+    expect(sidebarRowForDisplay(row, zh)).toEqual({ ...row, title: '新建对话' });
     const named: SidebarSessionRow = {
       ...row,
       title: 'Fix the build',
       chip: { variant: 'branch', label: 'main' },
     };
     expect(sidebarRowForDisplay(named, zh)).toBe(named);
+  });
+
+  it('words the Temp Session project and leaves a repository name alone', () => {
+    expect(sidebarFolderNameForDisplay('project-temp', 'Temp', zh)).toBe('临时工作区');
+    expect(sidebarFolderNameForDisplay('project-temp', 'Temp')).toBe('Temporary workspaces');
+    expect(sidebarFolderNameForDisplay('project:/repo/temp', 'Temp', zh)).toBe('Temp');
   });
 });
 

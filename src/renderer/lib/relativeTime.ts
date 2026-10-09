@@ -13,6 +13,8 @@
  * (`messageMetadata.formatRelativeTimestamp`).
  */
 
+import type { Locale } from '@shared/i18n';
+
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 const DAY_MS = 24 * HOUR_MS;
@@ -53,4 +55,35 @@ export function formatRelativeAge(updatedAt: number, now: number): string {
     return `${Math.floor(diff / MONTH_MS)}mo`;
   }
   return `${Math.floor(diff / YEAR_MS)}y`;
+}
+
+/**
+ * Decision 167 §3: the absolute moment behind a sidebar row's relative age,
+ * for its tooltip. Always date AND time (`YYYY-MM-DD HH:MM`, 24-hour, local
+ * time): sidebar rows span days and years, and a bare `14:32` — what
+ * `formatAbsoluteTime` (`chat/messageMetadata.ts`, `HH:MM` only, the turn
+ * footer's hover) prints — is ambiguous the moment it is not today.
+ *
+ * The pattern is chosen by the UI language, never by the system locale
+ * (`toLocaleString()` would read the OS setting and print a different shape
+ * on every machine). Both languages use the numeric form today; the table is
+ * where a language that wants another order would say so.
+ */
+const ABSOLUTE_DATE_TIME_PATTERN: Readonly<Record<Locale, string>> = {
+  en: '{Y}-{M}-{D} {h}:{m}',
+  zh: '{Y}-{M}-{D} {h}:{m}',
+};
+
+export function formatAbsoluteDateTime(ms: number, locale: Locale = 'en'): string {
+  const date = new Date(ms);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const parts: Record<string, string> = {
+    Y: String(date.getFullYear()),
+    M: pad(date.getMonth() + 1),
+    D: pad(date.getDate()),
+    h: pad(date.getHours()),
+    m: pad(date.getMinutes()),
+  };
+  const pattern = ABSOLUTE_DATE_TIME_PATTERN[locale] ?? ABSOLUTE_DATE_TIME_PATTERN.en;
+  return pattern.replace(/\{(\w)\}/g, (_match, key: string) => parts[key] ?? '');
 }

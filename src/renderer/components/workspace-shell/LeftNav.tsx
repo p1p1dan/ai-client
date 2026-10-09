@@ -22,7 +22,16 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import type { Repository } from '@/App/constants';
 import { STORAGE_KEYS } from '@/App/storage';
 import { RepositorySettingsDialog } from '@/components/repository/RepositorySettingsDialog';
@@ -44,6 +53,7 @@ import {
   EmptyTitle,
 } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from '@/components/ui/menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
@@ -68,17 +78,26 @@ import { SURFACE_ESCAPE_HOLD_ATTR } from './shellLayoutModel';
 import {
   buildSidebarFolders,
   buildUnboundFolder,
+  chipShownInFolder,
   deriveActiveRows,
   deriveRecentRows,
+  folderBranchLabel,
+  folderPrimaryChip,
+  folderTooltip,
   formatRelativeAge,
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
+  lastBranchSegment,
   limitFolderRows,
   RECENT_DEFAULT_LIMIT,
   resolveNewSessionTarget,
   resolveRecentCollapsed,
+  type SidebarRowPlace,
   type SidebarSessionRow,
+  sidebarFolderNameForDisplay,
   sidebarRowForDisplay,
+  sidebarRowPlace,
+  sidebarRowTooltip,
   splitBranchSuffix,
   UNBOUND_FOLDER_ID,
 } from './sidebarTree';
@@ -94,6 +113,13 @@ import { useFolderDiffStatsPolling } from './useFolderDiffStats';
  * and the plugin entry + dialog (now the rail's bottom group). What stays is
  * exactly the session list — search, New / Add repository, Recent, the folder
  * tree and the temporary-chat group.
+ *
+ * Decision 167 (GitHub issue #3, prototype in
+ * `docs/plantree/plans/dsh-rebase/evidence/sidebar-hierarchy-2026-10/`): three
+ * L1 sections — Recent (with "Active now" as its upper segment), Repositories
+ * and Temporary chats — each with a sticky h-8 title, below the dock's L0
+ * title. Levels use weights 400 / 600 only; see `docs/design-system.md`,
+ * 「侧栏层级（聊天面板）」.
  */
 interface LeftNavProps {
   /** T-24: opens the shared AddRepositoryDialog mounted in App. */
@@ -364,16 +390,9 @@ export function LeftNav({
     activeSessionId,
     t,
   });
-  const recent = deriveRecentRows({
-    sessions,
-    workspaces,
-    now,
-    showAll: recentShowAll,
-    query,
-    activeSessionId,
-    t,
-  });
   // Decision 137 §1: started on the engine in this run, or running a turn.
+  // Decision 167 §1: Recent's upper segment, derived first so the lower one
+  // can drop these rows before its 7-row cap.
   const activeRows = deriveActiveRows({
     sessions,
     workspaces,
@@ -382,6 +401,38 @@ export function LeftNav({
     activeSessionId,
     t,
   });
+  const recent = deriveRecentRows({
+    sessions,
+    workspaces,
+    now,
+    showAll: recentShowAll,
+    query,
+    activeSessionId,
+    t,
+    excludeSessionIds: new Set(activeRows.map((row) => row.sessionId)),
+  });
+  // Decision 167 §1: collapsing Recent folds only its lower segment.
+  const showRecentLower = !recentCollapsed && recent.rows.length > 0;
+  // Decision 167 §3: every row's tooltip names where it runs, resolved from
+  // the same lists the sidebar renders.
+  const workspaceById = useMemo(
+    () => new Map(workspaces.map((workspace) => [workspace.id, workspace] as const)),
+    [workspaces]
+  );
+  const folderNameByProjectId = useMemo(
+    () =>
+      new Map(
+        projects.map(
+          (project) =>
+            [project.id, sidebarFolderNameForDisplay(project.id, project.name, t)] as const
+        )
+      ),
+    [projects, t]
+  );
+  const placeOf = (row: SidebarSessionRow): SidebarRowPlace =>
+    sidebarRowPlace(row, workspaceById, folderNameByProjectId);
+  const activeSegmentLabelId = useId();
+  const recentSegmentLabelId = useId();
   const queryActive = query.trim().length > 0;
   // While searching, folders with zero hits collapse away instead of leaving
   // a wall of empty headers; without a query every folder stays visible so
@@ -451,24 +502,18 @@ export function LeftNav({
   ) => {
     if (limited.hiddenCount > 0) {
       return (
-        <button
-          type="button"
-          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
-          onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}
-        >
+        <SidebarAuxRow onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: true }))}>
           {t('View more ({{count}})', { count: limited.hiddenCount })}
-        </button>
+        </SidebarAuxRow>
       );
     }
     if (limited.collapsible) {
       return (
-        <button
-          type="button"
-          className="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground hover:bg-hover focus-visible:bg-hover"
+        <SidebarAuxRow
           onClick={() => setFolderShowAll((prev) => ({ ...prev, [projectId]: false }))}
         >
           {t('Show less')}
-        </button>
+        </SidebarAuxRow>
       );
     }
     return null;
@@ -484,11 +529,14 @@ export function LeftNav({
    * user with a sidebar that admits to no sessions at all while their history
    * sits on disk.
    *
-   * The header only expands/collapses — as every folder header does since
-   * decision 137 §3 — and the group lists its first rows behind the same
-   * "View more" as a repository folder (§4).
+   * Decision 167 §5 (variant X): an L1 section of its own, not a folder in
+   * Repositories — these chats belong to no repository. Its rows sit directly
+   * under the title like Recent's; the title's chevron folds them (the same
+   * memory-only state the old folder header kept), and the section lists its
+   * first rows behind the same "View more" as a repository folder (decision
+   * 137 §4, decision 138 §5).
    */
-  const renderUnboundSection = () => {
+  const renderUnboundSection = (first: boolean) => {
     if (!unboundFolder) return null;
     const expanded = isProjectExpanded(UNBOUND_FOLDER_ID);
     const limited = limitFolderRows({
@@ -503,29 +551,31 @@ export function LeftNav({
       // row's menu instead, because Base UI's context-menu trigger stops the
       // event before it reaches this one.
       <ContextMenuPrimitive.Root>
-        <ContextMenuPrimitive.Trigger render={<section />}>
-          <div className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover">
-            <button
-              type="button"
-              className="flex min-w-0 flex-1 items-center gap-1 text-left"
+        <ContextMenuPrimitive.Trigger render={<section className={sidebarSectionClass(first)} />}>
+          <SidebarSectionHeader title={unboundFolder.name}>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="size-6 text-muted-foreground"
+              aria-label={expanded ? t('Collapse temporary chats') : t('Expand temporary chats')}
               onClick={() =>
                 setExpandedProjects((prev) => ({ ...prev, [UNBOUND_FOLDER_ID]: !expanded }))
               }
             >
               {expanded ? (
-                <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
+                <ChevronDown className="size-3.5" />
               ) : (
-                <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+                <ChevronRight className="size-3.5" />
               )}
-              <span className="min-w-0 flex-1 truncate font-semibold">{unboundFolder.name}</span>
-            </button>
-          </div>
+            </Button>
+          </SidebarSectionHeader>
           {expanded && (
-            <div className="mt-1 space-y-0.5 pl-3">
+            <div className="mt-0.5 space-y-0.5">
               {limited.rows.map((row) => (
                 <SessionRow
                   key={row.sessionId}
                   row={row}
+                  place={placeOf(row)}
                   now={now}
                   active={activeSessionId === row.sessionId}
                   started={hostBoundSessionIds.includes(row.sessionId)}
@@ -567,6 +617,10 @@ export function LeftNav({
             while selecting would push the list down on entry and pull it back
             on exit — the list is the thing being worked on, so it must not move
             under the pointer. */}
+        {/* Decision 167: `sm:text-meta` on every xs button here. The variant's
+            desktop size is 12px (`sm:text-xs`), and these labels are CJK in
+            Chinese, which the design system keeps at 14px or more; a plain
+            `text-meta` would lose to the variant's media-query class. */}
         {selecting ? (
           <div className="flex items-center gap-1">
             <span className="min-w-0 flex-1 truncate text-ui">
@@ -575,7 +629,7 @@ export function LeftNav({
             <Button
               variant="outline"
               size="xs"
-              className="h-6 shrink-0"
+              className="h-6 shrink-0 sm:text-meta"
               disabled={selection.size === 0}
               title={t('Archive selected')}
               onClick={() => setBulkArchiveOpen(true)}
@@ -586,7 +640,7 @@ export function LeftNav({
             <Button
               variant="ghost"
               size="xs"
-              className="h-6 shrink-0"
+              className="h-6 shrink-0 sm:text-meta"
               onClick={() => setSelection(null)}
             >
               {t('Cancel')}
@@ -597,7 +651,7 @@ export function LeftNav({
             <Button
               variant="outline"
               size="xs"
-              className="h-6"
+              className="h-6 sm:text-meta"
               title={newSessionButtonTitle}
               onClick={handleNewSession}
             >
@@ -609,7 +663,7 @@ export function LeftNav({
             <Button
               variant="outline"
               size="xs"
-              className="h-6 min-w-0"
+              className="h-6 min-w-0 sm:text-meta"
               title={t('Add Repository')}
               onClick={onAddRepository}
             >
@@ -629,21 +683,37 @@ export function LeftNav({
           </div>
         )}
         {searchVisible && (
-          <div className="relative">
-            <Search className="pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
+          // Decision 167 (issue #3 item 5): coss's InputGroup, input FIRST and
+          // the icon addon after it — `order-first` draws the addon on the
+          // left, and its `[data-size=sm]+&` padding only matches in this
+          // order. The old absolutely positioned icon sat BEFORE an `Input`
+          // whose wrapper is `relative` and opaque, so the wrapper painted
+          // over it and the magnifier never showed in the light theme.
+          // `rounded-sm` (and the hairline's matching radius) because the
+          // group's `rounded-lg` on an h-7 control breaks the radius clamp
+          // rule (design system, Border Radius).
+          <InputGroup className="h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
+            <InputGroupInput
               size="sm"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('Search sessions')}
-              className="h-7 pl-7"
+              aria-label={t('Search sessions')}
             />
-          </div>
+            <InputGroupAddon align="inline-start">
+              <Search className="size-4 text-muted-foreground" />
+            </InputGroupAddon>
+          </InputGroup>
         )}
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 p-2">
+      {/* Decision 167: `scroll-pt-8` on the viewport keeps a row that takes
+          keyboard focus out from under a stuck h-8 section title. */}
+      <ScrollArea className="min-h-0 flex-1 *:data-[slot=scroll-area-viewport]:scroll-pt-8">
+        {/* `isolate`: the sticky section titles stack inside this list, so
+            they never paint over the ScrollArea's own overlay scrollbar (a
+            later sibling of the viewport with no z-index). */}
+        <div className="isolate p-2">
           {showAddRepositoryEmptyState ? (
             <>
               {/* Seed sessions point at empty-path workspaces and cannot send,
@@ -666,115 +736,135 @@ export function LeftNav({
                     {t('Add a repository to get started.')}
                   </EmptyDescription>
                 </EmptyHeader>
-                <Button variant="outline" size="xs" className="h-6" onClick={onAddRepository}>
+                <Button
+                  variant="outline"
+                  size="xs"
+                  className="h-6 sm:text-meta"
+                  onClick={onAddRepository}
+                >
                   <Plus className="h-3.5 w-3.5" />
                   {t('Add Repository')}
                 </Button>
               </Empty>
-              {renderUnboundSection()}
+              {renderUnboundSection(false)}
             </>
           ) : (
             <>
-              {/* Decision 137 §1: conversations started on the engine in this
-                  run, running turns first. The section is absent, header
-                  included, while there are none. */}
-              {activeRows.length > 0 && (
-                <section>
-                  <div className="flex h-7 items-center px-2">
-                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                      {t('Active now')}
-                    </p>
-                  </div>
-                  <div className="mt-1 space-y-0.5">
-                    {activeRows.map((row) => (
-                      <SessionRow
-                        key={`active-${row.sessionId}`}
-                        row={row}
-                        now={now}
-                        active={activeSessionId === row.sessionId}
-                        started={hostBoundSessionIds.includes(row.sessionId)}
-                        unread={unreadSessionIds.includes(row.sessionId)}
-                        {...(selecting
-                          ? {
-                              selected: selection.has(row.sessionId),
-                              onToggleSelect: toggleSelected,
-                            }
-                          : {})}
-                        pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                        onSelect={() => handleSelectSession(row.sessionId)}
-                        onClose={() => void close(row.sessionId)}
-                        onRename={(title) => void renameRow(row.sessionId, title)}
-                        onArchive={() => void archive(row.sessionId, true)}
-                      />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              <section>
-                <div className="flex h-7 items-center px-2">
-                  <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                    {t('Recent')}
-                  </p>
+              {/* Decision 167 §1 (user ruling 2026-10-09, replaces decision 137
+                  §1's separate section): ONE Recent section in two segments.
+                  The upper one is decision 137's "Active now" — started on the
+                  engine in this run or running a turn, running turns first, no
+                  cap — and stays when Recent is collapsed. The lower one is
+                  the 48-hour list minus the upper rows, capped at 7. A chat is
+                  listed in Recent at most once, and still in its folder. */}
+              <section className={sidebarSectionClass(true)}>
+                <SidebarSectionHeader title={t('Recent')}>
                   <Button
                     variant="ghost"
                     size="icon-xs"
-                    className="ml-auto h-5 w-5"
+                    className="size-6 text-muted-foreground"
                     aria-label={recentCollapsed ? t('Expand Recent') : t('Collapse Recent')}
                     onClick={toggleRecentCollapsed}
                   >
                     {recentCollapsed ? (
-                      <ChevronRight className="h-3 w-3" />
+                      <ChevronRight className="size-3.5" />
                     ) : (
-                      <ChevronDown className="h-3 w-3" />
+                      <ChevronDown className="size-3.5" />
                     )}
                   </Button>
-                </div>
-                {!recentCollapsed && (
-                  <div className="mt-1 space-y-0.5">
-                    {recent.rows.map((row) => (
-                      <SessionRow
-                        key={`recent-${row.sessionId}`}
-                        row={row}
-                        now={now}
-                        active={activeSessionId === row.sessionId}
-                        started={hostBoundSessionIds.includes(row.sessionId)}
-                        unread={unreadSessionIds.includes(row.sessionId)}
-                        {...(selecting
-                          ? {
-                              selected: selection.has(row.sessionId),
-                              onToggleSelect: toggleSelected,
-                            }
-                          : {})}
-                        pendingApprovalCount={pendingApprovalCountBySession.get(row.sessionId) ?? 0}
-                        onSelect={() => handleSelectSession(row.sessionId)}
-                        onClose={() => void close(row.sessionId)}
-                        onRename={(title) => void renameRow(row.sessionId, title)}
-                        onArchive={() => void archive(row.sessionId, true)}
-                      />
-                    ))}
-                    {recent.hiddenCount > 0 ? (
-                      // P1-7e e6 (problem 40, decision 145): the same words as
-                      // a folder's cap (decision 137 §4), 「查看更多（N）」 —
-                      // it used to read 「显示更多 (N)」 with half-width brackets.
-                      <button
-                        type="button"
-                        className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover"
-                        onClick={() => setRecentShowAll(true)}
+                </SidebarSectionHeader>
+                {(activeRows.length > 0 || showRecentLower) && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {activeRows.length > 0 && (
+                      <div
+                        role="group"
+                        aria-labelledby={activeSegmentLabelId}
+                        className="space-y-0.5"
                       >
-                        {t('View more ({{count}})', { count: recent.hiddenCount })}
-                      </button>
-                    ) : (
-                      recentShowAll &&
-                      recent.rows.length > RECENT_DEFAULT_LIMIT && (
-                        <button
-                          type="button"
-                          className="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground hover:bg-hover"
-                          onClick={() => setRecentShowAll(false)}
-                        >
-                          {t('Show less')}
-                        </button>
-                      )
+                        <SidebarSegmentLabel id={activeSegmentLabelId}>
+                          {t('Active now')}
+                        </SidebarSegmentLabel>
+                        {activeRows.map((row) => (
+                          <SessionRow
+                            key={`active-${row.sessionId}`}
+                            row={row}
+                            place={placeOf(row)}
+                            now={now}
+                            active={activeSessionId === row.sessionId}
+                            started={hostBoundSessionIds.includes(row.sessionId)}
+                            unread={unreadSessionIds.includes(row.sessionId)}
+                            {...(selecting
+                              ? {
+                                  selected: selection.has(row.sessionId),
+                                  onToggleSelect: toggleSelected,
+                                }
+                              : {})}
+                            pendingApprovalCount={
+                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                            }
+                            onSelect={() => handleSelectSession(row.sessionId)}
+                            onClose={() => void close(row.sessionId)}
+                            onRename={(title) => void renameRow(row.sessionId, title)}
+                            onArchive={() => void archive(row.sessionId, true)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {showRecentLower && (
+                      // The lower segment is only labelled when the upper one
+                      // is there to tell it from; alone, it is simply Recent.
+                      <div
+                        {...(activeRows.length > 0
+                          ? { role: 'group', 'aria-labelledby': recentSegmentLabelId }
+                          : {})}
+                        className="space-y-0.5"
+                      >
+                        {activeRows.length > 0 && (
+                          <SidebarSegmentLabel id={recentSegmentLabelId} className="mt-1">
+                            {t('Last 48 hours')}
+                          </SidebarSegmentLabel>
+                        )}
+                        {recent.rows.map((row) => (
+                          <SessionRow
+                            key={`recent-${row.sessionId}`}
+                            row={row}
+                            place={placeOf(row)}
+                            now={now}
+                            active={activeSessionId === row.sessionId}
+                            started={hostBoundSessionIds.includes(row.sessionId)}
+                            unread={unreadSessionIds.includes(row.sessionId)}
+                            {...(selecting
+                              ? {
+                                  selected: selection.has(row.sessionId),
+                                  onToggleSelect: toggleSelected,
+                                }
+                              : {})}
+                            pendingApprovalCount={
+                              pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                            }
+                            onSelect={() => handleSelectSession(row.sessionId)}
+                            onClose={() => void close(row.sessionId)}
+                            onRename={(title) => void renameRow(row.sessionId, title)}
+                            onArchive={() => void archive(row.sessionId, true)}
+                          />
+                        ))}
+                        {recent.hiddenCount > 0 ? (
+                          // P1-7e e6 (problem 40, decision 145): the same words
+                          // as a folder's cap (decision 137 §4). Decision 167:
+                          // N counts what the cap hides AFTER the upper
+                          // segment's rows were taken out.
+                          <SidebarAuxRow onClick={() => setRecentShowAll(true)}>
+                            {t('View more ({{count}})', { count: recent.hiddenCount })}
+                          </SidebarAuxRow>
+                        ) : (
+                          recentShowAll &&
+                          recent.rows.length > RECENT_DEFAULT_LIMIT && (
+                            <SidebarAuxRow onClick={() => setRecentShowAll(false)}>
+                              {t('Show less')}
+                            </SidebarAuxRow>
+                          )
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
@@ -782,262 +872,285 @@ export function LeftNav({
 
               {/* S1 (H/18): the projects partition's own right-click, covering
                   its title row, the gaps between folders and any folder header
-                  with no repository behind it. Wrapping several children in one
-                  element costs the parent's `space-y-3` between them, so the
-                  trigger restates it. */}
+                  with no repository behind it. Rendered AS the section, so the
+                  sticky title's containing block is the partition itself. */}
               <ContextMenuPrimitive.Root>
-                <ContextMenuPrimitive.Trigger className="space-y-3">
-                  <div className="flex h-7 items-center px-2">
-                    <p className="text-ui font-medium tracking-[0.04em] text-muted-foreground">
-                      {t('Repositories')}
-                    </p>
-                    <div className="ml-auto flex items-center">
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="h-5 w-5"
-                        aria-label={t('Filter sessions')}
-                        title={t('Filter sessions')}
-                        aria-pressed={searchVisible}
-                        onClick={toggleSearchVisible}
-                      >
-                        <ListFilter className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        className="h-5 w-5"
-                        aria-label={t('Add Repository')}
-                        title={t('Add Repository')}
-                        onClick={onAddRepository}
-                      >
-                        <FolderPlus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
+                <ContextMenuPrimitive.Trigger
+                  render={<section className={sidebarSectionClass(false)} />}
+                >
+                  {/* D21: the filter / add icon slot stays on this title. */}
+                  <SidebarSectionHeader title={t('Repositories')}>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-6 text-muted-foreground"
+                      aria-label={t('Filter sessions')}
+                      title={t('Filter sessions')}
+                      aria-pressed={searchVisible}
+                      onClick={toggleSearchVisible}
+                    >
+                      <ListFilter className="size-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="size-6 text-muted-foreground"
+                      aria-label={t('Add Repository')}
+                      title={t('Add Repository')}
+                      onClick={onAddRepository}
+                    >
+                      <FolderPlus className="size-3.5" />
+                    </Button>
+                  </SidebarSectionHeader>
 
-                  {noMatches && (
-                    <p className="px-2 py-1 text-meta text-muted-foreground">
-                      {t('No matching sessions')}
-                    </p>
-                  )}
+                  <div className="mt-0.5 space-y-1">
+                    {noMatches && (
+                      <p className="px-2 py-1 text-meta text-muted-foreground">
+                        {t('No matching sessions')}
+                      </p>
+                    )}
 
-                  {visibleFolders.map((folder) => {
-                    const expanded = isProjectExpanded(folder.projectId);
-                    const limited = limitFolderRows({
-                      rows: folder.rows,
-                      showAll: folderShowAll[folder.projectId] === true,
-                      queryActive,
-                      activeSessionId,
-                    });
-                    const newSessionWorkspaceId = folder.newSessionWorkspaceId;
-                    const folderRepo = repoByProjectId.get(folder.projectId);
-                    const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
-                    // S2 (H/18): ONE definition of the repository actions, rendered
-                    // from both entry points — the hover "more" button and the
-                    // row's new context menu. Two copies would drift apart the
-                    // first time either gains an action, and "the two give the same
-                    // menu" is the whole acceptance criterion.
-                    const repoMenuItems = folderRepo ? (
-                      <>
-                        <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
-                          <Settings />
-                          {t('Repository Settings')}
-                        </MenuItem>
-                        {/* Remote repositories have no local directory to open —
+                    {visibleFolders.map((folder) => {
+                      const expanded = isProjectExpanded(folder.projectId);
+                      const limited = limitFolderRows({
+                        rows: folder.rows,
+                        showAll: folderShowAll[folder.projectId] === true,
+                        queryActive,
+                        activeSessionId,
+                      });
+                      const newSessionWorkspaceId = folder.newSessionWorkspaceId;
+                      const folderRepo = repoByProjectId.get(folder.projectId);
+                      const diffTotals = sumFolderDiffTotals(folder, workspaces, diffStatsByPath);
+                      // Decision 167 §2: the folder row names its main
+                      // workspace's branch once (and says remote); a row
+                      // below shows its own branch only off that workspace.
+                      const primary = folderPrimaryChip(folder.projectId, workspaces);
+                      const folderName = sidebarFolderNameForDisplay(
+                        folder.projectId,
+                        folder.name,
+                        t
+                      );
+                      const branchLabel = folderBranchLabel(primary, t);
+                      // S2 (H/18): ONE definition of the repository actions, rendered
+                      // from both entry points — the hover "more" button and the
+                      // row's new context menu. Two copies would drift apart the
+                      // first time either gains an action, and "the two give the same
+                      // menu" is the whole acceptance criterion.
+                      const repoMenuItems = folderRepo ? (
+                        <>
+                          <MenuItem onClick={() => setRepoToConfigure(folderRepo)}>
+                            <Settings />
+                            {t('Repository Settings')}
+                          </MenuItem>
+                          {/* Remote repositories have no local directory to open —
                             same unsupported case `files.ts` throws on for
                             `file:revealInFileManager`, handled here by hiding the
                             action instead of exposing a click that always fails. */}
-                        {folderRepo.kind !== 'remote' && (
-                          <MenuItem
-                            onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}
-                          >
-                            <Search />
-                            {navigator.platform.toUpperCase().indexOf('MAC') >= 0
-                              ? t('Reveal in Finder')
-                              : t('Reveal in Explorer')}
-                          </MenuItem>
-                        )}
-                        {onRemoveRepository && (
-                          <MenuItem
-                            variant="destructive"
-                            onClick={() => setRepoToRemove(folderRepo)}
-                          >
-                            <FolderMinus />
-                            {t('Remove repository')}
-                          </MenuItem>
-                        )}
-                      </>
-                    ) : null;
-                    // Toggle and "+ new chat" are sibling buttons in a flex row — a
-                    // nested button would be invalid HTML (same trap as the
-                    // McpSection fix in d68d3c6).
-                    const header = (
-                      <div
-                        // Project headers have no selected state, so the plain
-                        // hover step is enough; --hover is the semantic alias.
-                        className="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover"
-                      >
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-center gap-1 text-left"
-                          // Decision 137 §3 (user ruling, replaces D29): the
-                          // header folds and unfolds this folder and does
-                          // nothing else — no conversation is opened and the
-                          // "New" target is left to the selected conversation.
-                          onClick={() =>
-                            setExpandedProjects((prev) => ({
-                              ...prev,
-                              [folder.projectId]: !expanded,
-                            }))
-                          }
-                        >
-                          {expanded ? (
-                            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-folder" />
-                          ) : (
-                            <Folder className="h-3.5 w-3.5 shrink-0 text-folder" />
+                          {folderRepo.kind !== 'remote' && (
+                            <MenuItem
+                              onClick={() => void handleOpenRepositoryFolder(folderRepo.path)}
+                            >
+                              <Search />
+                              {navigator.platform.toUpperCase().indexOf('MAC') >= 0
+                                ? t('Reveal in Finder')
+                                : t('Reveal in Explorer')}
+                            </MenuItem>
                           )}
-                          <span className="min-w-0 flex-1 truncate font-semibold">
-                            {folder.name}
-                          </span>
-                        </button>
-                        {/* Trailing slot. The totals and the row's two hover
+                          {onRemoveRepository && (
+                            <MenuItem
+                              variant="destructive"
+                              onClick={() => setRepoToRemove(folderRepo)}
+                            >
+                              <FolderMinus />
+                              {t('Remove repository')}
+                            </MenuItem>
+                          )}
+                        </>
+                      ) : null;
+                      // Toggle and "+ new chat" are sibling buttons in a flex row — a
+                      // nested button would be invalid HTML (same trap as the
+                      // McpSection fix in d68d3c6).
+                      const header = (
+                        <div
+                          // Project headers have no selected state, so the plain
+                          // hover step is enough; --hover is the semantic alias.
+                          // Keyboard focus on either button lights the same step.
+                          className="group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover has-focus-visible:bg-hover"
+                        >
+                          <button
+                            type="button"
+                            className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
+                            title={folderTooltip(folderName, primary, t)}
+                            // Decision 137 §3 (user ruling, replaces D29): the
+                            // header folds and unfolds this folder and does
+                            // nothing else — no conversation is opened and the
+                            // "New" target is left to the selected conversation.
+                            onClick={() =>
+                              setExpandedProjects((prev) => ({
+                                ...prev,
+                                [folder.projectId]: !expanded,
+                              }))
+                            }
+                          >
+                            {expanded ? (
+                              <FolderOpen className="size-4 shrink-0 text-folder" />
+                            ) : (
+                              <Folder className="size-4 shrink-0 text-folder" />
+                            )}
+                            <span
+                              data-slot="sidebar-folder-name"
+                              className="min-w-0 truncate font-semibold"
+                            >
+                              {folderName}
+                            </span>
+                            {branchLabel && (
+                              // The branch gives way first (`shrink-[1000]`
+                              // takes almost all of the deficit); the name is
+                              // the last thing cut.
+                              <span className="min-w-0 shrink-[1000] truncate text-meta text-muted-foreground">
+                                {branchLabel}
+                              </span>
+                            )}
+                          </button>
+                          {/* Trailing slot. The totals and the row's two hover
                           buttons share ONE grid cell, so the cell is as wide as
                           whichever is wider and the row cannot reflow when the
                           numbers give way on hover — the same reason the session
                           row below boxes its age and actions together. */}
-                        <span className="grid shrink-0 justify-items-end">
-                          {diffTotals && (
-                            <span
-                              className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
-                              title={t('Folder diff totals', {
-                                insertions: diffTotals.insertions,
-                                deletions: diffTotals.deletions,
-                              })}
-                            >
-                              {diffTotals.insertions > 0 && (
-                                <span className="text-success">+{diffTotals.insertions}</span>
+                          <span className="grid shrink-0 justify-items-end">
+                            {diffTotals && (
+                              <span
+                                className="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible"
+                                title={t('Folder diff totals', {
+                                  insertions: diffTotals.insertions,
+                                  deletions: diffTotals.deletions,
+                                })}
+                              >
+                                {diffTotals.insertions > 0 && (
+                                  <span className="text-success">+{diffTotals.insertions}</span>
+                                )}
+                                {diffTotals.deletions > 0 && (
+                                  <span className="text-destructive">-{diffTotals.deletions}</span>
+                                )}
+                              </span>
+                            )}
+                            <span className="col-start-1 row-start-1 flex items-center">
+                              {folderRepo && (
+                                <Menu>
+                                  <MenuTrigger
+                                    render={
+                                      <Button
+                                        variant="ghost"
+                                        size="icon-xs"
+                                        className="size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100 sm:size-5"
+                                        aria-label={t('Repository actions')}
+                                        title={t('Repository actions')}
+                                      />
+                                    }
+                                  >
+                                    <MoreHorizontal className="size-3.5" />
+                                  </MenuTrigger>
+                                  <MenuPopup align="end">{repoMenuItems}</MenuPopup>
+                                </Menu>
                               )}
-                              {diffTotals.deletions > 0 && (
-                                <span className="text-destructive">-{diffTotals.deletions}</span>
-                              )}
-                            </span>
-                          )}
-                          <span className="col-start-1 row-start-1 flex items-center">
-                            {folderRepo && (
-                              <Menu>
-                                <MenuTrigger
-                                  render={
-                                    <Button
-                                      variant="ghost"
-                                      size="icon-xs"
-                                      className="h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 data-popup-open:opacity-100"
-                                      aria-label={t('Repository actions')}
-                                      title={t('Repository actions')}
-                                    />
+                              {newSessionWorkspaceId && (
+                                // The header New button targets the active session's
+                                // workspace only, so a repo that already has sessions
+                                // needs its own entry point (T-26 review should-fix).
+                                <Button
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  className="size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 sm:size-5"
+                                  aria-label={t('New chat')}
+                                  title={t('New chat in existing directory: {{path}}', {
+                                    path: workspaceById.get(newSessionWorkspaceId)?.path ?? '',
+                                  })}
+                                  onClick={() =>
+                                    createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
                                   }
                                 >
-                                  <MoreHorizontal className="h-3 w-3" />
-                                </MenuTrigger>
-                                <MenuPopup align="end">{repoMenuItems}</MenuPopup>
-                              </Menu>
-                            )}
-                            {newSessionWorkspaceId && (
-                              // The header New button targets the active session's
-                              // workspace only, so a repo that already has sessions
-                              // needs its own entry point (T-26 review should-fix).
-                              <Button
-                                variant="ghost"
-                                size="icon-xs"
-                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"
-                                aria-label={t('New chat')}
-                                title={t('New chat in existing directory: {{path}}', {
-                                  path:
-                                    workspaces.find(
-                                      (workspace) => workspace.id === newSessionWorkspaceId
-                                    )?.path ?? '',
-                                })}
-                                onClick={() =>
-                                  createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
-                                }
-                              >
-                                <Plus className="h-3 w-3" />
-                              </Button>
-                            )}
+                                  <Plus className="size-3.5" />
+                                </Button>
+                              )}
+                            </span>
                           </span>
-                        </span>
-                      </div>
-                    );
-                    return (
-                      <section key={folder.projectId}>
-                        {/* S2: right-click gives the same actions as the "more"
+                        </div>
+                      );
+                      return (
+                        <section key={folder.projectId}>
+                          {/* S2: right-click gives the same actions as the "more"
                         button. Only wrapped when there ARE actions — the
                         synthetic Temp folder has no repository behind it, and a
                         trigger with an empty menu would swallow the right-click
                         (Base UI's trigger stops the event) instead of letting it
                         reach the section menu below. */}
-                        {repoMenuItems ? (
-                          <ContextMenuPrimitive.Root>
-                            <ContextMenuPrimitive.Trigger render={header} />
-                            <MenuPopup align="start" side="bottom" className="min-w-40">
-                              {repoMenuItems}
-                            </MenuPopup>
-                          </ContextMenuPrimitive.Root>
-                        ) : (
-                          header
-                        )}
+                          {repoMenuItems ? (
+                            <ContextMenuPrimitive.Root>
+                              <ContextMenuPrimitive.Trigger render={header} />
+                              <MenuPopup align="start" side="bottom" className="min-w-40">
+                                {repoMenuItems}
+                              </MenuPopup>
+                            </ContextMenuPrimitive.Root>
+                          ) : (
+                            header
+                          )}
 
-                        {expanded && (
-                          <div className="mt-1 space-y-0.5 pl-3">
-                            {limited.rows.map((row) => {
-                              const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
-                              return (
-                                <SessionRow
-                                  key={row.sessionId}
-                                  row={row}
-                                  now={now}
-                                  active={activeSessionId === row.sessionId}
-                                  started={hostBoundSessionIds.includes(row.sessionId)}
-                                  unread={unreadSessionIds.includes(row.sessionId)}
-                                  {...(selecting
-                                    ? {
-                                        selected: selection.has(row.sessionId),
-                                        onToggleSelect: toggleSelected,
-                                      }
-                                    : {})}
-                                  pendingApprovalCount={
-                                    pendingApprovalCountBySession.get(row.sessionId) ?? 0
-                                  }
-                                  onSelect={() => handleSelectSession(row.sessionId)}
-                                  onClose={() => void close(row.sessionId)}
-                                  onRename={(title) => void renameRow(row.sessionId, title)}
-                                  onArchive={() => void archive(row.sessionId, true)}
-                                  onDeleteTemp={
-                                    tempItemId && onRequestTempDelete
-                                      ? () => onRequestTempDelete(tempItemId)
-                                      : undefined
-                                  }
-                                />
-                              );
-                            })}
-                            {renderFolderLimitToggle(folder.projectId, limited)}
-                            {folder.rows.length === 0 && !query.trim() && newSessionWorkspaceId && (
-                              <button
-                                type="button"
-                                className="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover"
-                                onClick={() =>
-                                  createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
-                                }
-                              >
-                                <Plus className="h-3 w-3 shrink-0" />
-                                {t('New chat')}
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </section>
-                    );
-                  })}
+                          {expanded && (
+                            <div className="mt-0.5 space-y-0.5 pl-3">
+                              {limited.rows.map((row) => {
+                                const tempItemId = tempItemIdByWorkspaceId.get(row.workspaceId);
+                                return (
+                                  <SessionRow
+                                    key={row.sessionId}
+                                    row={row}
+                                    place={placeOf(row)}
+                                    branch={
+                                      chipShownInFolder(row, primary) ? row.chip?.label : undefined
+                                    }
+                                    now={now}
+                                    active={activeSessionId === row.sessionId}
+                                    started={hostBoundSessionIds.includes(row.sessionId)}
+                                    unread={unreadSessionIds.includes(row.sessionId)}
+                                    {...(selecting
+                                      ? {
+                                          selected: selection.has(row.sessionId),
+                                          onToggleSelect: toggleSelected,
+                                        }
+                                      : {})}
+                                    pendingApprovalCount={
+                                      pendingApprovalCountBySession.get(row.sessionId) ?? 0
+                                    }
+                                    onSelect={() => handleSelectSession(row.sessionId)}
+                                    onClose={() => void close(row.sessionId)}
+                                    onRename={(title) => void renameRow(row.sessionId, title)}
+                                    onArchive={() => void archive(row.sessionId, true)}
+                                    onDeleteTemp={
+                                      tempItemId && onRequestTempDelete
+                                        ? () => onRequestTempDelete(tempItemId)
+                                        : undefined
+                                    }
+                                  />
+                                );
+                              })}
+                              {renderFolderLimitToggle(folder.projectId, limited)}
+                              {folder.rows.length === 0 &&
+                                !query.trim() &&
+                                newSessionWorkspaceId && (
+                                  <SidebarAuxRow
+                                    icon={<Plus className="size-3.5" />}
+                                    onClick={() =>
+                                      createOrReuseChatSessionOnWorkspace(newSessionWorkspaceId)
+                                    }
+                                  >
+                                    {t('New chat')}
+                                  </SidebarAuxRow>
+                                )}
+                            </div>
+                          )}
+                        </section>
+                      );
+                    })}
+                  </div>
                 </ContextMenuPrimitive.Trigger>
                 <MenuPopup align="start" side="bottom" className="min-w-40">
                   <MenuItem onClick={() => onAddRepository?.()}>
@@ -1047,7 +1160,7 @@ export function LeftNav({
                 </MenuPopup>
               </ContextMenuPrimitive.Root>
 
-              {renderUnboundSection()}
+              {renderUnboundSection(false)}
             </>
           )}
         </div>
@@ -1136,6 +1249,92 @@ export function LeftNav({
 }
 
 /**
+ * Decision 167: an L1 section. Full-bleed (`-mx-2 px-2` undoes the list's
+ * `p-2`) so the divider above every section but the first runs edge to edge.
+ */
+function sidebarSectionClass(first: boolean): string {
+  return cn('-mx-2 px-2', !first && 'mt-2 border-t');
+}
+
+/**
+ * Decision 167: an L1 section title (15px / 600 / foreground, +0.04em, h-8),
+ * sticky within its own section so a long list always says where it is.
+ *
+ * Two layers make the stuck title opaque in the panel's own colour: the outer
+ * `bg-background` is the shell canvas, the inner `bg-card/40` is the same wash
+ * `LeftDock`'s root lays over it. With a background image the four panel
+ * surfaces turn translucent (`--panel-bg-opacity`), and a stuck title would
+ * let the rows scrolling under it show through — so it stops sticking there
+ * (`.bg-image-enabled` is set on <body> by `useBackgroundImage`). Nothing
+ * between this element and the scroll viewport may set overflow, transform,
+ * filter or contain: any of them silently breaks `sticky`.
+ */
+function SidebarSectionHeader({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="sticky top-0 z-10 -mx-2 bg-background in-[.bg-image-enabled]:static">
+      <div className="flex h-8 items-center bg-card/40 px-4">
+        <p className="min-w-0 truncate text-ui font-semibold tracking-[0.04em] text-foreground">
+          {title}
+        </p>
+        {children && <div className="ml-auto flex shrink-0 items-center gap-0.5">{children}</div>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Decision 167 §1: the small label over one of Recent's two segments (L4).
+ * It sits in the section title's column (x=16), not the rows' — aligned with
+ * the titles it would read like the clickable "View more".
+ */
+function SidebarSegmentLabel({
+  id,
+  className,
+  children,
+}: {
+  id: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      id={id}
+      className={cn('flex h-6 items-center px-2 text-meta text-muted-foreground', className)}
+    >
+      {children}
+    </div>
+  );
+}
+
+/**
+ * Decision 167: the list's own L4 rows — "View more (N)", "Show less", "New
+ * chat". h-6, 14px, muted; the leading `w-4` slot (empty, or the plus of
+ * "New chat") puts the text in the same column as the titles at that depth.
+ */
+function SidebarAuxRow({
+  icon,
+  onClick,
+  children,
+}: {
+  icon?: ReactNode;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover"
+      onClick={onClick}
+    >
+      <span aria-hidden className="flex w-4 shrink-0 items-center justify-center">
+        {icon}
+      </span>
+      <span className="min-w-0 truncate">{children}</span>
+    </button>
+  );
+}
+
+/**
  * Issue 26: how many focus thefts one rename edit undoes before it gives up and
  * commits what was typed. Two covers the menu's late focus return plus one
  * straggler; more would only prolong a fight with a dialog's focus trap.
@@ -1152,6 +1351,14 @@ const RENAME_EDITOR_HOLDS_ESCAPE = { [SURFACE_ESCAPE_HOLD_ATTR]: '' };
 
 interface SessionRowProps {
   row: SidebarSessionRow;
+  /** Decision 167 §3: where the chat runs, for the tooltip's second line. */
+  place: SidebarRowPlace;
+  /**
+   * Decision 167 §2: the full branch of a chat on a non-main workspace (a
+   * linked worktree), passed only inside its folder (`chipShownInFolder`).
+   * The row shows its last segment; Recent never passes it.
+   */
+  branch?: string;
   now: number;
   active: boolean;
   pendingApprovalCount: number;
@@ -1186,6 +1393,8 @@ interface SessionRowProps {
 
 function SessionRow({
   row: sourceRow,
+  place,
+  branch,
   now,
   active,
   pendingApprovalCount,
@@ -1199,12 +1408,19 @@ function SessionRow({
   onArchive,
   onDeleteTemp,
 }: SessionRowProps) {
-  const { t } = useI18n();
-  // Decision 144: the row as shown. A placeholder title (`New chat`) and a kind
-  // chip (`temporary`) are identifiers; every use below reads them in the UI
-  // language, so a rename that leaves the shown title untouched is still "no
-  // change".
+  const { t, locale } = useI18n();
+  // Decision 144: the row as shown. A placeholder title (`New chat`) is an
+  // identifier; every use below reads it in the UI language, so a rename that
+  // leaves the shown title untouched is still "no change".
   const row = useMemo(() => sidebarRowForDisplay(sourceRow, t), [sourceRow, t]);
+  // Decision 167 §3: title / folder · branch / updated at (date and time).
+  const tooltip = sidebarRowTooltip({
+    title: row.title,
+    place,
+    updatedAt: row.updatedAt,
+    locale,
+    t,
+  });
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(row.title);
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false);
@@ -1328,7 +1544,7 @@ function SessionRow({
       // the whole sidebar away with the edit still open behind it; marked like
       // any other surface that answers Escape itself (`SURFACE_ESCAPE_HOLD_ATTR`).
       <div
-        className="flex h-7 w-full items-center gap-1 rounded-md px-1"
+        className="flex h-7 w-full items-center gap-1 rounded-sm px-1"
         {...RENAME_EDITOR_HOLDS_ESCAPE}
       >
         <Input
@@ -1349,7 +1565,9 @@ function SessionRow({
               leaveIntentAtRef.current = Date.now();
             }
           }}
-          className="h-6 flex-1 text-ui"
+          // Decision 167: the radius clamp rule (design system, Border
+          // Radius) — the primitive's `rounded-lg` on h-6 renders as a pill.
+          className="h-6 flex-1 rounded-sm text-ui before:rounded-[calc(var(--radius-sm)-1px)]"
         />
       </div>
     );
@@ -1366,13 +1584,14 @@ function SessionRow({
             // The two are mutually exclusive on purpose: `hover:bg-hover` compiles to
             // `.hover\:bg-hover:hover` (0,2,0) and would outrank a plain `.bg-selection`
             // (0,1,0), so pointing at the active row would repaint it as an ordinary
-            // hovered row and erase the selection.
+            // hovered row and erase the selection. Keyboard focus (decision 167) lights
+            // the same step as hover; the global reset removed the outline.
             // overflow-hidden is load-bearing, not cosmetic: `min-w-20` on the title
             // makes the row's minimum content size exceed the track at the default
             // sidebar width, and without it the trailing items would spill past the
-            // rounded edge instead of the branch chip absorbing the deficit.
-            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui',
-            active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'
+            // rounded edge instead of the branch text absorbing the deficit.
+            'group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-ui',
+            active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover focus-visible:bg-hover'
           )}
           onClick={() => (onToggleSelect ? onToggleSelect(row.sessionId) : onSelect())}
           onDoubleClick={onToggleSelect ? undefined : beginRename}
@@ -1385,26 +1604,31 @@ function SessionRow({
               else onSelect();
             }
           }}
-          title={row.title}
+          title={tooltip}
         >
-          {/* U31: the checkbox replaces the run-state dot rather than joining
-              it. Both want the same 6px slot at the row's head, and while the
+          {/* Decision 167: ONE fixed `w-4` status slot at the head of every row,
+              rendered even when empty, so the title never moves when a run
+              starts or ends or selection mode begins (decision 138 §2 accepted
+              a 6px shift; this retires it). */}
+          <span className="flex w-4 shrink-0 items-center justify-center">
+            {/* U31: the checkbox replaces the run-state dot rather than joining
+              it. Both want the same slot at the row's head, and while the
               user is choosing what to archive, "is it selected" is the fact
               that matters — the dot comes back the moment selection ends. */}
-          {onToggleSelect && (
-            <span
-              aria-hidden
-              className={cn(
-                'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
-                selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
-              )}
-            >
-              {selected && <Check className="size-2.5" />}
-            </span>
-          )}
-          {/* The marker, in one 6px slot so rows never jump: filled accent =
-              running, filled green/red = an unread result (S3), ring = started
-              (a worker is attached in the background), nothing = not started.
+            {onToggleSelect && (
+              <span
+                aria-hidden
+                className={cn(
+                  'flex size-3.5 shrink-0 items-center justify-center rounded-xs border',
+                  selected ? 'border-primary bg-primary text-primary-foreground' : 'border-border'
+                )}
+              >
+                {selected && <Check className="size-2.5" />}
+              </span>
+            )}
+            {/* The marker, in one slot so rows never jump: spinner = running,
+              filled green/red = an unread result (S3), ring = started (a
+              worker is attached in the background), nothing = not started.
               One slot, not several — a second dot would widen the row and push
               the title, and only ever one of these is the fact worth acting on.
 
@@ -1414,55 +1638,61 @@ function SessionRow({
               is what ends the run), and `unread` outranks `started` because
               "attached in the background" is exactly the state every unread row
               is in — showing the ring there would say the less useful half. */}
-          {/* Decision 137 §1: a running turn spins; a turn parked on an
+            {/* Decision 137 §1: a running turn spins; a turn parked on an
               approval card or a question shows an attention dot instead,
               because the next move is the user's. Both carry their state in
               words for the tooltip and screen readers. */}
-          {onToggleSelect ? null : row.busy ? (
-            isWaitingSessionStatus(row.status) ? (
+            {onToggleSelect ? null : row.busy ? (
+              isWaitingSessionStatus(row.status) ? (
+                <span
+                  role="img"
+                  aria-label={waitingLabel}
+                  title={waitingLabel}
+                  className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+                />
+              ) : (
+                <Spinner
+                  aria-label={t('Running')}
+                  className="size-3 shrink-0 text-status-running"
+                />
+              )
+            ) : unread ? (
+              // Not `aria-hidden` like its neighbours: the run-state dots restate
+              // something the row's own text already implies, while this one is
+              // the ONLY carrier of "there is a result here you have not seen".
               <span
                 role="img"
-                aria-label={waitingLabel}
-                title={waitingLabel}
-                className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"
+                aria-label={unreadLabel}
+                title={unreadLabel}
+                className={cn(
+                  'h-1.5 w-1.5 shrink-0 rounded-full',
+                  row.failed ? 'bg-destructive' : 'bg-success'
+                )}
               />
-            ) : (
-              <Spinner aria-label={t('Running')} className="size-3 shrink-0 text-status-running" />
-            )
-          ) : unread ? (
-            // Not `aria-hidden` like its neighbours: the run-state dots restate
-            // something the row's own text already implies, while this one is
-            // the ONLY carrier of "there is a result here you have not seen".
-            <span
-              role="img"
-              aria-label={unreadLabel}
-              title={unreadLabel}
-              className={cn(
-                'h-1.5 w-1.5 shrink-0 rounded-full',
-                row.failed ? 'bg-destructive' : 'bg-success'
-              )}
-            />
-          ) : started ? (
-            <span
-              aria-hidden
-              className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
-              title={t('Running in the background')}
-            />
-          ) : null}
+            ) : started ? (
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"
+                title={t('Running in the background')}
+              />
+            ) : null}
+          </span>
           {/* `min-w-20` is the whole point of this row's sizing (S2 b). The title is
           the row's identity and the only user-authored text on it, so it gets a
           floor and everything else yields to it. Without the floor `flex-1
-          min-w-0` shrinks to whatever is left, and at SIDEBAR_DEFAULT_WIDTH the
-          leftovers are ~16px — a bare ellipsis. Budget for an indented row at
-          the 280px default: 280 - 16 (p-2) - 12 (pl-3) - 16 (px-2) = 236px, and
-          the agent chip alone claims ~63 of it. */}
+          min-w-0` shrinks to whatever is left. Budget for an indented row at the
+          280px default (decision 167, measured on the prototype): the panel's
+          280 includes its 1px right border, so 280 - 1 - 16 (p-2) - 12 (pl-3) -
+          16 (px-2) = 235px of content; minus the 16px status slot, two 6px gaps
+          and the 40px time box, the title gets 167px (SIDEBAR_DEFAULT_WIDTH -
+          DOCK_RAIL_WIDTH = 280). */}
           {titleParts.suffix === null ? (
             <span className="min-w-20 flex-1 truncate">{row.title}</span>
           ) : (
             // Point-check issue 32 (decision 138): the 1.0.x branch suffix is
             // what tells a moved copy from its original (decision 131), so it
             // stays whole and only the part before it gives way. The row's
-            // `title` still holds the whole string for the tooltip.
+            // tooltip still starts with the whole string.
             <span
               className={cn(
                 'flex min-w-20 flex-1 items-baseline overflow-hidden',
@@ -1473,16 +1703,19 @@ function SessionRow({
               <span className="shrink-0 text-muted-foreground">{titleParts.suffix}</span>
             </span>
           )}
+          {/* Alert badges are state, not context, so they stay on every row —
+              Recent's included. Decision 167 unified them at Badge `lg` (14px
+              on desktop; revises decisions 144 §2 and 123 §13, which kept the
+              Latin-only marks at `sm`'s 10px). */}
           {/* dsh-rebase P1-9e (decision 051): the legacy copy of a migrated
               chat, continued in 1.0.x since. It sits next to the migrated
               chat under the same title, so the mark is what tells the two
               apart; the tooltip says what continuing it does. The label is
-              the version alone — no CJK at this badge's 10px (design system,
-              CJK cascade). */}
+              the version alone. */}
           {row.legacyDiverged && (
             <Badge
               variant="warning"
-              size="sm"
+              size="lg"
               className="shrink-0"
               title={t(LEGACY_DIVERGED_HINT)}
               aria-label={t(LEGACY_DIVERGED_HINT)}
@@ -1493,7 +1726,7 @@ function SessionRow({
           {pendingApprovalCount > 0 && (
             <Badge
               variant="warning"
-              size="sm"
+              size="lg"
               className="shrink-0 gap-0.5 tabular-nums"
               aria-label={t('{{count}} pending approval requests', {
                 count: pendingApprovalCount,
@@ -1502,7 +1735,7 @@ function SessionRow({
                 count: pendingApprovalCount,
               })}
             >
-              <ShieldQuestion className="size-3" />
+              <ShieldQuestion className="size-3.5" />
               {pendingApprovalCount}
             </Badge>
           )}
@@ -1514,26 +1747,22 @@ function SessionRow({
               {t('Failed')}
             </Badge>
           )}
-          {row.chip && (
-            // The branch chip is the row's sole yielder. It is the only trailing
-            // item whose text is unbounded user data, and it is the only one that
-            // is recoverable elsewhere (row `title` tooltip + the Composer target
-            // bar, T-27), so when the row runs out of width this is what gives —
-            // never the title. `shrink` + `min-w-0` is what lets flexbox route the
-            // deficit here; dropping either sends it back to the title.
-            <Badge
-              variant="outline"
-              // Decision 144: a kind chip is a word in the UI language (CJK in
-              // Chinese), so it takes the 14px size; a branch name keeps 10px.
-              size={row.chip.variant === 'kind' ? 'lg' : 'sm'}
-              className="min-w-0 max-w-24 shrink"
-              title={row.chip.label}
+          {branch && (
+            // Decision 167 §2 (replaces D21-A): context text, only for a chat
+            // on a non-main workspace (a linked worktree), only inside its
+            // folder, and only the branch's last segment — the full name is
+            // its tooltip. It is the row's sole yielder: the only trailing
+            // item that is unbounded user data and recoverable elsewhere (the
+            // tooltip, the Composer target bar), so when the row runs out of
+            // width this gives — never the title. `shrink` + `min-w-0` is what
+            // lets flexbox route the deficit here; dropping either sends it
+            // back to the title.
+            <span
+              className="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground"
+              title={branch}
             >
-              {/* Inner span, not `truncate` on the Badge: Badge is `inline-flex`,
-              and text-overflow does not ellipsize the anonymous flex item that
-              bare text becomes — it needs a real block child to clip. */}
-              <span className="min-w-0 truncate">{row.chip.label}</span>
-            </Badge>
+              {lastBranchSegment(branch)}
+            </span>
           )}
           {/* Age and actions swap on hover; the shared width box is what actually
           keeps the row from jumping — the two are different natural widths (a
@@ -1543,7 +1772,10 @@ function SessionRow({
           Archive/Close reachable by keyboard (display:none alone would drop
           them from the tab order). Temp rows get a third (delete) button, so
           both this span and the actions box below widen to `w-[60px]`
-          together — otherwise only the temp rows would jump on hover. */}
+          together — otherwise only the temp rows would jump on hover.
+          Decision 167: the buttons are `size-5 sm:size-5` (20px, two fill the
+          40px box exactly); a bare `size-5` loses to the variant's
+          `sm:size-6`, and 48px of buttons overflowed the box. */}
           <span
             className={cn(
               'shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden',
@@ -1561,7 +1793,7 @@ function SessionRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5"
+              className="size-5 sm:size-5"
               // Decision 149 §12 / 156: in the UI language, like the menu's 「归档」.
               aria-label={t('Archive session')}
               title={t('Archive')}
@@ -1570,12 +1802,12 @@ function SessionRow({
                 requestArchive();
               }}
             >
-              <Archive className="h-3 w-3" />
+              <Archive className="size-3.5" />
             </Button>
             <Button
               variant="ghost"
               size="icon-xs"
-              className="h-5 w-5"
+              className="size-5 sm:size-5"
               // Not "Close": this is the list's remove, not the run's end (the
               // context menu's "End conversation" is that one). The title says
               // which of the two it is, because the difference — the row comes
@@ -1587,7 +1819,7 @@ function SessionRow({
                 onClose();
               }}
             >
-              <X className="h-3 w-3" />
+              <X className="size-3.5" />
             </Button>
             {onDeleteTemp && <DeleteTempButton onDelete={onDeleteTemp} />}
           </div>
@@ -1700,7 +1932,7 @@ function DeleteTempButton({ onDelete }: { onDelete: () => void }) {
     <Button
       variant="ghost"
       size="icon-xs"
-      className="h-5 w-5 text-muted-foreground hover:text-destructive"
+      className="size-5 text-muted-foreground hover:text-destructive sm:size-5"
       aria-label={t('Delete')}
       title={t('Delete')}
       onClick={(event) => {
@@ -1708,7 +1940,7 @@ function DeleteTempButton({ onDelete }: { onDelete: () => void }) {
         onDelete();
       }}
     >
-      <Trash2 className="h-3 w-3" />
+      <Trash2 className="size-3.5" />
     </Button>
   );
 }

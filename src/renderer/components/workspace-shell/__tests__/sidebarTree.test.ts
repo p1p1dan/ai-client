@@ -6,18 +6,26 @@ import {
   buildSidebarFolders,
   buildUnboundFolder,
   chipForWorkspace,
+  chipShownInFolder,
   deriveActiveRows,
   deriveRecentRows,
   FOLDER_DEFAULT_LIMIT,
+  folderBranchLabel,
+  folderPrimaryChip,
+  folderTooltip,
   formatRelativeAge,
   isWaitingSessionStatus,
   LEGACY_DIVERGED_HINT,
+  lastBranchSegment,
   limitFolderRows,
   RECENT_DEFAULT_LIMIT,
   RECENT_WINDOW_MS,
   resolveNewSessionTarget,
   resolveNewSessionWorkspaceId,
   resolveRecentCollapsed,
+  sidebarFolderNameForDisplay,
+  sidebarRowPlace,
+  sidebarRowTooltip,
   splitBranchSuffix,
   UNBOUND_FOLDER_ID,
 } from '../sidebarTree';
@@ -157,37 +165,170 @@ describe('chipForWorkspace', () => {
     expect(chipForWorkspace(workspaces[2])).toBeNull();
   });
 
-  // U05-b ③ — "no folder" is a state the user can now be IN, not just a gap
-  // on the way to picking one, so the session list has to say so.
-  it('labels a chat with no folder as temporary', () => {
-    expect(chipForWorkspace(undefined)).toEqual({ variant: 'kind', label: 'temporary' });
-  });
-
-  it('treats the empty-path placeholder as no folder too', () => {
+  // Decision 167 retired the kind chips (「临时」「远程」 on every row, decision
+  // 144 §2–3): a chat with no folder is marked `unbound` instead (U05-b ③,
+  // see 'marks a chat with no folder as unbound' below), and a remote
+  // repository is said once, on its folder row.
+  it('carries no chip for a chat with no folder, temp or remote workspaces', () => {
+    expect(chipForWorkspace(undefined)).toBeNull();
     // What a fresh install actually sits on: a seeded workspace whose path is
     // deliberately empty so a fake cwd can never reach spawn.
     expect(
-      chipForWorkspace({
-        id: 'ws-seed',
-        projectId: 'p-ai',
-        name: 'Main',
-        kind: 'main',
-        path: '',
-      })
-    ).toEqual({ variant: 'kind', label: 'temporary' });
+      chipForWorkspace({ id: 'ws-seed', projectId: 'p-ai', name: 'Main', kind: 'main', path: '' })
+    ).toBeNull();
+    expect(chipForWorkspace(workspaces[3])).toBeNull();
+    expect(
+      chipForWorkspace({ id: 'ws-r', projectId: 'p-r', name: 'srv', kind: 'remote', path: '/srv' })
+    ).toBeNull();
   });
 
-  it('shows the kind label for temp and remote workspaces', () => {
-    expect(chipForWorkspace(workspaces[3])).toEqual({ variant: 'kind', label: 'temp' });
+  // U05-b ③ — "no folder" is a state the user can now be IN, not just a gap
+  // on the way to picking one, so the session list has to say so.
+  it('marks a chat with no folder — or on the empty-path placeholder — as unbound', () => {
+    const seed: ChatWorkspace = {
+      id: 'ws-seed',
+      projectId: 'p-ai',
+      name: 'Main',
+      kind: 'main',
+      path: '',
+    };
+    const [onSeed] =
+      buildSidebarFolders({
+        projects,
+        workspaces: [seed],
+        sessions: [session({ id: 's-seed', workspaceId: 'ws-seed' })],
+      })[0]?.rows ?? [];
+    expect(onSeed?.unbound).toBe(true);
+    const [onRepo] = folderOf('p-ai', [session({ id: 's-repo' })]).rows;
+    expect(onRepo).toBeDefined();
+    expect('unbound' in (onRepo ?? {})).toBe(false);
+  });
+});
+
+describe('the folder row carries the branch, rows only off the main workspace (decision 167 §2)', () => {
+  const remote: ChatWorkspace = {
+    id: 'ws-r',
+    projectId: 'p-r',
+    name: 'srv',
+    kind: 'remote',
+    path: '/srv',
+  };
+
+  it('folderPrimaryChip names the main workspace and its branch', () => {
+    expect(folderPrimaryChip('p-ai', workspaces)).toEqual({
+      workspaceId: 'ws-main',
+      branch: 'main',
+      remote: false,
+    });
+    // Branch unknown: still the folder's main workspace, just nothing to name.
+    expect(folderPrimaryChip('p-empty', workspaces)).toEqual({
+      workspaceId: 'ws-empty',
+      branch: null,
+      remote: false,
+    });
+    expect(folderPrimaryChip('p-r', [remote])).toEqual({
+      workspaceId: 'ws-r',
+      branch: null,
+      remote: true,
+    });
+    // The Temp Session project has one temp workspace per directory, no main.
+    expect(folderPrimaryChip('p-temp', workspaces)).toBeNull();
+    expect(folderPrimaryChip('p-gone', workspaces)).toBeNull();
+  });
+
+  it('chipShownInFolder shows a branch only for a chat on a linked worktree', () => {
+    const rows = folderOf('p-ai', [
+      session({ id: 's-main', updatedAt: NOW }),
+      session({ id: 's-wt', workspaceId: 'ws-wt', updatedAt: NOW - 1 }),
+    ]).rows;
+    const primary = folderPrimaryChip('p-ai', workspaces);
+    expect(rows.map((row) => [row.sessionId, chipShownInFolder(row, primary)])).toEqual([
+      ['s-main', false],
+      ['s-wt', true],
+    ]);
+    // A row with no branch shows nothing, whatever its workspace.
+    expect(chipShownInFolder({ chip: null, workspaceId: 'ws-wt' }, primary)).toBe(false);
+    // A folder whose main workspace is unknown still shows a worktree's branch.
     expect(
-      chipForWorkspace({
-        id: 'ws-r',
-        projectId: 'p-r',
-        name: 'srv',
-        kind: 'remote',
-        path: '/srv',
+      chipShownInFolder(
+        { chip: { variant: 'branch', label: 'feat/x' }, workspaceId: 'ws-wt' },
+        null
+      )
+    ).toBe(true);
+  });
+
+  it('lastBranchSegment keeps only the last path segment', () => {
+    expect(lastBranchSegment('feature/sidebar-redesign')).toBe('sidebar-redesign');
+    expect(lastBranchSegment('user/team/fix/login-retry')).toBe('login-retry');
+    expect(lastBranchSegment('main')).toBe('main');
+    expect(lastBranchSegment('release/2026.10')).toBe('2026.10');
+    expect(lastBranchSegment('odd/')).toBe('odd');
+    expect(lastBranchSegment('/')).toBe('/');
+  });
+
+  it('folderBranchLabel and folderTooltip say the main branch once, and remote', () => {
+    const zh = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    const main = folderPrimaryChip('p-ai', workspaces);
+    expect(folderBranchLabel(main)).toBe('main');
+    expect(folderBranchLabel(folderPrimaryChip('p-empty', workspaces))).toBeNull();
+    expect(folderBranchLabel(null)).toBeNull();
+    const remotePrimary = folderPrimaryChip('p-r', [remote]);
+    expect(folderBranchLabel(remotePrimary, zh)).toBe('远程');
+    expect(folderBranchLabel({ workspaceId: 'w', branch: 'main', remote: true }, zh)).toBe(
+      'main · 远程'
+    );
+    expect(folderTooltip('ai-client', main, zh)).toBe('ai-client\n主工作区分支：main');
+    expect(folderTooltip('srv', remotePrimary, zh)).toBe('srv\n远程仓库');
+    expect(folderTooltip('newhp', folderPrimaryChip('p-empty', workspaces))).toBe('newhp');
+  });
+
+  it('words the Temp Session project at display time only', () => {
+    const zh = (key: string, params?: Record<string, string | number>) =>
+      translate('zh', key, params);
+    expect(sidebarFolderNameForDisplay('project-temp', 'Temp', zh)).toBe('临时工作区');
+    expect(sidebarFolderNameForDisplay('p-ai', 'ai-client', zh)).toBe('ai-client');
+  });
+});
+
+describe('the three-line row tooltip (decision 167 §3)', () => {
+  const zh = (key: string, params?: Record<string, string | number>) =>
+    translate('zh', key, params);
+  const at = new Date(2026, 9, 7, 14, 32).getTime();
+  const workspaceById = new Map(workspaces.map((ws) => [ws.id, ws] as const));
+  const names = new Map([['p-ai', 'ai-client']]);
+
+  it('reads title / folder · branch / updated date and time', () => {
+    const [row] = folderOf('p-ai', [session({ id: 's-wt', workspaceId: 'ws-wt' })]).rows;
+    const place = sidebarRowPlace(row as never, workspaceById, names);
+    expect(place).toEqual({ folderName: 'ai-client', branch: 'feat/x', remote: false });
+    expect(
+      sidebarRowTooltip({ title: '修复登录', place, updatedAt: at, locale: 'zh', t: zh })
+    ).toBe('修复登录\nai-client · feat/x\n更新于 2026-10-07 14:32');
+  });
+
+  it('says 「临时对话」 for an unbound chat and adds 「（远程）」 for a remote one', () => {
+    const unbound = sidebarRowPlace({ workspaceId: '', unbound: true }, workspaceById, names);
+    expect(unbound).toEqual({ folderName: null, branch: null, remote: false });
+    expect(
+      sidebarRowTooltip({ title: 'x', place: unbound, updatedAt: at, locale: 'zh', t: zh }).split(
+        '\n'
+      )[1]
+    ).toBe('临时对话');
+    const remote = { folderName: 'srv', branch: null, remote: true };
+    expect(
+      sidebarRowTooltip({ title: 'x', place: remote, updatedAt: at, locale: 'zh', t: zh }).split(
+        '\n'
+      )[1]
+    ).toBe('srv（远程）');
+    // English, and a folder with no branch to name.
+    expect(
+      sidebarRowTooltip({
+        title: 'Fix login',
+        place: { folderName: 'newhp', branch: null, remote: false },
+        updatedAt: at,
       })
-    ).toEqual({ variant: 'kind', label: 'remote' });
+    ).toBe('Fix login\nnewhp\nUpdated 2026-10-07 14:32');
   });
 });
 
@@ -561,6 +702,60 @@ describe('deriveRecentRows', () => {
     });
     expect(rows).toEqual([]);
   });
+
+  // Decision 167 §1: the lower segment of Recent drops what the upper one
+  // ("Active now") lists, BEFORE the cap — 16 chats in the 48-hour window, 3
+  // active, leave 13: 7 shown and "View more (6)", the prototype's numbers.
+  it('drops excluded rows before the 7-row cap, so the hidden count is after dedupe', () => {
+    const sessions = Array.from({ length: 16 }, (_, i) =>
+      session({ id: `s-${String(i).padStart(2, '0')}`, updatedAt: NOW - i * 1000 })
+    );
+    const active = deriveActiveRows({
+      sessions,
+      workspaces,
+      hostBoundSessionIds: ['s-00', 's-03', 's-09'],
+    });
+    const excludeSessionIds = new Set(active.map((row) => row.sessionId));
+    const lower = deriveRecentRows({ sessions, workspaces, now: NOW, excludeSessionIds });
+    expect(lower.rows).toHaveLength(RECENT_DEFAULT_LIMIT);
+    expect(lower.hiddenCount).toBe(6);
+    expect(lower.rows.map((row) => row.sessionId)).toEqual([
+      's-01',
+      's-02',
+      's-04',
+      's-05',
+      's-06',
+      's-07',
+      's-08',
+    ]);
+    // A chat is in Recent at most once.
+    const all = deriveRecentRows({
+      sessions,
+      workspaces,
+      now: NOW,
+      showAll: true,
+      excludeSessionIds,
+    });
+    const listed = [...active, ...all.rows].map((row) => row.sessionId);
+    expect(new Set(listed).size).toBe(listed.length);
+    expect(listed).toHaveLength(16);
+  });
+
+  it('a busy chat lives in the upper segment only', () => {
+    const sessions = [
+      session({ id: 's-busy', status: 'running', updatedAt: NOW - RECENT_WINDOW_MS * 2 }),
+      session({ id: 's-fresh', updatedAt: NOW - 1000 }),
+    ];
+    const active = deriveActiveRows({ sessions, workspaces, hostBoundSessionIds: [] });
+    expect(active.map((row) => row.sessionId)).toEqual(['s-busy']);
+    const lower = deriveRecentRows({
+      sessions,
+      workspaces,
+      now: NOW,
+      excludeSessionIds: new Set(active.map((row) => row.sessionId)),
+    });
+    expect(lower.rows.map((row) => row.sessionId)).toEqual(['s-fresh']);
+  });
 });
 
 describe('sidebar rows are Pi-only', () => {
@@ -628,7 +823,7 @@ describe('buildUnboundFolder (U13)', () => {
     expect(buildUnboundFolder({ sessions: [session({ id: 's1' })], name: 'Temporary' })).toBeNull();
   });
 
-  it('collects unbound chats newest first, with the temporary chip and no new-chat target', () => {
+  it('collects unbound chats newest first, marked unbound and with no new-chat target', () => {
     const folder = buildUnboundFolder({
       sessions: [
         session({ id: 'old', workspaceId: '', unbound, updatedAt: NOW - 10_000 }),
@@ -640,7 +835,7 @@ describe('buildUnboundFolder (U13)', () => {
     expect(folder?.synthetic).toBe('unbound');
     expect(folder?.newSessionWorkspaceId).toBeNull();
     expect(folder?.rows.map((row) => row.sessionId)).toEqual(['new', 'old']);
-    expect(folder?.rows.every((row) => row.chip?.label === 'temporary')).toBe(true);
+    expect(folder?.rows.every((row) => row.unbound === true && row.chip === null)).toBe(true);
   });
 
   it('applies the same title query as the repository folders', () => {
@@ -675,7 +870,7 @@ describe('buildUnboundFolder (U13)', () => {
       now: NOW,
     });
     expect(rows.map((row) => row.sessionId)).toEqual(['u1']);
-    expect(rows[0].chip?.label).toBe('temporary');
+    expect(rows[0].unbound).toBe(true);
   });
 });
 
@@ -701,13 +896,13 @@ describe('a live-only temporary chat is visible before its first send (T091)', (
   it('appears in the Temporary chats group', () => {
     const folder = buildUnboundFolder({ sessions: [liveOnly], name: 'Temporary' });
     expect(folder?.rows.map((row) => row.sessionId)).toEqual(['live-temp']);
-    expect(folder?.rows[0]?.chip?.label).toBe('temporary');
+    expect(folder?.rows[0]?.unbound).toBe(true);
   });
 
   it('appears in Recent', () => {
     const { rows } = deriveRecentRows({ sessions: [liveOnly], workspaces, now: NOW });
     expect(rows.map((row) => row.sessionId)).toEqual(['live-temp']);
-    expect(rows[0]?.chip?.label).toBe('temporary');
+    expect(rows[0]?.unbound).toBe(true);
   });
 
   it('is never duplicated into a repository folder', () => {

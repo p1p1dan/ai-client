@@ -10,7 +10,12 @@ import type { Repository } from '@/App/constants';
 import { TEMP_REPO_ID } from '@/App/constants';
 import type { ChatProject, ChatWorkspace, WorkspaceKind } from '@/stores/chatSessions';
 
-const TEMP_PROJECT_ID = 'project-temp';
+/**
+ * The synthetic project holding the Temp Session workspaces. Its `name` stays
+ * the identifier `Temp`; the sidebar words it in the UI language at display
+ * time (`sidebarFolderNameForDisplay`, decision 167).
+ */
+export const TEMP_PROJECT_ID = 'project-temp';
 
 export function workspaceIdFor(kind: WorkspaceKind, workspacePath: string): string {
   return `ws:${kind}:${normalizePath(workspacePath).toLowerCase()}`;

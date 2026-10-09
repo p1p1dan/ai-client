@@ -2,6 +2,7 @@ import type { GitBranch } from '@shared/types';
 import { GitBranch as GitBranchIcon, Loader2, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Input } from '@/components/ui/input';
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group';
 import {
   Select,
   SelectGroup,
@@ -128,18 +129,25 @@ export function BranchSwitcher({
       </SelectTrigger>
 
       <SelectPopup className="w-56" alignItemWithTrigger={false}>
-        {/* Search input */}
+        {/* Search input. Decision 167 (issue #3 item 5): coss's InputGroup with
+            the input FIRST and the icon addon after it (`order-first` draws it
+            on the left); an absolutely positioned icon placed before `Input` is
+            painted over by the input's `relative`, opaque wrapper. The group's
+            own 14px replaces the 12px `text-xs` the CJK placeholder had. */}
         <div className="p-2">
-          <div className="relative flex items-center py-2">
-            <Search className="absolute left-2 h-3.5 w-3.5 text-muted-foreground" />
-            <Input
+          <InputGroup className="my-2 h-7 rounded-sm before:rounded-[calc(var(--radius-sm)-1px)]">
+            <InputGroupInput
+              size="sm"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}
               placeholder={t('Search branches...')}
-              className="pl-4 text-xs"
+              aria-label={t('Search branches...')}
             />
-          </div>
+            <InputGroupAddon align="inline-start">
+              <Search className="size-4 text-muted-foreground" />
+            </InputGroupAddon>
+          </InputGroup>
         </div>
 
         {/* Create new branch */}

@@ -158,10 +158,11 @@ it('gives the row menu on a row and the repository menu on its folder header', a
   await pressEscape();
   expect(openMenuItems()).toEqual([]);
 
-  const folderHeader = [...container.querySelectorAll('div')].find(
-    (element) =>
-      element.className.includes('group flex h-7') && element.textContent?.trim() === 'alpha'
-  );
+  // Decision 167: the header row also holds the main branch, so it is found by
+  // the folder name's own slot rather than by its whole text.
+  const folderHeader = [...container.querySelectorAll('[data-slot="sidebar-folder-name"]')]
+    .find((element) => element.textContent === 'alpha')
+    ?.closest('div.group');
   expect(folderHeader, 'repository folder header is rendered').toBeTruthy();
 
   await rightClick(folderHeader as Element);
@@ -205,7 +206,9 @@ it('gives the temporary-chat partition its own menu', async () => {
   });
   await act(async () => root.render(createElement(LeftNav, { repositories: [REPO] as never })));
 
-  const header = [...container.querySelectorAll('span')].find(
+  // Decision 167 §5: an L1 section title (a `<p>`), no longer a folder-style
+  // header span.
+  const header = [...container.querySelectorAll('p')].find(
     (element) => element.textContent === 'Temporary chats'
   );
   expect(header, 'temporary-chat partition is rendered').toBeTruthy();

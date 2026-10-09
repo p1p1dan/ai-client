@@ -1,0 +1,1344 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>侧栏层级原型 · issue #3（现状 vs 方案）</title>
+<style>
+/* =====================================================================
+   Static acceptance prototype for GitHub issue #3 (the left 「聊天」 sidebar
+   hierarchy). Not product code; nothing here is imported by the app.
+
+   - Colour tokens are copied verbatim from src/renderer/styles/globals.css
+     (:root = Flexoki light, .dark = Flexoki dark), OKLCH exactly as written.
+   - Type / radius / font tokens are the @theme values (text-meta 14px,
+     text-ui 15px, --radius = radius-sm = 6px, the --font-sans stack).
+   - The utility classes below reuse Tailwind's class NAMES with hand-written
+     declarations matching Tailwind v4 output at the desktop (`sm:`)
+     breakpoint, so the 现状 markup is LeftNav.tsx's own class strings and the
+     方案 markup is what the implementation should write.
+   - All data is synthetic (no real titles, repositories, users or emails).
+   ===================================================================== */
+
+/* ---- tokens: globals.css :root (Flexoki Light) ---- */
+:root {
+  --panel-bg-opacity: 1;
+  --font-size-base: 16px;
+  --background: oklch(0.9931 0.012 96.42 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.1696 0.0017 17.32);
+  --card: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.1696 0.0017 17.32);
+  --popover: oklch(0.97 0.0106 100.82 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.1696 0.0017 17.32);
+  --primary: oklch(0.5665 0.1523 45.02);
+  --primary-foreground: oklch(0.9931 0.012 96.42);
+  --secondary: oklch(0.962 0.0111 89.72);
+  --secondary-foreground: oklch(0.1696 0.0017 17.32);
+  --muted: oklch(0.965 0.0093 99.98 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.4531 0.005 91.5);
+  --accent: oklch(0.935 0.0122 96.43);
+  --accent-foreground: oklch(0.1696 0.0017 17.32);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.91 0.0109 95.17);
+  --hover: oklch(0.935 0.0122 96.43);
+  --status-running: oklch(0.4818 0.1315 254.79);
+  --destructive: oklch(0.5042 0.1648 27.84);
+  --destructive-foreground: oklch(0.9931 0.012 96.42);
+  --success: oklch(0.5593 0.1335 122.92);
+  --success-foreground: oklch(0.9931 0.012 96.42);
+  --warning: oklch(0.5665 0.1523 45.02);
+  --warning-foreground: oklch(0.9931 0.012 96.42);
+  --info: oklch(0.4818 0.1315 254.79);
+  --info-foreground: oklch(0.9931 0.012 96.42);
+  --folder: oklch(0.6333 0.1295 85.81);
+  --border: oklch(0.875 0.0137 97.46);
+  --input: oklch(0.8463 0.0137 102.05);
+  --ring: oklch(0.5665 0.1523 45.02);
+  --radius: 0.375rem;
+}
+/* ---- tokens: globals.css .dark (Flexoki Dark) ---- */
+.dark {
+  --background: oklch(0.1981 0.0032 17.43 / var(--panel-bg-opacity, 1));
+  --foreground: oklch(0.8463 0.0137 102.05);
+  --card: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --card-foreground: oklch(0.8463 0.0137 102.05);
+  --popover: oklch(0.262 0.0037 48.55 / var(--panel-bg-opacity, 1));
+  --popover-foreground: oklch(0.8463 0.0137 102.05);
+  --primary: oklch(0.6576 0.1539 49.3);
+  --primary-foreground: oklch(0.1981 0.0032 17.43);
+  --secondary: oklch(0.276 0.0024 67.71);
+  --secondary-foreground: oklch(0.8463 0.0137 102.05);
+  --muted: oklch(0.268 0.0025 67.7 / var(--panel-bg-opacity, 1));
+  --muted-foreground: oklch(0.6956 0.0103 93.62);
+  --accent: oklch(0.305 0.0029 17.32);
+  --accent-foreground: oklch(0.8463 0.0137 102.05);
+  --accent-primary: oklch(0.8109 0.1131 56.61);
+  --selection: oklch(0.325 0.0029 17.31);
+  --hover: oklch(0.305 0.0029 17.32);
+  --status-running: oklch(0.5988 0.1104 247);
+  --destructive: oklch(0.597 0.1692 28.38);
+  --destructive-foreground: oklch(0.1981 0.0032 17.43);
+  --success: oklch(0.7227 0.1178 117.2);
+  --success-foreground: oklch(0.1981 0.0032 17.43);
+  --warning: oklch(0.6576 0.1539 49.3);
+  --warning-foreground: oklch(0.1981 0.0032 17.43);
+  --info: oklch(0.5988 0.1104 247);
+  --info-foreground: oklch(0.1981 0.0032 17.43);
+  --folder: oklch(0.7346 0.1462 87.46);
+  --border: oklch(0.34 0.0038 84.58);
+  --input: oklch(0.3651 0.0044 67.69);
+  --ring: oklch(0.6576 0.1539 49.3);
+}
+/* ---- @theme: type, radius, font stacks ---- */
+:root {
+  --radius-xs: 0.25rem;
+  --radius-sm: var(--radius);
+  --radius-md: 0.625rem;
+  --radius-lg: 0.75rem;
+  --text-2xs: 10px;
+  --text-code: 0.8125rem;
+  --text-meta: 0.875rem;
+  --text-ui: 0.9375rem;
+  --text-title: 1.125rem;
+  --font-sans:
+    -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI",
+    "Ubuntu", "Cantarell", "Noto Sans", "Liberation Sans", Arial,
+    "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei UI", "Microsoft YaHei",
+    "Noto Sans CJK SC", "Source Han Sans SC", "Noto Sans SC", "WenQuanYi Micro Hei",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    sans-serif;
+  --font-mono:
+    ui-monospace, "SF Mono", "SFMono-Regular", "Menlo",
+    "Cascadia Mono", "Consolas", "Liberation Mono", "DejaVu Sans Mono",
+    "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC",
+    "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji",
+    monospace;
+}
+
+/* ---- base (Tailwind preflight subset + globals.css @layer base) ---- */
+*, ::before, ::after { box-sizing: border-box; margin: 0; padding: 0; border: 0 solid var(--border); }
+html { font-size: var(--font-size-base); font-family: var(--font-sans); line-height: 1.5;
+  font-synthesis-weight: none; -webkit-text-size-adjust: 100%; }
+body { background: var(--background); color: var(--foreground); font-size: var(--text-ui); line-height: 1.55; }
+button, input { font: inherit; font-feature-settings: inherit; letter-spacing: inherit; color: inherit;
+  background-color: transparent; border-radius: 0; }
+button, [role="button"] { cursor: pointer; }
+svg { display: block; vertical-align: middle; }
+input::placeholder { color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); opacity: 1; }
+*:focus-visible { outline: none; box-shadow: none; }
+* { user-select: none; }
+
+/* ---- components: Badge (ui/badge.tsx, desktop sizes) ---- */
+.badge { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center;
+  gap: .25rem; white-space: nowrap; border-radius: var(--radius-sm); border: 1px solid transparent; font-weight: 500; }
+.badge svg:not([class*="opacity-"]) { opacity: .8; }
+.badge svg { flex-shrink: 0; pointer-events: none; }
+.badge-sm { height: 1rem; min-width: 1rem; border-radius: calc(var(--radius-sm) - 2px);
+  padding: 0 calc(.25rem - 1px); font-size: .625rem; }
+.badge-lg { height: 1.375rem; min-width: 1.375rem; padding: 0 calc(.375rem - 1px);
+  font-size: .875rem; line-height: calc(1.25 / .875); }
+.badge-outline { border-color: var(--border); background-color: transparent; }
+.dark .badge-outline { background-color: color-mix(in oklab, var(--input) 32%, transparent); }
+.badge-warning { background-color: color-mix(in oklab, var(--warning) 8%, transparent); color: var(--warning); }
+.dark .badge-warning { background-color: color-mix(in oklab, var(--warning) 16%, transparent); }
+.badge-destructive { background-color: var(--destructive); color: #fff; }
+
+/* ---- components: Button (ui/button.tsx; desktop `sm:` sizes) ---- */
+.btn { position: relative; display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: .5rem;
+  white-space: nowrap; border: 1px solid transparent; font-weight: 500; font-size: .875rem; text-transform: lowercase;
+  letter-spacing: .01em; border-radius: 10px; }
+.btn svg { margin-inline: -.125rem; flex-shrink: 0; pointer-events: none; }
+.btn svg:not([class*="opacity-"]) { opacity: .8; }
+.btn svg:not([class*="size-"]) { width: 1rem; height: 1rem; }
+.btn-xs { height: 1.5rem; gap: .25rem; padding: 0 calc(.5rem - 1px); font-size: .75rem; line-height: calc(1 / .75);
+  border-radius: 8px; }
+.btn-xs svg:not([class*="size-"]) { width: .875rem; height: .875rem; }
+.btn-icon-xs { width: 1.5rem; height: 1.5rem; border-radius: 8px; }
+.btn-icon-xs svg:not([class*="size-"]) { width: .875rem; height: .875rem; }
+/* LeftNav writes `h-5 w-5` on icon-xs buttons, but the variant's `sm:size-6`
+   sits in a media query and wins at desktop width, so they render 24px.
+   Emulated here so the 现状 is what the user actually sees. */
+.btn-icon-xs.h-5.w-5 { width: 1.5rem; height: 1.5rem; }
+@supports (corner-shape: squircle) {
+  .btn, .btn-xs, .btn-icon-xs { corner-shape: squircle; border-radius: 50px; }
+}
+.btn-outline { border-color: var(--border); background-color: var(--background); background-clip: padding-box;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.dark .btn-outline { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.btn-outline:hover { background-color: color-mix(in oklab, var(--accent) 50%, transparent); }
+.btn-ghost { border-color: transparent; }
+.btn-ghost:hover { background-color: var(--accent); }
+
+/* ---- components: Input (ui/input.tsx) ---- */
+.input-control { position: relative; display: inline-flex; width: 100%; border-radius: var(--radius-lg);
+  border: 1px solid var(--input); background-color: var(--background); background-clip: padding-box;
+  font-size: .875rem; line-height: calc(1.25 / .875); box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.input-control::before { content: ''; pointer-events: none; position: absolute; inset: 0;
+  border-radius: calc(var(--radius-lg) - 1px); box-shadow: 0 1px rgb(0 0 0 / .04); }
+.dark .input-control { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.dark .input-control::before { box-shadow: 0 -1px rgb(255 255 255 / .08); }
+.input-control > input { height: 1.625rem; width: 100%; min-width: 0; border-radius: inherit;
+  padding: 0 calc(.625rem - 1px); line-height: 1.625rem; outline: none; }
+
+/* ---- components: InputGroup (ui/input-group.tsx) ---- */
+.input-group { position: relative; display: inline-flex; width: 100%; min-width: 0; align-items: center;
+  border-radius: var(--radius-lg); border: 1px solid var(--input); background-color: var(--background);
+  background-clip: padding-box; font-size: .875rem; line-height: calc(1.25 / .875);
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / .05); }
+.input-group::before { content: ''; pointer-events: none; position: absolute; inset: 0;
+  border-radius: calc(var(--radius-lg) - 1px); box-shadow: 0 1px rgb(0 0 0 / .04); }
+.input-group.rounded-sm::before { border-radius: calc(var(--radius-sm) - 1px); }
+.dark .input-group { background-color: color-mix(in oklab, var(--input) 32%, transparent); background-clip: border-box; }
+.dark .input-group::before { box-shadow: 0 -1px rgb(255 255 255 / .08); }
+.input-group > [data-slot="input-control"] { display: contents; }
+.input-group input { height: 1.625rem; width: 100%; min-width: 0; line-height: 1.625rem; outline: none;
+  padding-inline: .375rem calc(.625rem - 1px); }
+.input-group-addon { display: flex; cursor: text; align-items: center; justify-content: center; gap: .5rem;
+  order: -9999; padding-inline-start: calc(.625rem - 1px); }
+.input-group-addon svg { margin-inline: -.125rem; }
+.input-group-addon svg:not([class*="opacity-"]) { opacity: .8; }
+
+/* ---- utilities (Tailwind names, desktop values) ---- */
+.flex { display: flex; } .inline-flex { display: inline-flex; } .grid { display: grid; }
+.hidden { display: none; } .block { display: block; }
+.flex-col { flex-direction: column; } .flex-1 { flex: 1 1 0%; }
+.shrink-0 { flex-shrink: 0; } .shrink { flex-shrink: 1; } .shrink-\[1000\] { flex-shrink: 1000; }
+.items-center { align-items: center; } .items-baseline { align-items: baseline; }
+.justify-center { justify-content: center; } .justify-end { justify-content: flex-end; }
+.justify-items-end { justify-items: end; }
+.min-w-0 { min-width: 0; } .min-w-20 { min-width: 5rem; } .min-h-0 { min-height: 0; }
+.w-full { width: 100%; } .h-full { height: 100%; }
+.relative { position: relative; } .absolute { position: absolute; } .sticky { position: sticky; }
+.top-0 { top: 0; } .top-1\/2 { top: 50%; } .left-2 { left: .5rem; }
+.-translate-y-1\/2 { translate: 0 -50%; }
+.z-10 { z-index: 10; } .isolate { isolation: isolate; }
+.-mx-2 { margin-inline: -.5rem; } .ml-auto { margin-left: auto; }
+.mt-0\.5 { margin-top: .125rem; } .mt-1 { margin-top: .25rem; } .mt-2 { margin-top: .5rem; }
+.overflow-hidden { overflow: hidden; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.text-left { text-align: left; } .text-right { text-align: right; }
+.col-start-1 { grid-column-start: 1; } .row-start-1 { grid-row-start: 1; }
+.pointer-events-none { pointer-events: none; }
+.h-1\.5 { height: .375rem; } .w-1\.5 { width: .375rem; } .size-1\.5 { width: .375rem; height: .375rem; }
+.size-2\.5 { width: .625rem; height: .625rem; }
+.h-3 { height: .75rem; } .w-3 { width: .75rem; } .size-3 { width: .75rem; height: .75rem; }
+.h-3\.5 { height: .875rem; } .w-3\.5 { width: .875rem; } .size-3\.5 { width: .875rem; height: .875rem; }
+.w-4 { width: 1rem; } .size-4 { width: 1rem; height: 1rem; } .size-4\.5 { width: 1.125rem; height: 1.125rem; }
+.size-5 { width: 1.25rem; height: 1.25rem; } .size-6 { width: 1.5rem; height: 1.5rem; }
+.h-6 { height: 1.5rem; } .w-6 { width: 1.5rem; }
+.h-7 { height: 1.75rem; } .h-8 { height: 2rem; } .w-8 { width: 2rem; } .h-9 { height: 2.25rem; }
+.w-10 { width: 2.5rem; } .max-w-24 { max-width: 6rem; }
+.p-2 { padding: .5rem; } .px-1 { padding-inline: .25rem; } .px-2 { padding-inline: .5rem; }
+.px-3 { padding-inline: .75rem; } .px-4 { padding-inline: 1rem; } .py-1 { padding-block: .25rem; }
+.pl-3 { padding-left: .75rem; } .pl-5 { padding-left: 1.25rem; } .pl-7 { padding-left: 1.75rem; }
+.pb-2 { padding-bottom: .5rem; }
+.gap-0\.5 { gap: .125rem; } .gap-1 { gap: .25rem; } .gap-1\.5 { gap: .375rem; } .gap-2 { gap: .5rem; }
+:where(.space-y-0\.5 > :not(:last-child)) { margin-bottom: .125rem; }
+:where(.space-y-1 > :not(:last-child)) { margin-bottom: .25rem; }
+:where(.space-y-2 > :not(:last-child)) { margin-bottom: .5rem; }
+:where(.space-y-3 > :not(:last-child)) { margin-bottom: .75rem; }
+.text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.text-ui { font-size: var(--text-ui); line-height: 1.5; }
+.font-normal { font-weight: 400; } .font-medium { font-weight: 500; } .font-semibold { font-weight: 600; }
+.tracking-\[0\.04em\] { letter-spacing: .04em; } .tracking-\[0\.02em\] { letter-spacing: .02em; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.text-foreground { color: var(--foreground); } .text-muted-foreground { color: var(--muted-foreground); }
+.text-accent-foreground { color: var(--accent-foreground); } .text-primary-foreground { color: var(--primary-foreground); }
+.text-folder { color: var(--folder); } .text-success { color: var(--success); }
+.text-destructive { color: var(--destructive); } .text-status-running { color: var(--status-running); }
+.bg-background { background-color: var(--background); } .bg-card { background-color: var(--card); }
+.bg-card\/40 { background-color: color-mix(in oklab, var(--card) 40%, transparent); }
+.bg-selection { background-color: var(--selection); } .bg-warning { background-color: var(--warning); }
+.bg-success { background-color: var(--success); } .bg-destructive { background-color: var(--destructive); }
+.bg-primary { background-color: var(--primary); } .bg-muted { background-color: var(--muted); }
+.bg-status-running { background-color: var(--status-running); }
+.border { border-width: 1px; } .border-b { border-bottom-width: 1px; } .border-t { border-top-width: 1px; }
+.border-r { border-right-width: 1px; }
+.border-border { border-color: var(--border); } .border-primary { border-color: var(--primary); }
+.border-muted-foreground { border-color: var(--muted-foreground); }
+.rounded-xs { border-radius: var(--radius-xs); } .rounded-sm { border-radius: var(--radius-sm); }
+.rounded-md { border-radius: var(--radius-md); } .rounded-full { border-radius: 9999px; }
+.opacity-0 { opacity: 0; }
+.scroll-pt-8 { scroll-padding-top: 2rem; }
+/* variants come after the base utilities, as in Tailwind's output */
+.sm\:text-meta { font-size: var(--text-meta); line-height: 1.5; }
+.hover\:bg-hover:hover { background-color: var(--hover); }
+.focus-visible\:bg-hover:focus-visible { background-color: var(--hover); }
+.group:hover .group-hover\:hidden, .group:focus-within .group-focus-within\:hidden { display: none; }
+.group:hover .group-hover\:flex, .group:focus-within .group-focus-within\:flex { display: flex; }
+.group:hover .group-hover\:invisible, .group:focus-within .group-focus-within\:invisible { visibility: hidden; }
+.group:hover .group-hover\:opacity-100, .group:focus-within .group-focus-within\:opacity-100 { opacity: 1; }
+
+/* ---- 「CJK / Win10 字重」 simulation ----
+   Microsoft YaHei UI has Light / Regular / Bold only, Segoe UI (Win10) has no
+   500: a requested 500 falls to 400 and 600 rounds up to Bold 700. This dev
+   box's CJK face (Noto Sans CJK SC, Regular / Bold) already behaves that way
+   for Chinese; the toggle makes the Latin text follow too. */
+.cjkwin .font-medium, .cjkwin .badge, .cjkwin .btn { font-weight: 400; }
+.cjkwin .font-semibold { font-weight: 700; }
+
+/* ---- prototype shell (not part of the design) ---- */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 1s linear infinite; }
+body.shot .spin { animation: none; }
+.app { position: relative; display: flex; height: 900px; background: var(--background); color: var(--foreground);
+  overflow: hidden; flex-shrink: 0; }
+.dock { position: relative; display: flex; height: 100%; flex-shrink: 0; }
+.rail-mark { position: absolute; top: .375rem; bottom: .375rem; left: -.375rem; width: .125rem;
+  border-radius: 9999px; background: var(--primary); }
+.viewport { overflow-y: auto; overflow-x: hidden; scrollbar-width: none; }
+.viewport::-webkit-scrollbar { display: none; }
+.center-note { padding: 12px 16px; line-height: 1.6; }
+.guide { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1px dashed rgb(220 0 160 / .75); }
+.guide-label { position: absolute; top: 38px; transform: translateX(-50%); padding: 0 3px; white-space: nowrap; font: 600 11px/14px var(--font-mono);
+  color: #fff; background: rgb(220 0 160 / .85); border-radius: 3px; }
+.tipcard { position: absolute; z-index: 60; max-width: 320px; padding: 6px 8px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--popover); color: var(--popover-foreground);
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / .1), 0 2px 4px -2px rgb(0 0 0 / .1); font-size: var(--text-meta); line-height: 1.5; }
+.tipcard .tip-sub { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.tipcard .tip-note { margin-top: 4px; white-space: nowrap; font-size: 12px; color: rgb(220 0 160); }
+#stage { display: flex; gap: 24px; align-items: flex-start; padding: 16px; }
+.cmp { display: flex; gap: 16px; align-items: flex-start; }
+.cmp-label { height: 28px; display: flex; align-items: center; font-size: 14px; font-weight: 600; color: var(--foreground); }
+.cmp-label small { margin-left: 8px; font-weight: 400; color: var(--muted-foreground); font-size: 14px; }
+body.shot { overflow: hidden; }
+body.shot #stage { display: inline-flex; padding: 0; gap: 0; }
+body.shot #controls, body.shot #report { display: none; }
+#controls { position: sticky; top: 0; z-index: 100; display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 16px;
+  border-bottom: 1px solid var(--border); background: var(--card); font-size: 14px; }
+#controls .grp { display: flex; align-items: center; gap: 6px; }
+#controls .grp > span { color: var(--muted-foreground); }
+#controls .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+#controls .seg button { padding: 2px 10px; border-right: 1px solid var(--border); }
+#controls .seg button:last-child { border-right: 0; }
+#controls .seg button[aria-pressed="true"] { background: var(--selection); font-weight: 600; }
+#controls label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+#report { margin: 0 16px 16px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); font: 12px/1.45 var(--font-mono); white-space: pre-wrap; max-width: 1200px; }
+</style>
+</head>
+<body>
+<!--ICONS:BEGIN-->
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none">
+<symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-list-checks" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/></symbol>
+<symbol id="i-list-filter" viewBox="0 0 24 24"><path d="M2 5h20"/><path d="M6 12h12"/><path d="M9 19h6"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-folder-open" viewBox="0 0 24 24"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/></symbol>
+<symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-ellipsis" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-shield-question" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+<symbol id="i-loader-circle" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-message-square" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></symbol>
+<symbol id="i-file-code" viewBox="0 0 24 24"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/><path d="M10 12.5 8 15l2 2.5"/><path d="m14 12.5 2 2.5-2 2.5"/></symbol>
+<symbol id="i-square-terminal" viewBox="0 0 24 24"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></symbol>
+<symbol id="i-panel-left-close" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m16 15-3-3 3-3"/></symbol>
+<symbol id="i-blocks" viewBox="0 0 24 24"><path d="M10 22V7a1 1 0 0 0-1-1H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5a1 1 0 0 0-1-1H2"/><rect x="14" y="2" width="8" height="8" rx="1"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></symbol>
+</svg>
+<!--ICONS:END-->
+<div id="controls"></div>
+<div id="stage"></div>
+<pre id="report"></pre>
+<script>
+(() => {
+  'use strict';
+
+  // ------------------------------------------------------------------ state
+  const params = new URLSearchParams(location.search);
+  const pick = (v, allowed, dflt) => (allowed.includes(v) ? v : dflt);
+  const SHOT = params.get('shot') === '1';
+  const st = {
+    mode: pick(params.get('mode'), ['current', 'proposal', 'compare'], 'proposal'),
+    l1: pick(params.get('l1'), ['A', 'B'], 'A'),
+    temp: pick(params.get('temp'), ['X', 'Y'], 'X'),
+    theme: pick(params.get('theme'), ['light', 'dark'], 'light'),
+    w: pick(params.get('w'), ['280', '360', '500'], '280'),
+    recent: pick(params.get('recent'), ['expanded', 'collapsed'], 'expanded'),
+    scroll: pick(params.get('scroll'), ['top', 'mid', 'bottom'], 'top'),
+    cjk: params.get('cjk') === '1',
+    tall: params.get('tall') === '1',
+    guides: params.get('guides') === '1',
+    tip: params.get('tip') === '1',
+    select: params.get('select') === '1',
+  };
+  if (SHOT) document.body.classList.add('shot');
+
+  // ------------------------------------------------------------------- data
+  // Synthetic: 26 repository folders (one empty) holding 54 chats, plus 4
+  // temporary chats = 58 chats. Clock frozen so ages and screenshots are stable.
+  const MIN = 60000;
+  const NOW = new Date(2026, 9, 9, 15, 20, 0).getTime();
+  const ACTIVE_ID = 's1';
+  const SELECTED = new Set(['a2', 's4']); // multi-select demo
+  const RECENT_WINDOW = 48 * 60 * MIN;
+  const RECENT_LIMIT = 7;
+  const FOLDER_LIMIT = 8;
+  const D = 1440;
+
+  const S = (id, title, ageMin, extra = {}) => ({ id, title, ageMin, ...extra });
+  const F = (id, name, branch, sessions, extra = {}) => ({ id, name, branch, sessions, ...extra });
+  const FOLDERS = [
+    F('atlas', 'atlas-web', 'main', [
+      S('a1', '为结算流程补充端到端测试用例', 25, { wt: 'feature/checkout-e2e-tests', unread: true }),
+      S('a2', '优化首页首屏加载时间', 300),
+      S('a3', '统一按钮组件的尺寸与圆角', 1800),
+      S('a4', '修复暗色主题下的对比度不足', 3120),
+      S('a5', '生成 API 文档并校对示例', 3 * D),
+      S('a6', '分析错误日志中的高频异常', 5 * D),
+      S('a7', '设计通知中心的数据结构', 7 * D),
+      S('a8', '补全国际化词条中的英文残留', 14 * D),
+      S('a9', '把表单校验逻辑抽成通用钩子', 21 * D),
+      S('a10', 'New chat', 30 * D),
+    ]),
+    F('beacon', 'beacon-api', 'develop', [
+      S('b1', '梳理权限审批的边界情况', 6, { status: 'waiting', bound: true, pending: 2 }),
+      S('b2', '给速率限制补充集成测试', 2900),
+    ], { diff: [12, 4] }),
+    F('cobalt', 'cobalt-cli', 'main', [
+      S('c1', '为子命令补全 shell 自动补全脚本', 660),
+      S('c2', '修复 Windows 路径分隔符问题', 3 * D),
+    ]),
+    F('delta', 'delta-docs', 'main', [
+      S('d1', '把 README 拆成多页文档站', 840),
+      S('d2', '校对安装指南里的命令', 6 * D),
+    ]),
+    F('ember', 'ember-ui', 'main', [
+      S('e1', '实现可折叠的侧边面板组件', 2400),
+      S('e2', '补充组件快照测试', 7 * D),
+    ]),
+    F('fjord', 'fjord-sync', 'main', [
+      S('f1', '设计离线同步的冲突解决策略', 3 * D),
+      S('f2', '压测增量同步接口', 14 * D),
+    ]),
+    F('garnet', 'garnet-ml', 'main', [
+      S('g1', '整理训练数据清洗脚本', 5 * D),
+      S('g2', '评估模型推理延迟', 21 * D),
+    ]),
+    F('harbor', 'harbor-infra', 'main', [S('h1', '编写 Terraform 模块的变量说明', 2940)]),
+    F('iris', 'iris-mobile', 'main', [S('i1', '修复安卓端键盘遮挡输入框', 4 * D)]),
+    F('juniper', 'juniper-etl', 'main', [S('j1', '优化每日汇总任务的执行时间', 6 * D)]),
+    F('kestrel', 'kestrel-auth', 'main', [S('k1', '接入短信验证码的限流', 7 * D)]),
+    F('lumen', 'lumen-site', 'master', [
+      S('l1', '整理本周发布说明草稿', 5 * D, { legacy: true }),
+      S('l2', '更新落地页文案与配图说明', 8 * D),
+    ]),
+    F('mosaic', 'mosaic-design', 'main', [S('m1', '整理设计令牌命名规范', 14 * D)]),
+    F('nimbus', 'nimbus-agent', 'main', [
+      S('s1', '拉取远端更新', 0.2, { status: 'running', bound: true }),
+      S('s2', '重构侧栏会话列表的层级与间距', 18, { bound: true, wt: 'feature/sidebar-hierarchy' }),
+      S('s3', '修复登录页在弱网下反复跳转的问题', 180, { wt: 'fix/login-redirect-loop' }),
+      S('s4', '解释这段正则为什么会回溯超时', 420),
+      S('s5', '给 CLI 增加 --dry-run 参数', 1200),
+      S('s6', 'New chat', 1560),
+      S('s7', '写一份数据库索引优化方案', 3000),
+      S('s8', '评估迁移到新版路由库的工作量', 3 * D),
+      S('s9', '检查依赖许可证并生成清单', 4 * D),
+      S('s10', '排查构建产物体积突然变大的原因', 6 * D),
+      S('s11', '把图片上传改成分片续传', 9 * D),
+      S('s12', '复查缓存失效策略的边界条件', 12 * D),
+    ], { diff: [128, 36] }),
+    F('onyx', 'onyx-billing', 'main', [S('o1', '核对账单导出的金额精度', 21 * D)]),
+    F('pylon', 'pylon-gateway', 'main', [
+      S('p1', '排查网关偶发 502 的原因', 540),
+      S('p2', '梳理灰度发布的回滚步骤', 4 * D),
+    ], { remote: true }),
+    F('quartz', 'quartz-search', 'main', [
+      S('q1', '调研流式输出卡顿的原因', 120, { status: 'failed' }),
+      S('q2', '对比两种分词方案的召回率', 6 * D),
+    ]),
+    F('raven', 'raven-notify', 'main', [S('r1', '合并重复的推送通道配置', 30 * D)]),
+    F('sable', 'sable-admin', 'main', [S('sa1', '给后台列表加批量操作', 32 * D)]),
+    F('tundra', 'tundra-cache', 'main', [S('t1', '分析缓存命中率下降的原因', 60 * D)]),
+    F('umber', 'umber-report', 'release/2026.10', [S('u1', '生成季度报表的图表模板', 5 * D)]),
+    F('vertex', 'vertex-sdk', 'main', [S('v1', '为 SDK 增加重试与退避', 15 * D)]),
+    F('willow', 'willow-blog', 'main', [S('w1', '迁移博客评论系统', 90 * D)]),
+    F('xenon', 'xenon-bench', 'main', [S('x1', '搭建基准测试的对比看板', 42 * D)]),
+    F('yarrow', 'yarrow-bot', 'main', [S('y1', '让机器人支持多轮追问', 120 * D)]),
+    F('zephyr', 'zephyr-tools', 'main', []),
+  ];
+  const TEMP = [
+    S('tmp1', '把这段 JSON 转成 TypeScript 类型', 240),
+    S('tmp2', '比较两种排序算法的复杂度', 3 * D),
+    S('tmp3', '帮我起草一份会议纪要模板', 7 * D),
+    S('tmp4', 'New chat', 14 * D),
+  ];
+
+  const SESSIONS = [];
+  const mk = (s, folder) => {
+    const status = s.status || 'idle';
+    return {
+      ...s,
+      folder,
+      temp: !folder,
+      updatedAt: NOW - Math.round(s.ageMin * MIN),
+      status,
+      busy: status === 'running' || status === 'waiting',
+      failed: status === 'failed',
+      bound: !!s.bound,
+    };
+  };
+  for (const f of FOLDERS) for (const s of f.sessions) SESSIONS.push(mk(s, f));
+  for (const s of TEMP) SESSIONS.push(mk(s, null));
+  const byId = new Map(SESSIONS.map((s) => [s.id, s]));
+
+  // ----------------------------------------------------------- derivations
+  const byUpdated = (a, b) => b.updatedAt - a.updatedAt;
+  // deriveActiveRows: host-bound or busy; busy first, then last activity.
+  const activeRows = () =>
+    SESSIONS.filter((s) => s.bound || s.busy).sort((a, b) => Number(b.busy) - Number(a.busy) || byUpdated(a, b));
+  // deriveRecentRows: busy or touched within 48h, newest first.
+  const recentAll = () => SESSIONS.filter((s) => s.busy || NOW - s.updatedAt <= RECENT_WINDOW).sort(byUpdated);
+  // 方案: the lower segment, deduped against the upper one BEFORE the 7-row cap.
+  const recentLower = () => {
+    const upper = new Set(activeRows().map((s) => s.id));
+    return recentAll().filter((s) => !upper.has(s.id));
+  };
+  const folderRows = (f) => SESSIONS.filter((s) => s.folder === f).sort(byUpdated);
+  const tempRows = () => SESSIONS.filter((s) => s.temp).sort(byUpdated);
+  // limitFolderRows: 8 rows; the selected chat is appended when it sorts past the cap.
+  const limitRows = (rows) => {
+    if (rows.length <= FOLDER_LIMIT) return { rows, hidden: 0 };
+    const vis = rows.slice(0, FOLDER_LIMIT);
+    const pinned = rows.slice(FOLDER_LIMIT).find((r) => r.id === ACTIVE_ID);
+    if (pinned) vis.push(pinned);
+    return { rows: vis, hidden: rows.length - vis.length };
+  };
+
+  // ------------------------------------------------------------ formatting
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  const attrNl = (s) => esc(s).replace(/\n/g, '&#10;');
+  const shownTitle = (s) => (s.title === 'New chat' ? '新建对话' : s.title);
+  // src/renderer/lib/relativeTime.ts formatRelativeAge
+  const relAge = (ts) => {
+    const diff = NOW - ts;
+    const H = 60 * MIN, DAY = 24 * H;
+    if (diff < MIN) return 'now';
+    if (diff < H) return `${Math.floor(diff / MIN)}m`;
+    if (diff < DAY) return `${Math.floor(diff / H)}h`;
+    if (diff < 7 * DAY) return `${Math.floor(diff / DAY)}d`;
+    if (diff < 30 * DAY) return `${Math.floor(diff / (7 * DAY))}w`;
+    if (diff < 365 * DAY) return `${Math.floor(diff / (30 * DAY))}mo`;
+    return `${Math.floor(diff / (365 * DAY))}y`;
+  };
+  // The proposed formatAbsoluteDateTime: always date + time (YYYY-MM-DD HH:MM).
+  const absDateTime = (ts) => {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const branchOf = (s) => s.wt || (s.folder && s.folder.branch) || null;
+  const whereOf = (s) =>
+    s.temp ? '临时对话' : `${s.folder.name} · ${branchOf(s)}${s.folder.remote ? '（远程）' : ''}`;
+  const tooltipProposal = (s) => `${shownTitle(s)}\n${whereOf(s)}\n更新于 ${absDateTime(s.updatedAt)}`;
+
+  const ic = (name, cls = '') =>
+    `<svg class="${cls}" data-icon viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+  const iconBtn = (name, cls, label, iconCls = '') =>
+    `<button type="button" data-slot="button" class="btn btn-ghost btn-icon-xs ${cls}" aria-label="${label}" title="${label}">${ic(name, iconCls)}</button>`;
+
+  // ------------------------------------------------------- shared row bits
+  const markerInner = (s) => {
+    if (s.busy) {
+      return s.status === 'waiting'
+        ? '<span role="img" aria-label="等待审批" title="等待审批" class="h-1.5 w-1.5 shrink-0 rounded-full bg-warning"></span>'
+        : ic('loader-circle', 'size-3 shrink-0 text-status-running spin');
+    }
+    if (s.unread) {
+      return `<span role="img" aria-label="离开期间已完成" title="离开期间已完成" class="h-1.5 w-1.5 shrink-0 rounded-full ${s.failed ? 'bg-destructive' : 'bg-success'}"></span>`;
+    }
+    if (s.bound) {
+      return '<span aria-hidden="true" title="正在后台运行" class="h-1.5 w-1.5 shrink-0 rounded-full border border-muted-foreground"></span>';
+    }
+    return '';
+  };
+  const checkbox = (s) => {
+    const on = SELECTED.has(s.id);
+    return `<span aria-hidden="true" class="flex size-3.5 shrink-0 items-center justify-center rounded-xs border ${on ? 'border-primary bg-primary text-primary-foreground' : 'border-border'}">${on ? ic('check', 'size-2.5') : ''}</span>`;
+  };
+  const LEGACY_HINT = '这个对话迁移到当前引擎之后，又在 1.0.x 里继续聊过。';
+  const badges = (s, lg) => {
+    let h = '';
+    if (s.legacy) {
+      h += `<span data-slot="badge" class="badge ${lg ? 'badge-lg' : 'badge-sm'} badge-warning shrink-0" title="${LEGACY_HINT}">1.0.x</span>`;
+    }
+    if (s.pending) {
+      h += `<span data-slot="badge" class="badge ${lg ? 'badge-lg' : 'badge-sm'} badge-warning shrink-0 gap-0.5 tabular-nums" title="${s.pending} 个待审批请求">${ic('shield-question', lg ? 'size-3.5' : 'size-3')}${s.pending}</span>`;
+    }
+    if (s.failed) h += '<span data-slot="badge" class="badge badge-lg badge-destructive shrink-0">失败</span>';
+    return h;
+  };
+  const timeAndActions = (s, proposal) => {
+    const btn = proposal ? 'size-5' : 'h-5 w-5';
+    const icn = proposal ? 'size-3.5' : 'h-3 w-3';
+    return (
+      `<span class="shrink-0 text-right text-meta text-muted-foreground tabular-nums group-hover:hidden group-focus-within:hidden w-10" data-level="4" data-time>${relAge(s.updatedAt)}</span>` +
+      `<div class="hidden shrink-0 items-center justify-end group-hover:flex group-focus-within:flex w-10">` +
+      iconBtn('archive', btn, '归档', icn) +
+      iconBtn('x', btn, '从列表中移除', icn) +
+      '</div>'
+    );
+  };
+
+  // ============================================================ 现状 (today)
+  // Class strings copied from LeftNav.tsx / LeftDock.tsx at a0320fe2.
+  const chipCurrent = (s) => {
+    let label;
+    let kind = true;
+    if (s.temp) label = '临时';
+    else if (s.folder.remote) label = '远程';
+    else {
+      label = branchOf(s);
+      kind = false;
+    }
+    return `<span data-slot="badge" class="badge ${kind ? 'badge-lg' : 'badge-sm'} badge-outline min-w-0 max-w-24 shrink" title="${esc(label)}" data-context><span class="min-w-0 truncate">${esc(label)}</span></span>`;
+  };
+  const rowCurrent = (s, depth) => {
+    const active = s.id === ACTIVE_ID;
+    return (
+      `<div role="button" tabindex="0" class="group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-md px-2 text-left text-ui ${active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover'}" title="${esc(shownTitle(s))}" data-row data-session="${s.id}" data-depth="${depth}" data-box="L3">` +
+      (st.select ? checkbox(s) : markerInner(s)) +
+      `<span class="min-w-20 flex-1 truncate" data-level="3" data-title data-align-depth="${depth}">${esc(shownTitle(s))}</span>` +
+      badges(s, false) +
+      chipCurrent(s) +
+      timeAndActions(s, false) +
+      '</div>'
+    );
+  };
+  const sectionHeadCurrent = (label, trailing = '') =>
+    `<div class="flex h-7 items-center px-2" data-box="L1"><p class="text-ui font-medium tracking-[0.04em] text-muted-foreground" data-level="1">${label}</p>${trailing}</div>`;
+  const folderHeaderCurrent = (name, diff, withActions) =>
+    `<div class="group flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui hover:bg-hover" data-folder-row data-box="L2">` +
+    `<button type="button" class="flex min-w-0 flex-1 items-center gap-1 text-left">${ic('folder-open', 'h-3.5 w-3.5 shrink-0 text-folder')}<span class="min-w-0 flex-1 truncate font-semibold" data-level="2" data-name data-align-depth="0">${esc(name)}</span></button>` +
+    (withActions
+      ? '<span class="grid shrink-0 justify-items-end">' +
+        (diff
+          ? `<span class="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible" data-level="4"><span class="text-success">+${diff[0]}</span><span class="text-destructive">-${diff[1]}</span></span>`
+          : '') +
+        '<span class="col-start-1 row-start-1 flex items-center">' +
+        iconBtn('ellipsis', 'h-5 w-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100', '仓库操作', 'h-3 w-3') +
+        iconBtn('plus', 'h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100', '新建对话', 'h-3 w-3') +
+        '</span></span>'
+      : '') +
+    '</div>';
+  const folderCurrent = (f) => {
+    const rows = folderRows(f);
+    const lim = limitRows(rows);
+    let body = lim.rows.map((s) => rowCurrent(s, 1)).join('');
+    if (lim.hidden) {
+      body += `<button type="button" class="flex h-7 w-full items-center rounded-sm px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover" data-more data-box="L4"><span data-level="4" data-align-depth="1">查看更多（${lim.hidden}）</span></button>`;
+    }
+    if (!rows.length) {
+      body += `<button type="button" class="flex h-7 w-full items-center gap-1 rounded-md px-2 text-ui text-muted-foreground hover:bg-hover" data-more data-box="L4">${ic('plus', 'h-3 w-3 shrink-0')}<span data-level="4" data-align-depth="1">新建对话</span></button>`;
+    }
+    return `<section data-folder="${f.id}">${folderHeaderCurrent(f.name, f.diff, true)}<div class="mt-1 space-y-0.5 pl-3">${body}</div></section>`;
+  };
+  const listCurrent = () => {
+    const act = activeRows();
+    const rec = recentAll();
+    const recShown = rec.slice(0, RECENT_LIMIT);
+    const recHidden = Math.max(0, rec.length - RECENT_LIMIT);
+    const collapsed = st.recent === 'collapsed';
+    const activeSec = act.length
+      ? `<section data-section="active">${sectionHeadCurrent('正在活动')}<div class="mt-1 space-y-0.5">${act.map((s) => rowCurrent(s, 0)).join('')}</div></section>`
+      : '';
+    const recentSec =
+      `<section data-section="recent">${sectionHeadCurrent('最近', iconBtn(collapsed ? 'chevron-right' : 'chevron-down', 'ml-auto h-5 w-5', collapsed ? '展开最近' : '收起最近', 'h-3 w-3'))}` +
+      (collapsed
+        ? ''
+        : `<div class="mt-1 space-y-0.5">${recShown.map((s) => rowCurrent(s, 0)).join('')}` +
+          (recHidden
+            ? `<button type="button" class="flex h-7 w-full items-center rounded-md px-2 pl-5 text-ui text-muted-foreground tabular-nums hover:bg-hover" data-more data-box="L4"><span data-level="4" data-align-depth="0">查看更多（${recHidden}）</span></button>`
+            : '') +
+          '</div>') +
+      '</section>';
+    const repos =
+      `<div class="space-y-3" data-section="repos">` +
+      sectionHeadCurrent(
+        '仓库列表',
+        `<div class="ml-auto flex items-center">${iconBtn('list-filter', 'h-5 w-5', '筛选会话', 'h-3 w-3')}${iconBtn('folder-plus', 'h-5 w-5', '添加仓库', 'h-3 w-3')}</div>`
+      ) +
+      FOLDERS.map(folderCurrent).join('') +
+      '</div>';
+    const temp = tempRows();
+    const tempSec = temp.length
+      ? `<section data-section="temp">${folderHeaderCurrent('临时对话', null, false)}<div class="mt-1 space-y-0.5 pl-3">${limitRows(temp).rows.map((s) => rowCurrent(s, 1)).join('')}</div></section>`
+      : '';
+    return `<div class="space-y-3 p-2" data-list>${activeSec}${recentSec}${repos}${tempSec}</div>`;
+  };
+
+  // ================================================================ 方案
+  const rowProposal = (s, depth, inRecent) => {
+    const active = s.id === ACTIVE_ID;
+    // Context text: only for a chat on a non-main workspace, never in 「最近」.
+    const ctx =
+      !inRecent && s.wt
+        ? `<span class="min-w-0 max-w-24 shrink truncate text-meta text-muted-foreground" data-level="4" data-context title="${esc(s.wt)}">${esc(s.wt)}</span>`
+        : '';
+    return (
+      `<div role="button" tabindex="0" class="group flex h-7 w-full items-center gap-1.5 overflow-hidden rounded-sm px-2 text-left text-ui ${active ? 'bg-selection text-accent-foreground' : 'hover:bg-hover focus-visible:bg-hover'}" title="${attrNl(tooltipProposal(s))}" data-row data-session="${s.id}" data-depth="${depth}" data-box="L3">` +
+      `<span class="flex w-4 shrink-0 items-center justify-center" data-slot-marker>${st.select ? checkbox(s) : markerInner(s)}</span>` +
+      `<span class="min-w-20 flex-1 truncate" data-level="3" data-title data-align-depth="${depth}">${esc(shownTitle(s))}</span>` +
+      badges(s, true) +
+      ctx +
+      timeAndActions(s, true) +
+      '</div>'
+    );
+  };
+  const subLabel = (text, extra = '') =>
+    `<div class="flex h-6 items-center px-2 text-meta text-muted-foreground${extra}" data-level="4" data-sublabel data-box="L4">${text}</div>`;
+  const auxRow = (text, depth, slot = '') =>
+    `<button type="button" class="flex h-6 w-full items-center gap-1.5 rounded-sm px-2 text-meta text-muted-foreground tabular-nums hover:bg-hover focus-visible:bg-hover" data-more data-box="L4"><span class="flex w-4 shrink-0 items-center justify-center" aria-hidden="true">${slot}</span><span data-level="4" data-align-depth="${depth}">${text}</span></button>`;
+  const headBtn = (name, label) => iconBtn(name, 'size-6 text-muted-foreground', label, 'size-3.5');
+  const sectionProposal = (id, label, actions, body, first) =>
+    `<section class="-mx-2 px-2${first ? '' : ' mt-2 border-t'}" data-section="${id}">` +
+    `<div class="sticky top-0 z-10 -mx-2 bg-background" data-sticky>` +
+    `<div class="flex h-8 items-center px-4 bg-card/40" data-box="L1">` +
+    `<p class="text-ui font-semibold tracking-[0.04em] ${st.l1 === 'B' ? 'text-muted-foreground' : 'text-foreground'}" data-level="1">${label}</p>` +
+    `<div class="ml-auto flex items-center gap-0.5">${actions}</div>` +
+    '</div></div>' +
+    body +
+    '</section>';
+  const folderHeaderProposal = (name, branchText, tooltip, diff, withActions) =>
+    `<div class="group flex h-7 w-full items-center gap-1.5 rounded-sm px-2 text-ui hover:bg-hover" data-folder-row data-box="L2">` +
+    `<button type="button" class="flex min-w-0 flex-1 items-center gap-1.5 text-left" title="${attrNl(tooltip)}">` +
+    ic('folder-open', 'size-4 shrink-0 text-folder') +
+    `<span class="min-w-0 truncate font-semibold" data-level="2" data-name data-align-depth="0">${esc(name)}</span>` +
+    (branchText
+      ? `<span class="min-w-0 shrink-[1000] truncate text-meta text-muted-foreground" data-level="4" data-branch>${esc(branchText)}</span>`
+      : '') +
+    '</button>' +
+    (withActions
+      ? '<span class="grid shrink-0 justify-items-end">' +
+        (diff
+          ? `<span class="col-start-1 row-start-1 flex items-center gap-1 text-meta tabular-nums group-hover:invisible group-focus-within:invisible" data-level="4"><span class="text-success">+${diff[0]}</span><span class="text-destructive">-${diff[1]}</span></span>`
+          : '') +
+        '<span class="col-start-1 row-start-1 flex items-center">' +
+        iconBtn('ellipsis', 'size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100', '仓库操作', 'size-3.5') +
+        iconBtn('plus', 'size-5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 group-focus-within:opacity-100', '新建对话', 'size-3.5') +
+        '</span></span>'
+      : '') +
+    '</div>';
+  const folderProposal = (f) => {
+    const rows = folderRows(f);
+    const lim = limitRows(rows);
+    const branchText = f.remote ? `${f.branch} · 远程` : f.branch;
+    const tooltip = `${f.name}\n主工作区分支：${f.branch}${f.remote ? '\n远程仓库' : ''}`;
+    let body = lim.rows.map((s) => rowProposal(s, 1, false)).join('');
+    if (lim.hidden) body += auxRow(`查看更多（${lim.hidden}）`, 1);
+    if (!rows.length) body += auxRow('新建对话', 1, ic('plus', 'size-3.5'));
+    return `<section data-folder="${f.id}">${folderHeaderProposal(f.name, branchText, tooltip, f.diff, true)}<div class="mt-0.5 space-y-0.5 pl-3">${body}</div></section>`;
+  };
+  const tempFolderProposal = () => {
+    const rows = tempRows();
+    if (!rows.length) return '';
+    const lim = limitRows(rows);
+    let body = lim.rows.map((s) => rowProposal(s, 1, false)).join('');
+    if (lim.hidden) body += auxRow(`查看更多（${lim.hidden}）`, 1);
+    return `<section data-folder="temp">${folderHeaderProposal('临时对话', '', '临时对话：没有绑定仓库的对话', null, false)}<div class="mt-0.5 space-y-0.5 pl-3">${body}</div></section>`;
+  };
+  const listProposal = () => {
+    const act = activeRows();
+    const lowerAll = recentLower();
+    const lower = lowerAll.slice(0, RECENT_LIMIT);
+    const hidden = Math.max(0, lowerAll.length - RECENT_LIMIT);
+    const collapsed = st.recent === 'collapsed';
+    const showLower = !collapsed && lower.length > 0;
+    let rb = '';
+    if (act.length) {
+      rb += subLabel('正在活动');
+      rb += act.map((s) => rowProposal(s, 0, true)).join('');
+    }
+    if (showLower) {
+      if (act.length) rb += subLabel('48 小时内', ' mt-1');
+      rb += lower.map((s) => rowProposal(s, 0, true)).join('');
+      if (hidden) rb += auxRow(`查看更多（${hidden}）`, 0);
+    }
+    const recentSec = sectionProposal(
+      'recent',
+      '最近',
+      headBtn(collapsed ? 'chevron-right' : 'chevron-down', collapsed ? '展开最近' : '收起最近'),
+      rb ? `<div class="mt-0.5 space-y-0.5">${rb}</div>` : '',
+      true
+    );
+    const folders = FOLDERS.map(folderProposal).join('') + (st.temp === 'Y' ? tempFolderProposal() : '');
+    const reposSec = sectionProposal(
+      'repos',
+      '仓库列表',
+      headBtn('list-filter', '筛选会话') + headBtn('folder-plus', '添加仓库'),
+      `<div class="mt-0.5 space-y-1">${folders}</div>`,
+      false
+    );
+    const temp = tempRows();
+    const tempSec =
+      st.temp === 'X' && temp.length
+        ? sectionProposal(
+            'temp',
+            '临时对话',
+            headBtn('chevron-down', '收起临时对话'),
+            `<div class="mt-0.5 space-y-0.5">${limitRows(temp).rows.map((s) => rowProposal(s, 0, false)).join('')}</div>`,
+            false
+          )
+        : '';
+    return `<div class="p-2" data-list>${recentSec}${reposSec}${tempSec}</div>`;
+  };
+
+  // ------------------------------------------------------------ app chrome
+  const dockTitle = (mode) =>
+    mode === 'proposal'
+      ? '<div class="flex h-9 shrink-0 items-center gap-2 border-b px-3" data-box="L0"><span class="min-w-0 flex-1 truncate text-ui font-semibold" data-level="0">聊天</span></div>'
+      : '<div class="flex h-9 shrink-0 items-center gap-2 border-b px-3" data-box="L0"><span class="min-w-0 flex-1 truncate text-meta font-semibold tracking-[0.02em]" data-level="0">聊天</span></div>';
+  const toolbar = (mode) => {
+    // 方案 lifts the xs buttons' desktop `sm:text-xs` (12px CJK) to text-meta.
+    const txt = mode === 'proposal' ? ' sm:text-meta' : '';
+    const row = st.select
+      ? `<div class="flex items-center gap-1"><span class="min-w-0 flex-1 truncate text-ui">已选 ${SELECTED.size} 项</span>` +
+        `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 shrink-0${txt}" title="归档所选">${ic('archive', 'h-3.5 w-3.5')}归档</button>` +
+        `<button type="button" data-slot="button" class="btn btn-ghost btn-xs h-6 shrink-0${txt}">取消</button></div>`
+      : `<div class="flex items-center gap-1">` +
+        `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6${txt}" title="在 nimbus-agent 中新建对话">${ic('plus', 'h-3.5 w-3.5')}新建</button>` +
+        `<button type="button" data-slot="button" class="btn btn-outline btn-xs h-6 min-w-0${txt}" title="添加仓库">${ic('folder-plus', 'h-3.5 w-3.5 shrink-0')}<span class="min-w-0 truncate">添加仓库</span></button>` +
+        `<button type="button" data-slot="button" class="btn btn-ghost btn-icon-xs ml-auto h-6 w-6 shrink-0" aria-label="选择要归档的会话" title="选择要归档的会话">${ic('list-checks', 'h-3.5 w-3.5')}</button></div>`;
+    const search =
+      mode === 'proposal'
+        ? // coss convention: Input first, Addon after (order-first puts it on the left).
+          `<div class="input-group h-7 rounded-sm" data-slot="input-group" role="group">` +
+          `<span data-slot="input-control" data-size="sm"><input data-slot="input" placeholder="搜索会话" aria-label="搜索会话" /></span>` +
+          `<div class="input-group-addon" data-align="inline-start" data-slot="input-group-addon">${ic('search', 'size-4 text-muted-foreground')}</div></div>`
+        : // LeftNav.tsx:632-640 — the icon comes first, the opaque relative span after it paints over it.
+          `<div class="relative">${ic('search', 'pointer-events-none absolute top-1/2 left-2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground')}` +
+          `<span class="input-control h-7 pl-7" data-slot="input-control" data-size="sm"><input data-slot="input" placeholder="搜索会话" /></span></div>`;
+    return `<div class="space-y-2 border-b p-2" data-toolbar>${row}${search}</div>`;
+  };
+  const rail = () => {
+    const top = [['message-square', true], ['git-branch', false], ['file-code', false], ['square-terminal', false], ['activity', false]];
+    return (
+      '<nav class="flex h-full shrink-0 flex-col items-center gap-0.5 border-r bg-card pb-2" style="width:44px">' +
+      '<div class="h-9 shrink-0"></div>' +
+      top
+        .map(
+          ([n, a]) =>
+            `<button type="button" class="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${a ? 'bg-selection text-foreground' : 'text-muted-foreground'}">${a ? '<span class="rail-mark"></span>' : ''}${ic(n, 'size-4.5')}</button>`
+        )
+        .join('') +
+      '<div class="flex-1"></div>' +
+      ['panel-left-close', 'blocks', 'settings']
+        .map(
+          (n) =>
+            `<button type="button" class="flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground">${ic(n, 'size-4.5')}</button>`
+        )
+        .join('') +
+      '</nav>'
+    );
+  };
+  const footer = () =>
+    '<div class="flex shrink-0 items-center gap-1 border-t p-2"><button type="button" class="flex h-6 min-w-0 flex-1 items-center gap-2 rounded-sm px-1">' +
+    '<span class="size-4 shrink-0 rounded-full bg-muted border"></span><span class="min-w-0 flex-1 truncate text-left text-meta">demo@example.com</span></button></div>';
+  const center = (mode) => {
+    const s = byId.get(ACTIVE_ID);
+    const titleCls =
+      mode === 'proposal'
+        ? 'min-w-0 truncate text-ui text-foreground'
+        : 'min-w-0 truncate font-medium text-foreground text-meta';
+    const note =
+      mode === 'proposal'
+        ? '中栏只为示意同一条 h-9 顶栏。<br />SessionBar 标题建议改为 text-ui 400（与左栏「聊天」同字号），见 README 待定项 C。'
+        : '中栏只为示意同一条 h-9 顶栏。<br />SessionBar 标题现为 font-medium text-meta（14px / 500）。';
+    return (
+      '<div class="flex min-w-0 flex-col" style="width:320px">' +
+      '<div class="flex h-9 shrink-0 items-center gap-2 overflow-hidden border-b bg-card/40 px-2"><div class="flex min-w-0 items-center gap-1.5">' +
+      `<span aria-hidden="true" class="size-1.5 shrink-0 rounded-full bg-status-running"></span><span class="${titleCls}" data-sessionbar-title>${esc(shownTitle(s))}</span></div></div>` +
+      `<div class="center-note text-meta text-muted-foreground">${note}</div></div>`
+    );
+  };
+  const appHtml = (mode, withCenter) =>
+    `<div class="app" data-proto-root data-mode="${mode}">` +
+    `<div class="dock bg-card/40">${rail()}` +
+    `<div class="relative flex h-full min-w-0 flex-col overflow-hidden border-r" style="width:${st.w}px" data-panel>` +
+    dockTitle(mode) +
+    '<div class="relative isolate min-h-0 flex-1"><aside class="flex h-full w-full min-w-0 flex-col">' +
+    toolbar(mode) +
+    `<div class="viewport min-h-0 flex-1${mode === 'proposal' ? ' scroll-pt-8' : ''}" data-viewport>` +
+    (mode === 'proposal' ? listProposal() : listCurrent()) +
+    '</div></aside></div>' +
+    footer() +
+    '<div data-guides></div>' +
+    '</div></div>' +
+    (withCenter ? center(mode) : '') +
+    '</div>';
+  const compareHtml = () =>
+    '<div class="cmp">' +
+    [
+      ['current', '现状', 'LeftNav.tsx @ a0320fe2'],
+      ['proposal', '方案', `板块标题 ${st.l1} · 临时对话 ${st.temp}`],
+    ]
+      .map(([m, label, sub]) => `<div><div class="cmp-label">${label}<small>${sub}</small></div>${appHtml(m, false)}</div>`)
+      .join('') +
+    '</div>';
+
+  // ------------------------------------------------------------ post-render
+  const drawGuides = (root) => {
+    const panel = root.querySelector('[data-panel]');
+    const host = root.querySelector('[data-guides]');
+    const W = Number(st.w);
+    const lines = root.dataset.mode === 'proposal' ? [16, 38, 50, W - 1 - 16] : [16, 28, 34, W - 1 - 16];
+    host.innerHTML = lines
+      .map(
+        (x, i) =>
+          `<div class="guide" style="left:${x}px"></div><div class="guide-label" style="left:${x}px;top:${38 + (i % 2) * 16}px">${x === W - 1 - 16 ? 'R-16' : x}</div>`
+      )
+      .join('');
+    host.style.cssText = 'position:absolute;inset:0;pointer-events:none;z-index:50';
+    void panel;
+  };
+  const drawTip = (root) => {
+    const row = root.querySelector('[data-section="recent"] [data-row][data-session="a1"]');
+    if (!row) return;
+    const s = byId.get('a1');
+    const rr = row.getBoundingClientRect();
+    const ar = root.getBoundingClientRect();
+    const title = row.querySelector('[data-title]').getBoundingClientRect();
+    const card = document.createElement('div');
+    card.className = 'tipcard';
+    card.innerHTML =
+      `<div>${esc(shownTitle(s))}</div><div class="tip-sub">${esc(whereOf(s))}</div><div class="tip-sub">更新于 ${absDateTime(s.updatedAt)}</div>` +
+      '<div class="tip-note">原型示意：悬停提示的内容（实现用 title 多行文本）</div>';
+    card.style.left = `${Math.round(title.left - ar.left + 24)}px`;
+    card.style.top = `${Math.round(rr.bottom - ar.top + 4)}px`;
+    root.appendChild(card);
+  };
+  const postRender = () => {
+    for (const root of document.querySelectorAll('[data-proto-root]')) {
+      const vp = root.querySelector('[data-viewport]');
+      if (st.tall) {
+        const extra = vp.scrollHeight - vp.clientHeight;
+        if (extra > 0) root.style.height = `${root.offsetHeight + extra}px`;
+      } else if (st.scroll === 'mid') {
+        // Anchor: the folder holding the selected chat, 120px below the viewport top.
+        const anchor = root.querySelector('[data-folder="nimbus"]');
+        const delta = anchor.getBoundingClientRect().top - vp.getBoundingClientRect().top;
+        vp.scrollTop = Math.round(vp.scrollTop + delta - 120);
+      } else if (st.scroll === 'bottom') {
+        vp.scrollTop = vp.scrollHeight;
+      }
+      if (st.guides) drawGuides(root);
+      if (st.tip && root.dataset.mode === 'proposal') drawTip(root);
+    }
+  };
+
+  // --------------------------------------------------------------- measure
+  const round1 = (n) => Math.round(n * 10) / 10;
+  const round2 = (n) => Math.round(n * 100) / 100;
+  const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const textOf = (el) => (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 24);
+  const CJK = /[\u2E80-\u9FFF\uF900-\uFAFF\uFF00-\uFFEF\u3000-\u303F]/;
+  const oklchL = (c) => {
+    const m = /oklch\(\s*([\d.]+)/.exec(c);
+    return m ? Number(m[1]) : null;
+  };
+
+  const measureRoot = (root) => {
+    const mode = root.dataset.mode;
+    const panel = root.querySelector('[data-panel]');
+    const vp = root.querySelector('[data-viewport]');
+    const pr = panel.getBoundingClientRect();
+    const vr = vp.getBoundingClientRect();
+    const relX = (x) => round1(x - pr.left);
+    const W = Math.round(pr.width);
+    const out = { mode, panelWidth: W, checks: {}, coords: {}, gaps: {}, titleWidths: {}, carriers: {} };
+
+    // (1) nothing spills out of a row's content box
+    const overflow = [];
+    root
+      .querySelectorAll('[data-row],[data-folder-row],[data-folder-row] > button,[data-box="L1"],[data-more],[data-sublabel]')
+      .forEach((row) => {
+        if (!visible(row)) return;
+        const r = row.getBoundingClientRect();
+        const cs = getComputedStyle(row);
+        const lo = r.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - 0.5;
+        const hi = r.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight) + 0.5;
+        const spill = [];
+        for (const c of row.children) {
+          if (!visible(c) || getComputedStyle(c).position === 'absolute') continue;
+          const cr = c.getBoundingClientRect();
+          if (cr.width === 0) continue;
+          if (cr.left < lo || cr.right > hi) {
+            spill.push({ child: textOf(c) || c.tagName.toLowerCase(), byLeft: round1(lo - cr.left), byRight: round1(cr.right - hi) });
+          }
+        }
+        if (row.scrollWidth > row.clientWidth + 1) spill.push({ scrollWidth: row.scrollWidth, clientWidth: row.clientWidth });
+        if (spill.length) overflow.push({ row: row.dataset.session || textOf(row), spill });
+      });
+    out.checks.noRowOverflow = { pass: overflow.length === 0, count: overflow.length, overflow: overflow.slice(0, 8) };
+
+    // (2) a chat appears at most once inside 「最近」 (现状: 正在活动 + 最近 together)
+    const scopeSel =
+      mode === 'proposal'
+        ? '[data-section="recent"] [data-row]'
+        : '[data-section="active"] [data-row], [data-section="recent"] [data-row]';
+    const inRecent = new Map();
+    root.querySelectorAll(scopeSel).forEach((r) => inRecent.set(r.dataset.session, (inRecent.get(r.dataset.session) || 0) + 1));
+    const dup = [...inRecent].filter(([, n]) => n > 1).map(([id, n]) => ({ id, title: shownTitle(byId.get(id)), times: n }));
+    const everywhere = new Map();
+    root.querySelectorAll('[data-row]').forEach((r) => everywhere.set(r.dataset.session, (everywhere.get(r.dataset.session) || 0) + 1));
+    const missingFromFolder = [...inRecent.keys()].filter(
+      (id) =>
+        ![...root.querySelectorAll(`[data-row][data-session="${id}"]`)].some(
+          (r) => !r.closest('[data-section="recent"],[data-section="active"]')
+        )
+    );
+    const moreBtn = [...root.querySelectorAll('[data-section="recent"] [data-more]')].find(visible);
+    const shownN = moreBtn ? Number((/（(\d+)）/.exec(moreBtn.textContent) || [])[1]) : 0;
+    const expectedN =
+      st.recent === 'collapsed'
+        ? 0
+        : Math.max(0, (mode === 'proposal' ? recentLower() : recentAll()).length - RECENT_LIMIT);
+    out.checks.recentAtMostOnce = {
+      pass: dup.length === 0 && missingFromFolder.length === 0 && shownN === expectedN,
+      duplicates: dup,
+      maxAppearancesInSidebar: Math.max(0, ...everywhere.values()),
+      selectedRowHighlights: root.querySelectorAll(`[data-row][data-session="${ACTIVE_ID}"].bg-selection`).length,
+      recentRowsMissingFromFolder: missingFromFolder,
+      viewMore: { shown: shownN, expected: expectedN },
+    };
+
+    // (3) L0–L4 use only 14/15px and 400/600 (buttons and badges excluded)
+    const allowedW = st.cjk ? [400, 700] : [400, 600];
+    const levelBad = [];
+    const seen = {};
+    root.querySelectorAll('[data-panel] [data-level]').forEach((el) => {
+      if (el.closest('[data-slot="button"],[data-slot="badge"]') || !visible(el)) return;
+      const cs = getComputedStyle(el);
+      const fs = parseFloat(cs.fontSize);
+      const fw = Number(cs.fontWeight);
+      const key = `L${el.dataset.level}`;
+      (seen[key] = seen[key] || new Set()).add(`${fs}px/${fw}`);
+      if (![14, 15].includes(fs) || !allowedW.includes(fw)) {
+        if (!levelBad.some((v) => v.level === key && v.fontSize === fs && v.fontWeight === fw)) {
+          levelBad.push({ level: key, text: textOf(el), fontSize: fs, fontWeight: fw });
+        }
+      }
+    });
+    out.checks.levelFonts = {
+      pass: levelBad.length === 0,
+      allowedWeights: allowedW,
+      seen: Object.fromEntries(Object.entries(seen).sort().map(([k, v]) => [k, [...v]])),
+      violations: levelBad,
+    };
+
+    // (4) no CJK text under 14px anywhere in the panel
+    const small = [];
+    const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (!CJK.test(n.data)) continue;
+      const el = n.parentElement;
+      if (!visible(el)) continue;
+      const fs = parseFloat(getComputedStyle(el).fontSize);
+      if (fs < 14) small.push({ text: n.data.trim().slice(0, 12), fontSize: fs, inButton: !!el.closest('[data-slot="button"]') });
+    }
+    panel.querySelectorAll('input').forEach((inp) => {
+      const fs = parseFloat(getComputedStyle(inp).fontSize);
+      if (CJK.test(inp.placeholder || '') && fs < 14) small.push({ text: inp.placeholder, fontSize: fs, placeholder: true });
+    });
+    out.checks.noSmallCjk = { pass: small.length === 0, violations: small };
+
+    // (5) same-depth titles share one x
+    const xs = {};
+    root.querySelectorAll('[data-panel] [data-align-depth]').forEach((el) => {
+      if (!visible(el)) return;
+      const d = `depth${el.dataset.alignDepth}`;
+      const x = relX(el.getBoundingClientRect().left);
+      xs[d] = xs[d] || new Map();
+      xs[d].set(x, (xs[d].get(x) || 0) + 1);
+    });
+    out.checks.sameDepthX = {
+      pass: Object.values(xs).every((m) => Math.max(...m.keys()) - Math.min(...m.keys()) <= 0.5),
+      xByDepth: Object.fromEntries(
+        Object.entries(xs).map(([d, m]) => [d, Object.fromEntries([...m].sort((a, b) => a[0] - b[0]).map(([x, n]) => [String(x), n]))])
+      ),
+    };
+
+    // (6) title widths
+    const plain1 = [];
+    const ctx1 = [];
+    const badge1 = [];
+    const any0 = [];
+    root.querySelectorAll('[data-row]').forEach((r) => {
+      if (!visible(r)) return;
+      const w = round1(r.querySelector('[data-title]').getBoundingClientRect().width);
+      const hasCtx = !!r.querySelector('[data-context]');
+      const hasBadge = !!r.querySelector('[data-slot="badge"]:not([data-context])');
+      if (r.dataset.depth === '1') (hasCtx ? ctx1 : hasBadge ? badge1 : plain1).push(w);
+      else any0.push(w);
+    });
+    const stats = (a) => (a.length ? { n: a.length, min: Math.min(...a), max: Math.max(...a) } : null);
+    out.titleWidths = {
+      inFolderPlain: stats(plain1),
+      inFolderWithContext: stats(ctx1),
+      inFolderWithAlertBadge: stats(badge1),
+      unnested: stats(any0),
+    };
+    if (W === 280 && mode === 'proposal') {
+      const floorOk = ctx1.concat(badge1).every((w) => w >= 80 - 0.5);
+      out.checks.titleWidth160 = {
+        pass: plain1.length > 0 && Math.min(...plain1) >= 160 - 0.5 && floorOk,
+        rule: 'rows in folders without context text or alert badges: title >= 160px; every other row: >= 80px (min-w-20)',
+        inFolderPlainMin: plain1.length ? Math.min(...plain1) : null,
+        othersMin: ctx1.concat(badge1).length ? Math.min(...ctx1.concat(badge1)) : null,
+      };
+    }
+
+    // (7) sticky: the header of the section crossing the viewport top sits on it
+    if (vp.scrollTop > 0) {
+      const sec = [...root.querySelectorAll('[data-section]')].find((s) => {
+        const r = s.getBoundingClientRect();
+        return r.top <= vr.top + 0.5 && r.bottom > vr.top + 0.5;
+      });
+      if (sec) {
+        const sticky = sec.querySelector('[data-sticky]');
+        const hdr = sticky || sec.querySelector('[data-box="L1"]');
+        const hr = hdr.getBoundingClientRect();
+        const expected = Math.min(vr.top, sec.getBoundingClientRect().bottom - hr.height);
+        out.checks.sticky = {
+          applicable: true,
+          pass: !!sticky && Math.abs(hr.top - expected) < 0.5,
+          section: sec.dataset.section,
+          headerTopMinusViewportTop: round1(hr.top - vr.top),
+          scrollTop: Math.round(vp.scrollTop),
+        };
+        // info: keyboard focus is not left under the sticky header
+        if (sticky && mode === 'proposal' && st.scroll === 'mid') {
+          const saved = vp.scrollTop;
+          const cand = [...sec.querySelectorAll('[data-row]')].find((r) => r.getBoundingClientRect().top > vr.top + 60);
+          if (cand) {
+            vp.scrollTop += cand.getBoundingClientRect().top - (vr.top + 8);
+            const before = round1(cand.getBoundingClientRect().top - vr.top);
+            cand.focus();
+            const after = round1(cand.getBoundingClientRect().top - vr.top);
+            cand.blur();
+            vp.scrollTop = saved;
+            out.checks.focusClearsStickyHeader = {
+              info: true,
+              pass: after >= 32 - 0.5,
+              rowTopBeforeFocus: before,
+              rowTopAfterFocus: after,
+            };
+          }
+        }
+      }
+    } else {
+      out.checks.sticky = { applicable: false, pass: true };
+    }
+
+    // coordinates (panel-relative x, border-box)
+    const first = (sel) => [...root.querySelectorAll(sel)].find(visible) || null;
+    const left = (el) => (el ? relX(el.getBoundingClientRect().left) : null);
+    const height = (el) => (el ? round1(el.getBoundingClientRect().height) : null);
+    const time = first('[data-row] [data-time]');
+    out.coords = {
+      L0TextX: left(first('[data-level="0"]')),
+      L1TextX: left(first('[data-level="1"]')),
+      sublabelTextX: (() => {
+        const el = first('[data-sublabel]');
+        return el ? relX(el.getBoundingClientRect().left + parseFloat(getComputedStyle(el).paddingLeft)) : null;
+      })(),
+      folderIconX: left(first('[data-folder-row] [data-icon]')),
+      folderNameX: left(first('[data-level="2"]')),
+      unnestedSlotX: left(first('[data-row][data-depth="0"] [data-slot-marker]')),
+      unnestedTitleX: left(first('[data-row][data-depth="0"] [data-title]')),
+      inFolderSlotX: left(first('[data-row][data-depth="1"] [data-slot-marker]')),
+      inFolderTitleX: left(first('[data-row][data-depth="1"] [data-title]')),
+      timeBoxRightInset: time ? round1(pr.right - 1 - time.getBoundingClientRect().right) : null,
+      heights: {
+        L0: height(first('[data-box="L0"]')),
+        L1: height(first('[data-box="L1"]')),
+        L2: height(first('[data-folder-row]')),
+        L3: height(first('[data-row]')),
+        L4aux: height(first('[data-more]')),
+        L4sublabel: height(first('[data-sublabel]')),
+      },
+    };
+    const gapBetween = (a, b) => (a && b ? round1(b.getBoundingClientRect().top - a.getBoundingClientRect().bottom) : null);
+    const secs = [...root.querySelectorAll('[data-section]')];
+    const fA = root.querySelector('[data-folder="atlas"]');
+    const fB = root.querySelector('[data-folder="beacon"]');
+    out.gaps = {
+      betweenSections: secs.length > 1 ? gapBetween(secs[secs.length - 2], secs[secs.length - 1]) : null,
+      betweenFolderGroups: gapBetween(fA, fB),
+      folderHeaderToFirstRow: fA ? gapBetween(fA.querySelector('[data-folder-row]'), fA.querySelector('[data-row]')) : null,
+      betweenRows: (() => {
+        const rows = fA ? fA.querySelectorAll('[data-row]') : [];
+        return rows.length > 1 ? gapBetween(rows[0], rows[1]) : null;
+      })(),
+    };
+
+    // carriers between adjacent levels
+    const bgL = oklchL(getComputedStyle(root).backgroundColor);
+    const describe = (el, lvl) => {
+      if (!el) return null;
+      const cs = getComputedStyle(el);
+      const box = el.closest('[data-box]') || el;
+      const er = el.getBoundingClientRect();
+      const icon = [...box.querySelectorAll('[data-icon]')].find(
+        (i) => visible(i) && !i.closest('[data-slot="button"]') && i.getBoundingClientRect().right <= er.left + 0.5
+      );
+      const fw = Number(cs.fontWeight);
+      const L = oklchL(cs.color);
+      return {
+        text: textOf(el),
+        fontSize: parseFloat(cs.fontSize),
+        fontWeight: fw,
+        // Win10 Segoe UI / YaHei UI: 500 falls to 400, 600 renders as Bold.
+        winWeight: fw === 500 ? 400 : fw >= 600 ? 700 : fw,
+        color: cs.color,
+        contrastL: L != null && bgL != null ? round2(Math.abs(L - bgL)) : null,
+        letterSpacingEm: round2(parseFloat(cs.letterSpacing) / parseFloat(cs.fontSize) || 0),
+        boxHeight: round1(box.getBoundingClientRect().height),
+        textX: relX(er.left),
+        leadingIcon: !!icon,
+        divider:
+          lvl === 0
+            ? parseFloat(getComputedStyle(box).borderBottomWidth) > 0
+            : lvl === 1
+              ? secs.some((s) => parseFloat(getComputedStyle(s).borderTopWidth) > 0)
+              : false,
+      };
+    };
+    const reps = [
+      describe(first('[data-level="0"]'), 0),
+      describe(first('[data-level="1"]'), 1),
+      describe(first('[data-level="2"]'), 2),
+      describe(root.querySelector('[data-folder="atlas"] [data-row][data-session="a2"] [data-title]'), 3),
+      describe(first('[data-folder="atlas"] [data-more] [data-align-depth]'), 4),
+    ];
+    const carriersOf = (a, b) => {
+      const d = [];
+      if (Math.abs(a.fontSize - b.fontSize) >= 1) d.push('字号');
+      if (a.winWeight !== b.winWeight) d.push('字重');
+      if (a.color !== b.color) d.push('颜色');
+      if (Math.abs(a.letterSpacingEm - b.letterSpacingEm) >= 0.01) d.push('字距');
+      if (Math.abs(a.boxHeight - b.boxHeight) >= 2) d.push('行高');
+      if (Math.abs(a.textX - b.textX) >= 6) d.push('缩进');
+      if (a.leadingIcon !== b.leadingIcon) d.push('图标');
+      if (a.divider !== b.divider) d.push('分隔线');
+      return d;
+    };
+    // "hi is not weaker than lo": size, Win-reliable weight, contrast.
+    const notWeaker = (hi, lo) =>
+      hi.fontSize >= lo.fontSize &&
+      hi.winWeight >= lo.winWeight &&
+      (hi.contrastL == null || lo.contrastL == null || hi.contrastL >= lo.contrastL - 0.005);
+    const pairs = [[0, 1], [1, 2], [2, 3], [3, 4], [1, 3], [1, 4]].map(([i, j]) => {
+      const a = reps[i];
+      const b = reps[j];
+      if (!a || !b) return { pair: `L${i}-L${j}`, missing: true };
+      const c = carriersOf(a, b);
+      return { pair: `L${i}-L${j}`, adjacent: j === i + 1, carriers: c, count: c.length, higherNotWeaker: notWeaker(a, b) };
+    });
+    out.carriers = { levels: reps, pairs };
+    out.checks.carriers = {
+      pass: pairs.filter((p) => p.adjacent).every((p) => !p.missing && p.count >= 2),
+      adjacentCounts: Object.fromEntries(pairs.filter((p) => p.adjacent).map((p) => [p.pair, p.count])),
+    };
+    out.checks.monotonic = {
+      info: true,
+      pass: pairs.filter((p) => p.adjacent).every((p) => p.higherNotWeaker),
+      weakerThanLowerLevel: pairs.filter((p) => p.adjacent && !p.higherNotWeaker).map((p) => p.pair),
+    };
+    return out;
+  };
+
+  window.__measure = () => ({
+    state: { ...st },
+    roots: [...document.querySelectorAll('[data-proto-root]')].map(measureRoot),
+  });
+  window.__pageSize = () => {
+    const r = document.getElementById('stage').getBoundingClientRect();
+    return { w: Math.ceil(r.width), h: Math.ceil(r.height) };
+  };
+
+  // --------------------------------------------------------------- controls
+  const CONTROLS = [
+    ['mode', '视图', [['current', '现状'], ['proposal', '方案'], ['compare', '并排对比']]],
+    ['l1', '板块标题颜色', [['A', 'A 正文色'], ['B', 'B 灰色']]],
+    ['temp', '临时对话', [['X', 'X 独立板块'], ['Y', 'Y 仓库列表内文件夹']]],
+    ['theme', '主题', [['light', '浅色'], ['dark', '深色']]],
+    ['w', '面板宽度', [['280', '280'], ['360', '360'], ['500', '500']]],
+    ['recent', '「最近」', [['expanded', '展开'], ['collapsed', '折叠']]],
+    ['scroll', '滚动', [['top', '顶部'], ['mid', '仓库列表中段'], ['bottom', '底部']]],
+  ];
+  const TOGGLES = [
+    ['cjk', 'CJK / Win10 字重（500→400，600→700）'],
+    ['tall', '全长'],
+    ['guides', '对齐参考线'],
+    ['tip', '悬停提示示例'],
+    ['select', '多选模式'],
+  ];
+  const renderControls = () => {
+    const el = document.getElementById('controls');
+    el.innerHTML =
+      CONTROLS.map(
+        ([key, label, opts]) =>
+          `<div class="grp"><span>${label}</span><div class="seg">${opts
+            .map(([v, t]) => `<button type="button" data-key="${key}" data-v="${v}" aria-pressed="${st[key] === v}">${t}</button>`)
+            .join('')}</div></div>`
+      ).join('') +
+      `<div class="grp">${TOGGLES.map(([key, t]) => `<label><input type="checkbox" data-toggle="${key}" ${st[key] ? 'checked' : ''} />${t}</label>`).join('')}</div>`;
+  };
+  document.getElementById('controls').addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-key]');
+    if (!b) return;
+    st[b.dataset.key] = b.dataset.v;
+    apply();
+  });
+  document.getElementById('controls').addEventListener('change', (e) => {
+    const t = e.target.closest('input[data-toggle]');
+    if (!t) return;
+    st[t.dataset.toggle] = t.checked;
+    apply();
+  });
+  const summary = (m) =>
+    m.roots
+      .map((r) => {
+        const lines = [`【${r.mode === 'proposal' ? '方案' : '现状'}】面板 ${r.panelWidth}px`];
+        for (const [k, v] of Object.entries(r.checks)) {
+          if (v.applicable === false) continue;
+          lines.push(`  ${v.pass ? '✓' : '✗'} ${k}${v.info ? '（参考）' : ''}`);
+        }
+        lines.push(`  坐标 ${JSON.stringify(r.coords)}`);
+        lines.push(`  间距 ${JSON.stringify(r.gaps)}`);
+        lines.push(`  标题宽 ${JSON.stringify(r.titleWidths)}`);
+        lines.push(`  载体 ${r.carriers.pairs.map((p) => `${p.pair}:${(p.carriers || []).join('+') || '无'}`).join('  ')}`);
+        return lines.join('\n');
+      })
+      .join('\n\n');
+
+  const apply = () => {
+    document.documentElement.classList.toggle('dark', st.theme === 'dark');
+    document.body.classList.toggle('cjkwin', st.cjk);
+    const stage = document.getElementById('stage');
+    stage.innerHTML = st.mode === 'compare' ? compareHtml() : appHtml(st.mode, true);
+    postRender();
+    if (!SHOT) {
+      renderControls();
+      const q = new URLSearchParams();
+      for (const [k, v] of Object.entries(st)) if (v !== false) q.set(k, v === true ? '1' : v);
+      history.replaceState(null, '', `?${q}`);
+      document.getElementById('report').textContent = summary(window.__measure());
+    }
+  };
+  apply();
+})();
+</script>
+</body>
+</html>
