@@ -1,6 +1,6 @@
 # DSH 二开迁移：进度看板
 
-Role: implementation-status。更新日期：2026-10-08。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
+Role: implementation-status。更新日期：2026-10-09。只放当前阶段、最多五项活动任务、最近落地、阻塞和最近验证；任务身份与状态以 [roadmap](roadmap.md) 为准。
 
 ## 工作方式（2026-09-26 用户授权）
 
@@ -56,6 +56,14 @@ P1 分支内 DSH 替换，已到 **P1-14（收口、推送、Windows 测试版�
 
 ## Last Landed
 
+- 2026-10-09 GitHub issue #1～#5 与自定义服务模型设置改版（未推送；提交 `0d1744f7`～`bcca610d`，每组一份决策，凡标「用户裁决」的条目已由用户在会话中拍板，其余待审批）：
+  - **#1 旧对话「读取历史失败」**（`0d1744f7`，[决策 163](decisions/163-workspace-path-identity-on-resume.md)）：恢复时按路径风格比较是否同一目录（Windows 忽略分隔符与大小写，POSIX 保持大小写敏感），以索引行路径作 cwd；查明 Main 每次恢复都把行改写成反斜杠，普通 Windows 上第二次冷恢复、fork 与导入对话同样会撞；`pi_session_workspace_mismatch` 改走不可重试卡；侧栏本地主工作区固定用登记路径，文件树 / 面包屑 / blame 改用不分分隔符的 `relativeToRoot`。
+  - **#2 供应商注入错误环境**（`628f489e`，[决策 164](decisions/164-environment-context-and-shell-workdir-precheck.md)，写入完整用户目录为用户裁决）：新运行时上下文 `aiclient:environment`（OS、Shell 工具、会话目录、用户目录、日期时区、冲突声明）；shell 预检两步（Windows 无盘符 workdir 闸门前拒、闸门后查存在 / 目录 / 可进入）；28 份 log 金样本重录。
+  - **#4 Claude thinking 参数错误**（`117ac93d`，[决策 165](decisions/165-user-provider-adaptive-thinking-and-anthropic-model-list.md)）：anthropic 协议拉模型改走 `/v1/models`（401/403 换 Bearer，再退 `/models`）；每模型「自适应思考」开关，按 id 预填（用户裁决，计划层仍不猜）；修编辑时取消勾选存不下来；失败卡识别 `requires adaptive thinking`。评论里「默认发 disabled」不成立，实为默认补 medium 走 budget。
+  - **#5 权限菜单**（`1f4c82c3`，[决策 166](decisions/166-permission-menu-single-column-and-goal-entry.md)）：单列五项（计划模式 = 只读 + 全自动、改动前确认、自动编辑、全自动、完全放行）、「设定目标…」预填 `/goal`、发出建目标的 `/goal` 时自动切到全自动（从不自动进完全放行），均为用户裁决。用户否决「计划模式下禁止模型建目标」，改做计划审阅流程（决策 169，进行中）。
+  - **#3 侧栏层级**（`7bf5a58c`，[决策 167](decisions/167-sidebar-hierarchy.md)，验收原型 [evidence/sidebar-hierarchy-2026-10](evidence/sidebar-hierarchy-2026-10/README.md)）：五级只用 400/600、板块分隔吸顶、「最近」合并「正在活动」不重复、分支只在文件夹行、worktree 行显示最后一段、三处搜索框放大镜修复；取代决策 137 §1 与 D21-A（用户裁决）。`docs/design-system.md` 新增「侧栏层级」一节。
+  - **模型设置改版**（`bcca610d`，[决策 168](decisions/168-custom-service-model-settings-panel.md)，用户新需求）：左侧已选模型列表 + 公共配置栏，核心 8 项（含可选推理强度与厂商协议预设），本轮不提供「关闭」档。
+  - 验证：各组聚焦测试、两套 tsc、`Static Scan Wiring`、`src/shared/__tests__`、`scripts`、bridge-smoke 66 项、bridge-record `--check` 0 差异；全量单测与 GUI 点验未做（全量在批次收口跑一次）。**需用户实测**：newapi 渠道拉模型与厂商预设、加密机打开 dsh.6 旧对话并发消息、Windows 上侧栏观感（对照原型截图 18）与环境段文本。
 - 2026-10-08 `1.1.0-dsh.7` 测试包：推送 `a0320fe2`（用户同意），整包 `build.yml` run 37859947558 全部 job 通过（Windows、Linux、macOS 打包与远程运行时），`dsh-bridge-gate` run 37859914736 通过。Windows 安装包 artifact `windows-installer` 182 MB。交用户在加密机上复测 git（分支显示与切换、变更与 diff、提交历史、AI 提交信息与代码审查、放弃更改）与主题「跟随系统」。
 - 2026-10-08 现场缺陷三条（未推送）：
   - **git（用户在 dsh.6 加密机上报）** `cc4f1f48`（[决策 161](decisions/161-git-read-fallback-shared.md)，待审批）：切分支「没反应」实为聊天栏当前分支来自没有回退的 `git worktree list`；「没有修改」是 `getFileChanges` 丢输出抛错后无回退；「暂无提交」是 `getLog` 把空输出当 0 条。新增共用 `gitReadFallback.ts`（每个读取声明 `lostWhen`，非零退出不算丢失，回退成功一次后本进程读取直接走 runner），log / file-changes / worktree list / diff / 提交详情 / blame 改走它，checkout 后读回 HEAD。独立审查 1 条中低（外部信号杀掉的 status 被当成丢输出、可在普通 Linux 上误开开关）已修。收尾批 `6626d618`（[决策 162](decisions/162-git-read-fallback-closeout.md)，待审批）：AI 提交信息 / 代码审查 diff、commit 读回 HEAD、合并与冲突、子模块、check-ignore 补回退；读失败时变更列表 / 提交历史 / 分支按钮显示错误行；大 diff 不再静默为空；远程端解析同修。第二次独立审查 6 条（discard 路径穿越、写后复用在飞的旧读、discard 受 5000 条上限影响等）全部已修。
