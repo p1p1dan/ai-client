@@ -45,6 +45,13 @@
  *                    relative to the session cwd. Default: demo/out.html.
  *   --write-lines <n> Only for slow-write. How many lines the streamed file body spans.
  *                    Default: 60.
+ *   --capture <dir>  (dsh-rebase decision 173) Before replying, writes every POST request
+ *                    (health checks excluded) to <dir>/<seq>.json: { seq, path, method,
+ *                    headers: { anthropic-beta, anthropic-version, x-pilab-client,
+ *                    user-agent } (null when absent), body: the raw request body string }.
+ *                    The prefix probe compares consecutive bodies of a session. Unlike the
+ *                    log these hold full request content: use a fresh scratch directory
+ *                    per run (files are named by the request counter, which --reset zeroes).
  *
  * Endpoints:
  *   POST *          Treated as POST /v1/messages regardless of actual path (path is ignored).
@@ -250,6 +257,22 @@
  *                       regression (tools/contention-regression.ts). Every P8 step that
  *                       carries the loop guard's wrap-up instruction is answered with
  *                       text (or, with `wrapTool`, one more tool call, to see it refused).
+ *                       dsh-rebase decision 173 (issue #9) adds P1-CHAIN for the prompt
+ *                       prefix probe: `P1-CHAIN {"tag":"x","steps":8,"tool":"bash",
+ *                       "think":true,"sleepStep":k,"sleepSeconds":3,"cacheSim":"single"}`
+ *                       (every field optional; no step sleeps unless `sleepStep` is set).
+ *                       Steps 0..steps-1 each answer a thinking block, then one `bash` (or
+ *                       `pwsh`) call printing `p1-chain-<tag>-<i>`; step 2 prints about
+ *                       17,000 characters instead (over the tool-result pruner's 8,192),
+ *                       and step `sleepStep` sleeps `sleepSeconds` first. Then the text
+ *                       `P1-CHAIN done <tag>`. The thinking form rotates with step i:
+ *                       i%3==0 summarized text signed `sig-<seq>-<i>`, i%3==1 empty text
+ *                       with that signature (issue #9's backend α), i%3==2
+ *                       `redacted_thinking`; `think: false` leaves the block out.
+ *                       `cacheSim` bills every P1-CHAIN reply from a simulated upstream
+ *                       cache (`simulateCache`): `single` one cache, `split` a second
+ *                       backend B that takes every 4th request of the session, counts
+ *                       0.55x and caches apart, `off` the static usage other scripts get.
  *
  * Every request (health checks excluded) appends one JSON line to /tmp/t032/fake-gateway.log
  * (or --log <path>) with: ISO timestamp, sequence number, HTTP status returned, the role of the
@@ -265,6 +288,12 @@
  * Decision 171 adds `wire` (which protocol the path speaks), `userAgentLines` (how many
  * User-Agent lines the raw request carried: Node keeps only the first in `userAgent`) and
  * `relayHeader` (the X-Aiclient-User-Agent value, which must never arrive; null when absent).
+ * Decision 173 adds the session a gateway reads off the body (claude-code-hub looks at
+ * `metadata.user_id` only, never at headers): `userIdFormat` ('json' for Claude Code's JSON
+ * string, 'legacy' for `user_<x>_account_<y>_session_<id>`, 'other', or null when absent),
+ * `userIdSession` (the session id it names, or null) and `metadataKeys` (the sorted keys of
+ * `metadata`, or null). P1-CHAIN lines also carry `thinkingForm` and `cacheSim` (backend and
+ * token counts of the simulated cache). Still counts and identifiers only, never content.
  *
  * `--port 0` listens on an ephemeral port; the startup line prints the actual one.
  *
@@ -338,8 +367,10 @@ function parseArgs(argv) {
     else if (a === '--write-path') args.writePath = argv[++i];
     else if (a === '--write-lines') args.writeLines = Number(argv[++i]);
     else if (a === '--log') args.log = argv[++i];
+    else if (a === '--capture') args.capture = argv[++i] ?? '';
     else throw new Error(`Unknown arg: ${a}`);
   }
+  if (args.capture !== undefined && !args.capture) throw new Error('--capture requires a value');
   if (args.port === null || Number.isNaN(args.port)) throw new Error('--port <n> is required');
   if (!args.plan) throw new Error('--plan <name> is required');
   if (!VALID_PLANS.includes(args.plan)) {
@@ -529,13 +560,31 @@ function logRequest(entry) {
   fs.appendFileSync(LOG_PATH, `${line}\n`);
 }
 
+/** Decision 173 (`--capture`): the request as the client sent it, on disk before the reply. */
+function captureRequest(dir, seq, req, body) {
+  const header = (name) => req.headers[name] ?? null;
+  const record = {
+    seq,
+    path: req.url,
+    method: req.method,
+    headers: {
+      'anthropic-beta': header('anthropic-beta'),
+      'anthropic-version': header('anthropic-version'),
+      'x-pilab-client': header('x-pilab-client'),
+      'user-agent': header('user-agent'),
+    },
+    body,
+  };
+  fs.writeFileSync(path.join(dir, `${seq}.json`), JSON.stringify(record));
+}
+
 // ---- dsh-p0-2: content-keyed scripts for the DSH host probe -----------------
 
 const P0_MARKER =
   /P0-(GOAL-COMPLETE|GOAL-BLOCKED|GOAL-PAUSE|GOAL-ROUNDLIMIT|JOBS|OFFICE|ENV|FDS|APPROVAL|STREAM|SLOWTOOL|SLEEPTOOL|TOOL|FS|RECALL|CRASH|PACED|LOAD|HIST)/;
 /** dsh-rebase P1-4e scenarios; scripted under `P1-<name>` in `DSH_P0_2_SCRIPTS`. */
 const P1_MARKER =
-  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18)/;
+  /P1-(FAILONCE|FAIL|GATE|NOUP|ECHOKEY|ENVDUMP|THINK|USAGE|JOBNOTICE|JOBKILL|SUBCONT|SUBCHILD|STEER-ONE|STEER|IMAGEREAD|IMAGE|FILEREAD|QUESTION|COMPLETE-(?:COMMIT|BRANCH|REVIEW|SLOW)|PERM-(?:SUB|CHILD|WF|PTC|GUARD|SEARCH|HOLD|DENY|SESSION|PLAN|WRITES|GRANTS)|PLAN-(?:REVIEW|DISMISS|SIBLING|GOAL)|S18|CHAIN)/;
 
 /** dsh-rebase P1-15: the system prompt of every one-shot completion (src/dsh-host/bridge/completions.ts). */
 const COMPLETION_SYSTEM = /You are a tool-free completion service\./;
@@ -808,6 +857,68 @@ function p04ShellSteps(p, f) {
       description: 'Print a large output',
     }),
   ];
+}
+
+// dsh-rebase decision 173 (issue #9): P1-CHAIN, a tool loop that thinks on every step.
+
+/** P1-CHAIN's parameters, defaulted: `P1-CHAIN {"tag":"x","steps":8,...}`. */
+function chainParams(triggerText) {
+  const p = firstJsonObject(triggerText) ? p04Params(triggerText) : {};
+  const seconds = p.sleepSeconds;
+  return {
+    tag: String(p.tag ?? 'chain'),
+    steps: Number.isInteger(p.steps) && p.steps >= 0 ? p.steps : 8,
+    tool: p.tool === 'pwsh' ? 'pwsh' : 'bash',
+    think: p.think !== false,
+    sleepStep: Number.isInteger(p.sleepStep) ? p.sleepStep : undefined,
+    sleepSeconds:
+      typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0 ? seconds : 3,
+    cacheSim: p.cacheSim === 'split' || p.cacheSim === 'off' ? p.cacheSim : 'single',
+  };
+}
+
+/**
+ * Step i's command: an echo of `p1-chain-<tag>-<i>`. Step 2 prints 200 longer
+ * lines instead (about 17,000 characters, over the tool-result pruner's 8,192);
+ * step `sleepStep` sleeps first.
+ */
+function chainCommand(p, i) {
+  const tag = p.tag.replace(/[^A-Za-z0-9._-]/g, '-');
+  const line = (n) =>
+    `p1-chain-${tag}-2 line ${n} of a long output that passes the tool-result pruner threshold`;
+  const pwsh = p.tool === 'pwsh';
+  let print;
+  if (i === 2) {
+    print = pwsh
+      ? `1..200 | ForEach-Object { "${line('$_')}" }`
+      : `for n in $(seq 1 200); do echo "${line('$n')}"; done`;
+  } else {
+    print = pwsh ? `Write-Output 'p1-chain-${tag}-${i}'` : `echo p1-chain-${tag}-${i}`;
+  }
+  if (i !== p.sleepStep) return print;
+  return pwsh
+    ? `Start-Sleep -Seconds ${p.sleepSeconds}; ${print}`
+    : `sleep ${p.sleepSeconds}; ${print}`;
+}
+
+/** Step i's thinking block: summarized and signed, empty but signed (backend α), redacted. */
+function chainThinking(seq, i, tag) {
+  const signature = `sig-${seq}-${i}`;
+  if (i % 3 === 0) {
+    return {
+      text: `P1-CHAIN ${tag} step ${i}: the last result is in.\nOne more command, then look again.`,
+      signature,
+    };
+  }
+  if (i % 3 === 1) return { text: '', signature };
+  return { redacted: Buffer.from(`P1-CHAIN redacted thinking ${seq} ${i}`).toString('base64') };
+}
+
+/** How a tool decision's thinking block looks, for the log; undefined for any other. */
+function thinkingFormOf(thinking) {
+  if (thinking === null || typeof thinking !== 'object') return undefined;
+  if (thinking.redacted !== undefined) return 'redacted';
+  return thinking.text ? 'summarized' : 'empty';
 }
 
 /**
@@ -1542,6 +1653,19 @@ const DSH_P0_2_SCRIPTS = {
     }
     return { ...say(`P1-S18 ${p.case} finished.`), tag: String(p.case) };
   },
+  // dsh-rebase decision 173 (issue #9): a tool loop with thinking on every step
+  // (`chainParams`); the request handler bills each reply from `simulateCache`.
+  // Scripts get the request's sequence number as a ninth argument.
+  'P1-CHAIN'(_round, step, _calls, triggerText, _history, _recent, _userTexts, _messages, seq) {
+    const p = chainParams(triggerText);
+    const common = { tag: p.tag, cacheSim: p.cacheSim };
+    if (step >= p.steps) return { ...say(`P1-CHAIN done ${p.tag}`), ...common };
+    return {
+      ...tool(p.tool, { command: chainCommand(p, step), description: `P1-CHAIN step ${step}` }),
+      ...(p.think ? { thinking: chainThinking(seq, step, p.tag) } : {}),
+      ...common,
+    };
+  },
   // dsh-rebase P0-6: one ordinary turn with one tool call, before the host is killed.
   CRASH(_round, step, _calls, triggerText) {
     const p = p04Params(triggerText);
@@ -1647,8 +1771,8 @@ function histProse(i, token) {
   return lines.join('\n');
 }
 
-/** dsh-p0-2: decide from the request's own messages. */
-function decideDshP02(parsed) {
+/** dsh-p0-2: decide from the request's own messages (`seq` only names P1-CHAIN's signatures). */
+function decideDshP02(parsed, seq) {
   const messages = Array.isArray(parsed?.messages) ? parsed.messages : [];
   const lastText = ownText(messages[messages.length - 1]);
   if (/<goal_(complete|blocked)>/.test(lastText)) {
@@ -1724,7 +1848,8 @@ function decideDshP02(parsed) {
     history,
     recent,
     userTexts,
-    messages
+    messages,
+    seq
   );
   const tag = decision.tag ? `:${decision.tag}` : '';
   return {
@@ -2050,10 +2175,72 @@ function chunkString(s, chunkCount) {
   return chunks;
 }
 
-function sendToolUseTurn(res, model, { name, input }) {
+/**
+ * Decision 173: the frames of a thinking block at index 0, or none. `thinking` is
+ * `{ text, signature }` (no thinking_delta when the text is empty; signature
+ * default `fake-signature`), `{ redacted: data }` for a `redacted_thinking` block,
+ * or a string (text signed `fake-signature`).
+ */
+function thinkingFrames(thinking) {
+  const spec = typeof thinking === 'string' ? { text: thinking } : thinking;
+  if (spec === null || typeof spec !== 'object') return [];
+  const stop = ['content_block_stop', { type: 'content_block_stop', index: 0 }];
+  if (spec.redacted !== undefined) {
+    return [
+      [
+        'content_block_start',
+        {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'redacted_thinking', data: String(spec.redacted) },
+        },
+      ],
+      stop,
+    ];
+  }
+  const text = String(spec.text ?? '');
+  const signature = spec.signature ?? 'fake-signature';
+  return [
+    [
+      'content_block_start',
+      {
+        type: 'content_block_start',
+        index: 0,
+        content_block: { type: 'thinking', thinking: '', signature: '' },
+      },
+    ],
+    ...(text ? splitInto(text, 3) : []).map((piece) => [
+      'content_block_delta',
+      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: piece } },
+    ]),
+    ...(signature
+      ? [
+          [
+            'content_block_delta',
+            {
+              type: 'content_block_delta',
+              index: 0,
+              delta: { type: 'signature_delta', signature },
+            },
+          ],
+        ]
+      : []),
+    stop,
+  ];
+}
+
+/**
+ * One tool call. Decision 173: `thinking` (see `thinkingFrames`) streams first as
+ * its own block, and `usage` is merged into both `message_start` and
+ * `message_delta` (e.g. input_tokens, cache_read_input_tokens,
+ * cache_creation_input_tokens and the `cache_creation` TTL breakdown).
+ */
+function sendToolUseTurn(res, model, { name, input, thinking, usage }) {
   const toolId = `toolu_${crypto.randomUUID()}`;
   const inputJson = JSON.stringify(input);
   const chunks = chunkString(inputJson, 3);
+  const thought = thinkingFrames(thinking);
+  const at = thought.length > 0 ? 1 : 0;
   const frames = [
     [
       'message_start',
@@ -2067,29 +2254,30 @@ function sendToolUseTurn(res, model, { name, input }) {
           content: [],
           stop_reason: null,
           stop_sequence: null,
-          usage: { input_tokens: 18, output_tokens: 0 },
+          usage: { input_tokens: 18, output_tokens: 0, ...usage },
         },
       },
     ],
+    ...thought,
     [
       'content_block_start',
       {
         type: 'content_block_start',
-        index: 0,
+        index: at,
         content_block: { type: 'tool_use', id: toolId, name, input: {} },
       },
     ],
     ...chunks.map((partial_json) => [
       'content_block_delta',
-      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json } },
+      { type: 'content_block_delta', index: at, delta: { type: 'input_json_delta', partial_json } },
     ]),
-    ['content_block_stop', { type: 'content_block_stop', index: 0 }],
+    ['content_block_stop', { type: 'content_block_stop', index: at }],
     [
       'message_delta',
       {
         type: 'message_delta',
         delta: { stop_reason: 'tool_use', stop_sequence: null },
-        usage: { output_tokens: 24 },
+        usage: { output_tokens: 24, ...usage },
       },
     ],
     ['message_stop', { type: 'message_stop' }],
@@ -2414,6 +2602,167 @@ function cacheControlOf(parsed) {
   return total > 0 ? { total, ...where } : undefined;
 }
 
+// ---- dsh-rebase decision 173 (issue #9): sessions and a simulated prompt cache ----------
+
+/**
+ * The session a gateway reads off the body, by claude-code-hub's rules: body
+ * `metadata.user_id` only, either Claude Code's JSON string with a `session_id`
+ * (>= 2.1.78) or the legacy `user_<x>_account_<y>_session_<id>`. Identifiers
+ * only: `metadataKeys` names the keys of `metadata`, never their values.
+ */
+function userIdOf(parsed) {
+  const metadata = parsed?.metadata;
+  if (metadata === null || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return { userIdFormat: null, userIdSession: null, metadataKeys: null };
+  }
+  const metadataKeys = Object.keys(metadata).sort();
+  const userId = metadata.user_id;
+  const result = (userIdFormat, userIdSession = null) => ({
+    userIdFormat,
+    userIdSession,
+    metadataKeys,
+  });
+  if (userId === undefined || userId === null) return result(null);
+  if (typeof userId !== 'string') return result('other');
+  if (userId.trimStart().startsWith('{')) {
+    try {
+      const object = JSON.parse(userId);
+      if (object !== null && typeof object === 'object' && !Array.isArray(object)) {
+        const session = object.session_id;
+        return result('json', typeof session === 'string' && session ? session : null);
+      }
+    } catch {
+      // Not JSON after all: try the legacy form.
+    }
+  }
+  const legacy = /^user_.+_account_.*_session_(.+)$/.exec(userId);
+  return legacy ? result('legacy', legacy[1]) : result('other');
+}
+
+/**
+ * P1-CHAIN's simulated upstream. A provider prompt cache is a prefix cache: a
+ * request reads the longest prefix an earlier request cached and writes the
+ * rest. Issue #9's gateway spread one session over two upstreams whose caches
+ * were apart and even counted tokens differently; this reproduces both, per
+ * session (`metadata.user_id`'s session, else the X-Pilab-Client header):
+ *   single  one backend, A
+ *   split   a second backend B serves every 4th request of the session
+ *           (by the session's simulated request count), counts 0.55x and
+ *           keeps its own cache
+ * Prefix units are the tools, the system, then each message, compared as JSON
+ * with sorted keys, no `cache_control` and string content as one text block.
+ * A boundary's size is ceil(chars / 4) of the units up to it (B: ceil(chars *
+ * 0.55 / 4)). A request reads the longest boundary its backend cached for the
+ * session and writes the rest but its last 2 tokens (input_tokens 2: in issue
+ * #9 every hit read the step before's prompt less 2), then caches each of its
+ * boundaries. Backend A writes at the TTL the request asked (1h when any
+ * breakpoint says so, else 5m); B always writes 5m, as issue #9's β did.
+ * Entries never expire; only boundary hashes and sizes are kept, bounded.
+ */
+const CACHE_SIM_TAIL = 2;
+const CACHE_SIM_MAX_SESSIONS = 256;
+const CACHE_SIM_MAX_BOUNDARIES = 4096;
+const CACHE_SIM_TOKENS = {
+  A: (chars) => Math.ceil(chars / 4),
+  B: (chars) => Math.ceil((chars * 11) / 80),
+};
+/** Session key -> { requests, A: Map<boundary hash, cached tokens>, B: the same }. */
+const cacheSimSessions = new Map();
+
+/** A prefix unit as an upstream compares it: sorted keys, no `cache_control`. */
+function cacheSimJson(value) {
+  if (Array.isArray(value)) return `[${value.map(cacheSimJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const keys = Object.keys(value)
+      .filter((key) => key !== 'cache_control' && value[key] !== undefined)
+      .sort();
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${cacheSimJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
+}
+
+/** The request's prefix units, as JSON: tools, system, then one per message. */
+function cacheSimUnits(parsed) {
+  const system =
+    typeof parsed?.system === 'string'
+      ? [{ type: 'text', text: parsed.system }]
+      : (parsed?.system ?? []);
+  const messages = (Array.isArray(parsed?.messages) ? parsed.messages : []).map((message) =>
+    typeof message?.content === 'string'
+      ? { ...message, content: [{ type: 'text', text: message.content }] }
+      : message
+  );
+  return [parsed?.tools ?? [], system, ...messages].map(cacheSimJson);
+}
+
+/** Whether any breakpoint of the request asked for the 1-hour cache. */
+function asksHourTtl(value) {
+  if (Array.isArray(value)) return value.some(asksHourTtl);
+  if (value === null || typeof value !== 'object') return false;
+  if (value.cache_control?.ttl === '1h') return true;
+  return Object.entries(value).some(([key, item]) => key !== 'cache_control' && asksHourTtl(item));
+}
+
+/** Bill one request from the simulated cache: `{ usage, log }` (counts only). */
+function simulateCache(parsed, mode, userIdSession, clientHeader) {
+  const key = userIdSession ? `user:${userIdSession}` : `client:${clientHeader ?? '-'}`;
+  let session = cacheSimSessions.get(key);
+  if (!session) {
+    session = { requests: 0, A: new Map(), B: new Map() };
+    cacheSimSessions.set(key, session);
+    if (cacheSimSessions.size > CACHE_SIM_MAX_SESSIONS) {
+      cacheSimSessions.delete(cacheSimSessions.keys().next().value);
+    }
+  }
+  session.requests += 1;
+  const backend = mode === 'split' && session.requests % 4 === 0 ? 'B' : 'A';
+  const tokens = CACHE_SIM_TOKENS[backend];
+  const store = session[backend];
+  const hashes = [];
+  const offsets = [];
+  let hash = '';
+  let chars = 0;
+  for (const unit of cacheSimUnits(parsed)) {
+    hash = crypto.createHash('sha256').update(`${hash}\n`).update(unit).digest('hex').slice(0, 32);
+    chars += unit.length;
+    hashes.push(hash);
+    offsets.push(chars);
+  }
+  const prompt = tokens(chars);
+  const cachedMax = Math.max(0, prompt - CACHE_SIM_TAIL);
+  let read = 0;
+  for (let k = hashes.length - 1; k >= 0; k -= 1) {
+    const cached = store.get(hashes[k]);
+    if (cached !== undefined) {
+      read = Math.min(cached, cachedMax);
+      break;
+    }
+  }
+  const input = Math.min(CACHE_SIM_TAIL, prompt);
+  const creation = prompt - input - read;
+  // What this request leaves cached: every boundary, the last less the tail.
+  for (let k = 0; k < hashes.length; k += 1) {
+    const size = Math.min(tokens(offsets[k]), cachedMax);
+    const before = store.get(hashes[k]) ?? 0;
+    store.delete(hashes[k]);
+    store.set(hashes[k], Math.max(before, size));
+  }
+  while (store.size > CACHE_SIM_MAX_BOUNDARIES) store.delete(store.keys().next().value);
+  const ttl = backend === 'A' && asksHourTtl(parsed) ? '1h' : '5m';
+  return {
+    usage: {
+      input_tokens: input,
+      cache_read_input_tokens: read,
+      cache_creation_input_tokens: creation,
+      cache_creation: {
+        ephemeral_5m_input_tokens: ttl === '5m' ? creation : 0,
+        ephemeral_1h_input_tokens: ttl === '1h' ? creation : 0,
+      },
+    },
+    log: { mode, backend, request: session.requests, prompt, read, creation, input, ttl },
+  };
+}
+
 // ---- dsh-rebase P1-8: loop guard scenarios ---------------------------------------
 
 /** The loop guard's wrap-up instruction (src/dsh-host/loopGuard/constants.ts). */
@@ -2688,6 +3037,7 @@ function sendBurst(res, model, decision, seq) {
 function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.log) LOG_PATH = args.log;
+  if (args.capture) fs.mkdirSync(args.capture, { recursive: true });
   const state = loadState(args.state, args.reset);
   saveState(args.state, state); // materialize the state file even on first run / --reset
 
@@ -2709,12 +3059,16 @@ function main() {
     }
 
     let body = '';
+    // Decision 173: decode across chunk boundaries, so a multi-byte character split
+    // between two chunks stays intact (`--capture` keeps the body as sent).
+    req.setEncoding('utf8');
     req.on('data', (chunk) => {
       body += chunk;
     });
     req.on('end', () => {
       state.count += 1;
       const seq = state.count;
+      if (args.capture) captureRequest(args.capture, seq, req, body);
 
       let parsed = null;
       try {
@@ -2732,6 +3086,8 @@ function main() {
       // Decision 171: which protocol, and how the request identified itself.
       const wire = wireOf(req.url);
       const identity = identityOf(req);
+      // Decision 173: the session a gateway would read off the body.
+      const session = userIdOf(parsed);
 
       if (wire !== 'anthropic-messages') {
         logRequest({
@@ -2745,6 +3101,7 @@ function main() {
           userAgent: req.headers['user-agent'] ?? null,
           ...identity,
           clientHeader: req.headers['x-pilab-client'] ?? null,
+          ...session,
           model: typeof parsed?.model === 'string' ? parsed.model : null,
           path: req.url,
           decision: 'openai-text',
@@ -2756,11 +3113,22 @@ function main() {
 
       const decision =
         args.plan === 'dsh-p0-2'
-          ? decideDshP02(parsed)
+          ? decideDshP02(parsed, seq)
           : args.plan === 'echo-key-error'
             ? { kind: 'echo-key', status: 401 }
             : decide(args.plan, seq, toolResultPresent, args.sleep, { hold: args.hold });
       const key = receivedKey(req);
+      // Decision 173: P1-CHAIN replies are billed by the simulated upstream cache.
+      const simulated =
+        decision.cacheSim === 'single' || decision.cacheSim === 'split'
+          ? simulateCache(
+              parsed,
+              decision.cacheSim,
+              session.userIdSession,
+              req.headers['x-pilab-client']
+            )
+          : undefined;
+      const usage = simulated?.usage ?? decision.usage;
 
       logRequest({
         seq,
@@ -2778,6 +3146,7 @@ function main() {
         path: req.url,
         reasoning: reasoningOf(parsed),
         cacheControl: cacheControlOf(parsed),
+        ...session,
         ...(args.plan === 'dsh-p0-2'
           ? {
               decision: decision.label,
@@ -2800,6 +3169,9 @@ function main() {
               probe: decision.probe,
               // P1-15: a one-shot completion's system prompt (absent otherwise).
               completionSystem: carriesCompletionSystem(parsed) || undefined,
+              // Decision 173: P1-CHAIN's thinking form and simulated cache (absent otherwise).
+              thinkingForm: thinkingFormOf(decision.thinking),
+              cacheSim: simulated?.log,
             }
           : {}),
       });
@@ -2818,12 +3190,14 @@ function main() {
           'authentication_error'
         );
       } else if (decision.kind === 'text') {
-        sendTextTurn(res, model, decision.text, {
-          usage: decision.usage,
-          thinking: decision.thinking,
-        });
+        sendTextTurn(res, model, decision.text, { usage, thinking: decision.thinking });
       } else if (decision.kind === 'tool_use') {
-        sendToolUseTurn(res, model, { name: decision.name, input: decision.input });
+        sendToolUseTurn(res, model, {
+          name: decision.name,
+          input: decision.input,
+          thinking: decision.thinking,
+          usage,
+        });
       } else if (decision.kind === 'hang') {
         sendHang(res, decision.holdMs);
       } else if (decision.kind === 'paced-text') {
