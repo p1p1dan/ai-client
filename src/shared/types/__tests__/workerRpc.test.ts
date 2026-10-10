@@ -10,6 +10,8 @@ import {
   isWorkerHistoryResult,
   isWorkerInterjectPayload,
   isWorkerInterjectResult,
+  isWorkerInterjectWithdrawPayload,
+  isWorkerInterjectWithdrawResult,
   isWorkerJobKillPayload,
   isWorkerJobKillResult,
   isWorkerJobReadPayload,
@@ -330,6 +332,20 @@ describe('worker RPC boundary guards', () => {
         attachments: [{ kind: 'binary', mediaType: 'x', data: 'x' }],
       })
     ).toBe(false);
+  });
+
+  it('[I8-withdraw] a withdrawal names its interjection; the answer is one of three (decision 172)', () => {
+    const withdraw = { logicalSessionId: 'logical-1', attemptId: 'interject-1' };
+    expect(isWorkerInterjectWithdrawPayload(withdraw)).toBe(true);
+    expect(isWorkerInterjectWithdrawPayload({ ...withdraw, attemptId: ' ' })).toBe(false);
+    expect(isWorkerInterjectWithdrawPayload({ ...withdraw, logicalSessionId: '' })).toBe(false);
+    expect(isWorkerInterjectWithdrawPayload({ logicalSessionId: 'logical-1' })).toBe(false);
+    for (const outcome of ['withdrawn', 'delivered', 'not_found']) {
+      expect(isWorkerInterjectWithdrawResult({ outcome })).toBe(true);
+    }
+    expect(isWorkerInterjectWithdrawResult({ outcome: 'gone' })).toBe(false);
+    expect(isWorkerInterjectWithdrawResult({ withdrawn: true })).toBe(false);
+    expect(isWorkerInterjectWithdrawResult(null)).toBe(false);
   });
 
   it('[T135] admits a retry only without a prompt of its own', () => {

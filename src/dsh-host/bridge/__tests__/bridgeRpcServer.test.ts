@@ -86,6 +86,7 @@ function runtime(overrides: Partial<BridgeSessionRuntime> = {}): BridgeSessionRu
     acceptFork: notCalled('acceptFork') as BridgeSessionRuntime['acceptFork'],
     stop: async () => ({ stopped: true }),
     interject: () => ({ interjected: false }),
+    withdrawInterjection: () => ({ outcome: 'not_found' }),
     respondPermission: notCalled('respondPermission') as BridgeSessionRuntime['respondPermission'],
     respondQuestion: notCalled('respondQuestion') as BridgeSessionRuntime['respondQuestion'],
     respondPreview: notCalled('respondPreview') as BridgeSessionRuntime['respondPreview'],
@@ -925,6 +926,50 @@ describe('BridgeRpcServer — worker.job.kill, worker.job.read, worker.subagent.
     }
     expect(messages.find((message) => message.requestId === 'early')).toMatchObject({
       error: { code: 'WORKER_NOT_BOOTSTRAPPED' },
+    });
+  });
+});
+
+describe('BridgeRpcServer — withdrawing an interjection (issue #8, decision 172)', () => {
+  function serverWith(overrides: Partial<BridgeSessionRuntime> = {}) {
+    const messages: Array<Record<string, unknown>> = [];
+    const server = new BridgeRpcServer({
+      port: { postMessage: (message) => messages.push(message as Record<string, unknown>) },
+      generation: 3,
+      projectTrusted: false,
+      createRuntime: () => runtime(overrides),
+    });
+    return { messages, server };
+  }
+  const withdraw = (requestId: string, payload: unknown) =>
+    request(requestId, 'worker.interject.withdraw', payload);
+
+  it('[I8-RPC-ROUTE] routes to the runtime and returns its answer', async () => {
+    const withdrawInterjection = vi.fn(() => ({ outcome: 'withdrawn' as const }));
+    const { messages, server } = serverWith({ withdrawInterjection });
+    server.receive(
+      request('bootstrap', 'worker.bootstrap', { logicalSessionId: 'logical-1', cwd: '/repo' })
+    );
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    server.receive(withdraw('w', { logicalSessionId: 'logical-1', attemptId: 'interject-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(withdrawInterjection).toHaveBeenCalledWith({
+      logicalSessionId: 'logical-1',
+      attemptId: 'interject-1',
+    });
+    expect(messages[1]).toMatchObject({ requestId: 'w', result: { outcome: 'withdrawn' } });
+  });
+
+  it('[I8-RPC-PAYLOAD] refuses a payload without an attempt; a worker with no runtime knows none', async () => {
+    const { messages, server } = serverWith();
+    server.receive(withdraw('bad', { logicalSessionId: 'logical-1' }));
+    server.receive(withdraw('early', { logicalSessionId: 'logical-1', attemptId: 'interject-1' }));
+    await vi.waitFor(() => expect(messages).toHaveLength(2));
+    expect(messages.find((message) => message.requestId === 'bad')).toMatchObject({
+      error: { code: 'WORKER_INVALID_PAYLOAD' },
+    });
+    expect(messages.find((message) => message.requestId === 'early')).toMatchObject({
+      result: { outcome: 'not_found' },
     });
   });
 });

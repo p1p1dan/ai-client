@@ -1007,16 +1007,34 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
   // outside it — a rewind handing back the prompt it rewound to. Taken only
   // while its chat is the one in the box (the layout effect above has run by
   // now), and merged after anything already typed rather than over it.
+  // Issue #8 (decision 172 §4): a withdrawn Ctrl+Enter message offers its
+  // attachments too; they join the box's own, never replace them.
   const offeredText = useComposerDraftsStore((state) =>
     activeSessionId ? state.offered[activeSessionId] : undefined
   );
+  const offeredAttachments = useComposerDraftsStore((state) =>
+    activeSessionId ? state.offeredAttachments[activeSessionId] : undefined
+  );
   useEffect(() => {
-    if (!activeSessionId || offeredText === undefined) return;
+    if (!activeSessionId) return;
+    if (offeredText === undefined && offeredAttachments === undefined) return;
     if (draftOwnerRef.current !== activeSessionId) return;
-    const text = useComposerDraftsStore.getState().takeOffered(activeSessionId);
-    if (text === undefined) return;
-    updateValue(mergeOfferedText(valueRef.current, text));
-  }, [activeSessionId, offeredText, updateValue]);
+    const offers = useComposerDraftsStore.getState();
+    const text = offers.takeOffered(activeSessionId);
+    const drafts = offers.takeOfferedAttachments(activeSessionId);
+    if (text !== undefined) updateValue(mergeOfferedText(valueRef.current, text));
+    if (drafts && drafts.length > 0) {
+      const inBox = new Set(getLiveAttachmentDrafts().map((draft) => draft.id));
+      attachments.addDrafts(drafts.filter((draft) => !inBox.has(draft.id)));
+    }
+  }, [
+    activeSessionId,
+    attachments,
+    getLiveAttachmentDrafts,
+    offeredAttachments,
+    offeredText,
+    updateValue,
+  ]);
 
   // Decision 169: the plan review card closed so the user can type — the
   // message box takes the keyboard, caret at the end of the draft.
@@ -1405,6 +1423,8 @@ export function ChatComposer({ mode, disabled, onAddRepository, onSendStart }: C
       })),
       startedAt: Date.now(),
       awaitingDelivery: true,
+      // Issue #8 (decision 172 §4): kept so a withdrawal hands them back.
+      ...(drafts.length > 0 ? { drafts } : {}),
     });
     const wireAttachments = toWireAttachments(drafts);
     try {

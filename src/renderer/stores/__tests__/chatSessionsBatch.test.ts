@@ -9,6 +9,7 @@ import {
   filterRetiredRuntimeEvents,
   useChatSessionsStore,
 } from '../chatSessions';
+import { usePendingUserMessagesStore } from '../pendingUserMessages';
 import { resetRuntimeEventBus } from '../runtimeEventBus';
 
 // Behavior-lock tests for the C-08a batching layer: the pure applyRuntimeEvents
@@ -727,5 +728,28 @@ describe('initRuntime — batching (RUNTIME_EVENT_FLUSH_MS / RUNTIME_EVENT_MAX_Q
     const session = useChatSessionsStore.getState().sessions.find((item) => item.id === SESSION_ID);
     expect(session?.status).toBe('waiting_question');
     expect(unsubSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('[I8-disconnect] a lost engine connection leaves no awaiting message withdrawable', () => {
+    // Issue #8 (decision 172 §4): the table naming them went with the connection.
+    usePendingUserMessagesStore.setState({ bySession: {} });
+    usePendingUserMessagesStore.getState().publish({
+      attemptId: 'interject-1',
+      sessionId: SESSION_ID,
+      text: 'also this',
+      attachments: [],
+      startedAt: 0,
+      awaitingDelivery: true,
+    });
+    activeCleanup = useChatSessionsStore.getState().initRuntime();
+    const withdrawal = () =>
+      usePendingUserMessagesStore.getState().bySession[SESSION_ID]?.[0]?.withdrawal;
+
+    captured?.(statusEvent(1, 'running'));
+    expect(withdrawal()).toBeUndefined();
+    // As the event arrives, not when its batch is flushed.
+    captured?.(statusEvent(2, 'disconnected'));
+    expect(withdrawal()).toBe('unavailable');
+    usePendingUserMessagesStore.setState({ bySession: {} });
   });
 });

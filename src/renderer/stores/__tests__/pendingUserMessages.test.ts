@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { ChatMessage } from '../chatSessions';
 import {
+  awaitingDeliveryAttemptId,
   isAwaitingDeliveryMessage,
   isPendingUserMessage,
   mergePendingUserRows,
@@ -157,5 +158,57 @@ describe('mergePendingUserRows (issue #8, decision 172)', () => {
     const merged = mergePendingUserRows(delivered, [acknowledged]);
     expect(merged.awaitingDelivery).toEqual([]);
     expect(merged.rows).toBe(delivered);
+  });
+});
+
+describe('withdrawal state (issue #8, decision 172 §4)', () => {
+  const store = () => usePendingUserMessagesStore.getState();
+  const row = (attemptId: string) =>
+    store().bySession.s1?.find((message) => message.attemptId === attemptId);
+
+  it('names the attempt an awaiting row draws, and nothing for any other row', () => {
+    expect(
+      awaitingDeliveryAttemptId(
+        pendingUserToChatMessage(pending({ attemptId: 'interject-1', awaitingDelivery: true }))
+      )
+    ).toBe('interject-1');
+    expect(awaitingDeliveryAttemptId(pendingUserToChatMessage(pending()))).toBeNull();
+  });
+
+  it('moves an awaiting row through its withdrawal, and never a send', () => {
+    store().publish(pending({ attemptId: 'interject-1', awaitingDelivery: true }));
+    store().publish(pending({ attemptId: 'attempt-2' }));
+    store().setWithdrawal('interject-1', 'pending');
+    expect(row('interject-1')?.withdrawal).toBe('pending');
+    store().setWithdrawal('interject-1', null);
+    expect(row('interject-1')).not.toHaveProperty('withdrawal');
+    // A send's bubble has nothing to withdraw.
+    const before = store().bySession;
+    store().setWithdrawal('attempt-2', 'pending');
+    expect(store().bySession).toBe(before);
+  });
+
+  it('a lost engine connection leaves no awaiting row of that session withdrawable', () => {
+    store().publish(pending({ attemptId: 'interject-1', awaitingDelivery: true }));
+    store().publish(pending({ attemptId: 'interject-2', awaitingDelivery: true }));
+    store().publish(pending({ attemptId: 'interject-3', awaitingDelivery: true }));
+    store().publish(pending({ attemptId: 'attempt-4' }));
+    store().publish(pending({ attemptId: 'interject-5', sessionId: 's2', awaitingDelivery: true }));
+    store().setWithdrawal('interject-2', 'pending');
+    store().setWithdrawal('interject-3', 'delivered');
+
+    store().markWithdrawalsUnavailable('s1');
+
+    expect(row('interject-1')?.withdrawal).toBe('unavailable');
+    // Asked when the connection went: its answer can no longer come back.
+    expect(row('interject-2')?.withdrawal).toBe('unavailable');
+    // Already taken in by a turn: still that.
+    expect(row('interject-3')?.withdrawal).toBe('delivered');
+    expect(row('attempt-4')).not.toHaveProperty('withdrawal');
+    expect(store().bySession.s2?.[0]).not.toHaveProperty('withdrawal');
+    // Nothing left to change: the same state back.
+    const before = store().bySession;
+    store().markWithdrawalsUnavailable('s1');
+    expect(store().bySession).toBe(before);
   });
 });

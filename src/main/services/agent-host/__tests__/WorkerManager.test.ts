@@ -3636,6 +3636,55 @@ describe('WorkerManager Stop always settles (decision 046)', () => {
     ).rejects.toMatchObject({ code: 'worker_invalid_interject_ack' });
   });
 
+  it('[I8-wm-01] a withdrawal goes to the worker that steered it; the running turn keeps its latch', async () => {
+    const h = createHarness();
+    await running(h);
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    const payloads: unknown[] = [];
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) => {
+      if (type !== 'worker.interject.withdraw') return original(type, payload);
+      payloads.push(payload);
+      return { outcome: 'withdrawn' };
+    });
+    h.events.length = 0;
+
+    await expect(h.manager.withdrawInterjection('s1', 'i1')).resolves.toEqual({
+      outcome: 'withdrawn',
+    });
+    // Issue #8 (decision 172 §4): the session and the interjection's attempt id.
+    expect(payloads).toEqual([{ logicalSessionId: 's1', attemptId: 'i1' }]);
+    expect(h.events).toEqual([]);
+    await expect(
+      h.manager.send({ sessionId: 's1', attemptId: 'a2', text: 'next', ownerWebContentsId: 7 })
+    ).rejects.toMatchObject({ code: 'session_busy' });
+  });
+
+  it('[I8-wm-02] with no ready worker nothing can name it, and none is started', async () => {
+    const h = createHarness();
+    await expect(h.manager.withdrawInterjection('s1', 'i1')).resolves.toEqual({
+      outcome: 'not_found',
+    });
+    expect(h.records).toHaveLength(0);
+  });
+
+  it('[I8-wm-03] an answer outside the three outcomes is an invalid acknowledgement', async () => {
+    const h = createHarness();
+    await running(h);
+    const original = h.records[0].request.getMockImplementation() as (
+      type: string,
+      payload: unknown
+    ) => Promise<unknown>;
+    h.records[0].request.mockImplementation(async (type: string, payload: unknown) =>
+      type === 'worker.interject.withdraw' ? { outcome: 'gone' } : original(type, payload)
+    );
+    await expect(h.manager.withdrawInterjection('s1', 'i1')).rejects.toMatchObject({
+      code: 'worker_invalid_withdraw_ack',
+    });
+  });
+
   it('[T144-wm-11] a send the worker refused up front does not pin the latch', async () => {
     const h = createHarness();
     await create(h.manager, 's1', 7);

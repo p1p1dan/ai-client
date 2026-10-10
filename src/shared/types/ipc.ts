@@ -354,6 +354,12 @@ export const IPC_CHANNELS = {
    * message next. Ctrl+Enter in the composer.
    */
   CHAT_INTERJECT: 'chat:interject',
+  /**
+   * GitHub issue #8 (dsh-rebase decision 172 §4) — take a Ctrl+Enter message
+   * back before the running turn takes it in: `withdrawn`, `delivered` or
+   * `not_found`.
+   */
+  CHAT_WITHDRAW_INTERJECTION: 'chat:withdrawInterjection',
   CHAT_CLOSE_SESSION: 'chat:closeSession',
   /**
    * Answer one `permission.requested`. Addressed by session plus the

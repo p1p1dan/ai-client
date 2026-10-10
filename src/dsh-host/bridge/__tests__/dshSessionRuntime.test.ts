@@ -134,6 +134,12 @@ function fakeDsh(options: FakeOptions = {}) {
   /** P1-4c1: what the bridge steered, and how it cancelled. */
   const steers: unknown[] = [];
   const cancels: unknown[][] = [];
+  /**
+   * Issue #8: the steered messages still in DSH's inbox, by id. A step claims
+   * one (`claim`) before its `user/message`; `inbox.remove` takes one back.
+   */
+  const inbox = new Set<string>();
+  const removes: string[] = [];
   const listeners = new Map<string, (...args: unknown[]) => unknown>();
   const stubFile = stubPathFor(home, DSH_ID);
   const handle = (id: string, cwd: string | undefined) => ({
@@ -142,7 +148,16 @@ function fakeDsh(options: FakeOptions = {}) {
       status: 'idle',
       session: { header: { cwd } },
       followup: (message: unknown) => followups.push(message),
-      steer: (message: unknown) => steers.push(message),
+      steer: (message: unknown) => {
+        steers.push(message);
+        inbox.add((message as { id: string }).id);
+      },
+      inbox: {
+        remove: (messageId: string) => {
+          removes.push(messageId);
+          return inbox.delete(messageId);
+        },
+      },
       cancel: (...args: unknown[]) => cancels.push(args),
     },
     dispose: async () => {
@@ -191,7 +206,22 @@ function fakeDsh(options: FakeOptions = {}) {
   /** P1-4d3: one `user-questions/request` down the row's waterfall, as dsh-user-questions sends it. */
   const ask = (request: Record<string, unknown>, next: () => Promise<unknown>) =>
     listeners.get('user-questions/request')?.(request, next) as Promise<unknown> | undefined;
-  return { ctx, calls, disposed, followups, steers, cancels, stubFile, append, ask, attachments };
+  /** Issue #8: the next step takes a steered message out of the inbox (its echo comes after). */
+  const claim = (messageId: string) => inbox.delete(messageId);
+  return {
+    ctx,
+    calls,
+    disposed,
+    followups,
+    steers,
+    cancels,
+    removes,
+    claim,
+    stubFile,
+    append,
+    ask,
+    attachments,
+  };
 }
 
 const deps: DshBridgeDeps = {
@@ -812,6 +842,86 @@ describe('DshSessionRuntime — turn semantics (P1-4c1, decisions 093-095)', () 
     }
     expect(code).toBe('WORKER_SESSION_MISMATCH');
     expect(dsh.steers).toEqual([]);
+  });
+
+  // ---- issue #8 (decision 172 §4): an interjection taken back ------------------------
+
+  const withdraw = (attemptId: string) => ({ logicalSessionId: LOGICAL, attemptId });
+
+  it('[I8-withdraw] takes a waiting interjection out of the inbox; it never echoes', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'list the files'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'list the files'));
+    bridge.interject(interject('interject-1', 'also count them'));
+    emitted.length = 0;
+
+    expect(bridge.withdrawInterjection(withdraw('interject-1'))).toEqual({ outcome: 'withdrawn' });
+    expect(dsh.removes).toEqual(['m2']);
+    // Nothing is said: it was never in the conversation.
+    expect(emitted).toEqual([]);
+    // Asked again, it is no longer there to take back.
+    expect(bridge.withdrawInterjection(withdraw('interject-1'))).toEqual({
+      outcome: 'not_found',
+    });
+    // The turn goes on and ends as itself, with no trace of the message.
+    dsh.append(at(2, 'step/end', { turn: 1, step: 1 }));
+    dsh.append(at(3, 'turn/end', { turn: 1, reason: { kind: 'completed' } }));
+    expect(echoes(emitted)).toEqual([]);
+  });
+
+  it('[I8-withdraw-claimed] a step that claimed it first wins; its echo still carries the attempt', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'list the files'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'list the files'));
+    bridge.interject(interject('interject-1', 'also count them'));
+    emitted.length = 0;
+    // The next step took it in; its `user/message` is not written yet.
+    dsh.claim('m2');
+
+    expect(bridge.withdrawInterjection(withdraw('interject-1'))).toEqual({ outcome: 'delivered' });
+    dsh.append(at(2, 'step/end', { turn: 1, step: 1 }));
+    dsh.append(userMessage(3, 'm2', 'also count them'));
+    expect(echoes(emitted)).toEqual([['dsh-user-3', 'interject-1', 'also count them']]);
+    // Once echoed, a late withdrawal is still told it was delivered.
+    expect(bridge.withdrawInterjection(withdraw('interject-1'))).toEqual({ outcome: 'delivered' });
+  });
+
+  it('[I8-withdraw-stop] one a Stop left in the inbox can be taken back too (decision 094)', async () => {
+    const { dsh, bridge, emitted } = await opened();
+    await bridge.startSend(send('turn-1', 'attempt-1', 'long job'));
+    dsh.append(at(0, 'turn/start', { turn: 1 }));
+    dsh.append(userMessage(1, 'm1', 'long job'));
+    bridge.interject(interject('interject-1', 'then this'));
+    await bridge.stop({ logicalSessionId: LOGICAL, reason: 'user' });
+    dsh.append(
+      at(2, 'turn/end', { turn: 1, reason: { kind: 'aborted', reason: { kind: 'user' } } })
+    );
+    expect(dsh.cancels).toEqual([[{ kind: 'user' }, { keepInbox: true }]]);
+
+    expect(bridge.withdrawInterjection(withdraw('interject-1'))).toEqual({ outcome: 'withdrawn' });
+    emitted.length = 0;
+    // The next turn takes in its own prompt only.
+    await bridge.startSend(send('turn-2', 'attempt-2', 'next thing'));
+    dsh.append(at(3, 'turn/start', { turn: 2 }));
+    dsh.append(userMessage(4, 'm3', 'next thing'));
+    expect(echoes(emitted)).toEqual([['dsh-user-4', 'attempt-2', 'next thing']]);
+  });
+
+  it('[I8-withdraw-unknown] an attempt this runtime never steered is not found; a foreign session is refused', async () => {
+    const { dsh, bridge } = await opened();
+    expect(bridge.withdrawInterjection(withdraw('interject-elsewhere'))).toEqual({
+      outcome: 'not_found',
+    });
+    expect(dsh.removes).toEqual([]);
+    let code: string | undefined;
+    try {
+      bridge.withdrawInterjection({ ...withdraw('interject-1'), logicalSessionId: 'other' });
+    } catch (error) {
+      code = (error as { code?: string }).code;
+    }
+    expect(code).toBe('WORKER_SESSION_MISMATCH');
   });
 
   // ---- P1-4c2: an interjection's attachments, through a send's admission ---------------

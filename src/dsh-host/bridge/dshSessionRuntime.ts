@@ -179,6 +179,8 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerInterjectWithdrawPayload,
+  type WorkerInterjectWithdrawResult,
   type WorkerJobKillPayload,
   type WorkerJobKillResult,
   type WorkerJobReadPayload,
@@ -329,6 +331,13 @@ interface DshAgent {
    * re-entrant append (measured, P1-4c1 experiment E2s).
    */
   steer(message: unknown): void;
+  /**
+   * DSH's durable inbox (`Agent.inbox`, dsh-agent's public `Inbox`). Only
+   * `remove` is read: a Ctrl+Enter message taken back before a step claims it
+   * (issue #8, decision 172). True when it was still pending. It appends a
+   * cancelling splice, so, like `steer`, never from a `session/event` listener.
+   */
+  readonly inbox: { remove(messageId: string): boolean };
   cancel(cause: { kind: 'user' | 'disposed' }, options?: { keepInbox?: boolean }): void;
   /**
    * Holds the idle agent for `task`: input that would wake it waits in the
@@ -613,6 +622,8 @@ export const SESSION_FORK_UNMATERIALIZED = 'session_fork_unmaterialized';
 const DISPOSE_TIMEOUT_MS = 3_000;
 /** A failed rewind may leave its child under the next id; skip that many at most. */
 const REWIND_ID_ATTEMPTS = 20;
+/** Issue #8: how many delivered interjections a late withdrawal can still be told about. */
+const DELIVERED_STEERS_KEPT = 32;
 
 /**
  * How the last turn must have ended for the failure card's Continue to be
@@ -751,10 +762,17 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private readonly stagedForks = new Map<string, string>();
   /**
    * Ctrl+Enter messages steered in and not yet taken in by a turn: message id
-   * -> the renderer's attempt id, for the echo (P1-4c1). One that a Stop left
-   * in the inbox waits here until a later turn takes it in.
+   * -> the renderer's attempt id, for the echo (P1-4c1), and the agent whose
+   * inbox holds it, for a withdrawal (issue #8). One that a Stop left in the
+   * inbox waits here until a later turn takes it in, or it is withdrawn.
    */
-  private readonly steered = new Map<string, { attemptId: string }>();
+  private readonly steered = new Map<string, { attemptId: string; agentId: string }>();
+  /**
+   * Issue #8: attempt ids whose echo went out, newest last, so a withdrawal
+   * that loses that race answers `delivered`, not `not_found`. A withdrawal
+   * comes seconds after its message or not at all, so a few are kept.
+   */
+  private readonly deliveredSteers: string[] = [];
   /** P1-4d2: a command send whose line DSH is admitting now; its `command/run` claims it. */
   private pendingCommand: CommandSend | null = null;
   /** Command sends DSH admitted and `execute` has not settled, by DSH's command id. */
@@ -848,6 +866,10 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       takeSteered: (messageId) => {
         const steered = this.steered.get(messageId);
         this.steered.delete(messageId);
+        if (steered) {
+          this.deliveredSteers.push(steered.attemptId);
+          if (this.deliveredSteers.length > DELIVERED_STEERS_KEPT) this.deliveredSteers.shift();
+        }
         return steered;
       },
       usageView: () => this.usageView(),
@@ -1792,7 +1814,7 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
   private steer(attemptId: string, content: DshUserContent[]): WorkerInterjectResult {
     const handle = this.requireHandle();
     const message = this.deps.createUserMessage({ content, source: { kind: 'user' } });
-    this.steered.set(message.id, { attemptId });
+    this.steered.set(message.id, { attemptId, agentId: handle.agent.id });
     try {
       handle.agent.steer(message);
     } catch (error) {
@@ -1800,6 +1822,33 @@ export class DshSessionRuntime implements BridgeSessionRuntime {
       throw error;
     }
     return { interjected: true, turnActive: true };
+  }
+
+  /**
+   * Issue #8 (decision 172 §4): take a Ctrl+Enter message back before a turn
+   * takes it in — while the turn runs, or after a Stop left it in the inbox
+   * (decision 094). `inbox.remove` and the loop's next-step claim run on the
+   * host's one thread, so the answer is exact: removed (it never reaches the
+   * model and never echoes), or already claimed (its echo is out or on its way).
+   *
+   * `not_found`: this runtime never steered it, or no longer reaches the inbox
+   * holding it. A new host or a released session starts with an empty table
+   * (the message itself stays in DSH's durable inbox and goes out with a later
+   * turn, echoed without an attempt id — decision 111); a rewind leaves it in
+   * the session it retired.
+   */
+  withdrawInterjection(input: WorkerInterjectWithdrawPayload): WorkerInterjectWithdrawResult {
+    this.assertLogicalSession(input.logicalSessionId);
+    if (this.deliveredSteers.includes(input.attemptId)) return { outcome: 'delivered' };
+    const agent = this.disposed ? undefined : this.handle?.agent;
+    for (const [messageId, steered] of this.steered) {
+      if (steered.attemptId !== input.attemptId) continue;
+      if (!agent || agent.id !== steered.agentId) return { outcome: 'not_found' };
+      if (!agent.inbox.remove(messageId)) return { outcome: 'delivered' };
+      this.steered.delete(messageId);
+      return { outcome: 'withdrawn' };
+    }
+    return { outcome: 'not_found' };
   }
 
   /** A card's answer, keyed by the tool call id; false when nothing waits on it. */

@@ -2515,6 +2515,15 @@ export const useChatSessionsStore = create<ChatSessionsState>()((set, get) => ({
           .getState()
           .acknowledgeAttempt(event.sessionId, event.payload.attemptId, event.payload.messageId);
       }
+      // Issue #8 (decision 172 §4): the engine connection went, and the table
+      // naming this session's awaiting Ctrl+Enter messages went with it.
+      if (
+        event.type === 'session.status' &&
+        event.sessionId &&
+        event.payload.status === 'disconnected'
+      ) {
+        usePendingUserMessagesStore.getState().markWithdrawalsUnavailable(event.sessionId);
+      }
       queue.push(event);
       if (queue.length >= RUNTIME_EVENT_MAX_QUEUE) {
         if (flushTimer !== null) {

@@ -26,7 +26,10 @@ import {
   isSessionPermissionTier,
   type SessionPermissionTier,
 } from '@shared/types/sessionPermissionTier';
-import type { WorkerCapabilityInventory } from '@shared/types/workerRpc';
+import type {
+  WorkerCapabilityInventory,
+  WorkerInterjectWithdrawResult,
+} from '@shared/types/workerRpc';
 import { BrowserWindow, type IpcMainInvokeEvent, ipcMain } from 'electron';
 import { dshHostSupervisor } from '../services/agent-host/DshHostSupervisor';
 import { scratchWorkspaceService } from '../services/agent-host/ScratchWorkspaceService';
@@ -665,6 +668,22 @@ export function registerChatHandlers(): void {
           text: payload.text,
           ...(payload.attachments ? { attachments: payload.attachments } : {}),
         });
+      } catch (error) {
+        throw withWorkerErrorCode(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    IPC_CHANNELS.CHAT_WITHDRAW_INTERJECTION,
+    async (
+      _e,
+      payload: { sessionId: string; attemptId: string }
+    ): Promise<WorkerInterjectWithdrawResult> => {
+      // No `claimSessionForSender`: a withdrawal starts nothing and emits
+      // nothing, so there is no event stream to route to this window.
+      try {
+        return await workerManager.withdrawInterjection(payload.sessionId, payload.attemptId);
       } catch (error) {
         throw withWorkerErrorCode(error);
       }

@@ -166,3 +166,55 @@ describe('a rewound prompt comes back to its chat (problem 1)', () => {
     expect(box().value).toBe('the second prompt');
   });
 });
+
+describe('a withdrawn Ctrl+Enter message comes back to its chat (issue #8, decision 172 §4)', () => {
+  const IMAGE = {
+    id: 'att-withdrawn',
+    kind: 'image' as const,
+    mediaType: 'image/png',
+    name: 'shot.png',
+    byteLength: 4,
+    data: 'AAAA',
+  };
+  const removeChip = () => container.querySelector('[aria-label="Remove shot.png"]');
+
+  it('[I8-OFFER-EMPTY] fills an empty box, its attachments with it', async () => {
+    await mountComposer();
+    await act(async () =>
+      useComposerDraftsStore
+        .getState()
+        .offerDraft('a', { text: 'also run lint', attachments: [IMAGE] })
+    );
+    expect(box().value).toBe('also run lint');
+    expect(removeChip()).not.toBeNull();
+    expect(useComposerDraftsStore.getState().offered).toEqual({});
+    expect(useComposerDraftsStore.getState().offeredAttachments).toEqual({});
+  });
+
+  it('[I8-OFFER-MERGE] goes on a new line after what is typed, never over it', async () => {
+    await mountComposer();
+    await type('a note I was writing');
+    await act(async () =>
+      useComposerDraftsStore
+        .getState()
+        .offerDraft('a', { text: 'also run lint', attachments: [IMAGE] })
+    );
+    expect(box().value).toBe('a note I was writing\n\nalso run lint');
+    expect(removeChip()).not.toBeNull();
+  });
+
+  it('[I8-OFFER-AWAY] waits for its chat when the user has moved on', async () => {
+    await mountComposer();
+    await open('b');
+    await act(async () =>
+      useComposerDraftsStore
+        .getState()
+        .offerDraft('a', { text: 'also run lint', attachments: [IMAGE] })
+    );
+    expect(box().value).toBe('');
+    expect(removeChip()).toBeNull();
+    await open('a');
+    expect(box().value).toBe('also run lint');
+    expect(removeChip()).not.toBeNull();
+  });
+});

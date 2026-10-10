@@ -42,6 +42,7 @@ import { statusForNextTurn, useChatSessionsStore } from '@/stores/chatSessions';
 import { useContinueIntentStore } from '@/stores/continueIntent';
 import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigration';
 import {
+  awaitingDeliveryAttemptId,
   isAwaitingDeliveryMessage,
   isPendingUserMessage,
   mergePendingUserRows,
@@ -108,6 +109,7 @@ import {
   selectHistoryError,
 } from './historyError';
 import { loadOlderHistoryPage } from './historyPageRequest';
+import { InterjectionWithdrawControl } from './InterjectionWithdrawControl';
 // T12-b: `formatMessageMetadata` / `formatRelativeTimestamp` left with the meta
 // row, and they stay left: the relative form ("3 minutes ago") needs a ticking
 // clock to stay true, and the `model · time` composer duplicates the composer's
@@ -1431,6 +1433,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
   // (decision 172): its words are greyed too, until the turn takes it in.
   const awaitingDelivery = isAwaitingDeliveryMessage(message);
   const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';
+  const withdrawAttemptId = awaitingDeliveryAttemptId(message);
 
   return (
     // What makes the two roles distinguishable is SHAPE on this side: the right
@@ -1506,6 +1509,13 @@ function UserBubble({ message }: { message: ChatMessage }) {
             >
               {awaitingDelivery ? t('Awaiting delivery') : t('Sending…')}
             </span>
+            {/* Issue #8 (decision 172 §4): until a turn takes it in. */}
+            {withdrawAttemptId !== null && (
+              <InterjectionWithdrawControl
+                sessionId={message.sessionId}
+                attemptId={withdrawAttemptId}
+              />
+            )}
           </div>
         )}
       </div>

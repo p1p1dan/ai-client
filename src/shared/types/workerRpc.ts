@@ -647,6 +647,31 @@ export interface WorkerInterjectResult {
 }
 
 /**
+ * GitHub issue #8 (dsh-rebase decision 172 §4): take back a Ctrl+Enter
+ * message before a turn takes it in — including one a Stop left waiting
+ * (decision 094). The worker removes it from DSH's inbox
+ * (`Agent.inbox.remove`); the turn's next-step claim cannot race that, as
+ * both run on the host's one thread.
+ */
+export interface WorkerInterjectWithdrawPayload {
+  logicalSessionId: string;
+  /** The attempt id the interjection was sent with. */
+  attemptId: string;
+}
+
+/**
+ * - `withdrawn`: it left the inbox; it never reaches the model and never echoes.
+ * - `delivered`: a turn took it in already; its echo is out or on its way.
+ * - `not_found`: this worker does not know it — the engine connection it was
+ *   handed to is gone (a restart, a release), or a rewind moved the chat on.
+ */
+export type WorkerInterjectWithdrawOutcome = 'withdrawn' | 'delivered' | 'not_found';
+
+export interface WorkerInterjectWithdrawResult {
+  outcome: WorkerInterjectWithdrawOutcome;
+}
+
+/**
  * The user's answer to one `permission.requested` event.
  *
  * Keyed by the `permissionId` the timeline block and the pending queue already
@@ -755,6 +780,10 @@ export type WorkerAcceptForkRequest = WorkerRpcRequest<
 >;
 export type WorkerStopRequest = WorkerRpcRequest<'worker.stop', WorkerStopPayload>;
 export type WorkerInterjectRequest = WorkerRpcRequest<'worker.interject', WorkerInterjectPayload>;
+export type WorkerInterjectWithdrawRequest = WorkerRpcRequest<
+  'worker.interject.withdraw',
+  WorkerInterjectWithdrawPayload
+>;
 export type WorkerPermissionRespondRequest = WorkerRpcRequest<
   'worker.permission.respond',
   WorkerPermissionRespondPayload
@@ -1327,6 +1356,30 @@ export function isWorkerInterjectResult(value: unknown): value is WorkerInterjec
     typeof value.interjected === 'boolean' &&
     (value.turnActive === undefined || typeof value.turnActive === 'boolean')
   );
+}
+
+export function isWorkerInterjectWithdrawPayload(
+  value: unknown
+): value is WorkerInterjectWithdrawPayload {
+  return (
+    isRecord(value) &&
+    typeof value.logicalSessionId === 'string' &&
+    value.logicalSessionId.trim().length > 0 &&
+    typeof value.attemptId === 'string' &&
+    value.attemptId.trim().length > 0
+  );
+}
+
+const WITHDRAW_OUTCOMES: ReadonlySet<unknown> = new Set<WorkerInterjectWithdrawOutcome>([
+  'withdrawn',
+  'delivered',
+  'not_found',
+]);
+
+export function isWorkerInterjectWithdrawResult(
+  value: unknown
+): value is WorkerInterjectWithdrawResult {
+  return isRecord(value) && WITHDRAW_OUTCOMES.has(value.outcome);
 }
 
 const PERMISSION_DECISIONS = new Set(['allow', 'allow_session', 'deny', 'cancel']);

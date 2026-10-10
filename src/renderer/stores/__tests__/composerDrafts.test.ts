@@ -170,6 +170,32 @@ describe('offered text (problem 1)', () => {
   });
 });
 
+describe('offered drafts (issue #8, decision 172 §4)', () => {
+  it('a withdrawn message offers its text as text, and its attachments beside it', () => {
+    const other: AttachmentDraft = { ...IMAGE, id: 'att-2' };
+    store().offerDraft('a', { text: 'also run lint', attachments: [IMAGE] });
+    store().offerDraft('a', { text: '', attachments: [other] });
+    expect(store().takeOfferedAttachments('b')).toBeUndefined();
+    expect(store().takeOffered('a')).toBe('also run lint');
+    expect(store().takeOfferedAttachments('a')).toEqual([IMAGE, other]);
+    expect(store().takeOfferedAttachments('a')).toBeUndefined();
+  });
+
+  it('a draft with no attachments offers none', () => {
+    store().offerDraft('a', { text: 'only words', attachments: [] });
+    expect(store().offeredAttachments).toEqual({});
+    expect(store().takeOffered('a')).toBe('only words');
+  });
+
+  it('is pruned with its chat', () => {
+    store().offerDraft('gone', { text: 'x', attachments: [IMAGE] });
+    store().offerDraft('kept', { text: '', attachments: [IMAGE] });
+    store().pruneSessions(['kept']);
+    expect(store().offered).toEqual({});
+    expect(store().offeredAttachments).toEqual({ kept: [IMAGE] });
+  });
+});
+
 describe('mergeOfferedText (decision 139 rule 2)', () => {
   it('fills an empty box', () => {
     expect(mergeOfferedText('', 'prompt')).toBe('prompt');

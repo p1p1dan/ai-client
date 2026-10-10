@@ -1049,6 +1049,17 @@ const electronAPI = {
       }>;
     }): Promise<{ interjected: boolean; turnActive?: boolean }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_INTERJECT, payload),
+    /**
+     * GitHub issue #8 (dsh-rebase decision 172 §4) — take a Ctrl+Enter message
+     * back before a turn takes it in. `withdrawn`: it will never reach the
+     * model; `delivered`: a turn has it already; `not_found`: the engine
+     * connection it went to is gone, so it can no longer be named.
+     */
+    withdrawInterjection: (payload: {
+      sessionId: string;
+      attemptId: string;
+    }): Promise<{ outcome: 'withdrawn' | 'delivered' | 'not_found' }> =>
+      ipcRenderer.invoke(IPC_CHANNELS.CHAT_WITHDRAW_INTERJECTION, payload),
     closeSession: (payload: { sessionId: string }): Promise<{ requestId: string }> =>
       ipcRenderer.invoke(IPC_CHANNELS.CHAT_CLOSE_SESSION, payload),
     respondPermission: (payload: {

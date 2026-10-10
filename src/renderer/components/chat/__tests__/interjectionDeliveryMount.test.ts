@@ -34,8 +34,15 @@ vi.mock('@/stores/settings', () => {
 vi.mock('@/stores/runtimeEventBus', () => ({ subscribeRuntimeEvent: () => () => undefined }));
 vi.mock('../useResolvedSessionModel', () => ({ useResolvedSessionModel: () => () => undefined }));
 vi.mock('../sessionIndex/useResumeSession', () => ({ useResumeSession: () => () => undefined }));
+// Issue #8 §4: the withdrawal's light notices, observed rather than drawn.
+const { toastAdd } = vi.hoisted(() => ({ toastAdd: vi.fn() }));
+vi.mock('@/components/ui/toast', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/toast')>()),
+  toastManager: { add: toastAdd },
+}));
 
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { resetComposerDraftsForTests, useComposerDraftsStore } from '@/stores/composerDrafts';
 import { usePendingUserMessagesStore } from '@/stores/pendingUserMessages';
 import { MessageTimeline } from '../MessageTimeline';
 
@@ -96,6 +103,9 @@ afterEach(async () => {
   await cleanup?.();
   cleanup = null;
   usePendingUserMessagesStore.setState({ bySession: {} });
+  resetComposerDraftsForTests();
+  toastAdd.mockReset();
+  Reflect.deleteProperty(window, 'electronAPI');
   vi.unstubAllGlobals();
 });
 
@@ -251,4 +261,75 @@ it('[I8-3] a Stop before delivery leaves the bubble waiting, and still no turn o
   // The stopped turn says "Worked" once — on its own head, not under the bubble.
   expect(view.head('u1').summary).toContain('Worked');
   expect(view.container.textContent?.split('Worked').length).toBe(2);
+});
+
+// ---- issue #8 §4: 「撤回」 on the awaiting bubble ----------------------------------
+
+/** The engine's answer to `chat.withdrawInterjection`, stubbed on the preload bridge. */
+function engineAnswers(outcome: 'withdrawn' | 'delivered' | 'not_found') {
+  const withdrawInterjection = vi.fn(async () => ({ outcome }));
+  Object.assign(window, { electronAPI: { chat: { withdrawInterjection } } });
+  return withdrawInterjection;
+}
+
+const withdrawButton = (container: HTMLElement) =>
+  container.querySelector<HTMLButtonElement>('button[aria-label="Withdraw this message"]');
+
+it('[I8-4] the awaiting bubble offers a named, keyboard-reachable withdraw; it hands the words back', async () => {
+  const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
+  await interject();
+  const button = withdrawButton(view.container);
+  expect(button, 'a real button, read aloud as "Withdraw this message"').not.toBeNull();
+  expect(button?.textContent).toContain('Withdraw');
+  expect(button?.disabled).toBe(false);
+  // Not a hover reveal: on screen and in the tab order as soon as the bubble is.
+  expect(button?.tabIndex).toBe(0);
+  expect(view.awaiting()[0]?.contains(button as Node)).toBe(true);
+
+  const ask = engineAnswers('withdrawn');
+  await act(async () => button?.click());
+
+  expect(ask).toHaveBeenCalledWith({ sessionId: 's', attemptId: ATTEMPT });
+  expect(view.awaiting()).toHaveLength(0);
+  expect(useComposerDraftsStore.getState().offered).toEqual({ s: INTERJECTION });
+  // The turn it never joined runs on, untouched.
+  expect(view.sections()).toEqual(['u1']);
+  expect(view.head('u1')).toEqual({ open: true, summary: expect.stringContaining('Working') });
+  expect(toastAdd).not.toHaveBeenCalled();
+});
+
+it('[I8-5] too late: delivered keeps the bubble for its echo, with a light notice', async () => {
+  const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
+  await interject();
+  engineAnswers('delivered');
+  await act(async () => withdrawButton(view.container)?.click());
+
+  expect(view.awaiting()).toHaveLength(1);
+  expect(withdrawButton(view.container)).toBeNull();
+  const note = view
+    .awaiting()[0]
+    ?.querySelector('[title="Already delivered; it can no longer be withdrawn"]');
+  expect(note?.textContent).toBe('Cannot withdraw');
+  expect(toastAdd).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'info',
+      title: 'Already delivered; it can no longer be withdrawn',
+    })
+  );
+  expect(useComposerDraftsStore.getState().offered).toEqual({});
+});
+
+it('[I8-6] a lost engine connection turns the button into a reason, before any press', async () => {
+  const view = await mount([PROMPT, STEP_1, STEP_2_RUNNING], 'running');
+  await interject();
+  expect(withdrawButton(view.container)).not.toBeNull();
+
+  await act(async () => usePendingUserMessagesStore.getState().markWithdrawalsUnavailable('s'));
+
+  expect(withdrawButton(view.container)).toBeNull();
+  const note = view.awaiting()[0]?.querySelector('span[title]:last-child');
+  expect(note?.textContent).toBe('Cannot withdraw');
+  expect(note?.getAttribute('title')).toContain('The engine can no longer find it');
+  // Still awaiting delivery: it may yet go out with a later turn.
+  expect(view.awaiting()[0]?.textContent).toContain('Awaiting delivery');
 });

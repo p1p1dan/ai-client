@@ -4129,3 +4129,21 @@ Object.assign(zhTranslations, {
     '只能包含英文字母、数字、空格和常见符号（可见 ASCII 字符）。',
   'Takes effect from the next turn; no restart needed.': '从下一轮开始生效，无需重启。',
 });
+
+// Interjection delivery (issue #8)
+/**
+ * dsh-rebase decision 172 §4 (GitHub issue #8): 「撤回」 on a Ctrl+Enter
+ * message awaiting delivery (`InterjectionWithdrawControl`).
+ */
+Object.assign(zhTranslations, {
+  Withdraw: '撤回',
+  'Withdraw this message': '撤回这条消息',
+  'Take it back before it is delivered; it goes back to the message box':
+    '在送达前收回，内容放回输入框',
+  'Cannot withdraw': '无法撤回',
+  'Already delivered; it can no longer be withdrawn': '已送达，无法撤回',
+  'This message can no longer be withdrawn': '这条消息已无法撤回',
+  'The engine can no longer find it: the connection was re-established, or the chat was rewound, after it was sent':
+    '引擎已找不到它：发出后连接重建过，或对话回退过',
+  'Could not withdraw the message': '撤回失败',
+});

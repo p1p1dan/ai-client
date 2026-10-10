@@ -22,6 +22,7 @@ import {
   isWorkerForkPayload,
   isWorkerHistoryPayload,
   isWorkerInterjectPayload,
+  isWorkerInterjectWithdrawPayload,
   isWorkerJobKillPayload,
   isWorkerJobReadPayload,
   isWorkerPanelsPayload,
@@ -57,6 +58,8 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerInterjectWithdrawPayload,
+  type WorkerInterjectWithdrawResult,
   type WorkerJobKillPayload,
   type WorkerJobKillResult,
   type WorkerJobReadPayload,
@@ -134,6 +137,11 @@ export interface BridgeSessionRuntime {
    * engine first (P1-4c2), and answers synchronously otherwise.
    */
   interject(input: WorkerInterjectPayload): WorkerInterjectResult | Promise<WorkerInterjectResult>;
+  /**
+   * Issue #8 (decision 172 §4) — take an interjection back before a turn
+   * takes it in: `withdrawn`, `delivered` (a turn has it) or `not_found`.
+   */
+  withdrawInterjection(input: WorkerInterjectWithdrawPayload): WorkerInterjectWithdrawResult;
   /** Answer one `permission.requested`. */
   respondPermission(input: { permissionId: string; decision: PermissionDecisionId }): boolean;
   /** F5 — answer one `question.requested`. */
@@ -380,6 +388,9 @@ export class BridgeRpcServer {
           break;
         case 'worker.interject':
           await this.handleInterject(request);
+          break;
+        case 'worker.interject.withdraw':
+          this.handleInterjectWithdraw(request);
           break;
         case 'worker.permission.respond':
           this.handlePermissionResponse(request);
@@ -714,6 +725,25 @@ export class BridgeRpcServer {
       return;
     }
     this.respondSuccess(request, await this.runtime.interject(request.payload));
+  }
+
+  private handleInterjectWithdraw(request: WorkerRpcRequest): void {
+    if (!isWorkerInterjectWithdrawPayload(request.payload)) {
+      this.respondError(request, {
+        code: 'WORKER_INVALID_PAYLOAD',
+        message: 'worker.interject.withdraw requires logicalSessionId and attemptId',
+        retryable: false,
+      });
+      return;
+    }
+    if (!this.runtime) {
+      // No runtime, no table: whatever it was handed, this worker cannot reach it.
+      this.respondSuccess(request, {
+        outcome: 'not_found',
+      } satisfies WorkerInterjectWithdrawResult);
+      return;
+    }
+    this.respondSuccess(request, this.runtime.withdrawInterjection(request.payload));
   }
 
   private handlePermissionResponse(request: WorkerRpcRequest): void {

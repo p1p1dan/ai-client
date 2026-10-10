@@ -192,6 +192,17 @@ export function userBubbleAwaitingClass(): string {
 }
 
 /**
+ * GitHub issue #8 (decision 172 §4): the labelled action on an awaiting
+ * bubble's status line, 「撤回」 — a ghost `Button` at the 24 px button tier,
+ * in the meta size its line already uses (CJK needs it; the `xs` size's own
+ * `text-xs` is gone from this folder). The same shape as the goal and todo
+ * strips' labelled actions (`panelStripActionClass`).
+ */
+export function userBubbleActionClass(): string {
+  return 'h-6 gap-1 px-1.5 text-meta sm:h-6 sm:text-meta';
+}
+
+/**
  * The prompt text inside the bubble.
  *
  * `select-text` because `globals.css` sets `user-select: none` on `*`; without

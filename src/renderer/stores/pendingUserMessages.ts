@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { AttachmentDraft } from '@/components/chat/attachments';
 import type { ChatMessage, ChatMessageAttachment } from './chatSessions';
 
 /**
@@ -25,7 +26,22 @@ export interface PendingUserMessage {
    * no turn while it waits (`mergePendingUserRows`, decision 172).
    */
   awaitingDelivery?: true;
+  /**
+   * GitHub issue #8 (decision 172 §4): the composer drafts an awaiting
+   * message carried, bytes and all, so a withdrawal can hand them back to the
+   * message box. Never set on a send's row.
+   */
+  drafts?: readonly AttachmentDraft[];
+  /**
+   * Where a withdrawal of an awaiting message stands: `pending` while the
+   * engine is asked; `delivered` when a turn took it in first (its echo
+   * retires the row); `unavailable` when the engine connection it was handed
+   * to is gone, so nothing can name it any more. Absent: it can be withdrawn.
+   */
+  withdrawal?: InterjectionWithdrawal;
 }
+
+export type InterjectionWithdrawal = 'pending' | 'delivered' | 'unavailable';
 
 interface PendingUserMessagesStore {
   bySession: Record<string, PendingUserMessage[]>;
@@ -33,7 +49,23 @@ interface PendingUserMessagesStore {
   /** Pair one renderer attempt with its exact authoritative Pi user echo. */
   acknowledgeAttempt: (sessionId: string, attemptId: string, messageId: string) => void;
   clear: (attemptId: string) => void;
+  /** Issue #8: move an awaiting row's withdrawal on; `null` makes it withdrawable again. */
+  setWithdrawal: (attemptId: string, withdrawal: InterjectionWithdrawal | null) => void;
+  /**
+   * Issue #8: the session's engine connection went away (`disconnected`), and
+   * with it the table that names its awaiting messages: none of them can be
+   * withdrawn from here on.
+   */
+  markWithdrawalsUnavailable: (sessionId: string) => void;
   pruneSessions: (sessionIds: readonly string[]) => void;
+}
+
+/** An awaiting row a withdrawal could still reach, or one being withdrawn now. */
+function stillWithdrawable(message: PendingUserMessage): boolean {
+  return (
+    message.awaitingDelivery === true &&
+    (message.withdrawal === undefined || message.withdrawal === 'pending')
+  );
 }
 
 export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((set) => ({
@@ -82,6 +114,35 @@ export const usePendingUserMessagesStore = create<PendingUserMessagesStore>()((s
       }
       return changed ? { bySession } : state;
     }),
+  setWithdrawal: (attemptId, withdrawal) =>
+    set((state) => {
+      for (const [sessionId, messages] of Object.entries(state.bySession)) {
+        const index = messages.findIndex((message) => message.attemptId === attemptId);
+        const current = messages[index];
+        if (!current) continue;
+        if (!current.awaitingDelivery || (current.withdrawal ?? null) === withdrawal) return state;
+        const { withdrawal: _previous, ...rest } = current;
+        const next = [...messages];
+        next[index] = withdrawal === null ? rest : { ...rest, withdrawal };
+        return { bySession: { ...state.bySession, [sessionId]: next } };
+      }
+      return state;
+    }),
+  markWithdrawalsUnavailable: (sessionId) =>
+    set((state) => {
+      const messages = state.bySession[sessionId];
+      if (!messages?.some(stillWithdrawable)) return state;
+      return {
+        bySession: {
+          ...state.bySession,
+          [sessionId]: messages.map((message) =>
+            stillWithdrawable(message)
+              ? { ...message, withdrawal: 'unavailable' as const }
+              : message
+          ),
+        },
+      };
+    }),
   pruneSessions: (sessionIds) =>
     set((state) => {
       const live = new Set(sessionIds);
@@ -120,6 +181,13 @@ export function isPendingUserMessage(message: ChatMessage): boolean {
 /** A pending row the running turn has not taken in yet (decision 093). */
 export function isAwaitingDeliveryMessage(message: ChatMessage): boolean {
   return message.id.startsWith(AWAITING_DELIVERY_PREFIX);
+}
+
+/** Issue #8: the attempt an awaiting row draws, or `null` for any other row. */
+export function awaitingDeliveryAttemptId(message: ChatMessage): string | null {
+  return isAwaitingDeliveryMessage(message)
+    ? message.id.slice(AWAITING_DELIVERY_PREFIX.length)
+    : null;
 }
 
 const NO_ROWS: readonly ChatMessage[] = [];

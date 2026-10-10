@@ -62,6 +62,8 @@ const compactSession = vi.fn(async () => ({ requestId: 'compact-1' }));
 const killSessionJob = vi.fn(async () => ({ outcome: 'requested' }));
 const readSessionJob = vi.fn(async () => null);
 const interruptSubagent = vi.fn(async () => ({ interrupted: true }));
+/** Issue #8 (decision 172 §4) — the awaiting bubble's 「撤回」. */
+const withdrawInterjection = vi.fn(async () => ({ outcome: 'withdrawn' }));
 const send = vi.fn(async () => 'send-1');
 const stop = vi.fn(async () => 'stop-1');
 const closeSession = vi.fn(async () => 'close-1');
@@ -123,6 +125,7 @@ vi.mock('../../services/agent-host/WorkerManager', () => ({
     killSessionJob,
     readSessionJob,
     interruptSubagent,
+    withdrawInterjection,
     send,
     stop,
     closeSession,
@@ -213,6 +216,15 @@ function invoke<T>(channel: string, payload?: unknown): Promise<T> {
   if (!handler) throw new Error(`missing handler ${channel}`);
   return Promise.resolve(handler({ sender: { id: 7 } }, payload) as T);
 }
+
+describe('issue #8 interjection withdrawal IPC', () => {
+  it('[I8-IPC] asks WorkerManager for the session and attempt, claiming nothing', async () => {
+    await expect(
+      invoke('chat:withdrawInterjection', { sessionId: 's1', attemptId: 'interject-1' })
+    ).resolves.toEqual({ outcome: 'withdrawn' });
+    expect(withdrawInterjection).toHaveBeenCalledWith('s1', 'interject-1');
+  });
+});
 
 /**
  * dsh-rebase P1-7b (decision 119): the jobs and subagents windows. The kill

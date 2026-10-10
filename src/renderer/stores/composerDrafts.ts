@@ -18,7 +18,8 @@ import type { AttachmentDraft } from '@/components/chat/attachments';
  * `offered` is text handed to a chat's composer from outside it — a rewind
  * puts the prompt it rewound to back (problem 1). The composer takes it when
  * that chat is (or next becomes) the one on screen, so an offer never lands in
- * another chat's box.
+ * another chat's box. `offeredAttachments` rides beside it for an offer that
+ * carries attachments too: a withdrawn Ctrl+Enter message (issue #8).
  */
 export interface ComposerDraft {
   text: string;
@@ -52,6 +53,7 @@ export function mergeOfferedText(current: string, offered: string): string {
 interface ComposerDraftsState {
   parked: Record<string, ComposerDraft>;
   offered: Record<string, string>;
+  offeredAttachments: Record<string, readonly AttachmentDraft[]>;
   /** Keep a chat's draft while the composer is elsewhere; an empty one is dropped. */
   park: (sessionId: string | null, draft: ComposerDraft) => void;
   /** Hand back (and forget) what was parked for a chat. */
@@ -72,6 +74,13 @@ interface ComposerDraftsState {
   offerText: (sessionId: string, text: string) => void;
   /** Take (and forget) the text offered to a chat. */
   takeOffered: (sessionId: string) => string | undefined;
+  /**
+   * Issue #8 (decision 172 §4): offer a whole draft — its text as `offerText`
+   * does, its attachments after any already offered.
+   */
+  offerDraft: (sessionId: string, draft: ComposerDraft) => void;
+  /** Take (and forget) the attachments offered to a chat. */
+  takeOfferedAttachments: (sessionId: string) => readonly AttachmentDraft[] | undefined;
   /** Forget the drafts of chats that no longer exist; the start screen's stays. */
   pruneSessions: (sessionIds: readonly string[]) => void;
 }
@@ -85,6 +94,7 @@ function without<T>(record: Readonly<Record<string, T>>, key: string): Record<st
 export const useComposerDraftsStore = create<ComposerDraftsState>()((set, get) => ({
   parked: {},
   offered: {},
+  offeredAttachments: {},
 
   park: (sessionId, draft) => {
     const key = draftKey(sessionId);
@@ -140,17 +150,38 @@ export const useComposerDraftsStore = create<ComposerDraftsState>()((set, get) =
     return text;
   },
 
+  offerDraft: (sessionId, draft) => {
+    get().offerText(sessionId, draft.text);
+    if (draft.attachments.length === 0) return;
+    set((state) => ({
+      offeredAttachments: {
+        ...state.offeredAttachments,
+        [sessionId]: [...(state.offeredAttachments[sessionId] ?? []), ...draft.attachments],
+      },
+    }));
+  },
+
+  takeOfferedAttachments: (sessionId) => {
+    const drafts = get().offeredAttachments[sessionId];
+    if (drafts !== undefined) {
+      set((state) => ({ offeredAttachments: without(state.offeredAttachments, sessionId) }));
+    }
+    return drafts;
+  },
+
   pruneSessions: (sessionIds) =>
     set((state) => {
       const live = new Set([...sessionIds, START_SCREEN_DRAFT_KEY]);
-      const parkedKeys = Object.keys(state.parked);
-      const offeredKeys = Object.keys(state.offered);
-      if (parkedKeys.every((key) => live.has(key)) && offeredKeys.every((key) => live.has(key))) {
-        return state;
-      }
+      const keys = [state.parked, state.offered, state.offeredAttachments].flatMap((record) =>
+        Object.keys(record)
+      );
+      if (keys.every((key) => live.has(key))) return state;
+      const kept = <T>(record: Record<string, T>) =>
+        Object.fromEntries(Object.entries(record).filter(([key]) => live.has(key)));
       return {
-        parked: Object.fromEntries(Object.entries(state.parked).filter(([key]) => live.has(key))),
-        offered: Object.fromEntries(Object.entries(state.offered).filter(([key]) => live.has(key))),
+        parked: kept(state.parked),
+        offered: kept(state.offered),
+        offeredAttachments: kept(state.offeredAttachments),
       };
     }),
 }));
@@ -179,5 +210,5 @@ export function switchComposerDraft(input: {
 
 /** Test-only: module state must not leak between cases. */
 export function resetComposerDraftsForTests(): void {
-  useComposerDraftsStore.setState({ parked: {}, offered: {} });
+  useComposerDraftsStore.setState({ parked: {}, offered: {}, offeredAttachments: {} });
 }

@@ -39,6 +39,7 @@ import {
   isWorkerForkResult,
   isWorkerHistoryResult,
   isWorkerInterjectResult,
+  isWorkerInterjectWithdrawResult,
   isWorkerJobKillResult,
   isWorkerPermissionRespondResult,
   isWorkerQuestionRespondResult,
@@ -74,6 +75,8 @@ import {
   type WorkerHistoryResult,
   type WorkerInterjectPayload,
   type WorkerInterjectResult,
+  type WorkerInterjectWithdrawPayload,
+  type WorkerInterjectWithdrawResult,
   type WorkerJobKillPayload,
   type WorkerJobKillResult,
   type WorkerJobReadPayload,
@@ -2203,6 +2206,33 @@ export class WorkerManager {
       interjected: result.interjected,
       ...(result.turnActive !== undefined ? { turnActive: result.turnActive } : {}),
     };
+  }
+
+  /**
+   * GitHub issue #8 (dsh-rebase decision 172 §4): take a Ctrl+Enter message
+   * back before a turn takes it in. Only the worker that steered it holds the
+   * table that names it, so a session with no ready worker answers
+   * `not_found` without starting one; the latch is never touched — a running
+   * turn keeps running, and nothing new starts.
+   */
+  async withdrawInterjection(
+    sessionId: string,
+    attemptId: string
+  ): Promise<WorkerInterjectWithdrawResult> {
+    const entry = this.entriesBySession.get(sessionId);
+    if (!entry?.slot || entry.state !== 'ready') return { outcome: 'not_found' };
+    entry.lastUsedAt = this.now();
+    const result = await entry.slot.request<
+      WorkerInterjectWithdrawResult,
+      WorkerInterjectWithdrawPayload
+    >('worker.interject.withdraw', { logicalSessionId: entry.logicalSessionId, attemptId });
+    if (!isWorkerInterjectWithdrawResult(result)) {
+      throw new WorkerManagerError(
+        'worker_invalid_withdraw_ack',
+        'The engine returned an invalid withdrawal acknowledgement'
+      );
+    }
+    return { outcome: result.outcome };
   }
 
   /** `slot` is still the one this session's live, ready entry runs on. */
