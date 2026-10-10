@@ -1,8 +1,6 @@
 import { deriveInheritedBaseUrl, stripRedundantVersion } from '@shared/modelBaseUrl';
 import {
   PI_MODEL_APIS,
-  PI_USER_AGENT_ENV,
-  PI_USER_AGENT_HEADER,
   type PiCredentialSource,
   type PiManagedModelDefinition,
   type PiManagedModelsConfig,
@@ -326,32 +324,6 @@ export function validatePiManagedModelsConfig(
 }
 
 /**
- * F08: the provider headers this client adds on its way to `models.json`.
- *
- * Added HERE rather than at any of `writeAll`'s callers because this function
- * is the only path to `models.json` — a fresh remote answer, the cheap rewrite
- * of a still-fresh cache, and the stale-cache fallback all pass through it. A
- * caller-side injection would have to be repeated three times and would be
- * missing from the fourth path somebody adds later.
- *
- * An administrator's own `User-Agent` wins. The reasoning is the same as
- * `resolveProviderApiKey`'s: a value the management site states explicitly is a
- * decision, and this default is only a default. The comparison is
- * case-insensitive because HTTP header names are — writing `User-Agent`
- * alongside a configured `user-agent` would emit the field twice and leave the
- * winner to the transport.
- */
-function withClientHeaders(headers: Record<string, string> | undefined): Record<string, string> {
-  const stated = headers ?? {};
-  const alreadySet = Object.keys(stated).some(
-    (name) => name.toLowerCase() === PI_USER_AGENT_HEADER.toLowerCase()
-  );
-  return alreadySet
-    ? { ...stated }
-    : { ...stated, [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}` };
-}
-
-/**
  * The `models.json` pi reads.
  *
  * Two fields never survive this step: `credentials` (our vocabulary, not pi's)
@@ -359,11 +331,9 @@ function withClientHeaders(headers: Record<string, string> | undefined): Record<
  * is resolved to the concrete login URL here, because pi needs an address, not
  * a statement about where one comes from.
  *
- * One field is ADDED: `headers`, carrying this client's User-Agent as an
- * environment REFERENCE (`$AICLIENT_PI_USER_AGENT`). Written as a reference and
- * not as a literal so it stays inside the rule `validateProvider` enforces on
- * every header it accepts, and so an upgraded app corrects its own header
- * without having to rewrite config it may not re-sync.
+ * `headers` is copied as the administrator stated it. F08's added User-Agent
+ * reference is gone (dsh-rebase decision 171): DSH dropped it as a reserved
+ * header, and the User-Agent is now one app setting the model plan relays.
  */
 export function toPiModelsJson(
   config: PiManagedModelsConfig,
@@ -388,7 +358,7 @@ export function toPiModelsJson(
     providers[providerId] = {
       ...rest,
       baseUrl: resolvedBaseUrl,
-      headers: withClientHeaders(headers),
+      ...(headers ? { headers } : {}),
     };
   }
   return { providers };

@@ -3,6 +3,7 @@ import type { ChatAgentDefaults } from '@shared/models/chatAgentDefaults';
 import type { ConnectionProfile, GitHostMapping, ProxySettings, ShellConfig } from '@shared/types';
 import type { CommonAISettings } from '@shared/types/ai';
 import type { PromptCacheTtl } from '@shared/types/promptCacheTtl';
+import type { RequestUserAgentMode } from '@shared/types/requestUserAgent';
 
 // Theme types
 export type Theme = 'light' | 'dark' | 'system' | 'sync-terminal';
@@ -245,6 +246,23 @@ export interface SettingsState {
   experimentalCacheControlOnTools: boolean;
 
   /**
+   * dsh-rebase decision 171 (GitHub issue #7): the User-Agent of every request
+   * to a model service (`@shared/types/requestUserAgent`): `default`
+   * (`claude-cli-pilab/<app version>`), `engine` (DSH's own) or `custom`.
+   * Main reads it into the DSH model plan and rebuilds the plan when the
+   * User-Agent it means changes (`agent-host/requestUserAgentSetting.ts`).
+   */
+  requestUserAgentMode: RequestUserAgentMode;
+
+  /**
+   * Decision 171: the custom value, sent in `custom` mode only and kept while
+   * another mode is chosen. Empty when nothing usable was entered (the plan
+   * then sends the default); otherwise always a value that passes
+   * `checkRequestUserAgent`, trimmed — the setter refuses anything else.
+   */
+  requestUserAgentCustom: string;
+
+  /**
    * T104: the chat area's own typeface and its two size tiers.
    *
    * Separate from `fontFamily` / `fontSize` above on purpose — those two are
@@ -361,6 +379,10 @@ export interface SettingsState {
   setProviderIdleTimeoutMs: (idleTimeoutMs: number) => void;
   /** GW-16 temporary switch (decision 159). */
   setExperimentalCacheControlOnTools: (enabled: boolean) => void;
+  /** Decision 171: ignores a mode it does not know. */
+  setRequestUserAgentMode: (mode: RequestUserAgentMode) => void;
+  /** Decision 171: stores a value that passes the check (trimmed), or `''` to clear; ignores the rest. */
+  setRequestUserAgentCustom: (value: string) => void;
 
   // Setters - Chat typography (T104)
   /** Empty string = follow the app's `--font-sans`. */

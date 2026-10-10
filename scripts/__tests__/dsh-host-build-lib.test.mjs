@@ -704,14 +704,17 @@ describe('the host bundle (P1-3a)', () => {
     expect(verdict.failures).toEqual([]);
     // P1-5: the model plan's overlays and the credential relay (decisions 033, 034).
     // P1-10b: the plugin rules and the shared allowlist library (decision 108).
+    // Decision 171: the User-Agent relay and the check it shares with Main.
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
       'src/dsh-host/lib/credentialRelay.ts',
       'src/dsh-host/lib/hostModelPlan.ts',
       'src/dsh-host/lib/hostPlugins.ts',
       'src/dsh-host/lib/hostProfile.ts',
+      'src/dsh-host/lib/userAgentRelay.ts',
       'src/shared/dshPluginAllowlist.ts',
       'src/shared/dshPlugins.ts',
+      'src/shared/types/requestUserAgent.ts',
     ]);
     expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
       '@deepseek-ai/dsh-app-boot',
@@ -720,6 +723,7 @@ describe('the host bundle (P1-3a)', () => {
     const text = fs.readFileSync(path.join(outDir, 'host.js'), 'utf8');
     expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
     expect(text).toContain('function reconcileProductBundles(');
+    expect(text).toContain('function installUserAgentRelay(');
   });
 
   it('flags a host bundle that took in anything else', () => {

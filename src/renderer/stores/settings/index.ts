@@ -14,6 +14,11 @@ import {
   DEFAULT_PROVIDER_IDLE_TIMEOUT_MS,
   isProviderIdleTimeoutMs,
 } from '@shared/types/providerTimeout';
+import {
+  checkRequestUserAgent,
+  DEFAULT_REQUEST_USER_AGENT_MODE,
+  isRequestUserAgentMode,
+} from '@shared/types/requestUserAgent';
 import { useEffect, useState } from 'react';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
@@ -183,6 +188,10 @@ export function getInitialState() {
     // GW-16 temporary switch (decision 159): the plan's own default.
     experimentalCacheControlOnTools: DEFAULT_CACHE_CONTROL_ON_TOOLS,
 
+    // Decision 171: the plan's own default, `claude-cli-pilab/<app version>`.
+    requestUserAgentMode: DEFAULT_REQUEST_USER_AGENT_MODE,
+    requestUserAgentCustom: '',
+
     // T104: chat typography. Empty family = follow the app's `--font-sans`.
     // The two sizes are D1's 17 / 14 (bumped from 16 / 13 on 2026-09-24, see
     // `a86cefa4`), and MUST equal `globals.css`'s `--text-chat-body` /
@@ -329,6 +338,21 @@ export const useSettingsStore = create<SettingsState>()(
 
       setExperimentalCacheControlOnTools: (experimentalCacheControlOnTools) =>
         set({ experimentalCacheControlOnTools }),
+
+      // Decision 171: guarded at the door, like the idle timeout above — a
+      // value the plan would refuse is never stored. `''` clears the custom
+      // value (the plan then sends the default).
+      setRequestUserAgentMode: (requestUserAgentMode) => {
+        if (isRequestUserAgentMode(requestUserAgentMode)) set({ requestUserAgentMode });
+      },
+      setRequestUserAgentCustom: (value) => {
+        if (value.trim() === '') {
+          set({ requestUserAgentCustom: '' });
+          return;
+        }
+        const checked = checkRequestUserAgent(value);
+        if (checked.ok) set({ requestUserAgentCustom: checked.value });
+      },
 
       // T104: three pure `set({…})` writers with no side effects, like every
       // other setter here — the override is applied by `ChatWorkspace` reading

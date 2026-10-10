@@ -209,6 +209,18 @@ describe('host.ts model plan and keys (P1-5, decisions 033 and 034)', () => {
   });
 });
 
+describe('host.ts User-Agent relay (decision 171, GitHub issue #7)', () => {
+  it('wraps fetch before the first DSH module loads', () => {
+    expect(host).toContain("import { installUserAgentRelay } from './lib/userAgentRelay.ts';");
+    const installed = host.indexOf('installUserAgentRelay(globalThis');
+    const firstDsh = host.search(/\bimport\(\s*'@deepseek-ai\//);
+    expect(installed).toBeGreaterThan(0);
+    expect(firstDsh).toBeGreaterThan(installed);
+    // A static import of a DSH package would be evaluated before the wrapper.
+    expect(host).not.toMatch(/^import[^;]*from\s*'@deepseek-ai\//m);
+  });
+});
+
 describe('host.ts IPC (P1-3a, decision 019)', () => {
   it('buffers IPC for the bridge whenever there is a channel, with no mode switch', () => {
     expect(host).toContain("const ipc = typeof process.send === 'function';");

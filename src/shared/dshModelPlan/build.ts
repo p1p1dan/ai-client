@@ -10,6 +10,7 @@
 
 import { createHash } from 'node:crypto';
 import { resolveCacheControlOnTools } from '../types/cacheControlOnTools.ts';
+import { resolveRequestUserAgent, USER_AGENT_RELAY_HEADER } from '../types/requestUserAgent.ts';
 import { dshRouteSettings } from './settings.ts';
 import {
   CLIENT_IDENTITY_HEADER,
@@ -36,8 +37,15 @@ import type {
   DshProtocol,
 } from './types.ts';
 
-/** Header names DSH owns; a profile value would be deleted anyway (D5). */
-const RESERVED_HEADERS: ReadonlySet<string> = new Set(['user-agent']);
+/**
+ * Header names a provider may not state. DSH owns User-Agent and deletes a
+ * profile value anyway (D5); ours travels in the relay header (decision 171),
+ * so a provider's own relay header would be taken for the app's choice.
+ */
+const RESERVED_HEADERS: ReadonlySet<string> = new Set([
+  'user-agent',
+  USER_AGENT_RELAY_HEADER.toLowerCase(),
+]);
 
 /**
  * Substrings that make a header name look like it carries a credential. Such
@@ -161,6 +169,19 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
   const settings = dshRouteSettings(input.settings);
   const cacheControlOnTools = resolveCacheControlOnTools(input.settings?.cacheControlOnTools);
   const drops: DshPlanDrop[] = [];
+  // Decision 171: one User-Agent for every route, relayed past DSH's own.
+  const userAgent = resolveRequestUserAgent(
+    { mode: input.settings?.userAgentMode, custom: input.settings?.userAgentCustom },
+    input.clientVersion ?? ''
+  );
+  if (userAgent.problem) {
+    drops.push({
+      kind: 'setting',
+      setting: 'userAgent',
+      reason: 'invalid_user_agent',
+      detail: userAgent.problem,
+    });
+  }
   const fieldDropKeys = new Set<string>();
   const dropField = (
     providerId: string,
@@ -222,7 +243,7 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
     return { ...compat, supportsCacheControlOnTools: false };
   };
 
-  /** R5: expanded like the native runtime; the reserved name and dead references go. */
+  /** R5: expanded like the native runtime; the reserved names and dead references go. */
   const routeHeaders = (raw: RawRecord, providerId: string): Record<string, string> | undefined => {
     const out: Record<string, string> = {};
     for (const [name, value] of Object.entries(raw)) {
@@ -254,6 +275,9 @@ export function buildDshModelPlan(input: DshModelPlanInput): DshModelPlan {
       }
       out[CLIENT_IDENTITY_HEADER] = version;
     }
+    // Decision 171: what the host's fetch wrapper sends as User-Agent in place
+    // of DSH's own. None in `engine` mode: DSH's own goes out.
+    if (userAgent.userAgent !== undefined) out[USER_AGENT_RELAY_HEADER] = userAgent.userAgent;
     return Object.keys(out).length > 0 ? out : undefined;
   };
 

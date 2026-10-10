@@ -15,8 +15,6 @@ import {
   PI_MODEL_SOURCE_FILE_NAME,
   PI_MODEL_SYNC_STATE_FILE_NAME,
   PI_MODELS_FILE_NAME,
-  PI_USER_AGENT_ENV,
-  PI_USER_AGENT_HEADER,
   type PiManagedModelDefinition,
   type PiManagedModelsConfig,
   type PiModelSyncFailureKind,
@@ -986,18 +984,19 @@ function userProviderId(provider: UserProvider): string {
  *
  * `headers` keeps only `$`-prefixed values. `validateProvider` enforces that
  * rule on the managed side so a literal secret can never land in this file,
- * and a hand-typed header must not be the hole in it — the app's own
- * User-Agent reference is added the same way the managed writer adds it.
+ * and a hand-typed header must not be the hole in it. No User-Agent is added:
+ * F08's reference went with dsh-rebase decision 171, which relays the app's
+ * one User-Agent setting through the model plan instead.
  */
 function toPiUserProvider(provider: UserProvider): Record<string, unknown> {
-  const headers: Record<string, string> = { [PI_USER_AGENT_HEADER]: `$${PI_USER_AGENT_ENV}` };
+  const headers: Record<string, string> = {};
   for (const [name, value] of Object.entries(provider.headers ?? {})) {
     if (value.startsWith('$')) headers[name] = value;
   }
   return {
     baseUrl: provider.baseUrl,
     api: provider.api,
-    headers,
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
     models: (provider.models ?? []).map((id) =>
       toPiUserModel(id, provider.api, provider.modelMeta?.[id])
     ),

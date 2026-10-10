@@ -20,47 +20,9 @@ export const PI_MODEL_MANAGEMENT_URL_ENV = 'PILAB_MODEL_CONFIG_URL';
 // `NATIVE_PROJECT_TRUSTED` left with the native worker, their only readers.
 // The DSH bridge passes project trust as a constant of its own (decision 009).
 
-/**
- * F08 — the environment variable every generated provider's `User-Agent`
- * header references.
- *
- * pi resolves `$NAME` in a provider's `headers` at request time, so the config
- * on disk carries the REFERENCE and this process supplies the value. That split
- * is not incidental: `configValidation.ts` refuses any header whose value is
- * not `$`-prefixed, precisely so a `models.json` can never come to hold a
- * literal secret or a value that outlives the build that wrote it. A version
- * number is neither, but it IS build-specific, and routing it through the
- * environment means an upgraded app corrects its own header without rewriting
- * config it may not even sync.
- */
-export const PI_USER_AGENT_ENV = 'AICLIENT_PI_USER_AGENT';
-
-/**
- * F08 — product half of the User-Agent, before the `/<version>` suffix.
- *
- * pi's default (`pi (win32 10.0.26100; x64)`) identifies the CLI and the host
- * OS, which is exactly what the gateway must NOT see here: requests from this
- * app are not requests from a pi CLI installation, and telling the two apart at
- * the gateway is the whole point of overriding it. The OS/arch detail is
- * dropped with it rather than reproduced — it is not ours to publish.
- */
-export const PI_USER_AGENT_PRODUCT = 'claude-cli-pilab';
-
-/** `claude-cli-pilab/0.4.0-test.7` — the value {@link PI_USER_AGENT_ENV} carries. */
-export function piUserAgent(appVersion: string): string {
-  const version = appVersion.trim();
-  return version ? `${PI_USER_AGENT_PRODUCT}/${version}` : PI_USER_AGENT_PRODUCT;
-}
-
-/**
- * The header name written into every generated provider.
- *
- * Compared case-INSENSITIVELY against what a management config already carries
- * (see `toPiModelsJson`): HTTP header names are case-insensitive, so a config
- * spelling it `user-agent` states the same field, and treating the two as
- * different would write both and leave which one wins to the transport.
- */
-export const PI_USER_AGENT_HEADER = 'User-Agent';
+// dsh-rebase decision 171: F08's User-Agent reference (`$AICLIENT_PI_USER_AGENT`
+// in every provider's `headers`) went with the native worker that resolved it;
+// the product name lives on in `types/requestUserAgent.ts`.
 
 /**
  * Feature id of delegation, and the only native feature switch there is today.

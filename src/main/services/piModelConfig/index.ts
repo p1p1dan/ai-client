@@ -19,6 +19,7 @@ import { app, net } from 'electron';
 import { cacheControlOnToolsSettings } from '../agent-host/cacheControlOnToolsSetting';
 import { promptCacheTtlSettings } from '../agent-host/promptCacheSettings';
 import { providerTimeoutSettings } from '../agent-host/providerTimeoutSettings';
+import { requestUserAgentSettings } from '../agent-host/requestUserAgentSetting';
 import { getAppStateRoot } from '../appStatePaths';
 import { getCredentialVault } from '../auth';
 import { resolveManagedCredentialsEnabled } from '../auth/credentialMode';
@@ -194,6 +195,9 @@ function dshModelPlanFor(native: NativeModelCatalog | undefined): DshModelPlan {
       ...(promptCacheTtl ? { promptCacheTtl } : {}),
       ...providerTimeoutSettings(),
       ...cacheControlOnToolsSettings(),
+      // Decision 171: the User-Agent every route relays; its default is built
+      // from `clientVersion` below.
+      ...requestUserAgentSettings(),
     },
     clientVersion: app.getVersion(),
     log: (...args) => console.info(...args),

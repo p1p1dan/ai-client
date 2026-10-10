@@ -10,6 +10,7 @@
 
 import type { SessionEffortLevel } from '../types/agentHost.ts';
 import type { PromptCacheTtl } from '../types/promptCacheTtl.ts';
+import type { RequestUserAgentMode, RequestUserAgentProblem } from '../types/requestUserAgent.ts';
 
 /** DSH's effort vocabulary is ours word for word (`dsh-llm-pi-ai` lib/index.js:297-305). */
 export type DshEffortLevel = SessionEffortLevel;
@@ -52,6 +53,13 @@ export interface DshRouteSettingsInput {
    * `compat.supportsCacheControlOnTools: false` on those routes.
    */
   cacheControlOnTools?: boolean;
+  /**
+   * Decision 171: the User-Agent every route sends (`requestUserAgentMode`).
+   * Absent means the default, `claude-cli-pilab/<clientVersion>`.
+   */
+  userAgentMode?: RequestUserAgentMode;
+  /** Decision 171: the custom value as stored; read in `custom` mode only, and checked here. */
+  userAgentCustom?: string;
 }
 
 /** One `llm-pi-ai` provider profile, keyed in `routes` by the route name. */
@@ -101,6 +109,14 @@ export type DshFieldDropReason =
    */
   | 'max_tokens_clamped';
 
+/** Why a setting was not planned as it stands (decision 171). */
+export type DshSettingDropReason =
+  /**
+   * The User-Agent choice fails the shared check (`detail`: why): a custom
+   * value is planned as the default, an unusable default as DSH's own.
+   */
+  'invalid_user_agent';
+
 export type DshPlanDrop =
   | {
       kind: 'model';
@@ -116,6 +132,12 @@ export type DshPlanDrop =
       field: string;
       reason: DshFieldDropReason;
       detail?: string;
+    }
+  | {
+      kind: 'setting';
+      setting: 'userAgent';
+      reason: DshSettingDropReason;
+      detail: RequestUserAgentProblem;
     };
 
 export interface DshModelPlan {
@@ -138,6 +160,9 @@ export interface DshModelPlanInput {
   /** Environment used to expand `$NAME` header values, as the native runtime does. */
   env?: Readonly<Record<string, string | undefined>>;
   settings?: DshRouteSettingsInput;
-  /** The app version, sent on every route as `X-Pilab-Client` (decision 037). */
+  /**
+   * The app version, sent on every route as `X-Pilab-Client` (decision 037),
+   * and the version of the default User-Agent (decision 171).
+   */
   clientVersion?: string;
 }

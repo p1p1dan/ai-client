@@ -28,6 +28,7 @@ import { useI18n } from '@/i18n';
 import { Z_INDEX } from '@/lib/z-index';
 import { useSettingsStore } from '@/stores/settings';
 import { ExperimentalCacheControlSection } from './ExperimentalCacheControlSection';
+import { RequestUserAgentSection } from './RequestUserAgentSection';
 import { SettingsRow, SettingsSectionBlock } from './SettingsPrimitives';
 
 function formatTime(value: number | null): string {
@@ -209,6 +210,7 @@ export function PiModelManagementSettings() {
 
       <PromptCacheTtlSection />
       <ProviderIdleTimeoutSection />
+      <RequestUserAgentSection />
       <ExperimentalCacheControlSection />
     </div>
   );

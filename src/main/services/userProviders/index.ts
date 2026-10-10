@@ -17,7 +17,8 @@
  * request, by `services/agentMigration`.
  */
 
-import { net } from 'electron';
+import { app, net } from 'electron';
+import { resolveMainRequestUserAgent } from '../agent-host/requestUserAgentSetting';
 import { getCredentialVault } from '../auth';
 import type { UserProvider } from '../auth/CredentialVault';
 import { UserProviderService, type UserProviderStore } from './UserProviderService';
@@ -91,6 +92,9 @@ export function getUserProviderService(): UserProviderService {
           text: () => response.text(),
         };
       },
+      // Decision 171: Electron's `net.fetch` sends a User-Agent it is given
+      // (checked on Electron 39); `engine` mode gives none and keeps its own.
+      userAgent: () => resolveMainRequestUserAgent(app.getVersion()).userAgent,
       onChange: () => {
         // Lazy import: this module is reached from IPC registration at boot,
         // and `piModelConfig` pulls in the whole managed-config stack.

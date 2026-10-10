@@ -4105,3 +4105,27 @@ Object.assign(zhTranslations, {
   'Plan approved with all prompts bypassed; the goal could not be set.':
     '计划已批准（完全放行），但未能设定目标。',
 });
+
+// Request identity / User-Agent (issue #7)
+/**
+ * dsh-rebase decision 171 (GitHub issue #7): the 「请求标识（User-Agent）」
+ * section of 「设置 · 模型」 (`RequestUserAgentSection`). `Default` and `Custom`
+ * reuse the catalog's existing entries; the last key is also in the decision
+ * 159 block, which goes away with that switch.
+ */
+Object.assign(zhTranslations, {
+  'Request identity (User-Agent)': '请求标识（User-Agent）',
+  'The User-Agent sent with every request to a model service, including the company gateway and your own AI services, and when fetching a service model list. Some services only accept specific values.':
+    '发给模型服务的每个请求（包括公司网关和你添加的 AI 服务）以及获取服务模型列表时使用的 User-Agent。部分服务只接受特定的值。',
+  'User-Agent': 'User-Agent',
+  'Engine default': '引擎默认',
+  'Custom User-Agent': '自定义 User-Agent',
+  'The engine sends its own User-Agent (deepseek-harness/…). Fetching a service model list uses the system default.':
+    '使用引擎自带的 User-Agent（deepseek-harness/…）。获取服务模型列表时使用系统默认值。',
+  'Until a value is entered, the default is sent:': '尚未填写，暂按默认值发送：',
+  'Sent as:': '实际发送：',
+  'At most {{count}} characters.': '最多 {{count}} 个字符。',
+  'Use letters, digits, spaces and common symbols only (visible ASCII).':
+    '只能包含英文字母、数字、空格和常见符号（可见 ASCII 字符）。',
+  'Takes effect from the next turn; no restart needed.': '从下一轮开始生效，无需重启。',
+});

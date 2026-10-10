@@ -1,4 +1,5 @@
 import { sanitizeChatAgentDefaults } from '@shared/models/chatAgentDefaults';
+import { checkRequestUserAgent, isRequestUserAgentMode } from '@shared/types/requestUserAgent';
 import type { SettingsState, TerminalKeybinding, XtermKeybindings } from './types';
 
 function sanitizeRemoteProfiles(
@@ -123,6 +124,13 @@ export function sanitizeLegacyAiSettings(
     next[key] = value;
   }
   return next as Partial<SettingsState>;
+}
+
+/** Decision 171: a stored custom User-Agent the check accepts (trimmed), else the current one. */
+function sanitizeRequestUserAgentCustom(value: unknown, fallback: string): string {
+  if (value === '') return '';
+  const checked = checkRequestUserAgent(value);
+  return checked.ok ? checked.value : fallback;
 }
 
 /**
@@ -293,6 +301,16 @@ export function migrateSettings(
       ...currentState.proxySettings,
       ...persisted.proxySettings,
     },
+
+    // Decision 171: a hand-edited file must not show a mode the page cannot
+    // select, or hold text the plan refuses.
+    requestUserAgentMode: isRequestUserAgentMode(persisted.requestUserAgentMode)
+      ? persisted.requestUserAgentMode
+      : currentState.requestUserAgentMode,
+    requestUserAgentCustom: sanitizeRequestUserAgentCustom(
+      persisted.requestUserAgentCustom,
+      currentState.requestUserAgentCustom
+    ),
 
     // D48 S2 §4.3: replaced wholesale rather than shallow-merged. The record's
     // shape is nested (`byAgent[agent].model`), so `{...current, ...persisted}`

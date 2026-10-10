@@ -71,7 +71,12 @@ beforeEach(() => {
   fetchFn = vi.fn();
 });
 
-function service(options: { onChange?: (rows: readonly UserProvider[]) => void } = {}) {
+function service(
+  options: {
+    onChange?: (rows: readonly UserProvider[]) => void;
+    userAgent?: () => string | undefined;
+  } = {}
+) {
   return new UserProviderService({
     store,
     fetchFn: fetchFn as never,
@@ -378,6 +383,31 @@ describe('UserProviderService — fetchModels', () => {
     expect(fetchFn).toHaveBeenCalledWith('https://api.example.com/v1/models', {
       headers: { authorization: 'Bearer K' },
     });
+  });
+
+  it('sends the configured User-Agent on every attempt, beside the key (decision 171)', async () => {
+    // Anthropic Messages tries more than one path: every one carries it.
+    fetchFn.mockResolvedValue(jsonResponse({ error: 'not here' }, 404));
+    await service({ userAgent: () => 'claude-cli-pilab/1.1.0' }).fetchModels({
+      baseUrl: 'https://gw.example.com',
+      api: 'anthropic-messages',
+      apiKey: 'K',
+    });
+    expect(fetchFn.mock.calls.length).toBeGreaterThan(1);
+    for (const [, init] of fetchFn.mock.calls) {
+      expect(init.headers['User-Agent']).toBe('claude-cli-pilab/1.1.0');
+      expect(init.headers['x-api-key']).toBe('K');
+    }
+  });
+
+  it("sends no User-Agent of its own in engine mode, leaving the transport's (decision 171)", async () => {
+    fetchFn.mockResolvedValue(jsonResponse({ data: [{ id: 'm' }] }));
+    await service({ userAgent: () => undefined }).fetchModels({
+      baseUrl: 'https://api.example.com/v1',
+      api: 'openai-completions',
+      apiKey: 'K',
+    });
+    expect(fetchFn.mock.calls[0][1]).toEqual({ headers: { authorization: 'Bearer K' } });
   });
 
   it('strips the models/ prefix Google returns', async () => {

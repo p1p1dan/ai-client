@@ -17,6 +17,7 @@ import {
   describeCacheControlOnTools,
   resolveCacheControlOnTools,
 } from '@shared/types/cacheControlOnTools';
+import { describeRequestUserAgent, resolveRequestUserAgent } from '@shared/types/requestUserAgent';
 import type { NativeModelCatalog } from './nativeCatalog';
 
 /**
@@ -41,7 +42,7 @@ export interface DshModelPlanDeps {
   /** Expands `$NAME` header values, as the native runtime did in its own process. */
   env: Readonly<Record<string, string | undefined>>;
   settings: DshRouteSettingsInput;
-  /** The app version, sent as `X-Pilab-Client` (decision 037). */
+  /** The app version, sent as `X-Pilab-Client` (decision 037) and in the default User-Agent (decision 171). */
   clientVersion?: string;
   log?: (...args: unknown[]) => void;
 }
@@ -83,14 +84,25 @@ export function resolveDshModelPlanWith(deps: DshModelPlanDeps): DshModelPlan {
         resolveCacheControlOnTools(deps.settings.cacheControlOnTools)
       )}, plan ${plan.revision.slice(0, 12)}`
     );
+    // Decision 171: the User-Agent every route relays, resolved as the plan did.
+    deps.log?.(
+      `[dsh-plan] ${describeRequestUserAgent(
+        resolveRequestUserAgent(
+          { mode: deps.settings.userAgentMode, custom: deps.settings.userAgentCustom },
+          deps.clientVersion ?? ''
+        )
+      )}, plan ${plan.revision.slice(0, 12)}`
+    );
     if (plan.dropped.length > 0) {
       deps.log?.('[dsh-model-plan] left out of the plan', {
         revision: plan.revision.slice(0, 12),
-        dropped: plan.dropped.map((drop) =>
-          drop.kind === 'model'
-            ? `${drop.providerId}/${drop.modelId}: ${drop.reason}${drop.detail ? ` (${drop.detail})` : ''}`
-            : `${drop.providerId}${drop.modelId ? `/${drop.modelId}` : ''} ${drop.field}: ${drop.reason}${drop.detail ? ` (${drop.detail})` : ''}`
-        ),
+        dropped: plan.dropped.map((drop) => {
+          const detail = drop.detail ? ` (${drop.detail})` : '';
+          if (drop.kind === 'model')
+            return `${drop.providerId}/${drop.modelId}: ${drop.reason}${detail}`;
+          if (drop.kind === 'setting') return `setting ${drop.setting}: ${drop.reason}${detail}`;
+          return `${drop.providerId}${drop.modelId ? `/${drop.modelId}` : ''} ${drop.field}: ${drop.reason}${detail}`;
+        }),
       });
     }
   }

@@ -28,7 +28,12 @@ const UPDATE = Boolean(process.env.AICLIENT_UPDATE_FIXTURES);
 
 const LOGIN_BASE_URL = 'https://gateway.example.test/v1';
 const CANARY = 'sk-canary-p15a-7d1e';
-const ENV = { AICLIENT_PI_USER_AGENT: 'claude-cli-pilab/0.0.0-test' };
+/**
+ * The environment `$NAME` header values expand from. Decision 171 removed the
+ * one reference the catalog writers added (F08's `$AICLIENT_PI_USER_AGENT`);
+ * kept here, set, so a writer that brought it back would show up in the plan.
+ */
+const ENV = { AICLIENT_PI_USER_AGENT: 'f08-reference-must-not-come-back/0' };
 
 const shippedSnapshot = () =>
   validatePiManagedModelsConfig(
@@ -95,6 +100,12 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     expect(plan.dropped.filter((drop) => drop.kind === 'model')).toEqual([]);
     expect(JSON.stringify(plan)).not.toContain(CANARY);
     expect(JSON.stringify(plan)).not.toContain(ENV.AICLIENT_PI_USER_AGENT);
+    // Decision 171 (GW-5): no User-Agent of the catalog is left to drop, and
+    // every route relays the app's default (no version given here).
+    expect(JSON.stringify(plan.dropped)).not.toContain('User-Agent');
+    for (const route of Object.values(plan.routes)) {
+      expect(route.headers).toEqual({ 'X-Aiclient-User-Agent': 'claude-cli-pilab' });
+    }
 
     if (UPDATE) {
       mkdirSync(path.dirname(GOLDEN), { recursive: true });
@@ -321,12 +332,13 @@ describe('the DSH model plan over Main’s catalog assembly', () => {
     });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
     resolveDshModelPlanWith({ native, env: ENV, settings: { promptCacheTtl: '5m' }, log });
-    // Decision 159 adds the GW-16 mode line, once per revision as well.
+    // Decision 159 adds the GW-16 mode line and decision 171 the User-Agent
+    // line, once per revision as well.
     const leftOut = log.mock.calls.filter(
       ([first]) => first === '[dsh-model-plan] left out of the plan'
     );
     expect(leftOut).toHaveLength(1);
-    expect(log).toHaveBeenCalledTimes(2);
+    expect(log).toHaveBeenCalledTimes(3);
     const logged = JSON.stringify(leftOut);
     expect(logged).toContain('u-pi-messages/u1: unsupported_api (pi-messages)');
     expect(logged).toContain('compat.supportsToolReferences: compat_not_offered');
@@ -398,7 +410,7 @@ describe('GW-16 cache_control on tools over the shipped catalog (decision 159)',
       expect(announced).toEqual([off.revision, off.revision, on.revision]);
       const modes = log.mock.calls
         .map(([first]) => first)
-        .filter((first): first is string => String(first).startsWith('[dsh-plan]'));
+        .filter((first): first is string => String(first).startsWith('[dsh-plan] cache_control'));
       expect(modes).toEqual([
         `[dsh-plan] cache_control on tools: off (2 breakpoints max), plan ${off.revision.slice(0, 12)}`,
         `[dsh-plan] cache_control on tools: on (3 breakpoints max), plan ${on.revision.slice(0, 12)}`,
@@ -407,6 +419,86 @@ describe('GW-16 cache_control on tools over the shipped catalog (decision 159)',
     } finally {
       stop();
     }
+  });
+});
+
+describe('User-Agent over the shipped catalog (decision 171, GitHub issue #7)', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'dsh-model-plan-ua-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  function nativeCatalog() {
+    return new PiModelConfigService({
+      agentDir: dir,
+      fetchFn: async () => ({ ok: false, status: 500, text: async () => '' }),
+      now: () => 1234,
+      readBundledCatalog: shippedSnapshot,
+      userProviders: () => [userService('openai-completions')],
+      managedCredentialsEnabled: () => true,
+    }).buildNativeModelCatalog({ inheritedApiKey: CANARY, inheritedBaseUrl: LOGIN_BASE_URL });
+  }
+  const relayed = (plan: ReturnType<typeof resolveDshModelPlanWith>) =>
+    new Set(Object.values(plan.routes).map((route) => route.headers?.['X-Aiclient-User-Agent']));
+
+  it('relays one value on every route, company and user alike, beside X-Pilab-Client', () => {
+    const native = nativeCatalog();
+    const plan = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: {},
+      clientVersion: '1.1.0-dsh.8',
+    });
+    expect(Object.keys(plan.routes)).toEqual([
+      'claude',
+      'gpt',
+      'grok',
+      'china',
+      'u-openai-completions',
+    ]);
+    expect(relayed(plan)).toEqual(new Set(['claude-cli-pilab/1.1.0-dsh.8']));
+    for (const route of Object.values(plan.routes)) {
+      expect(route.headers?.['X-Pilab-Client']).toBe('1.1.0-dsh.8');
+    }
+    const custom = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: { userAgentMode: 'custom', userAgentCustom: 'pilab-gw/2' },
+      clientVersion: '1.1.0-dsh.8',
+    });
+    expect(relayed(custom)).toEqual(new Set(['pilab-gw/2']));
+    const engine = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: { userAgentMode: 'engine' },
+      clientVersion: '1.1.0-dsh.8',
+    });
+    expect(relayed(engine)).toEqual(new Set([undefined]));
+    expect(new Set([plan.revision, custom.revision, engine.revision]).size).toBe(3);
+  });
+
+  it('falls back on a bad custom value, and the log says so once per revision', () => {
+    const native = nativeCatalog();
+    const log = vi.fn();
+    const bad = resolveDshModelPlanWith({
+      native,
+      env: ENV,
+      settings: { userAgentMode: 'custom', userAgentCustom: 'pilab\tgw/2' },
+      clientVersion: '1.1.0',
+      log,
+    });
+    expect(relayed(bad)).toEqual(new Set(['claude-cli-pilab/1.1.0']));
+    const lines = log.mock.calls.map(([first]) => String(first));
+    expect(lines.filter((line) => line.startsWith('[dsh-plan] user agent'))).toEqual([
+      `[dsh-plan] user agent: custom value unusable (invalid_character), sending the default (claude-cli-pilab/1.1.0), plan ${bad.revision.slice(0, 12)}`,
+    ]);
+    const leftOut = JSON.stringify(
+      log.mock.calls.find(([first]) => first === '[dsh-model-plan] left out of the plan')
+    );
+    expect(leftOut).toContain('setting userAgent: invalid_user_agent (invalid_character)');
   });
 });
 

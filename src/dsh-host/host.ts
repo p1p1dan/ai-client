@@ -51,6 +51,10 @@
  * packaged host never reads the home layer either (a source checkout still
  * does, for development and the probes), and `ready.plugins` reports every
  * allowlisted plugin's state.
+ *
+ * User-Agent (decision 171): before any DSH module loads, `fetch` is wrapped
+ * (lib/userAgentRelay.ts) so a provider request carrying the plan's relay
+ * header goes out with that value as its User-Agent instead of DSH's own.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -100,6 +104,7 @@ import {
   requiredEnabledOverlays,
   sameBundles,
 } from './lib/hostProfile.ts';
+import { installUserAgentRelay } from './lib/userAgentRelay.ts';
 
 const PROFILE_NAME = 'aiclient';
 // Test-only bundle carrying the auto-approving IPC probe (decision 015).
@@ -114,6 +119,12 @@ const FORBIDDEN_PACKAGES = [
 ];
 
 const marks: Record<string, number> = { entry: performance.now() };
+
+// Decision 171 (GitHub issue #7): the User-Agent relay wraps `fetch` before any
+// DSH module loads, so every provider request DSH builds goes through it.
+installUserAgentRelay(globalThis, {
+  onRefused: () => warn("a relayed User-Agent failed the check; DSH's own was sent"),
+});
 
 /** Shared with the aiclient-bridge row through a global symbol. */
 interface BridgeInbox {

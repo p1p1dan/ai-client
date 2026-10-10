@@ -60,6 +60,12 @@ export interface UserProviderServiceOptions {
   /** Called after any successful mutation so the derived pi files are rewritten. */
   onChange?: (providers: readonly UserProvider[]) => void;
   now?: () => Date;
+  /**
+   * Decision 171: the User-Agent the model list (also the connection test)
+   * sends, the same one the model plan relays; `undefined` leaves the
+   * transport's own.
+   */
+  userAgent?: () => string | undefined;
 }
 
 /** Size guard on the model-list response — a service that answers with megabytes is not one. */
@@ -70,12 +76,14 @@ export class UserProviderService {
   private readonly fetchFn: UserProviderServiceOptions['fetchFn'];
   private readonly onChange: (providers: readonly UserProvider[]) => void;
   private readonly now: () => Date;
+  private readonly userAgent: () => string | undefined;
 
   constructor(options: UserProviderServiceOptions) {
     this.store = options.store;
     this.fetchFn = options.fetchFn;
     this.onChange = options.onChange ?? (() => {});
     this.now = options.now ?? (() => new Date());
+    this.userAgent = options.userAgent ?? (() => undefined);
   }
 
   /** Everything the settings page renders, with no secret in it. */
@@ -195,11 +203,19 @@ export class UserProviderService {
     // cannot help — while any answer from the service moves on to the next.
     const failures: ModelListFailure[] = [];
     let previousRefused = false;
+    // Decision 171: a service that admits requests by User-Agent sees the one
+    // its chat requests carry.
+    const userAgent = this.userAgent();
     for (const attempt of providerModelListAttempts(baseUrl, request.api)) {
       if (attempt.onlyAfterRefusal && !previousRefused) continue;
       let response: ModelListResponse;
       try {
-        response = await this.fetchFn(attempt.url, { headers: authHeaders(attempt.auth, apiKey) });
+        response = await this.fetchFn(attempt.url, {
+          headers: {
+            ...authHeaders(attempt.auth, apiKey),
+            ...(userAgent === undefined ? {} : { 'User-Agent': userAgent }),
+          },
+        });
       } catch (error) {
         return { ok: false, error: error instanceof Error ? error.message : String(error) };
       }

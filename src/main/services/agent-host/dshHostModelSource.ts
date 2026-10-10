@@ -15,6 +15,7 @@
  * Installed once at startup (`registerIpcHandlers`), before any host starts.
  */
 
+import { app } from 'electron';
 import { onRendererSettingsWrite } from '../../ipc/settings';
 import { getCredentialVault } from '../auth';
 import {
@@ -25,6 +26,7 @@ import {
 import { watchCacheControlOnTools } from './cacheControlOnToolsSetting';
 import { DshCredentialBroker } from './DshCredentialBroker';
 import { dshHostSupervisor } from './DshHostSupervisor';
+import { watchRequestUserAgent } from './requestUserAgentSetting';
 import { workerManager } from './WorkerManager';
 
 let installed = false;
@@ -47,6 +49,13 @@ export function installDshHostModelSource(): void {
   watchCacheControlOnTools({
     onSettingsWrite: onRendererSettingsWrite,
     rebuild: () => resolveDshModelPlan(),
+    log: (...args) => console.info(...args),
+  });
+  // Decision 171: a different User-Agent rebuilds the plan at once as well.
+  watchRequestUserAgent({
+    onSettingsWrite: onRendererSettingsWrite,
+    rebuild: () => resolveDshModelPlan(),
+    appVersion: () => app.getVersion(),
     log: (...args) => console.info(...args),
   });
 }

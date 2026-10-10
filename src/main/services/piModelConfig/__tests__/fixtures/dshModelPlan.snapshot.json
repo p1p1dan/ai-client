@@ -1,10 +1,13 @@
 {
-  "revision": "4031e408019abe07089e2d96f641aa36beae74b17b746c67fab570d46311bb2d",
+  "revision": "1063419f5462e31e770a70ec82f782aa839b22e438bdd5978507d9a915049c93",
   "routes": {
     "claude": {
       "api": "anthropic-messages",
       "baseURL": "https://gateway.example.test",
       "apiKeyEnv": "AICLIENT_KEY_CLAUDE_C857",
+      "headers": {
+        "X-Aiclient-User-Agent": "claude-cli-pilab"
+      },
       "compat": {
         "forceAdaptiveThinking": true,
         "supportsCacheControlOnTools": false
@@ -69,6 +72,9 @@
       "api": "openai-responses",
       "baseURL": "https://gateway.example.test/v1",
       "apiKeyEnv": "AICLIENT_KEY_GPT_053E",
+      "headers": {
+        "X-Aiclient-User-Agent": "claude-cli-pilab"
+      },
       "compat": {
         "supportsDeveloperRole": true
       },
@@ -136,6 +142,9 @@
       "api": "openai-completions",
       "baseURL": "https://gateway.example.test/v1",
       "apiKeyEnv": "AICLIENT_KEY_GROK_ADD9",
+      "headers": {
+        "X-Aiclient-User-Agent": "claude-cli-pilab"
+      },
       "compat": {
         "supportsDeveloperRole": true,
         "supportsReasoningEffort": true
@@ -172,6 +181,9 @@
       "api": "openai-completions",
       "baseURL": "https://gateway.example.test/v1",
       "apiKeyEnv": "AICLIENT_KEY_CHINA_50C0",
+      "headers": {
+        "X-Aiclient-User-Agent": "claude-cli-pilab"
+      },
       "compat": {
         "supportsDeveloperRole": false,
         "supportsReasoningEffort": true
@@ -307,26 +319,8 @@
     {
       "kind": "field",
       "providerId": "claude",
-      "field": "headers.User-Agent",
-      "reason": "reserved_header"
-    },
-    {
-      "kind": "field",
-      "providerId": "claude",
       "field": "compat.supportsToolReferences",
       "reason": "compat_not_offered"
-    },
-    {
-      "kind": "field",
-      "providerId": "gpt",
-      "field": "headers.User-Agent",
-      "reason": "reserved_header"
-    },
-    {
-      "kind": "field",
-      "providerId": "grok",
-      "field": "headers.User-Agent",
-      "reason": "reserved_header"
     },
     {
       "kind": "field",
@@ -335,12 +329,6 @@
       "field": "maxTokens",
       "reason": "max_tokens_clamped",
       "detail": "500000 -> 125000"
-    },
-    {
-      "kind": "field",
-      "providerId": "china",
-      "field": "headers.User-Agent",
-      "reason": "reserved_header"
     }
   ]
 }

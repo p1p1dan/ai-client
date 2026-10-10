@@ -504,12 +504,13 @@ describe('MP-06 per-model address or protocol splits routes (R1)', () => {
 });
 
 describe('MP-07 headers and keys (R4, R5)', () => {
-  it('expands $NAME from the given env, drops User-Agent and dead references', () => {
+  it('expands $NAME from the given env, drops User-Agent, the relay header and dead references', () => {
     const p = plan(
       {
         h: provider('openai-completions', [{ id: 'a' }], {
           headers: {
-            'User-Agent': '$AICLIENT_PI_USER_AGENT',
+            'User-Agent': '$STATED_AGENT',
+            'x-aiclient-user-agent': 'spoofed/1',
             'X-Client': '$CLIENT_TAG',
             'X-Gone': '$NOT_SET',
             'X-Literal': 'fixed',
@@ -517,15 +518,28 @@ describe('MP-07 headers and keys (R4, R5)', () => {
           },
         }),
       },
-      { env: { AICLIENT_PI_USER_AGENT: 'claude-cli-pilab/1.0.3', CLIENT_TAG: ' ai-client ' } }
+      { env: { STATED_AGENT: 'stated-agent/1.0.3', CLIENT_TAG: ' ai-client ' } }
     );
-    expect(p.routes.h?.headers).toEqual({ 'X-Client': 'ai-client', 'X-Literal': 'fixed' });
+    // Decision 171: the app's own choice (here the default, no version given)
+    // travels in the relay header; a provider's User-Agent or relay never does.
+    expect(p.routes.h?.headers).toEqual({
+      'X-Client': 'ai-client',
+      'X-Literal': 'fixed',
+      'X-Aiclient-User-Agent': 'claude-cli-pilab',
+    });
     expect(p.dropped).toEqual([
       { kind: 'field', providerId: 'h', field: 'headers.User-Agent', reason: 'reserved_header' },
+      {
+        kind: 'field',
+        providerId: 'h',
+        field: 'headers.x-aiclient-user-agent',
+        reason: 'reserved_header',
+      },
       { kind: 'field', providerId: 'h', field: 'headers.X-Gone', reason: 'unresolved_header' },
       { kind: 'field', providerId: 'h', field: 'headers.Bad Name', reason: 'invalid_header' },
     ]);
-    expect(JSON.stringify(p)).not.toContain('claude-cli-pilab');
+    expect(JSON.stringify(p)).not.toContain('stated-agent');
+    expect(JSON.stringify(p)).not.toContain('spoofed');
   });
 
   it.each([
@@ -556,12 +570,17 @@ describe('MP-07 headers and keys (R4, R5)', () => {
       },
       { clientVersion: '1.0.3' }
     );
-    expect(p.routes.h?.headers).toEqual({ 'X-Literal': 'fixed', 'X-Pilab-Client': '1.0.3' });
-    expect(p.routes['h~2']?.headers).toEqual({ 'X-Literal': 'fixed', 'X-Pilab-Client': '1.0.3' });
-    expect(p.routes.bare?.headers).toEqual({ 'X-Pilab-Client': '1.0.3' });
-    // No version, no header: the revision of a plan without it is unchanged.
+    const sent = {
+      'X-Pilab-Client': '1.0.3',
+      // Decision 171: the same version names the default User-Agent.
+      'X-Aiclient-User-Agent': 'claude-cli-pilab/1.0.3',
+    };
+    expect(p.routes.h?.headers).toEqual({ 'X-Literal': 'fixed', ...sent });
+    expect(p.routes['h~2']?.headers).toEqual({ 'X-Literal': 'fixed', ...sent });
+    expect(p.routes.bare?.headers).toEqual(sent);
+    // No version, no identity header: a blank version plans as no version at all.
     const without = plan({ bare: provider('anthropic-messages', [{ id: 'c' }]) });
-    expect(without.routes.bare?.headers).toBeUndefined();
+    expect(without.routes.bare?.headers).toEqual({ 'X-Aiclient-User-Agent': 'claude-cli-pilab' });
     expect(
       plan({ bare: provider('anthropic-messages', [{ id: 'c' }]) }, { clientVersion: ' ' }).revision
     ).toBe(without.revision);
@@ -739,6 +758,122 @@ describe('GW-16 cache_control on tools, the temporary switch (decisions 149 rule
 
   it('leaves the route-level knobs of decision 040 as they were', () => {
     expect(dshRouteSettings({ cacheControlOnTools: true })).toEqual(dshRouteSettings());
+  });
+});
+
+describe('User-Agent relay (decision 171, GitHub issue #7)', () => {
+  const mixed = () => ({
+    claude: provider('anthropic-messages', [{ id: 'sonnet' }]),
+    gpt: provider('openai-responses', [{ id: 'g' }], { headers: { 'X-Literal': 'fixed' } }),
+    china: provider('openai-completions', [{ id: 'glm' }, { id: 'v2', baseUrl: `${GW}/v2` }]),
+  });
+  const relayed = (p: DshModelPlan) =>
+    Object.fromEntries(
+      Object.entries(p.routes).map(([route, r]) => [route, r.headers?.['X-Aiclient-User-Agent']])
+    );
+
+  it('default: every route, of every protocol, relays claude-cli-pilab/<app version>', () => {
+    const p = plan(mixed(), { clientVersion: '1.1.0-dsh.8' });
+    expect(relayed(p)).toEqual({
+      claude: 'claude-cli-pilab/1.1.0-dsh.8',
+      gpt: 'claude-cli-pilab/1.1.0-dsh.8',
+      china: 'claude-cli-pilab/1.1.0-dsh.8',
+      'china~2': 'claude-cli-pilab/1.1.0-dsh.8',
+    });
+    // An explicit default plans the same, and nothing is reported.
+    expect(
+      plan(mixed(), { clientVersion: '1.1.0-dsh.8', settings: { userAgentMode: 'default' } })
+    ).toEqual(p);
+    expect(p.dropped.filter((drop) => drop.kind === 'setting')).toEqual([]);
+    // Every other header stays as it was.
+    expect(p.routes.gpt?.headers).toEqual({
+      'X-Literal': 'fixed',
+      'X-Pilab-Client': '1.1.0-dsh.8',
+      'X-Aiclient-User-Agent': 'claude-cli-pilab/1.1.0-dsh.8',
+    });
+  });
+
+  it("engine: no route carries the relay header, so DSH's own User-Agent goes out", () => {
+    const p = plan(mixed(), { clientVersion: '1.1.0', settings: { userAgentMode: 'engine' } });
+    expect(relayed(p)).toEqual({
+      claude: undefined,
+      gpt: undefined,
+      china: undefined,
+      'china~2': undefined,
+    });
+    expect(p.routes.claude?.headers).toEqual({ 'X-Pilab-Client': '1.1.0' });
+    expect(p.dropped.filter((drop) => drop.kind === 'setting')).toEqual([]);
+  });
+
+  it('custom: the trimmed value on every route', () => {
+    const p = plan(mixed(), {
+      clientVersion: '1.1.0',
+      settings: { userAgentMode: 'custom', userAgentCustom: '  pilab-gw/2 (custom)  ' },
+    });
+    expect(new Set(Object.values(relayed(p)))).toEqual(new Set(['pilab-gw/2 (custom)']));
+    expect(p.dropped.filter((drop) => drop.kind === 'setting')).toEqual([]);
+  });
+
+  it.each([
+    ['', 'empty'],
+    [undefined, 'empty'],
+    ['a'.repeat(257), 'too_long'],
+    ['foo/1\r\nX-Injected: 1', 'invalid_character'],
+    ['tab\tbed/1', 'invalid_character'],
+    ['claude-cli-pilab/1 (测试)', 'invalid_character'],
+  ])('custom %j falls back to the default and says why (%s)', (custom, problem) => {
+    const p = plan(mixed(), {
+      clientVersion: '1.1.0',
+      settings: {
+        userAgentMode: 'custom',
+        ...(custom === undefined ? {} : { userAgentCustom: custom }),
+      },
+    });
+    expect(new Set(Object.values(relayed(p)))).toEqual(new Set(['claude-cli-pilab/1.1.0']));
+    expect(p.dropped.filter((drop) => drop.kind === 'setting')).toEqual([
+      { kind: 'setting', setting: 'userAgent', reason: 'invalid_user_agent', detail: problem },
+    ]);
+    // Same routes as the default: the host is not restarted for a bad value.
+    expect(p.revision).toBe(plan(mixed(), { clientVersion: '1.1.0' }).revision);
+  });
+
+  it("a version that makes the default unusable plans DSH's own, and says why", () => {
+    const p = plan(mixed(), { clientVersion: '1.1.0 (测试)' });
+    expect(new Set(Object.values(relayed(p)))).toEqual(new Set([undefined]));
+    expect(p.dropped.filter((drop) => drop.kind === 'setting')).toEqual([
+      {
+        kind: 'setting',
+        setting: 'userAgent',
+        reason: 'invalid_user_agent',
+        detail: 'invalid_character',
+      },
+    ]);
+  });
+
+  it('changes the revision with the value, so the host restarts for a new one', () => {
+    const revision = (settings: DshModelPlanInput['settings']) =>
+      plan(mixed(), { clientVersion: '1.1.0', ...(settings ? { settings } : {}) }).revision;
+    const all = new Set([
+      revision(undefined),
+      revision({ userAgentMode: 'engine' }),
+      revision({ userAgentMode: 'custom', userAgentCustom: 'a/1' }),
+      revision({ userAgentMode: 'custom', userAgentCustom: 'b/1' }),
+    ]);
+    expect(all.size).toBe(4);
+    // A custom value kept while another mode is chosen does not reach the plan.
+    expect(revision({ userAgentMode: 'engine', userAgentCustom: 'a/1' })).toBe(
+      revision({ userAgentMode: 'engine' })
+    );
+  });
+
+  it('leaves the route-level knobs of decision 040 and the GW-16 compat as they were', () => {
+    const withoutHeaders = (p: DshModelPlan) =>
+      Object.fromEntries(
+        Object.entries(p.routes).map(([key, { headers: _h, ...rest }]) => [key, rest])
+      );
+    expect(withoutHeaders(plan(mixed(), { settings: { userAgentMode: 'engine' } }))).toEqual(
+      withoutHeaders(plan(mixed()))
+    );
   });
 });
 
