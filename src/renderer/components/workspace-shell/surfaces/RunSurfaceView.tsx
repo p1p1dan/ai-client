@@ -12,13 +12,18 @@
  * T38-b's catalog `contextWindow`) — nothing on this surface divides characters
  * by four and calls the result tokens. When the runtime has not reported
  * occupancy, the ring is absent rather than empty.
+ *
+ * Issue #9 (decision 173 §4.5) adds the 「逐步缓存」 group and the session's
+ * cache alert (`RunCacheSteps.tsx`): each settled step of the turn on screen
+ * from the message metadata registry, with the host's cache verdict.
  */
 import { agentDefaultEffort } from '@shared/models/chatAgentDefaults';
 import type { ContextOccupancy } from '@shared/piUsage';
 import { Wrench } from 'lucide-react';
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { formatTokenTotal } from '@/components/chat/countFormat';
 import { EFFORT_DEFAULT_ID, effortLabel, resolveEffortSelection } from '@/components/chat/efforts';
+import type { MessageMetadata } from '@/components/chat/messageMetadata';
 import { useHostStatus } from '@/components/chat/useHostStatus';
 import { useMessageMetadata } from '@/components/chat/useMessageMetadata';
 import { usePiModelCatalog } from '@/components/chat/usePiModelCatalog';
@@ -28,15 +33,26 @@ import { Badge } from '@/components/ui/badge';
 import { useI18n } from '@/i18n';
 import { cn } from '@/lib/utils';
 import { type ChatMessage, useChatSessionsStore } from '@/stores/chatSessions';
+import { useMessageMetadataStore } from '@/stores/messageMetadataRegistry';
+import { useRunPanelPreferencesStore } from '@/stores/runPanelPreferences';
 import { useSessionRuntimeFactsStore } from '@/stores/sessionRuntimeFacts';
 import { useSettingsStore } from '@/stores/settings';
 import { useTurnSendStatusStore } from '@/stores/turnSendStatus';
 import type { SurfaceViewProps } from '../surfaceViews';
-import { deriveRunPanelView, type RunTone } from './runPanelModel';
+import { buildCacheDiagnostics } from './cacheDiagnostics';
+import { RunCacheAlert, RunCacheStepsGroup } from './RunCacheSteps';
+import {
+  cacheTurnsOf,
+  collectSettledSteps,
+  deriveRunCacheView,
+  deriveRunPanelView,
+  type RunTone,
+} from './runPanelModel';
 
 // Stable snapshot for "session has no bucket yet" — a fresh `[]` per selector
 // call makes zustand v5's `useSyncExternalStore` re-render forever.
 const EMPTY_MESSAGES: readonly ChatMessage[] = [];
+const EMPTY_METADATA: Readonly<Record<string, MessageMetadata>> = {};
 
 const TONE_BADGE: Record<RunTone, 'secondary' | 'info' | 'warning' | 'error'> = {
   idle: 'secondary',
@@ -161,6 +177,43 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
     const option = catalog?.models.find((model) => model.id === configuredModelId);
     return option?.contextWindow ?? null;
   }, [catalog, configuredModelId]);
+  const effortId = activeSessionId
+    ? (resolveEffortSelection(
+        getSessionEffort(activeSessionId),
+        agentDefaultEffort(chatAgentDefaults)
+      ) ?? EFFORT_DEFAULT_ID)
+    : null;
+
+  // Issue #9: the steps come from the same registry the timeline's turn clock
+  // reads (held for the whole run by `ChatWorkspace`, and by the hook above).
+  const metadataRegistry = useMessageMetadataStore((state) =>
+    activeSessionId ? state.bySession[activeSessionId] : undefined
+  );
+  const cacheAlertDismissed = useRunPanelPreferencesStore((state) =>
+    activeSessionId ? state.dismissedCacheAlerts[activeSessionId] === true : false
+  );
+  const dismissCacheAlert = useRunPanelPreferencesStore((state) => state.dismissCacheAlert);
+  const settledSteps = useMemo(
+    () => collectSettledSteps(metadataRegistry?.byMessage ?? EMPTY_METADATA),
+    [metadataRegistry]
+  );
+  // Assistant rows the registry never saw came back as history from before
+  // this run: they have no per-step bills (decision 173 §4.5).
+  const hasUnlistedHistory = useMemo(
+    () =>
+      messages.some(
+        (message) => message.role === 'assistant' && !metadataRegistry?.byMessage[message.id]
+      ),
+    [messages, metadataRegistry]
+  );
+  const cacheView = useMemo(
+    () =>
+      deriveRunCacheView(
+        { steps: settledSteps, hasUnlistedHistory, alertDismissed: cacheAlertDismissed },
+        t
+      ),
+    [settledSteps, hasUnlistedHistory, cacheAlertDismissed, t]
+  );
 
   const view = deriveRunPanelView({
     sessionId: activeSessionId,
@@ -177,19 +230,31 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
     // pick, which would make a guess look like the runtime's own answer.
     actualModel: lastMeta?.reportedModel ?? null,
     configuredModel: configuredModelId,
-    effortLabel: activeSessionId
-      ? effortLabel(
-          resolveEffortSelection(
-            getSessionEffort(activeSessionId),
-            agentDefaultEffort(chatAgentDefaults)
-          ) ?? EFFORT_DEFAULT_ID
-        )
-      : null,
+    effortLabel: effortId ? effortLabel(effortId) : null,
     lastTurnMs: lastMeta?.latencyMs ?? null,
     usage,
     configuredContextWindow,
     toolStatus,
   });
+
+  // Built on press, from what is on screen then: numbers and ids only.
+  const cacheDiagnostics = useCallback(
+    () =>
+      buildCacheDiagnostics(
+        {
+          appVersion: window.electronAPI?.env.appVersion ?? null,
+          platform: window.electronAPI?.env.platform ?? null,
+          model: view.model,
+          effort: effortId,
+          sessionSteps: view.sessionUsage?.turns ?? null,
+          session: cacheView.session,
+          prefix: cacheView.prefix,
+          turns: cacheTurnsOf(settledSteps, t),
+        },
+        t
+      ),
+    [view.model, effortId, view.sessionUsage, cacheView, settledSteps, t]
+  );
 
   if (!activeSessionId) {
     return (
@@ -201,6 +266,14 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
 
   return (
     <div className="select-text flex h-full flex-col overflow-y-auto">
+      {cacheView.alert && (
+        <RunCacheAlert
+          key={activeSessionId}
+          alert={cacheView.alert}
+          diagnostics={cacheDiagnostics}
+          onDismiss={() => dismissCacheAlert(activeSessionId)}
+        />
+      )}
       <div className="relative shrink-0 border-b p-2">
         <span
           aria-hidden
@@ -320,14 +393,15 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             )}
           </>
         )}
-        {/* Labelled "last turn" throughout: a Pi run that calls tools settles
-            several turns, and each `usage.updated` is that turn's own bill —
-            summing them would print a total nobody was charged. */}
+        {/* Labelled "last step" throughout (issue #9): a turn that calls tools
+            settles several model requests, and each `usage.updated` is that
+            step's own bill — summing them would print a total nobody was
+            charged. */}
         {view.usage && (
           <div className="mt-1 flex flex-col border-t pt-1">
-            <RunMetric label={t('Input (last turn)')} value={formatTokenTotal(view.usage.input)} />
+            <RunMetric label={t('Input (last step)')} value={formatTokenTotal(view.usage.input)} />
             <RunMetric
-              label={t('Output (last turn)')}
+              label={t('Output (last step)')}
               value={formatTokenTotal(view.usage.output)}
             />
             {view.usage.cacheRead > 0 && (
@@ -337,13 +411,14 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
               <RunMetric label={t('Cache write')} value={formatTokenTotal(view.usage.cacheWrite)} />
             )}
             {/* A1: the two rows above move with prompt size, so the ratio is
-                the one that reads as a signal. Shown whenever it is known,
-                including at 0% — a turn that cached nothing is a measurement,
-                and hiding it would mask a cache that quietly stopped working.
-                `null` (no prompt tokens, or no reported `cacheRead`) prints
-                nothing rather than 0%. */}
+                the one that reads as a signal: the share of the whole prompt
+                (input + read + write, issue #9) served from cache. Shown
+                whenever it is known, including at 0% — a step that cached
+                nothing is a measurement, and hiding it would mask a cache that
+                quietly stopped working. `null` (no prompt tokens, or a count
+                not reported) prints nothing rather than 0%. */}
             {view.cacheHitRate !== null && (
-              <RunMetric label={t('Cache hit rate (last turn)')} value={`${view.cacheHitRate}%`} />
+              <RunMetric label={t('Cache hit rate (last step)')} value={`${view.cacheHitRate}%`} />
             )}
             {view.usage.costUsd > 0 && (
               <RunMetric label={t('Cost')} value={`$${view.usage.costUsd.toFixed(4)}`} />
@@ -360,14 +435,21 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
             </p>
           </div>
         )}
+        {/* Issue #9: the turn's steps one by one — the rows above are its last
+            row's read and write. Between that group and the session's. */}
+        {!view.empty && cacheView.group && (
+          <RunCacheStepsGroup key={activeSessionId} group={cacheView.group} />
+        )}
         {/* A2: the conversation total, in its own bordered group and with every
             label saying "session". Never merged with the block above into one
-            "Total" — a reader who took a session figure for a turn figure would
+            "Total" — a reader who took a session figure for a step figure would
             misread both. */}
         {view.sessionUsage && (
           <div className="mt-1 flex flex-col border-t pt-1">
+            {/* Issue #9: `turns` counts settled model requests — steps, not
+                the user's turns the 「逐步缓存」 header counts by. */}
             <RunMetric
-              label={t('Turns (session)')}
+              label={t('Steps (session)')}
               value={
                 view.sessionUsage.toolResults > 0
                   ? t('{{turns}} + {{delegated}} delegated', {
@@ -389,6 +471,14 @@ export function RunSurfaceView(_props: SurfaceViewProps) {
               <RunMetric
                 label={t('Cache read (session)')}
                 value={formatTokenTotal(view.sessionUsage.cacheRead)}
+              />
+            )}
+            {/* Issue #9: what the writes add up to — the figure a rebuilt
+                cache inflates, so it sits beside the reads. */}
+            {view.sessionUsage.cacheWrite > 0 && (
+              <RunMetric
+                label={t('Cache write (session)')}
+                value={formatTokenTotal(view.sessionUsage.cacheWrite)}
               />
             )}
             {view.sessionUsage.costUsd > 0 && (

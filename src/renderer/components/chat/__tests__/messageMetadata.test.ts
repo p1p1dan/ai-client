@@ -297,6 +297,49 @@ describe('reduceMessageMetadata (T-06)', () => {
     });
   });
 
+  // Issue #9: the Run panel lists a step once it is billed, never on the
+  // first-byte tick, and the merged `usage` cannot tell the two apart.
+  it('stamps when the bill settled, and only then', () => {
+    let reg = reduceMessageMetadata(
+      initialMetadataRegistry,
+      event('message.started', {
+        sessionId: 's1',
+        timestamp: 1000,
+        payload: { messageId: 'a1', role: 'assistant' },
+      })
+    );
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', {
+        sessionId: 's1',
+        timestamp: 1500,
+        payload: { input: 431, output: 0, cacheRead: 0, cacheWrite: 10_656, pending: true },
+      })
+    );
+    expect(reg.byMessage.a1).not.toHaveProperty('usageSettledAt');
+    reg = reduceMessageMetadata(
+      reg,
+      event('usage.updated', {
+        sessionId: 's1',
+        timestamp: 9000,
+        payload: { input: 431, output: 1_321, cacheRead: 0, cacheWrite: 10_656 },
+      })
+    );
+    expect(reg.byMessage.a1.usageSettledAt).toBe(9000);
+    // A settled event with no host timestamp still settles the step.
+    const undated = reduceMessageMetadata(
+      reduceMessageMetadata(
+        initialMetadataRegistry,
+        event('message.started', {
+          sessionId: 's1',
+          payload: { messageId: 'a2', role: 'assistant' },
+        })
+      ),
+      event('usage.updated', { sessionId: 's1', payload: { input: 1, output: 1 } })
+    );
+    expect(undated.byMessage.a2.usageSettledAt).toBeNull();
+  });
+
   it('ignores usage.updated with no prior assistant index for the session', () => {
     const next = reduceMessageMetadata(
       initialMetadataRegistry,

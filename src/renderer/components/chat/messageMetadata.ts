@@ -44,6 +44,14 @@ export interface MessageMetadata {
   reportedModel?: string | null;
   /** Raw usage payload from `usage.updated`. */
   usage?: Record<string, unknown> | null;
+  /**
+   * Issue #9: epoch ms of the settled `usage.updated` (one without the
+   * `pending` mark), `null` when that event carried no timestamp. Absent while
+   * only the first-byte tick has arrived: `usage` above already holds its
+   * prompt side, and this is what tells the Run panel's per-step list the
+   * step is billed.
+   */
+  usageSettledAt?: number | null;
 }
 
 export interface MetadataRegistry {
@@ -184,9 +192,14 @@ export function reduceMessageMetadata(
       // record would outlive the numbers it qualifies and describe the settled
       // bill that overwrites them a few seconds later.
       const { pending: _pending, ...merged } = { ...(existing.usage ?? {}), ...payload };
+      const settled = payload.pending !== true;
       const byMessage = {
         ...prev.byMessage,
-        [messageId]: { ...existing, usage: merged },
+        [messageId]: {
+          ...existing,
+          usage: merged,
+          ...(settled ? { usageSettledAt: ts ?? null } : {}),
+        },
       };
       return { ...prev, byMessage };
     }

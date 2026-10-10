@@ -2365,29 +2365,35 @@ export const zhTranslations: Record<string, string> = {
   Used: '已占用',
   Free: '剩余',
   'Context window': '上下文窗口',
-  'Input (last turn)': '输入（上一回合）',
-  'Output (last turn)': '输出（上一回合）',
+  // Issue #9 (decision 173): each settled `usage.updated` is one model
+  // request, so these rows describe the last STEP; 「上一回合」 read as the
+  // whole turn the 「逐步缓存」 group below lists step by step.
+  'Input (last step)': '输入（最后一步）',
+  'Output (last step)': '输出（最后一步）',
   // T125: a request cut mid-stream whose cost the provider never reported.
   'Usage for this request is unknown': '本次消耗未知',
   'Cache read': '缓存读取',
   'Cache write': '缓存写入',
-  // A1: `cacheRead / (input + cacheRead)`, cache writes excluded from the base.
+  // A1: `cacheRead / (input + cacheRead + cacheWrite)` — the whole prompt is
+  // the base since issue #9, so a rebuild no longer reads as 100%.
   'Cache hit rate': '缓存命中率',
-  // 2026-09-20: the Run panel's own row now says which turn it describes. The
+  // 2026-09-20: the Run panel's own row says which request it describes. The
   // user's report was that 99% looked like a property of the session; it is a
-  // property of the LAST TURN, and the session figure beside it is a running
+  // property of the LAST STEP, and the session figure beside it is a running
   // sum. Every label that could be read as the other one now says which it is.
-  'Cache hit rate (last turn)': '缓存命中率（上一回合）',
+  'Cache hit rate (last step)': '缓存命中率（最后一步）',
   'Session figures add up every model request, so the cache read is a running sum, not what is in the context now.':
     '本会话的数字是把每一次模型请求累加起来的结果，所以「缓存读取」是累计量，不是当前上下文里占了多少。',
   Cost: '费用',
   // A2: the conversation total, deliberately labelled apart from the
-  // per-turn figures above it — the two are never added together.
-  'Turns (session)': '回合数（本会话）',
+  // per-step figures above it — the two are never added together. Issue #9:
+  // the count is of model requests, so steps, not turns.
+  'Steps (session)': '步数（本会话）',
   '{{turns}} + {{delegated}} delegated': '{{turns}} + {{delegated}} 次委派',
   'Input (session)': '输入（本会话累计）',
   'Output (session)': '输出（本会话累计）',
   'Cache read (session)': '缓存读取（本会话累计）',
+  'Cache write (session)': '缓存写入（本会话累计）',
   'Cost (session)': '费用（本会话累计）',
   // decision 005 — the delegated share of the session totals above.
   'Delegated (session)': '其中委派（本会话累计）',
@@ -4194,4 +4200,140 @@ Object.assign(zhTranslations, {
   'Send on {{branch}} instead': '改在 {{branch}} 上发送',
   'Send on the current branch instead': '改在当前分支上发送',
   'Could not switch to {{branch}}; the message was not sent': '无法切换到 {{branch}}，消息没有发送',
+});
+
+// Cache chain (issue #9)
+/**
+ * dsh-rebase decision 173 §4.5 (GitHub issue #9): the Run panel's 「逐步缓存」
+ * group, its badges and their hovers, the session's cache alert, and the text
+ * 「复制诊断信息」 copies (`RunCacheSteps.tsx`, `runPanelModel.ts`,
+ * `cacheDiagnostics.ts`), worded as the approved prototype words them
+ * (`evidence/cache-chain-2026-10/`). 「已复制」 (`Copied`) and 「提示词」
+ * (`Prompt`) reuse existing entries.
+ */
+Object.assign(zhTranslations, {
+  'Cache by step': '逐步缓存',
+  '{{count}} anomalies': '{{count}} 处异常',
+  '{{count}} steps this turn': '本回合 {{count}} 步',
+  'No details yet': '暂无明细',
+  'Steps from before the reopen are not itemized. Once the next message is sent, its steps are listed here.':
+    '重开之前的步骤不显示逐步明细。发出下一条消息后，这里会逐步列出。',
+  Step: '步',
+  Reused: '缓存读',
+  Written: '缓存写',
+  'Show {{count}} earlier steps': '查看更早的 {{count}} 步',
+  'Step {{step}}: prompt {{prompt}} · read {{read}} · written {{write}}':
+    '第 {{step}} 步：提示词 {{prompt}} · 缓存读 {{read}} · 缓存写 {{write}}',
+  '{{list}}, {{item}}': '{{list}}、{{item}}',
+  // The line under the rows.
+  'No local cause found at step {{steps}}; see the notice at the top of the panel.':
+    '第 {{steps}} 步找不到本地原因，见面板顶部的提示。',
+  'No local cause found at step {{steps}}.': '第 {{steps}} 步找不到本地原因。',
+  'Every rebuild in this turn has a local cause; it is not the upstream.':
+    '这一回合的重建都有本地原因，不是上游的问题。',
+  'Every step reused the cache of the step before.': '每一步都复用了上一步的缓存。',
+  'After the first write, every step reused the cache of the step before.':
+    '首次写入之后，每一步都复用了上一步的缓存。',
+  // Badges: the first write (grey; blue for its cause when a local event explains it).
+  'First write': '首次写入',
+  'No cache to build on yet, so this step’s whole prompt is written to the cache.':
+    '还没有可用的缓存，这一步的提示词全部写入缓存。',
+  // Badges: local causes (blue), in display order.
+  'Plan mode switched': '计划模式切换',
+  'Entering or leaving plan mode changes the system prompt, so what follows is written to the cache again.':
+    '进出计划模式会改系统提示词，之后的内容要重新写入缓存。',
+  'System prompt changed': '系统提示词变了',
+  'The system prompt changed, so what follows is written to the cache again.':
+    '系统提示词变了，之后的内容要重新写入缓存。',
+  'Model switched': '换了模型',
+  'The model changed. A cache is not shared across models, so the prompt is written again.':
+    '换了模型。缓存不能跨模型复用，提示词要重新写入。',
+  'Context compacted': '压缩了上下文',
+  'After a compaction the earlier conversation is replaced by a summary: the prompt gets shorter and what follows is written to the cache again.':
+    '上下文压缩后，较早的对话换成了摘要，提示词变短，后面的内容要重新写入缓存。',
+  'Chat resumed': '恢复会话',
+  'The first step after the engine restarted or the chat was reopened could not reuse the earlier cache, so the prompt is written again.':
+    '引擎重启或会话重新打开后的第一步，没能沿用之前的缓存，提示词要重新写入。',
+  'New request series': '新的请求序列',
+  'The engine started a new series of requests and could not reuse the earlier cache, so the prompt is written again.':
+    '引擎开始了新的请求序列，没能沿用之前的缓存，提示词要重新写入。',
+  'History restored': '恢复了历史',
+  'History was restored or carried over (a rewind or a fork), so the prompt is written to the cache again.':
+    '恢复或继承了历史记录（例如回退或分叉），提示词要重新写入缓存。',
+  'Idle {{duration}}, cache expired': '闲置 {{duration}}，缓存已过期',
+  'Idle past the cache lifetime': '闲置超过缓存保留时间',
+  'It had been {{duration}} since the step before, longer than the cache is kept: the cache had expired, so this step writes it again.':
+    '距离上一步过了 {{duration}}，超过缓存的保留时间，缓存已经过期，这一步要重新写入。',
+  'More time passed since the step before than the cache is kept: the cache had expired, so this step writes it again.':
+    '距离上一步的时间超过了缓存的保留时间，缓存已经过期，这一步要重新写入。',
+  '{{hours}} h {{minutes}} min': '{{hours}} 小时 {{minutes}} 分',
+  '{{hours}} h': '{{hours}} 小时',
+  '{{minutes}} min': '{{minutes}} 分钟',
+  'Effort switched': '换了推理档位',
+  'The reasoning effort changed, so what follows is written to the cache again.':
+    '换了推理档位，之后的内容要重新写入缓存。',
+  'Tools changed': '工具变了',
+  'The available tools changed. Their definitions open the prompt, so it is written to the cache again.':
+    '可用的工具变了。工具定义在提示词最前面，提示词要重新写入缓存。',
+  'Route switched': '换了路由',
+  'The request went through another route or context window and could not reuse the earlier cache, so the prompt is written again.':
+    '请求换了路由或上下文窗口，没能沿用之前的缓存，提示词要重新写入。',
+  'Request settings changed': '请求配置变了',
+  'The request settings changed, so what follows is written to the cache again.':
+    '请求的配置变了，之后的内容要重新写入缓存。',
+  // Badges: nothing local explains the step (orange).
+  'Unexplained · about {{tokens}} rewritten': '无法解释 · 重写约 {{tokens}}',
+  'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again. Nothing local explains it: most likely the request went to another upstream.':
+    '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 要重写。本地没有能解释的变化，多半是请求被分到了另一个上游。',
+  'The step before had a prompt of {{prev}}; this step read only {{read}}, so about {{rewrite}} is written again.':
+    '上一步提示词 {{prev}}，这一步只读到 {{read}}，约 {{rewrite}} 要重写。',
+  'Prompt shorter · −{{tokens}}': '提示词变短 · −{{tokens}}',
+  'This step’s prompt is {{tokens}} shorter than the step before’s. The client only appends (verified), so the upstream dropped part of the history and what follows is written to the cache again.':
+    '这一步的提示词比上一步少了 {{tokens}}。客户端只在末尾追加内容（已校验），变短说明上游丢掉了一部分历史，后面的内容要重新写入缓存。',
+  'This step’s prompt is {{tokens}} shorter than the step before’s. The client only appends, so most likely the upstream dropped part of the history; what follows is written to the cache again.':
+    '这一步的提示词比上一步少了 {{tokens}}。客户端只在末尾追加内容，变短多半是上游丢掉了一部分历史，后面的内容要重新写入缓存。',
+  'This step’s prompt is {{tokens}} shorter than the step before’s, so what follows is written to the cache again.':
+    '这一步的提示词比上一步少了 {{tokens}}，后面的内容要重新写入缓存。',
+  'Read step {{step}}’s prefix': '读到第 {{step}} 步的前缀',
+  'Read an earlier turn’s prefix': '读到之前回合的前缀',
+  'The cache this step read ({{read}}) is exactly step {{step}}’s length: requests are switching between two caches, most likely because the gateway sends them to different upstreams.':
+    '这一步读到的缓存（{{read}}）正好是第 {{step}} 步的长度，说明请求在两份缓存之间来回切换，多半是网关把请求分到了不同的上游。',
+  'The cache this step read ({{read}}) is exactly the length of a step in an earlier turn: requests are switching between two caches, most likely because the gateway sends them to different upstreams.':
+    '这一步读到的缓存（{{read}}）正好是之前回合某一步的长度，说明请求在两份缓存之间来回切换，多半是网关把请求分到了不同的上游。',
+  'This step’s request did not extend the request before it, so the client may be the cause.':
+    '这一步的请求没有接在上一个请求的末尾，问题可能出在客户端。',
+  // The session alert, shown at 2 rebuilds with no local cause or 100k tokens written again.
+  'This chat’s cache was rebuilt several times': '这个会话的缓存多次被重建',
+  'A large part of this chat’s cache was rebuilt': '这个会话的缓存被大段重建',
+  'Rebuilds with no local cause: {{count}}, about {{tokens}} tokens written again. Each request extended the one before it (verified), so most likely the gateway sent them to different upstreams.':
+    '有 {{count}} 次重建找不到本地原因，共重写约 {{tokens}} tokens。客户端每次都是在上一个请求的末尾追加（已校验），多半是网关把请求分到了不同的上游。',
+  'Rebuilds with no local cause: {{count}}, about {{tokens}} tokens written again. Some requests did not extend the one before them, so the client may be the cause.':
+    '有 {{count}} 次重建找不到本地原因，共重写约 {{tokens}} tokens。其中有请求没有接在上一个请求的末尾，问题可能出在客户端。',
+  'Rebuilds with no local cause: {{count}}, about {{tokens}} tokens written again. Most likely the gateway sent the requests to different upstreams.':
+    '有 {{count}} 次重建找不到本地原因，共重写约 {{tokens}} tokens。多半是网关把请求分到了不同的上游。',
+  'Copy diagnostics': '复制诊断信息',
+  'Hide for this chat': '本会话不再提示',
+  // What 「复制诊断信息」 copies: numbers, times and ids only.
+  'PiLab Ai cache diagnostics (numbers and the gateway session ID only)':
+    'PiLab Ai 缓存诊断（只含数字与网关会话 ID）',
+  'Version: {{version}} · {{platform}}': '版本：{{version}} · {{platform}}',
+  'Gateway session ID: {{id}}': '网关会话 ID：{{id}}',
+  'Model: {{model}} · effort {{effort}}': '模型：{{model}} · 推理档位 {{effort}}',
+  'This chat: {{steps}} steps, {{unexplained}} with no local cause ({{rebuilds}} rebuilds), about {{tokens}} tokens written again':
+    '本会话：{{steps}} 步，{{unexplained}} 步找不到本地原因（其中重建 {{rebuilds}} 次），共重写约 {{tokens}} tokens',
+  'Prefix check: every request with no local cause extended the request before it':
+    '前缀校验：找不到本地原因的请求都是在上一个请求的末尾追加',
+  'Prefix check: some requests did not extend the request before them (see the verdicts)':
+    '前缀校验：有请求没有接在上一个请求的末尾（见判定列）',
+  'Prefix check: not recorded': '前缀校验：没有记录',
+  'Turn {{turn}}': '回合 {{turn}}',
+  'Turn {{turn}} started at {{time}}': '回合 {{turn}} 开始于 {{time}}',
+  'Turn {{turn}}, listed from step {{step}}, at {{time}}':
+    '回合 {{turn}}：从第 {{step}} 步列起，该步开始于 {{time}}',
+  Time: '时间',
+  Verdict: '判定',
+  'Unexplained, rewrote {{tokens}}': '无法解释，重写 {{tokens}}',
+  'Prompt shorter −{{tokens}}': '提示词变短 −{{tokens}}',
+  'Read the prefix of turn {{turn}}, step {{step}}': '读到回合 {{turn}} 第 {{step}} 步的前缀',
+  '{{verdict}} (prefix diverged)': '{{verdict}}（前缀不一致）',
 });
