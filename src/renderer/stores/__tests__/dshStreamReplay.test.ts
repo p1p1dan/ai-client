@@ -58,7 +58,11 @@ import {
   statusForNextTurn,
 } from '../chatSessions';
 import { resetResumeCandidatesForTests } from '../historyReplayMerge';
-import { usePendingUserMessagesStore } from '../pendingUserMessages';
+import {
+  mergePendingUserRows,
+  type PendingUserMessage,
+  usePendingUserMessagesStore,
+} from '../pendingUserMessages';
 
 // The real English translator: the rows interpolate, and an identity stub would
 // assert on strings no user ever sees.
@@ -1103,6 +1107,75 @@ scenario('steer', (events, id) => {
     expect(usePendingUserMessagesStore.getState().bySession[id]?.[0]?.authoritativeMessageId).toBe(
       'dsh-user-17'
     );
+  });
+
+  it('keeps the running turn the last one while the interjection waits (issue #8)', () => {
+    const awaiting: PendingUserMessage = {
+      attemptId: 'interject-STEER',
+      sessionId: id,
+      text: 'STEER-NOTE-A also report the step count.',
+      attachments: [],
+      startedAt: 0,
+      awaitingDelivery: true,
+    };
+    /** What the timeline cuts turns from at that point, and what waits in none. */
+    const timeline = (upTo: number, pending: PendingUserMessage) => {
+      const { rows, awaitingDelivery } = mergePendingUserRows(
+        bucket(replay(events.slice(0, upTo)), id),
+        [pending]
+      );
+      const turns = groupMessagesIntoTurns(rows);
+      return {
+        turns: turns.map((turn) => textOf(turn.user)),
+        lastTurnRows: toolRowsOf(
+          flattenTurnItems(turns.at(-1) ?? { id: '', user: null, body: [] })
+        ).map((row) => row.running),
+        waiting: awaitingDelivery.map(textOf),
+      };
+    };
+    // The recorder interjected while the first command slept (decision 111 rule 16).
+    const slept = events.findIndex(
+      (event) =>
+        event.type === 'tool.updated' &&
+        event.payload.toolCallId === 'toolu_id-4' &&
+        'execStartedAt' in event.payload
+    );
+    const echo = events.findIndex(
+      (event) =>
+        event.type === 'message.started' &&
+        event.payload.role === 'user' &&
+        event.payload.attemptId === 'interject-STEER'
+    );
+    // The command still running: the bubble waits outside every turn, and the
+    // turn it will join is still the last one — so it still reads as running.
+    expect(timeline(slept + 1, awaiting)).toEqual({
+      turns: ['P1-STEER: two tool steps.'],
+      lastTurnRows: [true],
+      waiting: ['STEER-NOTE-A also report the step count.'],
+    });
+    // The result landed, DSH has not opened the next step yet: unchanged.
+    expect(timeline(echo, awaiting)).toEqual({
+      turns: ['P1-STEER: two tool steps.'],
+      lastTurnRows: [false],
+      waiting: ['STEER-NOTE-A also report the step count.'],
+    });
+    // The echo is in the store (started, text, completed): it opens the new
+    // turn where DSH took the message in.
+    expect(timeline(echo + 3, { ...awaiting, authoritativeMessageId: 'dsh-user-17' })).toEqual({
+      turns: ['P1-STEER: two tool steps.', 'STEER-NOTE-A also report the step count.'],
+      lastTurnRows: [],
+      waiting: [],
+    });
+  });
+
+  it('reopened, the interjection opens its turn where DSH took it in, as live (issue #8)', () => {
+    const live = turnsOf(replay(events), id);
+    const reopened = turnsOf(reopen(id, rpc.history.page.messages), id);
+    expect(reopened.map((turn) => turn.head)).toEqual(live.map((turn) => turn.head));
+    expect(reopened.map((turn) => turn.rows.map(rowSummary))).toEqual(
+      live.map((turn) => turn.rows.map(rowSummary))
+    );
+    expect(reopened[1]?.answer).toBe(live[1]?.answer);
   });
 
   it('finds no turn to join once idle, so the composer sends normally', () => {

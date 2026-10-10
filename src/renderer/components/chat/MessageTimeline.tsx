@@ -44,8 +44,8 @@ import { selectIsMigrating, useLegacyMigrationStore } from '@/stores/legacyMigra
 import {
   isAwaitingDeliveryMessage,
   isPendingUserMessage,
+  mergePendingUserRows,
   type PendingUserMessage,
-  pendingUserToChatMessage,
   usePendingUserMessagesStore,
 } from '@/stores/pendingUserMessages';
 import { useSettingsIntentStore } from '@/stores/settingsIntent';
@@ -462,18 +462,14 @@ export function MessageTimeline({
   const { get: getMeta } = useMessageMetadata(sessionId);
   const { getThinking, getToolStartedAtMs } = useTurnTiming(sessionId);
 
-  const sessionMessages = useMemo(() => {
-    const authoritative = bucket ?? [];
-    const authoritativeIds = new Set(authoritative.map((message) => message.id));
-    const visiblePending = pendingUserMessages
-      .filter(
-        (pending) =>
-          pending.authoritativeMessageId == null ||
-          !authoritativeIds.has(pending.authoritativeMessageId)
-      )
-      .map(pendingUserToChatMessage);
-    return visiblePending.length > 0 ? [...authoritative, ...visiblePending] : authoritative;
-  }, [bucket, pendingUserMessages]);
+  // Issue #8 (decision 172): a Ctrl+Enter message DSH has not taken in yet is
+  // drawn after the turns, not as one — the running turn stays the last turn,
+  // and so stays running, until the echo opens the next one where DSH took
+  // the message in.
+  const { rows: sessionMessages, awaitingDelivery } = useMemo(
+    () => mergePendingUserRows(bucket ?? [], pendingUserMessages),
+    [bucket, pendingUserMessages]
+  );
 
   /**
    * The prompt of the turn Continue retries: the LAST user message in this
@@ -503,15 +499,17 @@ export function MessageTimeline({
     return null;
   }, [sessionMessages]);
 
+  // A bubble awaiting delivery is a row on screen, whatever turn it joins.
+  const messageCount = sessionMessages.length + awaitingDelivery.length;
   const historyNotice = useMemo(
     () =>
       deriveHistoryNotice({
         sessionId,
-        messageCount: sessionMessages.length,
+        messageCount,
         error: historyError,
         migrating,
       }),
-    [sessionId, sessionMessages.length, historyError, migrating]
+    [sessionId, messageCount, historyError, migrating]
   );
 
   // F12 used to fan a second predicate (`thinkingCard.isTurnActive`, which
@@ -929,6 +927,13 @@ export function MessageTimeline({
                   nowMs={nowMs}
                 />
               )}
+              {/* Issue #8 (decision 172): Ctrl+Enter messages DSH has not taken
+                in yet, at the end of the timeline (decision 111 rule 12) and in
+                no turn. The turn they wait to join keeps running above them;
+                each echo opens its turn where DSH took the message in. */}
+              {awaitingDelivery.map((message) => (
+                <UserBubble key={message.id} message={message} />
+              ))}
               {/* dsh-rebase P1-7e (problem 25, decision 139): the history card
                 and the migration notice sit at the END of the timeline, beside
                 the session-failed card below, not above the first turn. Both
@@ -1422,8 +1427,10 @@ function UserBubble({ message }: { message: ChatMessage }) {
   const pending = isPendingUserMessage(message);
   // Decision 093: a Ctrl+Enter message the running turn has not taken in yet.
   // P1-7a (decision 118): a dashed, faceless bubble with a clock, not a spinner
-  // — it is waiting for the turn's next step, not being sent.
+  // — it is waiting for the turn's next step, not being sent. Issue #8
+  // (decision 172): its words are greyed too, until the turn takes it in.
   const awaitingDelivery = isAwaitingDeliveryMessage(message);
+  const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';
 
   return (
     // What makes the two roles distinguishable is SHAPE on this side: the right
@@ -1452,7 +1459,10 @@ function UserBubble({ message }: { message: ChatMessage }) {
                 // dark. The chip follows the bubble's own edge onto `--input`
                 // (1.350 / 1.322). Its `bg-muted/50` fill stays as it was: the
                 // chip is shaped by its edge and icon, not by its fill.
-                className="inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-input bg-muted/50 px-1.5 text-meta text-foreground"
+                className={cn(
+                  'inline-flex h-6 max-w-56 shrink-0 items-center gap-1 rounded-xs border border-input bg-muted/50 px-1.5 text-meta',
+                  ink
+                )}
               >
                 {attachment.kind === 'image' ? (
                   <ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
@@ -1478,7 +1488,7 @@ function UserBubble({ message }: { message: ChatMessage }) {
           {textBlocks.map((block) => (
             <p
               key={block.id}
-              className="whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground"
+              className={cn('whitespace-pre-wrap break-words text-chat-body leading-relaxed', ink)}
             >
               {block.text}
             </p>

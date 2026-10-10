@@ -19,6 +19,10 @@ const sessionsStore = stripComments(
   readFileSync(path.join(__dirname, '..', '..', '..', 'stores', 'chatSessions.ts'), 'utf8'),
   'chatSessions.ts'
 );
+const pendingStore = stripComments(
+  readFileSync(path.join(__dirname, '..', '..', '..', 'stores', 'pendingUserMessages.ts'), 'utf8'),
+  'pendingUserMessages.ts'
+);
 
 describe('T24/T26 send experience wiring', () => {
   it('publishes an attempt-identified pending user message before the first Host await', () => {
@@ -55,7 +59,12 @@ describe('T24/T26 send experience wiring', () => {
       '.acknowledgeAttempt(event.sessionId, event.payload.attemptId, event.payload.messageId)'
     );
     expect(sessionsStore).toContain('message.id === pending.authoritativeMessageId');
-    expect(timeline).toContain('pendingUserToChatMessage');
+    // Issue #8 (decision 172): the timeline takes its rows from the one merge,
+    // which draws every pending row through the shared converter and keeps it
+    // until the exact message its echo named is in the store.
+    expect(timeline).toContain('mergePendingUserRows(bucket');
+    expect(pendingStore).toContain('pendingUserToChatMessage(item)');
+    expect(pendingStore).toContain('authoritativeIds.has(item.authoritativeMessageId)');
     expect(timeline).toContain('isPendingUserMessage(message)');
   });
 

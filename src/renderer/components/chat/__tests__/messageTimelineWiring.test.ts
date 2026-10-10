@@ -350,26 +350,17 @@ function classNameInitializerOf(node: JsxNode): NonNullable<ts.JsxAttribute['ini
   return attribute.initializer;
 }
 
-/** The element's `className` as a literal string; throws if it hides behind an expression. */
-function nodeClassName(fnName: string, path: readonly string[]): string {
-  const initializer = classNameInitializerOf(jsxNodeAt(fnName, path));
-  if (ts.isStringLiteral(initializer)) return initializer.text;
-  if (
-    ts.isJsxExpression(initializer) &&
-    initializer.expression &&
-    ts.isStringLiteral(initializer.expression)
-  ) {
-    return initializer.expression.text;
-  }
-  throw new Error(`className on ${fnName} ${path.join(' > ')} is not a string literal`);
-}
-
 /*
  * `nodeClassNameArgs` — the literal arguments of a `className={cn(…)}` — retired
  * with T12. Its only caller was `[D3-1]`, which read the user bubble's two-part
  * `cn('min-w-0 max-w-[85%] …', 'rounded-br-xs …')`; the bubble now mounts
  * `userBubbleClass()` instead, whose contents are asserted as a return value in
  * `chatTimelineLayout.test.ts` rather than as JSX text.
+ *
+ * `nodeClassName` — the className as a bare string literal — retired with issue
+ * #8 (decision 172). Its last caller was `[D3-3]`, and the chip it read moved
+ * to `cn(literal, ink)` so an awaiting bubble greys its chips with its words;
+ * `[D3-3]` reads the expression through `classNameExpressionOf` now.
  */
 
 /** Raw (comment-blanked) text of a node — for subtree prohibitions and expression attributes. */
@@ -1105,12 +1096,18 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
     // and each paragraph is now pinned as a whole string — strictly stronger
     // than the prefix count it replaces, and it still fails if either is
     // deleted or routed into markdown.
+    //
+    // Issue #8 (decision 172): the user bubble's ink moved out of the literal —
+    // a Ctrl+Enter message awaiting delivery is greyed — so its paragraph is
+    // pinned as the literal plus the one ink choice.
     for (const cls of [
-      'whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground',
+      'whitespace-pre-wrap break-words text-chat-body leading-relaxed',
       'select-text whitespace-pre-wrap text-chat-body text-foreground',
     ]) {
       expect(countIn(SYNTAX, cls), `paragraph must survive verbatim: ${cls}`).toBe(1);
     }
+    expectWired("const ink = awaitingDelivery ? 'text-muted-foreground' : 'text-foreground';");
+    expectWired("cn('whitespace-pre-wrap break-words text-chat-body leading-relaxed', ink)");
   });
 
   // F13's sibling: the copy payload is the RAW markdown source, so the button
@@ -1169,9 +1166,12 @@ describe('MessageTimeline wiring smoke (F8) — brittle by design', () => {
   // drops to 1.115 in dark, i.e. effectively invisible. It follows the bubble's
   // own edge onto `--input` (§3.4 ③).
   it('[D3-3] the attachment chip edge follows the bubble onto --input', () => {
-    const chip = nodeClassName('UserBubble', ['article', 'div', 'div', 'span']);
+    // Issue #8 (decision 172): a `cn(…)` now — the chip's ink greys with an
+    // awaiting bubble's — so the literal is read through the expression.
+    const chip = classNameExpressionOf(jsxNodeAt('UserBubble', ['article', 'div', 'div', 'span']));
     expect(chip).toContain('border border-input');
     expect(chip).not.toContain('border-border');
+    expect(chip).toContain('ink');
   });
 
   /**
@@ -1798,9 +1798,8 @@ describe('[INV-D1-1] F5 D1-b: the three prose surfaces move together, the rest d
     ).toBe(3);
     // Spelled out so a failure names the surface, not just the count.
     expect(CHAT_CODE).toContain('break-words text-chat-body leading-relaxed text-foreground');
-    expect(CHAT_CODE).toContain(
-      'whitespace-pre-wrap break-words text-chat-body leading-relaxed text-foreground'
-    );
+    // The user bubble: its ink is chosen beside the literal (issue #8).
+    expect(CHAT_CODE).toContain('whitespace-pre-wrap break-words text-chat-body leading-relaxed');
     expect(CHAT_CODE).toContain(
       'text-chat-body leading-relaxed text-foreground whitespace-pre-wrap select-text'
     );

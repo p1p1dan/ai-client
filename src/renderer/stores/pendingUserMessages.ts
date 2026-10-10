@@ -21,7 +21,8 @@ export interface PendingUserMessage {
    * dsh-rebase decision 093: a Ctrl+Enter message the running turn has been
    * handed but has not taken in yet — it goes in at the turn's next step
    * boundary, or, after a Stop, with the next turn (decision 094). Shown as
-   * awaiting delivery rather than sending; retired by the same echo.
+   * awaiting delivery rather than sending; retired by the same echo. It opens
+   * no turn while it waits (`mergePendingUserRows`, decision 172).
    */
   awaitingDelivery?: true;
 }
@@ -119,4 +120,40 @@ export function isPendingUserMessage(message: ChatMessage): boolean {
 /** A pending row the running turn has not taken in yet (decision 093). */
 export function isAwaitingDeliveryMessage(message: ChatMessage): boolean {
   return message.id.startsWith(AWAITING_DELIVERY_PREFIX);
+}
+
+const NO_ROWS: readonly ChatMessage[] = [];
+
+/**
+ * The timeline's rows: a session's messages plus its pending ones that have
+ * not reached the store yet. A pending row stays until the exact message its
+ * echo named is in the store (`authoritativeMessageId`).
+ *
+ * `rows` is what turns are cut from, and a pending send is one of them: the
+ * turn it opens is the turn its echo will open. `awaitingDelivery` is not
+ * (GitHub issue #8, dsh-rebase decision 172). DSH takes a Ctrl+Enter message
+ * in at the running turn's next step boundary, after the step that is running
+ * now has finished, and the echo opens the turn where it lands. Cut at the
+ * bubble, the running turn stopped being the last one the moment Ctrl+Enter
+ * was pressed, and read as finished — folded under "Worked", its clocks stopped —
+ * while its last call or thought was still running.
+ */
+export function mergePendingUserRows(
+  authoritative: readonly ChatMessage[],
+  pending: readonly PendingUserMessage[]
+): { rows: readonly ChatMessage[]; awaitingDelivery: readonly ChatMessage[] } {
+  if (pending.length === 0) return { rows: authoritative, awaitingDelivery: NO_ROWS };
+  const authoritativeIds = new Set(authoritative.map((message) => message.id));
+  const sends: ChatMessage[] = [];
+  const awaitingDelivery: ChatMessage[] = [];
+  for (const item of pending) {
+    if (item.authoritativeMessageId != null && authoritativeIds.has(item.authoritativeMessageId)) {
+      continue;
+    }
+    (item.awaitingDelivery ? awaitingDelivery : sends).push(pendingUserToChatMessage(item));
+  }
+  return {
+    rows: sends.length > 0 ? [...authoritative, ...sends] : authoritative,
+    awaitingDelivery: awaitingDelivery.length > 0 ? awaitingDelivery : NO_ROWS,
+  };
 }

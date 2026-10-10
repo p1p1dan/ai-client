@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import type { ChatMessage } from '../chatSessions';
 import {
   isAwaitingDeliveryMessage,
   isPendingUserMessage,
+  mergePendingUserRows,
   type PendingUserMessage,
   pendingUserToChatMessage,
   usePendingUserMessagesStore,
@@ -106,5 +108,54 @@ describe('pending user message reconciliation', () => {
       authoritativeMessageId: 'dsh-user-7',
       awaitingDelivery: true,
     });
+  });
+});
+
+describe('mergePendingUserRows (issue #8, decision 172)', () => {
+  const stored = (id: string, role: ChatMessage['role'] = 'user'): ChatMessage => ({
+    id,
+    sessionId: 's1',
+    role,
+    blocks: [],
+  });
+  const BUCKET = [stored('u1'), stored('a1', 'assistant')];
+
+  it('hands back the store rows themselves when nothing is pending', () => {
+    const merged = mergePendingUserRows(BUCKET, []);
+    expect(merged.rows).toBe(BUCKET);
+    expect(merged.awaitingDelivery).toEqual([]);
+  });
+
+  it('a pending send is a turn row; a Ctrl+Enter message awaiting delivery is not', () => {
+    const merged = mergePendingUserRows(BUCKET, [
+      pending({ attemptId: 'interject-1', text: 'also this', awaitingDelivery: true }),
+      pending({ attemptId: 'attempt-2', text: 'next prompt' }),
+    ]);
+    expect(merged.rows.map((row) => row.id)).toEqual(['u1', 'a1', 'pending-user:attempt-2']);
+    expect(merged.awaitingDelivery.map((row) => row.id)).toEqual([
+      'pending-user:steer:interject-1',
+    ]);
+    // Only awaiting rows: the store's rows go through untouched, so the turns
+    // cut from them — and the running one among them — keep their identity.
+    const waiting = mergePendingUserRows(BUCKET, [
+      pending({ attemptId: 'interject-1', awaitingDelivery: true }),
+    ]);
+    expect(waiting.rows).toBe(BUCKET);
+    expect(waiting.awaitingDelivery).toHaveLength(1);
+  });
+
+  it('a row leaves once the message its echo named is in the store, not before', () => {
+    const acknowledged = pending({
+      attemptId: 'interject-1',
+      awaitingDelivery: true,
+      authoritativeMessageId: 'dsh-user-7',
+    });
+    // Acknowledged on the wire, not yet flushed into the store: still drawn.
+    expect(mergePendingUserRows(BUCKET, [acknowledged]).awaitingDelivery).toHaveLength(1);
+    // The echo is in: the store's own row stands where DSH took it in.
+    const delivered = [...BUCKET, stored('dsh-user-7')];
+    const merged = mergePendingUserRows(delivered, [acknowledged]);
+    expect(merged.awaitingDelivery).toEqual([]);
+    expect(merged.rows).toBe(delivered);
   });
 });
