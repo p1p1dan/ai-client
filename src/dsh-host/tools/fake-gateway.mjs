@@ -50,6 +50,11 @@
  *   POST *          Treated as POST /v1/messages regardless of actual path (path is ignored).
  *                   Body is expected to be an Anthropic Messages request:
  *                   { model, messages: [{ role, content }], ... }
+ *   POST …/chat/completions, POST …/responses
+ *                   (dsh-rebase decision 171) The two OpenAI wires, whatever the plan:
+ *                   one plain text answer, `fake gateway ok (<wire>)`, in that wire's own
+ *                   stream format. Enough for a turn or a one-shot completion to finish,
+ *                   so a probe can read how each protocol identified itself.
  *   GET  /health    Returns { ok: true, plan, count } as JSON — count is the number of
  *                   POST requests served so far (persisted via --state).
  *
@@ -257,6 +262,9 @@
  * reads these logs too), `userAgent`, `clientHeader` (X-Pilab-Client), the model the body
  * named, the path, and the reasoning fields the body carried. Decision 146 adds
  * `cacheControl`: how many `cache_control` breakpoints the body carried, and where.
+ * Decision 171 adds `wire` (which protocol the path speaks), `userAgentLines` (how many
+ * User-Agent lines the raw request carried: Node keeps only the first in `userAgent`) and
+ * `relayHeader` (the X-Aiclient-User-Agent value, which must never arrive; null when absent).
  *
  * `--port 0` listens on an ephemeral port; the startup line prints the actual one.
  *
@@ -405,6 +413,113 @@ function summarizeMessage(msg) {
 function hasToolResult(messages) {
   return messages.some(
     (m) => Array.isArray(m?.content) && m.content.some((b) => b?.type === 'tool_result')
+  );
+}
+
+/**
+ * dsh-rebase decision 171: the wire protocol a POST speaks, by its path. Anything
+ * that is not one of the two OpenAI paths is Anthropic Messages, as before.
+ */
+function wireOf(url) {
+  const pathname = String(url ?? '').split('?')[0];
+  if (pathname.endsWith('/chat/completions')) return 'openai-completions';
+  if (pathname.endsWith('/responses')) return 'openai-responses';
+  return 'anthropic-messages';
+}
+
+/**
+ * Decision 171: how a request identified itself, read off the raw header lines
+ * (`req.headers` keeps only the first User-Agent and hides a duplicate).
+ */
+function identityOf(req) {
+  let userAgentLines = 0;
+  let relayHeader = null;
+  for (let i = 0; i < req.rawHeaders.length; i += 2) {
+    const name = String(req.rawHeaders[i]).toLowerCase();
+    if (name === 'user-agent') userAgentLines += 1;
+    if (name === 'x-aiclient-user-agent') relayHeader = String(req.rawHeaders[i + 1]);
+  }
+  return { userAgentLines, relayHeader };
+}
+
+/** Decision 171: one plain text answer in an OpenAI wire's own stream format. */
+function sendOpenAiText(res, wire, model, text) {
+  res.writeHead(200, {
+    'content-type': 'text/event-stream',
+    'cache-control': 'no-cache',
+    connection: 'keep-alive',
+  });
+  if (wire === 'openai-completions') {
+    const chunk = (choice, extra = {}) =>
+      `data: ${JSON.stringify({
+        id: 'chatcmpl-fake',
+        object: 'chat.completion.chunk',
+        created: 0,
+        model,
+        choices: [{ index: 0, ...choice }],
+        ...extra,
+      })}\n\n`;
+    res.end(
+      chunk({ delta: { role: 'assistant', content: text }, finish_reason: null }) +
+        chunk(
+          { delta: {}, finish_reason: 'stop' },
+          { usage: { prompt_tokens: 24, completion_tokens: 4, total_tokens: 28 } }
+        ) +
+        'data: [DONE]\n\n'
+    );
+    return;
+  }
+  const item = {
+    id: 'msg_fake',
+    type: 'message',
+    role: 'assistant',
+    status: 'completed',
+    content: [{ type: 'output_text', text, annotations: [] }],
+  };
+  const event = (type, data) => sseFrame(type, { type, ...data });
+  res.end(
+    [
+      event('response.created', {
+        response: { id: 'resp_fake', status: 'in_progress', output: [] },
+      }),
+      event('response.output_item.added', {
+        output_index: 0,
+        item: { ...item, status: 'in_progress', content: [] },
+      }),
+      event('response.content_part.added', {
+        item_id: item.id,
+        output_index: 0,
+        content_index: 0,
+        part: { type: 'output_text', text: '', annotations: [] },
+      }),
+      event('response.output_text.delta', {
+        item_id: item.id,
+        output_index: 0,
+        content_index: 0,
+        delta: text,
+      }),
+      event('response.output_text.done', {
+        item_id: item.id,
+        output_index: 0,
+        content_index: 0,
+        text,
+      }),
+      event('response.output_item.done', { output_index: 0, item }),
+      event('response.completed', {
+        response: {
+          id: 'resp_fake',
+          status: 'completed',
+          output: [item],
+          usage: {
+            input_tokens: 24,
+            output_tokens: 4,
+            total_tokens: 28,
+            input_tokens_details: { cached_tokens: 0 },
+            output_tokens_details: { reasoning_tokens: 0 },
+          },
+        },
+      }),
+    ].join('')
   );
 }
 
@@ -2614,6 +2729,30 @@ function main() {
       const lastMessage = messages[messages.length - 1];
       const toolResultPresent = hasToolResult(messages);
       const summary = summarizeMessage(lastMessage);
+      // Decision 171: which protocol, and how the request identified itself.
+      const wire = wireOf(req.url);
+      const identity = identityOf(req);
+
+      if (wire !== 'anthropic-messages') {
+        logRequest({
+          seq,
+          status: 200,
+          wire,
+          role: lastMessage?.role ?? null,
+          contentSummary: summary,
+          plan: args.plan,
+          auth: keyDigest(receivedKey(req)),
+          userAgent: req.headers['user-agent'] ?? null,
+          ...identity,
+          clientHeader: req.headers['x-pilab-client'] ?? null,
+          model: typeof parsed?.model === 'string' ? parsed.model : null,
+          path: req.url,
+          decision: 'openai-text',
+        });
+        saveState(args.state, state);
+        sendOpenAiText(res, wire, model, `fake gateway ok (${wire})`);
+        return;
+      }
 
       const decision =
         args.plan === 'dsh-p0-2'
@@ -2631,7 +2770,9 @@ function main() {
         hasToolResult: toolResultPresent,
         plan: args.plan,
         auth: keyDigest(key),
+        wire,
         userAgent: req.headers['user-agent'] ?? null,
+        ...identity,
         clientHeader: req.headers['x-pilab-client'] ?? null,
         model: typeof parsed?.model === 'string' ? parsed.model : null,
         path: req.url,

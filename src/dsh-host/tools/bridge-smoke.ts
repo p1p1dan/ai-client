@@ -1591,7 +1591,42 @@ async function main() {
       JSON.stringify(page) === JSON.stringify(earlier)
     );
   };
+  // Decision 171 (GitHub issue #7): how every model request of every host
+  // identified itself at the gateway. The plan's default User-Agent is
+  // `claude-cli-pilab/<clientVersion>`, relayed past DSH's own. Request lines
+  // only: the gateway also logs events of its own (`burst-completed`).
+  const gatewayIdentity = existsSync(join(box.root, 'gateway.jsonl'))
+    ? readFileSync(join(box.root, 'gateway.jsonl'), 'utf8')
+        .split('\n')
+        .filter(Boolean)
+        .map(
+          (line) =>
+            JSON.parse(line) as {
+              event?: unknown;
+              userAgent?: unknown;
+              userAgentLines?: unknown;
+              relayHeader?: unknown;
+            }
+        )
+        .filter((line) => line.event === undefined)
+    : [];
+  report.userAgent = {
+    requests: gatewayIdentity.length,
+    agents: [...new Set(gatewayIdentity.map((line) => line.userAgent))],
+    relayHeaderSeen: gatewayIdentity.filter((line) => line.relayHeader !== null).length,
+    notOneLine: gatewayIdentity.filter((line) => line.userAgentLines !== 1).length,
+  };
   report.verdict = {
+    // Decision 171: every request sent the plan's User-Agent, on one line,
+    // and the relay header never reached the gateway.
+    userAgentRelayed:
+      gatewayIdentity.length > 0 &&
+      gatewayIdentity.every(
+        (line) =>
+          line.userAgent === 'claude-cli-pilab/bridge-smoke' &&
+          line.userAgentLines === 1 &&
+          line.relayHeader === null
+      ),
     // P0-3, unchanged
     streamedInManyDeltas: (stream?.assistantDeltas ?? 0) >= 10,
     toolRowSettled: tool?.tools?.some((t) => t.ok === true) ?? false,

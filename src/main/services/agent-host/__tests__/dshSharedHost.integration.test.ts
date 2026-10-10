@@ -1678,10 +1678,15 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
         ['fake-1', digestOf(canary), '/v1/messages'],
         ['fake-2', digestOf(second), '/second/v1/messages'],
       ]);
-      // Decision 037's default: DSH's User-Agent, and our identity header beside it.
+      // Decision 037's identity header, and decision 171's User-Agent: the
+      // plan's default, relayed past DSH's own, on one line, the relay header gone.
       expect(new Set(lines.map((line) => line.clientHeader))).toEqual(new Set(['it-p1-5']));
       const agents = [...new Set(lines.map((line) => String(line.userAgent)))];
-      expect(agents.every((agent) => agent.startsWith('deepseek-harness/'))).toBe(true);
+      expect(agents).toEqual(['claude-cli-pilab/it-p1-5']);
+      expect(lines.map((line) => [line.userAgentLines, line.relayHeader])).toEqual([
+        [1, null],
+        [1, null],
+      ]);
       process.stderr.write(`[p1-5] User-Agent sent: ${agents.join(', ')}\n`);
       // The model switch is a DSH notice in the log, and message.started names our id.
       const log = textsUnder(
@@ -2027,6 +2032,143 @@ describe.skipIf(!enabled)('shared DSH host, real process (P1-3a, P1-3c)', () => 
    * the 1.0.x card, answered through `respondPermission` as the renderer
    * answers it; DSH's sandbox is off, so nothing else asks.
    */
+  describe('a User-Agent supervisor: every protocol, each choice (decision 171, GitHub issue #7)', () => {
+    const ROUTES = ['ua-am', 'ua-oc', 'ua-or'] as const;
+    const auth = Object.fromEntries(
+      ROUTES.map((route) => [route, { type: 'api_key', key: FAKE_KEY }])
+    ) as Record<string, unknown>;
+
+    const gatewayLines = () => {
+      const file = join(shared.stateRoot, 'gateway.jsonl');
+      if (!existsSync(file)) return [];
+      return readFileSync(file, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    };
+
+    /** One route per protocol on the fake gateway, by the product's own rules. */
+    const uaPlan = (settings?: Parameters<typeof buildDshModelPlan>[0]['settings']) => {
+      const model = [{ id: 'm1', name: 'UA probe', contextWindow: 100_000, maxTokens: 4096 }];
+      return buildDshModelPlan({
+        models: {
+          providers: {
+            'ua-am': {
+              baseUrl: `http://127.0.0.1:${port}/ua-am`,
+              api: 'anthropic-messages',
+              models: model,
+            },
+            'ua-oc': {
+              baseUrl: `http://127.0.0.1:${port}/ua-oc/v1`,
+              api: 'openai-completions',
+              models: model,
+            },
+            'ua-or': {
+              baseUrl: `http://127.0.0.1:${port}/ua-or/v1`,
+              api: 'openai-responses',
+              models: model,
+            },
+          },
+        },
+        keyed: Object.fromEntries(ROUTES.map((route) => [route, true])),
+        clientVersion: 'it-ua',
+        ...(settings ? { settings } : {}),
+      });
+    };
+
+    /**
+     * A host of its own for `plan`, one one-shot completion per route, and how
+     * the gateway saw each request identify itself. The host is shut down
+     * before this returns.
+     */
+    async function probe(plan: DshModelPlan) {
+      const supervisor = new DshHostSupervisor({
+        idleStopMs: 0,
+        modelSource: {
+          plan: () => plan,
+          credentials: new DshCredentialBroker({ readAuth: () => auth }),
+        },
+      });
+      const service = new DshCompletionService({ host: supervisor });
+      const seen = gatewayLines().length;
+      try {
+        const texts: string[] = [];
+        for (const route of ROUTES) {
+          const result = await service.complete({
+            purpose: 'commit-message',
+            prompt: `UA-PROBE on ${route}`,
+            model: `${route}/m1`,
+            timeoutMs: 60_000,
+          });
+          texts.push(result.text);
+        }
+        const lines = gatewayLines()
+          .slice(seen)
+          .map((line) => ({
+            wire: line.wire,
+            route: String(line.path).split('/')[1],
+            userAgent: line.userAgent,
+            userAgentLines: line.userAgentLines,
+            relayHeader: line.relayHeader,
+            clientHeader: line.clientHeader,
+          }));
+        return { texts, lines, revision: plan.revision };
+      } finally {
+        await supervisor.shutdown('app-quit');
+      }
+    }
+
+    const expected = (userAgent: unknown) =>
+      [
+        ['anthropic-messages', 'ua-am'],
+        ['openai-completions', 'ua-oc'],
+        ['openai-responses', 'ua-or'],
+      ].map(([wire, route]) => ({
+        wire,
+        route,
+        userAgent,
+        userAgentLines: 1,
+        relayHeader: null,
+        clientHeader: 'it-ua',
+      }));
+
+    afterAll(() => {
+      expect(liveHosts()).toHaveLength(0);
+    });
+
+    it('[UA-1] default: every protocol sends claude-cli-pilab/<app version>, on one line, never the relay header', async () => {
+      const { texts, lines } = await probe(uaPlan());
+      expect(texts).toEqual([
+        'fake gateway: no P0 scenario marker',
+        'fake gateway ok (openai-completions)',
+        'fake gateway ok (openai-responses)',
+      ]);
+      expect(lines).toEqual(expected('claude-cli-pilab/it-ua'));
+      process.stderr.write(
+        `[ua] default: ${lines.map((line) => `${line.wire}=${String(line.userAgent)}`).join(', ')}\n`
+      );
+    }, 180_000);
+
+    it('[UA-2] custom: the value, trimmed, on every protocol', async () => {
+      const { lines } = await probe(
+        uaPlan({ userAgentMode: 'custom', userAgentCustom: '  pilab-it/9 (custom)  ' })
+      );
+      expect(lines).toEqual(expected('pilab-it/9 (custom)'));
+    }, 180_000);
+
+    it("[UA-3] engine default: DSH's own User-Agent, as before decision 171", async () => {
+      const { lines } = await probe(uaPlan({ userAgentMode: 'engine' }));
+      const agents = [...new Set(lines.map((line) => String(line.userAgent)))];
+      expect(agents).toHaveLength(1);
+      expect(agents[0]).toMatch(
+        /^deepseek-harness\/\S+ \(\+https:\/\/github\.com\/deepseek-ai\/deepseek-harness\)$/
+      );
+      expect(lines).toEqual(expected(agents[0]));
+      process.stderr.write(`[ua] engine: ${String(agents[0])}\n`);
+    }, 180_000);
+  });
+
   describe('a seventh supervisor: the permission gate, cards round trip (P1-6b)', () => {
     let supervisor: Supervisor;
     let manager: Manager;
