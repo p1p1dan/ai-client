@@ -34,11 +34,22 @@ const STRIPPED_LIFECYCLE_PREFIX = 'npm_';
 /**
  * App switches the host itself reads, forwarded packaged or not: the loop
  * guard's emergency kill switch (dsh-rebase decision 065; `0` turns the
- * `aiclient-loop-guard` row off), under 1.0.x's name; and the encrypted-read
+ * `aiclient-loop-guard` row off), under 1.0.x's name; the encrypted-read
  * row's (P1-13d, decision 135; `0` leaves the fs service unwrapped), whose
- * name follows the same family.
+ * name follows the same family; and decision 173's three (GitHub issue #9;
+ * `0` turns each off): the request tap's session metadata and prefix watch,
+ * and the per-step cache chain check. The last three are spelled out here
+ * because this file imports nothing; they are `SESSION_METADATA_ENV`,
+ * `PREFIX_WATCH_ENV` and `CACHE_CHAIN_ENV` in src/shared/types/requestScope.ts,
+ * and DshHostProcess.test.ts pins the two equal.
  */
-const FORWARDED_ENV = ['AICLIENT_RUNTIME_LOOP_GUARD', 'AICLIENT_RUNTIME_ENCRYPTED_READ'];
+const FORWARDED_ENV = [
+  'AICLIENT_RUNTIME_LOOP_GUARD',
+  'AICLIENT_RUNTIME_ENCRYPTED_READ',
+  'AICLIENT_RUNTIME_SESSION_METADATA',
+  'AICLIENT_RUNTIME_PREFIX_WATCH',
+  'AICLIENT_RUNTIME_CACHE_CHAIN',
+];
 
 /**
  * dsh-rebase P1-6c: the app's pi-agent directory (`<agentDir>`), whose policy

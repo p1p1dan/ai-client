@@ -55,6 +55,14 @@
  * User-Agent (decision 171): before any DSH module loads, `fetch` is wrapped
  * (lib/userAgentRelay.ts) so a provider request carrying the plan's relay
  * header goes out with that value as its User-Agent instead of DSH's own.
+ *
+ * Request tap (decision 173, GitHub issue #9): right after, `fetch` is wrapped
+ * again (lib/requestTap.ts), so each chat's anthropic-messages requests carry
+ * a stable `metadata.user_id` and a request that does not merely extend the
+ * previous one is logged. The session comes from the request scope
+ * (lib/requestScope.ts), whose `llm/stream` listener the boot callback
+ * registers before any row loads; the rows read what the tap found through
+ * the `aiclientRequestScope` service.
  */
 
 import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
@@ -63,6 +71,8 @@ import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { format } from 'node:util';
+import { REQUEST_SCOPE_SERVICE } from '../shared/types/requestScope.ts';
+import { dshHomeFrom, readOrCreateAnonymousId } from './lib/anonymousId.ts';
 import { CredentialRelay } from './lib/credentialRelay.ts';
 import {
   CONFIGURE_TIMEOUT_MS,
@@ -104,6 +114,9 @@ import {
   requiredEnabledOverlays,
   sameBundles,
 } from './lib/hostProfile.ts';
+import { installRequestScope, RequestScope } from './lib/requestScope.ts';
+import { describeRequestTap, installRequestTap } from './lib/requestTap.ts';
+import { deviceIdFrom } from './lib/sessionMetadata.ts';
 import { installUserAgentRelay } from './lib/userAgentRelay.ts';
 
 const PROFILE_NAME = 'aiclient';
@@ -125,6 +138,26 @@ const marks: Record<string, number> = { entry: performance.now() };
 installUserAgentRelay(globalThis, {
   onRefused: () => warn("a relayed User-Agent failed the check; DSH's own was sent"),
 });
+
+// Decision 173 (GitHub issue #9): the request tap wraps `fetch` next, also
+// before any DSH module loads, so it sees every model request DSH builds. The
+// request scope it reads each request's session from is registered in the
+// boot callback; the anonymous install id is read on the first request that
+// needs it.
+const requestScope = new RequestScope();
+const requestTapWarnings = new Set<string>();
+const requestTap = installRequestTap(globalThis, {
+  scope: requestScope,
+  env: process.env,
+  deviceId: async () => deviceIdFrom(readOrCreateAnonymousId(dshHomeFrom(process.env))),
+  log: (line) => process.stderr.write(`[dsh-host] ${line}\n`),
+  warnOnce: (key, line) => {
+    if (requestTapWarnings.has(key)) return;
+    requestTapWarnings.add(key);
+    warn(line);
+  },
+});
+process.stderr.write(`[dsh-host] ${describeRequestTap(requestTap)}\n`);
 
 /** Shared with the aiclient-bridge row through a global symbol. */
 interface BridgeInbox {
@@ -591,6 +624,11 @@ const ctx = await appBoot.boot(BIN, rootConfig, patches, async (hostCtx) => {
       }
     },
   });
+  // Decision 173: each model request's chain runs in its session's request
+  // scope, registered before any row loads, so the request tap knows whose
+  // request it sees; the rows read what the tap found through the service.
+  hostCtx.provide(REQUEST_SCOPE_SERVICE, requestScope);
+  if (requestTap.installed) installRequestScope(hostCtx, requestScope);
   hostCtx.provide('profileContext', profileContext);
   hostCtx.provide(DSH_LAUNCH_ENVIRONMENT_KEY, environment);
   // Decision 033: the plan the bridge routes each turn by (the nonce stays

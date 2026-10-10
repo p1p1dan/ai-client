@@ -2,6 +2,11 @@ import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import {
+  CACHE_CHAIN_ENV,
+  PREFIX_WATCH_ENV,
+  SESSION_METADATA_ENV,
+} from '../../../../shared/types/requestScope';
+import {
   buildDshHostEnvironment,
   buildDshHostLaunch,
   currentDshHostLaunch,
@@ -324,6 +329,32 @@ describe('buildDshHostEnvironment (decision 022)', () => {
     // Absent stays absent: no value means the row is on, its own default.
     expect(build().AICLIENT_RUNTIME_ENCRYPTED_READ).toBeUndefined();
     expect(isStrippedDshHostEnvName('AICLIENT_RUNTIME_ENCRYPTED_READ')).toBe(true);
+  });
+
+  it("forwards decision 173's request tap and cache chain switches, by the host's own names", () => {
+    const names = [SESSION_METADATA_ENV, PREFIX_WATCH_ENV, CACHE_CHAIN_ENV];
+    expect(names).toEqual([
+      'AICLIENT_RUNTIME_SESSION_METADATA',
+      'AICLIENT_RUNTIME_PREFIX_WATCH',
+      'AICLIENT_RUNTIME_CACHE_CHAIN',
+    ]);
+    for (const isPackaged of [true, false]) {
+      const env = build({
+        isPackaged,
+        env: {
+          ...SHELL_ENV,
+          ...Object.fromEntries(names.map((name) => [name, '0'])),
+          AICLIENT_RUNTIME_OTHER: '1',
+        },
+      });
+      for (const name of names) expect(env[name], `${name} ${isPackaged}`).toBe('0');
+      expect(env.AICLIENT_RUNTIME_OTHER, String(isPackaged)).toBeUndefined();
+    }
+    for (const name of names) {
+      // Absent stays absent: each part is on by default.
+      expect(build()[name], name).toBeUndefined();
+      expect(isStrippedDshHostEnvName(name), name).toBe(true);
+    }
   });
 
   it('sets the permission agent directory only when given one, and never inherits it (P1-6c)', () => {

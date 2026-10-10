@@ -2,6 +2,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  CACHE_CHAIN_ENV,
+  PREFIX_WATCH_ENV,
+  SESSION_METADATA_ENV,
+} from '../../shared/types/requestScope.ts';
 
 /**
  * dsh-rebase P1-3a static guards on the host launcher and the product bundle
@@ -218,6 +223,59 @@ describe('host.ts User-Agent relay (decision 171, GitHub issue #7)', () => {
     expect(firstDsh).toBeGreaterThan(installed);
     // A static import of a DSH package would be evaluated before the wrapper.
     expect(host).not.toMatch(/^import[^;]*from\s*'@deepseek-ai\//m);
+  });
+});
+
+describe('host.ts request tap and request scope (decision 173, GitHub issue #9)', () => {
+  it('wraps fetch right after the User-Agent relay, before the first DSH module loads', () => {
+    expect(host).toContain(
+      "import { describeRequestTap, installRequestTap } from './lib/requestTap.ts';"
+    );
+    const relay = host.indexOf('installUserAgentRelay(globalThis');
+    const tap = host.indexOf('installRequestTap(globalThis');
+    const firstDsh = host.search(/\bimport\(\s*'@deepseek-ai\//);
+    expect(relay).toBeGreaterThan(0);
+    expect(tap).toBeGreaterThan(relay);
+    expect(firstDsh).toBeGreaterThan(tap);
+    // Each wraps fetch once: the relay, then the tap around it.
+    expect(host.match(/\binstall(UserAgentRelay|RequestTap)\(/g)).toEqual([
+      'installUserAgentRelay(',
+      'installRequestTap(',
+    ]);
+  });
+
+  it('offers the scope and registers its llm/stream listener in the boot callback, before any row loads', () => {
+    const boot = host.slice(
+      host.indexOf('await appBoot.boot('),
+      host.indexOf('await hostCtx.plugin(appBoot.PluginPackages')
+    );
+    expect(boot).toContain('hostCtx.provide(REQUEST_SCOPE_SERVICE, requestScope);');
+    expect(boot).toContain('if (requestTap.installed) installRequestScope(hostCtx, requestScope);');
+    expect(host).toContain(
+      "import { REQUEST_SCOPE_SERVICE } from '../shared/types/requestScope.ts';"
+    );
+  });
+
+  it('says how the tap started, and reads the anonymous install id only when a request needs it', () => {
+    expect(host).toMatch(
+      /^process\.stderr\.write\(`\[dsh-host\] \$\{describeRequestTap\(requestTap\)\}\\n`\);$/m
+    );
+    expect(host).toContain(
+      'deviceId: async () => deviceIdFrom(readOrCreateAnonymousId(dshHomeFrom(process.env))),'
+    );
+    expect(host).toContain('env: process.env,');
+  });
+
+  it("reads the switches Main forwards (FORWARDED_ENV in Main's host environment)", () => {
+    const main = readFileSync(
+      join(HOST_DIR, '..', 'main', 'services', 'agent-host', 'dshHostEnvironment.ts'),
+      'utf8'
+    );
+    const forwarded = main.slice(main.indexOf('const FORWARDED_ENV = ['));
+    const list = forwarded.slice(0, forwarded.indexOf('];'));
+    for (const name of [SESSION_METADATA_ENV, PREFIX_WATCH_ENV, CACHE_CHAIN_ENV]) {
+      expect(list, name).toContain(`'${name}'`);
+    }
   });
 });
 

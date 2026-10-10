@@ -705,15 +705,23 @@ describe('the host bundle (P1-3a)', () => {
     // P1-5: the model plan's overlays and the credential relay (decisions 033, 034).
     // P1-10b: the plugin rules and the shared allowlist library (decision 108).
     // Decision 171: the User-Agent relay and the check it shares with Main.
+    // Decision 173: the request scope and tap, their libraries and the names
+    // they share with the bridge and Main.
     expect(verdict.inputs.sort()).toEqual([
       'src/dsh-host/host.ts',
+      'src/dsh-host/lib/anonymousId.ts',
       'src/dsh-host/lib/credentialRelay.ts',
       'src/dsh-host/lib/hostModelPlan.ts',
       'src/dsh-host/lib/hostPlugins.ts',
       'src/dsh-host/lib/hostProfile.ts',
+      'src/dsh-host/lib/requestPrefix.ts',
+      'src/dsh-host/lib/requestScope.ts',
+      'src/dsh-host/lib/requestTap.ts',
+      'src/dsh-host/lib/sessionMetadata.ts',
       'src/dsh-host/lib/userAgentRelay.ts',
       'src/shared/dshPluginAllowlist.ts',
       'src/shared/dshPlugins.ts',
+      'src/shared/types/requestScope.ts',
       'src/shared/types/requestUserAgent.ts',
     ]);
     expect(verdict.externals.filter((name) => !name.startsWith('node:'))).toEqual([
@@ -724,6 +732,8 @@ describe('the host bundle (P1-3a)', () => {
     expect(text).not.toMatch(/from\s+['"][^'"]+\.ts['"]/);
     expect(text).toContain('function reconcileProductBundles(');
     expect(text).toContain('function installUserAgentRelay(');
+    expect(text).toContain('function installRequestTap(');
+    expect(text).toContain('function installRequestScope(');
   });
 
   it('flags a host bundle that took in anything else', () => {
@@ -738,6 +748,22 @@ describe('the host bundle (P1-3a)', () => {
       'host bundle took in src/shared/types/workerRpc.ts',
       'host bundle imports zod at run time',
     ]);
+  });
+
+  it('may take in the request scope and its fetch-wrapper libraries (decision 173)', () => {
+    const { failures } = checkHostMetafile(
+      {
+        inputs: {
+          'src/dsh-host/host.ts': {},
+          'src/dsh-host/lib/requestPrefix.ts': {},
+          'src/dsh-host/lib/sessionMetadata.ts': {},
+          'src/shared/types/requestScope.ts': {},
+        },
+        outputs: { 'host.js': { imports: [{ path: 'node:crypto', external: true }] } },
+      },
+      repoRoot
+    );
+    expect(failures).toEqual([]);
   });
 });
 
