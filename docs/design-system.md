@@ -21,8 +21,8 @@
 > **仍未撤销**：
 >
 > - **字号 / 字族的全仓调用点迁移**：token 层已落齐（`@theme` 现有 `--text-2xs` / `--text-code` /
->   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-section` / `--text-title` 七个固定字号 token
->   与两条字族栈；`--text-section` 是 2026-10-10 决策 170 加的 16px 档），
+>   `--text-meta` / `--text-ui` / `--text-markdown` / `--text-section` / `--text-title` / `--text-display` 八个固定字号 token
+>   与两条字族栈；`--text-section` 是 2026-10-10 决策 170 加的 16px 档，`--text-display` 是决策 174 加的 26px 首页标题档），
 >   调用点迁移**已覆盖 `chat/` 与 `workspace-shell/`**（含 D25 的 mono 白名单、tracking 梯度、`tabular-nums`）；
 >   **`source-control/` / `files/` / `git/` / `sessions/` 等其余目录的逐屏复核尚未完成**（D25 §5.5 工序 ④）。
 >   写新代码按本节；改旧代码不要单纯为了对齐档位而重排布局。
@@ -399,8 +399,8 @@ ghost chip 静息态**没有任何外框**，「壳」只在交互时浮出。�
 
 ### Typography（字号）
 
-> **档位表已全部落成 `@theme` token（D25）。** 七个固定字号 token 均在 `globals.css` 的 `@theme` 中，
-> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-section` / `text-title` 即可，不要写任意值。
+> **档位表已全部落成 `@theme` token（D25）。** 八个固定字号 token 均在 `globals.css` 的 `@theme` 中，
+> 直接写 `text-code` / `text-meta` / `text-ui` / `text-markdown` / `text-section` / `text-title` / `text-display` 即可，不要写任意值。
 > 调用点迁移状态见文首时效警示。
 
 **四档语义体系保留**（对齐 OpenChamber `packages/ui/src/styles/design-system.css:21-27` 的桌面基线值），
@@ -415,6 +415,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 | markdown | **15px**（0.9375rem） | `--text-markdown` | sans | 聊天正文、工具行动词、Markdown 全部内容、**以及所有标题 h1–h6** |
 | section | **16px**（1rem） | `--text-section` | sans | 面板标题（`DockTitle`，五个面板共用）、侧栏「聊天」面板的板块标题（L1）、中栏会话栏标题（决策 170，issue #6；行高 1.5） |
 | title | **18px**（1.125rem） | `--text-title` | sans | 设置页 L1 与对话框 / 抽屉标题 |
+| display | **26px**（1.625rem） | `--text-display` | sans | **只用于首页标题**（决策 174，issue #6；行高 1.3，句子 400、仓库名 600，字距 `-0.01em`）。见「首页」 |
 
 > **U01-a（2026-09-03）把 markdown 15→14、code 13→12**，对齐 pix 的正文与代码档
 > （[evidence-u01](./plantree/plans/pix-ui-alignment/topics/evidence-u01-numeric-scale.md)）。
@@ -431,6 +432,10 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 >
 > 2026-10-10（决策 170，issue #6）新增 `--text-section` 16px：以前「`--text-title` 是唯一高于 15px 的档」的说法不再成立
 > （聊天区 `--text-chat-body` 默认 17px 也早已高于 15px）。
+>
+> 2026-10-10（决策 174，issue #6 第二波）新增 `--text-display` 26px，只给首页标题用：最大的固定字号档从 18px 变为 26px，
+> 但**界面里的标题层级仍以 18px（`--text-title`）为上限**，26px 是首页那一句话独有的，不要拿它做别处的标题。
+> 与其他字号 token 一样已注册进 tailwind-merge 的 `font-size` 组（`cn('text-muted-foreground', 'text-display')` 不会吞掉颜色）。
 
 **`--text-markdown` 与 `--text-ui` 现在同为 15px，但仍是两个 token**——理由与下面 meta/code 那条
 完全一样：**值相同，变更理由不同**（U01-a / 2026-09-24 之前，两者曾同为 pix 对齐后的 14px）。
@@ -462,7 +467,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 本文件旧版这里写的是「在全等宽 UI 里这条尤其重要：等宽字体放大后横向占位增长很快……」——
 该理由**随 D25 作废**（比例字体下缩字号是真省宽的）。结论不变，理由换成两条：
 
-1. 本项目最大的标题只有 18px，**字号维度本来就只剩一档余量**；把它花在标题上，正文与标题会挤在 15/18
+1. 本项目界面里最大的标题只有 18px（首页标题的 26px 是唯一例外，只此一句），**字号维度本来就只剩一档余量**；把它花在标题上，正文与标题会挤在 15/18
    之间读不出差别，而 10~12px 的小字在 CJK 下不可读，向下也没有空间。
 2. D25 之后 **weight（400/600 全平台可靠）+ letter-spacing 梯度 + color** 三件套**全部可用**，
    层级不再只能靠 color 一维硬撑。用三件套比动字号更稳、也更可回归（字号一动就牵连布局，权重和字距不会）。
@@ -502,7 +507,7 @@ D25 在其上做两件事：**补齐 token**、**给每一档标明字族**—�
 
 ### 已记录偏离：聊天区两档字号**运行时可变**（D1 / D2，T104，2026-09-19）
 
-上表的七档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
+上表的八档字号 token 是**固定档位**——值由设计决定，不随用户设置变化。聊天区新增的
 **`--text-chat-body`**（默认 17px）与 **`--text-chat-process`**（默认 14px）**不照这条走**：
 它们是本仓库里**唯一一对运行时可变**的字号 token，由设置在 [12, 24] / [12, 20] 内连续调节。
 完整决策见 [决策 032](plantree/plans/runtime-hardening/decisions/032-chat-typography-configurable-two-tiers.md)。
@@ -573,7 +578,7 @@ D25 换到比例栈之后梯度才真正接通：
 
 上游 OpenChamber 的六级梯度（h1 `-0.025em` … h6 `+0.01em`）**不能原样搬**，两条硬理由：
 ① **负字距在 CJK 上会撞字**——CJK 字形本就满格排布，而我们的标题、侧栏会话标题、user 气泡都可能全是中文；
-② **负字距的收益只在大字号出现**，本项目最大的标题只有 18px，15px 以下的负字距是纯风险无收益。
+② **负字距的收益只在大字号出现**，本项目界面标题最大只有 18px（首页标题 26px 是唯一例外），15px 以下的负字距是纯风险无收益。
 
 D25 的四档 + 一个例外：
 
@@ -583,7 +588,7 @@ D25 的四档 + 一个例外：
 | 微标签 | `+0.02em` | ≤11px 的 badge / 角标 / `kbd` 内文——小号比例字需要开距 |
 | 按钮 | `+0.01em` | `ui/button.tsx` 基类已全局带 `tracking-[0.01em]`（比例字体下这条才开始真的起作用） |
 | 正文 / UI | `0` | 正文、侧栏行、Composer、工具行、meta —— **默认** |
-| 大标题（例外） | `-0.01em` | **仅 ≥18px**：`font-heading` 全仓 7 处，**已全部落地**（dialog / sheet / alert-dialog / empty / SessionManagerView ×2 / OnboardingView） |
+| 大标题（例外） | `-0.01em` | **仅 ≥18px**：`font-heading` 全仓 8 处，**已全部落地**（dialog / sheet / alert-dialog / empty / SessionManagerView ×2 / OnboardingView / 首页标题 26px，决策 174） |
 
 **两条禁令（可静态断言）**：
 
@@ -783,7 +788,7 @@ D25 的四档 + 一个例外：
 - 最多 5 条（`limitActiveRows`），多的收进「查看更多（N）」，展开后末尾是「收起」；展开只在本次运行内有效。搜索时列出全部命中。超过 5 条时选中的对话也可能被收起，不置顶（它在所属文件夹里照常显示、照常高亮）。
 - 行只显示状态槽、标题、告警徽标和时间，不显示 worktree 分支文字。同一个对话在所属文件夹里照常出现，两处都保留选中高亮。
 - 没有正在活动的对话时整区连标题都不渲染。
-- 「48 小时内」段与段落小标签已删除（移到首页，首页另起决策）；决策 137 §2 的存储键 `aiclient-sidebar-recent-collapsed` 废弃，不迁移（`App/storage.ts` 里留了「不要复用」的注释）。
+- 「48 小时内」段与段落小标签已删除（移到首页的「最近对话」，决策 174，见「首页」）；决策 137 §2 的存储键 `aiclient-sidebar-recent-collapsed` 废弃，不迁移（`App/storage.ts` 里留了「不要复用」的注释）。
 
 **仓库列表的顺序**（决策 170 裁决 6）：
 
@@ -812,6 +817,25 @@ D25 的四档 + 一个例外：
 5. 渲染层任何地方不得出现「绝对定位图标紧跟 `<Input`」。
 6. 板块标题不得放进任何滚动视口；区用两行 grid，`grid-cols-1` 不能省；侧栏里不再出现 `sticky`。
 7. `text-foreground-soft` 不加 `/N`。
+
+### 首页（中栏没有打开对话时）（issue #6 第二波，2026-10，决策 174）
+
+**验收依据是原型** [`plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/`](./plantree/plans/dsh-rebase/evidence/sidebar-regions-2026-10/README.md) 的默认视图（v4，输入框 2 行）。模型就是「当前对话为空」（`activeSessionId === null`）：应用启动（凭据选择屏之后）、关掉或归档了当前对话、点导轨最上方「首页」或任何「新建」时都是它。会话栏标题写「首页」，右侧只有「＋」。实现：`workspace-shell/HomeView.tsx`、`homeViewModel.ts`（类名常量与纯函数）。
+
+**只有三样**：标题、最近对话、输入框。输入框不属于首页：`ChatWorkspace` 把同一个 `ChatComposer` 实例放在首页下面，位置、宽度、几何与对话页完全相同，从首页发出第一条后它一动不动。
+
+| 项 | 规格 |
+|---|---|
+| 标题 | `font-heading text-display font-normal tracking-[-0.01em] text-muted-foreground`：26px、行高 1.3、400、次级色，居中。仓库名 `inline-block max-w-[14em] truncate align-bottom font-semibold text-foreground`（悬停显示全名）。不加图标、不用品牌色 |
+| 标题文案 | 「在 {仓库} 与 PiLab 一起进行创造吧」，仓库取输入框工作栏选中的那个，随选择变化。没选仓库时「与 PiLab 一起进行创造吧」（PiLab 强调），下面一行 `text-ui` 灰色说明；一个仓库都没有时说明是刻意断开的两行（中文自由折行会断在词中间） |
+| 位置 | 上区是尺寸容器 `@container-[size]`，标题中心在上区高度的 38.2%（黄金分割）：顶部留白 `h-[calc(38.2cqh_-_var(--text-display)*0.65)] min-h-12`，标题与列表 `shrink-0`，底部 `min-h-8 grow`。列表离输入框不到 32px 时只压缩顶部留白，压到 48px 还放不下时上区自己滚动（`ScrollArea scrollFade="bottom"`），输入框始终贴底。纯 CSS，不用脚本 |
+| 宽度 | 标题、最近对话与输入框同一条阅读栏 `mx-auto w-full max-w-reading`，外层 `px-6` |
+| 最近对话 | 标题下 40px（`mt-10`）。段头 `h-7` 里的 `text-meta font-normal text-muted-foreground`。列全部对话（含临时对话），最后活动时间降序；5 条 +「查看更多（N）」，5 条时不分组；展开后按本地日历日分「今天 / 昨天 / 更早」（`h-6` 14px 灰小标签，组间 `mt-3`），末尾「收起」。对话很多时每按一次多 100 条 |
+| 行 | `h-9 gap-2 rounded-sm px-2 text-ui`，悬停 / 键盘焦点 `bg-hover`。从左到右：`w-4` 状态槽（同侧栏）→ 标题（正文色）→ 告警徽标 → 「文件夹 · 分支」`max-w-[45%]` 14px 灰（先截断它）→ 相对时间 `w-12` 14px 灰 `tabular-nums`。悬停三行提示与侧栏相同；点一行就是打开它 |
+| 输入框 | 空输入框最少 2 行（聊天正文 17px × 1.5 × 2 = 51px，卡片 101px，`COMPOSER_TEXTAREA_MIN_ROWS`），有内容时照旧长到 8 行上限；首页与对话页相同。工作栏（卡片下方 `mt-2 h-6`）在首页、临时对话里也一直在：首页是仓库下拉（没有仓库时写「未选仓库」），临时对话是「临时对话」标签，所以任何对话的卡片都在同一高度 |
+| 发送被锁拦下 | 首页上选的分支在发送时才切；发送时同一检出有对话在跑，就在卡片上方出 coss `Alert` warning（同 `ModelMissingNotice` 的位置 `mb-2`），按钮 `Button size="xs"` + `h-6 sm:text-meta` |
+
+工作栏的两个弹层（仓库菜单、分支菜单）里中文一律 14px：组名 `text-meta font-normal`（coss 原语是 12px 500），「创建新分支...」`text-meta`。
 
 ## 字体族（分域：UI 比例 / 代码等宽）
 
