@@ -21,6 +21,13 @@ name: DSH bridge gate
 # soft gates (reported in the job summary, never fail the job) in its own
 # exit code; this workflow does not re-implement that split, only reads it.
 #
+# Decision 173 (GitHub issue #9) adds request-prefix-probe.ts, a hard gate:
+# the fake gateway captures every model request, and each session's must
+# only append to the one before (save the two expected breaks), carry a
+# stable metadata.user_id, and match the hosts' prefix-watch and cache-chain
+# lines. The captures stay in the runner's scratch directory; only the
+# report (no request content) is uploaded, on failure.
+#
 # Nothing here pushes, publishes or signs anything.
 on:
   push:
@@ -45,11 +52,12 @@ jobs:
   record:
     runs-on: ubuntu-latest
     # Measured on the 2-core dev box (P1-8c, 2026-10-07): loop-guard-smoke
-    # took 56 s, contention-regression (LC-0..LC-2, --runs 1) took 70 s. The
-    # rest (installs, typecheck, the recording's 51 s, two test files) is
-    # still an estimate, about 5 min cold. Raw push path ~7 min, times 3
-    # rounded up to 30; +10 min leaves room for a dispatched smoke, which has
-    # its own 15 min cap. Re-derive from the first green runs.
+    # took 56 s, contention-regression (LC-0..LC-2, --runs 1) took 70 s; the
+    # request prefix probe (decision 173, 2026-10-10) about 30 s. The rest
+    # (installs, typecheck, the recording's 51 s, two test files) is still an
+    # estimate, about 5 min cold. Raw push path ~7.5 min, times 3 rounded up
+    # to 30; +10 min leaves room for a dispatched smoke, which has its own
+    # 15 min cap. Re-derive from the first green runs.
     timeout-minutes: 40
     steps:
       - name: Checkout
@@ -135,6 +143,27 @@ jobs:
         with:
           name: dsh-loop-guard-smoke
           path: ${{ runner.temp }}/dsh-loop-guard-smoke
+          if-no-files-found: warn
+          retention-days: 14
+
+      # Decision 173 (GitHub issue #9): every request a chat sends only appends
+      # to the one before (save after a compaction and at a plan-mode exit),
+      # with metadata.user_id, the prefix watch and the cache chain lines
+      # checked on two real hosts. A hard gate: the script's exit code says it.
+      # The report holds counts, ids and verdicts, never request content.
+      - name: Request prefix probe (issue #9)
+        if: ${{ !cancelled() && steps.node.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          mkdir -p "$RUNNER_TEMP/dsh-request-prefix-probe"
+          out-node-runtime/node src/dsh-host/tools/request-prefix-probe.ts --out "$RUNNER_TEMP/dsh-request-prefix-probe/report.json"
+
+      - name: Upload the request prefix probe report on failure
+        if: failure()
+        uses: actions/upload-artifact@v5
+        with:
+          name: dsh-request-prefix-probe
+          path: ${{ runner.temp }}/dsh-request-prefix-probe
           if-no-files-found: warn
           retention-days: 14
 
